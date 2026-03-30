@@ -520,14 +520,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (cancelled) return
         if (data.enabled && data.finalTotalEur) {
           setRevenueSuggestion(data)
-          // AUTO_APPLY: automatically set the total amount (rental + insurance)
+          // AUTO_APPLY: automatically set the total amount (rental + insurance + contanti surcharge)
           if (data.mode === 'auto_apply') {
             setFormData(prev => {
               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
               const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle) : []
               const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
-              return { ...prev, total_amount: (data.finalTotalEur + insuranceTotal).toFixed(2) }
+              const baseTotal = data.finalTotalEur + insuranceTotal
+              const total = prev.payment_method === 'Contanti' ? baseTotal * 1.20 : baseTotal
+              return { ...prev, total_amount: total.toFixed(2) }
             })
           }
         } else {
@@ -540,15 +542,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return () => { cancelled = true }
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
 
-  // Recalculate total when insurance option changes (rental price from revenue + insurance)
+  // Recalculate total when insurance option changes (rental + insurance + contanti surcharge)
   useEffect(() => {
     if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle) : []
       const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
       const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
-      const newTotal = (revenueSuggestion.finalTotalEur + insuranceTotal).toFixed(2)
-      setFormData(prev => ({ ...prev, total_amount: newTotal }))
+      const baseTotal = revenueSuggestion.finalTotalEur + insuranceTotal
+      const newTotal = formData.payment_method === 'Contanti' ? baseTotal * 1.20 : baseTotal
+      setFormData(prev => ({ ...prev, total_amount: newTotal.toFixed(2) }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.insurance_option])
@@ -5267,6 +5270,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       updates.status = 'pending'
                       updates.amount_paid = '0'
                     }
+                    // Contanti: +20% surcharge — recalculate total
+                    if (revenueSuggestion) {
+                      const sv = vehicles.find(v => v.id === formData.vehicle_id)
+                      const ko = sv ? getInsuranceOptions(sv) : []
+                      const sk = ko.find(k => k.id === formData.insurance_option)
+                      const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
+                      const baseTotal = revenueSuggestion.finalTotalEur + insTotal
+                      const newTotal = method === 'Contanti' ? baseTotal * 1.20 : baseTotal
+                      updates.total_amount = newTotal.toFixed(2)
+                    }
                     setFormData(prev => ({ ...prev, ...updates }))
                   }}
                   options={[
@@ -5378,6 +5391,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             </div>
                           )
                         })()}
+                        {formData.payment_method === 'Contanti' && (
+                          <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                            <span className="text-theme-text-muted">Maggiorazione contanti</span>
+                            <span className="text-red-400 font-mono">+20%</span>
+                          </div>
+                        )}
                       </div>
                     </>
                   )}
