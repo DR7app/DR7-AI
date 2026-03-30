@@ -21,6 +21,87 @@ interface Vehicle {
   category?: string; status: string
 }
 
+// ─── Extras Config Types ───
+interface ExtraItem {
+  id: string
+  name: string
+  price: number
+  price_unit: 'per_day' | 'per_hour' | 'per_km' | 'per_unit' | 'one_time' | 'included'
+  unit_label?: string
+  is_active: boolean
+  display_order: number
+  description?: string
+  deposit_required?: number
+}
+
+type ExtraCategory = 'insurance' | 'km_packages' | 'deposit_options' | 'driver_extras' | 'delivery' | 'experience' | 'cancellation'
+
+interface ExtrasConfig {
+  insurance: ExtraItem[]
+  km_packages: ExtraItem[]
+  deposit_options: ExtraItem[]
+  driver_extras: ExtraItem[]
+  delivery: ExtraItem[]
+  experience: ExtraItem[]
+  cancellation: ExtraItem[]
+}
+
+const EXTRA_CATEGORY_LABELS: Record<ExtraCategory, string> = {
+  insurance: 'Assicurazioni',
+  km_packages: 'Pacchetti KM',
+  deposit_options: 'Opzioni Cauzione',
+  driver_extras: 'Guidatore & Pulizia',
+  delivery: 'Consegna',
+  experience: 'Esperienze',
+  cancellation: 'Cancellazione',
+}
+
+const PRICE_UNIT_LABELS: Record<string, string> = {
+  per_day: '/giorno',
+  per_hour: '/ora',
+  per_km: '/km',
+  per_unit: '/unità',
+  one_time: 'una tantum',
+  included: 'incluso',
+}
+
+const DEFAULT_EXTRAS_CONFIG: ExtrasConfig = {
+  insurance: [
+    { id: 'rca_inclusa', name: 'RCA Compresa', price: 0, price_unit: 'included', deposit_required: 10000, is_active: true, display_order: 1, description: 'Assicurazione base inclusa. Richiede cauzione 10.000€' },
+    { id: 'kasko_base', name: 'Kasko Base', price: 89, price_unit: 'per_day', is_active: true, display_order: 2 },
+    { id: 'kasko_black', name: 'Kasko Black', price: 149, price_unit: 'per_day', is_active: true, display_order: 3 },
+    { id: 'kasko_signature', name: 'Kasko Signature', price: 189, price_unit: 'per_day', is_active: true, display_order: 4 },
+    { id: 'kasko_dr7', name: 'Kasko DR7', price: 289, price_unit: 'per_day', is_active: true, display_order: 5, description: 'Massima protezione' },
+  ],
+  km_packages: [
+    { id: 'unlimited_km', name: 'KM Illimitati', price: 189, price_unit: 'per_day', is_active: true, display_order: 1 },
+  ],
+  deposit_options: [
+    { id: 'no_deposit', name: 'Senza Cauzione', price: 49, price_unit: 'per_day', is_active: true, display_order: 1 },
+    { id: 'deposit_2020_plus', name: 'Cauzione Auto 2020+', price: 20, price_unit: 'per_day', is_active: true, display_order: 2 },
+  ],
+  driver_extras: [
+    { id: 'second_driver', name: 'Secondo Guidatore', price: 10, price_unit: 'per_day', is_active: true, display_order: 1 },
+    { id: 'final_cleaning', name: 'Pulizia Finale', price: 9.90, price_unit: 'one_time', is_active: true, display_order: 2 },
+  ],
+  delivery: [
+    { id: 'delivery', name: 'Consegna / Ritiro', price: 3, price_unit: 'per_km', is_active: true, display_order: 1 },
+  ],
+  experience: [
+    { id: 'bouquet_rose', name: 'Bouquet Rose', price: 7.90, price_unit: 'per_unit', unit_label: 'rosa', is_active: true, display_order: 1 },
+    { id: 'wedding_decoration', name: 'Allestimento Matrimonio', price: 150, price_unit: 'one_time', is_active: true, display_order: 2 },
+    { id: 'chauffeur', name: 'Chauffeur', price: 150, price_unit: 'per_hour', is_active: true, display_order: 3 },
+    { id: 'restaurant_booking', name: 'Prenotazione Ristorante', price: 10, price_unit: 'one_time', is_active: true, display_order: 4 },
+    { id: 'video_drone', name: 'Video Maker + Drone', price: 200, price_unit: 'per_hour', is_active: true, display_order: 5 },
+    { id: 'premium_assistance', name: 'Assistenza Premium', price: 19.90, price_unit: 'per_day', is_active: true, display_order: 6 },
+    { id: 'vehicle_replacement', name: 'Sostituzione Veicolo', price: 19.90, price_unit: 'per_day', is_active: true, display_order: 7 },
+    { id: 'vip_chauffeur', name: 'VIP Chauffeur', price: 189, price_unit: 'per_hour', is_active: true, display_order: 8 },
+  ],
+  cancellation: [
+    { id: 'dr7_flex', name: 'DR7 FLEX', price: 19.90, price_unit: 'per_day', is_active: true, display_order: 1, description: '90% rimborso in credito DR7 Wallet' },
+  ],
+}
+
 const SECTION = 'bg-theme-bg-secondary border border-theme-border rounded-lg p-4 sm:p-6'
 const SECTION_TITLE = 'text-lg font-semibold text-theme-text-primary mb-4'
 
@@ -45,6 +126,11 @@ export default function RevenuePricingTab() {
   // Config state
   const [config, setConfig] = useState<RevenueConfig>(getDefaultConfig())
 
+  // Extras config state
+  const [extrasConfig, setExtrasConfig] = useState<ExtrasConfig>(DEFAULT_EXTRAS_CONFIG)
+  const [extrasSaving, setExtrasSaving] = useState(false)
+  const [extrasCollapsed, setExtrasCollapsed] = useState<Record<string, boolean>>({})
+
   // Simulator state
   const [simVehicleId, setSimVehicleId] = useState('')
   const [simPickup, setSimPickup] = useState('')
@@ -52,7 +138,7 @@ export default function RevenuePricingTab() {
   const [simResult, setSimResult] = useState<PricingTrace | null>(null)
   const [simLoading, setSimLoading] = useState(false)
 
-  useEffect(() => { loadConfig(); loadVehicles() }, [])
+  useEffect(() => { loadConfig(); loadVehicles(); loadExtrasConfig() }, [])
 
   async function loadVehicles() {
     const { data } = await supabase
@@ -61,6 +147,103 @@ export default function RevenuePricingTab() {
       .neq('status', 'retired')
       .order('display_name')
     setVehicles(data || [])
+  }
+
+  async function loadExtrasConfig() {
+    try {
+      const { data, error } = await supabase
+        .from('rental_extras_config')
+        .select('*')
+        .limit(1)
+        .single()
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No row yet, use defaults
+          setExtrasConfig(DEFAULT_EXTRAS_CONFIG)
+          return
+        }
+        throw error
+      }
+
+      if (data?.config) {
+        const c = data.config as Record<string, ExtraItem[]>
+        setExtrasConfig({
+          insurance: c.insurance || DEFAULT_EXTRAS_CONFIG.insurance,
+          km_packages: c.km_packages || DEFAULT_EXTRAS_CONFIG.km_packages,
+          deposit_options: c.deposit_options || DEFAULT_EXTRAS_CONFIG.deposit_options,
+          driver_extras: c.driver_extras || DEFAULT_EXTRAS_CONFIG.driver_extras,
+          delivery: c.delivery || DEFAULT_EXTRAS_CONFIG.delivery,
+          experience: c.experience || DEFAULT_EXTRAS_CONFIG.experience,
+          cancellation: c.cancellation || DEFAULT_EXTRAS_CONFIG.cancellation,
+        })
+      }
+    } catch (err: unknown) {
+      console.error('Error loading extras config:', err)
+      // Use defaults if table doesn't exist yet
+    }
+  }
+
+  async function saveExtrasConfig() {
+    setExtrasSaving(true)
+    try {
+      const dbPayload = {
+        config: extrasConfig,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data: existing } = await supabase.from('rental_extras_config').select('id').limit(1).single()
+
+      if (existing) {
+        const { error } = await supabase
+          .from('rental_extras_config')
+          .update(dbPayload)
+          .eq('id', existing.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('rental_extras_config')
+          .insert(dbPayload)
+        if (error) throw error
+      }
+
+      toast.success('Prezzi servizi extra salvati')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Errore sconosciuto'
+      toast.error('Errore salvataggio extras: ' + message)
+    }
+    setExtrasSaving(false)
+  }
+
+  // ─── Extras update helpers ───
+  function updateExtraItem(category: ExtraCategory, index: number, updates: Partial<ExtraItem>) {
+    setExtrasConfig(prev => {
+      const items = [...prev[category]]
+      items[index] = { ...items[index], ...updates }
+      return { ...prev, [category]: items }
+    })
+  }
+
+  function addExtraItem(category: ExtraCategory) {
+    setExtrasConfig(prev => {
+      const items = prev[category]
+      const newItem: ExtraItem = {
+        id: `new_${category}_${Date.now()}`,
+        name: '',
+        price: 0,
+        price_unit: 'per_day',
+        is_active: true,
+        display_order: items.length + 1,
+      }
+      return { ...prev, [category]: [...items, newItem] }
+    })
+  }
+
+  function removeExtraItem(category: ExtraCategory, index: number) {
+    setExtrasConfig(prev => ({
+      ...prev,
+      [category]: prev[category].filter((_, i) => i !== index),
+    }))
   }
 
   async function loadConfig() {
@@ -623,6 +806,207 @@ export default function RevenuePricingTab() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ─── Servizi Extra & Prezzi ─── */}
+      <div className={`${SECTION} border-green-500/30`}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-theme-text-primary">Servizi Extra & Prezzi</h3>
+          <Button onClick={saveExtrasConfig} disabled={extrasSaving} className="whitespace-nowrap">
+            {extrasSaving ? 'Salvando...' : 'Salva Extras'}
+          </Button>
+        </div>
+        <p className="text-sm text-theme-text-muted mb-6">
+          Gestisci i prezzi dei servizi aggiuntivi. Il sito web legge questi valori in tempo reale.
+          <br/>Prezzi in <strong>EURO</strong>. Disattiva un servizio per nasconderlo dal sito.
+        </p>
+
+        {(Object.keys(EXTRA_CATEGORY_LABELS) as ExtraCategory[]).map(category => {
+          const items = extrasConfig[category]
+          const isCollapsed = extrasCollapsed[category]
+          return (
+            <div key={category} className="mb-4 border border-theme-border rounded-lg overflow-hidden">
+              {/* Category header */}
+              <button
+                onClick={() => setExtrasCollapsed(prev => ({ ...prev, [category]: !prev[category] }))}
+                className="w-full flex items-center justify-between px-4 py-3 bg-theme-bg-primary hover:bg-theme-bg-secondary transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs transform transition-transform ${isCollapsed ? '' : 'rotate-90'}`}>&#9654;</span>
+                  <span className="font-semibold text-theme-text-primary">{EXTRA_CATEGORY_LABELS[category]}</span>
+                  <span className="text-xs text-theme-text-muted">({items.length} {items.length === 1 ? 'servizio' : 'servizi'})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {items.filter(i => i.is_active).length < items.length && (
+                    <span className="text-xs text-amber-400">{items.filter(i => !i.is_active).length} disattivati</span>
+                  )}
+                </div>
+              </button>
+
+              {/* Category items */}
+              {!isCollapsed && (
+                <div className="px-4 py-3 space-y-2 bg-theme-bg-secondary">
+                  {/* Header row */}
+                  <div className="grid grid-cols-[auto_2fr_1fr_1fr_1fr_auto_auto] gap-2 text-xs font-semibold text-theme-text-muted uppercase">
+                    <span className="w-8">On</span>
+                    <span>Nome</span>
+                    <span>Prezzo (EUR)</span>
+                    <span>Unità</span>
+                    <span>Note</span>
+                    <span className="w-8"></span>
+                    <span className="w-8"></span>
+                  </div>
+
+                  {items.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className={`grid grid-cols-[auto_2fr_1fr_1fr_1fr_auto_auto] gap-2 items-center ${
+                        !item.is_active ? 'opacity-50' : ''
+                      }`}
+                    >
+                      {/* Active toggle */}
+                      <input
+                        type="checkbox"
+                        checked={item.is_active}
+                        onChange={e => updateExtraItem(category, idx, { is_active: e.target.checked })}
+                        className="w-4 h-4 rounded"
+                      />
+                      {/* Name */}
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={e => updateExtraItem(category, idx, { name: e.target.value })}
+                        className="w-full px-2 py-1.5 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
+                        placeholder="Nome servizio"
+                      />
+                      {/* Price */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-theme-text-muted">EUR</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.price}
+                          onChange={e => updateExtraItem(category, idx, { price: Number(e.target.value) })}
+                          className="w-full px-2 py-1.5 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
+                        />
+                      </div>
+                      {/* Unit */}
+                      <select
+                        value={item.price_unit}
+                        onChange={e => updateExtraItem(category, idx, { price_unit: e.target.value as ExtraItem['price_unit'] })}
+                        className="w-full px-2 py-1.5 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
+                      >
+                        <option value="per_day">/giorno</option>
+                        <option value="per_hour">/ora</option>
+                        <option value="per_km">/km</option>
+                        <option value="per_unit">/unità</option>
+                        <option value="one_time">una tantum</option>
+                        <option value="included">incluso</option>
+                      </select>
+                      {/* Description / notes */}
+                      <input
+                        type="text"
+                        value={item.description || ''}
+                        onChange={e => updateExtraItem(category, idx, { description: e.target.value })}
+                        className="w-full px-2 py-1.5 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
+                        placeholder="Descrizione"
+                      />
+                      {/* Move up */}
+                      <button
+                        onClick={() => {
+                          if (idx === 0) return
+                          setExtrasConfig(prev => {
+                            const arr = [...prev[category]]
+                            ;[arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]]
+                            return { ...prev, [category]: arr }
+                          })
+                        }}
+                        className="text-theme-text-muted hover:text-theme-text-primary text-sm px-1"
+                        title="Sposta su"
+                      >{idx > 0 ? '\u2191' : ''}</button>
+                      {/* Delete */}
+                      <button
+                        onClick={() => removeExtraItem(category, idx)}
+                        className="text-red-400 hover:text-red-300 text-sm px-1"
+                        title="Rimuovi"
+                      >\u2715</button>
+                    </div>
+                  ))}
+
+                  {/* Special fields for insurance items (deposit_required) */}
+                  {category === 'insurance' && items.some(i => i.deposit_required != null) && (
+                    <div className="mt-2 pt-2 border-t border-theme-border">
+                      <p className="text-xs text-theme-text-muted mb-1">Cauzione richiesta per assicurazione (EUR):</p>
+                      {items.map((item, idx) => (
+                        item.deposit_required != null && (
+                          <div key={item.id} className="flex items-center gap-2 mb-1">
+                            <span className="text-sm text-theme-text-secondary w-32">{item.name}</span>
+                            <input
+                              type="number"
+                              step="100"
+                              value={item.deposit_required}
+                              onChange={e => updateExtraItem(category, idx, { deposit_required: Number(e.target.value) })}
+                              className="w-32 px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
+                            />
+                            <span className="text-xs text-theme-text-muted">EUR</span>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Special field for per_unit items (unit_label) */}
+                  {items.some(i => i.price_unit === 'per_unit') && (
+                    <div className="mt-2 pt-2 border-t border-theme-border">
+                      <p className="text-xs text-theme-text-muted mb-1">Etichetta unità:</p>
+                      {items.map((item, idx) => (
+                        item.price_unit === 'per_unit' && (
+                          <div key={item.id} className="flex items-center gap-2 mb-1">
+                            <span className="text-sm text-theme-text-secondary w-32">{item.name}</span>
+                            <input
+                              type="text"
+                              value={item.unit_label || ''}
+                              onChange={e => updateExtraItem(category, idx, { unit_label: e.target.value })}
+                              className="w-32 px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
+                              placeholder="es. rosa"
+                            />
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => addExtraItem(category)}
+                    className="text-sm text-green-400 hover:text-green-300 mt-2"
+                  >+ Aggiungi servizio</button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* Price summary */}
+        <div className="mt-6 bg-theme-bg-primary rounded-lg p-4 border border-theme-border">
+          <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Riepilogo Prezzi Attivi</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            {(Object.keys(EXTRA_CATEGORY_LABELS) as ExtraCategory[]).flatMap(cat =>
+              extrasConfig[cat]
+                .filter(item => item.is_active)
+                .map(item => (
+                  <div key={item.id} className="flex justify-between text-sm">
+                    <span className="text-theme-text-muted truncate">{item.name}</span>
+                    <span className="text-theme-text-primary font-mono ml-2">
+                      {item.price_unit === 'included'
+                        ? 'Incluso'
+                        : `EUR ${item.price.toFixed(2)}${PRICE_UNIT_LABELS[item.price_unit] || ''}`
+                      }
+                    </span>
+                  </div>
+                ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

@@ -98,8 +98,8 @@ export interface PricingTrace {
 
 export function getDefaultConfig(): RevenueConfig {
   return {
-    enabled: false,
-    mode: 'suggestion',
+    enabled: true,
+    mode: 'auto_apply',
     base_prices: {},
     min_prices: {},
     max_prices: {},
@@ -436,15 +436,21 @@ export function parseConfigFromDB(row: {
     mode = 'suggestion'
   }
 
+  // Use defaults if coefficient arrays are empty/missing — never let them be []
+  const defaults = getDefaultConfig()
+  const occCoeffs = c.occupation_coefficients as CoefficientRow[] | undefined
+  const advCoeffs = c.advance_coefficients as CoefficientRow[] | undefined
+  const durCoeffs = c.duration_coefficients as CoefficientRow[] | undefined
+
   return {
-    enabled: row.enabled ?? false,
+    enabled: row.enabled ?? true,
     mode,
     base_prices: (c.base_prices as Record<string, number>) || {},
     min_prices: (c.min_prices as Record<string, number>) || {},
     max_prices: (c.max_prices as Record<string, number>) || {},
-    occupation_coefficients: (c.occupation_coefficients as CoefficientRow[]) || [],
-    advance_coefficients: (c.advance_coefficients as CoefficientRow[]) || [],
-    duration_coefficients: (c.duration_coefficients as CoefficientRow[]) || [],
+    occupation_coefficients: occCoeffs?.length ? occCoeffs : defaults.occupation_coefficients,
+    advance_coefficients: advCoeffs?.length ? advCoeffs : defaults.advance_coefficients,
+    duration_coefficients: durCoeffs?.length ? durCoeffs : defaults.duration_coefficients,
     season_rules: (c.season_rules as SeasonRule[]) || [],
   }
 }

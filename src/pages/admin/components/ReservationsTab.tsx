@@ -112,6 +112,23 @@ function isFurgone(vehicle?: Vehicle): boolean {
   return name.includes('ducato') || name.includes('vito') || name.includes('furgone');
 }
 
+// Sforo (km overage fee) defaults per vehicle type
+// eslint-disable-next-line react-refresh/only-export-components
+export const SFORO_DEFAULTS: { match: (name: string) => boolean; sforo: string; label: string }[] = [
+  { match: (n) => n.includes('rs3') || n.includes('macan'), sforo: '0.89', label: 'RS3/Macan' },
+  { match: (n) => n.includes('ducato') || n.includes('vito') || n.includes('furgone') || n.includes('ncc') || n.includes('tourer'), sforo: '0.49', label: 'Furgone/NCC' },
+]
+const DEFAULT_SFORO = '1.80'
+const DEFAULT_KM_LIMIT = '100/giorno'
+
+function getSforoForVehicle(vehicleName: string): string {
+  const lower = (vehicleName || '').toLowerCase()
+  for (const rule of SFORO_DEFAULTS) {
+    if (rule.match(lower)) return rule.sforo
+  }
+  return DEFAULT_SFORO
+}
+
 // Helper function to get insurance options for vehicle
 function getInsuranceOptions(vehicle?: Vehicle) {
   if (!vehicle) return INSURANCE_OPTIONS;
@@ -427,9 +444,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     deposit: '0',
     deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
     // KM Overage Fee
-    km_overage_fee: '1.80',
+    km_overage_fee: DEFAULT_SFORO,
     unlimited_km: false,
-    km_limit: '50/giorno', // Default KM limit when not unlimited
+    km_limit: DEFAULT_KM_LIMIT, // Default KM limit when not unlimited
     // Home Delivery & Pickup
     delivery_enabled: false,
     delivery_street: '',
@@ -1069,6 +1086,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }, [formData.vehicle_id, vehicles, formData.insurance_option])
 
+  // Auto-set sforo (km_overage_fee) based on vehicle type when vehicle changes
+  useEffect(() => {
+    if (formData.vehicle_id && !editingId) {
+      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+      if (!selectedVehicle) return
+      if (!formData.unlimited_km) {
+        const newSforo = getSforoForVehicle(selectedVehicle.display_name)
+        setFormData(prev => ({ ...prev, km_overage_fee: newSforo }))
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.vehicle_id])
 
   async function loadData() {
     setLoading(true)
@@ -2167,9 +2196,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       garante_birth_provincia: booking.booking_details?.garante_veicolo?.birth_provincia || '',
       garante_phone: booking.booking_details?.garante_veicolo?.phone || '',
       garante_email: booking.booking_details?.garante_veicolo?.email || '',
-      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '1.80',
+      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : DEFAULT_SFORO,
       unlimited_km: booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false,
-      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || '50/giorno'),
+      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || DEFAULT_KM_LIMIT),
       // Home Delivery & Pickup
       delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
       delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
@@ -3888,11 +3917,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           let kmLabel = '-'
           if (formData.unlimited_km) {
             kmLabel = 'Illimitati'
-          } else if (formData.km_limit === '50/giorno') {
+          } else if (formData.km_limit === DEFAULT_KM_LIMIT) {
             const pickup = new Date(formData.pickup_date + 'T' + formData.pickup_time)
             const dropoff = new Date(formData.return_date + 'T' + formData.return_time)
             const days = Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24))
-            kmLabel = `${50 * days} Km (50/g x ${days}gg)`
+            const perDay = parseInt(DEFAULT_KM_LIMIT)
+            kmLabel = `${perDay * days} Km (${perDay}/g x ${days}gg)`
           } else if (formData.km_limit) {
             kmLabel = `${formData.km_limit} km`
           }
@@ -4077,7 +4107,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       source: 'admin',
       total_amount: '0',
       amount_paid: '0',
-      km_overage_fee: '1.80',
+      km_overage_fee: DEFAULT_SFORO,
       payment_status: 'pending',
       payment_method: 'Nexi Pay by Link',
       currency: 'EUR',
@@ -4106,7 +4136,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       deposit: '0',
       deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
       unlimited_km: false,
-      km_limit: '50/giorno',
+      km_limit: DEFAULT_KM_LIMIT,
       // Home Delivery & Pickup
       delivery_enabled: false,
       delivery_street: '',
@@ -5321,25 +5351,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   })
                 }}
               />
-              <Input
-                label="Sforo per KM (€)"
-                type="number"
-                step="0.01"
-                value={formData.km_overage_fee}
-                onChange={(e) => setFormData({ ...formData, km_overage_fee: e.target.value })}
-                placeholder="es. 0.50"
-                disabled={formData.unlimited_km}
-              />
+              <div>
+                <Input
+                  label="Sforo per KM (€)"
+                  type="number"
+                  step="0.01"
+                  value={formData.km_overage_fee}
+                  onChange={(e) => setFormData({ ...formData, km_overage_fee: e.target.value })}
+                  placeholder="es. 0.50"
+                  disabled={formData.unlimited_km}
+                />
+                {formData.vehicle_id && !formData.unlimited_km && (() => {
+                  const vName = vehicles.find(v => v.id === formData.vehicle_id)?.display_name || ''
+                  const rule = SFORO_DEFAULTS.find(r => r.match(vName.toLowerCase()))
+                  return rule ? (
+                    <p className="text-xs text-amber-400 mt-1">Default {rule.label}: €{rule.sforo}/km</p>
+                  ) : null
+                })()}
+              </div>
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
                 <div
-                  className={`p-3 rounded-md border cursor-pointer transition-all flex items-center gap-2 ${formData.km_limit === '50/giorno' && !formData.unlimited_km
+                  className={`p-3 rounded-md border cursor-pointer transition-all flex items-center gap-2 ${formData.km_limit === DEFAULT_KM_LIMIT && !formData.unlimited_km
                     ? 'border-theme-text-primary bg-theme-text-primary/5'
                     : 'border-theme-border hover:border-theme-border'
                     } ${formData.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: '50/giorno' }))}
+                  onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: DEFAULT_KM_LIMIT }))}
                 >
-                  <span className="text-theme-text-primary font-bold text-sm">50 Km / Giorno</span>
+                  <span className="text-theme-text-primary font-bold text-sm">100 Km / Giorno</span>
                 </div>
               </div>
 
@@ -5359,7 +5398,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   checked={formData.unlimited_km}
                   onChange={(e) => {
                     const checked = e.target.checked
-                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : '1.80' }))
+                    const vehicleName = vehicles.find(v => v.id === formData.vehicle_id)?.display_name || ''
+                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : getSforoForVehicle(vehicleName) }))
                   }}
                   className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
                 />
@@ -5871,9 +5911,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{(() => {
                           const bd = selectedBooking.booking_details;
                           if (bd?.unlimited_km || bd?.km_limit === 'Illimitati') return 'KM Illimitati';
-                          if (bd?.km_limit === '50/giorno' && selectedBooking.pickup_date && selectedBooking.dropoff_date) {
+                          const perDayMatch = bd?.km_limit?.match?.(/^(\d+)\/giorno$/)
+                          if (perDayMatch && selectedBooking.pickup_date && selectedBooking.dropoff_date) {
+                            const kmPerDay = parseInt(perDayMatch[1])
                             const days = Math.ceil((new Date(selectedBooking.dropoff_date).getTime() - new Date(selectedBooking.pickup_date).getTime()) / (1000 * 60 * 60 * 24));
-                            return `${50 * days} Km (50/g x ${days}gg)`;
+                            return `${kmPerDay * days} Km (${kmPerDay}/g x ${days}gg)`;
                           }
                           return bd?.km_limit ? `${bd.km_limit} km` : 'KM Illimitati';
                         })()}</span></div>
