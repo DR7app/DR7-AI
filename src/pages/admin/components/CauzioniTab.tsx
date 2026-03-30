@@ -879,7 +879,6 @@ export default function CauzioniTab() {
                         <option value="all">Tutti i metodi</option>
                         <option value="bonifico">Bonifico</option>
                         <option value="carta">Carta</option>
-                        <option value="preautorizzazione">Preautorizzazione</option>
                     </select>
                 </div>
             </div>
@@ -969,52 +968,13 @@ export default function CauzioniTab() {
                                             >
                                                 INCASSA
                                             </button>
-                                            <button
-                                                onClick={() => handleAddebitaMIT(cauzione)}
-                                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors font-semibold"
-                                            >
-                                                PRE-AUTH
-                                            </button>
+                                            {/* Pre-auth disabled — Nexi Pay by Link doesn't support capture via API */}
                                             <button
                                                 onClick={() => handleSendPayLink(cauzione)}
-                                                className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors font-semibold"
+                                                className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-dr7-gold/80 transition-colors font-semibold"
                                             >
                                                 INVIA LINK
                                             </button>
-                                            {cauzione.metodo === 'preautorizzazione' && !cauzione.nexi_transaction_id && (
-                                                <button
-                                                    onClick={() => handleCreatePreauth(cauzione)}
-                                                    className="px-3 py-2 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors font-semibold"
-                                                >
-                                                    CREA PREAUTH
-                                                </button>
-                                            )}
-                                            {cauzione.metodo === 'preautorizzazione' && cauzione.nexi_transaction_id && (
-                                                <>
-                                                    <button
-                                                        onClick={() => {
-                                                            if (confirm(`Incassare l'intero importo di €${Number(cauzione.importo).toFixed(2)}?`)) {
-                                                                handleIncassaFull(cauzione)
-                                                            }
-                                                        }}
-                                                        className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors font-semibold"
-                                                    >
-                                                        CASSA (€{Number(cauzione.importo).toFixed(0)})
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleIncassa(cauzione)}
-                                                        className="px-3 py-2 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors font-semibold"
-                                                    >
-                                                        PARZIALE
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleMarkSbloccataPreauth(cauzione)}
-                                                        className="px-3 py-2 bg-theme-bg-hover text-theme-text-primary text-xs rounded-full hover:bg-theme-bg-tertiary transition-colors"
-                                                    >
-                                                        SBLOCCA
-                                                    </button>
-                                                </>
-                                            )}
                                             <button
                                                 onClick={() => handleMarkRestituita(cauzione)}
                                                 className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"

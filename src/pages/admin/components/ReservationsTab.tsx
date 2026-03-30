@@ -6216,15 +6216,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       Rinvia Contratto
                     </button>
                   )}
-                  {selectedBooking.status !== 'cancelled' && selectedBooking.booking_details?.deposit && selectedBooking.booking_details.deposit > 0 && (
-                    <button
-                      onClick={() => handleCreatePreAuth(selectedBooking)}
-                      disabled={creatingPreAuth}
-                      className="flex-1 px-4 py-3 bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary transition-colors font-medium disabled:opacity-50"
-                    >
-                      {creatingPreAuth ? 'Creazione Pre-Auth...' : 'Pre-Auth Cauzione'}
-                    </button>
-                  )}
+                  {/* Pre-Auth Cauzione disabled — Nexi capture not reliable via API */}
                   {selectedBooking.status !== 'cancelled' && (
                     <button
                       onClick={() => {
