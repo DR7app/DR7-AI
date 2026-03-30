@@ -157,6 +157,66 @@ export function getProvinciaByCity(cityName?: string): string | null {
 }
 
 // Get residence status based on province code or city
+// CAP (Codice Avviamento Postale) lookup by city name
+const CAP_MAP: Record<string, string> = {
+  // Sardegna — Cagliari area
+  'Cagliari': '09124', 'Assemini': '09032', 'Capoterra': '09012', 'Decimomannu': '09033',
+  'Elmas': '09030', 'Maracalagonis': '09040', 'Monserrato': '09042', 'Pula': '09010',
+  'Quartu Sant\'Elena': '09045', 'Quartucciu': '09044', 'Sarroch': '09018', 'Selargius': '09047',
+  'Sestu': '09028', 'Settimo San Pietro': '09040', 'Sinnai': '09048', 'Uta': '09010',
+  // Sardegna — Sud Sardegna
+  'Carbonia': '09013', 'Iglesias': '09016', 'Villacidro': '09039', 'Sanluri': '09025',
+  'San Gavino Monreale': '09037', 'Guspini': '09036', 'Muravera': '09043',
+  'Sant\'Antioco': '09017', 'Dolianova': '09041', 'Monastir': '09023',
+  'San Sperate': '09026', 'Villasor': '09034', 'Serramanna': '09038',
+  'Villasimius': '09049', 'Villaputzu': '09040',
+  // Sardegna — Sassari
+  'Sassari': '07100', 'Alghero': '07041', 'Porto Torres': '07046', 'Sorso': '07037',
+  'Ozieri': '07014', 'Tempio Pausania': '07029', 'La Maddalena': '07024',
+  'Castelsardo': '07031', 'Ittiri': '07044',
+  // Sardegna — Nuoro
+  'Nuoro': '08100', 'Siniscola': '08029', 'Tortolì': '08048', 'Macomer': '08015',
+  'Dorgali': '08022', 'Orosei': '08028', 'Lanusei': '08045',
+  // Sardegna — Oristano
+  'Oristano': '09170', 'Terralba': '09098', 'Cabras': '09072', 'Bosa': '08013',
+  // Sardegna — Olbia-Tempio
+  'Olbia': '07026', 'Arzachena': '07021', 'Budoni': '08020', 'San Teodoro': '08020',
+  'Golfo Aranci': '07020', 'Palau': '07020', 'Santa Teresa Gallura': '07028',
+  // Capoluoghi
+  'Roma': '00100', 'Milano': '20100', 'Napoli': '80100', 'Torino': '10100',
+  'Palermo': '90100', 'Genova': '16100', 'Bologna': '40100', 'Firenze': '50100',
+  'Bari': '70100', 'Catania': '95100', 'Venezia': '30100', 'Verona': '37100',
+  'Messina': '98100', 'Padova': '35100', 'Trieste': '34100', 'Brescia': '25100',
+  'Taranto': '74100', 'Reggio Calabria': '89100', 'Modena': '41100',
+  'Reggio Emilia': '42100', 'Perugia': '06100', 'Ravenna': '48100',
+  'Livorno': '57100', 'Foggia': '71100', 'Rimini': '47921', 'Salerno': '84100',
+  'Ferrara': '44121', 'Siracusa': '96100', 'Pescara': '65100', 'Monza': '20900',
+  'Bergamo': '24100', 'Vicenza': '36100', 'Bolzano': '39100', 'Trento': '38122',
+  'Ancona': '60100', 'Udine': '33100', 'Arezzo': '52100', 'Catanzaro': '88100',
+  'Lecce': '73100', 'Pesaro': '61121', 'Alessandria': '15121', 'Pisa': '56100',
+  'La Spezia': '19100', 'Lucca': '55100', 'Como': '22100', 'Novara': '28100',
+  'Varese': '21100', 'Latina': '04100', 'Brindisi': '72100', 'Parma': '43121',
+  'Piacenza': '29121', 'Cosenza': '87100', 'Potenza': '85100', 'Avellino': '83100',
+  'Caserta': '81100', 'L\'Aquila': '67100', 'Chieti': '66100', 'Teramo': '64100',
+  'Aosta': '11100', 'Prato': '59100', 'Terni': '05100', 'Grosseto': '58100',
+  'Siena': '53100', 'Pistoia': '51100', 'Massa': '54100', 'Frosinone': '03100',
+  'Campobasso': '86100', 'Isernia': '86170', 'Matera': '75100',
+}
+
+/**
+ * Get CAP (postal code) by city name. Case-insensitive.
+ * Returns null if city not found.
+ */
+export function getCAPByCity(cityName?: string): string | null {
+  if (!cityName) return null
+  const trimmed = cityName.trim()
+  // Exact match (case-insensitive)
+  for (const [city, cap] of Object.entries(CAP_MAP)) {
+    if (city.toLowerCase() === trimmed.toLowerCase()) return cap
+  }
+  return null
+}
+
 export function getResidenceStatus(provinciaCode?: string, cityName?: string): 'residente' | 'non_residente' {
   if (provinciaCode && isResidentByProvincia(provinciaCode)) {
     return 'residente'

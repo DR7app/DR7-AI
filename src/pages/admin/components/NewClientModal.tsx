@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
-import { getResidenceStatus, getProvinciaByCity } from '../../../data/sardegnaProvince'
+import { getResidenceStatus, getProvinciaByCity, getCAPByCity } from '../../../data/sardegnaProvince'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
+import { calcolaCodiceFiscale } from '../../../utils/codiceFiscale'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -818,13 +819,41 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale</label>
-                      <input
-                        type="text"
-                        value={formData.codice_fiscale}
-                        onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
-                        maxLength={16}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={formData.codice_fiscale}
+                          onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
+                          maxLength={16}
+                          className="flex-1 bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!formData.cognome || !formData.nome || !formData.data_nascita || !formData.sesso || !formData.luogo_nascita) {
+                              toast.error('Compila cognome, nome, data nascita, sesso e luogo nascita per calcolare il CF')
+                              return
+                            }
+                            const result = calcolaCodiceFiscale({
+                              cognome: formData.cognome,
+                              nome: formData.nome,
+                              data_nascita: formData.data_nascita,
+                              sesso: formData.sesso as 'M' | 'F',
+                              luogo_nascita: formData.luogo_nascita,
+                            })
+                            if (result.codice_fiscale) {
+                              setFormData({ ...formData, codice_fiscale: result.codice_fiscale })
+                              toast.success('Codice Fiscale calcolato')
+                            } else {
+                              toast.error(result.error || 'Errore nel calcolo del CF')
+                            }
+                          }}
+                          className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
+                          title="Calcola CF da cognome, nome, data nascita, sesso, luogo nascita"
+                        >
+                          Calcola CF
+                        </button>
+                      </div>
                       {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
                     </div>
                     <div>
@@ -912,7 +941,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => {
                           const city = e.target.value
                           const prov = getProvinciaByCity(city)
-                          setFormData({ ...formData, citta_residenza: city, ...(prov ? { provincia_residenza: prov } : {}) })
+                          const cap = getCAPByCity(city)
+                          setFormData({ ...formData, citta_residenza: city, ...(prov ? { provincia_residenza: prov } : {}), ...(cap ? { codice_postale: cap } : {}) })
                         }}
                         className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                         placeholder="es. Cagliari, Torino..."
