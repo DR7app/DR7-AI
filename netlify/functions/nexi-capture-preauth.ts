@@ -87,6 +87,26 @@ const handler: Handler = async (event) => {
             });
         }
 
+        // If still 404, try /build/captures with orderId in body
+        if (response.status === 404 && orderId) {
+            console.log('[nexi-capture-preauth] Still 404 — trying /build/captures');
+            response = await fetch(`${NEXI_BASE_URL}/build/captures`, {
+                method: 'POST',
+                headers: { ...captureHeaders, 'Idempotency-Key': correlationId + '-build' },
+                body: JSON.stringify({ ...capturePayload, orderId })
+            });
+        }
+
+        // If still 404, try accounting endpoint
+        if (response.status === 404 && orderId) {
+            console.log('[nexi-capture-preauth] Still 404 — trying /build/confirm');
+            response = await fetch(`${NEXI_BASE_URL}/build/confirm`, {
+                method: 'POST',
+                headers: { ...captureHeaders, 'Idempotency-Key': correlationId + '-confirm' },
+                body: JSON.stringify({ ...capturePayload, orderId, operationId })
+            });
+        }
+
         const responseText = await response.text();
         console.log('[nexi-capture-preauth] Response:', response.status, responseText.substring(0, 500));
 
