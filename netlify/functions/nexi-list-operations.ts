@@ -18,7 +18,7 @@ const handler: Handler = async (event) => {
 
     try {
         const res = await fetch(`${NEXI_BASE_URL}/orders/${orderId}`, {
-            headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': `list-${Date.now()}` }
+            headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16) }) }
         })
         const text = await res.text()
         let data
