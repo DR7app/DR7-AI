@@ -361,8 +361,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
-  // @ts-ignore
-  const [creatingPreAuth, setCreatingPreAuth] = useState(false)
+  // Pre-auth disabled — Nexi capture not supported via Pay by Link API
 
   const isInitialEditLoad = useRef(false)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
@@ -1859,87 +1858,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
-  // Handle creating Nexi pre-authorization for cauzione
-  // @ts-ignore
-  async function handleCreatePreAuth(booking: Booking) {
-    if (!booking.id) return
-
-    const depositAmount = booking.booking_details?.deposit
-    if (!depositAmount || depositAmount <= 0) {
-      alert('Nessuna cauzione specificata per questa prenotazione')
-      return
-    }
-
-    setCreatingPreAuth(true)
-    try {
-      // First, find or create the cauzione record for this booking
-      const { data: existingCauzione } = await supabase
-        .from('cauzioni')
-        .select('id')
-        .eq('riferimento_contratto_id', booking.id)
-        .single()
-
-      let cauzioneId: string
-
-      if (existingCauzione) {
-        cauzioneId = existingCauzione.id
-      } else {
-        // Create cauzione via sync function
-        const syncResponse = await fetch('/.netlify/functions/sync-booking-cauzione', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            customerId: booking.user_id || booking.booking_details?.customer?.id,
-            vehicleId: booking.vehicle_id,
-            returnDate: booking.dropoff_date,
-            depositAmount: depositAmount,
-            paymentMethod: 'carta',
-            depositPaid: false
-          })
-        })
-
-        const syncResult = await syncResponse.json()
-        if (!syncResponse.ok) {
-          throw new Error(syncResult.error || 'Failed to create cauzione record')
-        }
-        cauzioneId = syncResult.cauzione?.id
-        if (!cauzioneId) {
-          throw new Error('No cauzione ID returned from sync')
-        }
-      }
-
-      // Now create the pre-authorization
-      const response = await fetch('/.netlify/functions/nexi-create-preauth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cauzioneId: cauzioneId,
-          amount: depositAmount,
-          customerEmail: booking.customer_email || '',
-          customerName: booking.customer_name || '',
-          description: `Cauzione - ${booking.vehicle_name || 'Veicolo'} - ${booking.customer_name || 'Cliente'}`
-        })
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Errore nella creazione della preautorizzazione')
-      }
-
-      // Open the Nexi payment page
-      if (result.paymentUrl) {
-        window.open(result.paymentUrl, '_blank')
-      }
-    } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
-      console.error('Error creating pre-auth:', error)
-      alert('Errore nella creazione della preautorizzazione: ' + _errMsg)
-    } finally {
-      setCreatingPreAuth(false)
-    }
-  }
+  // Pre-auth function removed — Nexi Pay by Link doesn't support capture via API
 
   async function handleDeleteBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
     try {
