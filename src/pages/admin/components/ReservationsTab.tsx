@@ -498,7 +498,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     vehicleName: string; category: string
   } | null>(null)
   const [revenueLoading, setRevenueLoading] = useState(false)
-  const [revenueExpanded, setRevenueExpanded] = useState(false)
+  // revenueExpanded removed — details always shown
 
   useEffect(() => {
     if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
@@ -520,9 +520,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (cancelled) return
         if (data.enabled && data.finalTotalEur) {
           setRevenueSuggestion(data)
-          // AUTO_APPLY: automatically set the total amount
+          // AUTO_APPLY: automatically set the total amount (rental + insurance)
           if (data.mode === 'auto_apply') {
-            setFormData(prev => ({ ...prev, total_amount: data.finalTotalEur.toFixed(2) }))
+            setFormData(prev => {
+              const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
+              const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle) : []
+              const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
+              const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
+              return { ...prev, total_amount: (data.finalTotalEur + insuranceTotal).toFixed(2) }
+            })
           }
         } else {
           setRevenueSuggestion(null)
@@ -533,6 +539,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     return () => { cancelled = true }
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
+
+  // Recalculate total when insurance option changes (rental price from revenue + insurance)
+  useEffect(() => {
+    if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id) {
+      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+      const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle) : []
+      const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
+      const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
+      const newTotal = (revenueSuggestion.finalTotalEur + insuranceTotal).toFixed(2)
+      setFormData(prev => ({ ...prev, total_amount: newTotal }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.insurance_option])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -5295,25 +5314,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     </span>
                     {revenueSuggestion && (
                       <div className="flex items-center gap-2">
-                        <span className={`text-lg font-bold ${
-                          revenueSuggestion.mode === 'auto_apply' ? 'text-green-400' : 'text-amber-400'
-                        }`}>
-                          EUR {revenueSuggestion.finalTotalEur.toFixed(2)}
-                        </span>
-                        {revenueSuggestion.mode !== 'auto_apply' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormData(prev => ({
-                                ...prev,
-                                total_amount: revenueSuggestion.finalTotalEur.toFixed(2)
-                              }))
-                            }}
-                            className="text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition-colors"
-                          >
-                            Applica
-                          </button>
-                        )}
+                        {(() => {
+                          const sv = vehicles.find(v => v.id === formData.vehicle_id)
+                          const ko = sv ? getInsuranceOptions(sv) : []
+                          const sk = ko.find(k => k.id === formData.insurance_option)
+                          const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
+                          const grandTotal = revenueSuggestion.finalTotalEur + insTotal
+                          return (
+                            <>
+                              <span className={`text-lg font-bold ${
+                                revenueSuggestion.mode === 'auto_apply' ? 'text-green-400' : 'text-amber-400'
+                              }`}>
+                                EUR {grandTotal.toFixed(2)}
+                              </span>
+                              {revenueSuggestion.mode !== 'auto_apply' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(prev => ({ ...prev, total_amount: grandTotal.toFixed(2) }))
+                                  }}
+                                  className="text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition-colors"
+                                >
+                                  Applica
+                                </button>
+                              )}
+                            </>
+                          )
+                        })()}
                       </div>
                     )}
                   </div>
@@ -5339,6 +5366,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             </span>
                           </div>
                         ))}
+                        {(() => {
+                          const sv = vehicles.find(v => v.id === formData.vehicle_id)
+                          const ko = sv ? getInsuranceOptions(sv) : []
+                          const sk = ko.find(k => k.id === formData.insurance_option)
+                          if (!sk || sk.pricePerDay === 0) return null
+                          return (
+                            <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                              <span className="text-theme-text-muted">Assicurazione ({sk.label})</span>
+                              <span className="text-blue-400 font-mono">+EUR {(sk.pricePerDay * revenueSuggestion.rentalDays).toFixed(2)}</span>
+                            </div>
+                          )
+                        })()}
                       </div>
                     </>
                   )}
