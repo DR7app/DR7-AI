@@ -122,6 +122,7 @@ export const SFORO_DEFAULTS: { match: (name: string) => boolean; sforo: string; 
 ]
 const DEFAULT_SFORO = '1.80'
 const DEFAULT_KM_LIMIT = '100/giorno'
+const LAVAGGIO_FEE = 9.90 // Mandatory car wash fee per booking
 
 function getSforoForVehicle(vehicleName: string): string {
   const lower = (vehicleName || '').toLowerCase()
@@ -520,7 +521,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (cancelled) return
         if (data.enabled && data.finalTotalEur) {
           setRevenueSuggestion(data)
-          // AUTO_APPLY: automatically set the total amount (rental + insurance + delivery + contanti)
+          // AUTO_APPLY: automatically set the total amount (rental + insurance + delivery + lavaggio + contanti)
           if (data.mode === 'auto_apply') {
             setFormData(prev => {
               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
@@ -529,7 +530,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
               const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
                 + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
-              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees
+              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               return { ...prev, total_amount: total.toFixed(2) }
             })
@@ -553,7 +554,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
       const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
         + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees
+      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       setFormData(prev => ({ ...prev, total_amount: newTotal.toFixed(2) }))
     }
@@ -5395,7 +5396,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
                           const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
                             + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees
+                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees + LAVAGGIO_FEE
                           const grandTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
                           return (
                             <>
@@ -5455,6 +5456,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             </div>
                           )
                         })()}
+                        <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                          <span className="text-theme-text-muted">Lavaggio</span>
+                          <span className="text-blue-400 font-mono">+EUR {LAVAGGIO_FEE.toFixed(2)}</span>
+                        </div>
                         {(formData.delivery_enabled && parseFloat(formData.delivery_fee || '0') > 0) && (
                           <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
                             <span className="text-theme-text-muted">Consegna ({formData.pickup_location === 'cagliari_airport' ? 'Aeroporto' : 'Domicilio'})</span>
