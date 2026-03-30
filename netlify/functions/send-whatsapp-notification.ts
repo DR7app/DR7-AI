@@ -295,10 +295,7 @@ const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         chatId: `${targetPhone}@c.us`,
-        // If message already includes the header, send as-is (avoid double wrapping)
-        message: message.includes('MESSAGGIO AUTOMATICO GENERATO DA RENTORA')
-          ? message
-          : `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
+        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
       }),
     });
 
