@@ -5326,29 +5326,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         {revenueSuggestion.minHit && ' | Min raggiunto'}
                         {revenueSuggestion.maxHit && ' | Max raggiunto'}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setRevenueExpanded(!revenueExpanded)}
-                        className="text-xs text-blue-400 hover:text-blue-300"
-                      >
-                        {revenueExpanded ? 'Nascondi dettagli' : 'Mostra dettagli'}
-                      </button>
-                      {revenueExpanded && (
-                        <div className="space-y-1 pt-1 border-t border-theme-border">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-theme-text-muted">Base selezionata</span>
-                            <span className="text-theme-text-primary">EUR {revenueSuggestion.selectedBaseRateEur.toFixed(2)}/g</span>
-                          </div>
-                          {revenueSuggestion.breakdown.map((item, i) => (
-                            <div key={i} className="flex justify-between text-xs">
-                              <span className="text-theme-text-muted">{item.label} ({item.description})</span>
-                              <span className={`font-mono ${item.coeff > 1 ? 'text-red-400' : item.coeff < 1 ? 'text-green-400' : 'text-theme-text-primary'}`}>
-                                x{item.coeff.toFixed(2)}
-                              </span>
-                            </div>
-                          ))}
+                      <div className="space-y-1 pt-1 border-t border-theme-border">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-theme-text-muted">Base selezionata</span>
+                          <span className="text-theme-text-primary">EUR {revenueSuggestion.selectedBaseRateEur.toFixed(2)}/g</span>
                         </div>
-                      )}
+                        {revenueSuggestion.breakdown.map((item, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="text-theme-text-muted">{item.label} ({item.description})</span>
+                            <span className={`font-mono ${item.coeff > 1 ? 'text-red-400' : item.coeff < 1 ? 'text-green-400' : 'text-theme-text-primary'}`}>
+                              x{item.coeff.toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </>
                   )}
                 </div>
