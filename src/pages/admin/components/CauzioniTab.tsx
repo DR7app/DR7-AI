@@ -376,11 +376,10 @@ export default function CauzioniTab() {
                     await navigator.clipboard.writeText(result.paymentUrl)
                     toast.success('Link pre-autorizzazione copiato!')
                 } catch {
-                    // Fallback: prompt user to copy manually
                     prompt('Copia il link:', result.paymentUrl)
                 }
 
-                // Send via WhatsApp if phone available
+                // Send via WhatsApp with full branded message
                 const phone = cauzione.cliente_telefono
                 if (phone) {
                     await fetch('/.netlify/functions/send-whatsapp-notification', {
@@ -388,10 +387,10 @@ export default function CauzioniTab() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: phone,
-                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nPer completare la pre-autorizzazione della cauzione di *€${Number(cauzione.importo).toFixed(2)}* per ${cauzione.veicolo_modello || 'il veicolo'}, clicchi qui:\n${result.paymentUrl}\n\nL'importo verrà solo bloccato sulla carta e sbloccato al termine del noleggio.\n\nGrazie,\nDR7`
+                            customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7\n\nGentile ${cauzione.cliente_nome || 'Cliente'},\n\nPer completare la pre-autorizzazione della cauzione di *€${Number(cauzione.importo).toFixed(2)}* per ${cauzione.veicolo_modello || 'il veicolo'}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n*IMPORTANTE:* L'importo verrà solo bloccato sulla carta e sbloccato al termine del noleggio. Non verrà effettuato alcun addebito.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIl link ha validità limitata. Il pagamento implica accettazione delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
                         })
                     })
-                    toast.success('Link inviato via WhatsApp!')
+                    toast.success('Link cauzione inviato via WhatsApp!')
                 }
 
                 fetchCauzioni()
@@ -424,8 +423,26 @@ export default function CauzioniTab() {
             }
 
             if (result.paymentUrl) {
-                window.open(result.paymentUrl, '_blank', 'width=600,height=700')
-                toast.success('Pagina di pagamento Nexi aperta. Completa il pagamento con il cliente.')
+                // Copy to clipboard
+                try {
+                    await navigator.clipboard.writeText(result.paymentUrl)
+                } catch { /* ignore */ }
+
+                // Send via WhatsApp with full branded message
+                const phone = cauzione.cliente_telefono
+                if (phone) {
+                    await fetch('/.netlify/functions/send-whatsapp-notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customPhone: phone,
+                            customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7\n\nGentile ${cauzione.cliente_nome || 'Cliente'},\n\nPer completare la pre-autorizzazione della cauzione di *€${Number(cauzione.importo).toFixed(2)}* per ${cauzione.veicolo_modello || 'il veicolo'}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n*IMPORTANTE:* L'importo verrà solo bloccato sulla carta e sbloccato al termine del noleggio. Non verrà effettuato alcun addebito.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIl link ha validità limitata. Il pagamento implica accettazione delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
+                        })
+                    })
+                    toast.success('Link cauzione inviato via WhatsApp!')
+                } else {
+                    toast.success('Link cauzione creato e copiato!')
+                }
             }
 
             fetchCauzioni()
