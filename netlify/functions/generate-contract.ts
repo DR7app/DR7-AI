@@ -706,12 +706,12 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // Contract Info
             'ContractNumber': contractNumber,
             'NumeroContratto': contractNumber,
-            'Date': new Date().toLocaleDateString('it-IT'),
-            'Data': new Date().toLocaleDateString('it-IT'),
+            'Date': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            'Data': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
             'PlaceOfIssue': 'Cagliari',
             'LuogoStipula': 'Cagliari',
-            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
-            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
+            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
 
             // Customer Info — use resolved values (booking top-level can be null for credit wallet bookings)
             'CustomerName': clientName || '',
