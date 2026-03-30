@@ -4609,7 +4609,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   value={formData.pickup_location}
                   onChange={(e) => {
                     const loc = e.target.value
-                    const fee = LOCATIONS.find(l => l.value === loc)?.fee || 0
                     setFormData(prev => ({
                       ...prev,
                       pickup_location: loc,
