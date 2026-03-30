@@ -117,7 +117,7 @@ function isFurgone(vehicle?: Vehicle): boolean {
 // Sforo (km overage fee) defaults per vehicle type
 // eslint-disable-next-line react-refresh/only-export-components
 export const SFORO_DEFAULTS: { match: (name: string) => boolean; sforo: string; label: string }[] = [
-  { match: (n) => n.includes('rs3') || n.includes('macan'), sforo: '0.89', label: 'RS3/Macan' },
+  { match: (n) => n.includes('rs3') || n.includes('macan') || n.includes('test'), sforo: '0.89', label: 'RS3/Macan/Test' },
   { match: (n) => n.includes('ducato') || n.includes('vito') || n.includes('furgone') || n.includes('ncc') || n.includes('tourer'), sforo: '0.49', label: 'Furgone/NCC' },
 ]
 const DEFAULT_SFORO = '1.80'
@@ -5362,17 +5362,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   })
                 }}
               />
-              {/* Sforo auto-set per vehicle: RS3/Macan €0.89, Furgone/NCC €0.49, default €1.80 */}
-              {!formData.unlimited_km && formData.km_overage_fee && formData.km_overage_fee !== '0' && (
-                <div className="text-xs text-theme-text-muted p-2 bg-theme-bg-tertiary rounded border border-theme-border">
-                  Sforo: <span className="text-theme-text-primary font-mono font-bold">€{formData.km_overage_fee}/km</span>
-                  {formData.vehicle_id && (() => {
-                    const vName = vehicles.find(v => v.id === formData.vehicle_id)?.display_name || ''
-                    const rule = SFORO_DEFAULTS.find(r => r.match(vName.toLowerCase()))
-                    return rule ? <span className="text-amber-400 ml-1">({rule.label})</span> : null
-                  })()}
-                </div>
-              )}
+              <div>
+                <Input
+                  label="Sforo per KM (€)"
+                  type="number"
+                  step="0.01"
+                  value={formData.km_overage_fee}
+                  onChange={(e) => setFormData({ ...formData, km_overage_fee: e.target.value })}
+                  placeholder="es. 0.50"
+                  disabled={formData.unlimited_km}
+                />
+                {formData.vehicle_id && !formData.unlimited_km && (() => {
+                  const vName = vehicles.find(v => v.id === formData.vehicle_id)?.display_name || ''
+                  const rule = SFORO_DEFAULTS.find(r => r.match(vName.toLowerCase()))
+                  return rule ? (
+                    <p className="text-xs text-amber-400 mt-1">Default {rule.label}: €{rule.sforo}/km</p>
+                  ) : null
+                })()}
+              </div>
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
                 <div
