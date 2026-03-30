@@ -192,7 +192,10 @@ export function getEarliestValidPickupTime(
     // Filter bookings for this vehicle
     const vehicleBookings = existingBookings.filter(booking => {
         if (excludeBookingId && booking.id === excludeBookingId) return false
-        if (booking.status === 'cancelled') return false
+        // Exclude cancelled and expired bookings — they don't block slots
+        if (booking.status === 'cancelled' || booking.status === 'expired') return false
+        // Exclude expired pending_payment bookings (payment link timed out)
+        if (booking.status === 'pending_payment' && booking.payment_status === 'expired') return false
         return matchVehicleByPlate(booking, vehicle)
     })
 

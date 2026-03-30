@@ -418,11 +418,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return_time: '10:00',
     pickup_location: 'dr7_office',
     dropoff_location: 'dr7_office',
-    status: 'confirmed',
+    status: 'pending_payment',
     source: 'admin',
     total_amount: '0',
     amount_paid: '0',
-    payment_status: 'pending',
+    payment_status: 'unpaid',
     payment_method: 'Nexi Pay by Link',
     currency: 'EUR',
     // 2nd Driver - Required fields for contract generation validation
@@ -3451,8 +3451,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0)),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
-        status: formData.status,
-        payment_status: formData.payment_status,
+        // Pay by Link bookings start as pending_payment/unpaid;
+        // other payment methods start as confirmed/paid
+        status: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
+          ? 'pending_payment' : formData.status === 'pending_payment' ? 'pending_payment' : (formData.status || 'confirmed'),
+        payment_status: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
+          ? 'unpaid' : formData.payment_status,
         payment_method: formData.payment_method,
         customer_name: customerInfo?.full_name || 'N/A',
         customer_email: customerInfo?.email || null,
@@ -3691,12 +3695,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const linkData = await linkRes.json()
 
           if (linkRes.ok && linkData.paymentUrl) {
-            // Store link on booking
+            // Payment link tracking fields are now set by the backend (nexi-pay-by-link),
+            // but we also update booking_details for backward compatibility
             await supabase.from('bookings').update({
+              payment_link_url: linkData.paymentUrl,
+              payment_link_created_at: linkData.linkCreatedAt || new Date().toISOString(),
+              payment_link_expires_at: linkData.expiresAt,
               booking_details: {
                 ...insertedBooking.booking_details,
                 nexi_payment_link: linkData.paymentUrl,
-                nexi_order_id: linkData.orderId
+                nexi_order_id: linkData.orderId,
+                payment_link_expires_at: linkData.expiresAt,
               }
             }).eq('id', insertedBooking.id)
 
@@ -5160,7 +5169,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     ...formData,
                     payment_status: newStatus,
                     amount_paid: newAmountPaid,
-                    status: newStatus === 'paid' ? 'confirmed' : 'pending',
+                    // Map payment status to booking status consistently
+                    status: newStatus === 'paid' ? 'confirmed'
+                      : (formData.payment_method === 'Nexi Pay by Link' ? 'pending_payment' : 'confirmed'),
                     payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
                   })
                 }}
@@ -5890,18 +5901,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         selectedBooking.payment_status === 'succeeded' ||
                         (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                         ? 'bg-green-900 text-green-300'
-                        : selectedBooking.payment_status === 'pending'
+                        : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending_payment')
                           ? 'bg-yellow-900 text-yellow-300'
-                          : 'bg-red-900 text-red-300'
+                          : selectedBooking.payment_status === 'expired'
+                            ? 'bg-orange-900 text-orange-300'
+                            : 'bg-red-900 text-red-300'
                         }`}>
                         {selectedBooking.payment_status === 'completed' ||
                           selectedBooking.payment_status === 'paid' ||
                           selectedBooking.payment_status === 'succeeded' ||
                           (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                           ? 'Pagato'
-                          : selectedBooking.payment_status === 'pending'
+                          : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending_payment')
                             ? 'Da Saldare'
-                            : 'Non Pagato'}
+                            : selectedBooking.payment_status === 'expired'
+                              ? 'Scaduto'
+                              : 'Non Pagato'}
                       </span>
                     </div>
                   </div>

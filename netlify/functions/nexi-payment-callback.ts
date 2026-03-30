@@ -354,28 +354,55 @@ const handler: Handler = async (event) => {
         if (isSuccess && transaction.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
-                .select('id, user_id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, service_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee')
+                .select('id, user_id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, service_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee, status, payment_status')
                 .eq('id', transaction.booking_id)
                 .single();
 
             if (booking) {
                 const amountEur = (transaction.amount_cents / 100).toFixed(2);
+                const paidAt = new Date().toISOString();
 
-                // Confirm the booking
-                await supabase.from('bookings').update({
+                // RACE CONDITION GUARD: Only confirm if booking is still in a payable state
+                // If the expiration job already ran, booking.status might be 'expired'
+                // In that case, we still confirm — payment was authorized before expiry
+                // (Nexi authorized the charge, so the customer DID pay)
+                const wasExpired = booking.status === 'expired';
+                if (wasExpired) {
+                    console.log(`[nexi-payment-callback] Booking ${booking.id} was expired but payment came through — re-confirming (payment wins over expiry)`);
+                }
+
+                // Skip if already paid (duplicate webhook)
+                if (booking.payment_status === 'paid') {
+                    console.log(`[nexi-payment-callback] Booking ${booking.id} already paid — skipping duplicate confirmation`);
+                    return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_paid: true }) };
+                }
+
+                // Confirm the booking — CONDITIONAL UPDATE for safety
+                const { data: confirmedRows } = await supabase.from('bookings').update({
                     payment_status: 'paid',
                     status: 'confirmed',
+                    paid_at: paidAt,
                     amount_paid: transaction.amount_cents,
+                    expired_at: null,  // Clear expiry if it was set by the cron job
                     booking_details: {
                         ...booking.booking_details,
                         nexi_transaction_id: transactionId || operationId,
                         nexi_contract_id: contractId,
-                        nexi_paid_at: new Date().toISOString(),
+                        nexi_paid_at: paidAt,
                         paymentStatus: 'paid'
                     }
-                }).eq('id', booking.id);
+                })
+                .eq('id', booking.id)
+                .neq('payment_status', 'paid')  // Guard: don't re-confirm
+                .select('id');
 
-                console.log(`[nexi-payment-callback] Booking ${booking.id} confirmed — €${amountEur} paid`);
+                if (!confirmedRows || confirmedRows.length === 0) {
+                    console.log(`[nexi-payment-callback] Booking ${booking.id} — conditional update matched 0 rows (already paid by another webhook)`);
+                    return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_paid: true }) };
+                }
+
+                console.log(`[nexi-payment-callback] Booking ${booking.id} confirmed — €${amountEur} paid${wasExpired ? ' (recovered from expired)' : ''}`);
+
 
                 // Store contractId on customer for future MIT charges
                 if (contractId) {

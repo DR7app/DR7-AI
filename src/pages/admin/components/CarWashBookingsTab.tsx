@@ -851,8 +851,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       dropoff_location: 'DR7 Empire - Car Wash',
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
-      status: 'confirmed',
-      payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : formData.payment_status,
+      // Pay by Link: pending_payment/unpaid; all others: confirmed
+      status: formData.payment_status === 'nexi_pay_by_link' ? 'pending_payment' : 'confirmed',
+      payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'unpaid' : formData.payment_status,
       payment_method: formData.payment_status === 'nexi_pay_by_link' ? 'Nexi Pay by Link' : undefined,
       booking_details: bookingDetails
     }
@@ -942,7 +943,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     // Send WhatsApp notification
     try {
-      const paymentStatus = isNexiPayByLink ? 'pending' : (formData.payment_status || 'pending')
+      const paymentStatus = isNexiPayByLink ? 'unpaid' : (formData.payment_status || 'unpaid')
       const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : 0
 
       // Send admin notification (detailed internal format)

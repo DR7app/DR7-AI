@@ -210,7 +210,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     // Priority: 1) plate match (targa), 2) vehicle_id match (fallback)
     const bookingToVehicleId = new Map<string, string>()
     bookings.forEach(b => {
-      if (b.status === 'cancelled') return
+      // Use centralized visibility rule: hide cancelled, expired, and expired pending_payment
+      if (b.status === 'cancelled' || b.status === 'expired') return
+      if (b.status === 'pending_payment' && b.payment_status === 'expired') return
       const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
       const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
 
@@ -523,8 +525,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
                       // Check if this is an unavailability/mechanic booking
                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
-                      // Check if this is a pending Nexi Pay by Link booking (DA SALDARE)
-                      const isPendingPayment = evt.booking.payment_method === 'Nexi Pay by Link' && evt.booking.payment_status === 'pending'
+                      // Check if this is a pending payment booking (DA SALDARE)
+                      // Supports both new status model (pending_payment) and legacy (Nexi Pay by Link + pending/unpaid)
+                      const isPendingPayment = evt.booking.status === 'pending_payment'
+                        || (evt.booking.payment_method === 'Nexi Pay by Link' && (evt.booking.payment_status === 'pending' || evt.booking.payment_status === 'unpaid'))
 
                       if (isPendingPayment) {
                         bgClass = "bg-amber-500/70"
