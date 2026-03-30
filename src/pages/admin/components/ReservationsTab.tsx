@@ -40,15 +40,16 @@ import DanniPenaliModal from './DanniPenaliModal'
 import { logger } from '../../../utils/logger'
 
 // --- Kasko Constants & Types ---
-type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
+type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
 
-// SUPERCARS (Exotic) - KASKO options + Kasko DR7
+// SUPERCARS (Exotic) - RCA compresa + KASKO options
 // eslint-disable-next-line react-refresh/only-export-components
 export const INSURANCE_OPTIONS = [
-  { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 100 },
-  { id: 'KASKO_BLACK', label: 'KASKO BLACK', pricePerDay: 150 },
-  { id: 'KASKO_SIGNATURE', label: 'KASKO SIGNATURE', pricePerDay: 200 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 300 },
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
+  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 119 },
+  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 149 },
+  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 189 },
+  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 289 },
 ];
 
 // URBAN - Kasko Base + Kasko DR7
@@ -82,6 +83,7 @@ export const DEPOSIT_AMOUNTS = {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const INSURANCE_ELIGIBILITY = {
+  RCA: { minAge: 18, minLicenseYears: 2 },
   KASKO_BASE: { minAge: 20, minLicenseYears: 2 },
   KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
   KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
@@ -3926,7 +3928,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } else if (formData.km_limit) {
             kmLabel = `${formData.km_limit} km`
           }
-          const insuranceLabel = formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
+          const insuranceLabel = formData.insurance_option === 'RCA' ? 'RCA Compresa (no Kasko)'
+            : formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
             : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
             : formData.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
             : formData.insurance_option === 'DR7' ? 'Kasko DR7'
@@ -4847,9 +4850,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Assicurazione</label>
-                  <div className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary">
-                    Kasko (inclusa)
-                  </div>
+                  <select
+                    value={formData.insurance_option}
+                    onChange={(e) => {
+                      const newOption = e.target.value as KaskoTier;
+                      setFormData(prev => ({ ...prev, insurance_option: newOption }));
+                    }}
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
+                  >
+                    {(() => {
+                      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
+                      return getInsuranceOptions(selectedVehicle).map(opt => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label} {opt.pricePerDay > 0 ? `(€${opt.pricePerDay}/giorno)` : '(inclusa)'}
+                        </option>
+                      ));
+                    })()}
+                  </select>
+                  {formData.insurance_option === 'RCA' && (
+                    <p className="text-xs text-yellow-400 mt-1">⚠️ Senza Kasko: cauzione obbligatoria €15.000</p>
+                  )}
                 </div>
                 {!formData.cauzione_auto && (
                   <>
@@ -5900,7 +5920,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div><span className="text-theme-text-muted">Luogo Ritiro:</span> <span className="text-theme-text-primary">{selectedBooking.pickup_location || '-'}</span></div>
                         <div><span className="text-theme-text-muted">Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_date ? new Date(typeof selectedBooking.dropoff_date === 'number' ? selectedBooking.dropoff_date * 1000 : selectedBooking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
                         <div><span className="text-theme-text-muted">Luogo Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_location || '-'}</span></div>
-                        <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{({'RCA':'Kasko','KASKO':'Kasko','KASKO_BASE':'Kasko','KASKO_BLACK':'Kasko Black','KASKO_SIGNATURE':'Kasko Signature','DR7':'Kasko DR7'} as Record<string,string>)[selectedBooking.booking_details?.insuranceOption || ''] || selectedBooking.booking_details?.insuranceOption || 'Kasko'}</span></div>
+                        <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{({'RCA':'RCA Compresa (no Kasko)','KASKO':'Kasko Base','KASKO_BASE':'Kasko Base','KASKO_BLACK':'Kasko Black','KASKO_SIGNATURE':'Kasko Signature','DR7':'Kasko DR7'} as Record<string,string>)[selectedBooking.booking_details?.insuranceOption || ''] || selectedBooking.booking_details?.insuranceOption || 'Kasko Base'}</span></div>
                         <div><span className="text-theme-text-muted">Cauzione:</span> <span className="text-theme-text-primary">{
                           selectedBooking.booking_details?.depositOption === 'no_deposit'
                             ? `Senza cauzione (+30% = €${selectedBooking.booking_details?.noDepositSurcharge?.toFixed(2) || '0.00'})`
