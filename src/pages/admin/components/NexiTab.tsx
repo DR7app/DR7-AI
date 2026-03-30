@@ -39,10 +39,27 @@ interface NexiTransaction {
     }
 }
 
+interface TokenizedCard {
+    id: string
+    full_name: string
+    email: string
+    phone: string
+    contract_id: string
+    masked_pan: string
+    circuit: string
+    card_type: string
+    card_brand: string
+    updated_at: string
+}
+
 export default function NexiTab() {
     const [transactions, setTransactions] = useState<NexiTransaction[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
+
+    // Tokenized cards
+    const [tokenizedCards, setTokenizedCards] = useState<TokenizedCard[]>([])
+    const [cardsLoading, setCardsLoading] = useState(true)
 
     // Nuovo Addebito modal state
     const [showAddebitoModal, setShowAddebitoModal] = useState(false)
@@ -60,7 +77,36 @@ export default function NexiTab() {
     useEffect(() => {
         fetchTransactions()
         fetchAllAddebiti()
+        fetchTokenizedCards()
     }, [])
+
+    async function fetchTokenizedCards() {
+        setCardsLoading(true)
+        try {
+            const { data } = await supabase
+                .from('customers_extended')
+                .select('id, full_name, email, phone, metadata, updated_at')
+                .not('metadata->nexi_contract_id', 'is', null)
+                .order('updated_at', { ascending: false })
+            const cards: TokenizedCard[] = (data || []).map((c: any) => ({
+                id: c.id,
+                full_name: c.full_name || '',
+                email: c.email || '',
+                phone: c.phone || '',
+                contract_id: c.metadata?.nexi_contract_id || '',
+                masked_pan: c.metadata?.nexi_card_masked_pan || '',
+                circuit: c.metadata?.nexi_card_circuit || '',
+                card_type: c.metadata?.nexi_card_type || '',
+                card_brand: c.metadata?.nexi_card_brand || '',
+                updated_at: c.metadata?.nexi_contract_updated || c.updated_at || '',
+            }))
+            setTokenizedCards(cards)
+        } catch (err) {
+            console.error('Error fetching tokenized cards:', err)
+        } finally {
+            setCardsLoading(false)
+        }
+    }
 
     async function fetchAllAddebiti() {
         const { data } = await supabase
@@ -252,6 +298,61 @@ export default function NexiTab() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                 </button>
+            </div>
+
+            {/* Carte Tokenizzate */}
+            <div className="bg-theme-text-primary/5 rounded-xl border border-theme-border/50 overflow-hidden">
+                <div className="px-6 py-3 bg-theme-bg-primary/20 border-b border-theme-border/50 flex justify-between items-center">
+                    <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Carte Tokenizzate</h3>
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-theme-text-muted">{tokenizedCards.length} carte</span>
+                        <button onClick={fetchTokenizedCards} className="text-xs text-theme-text-muted hover:text-dr7-gold">Aggiorna</button>
+                    </div>
+                </div>
+                {cardsLoading ? (
+                    <div className="px-6 py-8 text-center text-theme-text-muted text-sm">Caricamento...</div>
+                ) : tokenizedCards.length === 0 ? (
+                    <div className="px-6 py-8 text-center text-theme-text-muted text-sm">Nessuna carta tokenizzata</div>
+                ) : (
+                    <div className="divide-y divide-white/5">
+                        {tokenizedCards.map((card) => (
+                            <div key={card.id} className="px-6 py-3 flex items-center justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-theme-text-primary font-semibold text-sm">{card.full_name || 'N/A'}</span>
+                                        {card.masked_pan && (
+                                            <span className="font-mono text-sm text-theme-text-secondary">
+                                                {card.masked_pan}
+                                            </span>
+                                        )}
+                                        {card.circuit && (
+                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30 uppercase">
+                                                {card.circuit}
+                                            </span>
+                                        )}
+                                        {card.card_type && (
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                                card.card_type === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
+                                                card.card_type === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
+                                                card.card_type === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
+                                                'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                                            }`}>
+                                                {card.card_type}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-theme-text-muted mt-0.5">
+                                        {card.email}{card.phone ? ` · ${card.phone}` : ''}
+                                        <span className="ml-2 font-mono">ID: ...{card.contract_id.slice(-8)}</span>
+                                        {card.updated_at && (
+                                            <span className="ml-2">{formatRomeDate(new Date(card.updated_at), { dateStyle: 'short' })}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Stato Addebiti */}
