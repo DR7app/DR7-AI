@@ -520,15 +520,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (cancelled) return
         if (data.enabled && data.finalTotalEur) {
           setRevenueSuggestion(data)
-          // AUTO_APPLY: automatically set the total amount (rental + insurance + contanti surcharge)
+          // AUTO_APPLY: automatically set the total amount (rental + insurance + delivery + contanti)
           if (data.mode === 'auto_apply') {
             setFormData(prev => {
               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
               const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle) : []
               const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
-              const baseTotal = data.finalTotalEur + insuranceTotal
-              const total = prev.payment_method === 'Contanti' ? baseTotal * 1.20 : baseTotal
+              const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
+                + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
+              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees
+              const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               return { ...prev, total_amount: total.toFixed(2) }
             })
           }
@@ -542,19 +544,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return () => { cancelled = true }
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
 
-  // Recalculate total when insurance option changes (rental + insurance + contanti surcharge)
+  // Recalculate total when insurance, delivery fees, or payment method change
   useEffect(() => {
     if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle) : []
       const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
       const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
-      const baseTotal = revenueSuggestion.finalTotalEur + insuranceTotal
-      const newTotal = formData.payment_method === 'Contanti' ? baseTotal * 1.20 : baseTotal
+      const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+        + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees
+      const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       setFormData(prev => ({ ...prev, total_amount: newTotal.toFixed(2) }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -1013,8 +1017,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes, showAllVehicles])
 
   const LOCATIONS = [
-    { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
-    { value: 'cagliari_airport', label: 'Aeroporto di Cagliari Elmas (+€50)' }
+    { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA', fee: 0 },
+    { value: 'cagliari_airport', label: 'Aeroporto di Cagliari Elmas (+€50)', fee: 50 },
+    { value: 'domicilio', label: 'Consegna a domicilio (inserisci indirizzo)', fee: 0 },
   ]
 
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -4602,9 +4607,43 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   label="Luogo Ritiro"
                   required
                   value={formData.pickup_location}
-                  onChange={(e) => setFormData({ ...formData, pickup_location: e.target.value })}
+                  onChange={(e) => {
+                    const loc = e.target.value
+                    const fee = LOCATIONS.find(l => l.value === loc)?.fee || 0
+                    setFormData(prev => ({
+                      ...prev,
+                      pickup_location: loc,
+                      delivery_enabled: loc === 'domicilio' || loc === 'cagliari_airport',
+                      delivery_fee: loc === 'cagliari_airport' ? '50' : loc === 'domicilio' ? prev.delivery_fee : '0',
+                      ...(loc === 'cagliari_airport' ? {
+                        delivery_street: 'Aeroporto di Cagliari Elmas',
+                        delivery_city: 'Elmas', delivery_zip: '09030', delivery_province: 'CA',
+                      } : loc === 'dr7_office' ? {
+                        delivery_enabled: false, delivery_fee: '0',
+                        delivery_street: '', delivery_city: '', delivery_zip: '', delivery_province: '',
+                      } : {}),
+                    }))
+                  }}
                   options={LOCATIONS}
                 />
+                {formData.pickup_location === 'domicilio' && (
+                  <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
+                    <p className="text-xs text-amber-400 font-semibold">Indirizzo di consegna</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input label="Via *" required value={formData.delivery_street}
+                        onChange={(e) => setFormData({ ...formData, delivery_street: e.target.value })} placeholder="Via Roma, 15" />
+                      <Input label="Città *" required value={formData.delivery_city}
+                        onChange={(e) => setFormData({ ...formData, delivery_city: e.target.value })} placeholder="Cagliari" />
+                      <Input label="CAP" value={formData.delivery_zip}
+                        onChange={(e) => setFormData({ ...formData, delivery_zip: e.target.value })} placeholder="09131" maxLength={5} />
+                      <Input label="Provincia" value={formData.delivery_province}
+                        onChange={(e) => setFormData({ ...formData, delivery_province: e.target.value.toUpperCase() })} placeholder="CA" maxLength={2} />
+                    </div>
+                    <Input label="Costo consegna (€) *" type="number" step="0.01" min="0" required
+                      value={formData.delivery_fee}
+                      onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })} placeholder="0.00" />
+                  </div>
+                )}
                 <div className="space-y-3">
                   <Input
                     label="Data Riconsegna"
@@ -4628,9 +4667,42 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   label="Luogo Riconsegna"
                   required
                   value={formData.dropoff_location}
-                  onChange={(e) => setFormData({ ...formData, dropoff_location: e.target.value })}
+                  onChange={(e) => {
+                    const loc = e.target.value
+                    setFormData(prev => ({
+                      ...prev,
+                      dropoff_location: loc,
+                      pickup_enabled: loc === 'domicilio' || loc === 'cagliari_airport',
+                      pickup_fee: loc === 'cagliari_airport' ? '50' : loc === 'domicilio' ? prev.pickup_fee : '0',
+                      ...(loc === 'cagliari_airport' ? {
+                        pickup_street: 'Aeroporto di Cagliari Elmas',
+                        pickup_city: 'Elmas', pickup_zip: '09030', pickup_province: 'CA',
+                      } : loc === 'dr7_office' ? {
+                        pickup_enabled: false, pickup_fee: '0',
+                        pickup_street: '', pickup_city: '', pickup_zip: '', pickup_province: '',
+                      } : {}),
+                    }))
+                  }}
                   options={LOCATIONS}
                 />
+                {formData.dropoff_location === 'domicilio' && (
+                  <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
+                    <p className="text-xs text-amber-400 font-semibold">Indirizzo di ritiro veicolo</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input label="Via *" required value={formData.pickup_street}
+                        onChange={(e) => setFormData({ ...formData, pickup_street: e.target.value })} placeholder="Via Roma, 15" />
+                      <Input label="Città *" required value={formData.pickup_city}
+                        onChange={(e) => setFormData({ ...formData, pickup_city: e.target.value })} placeholder="Cagliari" />
+                      <Input label="CAP" value={formData.pickup_zip}
+                        onChange={(e) => setFormData({ ...formData, pickup_zip: e.target.value })} placeholder="09131" maxLength={5} />
+                      <Input label="Provincia" value={formData.pickup_province}
+                        onChange={(e) => setFormData({ ...formData, pickup_province: e.target.value.toUpperCase() })} placeholder="CA" maxLength={2} />
+                    </div>
+                    <Input label="Costo ritiro (€) *" type="number" step="0.01" min="0" required
+                      value={formData.pickup_fee}
+                      onChange={(e) => setFormData({ ...formData, pickup_fee: e.target.value })} placeholder="0.00" />
+                  </div>
+                )}
               </div>
 
               {/* VEHICLE SELECTION - Now appears after dates */}
@@ -5270,16 +5342,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       updates.status = 'pending'
                       updates.amount_paid = '0'
                     }
-                    // Contanti: +20% surcharge — recalculate total
-                    if (revenueSuggestion) {
-                      const sv = vehicles.find(v => v.id === formData.vehicle_id)
-                      const ko = sv ? getInsuranceOptions(sv) : []
-                      const sk = ko.find(k => k.id === formData.insurance_option)
-                      const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
-                      const baseTotal = revenueSuggestion.finalTotalEur + insTotal
-                      const newTotal = method === 'Contanti' ? baseTotal * 1.20 : baseTotal
-                      updates.total_amount = newTotal.toFixed(2)
-                    }
                     setFormData(prev => ({ ...prev, ...updates }))
                   }}
                   options={[
@@ -5332,7 +5394,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const ko = sv ? getInsuranceOptions(sv) : []
                           const sk = ko.find(k => k.id === formData.insurance_option)
                           const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
-                          const grandTotal = revenueSuggestion.finalTotalEur + insTotal
+                          const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+                            + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees
+                          const grandTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
                           return (
                             <>
                               <span className={`text-lg font-bold ${
@@ -5391,6 +5456,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             </div>
                           )
                         })()}
+                        {(formData.delivery_enabled && parseFloat(formData.delivery_fee || '0') > 0) && (
+                          <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                            <span className="text-theme-text-muted">Consegna ({formData.pickup_location === 'cagliari_airport' ? 'Aeroporto' : 'Domicilio'})</span>
+                            <span className="text-blue-400 font-mono">+EUR {parseFloat(formData.delivery_fee).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {(formData.pickup_enabled && parseFloat(formData.pickup_fee || '0') > 0) && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-theme-text-muted">Ritiro ({formData.dropoff_location === 'cagliari_airport' ? 'Aeroporto' : 'Domicilio'})</span>
+                            <span className="text-blue-400 font-mono">+EUR {parseFloat(formData.pickup_fee).toFixed(2)}</span>
+                          </div>
+                        )}
                         {formData.payment_method === 'Contanti' && (
                           <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
                             <span className="text-theme-text-muted">Maggiorazione contanti</span>
