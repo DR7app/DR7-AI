@@ -60,7 +60,8 @@ const handler: Handler = async (event) => {
             headers: {
                 'Content-Type': 'application/json',
                 'X-Api-Key': NEXI_API_KEY,
-                'Correlation-Id': correlationId
+                'Correlation-Id': correlationId,
+                'Idempotency-Key': correlationId
             },
             body: JSON.stringify(capturePayload)
         });
