@@ -26,33 +26,23 @@ const handler: Handler = async (event) => {
     }
 
     try {
-        const { cauzioneId, operationId, amount, orderId } = JSON.parse(event.body || '{}');
+        const { cauzioneId, operationId: inputOperationId, amount, orderId } = JSON.parse(event.body || '{}');
 
-        if (!cauzioneId || !operationId || !amount) {
+        if (!amount || (!inputOperationId && !orderId)) {
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'cauzioneId, operationId, and amount are required' })
+                body: JSON.stringify({ error: 'amount and (operationId or orderId) are required' })
             };
         }
 
         const amountCents = Math.round(amount * 100);
-
-        // POST /operations/{operationId}/captures — captures a pre-authorized amount
-        const capturePayload = {
-            amount: amountCents.toString(),
-            currency: 'EUR',
-            description: `Incasso cauzione ${cauzioneId}`
-        };
 
         const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = Math.random() * 16 | 0
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
         })
 
-        // Try both capture endpoints:
-        // 1. /operations/{operationId}/captures (if we have a real operationId)
-        // 2. /orders/{orderId}/captures (fallback using orderId)
         const captureHeaders = {
             'Content-Type': 'application/json',
             'X-Api-Key': NEXI_API_KEY,
@@ -60,52 +50,47 @@ const handler: Handler = async (event) => {
             'Idempotency-Key': correlationId
         }
 
-        // Try operation-based capture first
-        console.log('[nexi-capture-preauth] Trying /operations/ capture with:', operationId);
-        let response = await fetch(`${NEXI_BASE_URL}/operations/${operationId}/captures`, {
+        // Step 1: Find the real operationId by looking up operations for this orderId
+        let realOperationId = inputOperationId
+        if (orderId) {
+            console.log('[nexi-capture-preauth] Looking up operations for orderId:', orderId);
+            const opsRes = await fetch(`${NEXI_BASE_URL}/operations?orderId=${orderId}`, {
+                headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': correlationId + '-lookup' }
+            })
+            if (opsRes.ok) {
+                const opsData = await opsRes.json()
+                console.log('[nexi-capture-preauth] Operations response:', JSON.stringify(opsData).substring(0, 500))
+                const operations = opsData.operations || opsData || []
+                // Find the AUTHORIZATION operation
+                const authOp = Array.isArray(operations)
+                    ? operations.find((op: any) => op.operationType === 'AUTHORIZATION' && op.operationResult === 'AUTHORIZED')
+                    || operations.find((op: any) => op.operationType === 'AUTHORIZATION')
+                    || operations[0]
+                    : null
+                if (authOp?.operationId) {
+                    realOperationId = authOp.operationId
+                    console.log('[nexi-capture-preauth] Found real operationId:', realOperationId)
+                }
+            } else {
+                console.warn('[nexi-capture-preauth] Operations lookup failed:', opsRes.status)
+            }
+        }
+
+        if (!realOperationId) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Could not find operationId' }) }
+        }
+
+        // Step 2: Capture with the real operationId
+        console.log('[nexi-capture-preauth] Capturing with operationId:', realOperationId, 'amount:', amountCents);
+        const capturePayload = {
+            amount: amountCents.toString(),
+            currency: 'EUR',
+            description: `Incasso ${cauzioneId || orderId}`
+        }
+
+        const response = await fetch(`${NEXI_BASE_URL}/operations/${realOperationId}/captures`, {
             method: 'POST', headers: captureHeaders, body: JSON.stringify(capturePayload)
         });
-
-        // If 404, try order-based capture
-        if (response.status === 404 && orderId) {
-            console.log('[nexi-capture-preauth] 404 — trying /orders/ capture with:', orderId);
-            response = await fetch(`${NEXI_BASE_URL}/orders/${orderId}/captures`, {
-                method: 'POST',
-                headers: { ...captureHeaders, 'Idempotency-Key': correlationId + '-order' },
-                body: JSON.stringify(capturePayload)
-            });
-        }
-
-        // If still 404, try v2 endpoint
-        if (response.status === 404 && orderId) {
-            console.log('[nexi-capture-preauth] Still 404 — trying v2 /orders/ capture');
-            const v2Url = NEXI_BASE_URL.replace('/v1', '/v2');
-            response = await fetch(`${v2Url}/orders/${orderId}/captures`, {
-                method: 'POST',
-                headers: { ...captureHeaders, 'Idempotency-Key': correlationId + '-v2' },
-                body: JSON.stringify(capturePayload)
-            });
-        }
-
-        // If still 404, try /build/captures with orderId in body
-        if (response.status === 404 && orderId) {
-            console.log('[nexi-capture-preauth] Still 404 — trying /build/captures');
-            response = await fetch(`${NEXI_BASE_URL}/build/captures`, {
-                method: 'POST',
-                headers: { ...captureHeaders, 'Idempotency-Key': correlationId + '-build' },
-                body: JSON.stringify({ ...capturePayload, orderId })
-            });
-        }
-
-        // If still 404, try accounting endpoint
-        if (response.status === 404 && orderId) {
-            console.log('[nexi-capture-preauth] Still 404 — trying /build/confirm');
-            response = await fetch(`${NEXI_BASE_URL}/build/confirm`, {
-                method: 'POST',
-                headers: { ...captureHeaders, 'Idempotency-Key': correlationId + '-confirm' },
-                body: JSON.stringify({ ...capturePayload, orderId, operationId })
-            });
-        }
 
         const responseText = await response.text();
         console.log('[nexi-capture-preauth] Response:', response.status, responseText.substring(0, 500));
