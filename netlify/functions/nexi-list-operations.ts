@@ -20,8 +20,10 @@ const handler: Handler = async (event) => {
         const res = await fetch(`${NEXI_BASE_URL}/orders/${orderId}/operations`, {
             headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': `list-${Date.now()}` }
         })
-        const data = await res.json()
-        return { statusCode: res.status, headers, body: JSON.stringify(data) }
+        const text = await res.text()
+        let data
+        try { data = JSON.parse(text) } catch { data = { raw: text.substring(0, 500), status: res.status } }
+        return { statusCode: 200, headers, body: JSON.stringify(data) }
     } catch (err: any) {
         return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) }
     }
