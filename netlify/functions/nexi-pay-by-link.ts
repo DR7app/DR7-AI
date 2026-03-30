@@ -87,6 +87,7 @@ const handler: Handler = async (event) => {
             },
             paymentSession: {
                 actionType: 'PAY',
+                captureType: 'IMPLICIT',  // Force auto-capture — charge immediately, not preauth
                 amount: amountCents.toString(),
                 language: 'ita',
                 expirationDate: expirationDateStr,
