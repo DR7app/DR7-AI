@@ -344,6 +344,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingOriginalPaymentStatus, setEditingOriginalPaymentStatus] = useState<string | null>(null) // Track if payment changed from unpaid → paid
   const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
 
   // Missing Data Modal State
@@ -2290,6 +2291,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     })
 
     setEditingId(booking.id)
+    setEditingOriginalPaymentStatus(booking.payment_status || 'pending')
     setShowForm(true)
   }
 
@@ -4086,6 +4088,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't alert here to avoid confusion, just log it
       }
 
+      // Detect if payment status just changed from unpaid → paid (on edit)
+      const justMarkedPaid = editingId
+        && formData.payment_status === 'paid'
+        && editingOriginalPaymentStatus !== 'paid'
+        && editingOriginalPaymentStatus !== 'completed'
+        && editingOriginalPaymentStatus !== 'succeeded'
+
       // Auto-generate fattura and send to SDI when payment status is "paid"
       if (formData.payment_status === 'paid' && insertedBooking?.id) {
         try {
@@ -4108,8 +4117,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Auto-send contract for signature via WhatsApp (NEW paid bookings only, after contract + fattura)
-      if (!editingId && formData.payment_status === 'paid' && insertedBooking?.id) {
+      // Auto-send contract for signature via WhatsApp (new paid bookings OR when manually marked paid)
+      if (((!editingId && formData.payment_status === 'paid') || justMarkedPaid) && insertedBooking?.id) {
         try {
           // Fetch the contract that was just generated for this booking
           const { data: contractForSig } = await supabase
