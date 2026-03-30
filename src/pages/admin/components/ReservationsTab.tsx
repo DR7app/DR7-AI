@@ -2328,7 +2328,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     try {
       // Build new dropoff datetime with explicit Rome timezone offset
       function getRomeOffsetForDate(dateString: string): string {
-        const date = new Date(dateString)
+        // Use noon to avoid DST boundary issues
+        const date = new Date(`${dateString}T12:00:00`)
         const formatter = new Intl.DateTimeFormat('en-US', {
           timeZone: 'Europe/Rome',
           timeZoneName: 'short'
@@ -3510,7 +3511,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Helper function to get correct timezone offset for Europe/Rome (handles DST automatically)
       const getRomeOffset = (dateString: string): string => {
-        const date = new Date(dateString)
+        // Use noon to avoid DST boundary issues (new Date("2026-03-30") parses as UTC midnight)
+        const date = new Date(`${dateString}T12:00:00`)
         const formatter = new Intl.DateTimeFormat('en-US', {
           timeZone: 'Europe/Rome',
           timeZoneName: 'short'
