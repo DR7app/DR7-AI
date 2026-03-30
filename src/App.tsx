@@ -7,12 +7,29 @@ import ErrorBoundary from './components/ErrorBoundary'
 import AlarmNotification from './components/AlarmNotification'
 import LateReturnAlarm from './components/admin/LateReturnAlarm'
 
-const Login = lazy(() => import('./pages/Login'))
-const ResetPassword = lazy(() => import('./pages/ResetPassword'))
-const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
-const AdminRoute = lazy(() => import('./components/AdminRoute'))
-const ReferralPage = lazy(() => import('./pages/ReferralPage'))
-const FirmaPage = lazy(() => import('./pages/FirmaPage'))
+// Retry lazy imports — handles stale chunks after Netlify deploys
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function lazyRetry(importFn: () => Promise<any>) {
+  return lazy(() =>
+    importFn().catch(() => {
+      // Chunk failed to load (likely new deploy) — reload page once
+      const hasReloaded = sessionStorage.getItem('chunk_reload')
+      if (!hasReloaded) {
+        sessionStorage.setItem('chunk_reload', '1')
+        window.location.reload()
+      }
+      sessionStorage.removeItem('chunk_reload')
+      return importFn()
+    })
+  )
+}
+
+const Login = lazyRetry(() => import('./pages/Login'))
+const ResetPassword = lazyRetry(() => import('./pages/ResetPassword'))
+const AdminDashboard = lazyRetry(() => import('./pages/admin/AdminDashboard'))
+const AdminRoute = lazyRetry(() => import('./components/AdminRoute'))
+const ReferralPage = lazyRetry(() => import('./pages/ReferralPage'))
+const FirmaPage = lazyRetry(() => import('./pages/FirmaPage'))
 
 function App() {
   return (
