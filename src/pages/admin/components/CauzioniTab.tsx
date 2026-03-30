@@ -496,6 +496,51 @@ export default function CauzioniTab() {
         }
     }
 
+    // Capture full preauth amount
+    const handleIncassaFull = async (cauzione: Cauzione) => {
+        const amount = Number(cauzione.importo)
+        try {
+            toast.loading(`Incasso €${amount.toFixed(2)} in corso...`, { id: 'capture' })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const nexiTransactionId = (cauzione as any).nexi_transaction_id
+            if (nexiTransactionId) {
+                const response = await fetch('/.netlify/functions/nexi-capture-preauth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cauzioneId: cauzione.id,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        operationId: (cauzione as any).nexi_operation_id || nexiTransactionId,
+                        amount: amount,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        orderId: (cauzione as any).nexi_order_id
+                    })
+                })
+                const result = await response.json()
+                toast.dismiss('capture')
+                if (!response.ok) throw new Error(result.error || 'Errore Nexi')
+                toast.success(`Incassato €${amount.toFixed(2)} con successo!`)
+            } else {
+                toast.dismiss('capture')
+                // No Nexi transaction — mark manually
+                await supabase.from('cauzioni').update({
+                    stato: 'Incassata',
+                    data_incasso: new Date().toISOString(),
+                    note: `Incassato €${amount.toFixed(2)} manualmente`,
+                    updated_at: new Date().toISOString()
+                }).eq('id', cauzione.id)
+                toast.success(`Incassato €${amount.toFixed(2)} (manuale)`)
+            }
+            fetchCauzioni()
+        } catch (error: unknown) {
+            toast.dismiss('capture')
+            const _errMsg = error instanceof Error ? error.message : String(error)
+            console.error('Error capturing:', error)
+            toast.error(`Errore: ${_errMsg}`)
+        }
+    }
+
+    // Capture partial preauth amount (with prompt)
     const handleIncassa = async (cauzione: Cauzione) => {
         const importo = prompt(`Importo da incassare (max €${cauzione.importo}):`, String(cauzione.importo))
         if (importo === null) return
@@ -947,16 +992,26 @@ export default function CauzioniTab() {
                                             {cauzione.metodo === 'preautorizzazione' && cauzione.nexi_transaction_id && (
                                                 <>
                                                     <button
-                                                        onClick={() => handleIncassa(cauzione)}
-                                                        className="px-3 py-2 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors"
+                                                        onClick={() => {
+                                                            if (confirm(`Incassare l'intero importo di €${Number(cauzione.importo).toFixed(2)}?`)) {
+                                                                handleIncassaFull(cauzione)
+                                                            }
+                                                        }}
+                                                        className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors font-semibold"
                                                     >
-                                                        INCASSA
+                                                        CASSA (€{Number(cauzione.importo).toFixed(0)})
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleIncassa(cauzione)}
+                                                        className="px-3 py-2 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors font-semibold"
+                                                    >
+                                                        PARZIALE
                                                     </button>
                                                     <button
                                                         onClick={() => handleMarkSbloccataPreauth(cauzione)}
                                                         className="px-3 py-2 bg-theme-bg-hover text-theme-text-primary text-xs rounded-full hover:bg-theme-bg-tertiary transition-colors"
                                                     >
-                                                        SBLOCCA PREAUTH
+                                                        SBLOCCA
                                                     </button>
                                                 </>
                                             )}
