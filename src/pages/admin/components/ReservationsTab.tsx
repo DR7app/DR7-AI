@@ -361,6 +361,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
+  // @ts-ignore
   const [creatingPreAuth, setCreatingPreAuth] = useState(false)
 
   const isInitialEditLoad = useRef(false)
@@ -1859,6 +1860,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   // Handle creating Nexi pre-authorization for cauzione
+  // @ts-ignore
   async function handleCreatePreAuth(booking: Booking) {
     if (!booking.id) return
 

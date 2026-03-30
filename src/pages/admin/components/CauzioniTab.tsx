@@ -241,6 +241,7 @@ export default function CauzioniTab() {
         }
     }
 
+    // @ts-ignore
     const handleAddebitaMIT = async (cauzione: Cauzione) => {
         try {
             // Find customer's contractId from customers_extended or nexi_transactions
@@ -402,6 +403,7 @@ export default function CauzioniTab() {
         }
     }
 
+    // @ts-ignore
     const handleCreatePreauth = async (cauzione: Cauzione) => {
         try {
             const response = await fetch('/.netlify/functions/nexi-create-preauth', {
@@ -453,6 +455,7 @@ export default function CauzioniTab() {
         }
     }
 
+    // @ts-ignore
     const handleMarkSbloccataPreauth = async (cauzione: Cauzione) => {
         try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -497,6 +500,7 @@ export default function CauzioniTab() {
     }
 
     // Capture full preauth amount
+    // @ts-ignore
     const handleIncassaFull = async (cauzione: Cauzione) => {
         const amount = Number(cauzione.importo)
         try {
@@ -541,6 +545,7 @@ export default function CauzioniTab() {
     }
 
     // Capture partial preauth amount (with prompt)
+    // @ts-ignore
     const handleIncassa = async (cauzione: Cauzione) => {
         const importo = prompt(`Importo da incassare (max €${cauzione.importo}):`, String(cauzione.importo))
         if (importo === null) return
