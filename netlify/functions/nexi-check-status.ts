@@ -45,8 +45,24 @@ const handler: Handler = async (event) => {
             if (!resp.ok) {
                 return { statusCode: resp.status, headers, body: JSON.stringify({ error: data.errors?.[0]?.description || 'API error', raw: data }) }
             }
-            const ops = (data.operations || []).filter((op: any) => op.orderId === orderId)
-            return { statusCode: 200, headers, body: JSON.stringify({ operations: ops, totalScanned: data.operations?.length || 0 }) }
+            const allOps = data.operations || []
+            // If orderId is 'all', return all uncaptured authorizations
+            if (orderId === 'all') {
+                // Group by orderId, find those with AUTH but no CAPTURE/VOID
+                const byOrder: Record<string, any[]> = {}
+                for (const op of allOps) { (byOrder[op.orderId] ||= []).push(op) }
+                const uncaptured = []
+                for (const [, opList] of Object.entries(byOrder)) {
+                    const hasAuth = opList.some((o: any) => o.operationType === 'AUTHORIZATION' && o.operationResult === 'AUTHORIZED')
+                    const hasCaptureOrVoid = opList.some((o: any) => ['CAPTURE', 'VOID', 'CANCEL', 'REFUND'].includes(o.operationType))
+                    if (hasAuth && !hasCaptureOrVoid) {
+                        uncaptured.push(opList.find((o: any) => o.operationType === 'AUTHORIZATION')!)
+                    }
+                }
+                return { statusCode: 200, headers, body: JSON.stringify({ operations: uncaptured, totalScanned: allOps.length }) }
+            }
+            const ops = allOps.filter((op: any) => op.orderId === orderId)
+            return { statusCode: 200, headers, body: JSON.stringify({ operations: ops, totalScanned: allOps.length }) }
         }
 
         if (!orderId) {
