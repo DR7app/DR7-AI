@@ -65,14 +65,9 @@ const handler: Handler = async (event) => {
                 }
             },
             paymentSessions: [{
-                actionType: 'PREAUTH',       // PREAUTH = hold only, NOT PAY
-                captureType: 'EXPLICIT',     // EXPLICIT = must confirm manually via API
+                actionType: 'PAY',           // PAY + EXPLICIT = authorize only, capture manually later
+                captureType: 'EXPLICIT',     // EXPLICIT = funds held, not charged until capture API call
                 amount: amountCents.toString(),
-                recurrence: {
-                    action: 'CONTRACT_CREATION',
-                    contractId: orderId,
-                    contractType: 'MIT_UNSCHEDULED'
-                },
                 language: 'ita',
                 resultUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=success`,
                 cancelUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=cancelled`,
@@ -83,7 +78,7 @@ const handler: Handler = async (event) => {
 
         console.log('[nexi-create-preauth] === PREAUTH REQUEST ===');
         console.log('[nexi-create-preauth] Endpoint: /v2/orders/paybylink (same key as pay-by-link)');
-        console.log('[nexi-create-preauth] actionType: PREAUTH, captureType: EXPLICIT');
+        console.log('[nexi-create-preauth] actionType: PAY, captureType: EXPLICIT (authorize only, capture manually)');
         console.log('[nexi-create-preauth] orderId:', orderId);
         console.log('[nexi-create-preauth] amount (cents):', amountCents);
 
