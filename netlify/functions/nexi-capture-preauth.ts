@@ -45,26 +45,47 @@ const handler: Handler = async (event) => {
             description: `Incasso cauzione ${cauzioneId}`
         };
 
-        console.log('[nexi-capture-preauth] === CAPTURE REQUEST ===');
-        console.log('[nexi-capture-preauth] operationId:', operationId);
-        console.log('[nexi-capture-preauth] amount (cents):', amountCents);
-        console.log('[nexi-capture-preauth] Endpoint:', `${NEXI_BASE_URL}/operations/${operationId}/captures`);
-
         const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = Math.random() * 16 | 0
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
         })
 
-        const response = await fetch(`${NEXI_BASE_URL}/operations/${operationId}/captures`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Api-Key': NEXI_API_KEY,
-                'Correlation-Id': correlationId,
-                'Idempotency-Key': correlationId
-            },
-            body: JSON.stringify(capturePayload)
+        // Try both capture endpoints:
+        // 1. /operations/{operationId}/captures (if we have a real operationId)
+        // 2. /orders/{orderId}/captures (fallback using orderId)
+        const captureHeaders = {
+            'Content-Type': 'application/json',
+            'X-Api-Key': NEXI_API_KEY,
+            'Correlation-Id': correlationId,
+            'Idempotency-Key': correlationId
+        }
+
+        // Try operation-based capture first
+        console.log('[nexi-capture-preauth] Trying /operations/ capture with:', operationId);
+        let response = await fetch(`${NEXI_BASE_URL}/operations/${operationId}/captures`, {
+            method: 'POST', headers: captureHeaders, body: JSON.stringify(capturePayload)
         });
+
+        // If 404, try order-based capture
+        if (response.status === 404 && orderId) {
+            console.log('[nexi-capture-preauth] 404 — trying /orders/ capture with:', orderId);
+            response = await fetch(`${NEXI_BASE_URL}/orders/${orderId}/captures`, {
+                method: 'POST',
+                headers: { ...captureHeaders, 'Idempotency-Key': correlationId + '-order' },
+                body: JSON.stringify(capturePayload)
+            });
+        }
+
+        // If still 404, try v2 endpoint
+        if (response.status === 404 && orderId) {
+            console.log('[nexi-capture-preauth] Still 404 — trying v2 /orders/ capture');
+            const v2Url = NEXI_BASE_URL.replace('/v1', '/v2');
+            response = await fetch(`${v2Url}/orders/${orderId}/captures`, {
+                method: 'POST',
+                headers: { ...captureHeaders, 'Idempotency-Key': correlationId + '-v2' },
+                body: JSON.stringify(capturePayload)
+            });
+        }
 
         const responseText = await response.text();
         console.log('[nexi-capture-preauth] Response:', response.status, responseText.substring(0, 500));
