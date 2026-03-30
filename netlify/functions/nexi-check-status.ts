@@ -46,6 +46,12 @@ const handler: Handler = async (event) => {
                 return { statusCode: resp.status, headers, body: JSON.stringify({ error: data.errors?.[0]?.description || 'API error', raw: data }) }
             }
             const allOps = data.operations || []
+            // If orderId starts with 'search_auth:', find by authCode
+            if (orderId.startsWith('search_auth:')) {
+                const targetAuth = orderId.replace('search_auth:', '')
+                const matched = allOps.filter((op: any) => op.additionalData?.authorizationCode === targetAuth)
+                return { statusCode: 200, headers, body: JSON.stringify({ operations: matched, totalScanned: allOps.length }) }
+            }
             // If orderId is 'all', return all uncaptured authorizations
             if (orderId === 'all') {
                 // Group by orderId, find those with AUTH but no CAPTURE/VOID
