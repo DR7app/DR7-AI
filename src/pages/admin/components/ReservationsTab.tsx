@@ -3501,9 +3501,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
       // Note: vehicle is already declared above in scheduling validation block
 
-      // Get location labels
-      const pickupLocationLabel = LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location
-      const dropoffLocationLabel = LOCATIONS.find(l => l.value === formData.dropoff_location)?.label || formData.dropoff_location
+      // Get location labels — use actual address for domicilio, not the dropdown placeholder
+      const pickupLocationLabel = formData.pickup_location === 'domicilio'
+        ? `${formData.delivery_street || ''}, ${formData.delivery_city || ''}${formData.delivery_zip ? ' ' + formData.delivery_zip : ''}${formData.delivery_province ? ' ' + formData.delivery_province : ''}`.trim().replace(/^,\s*/, '') || 'Consegna a domicilio'
+        : LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location
+      const dropoffLocationLabel = formData.dropoff_location === 'domicilio'
+        ? `${formData.pickup_street || ''}, ${formData.pickup_city || ''}${formData.pickup_zip ? ' ' + formData.pickup_zip : ''}${formData.pickup_province ? ' ' + formData.pickup_province : ''}`.trim().replace(/^,\s*/, '') || 'Ritiro a domicilio'
+        : LOCATIONS.find(l => l.value === formData.dropoff_location)?.label || formData.dropoff_location
 
       // SIMPLIFIED TIMEZONE HANDLING: Construct ISO strings directly
       // This ensures times entered in the admin panel are stored EXACTLY as entered
