@@ -371,11 +371,45 @@ const handler: Handler = async (event) => {
 
                 console.log(`[nexi-payment-callback] Booking ${booking.id} confirmed — €${amountEur} paid`);
 
-                // Store contractId on customer for future MIT charges
-                if (contractId) {
-                    // Try by customer ID first
+                // Store contractId + card details on customer
+                {
                     const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id;
                     const custEmail = (booking.customer_email || booking.booking_details?.customer?.email || transaction.customer_email || '').toLowerCase().trim();
+
+                    // Fetch card details from Nexi operation
+                    let cardInfo: Record<string, any> = {}
+                    if (operationId) {
+                        const opDetails = await fetchNexiOperationDetails(operationId);
+                        if (opDetails) {
+                            const maskedPan = opDetails.paymentMethod?.maskedPan || opDetails.maskedPan || op.additionalData?.maskedPan || '';
+                            const circuit = opDetails.paymentMethod?.circuit || opDetails.paymentCircuit || paymentCircuit || '';
+                            const cardType = opDetails.paymentMethod?.cardType || '';
+                            // BIN lookup for credit/debit/prepaid detection
+                            let binType = '';
+                            let binBrand = '';
+                            if (maskedPan && maskedPan.length >= 6) {
+                                const binResult = await lookupBin(maskedPan.substring(0, 6));
+                                if (binResult) {
+                                    binType = binResult.type; // credit, debit, prepaid
+                                    binBrand = binResult.brand;
+                                }
+                            }
+                            cardInfo = {
+                                nexi_card_masked_pan: maskedPan,
+                                nexi_card_circuit: circuit,
+                                nexi_card_type: cardType || binType, // credit/debit/prepaid
+                                nexi_card_brand: binBrand || circuit,
+                                nexi_card_updated: new Date().toISOString(),
+                            }
+                            console.log(`[nexi-payment-callback] Card info: ${circuit} ${maskedPan} (${cardType || binType})`);
+                        }
+                    }
+
+                    const metadataUpdate = {
+                        ...(contractId ? { nexi_contract_id: contractId } : {}),
+                        nexi_contract_updated: new Date().toISOString(),
+                        ...cardInfo,
+                    }
 
                     let savedOnCustomer = false;
 
@@ -383,11 +417,11 @@ const handler: Handler = async (event) => {
                         const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('id', custId).maybeSingle();
                         if (cust) {
                             await supabase.from('customers_extended').update({
-                                metadata: { ...(cust.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                metadata: { ...(cust.metadata || {}), ...metadataUpdate },
                                 updated_at: new Date().toISOString()
                             }).eq('id', cust.id);
                             savedOnCustomer = true;
-                            console.log(`[nexi-payment-callback] Saved contractId ${contractId} on customer ${cust.id} (by ID)`);
+                            console.log(`[nexi-payment-callback] Saved card info + contractId on customer ${cust.id} (by ID)`);
                         }
                     }
 
@@ -396,16 +430,16 @@ const handler: Handler = async (event) => {
                         const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
                         if (custByEmail) {
                             await supabase.from('customers_extended').update({
-                                metadata: { ...(custByEmail.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                metadata: { ...(custByEmail.metadata || {}), ...metadataUpdate },
                                 updated_at: new Date().toISOString()
                             }).eq('id', custByEmail.id);
                             savedOnCustomer = true;
-                            console.log(`[nexi-payment-callback] Saved contractId ${contractId} on customer ${custByEmail.id} (by email: ${custEmail})`);
+                            console.log(`[nexi-payment-callback] Saved card info + contractId on customer ${custByEmail.id} (by email: ${custEmail})`);
                         }
                     }
 
                     if (!savedOnCustomer) {
-                        console.warn(`[nexi-payment-callback] Could not find customer to save contractId. custId=${custId}, email=${custEmail}`);
+                        console.warn(`[nexi-payment-callback] Could not find customer to save card info. custId=${custId}, email=${custEmail}`);
                     }
                 }
 
