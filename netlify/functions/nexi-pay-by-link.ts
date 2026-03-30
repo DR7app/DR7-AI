@@ -121,7 +121,7 @@ const handler: Handler = async (event) => {
         console.log('Nexi response status:', response.status);
         console.log('Nexi response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
         console.log('Nexi response body:', responseText || '(empty)');
-        console.log('API key first/last 4:', NEXI_API_KEY?.slice(0, 4) + '...' + NEXI_API_KEY?.slice(-4));
+        console.log('API key configured:', !!NEXI_API_KEY);
 
         let responseData: any;
         try {

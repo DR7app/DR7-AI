@@ -100,13 +100,19 @@ const handler: Handler = async (event) => {
         // Find the nexi_transaction by order_id
         const { data: transaction } = await supabase
             .from('nexi_transactions')
-            .select('id, booking_id, amount_cents, customer_email, contract_id, metadata, description')
+            .select('id, booking_id, amount_cents, customer_email, contract_id, metadata, description, status')
             .eq('order_id', orderId)
             .single();
 
         if (!transaction) {
             console.error('[nexi-payment-callback] Transaction not found for order:', orderId);
             return { statusCode: 404, headers, body: JSON.stringify({ error: 'Transaction not found' }) };
+        }
+
+        // Idempotency: if transaction already processed, return success without re-processing
+        if (transaction.status === 'completed' || transaction.status === 'failed') {
+            console.log(`[nexi-payment-callback] Transaction ${orderId} already processed (status: ${transaction.status}). Skipping.`);
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_processed: true, status: transaction.status }) };
         }
 
         // Detect payment purpose from metadata or description

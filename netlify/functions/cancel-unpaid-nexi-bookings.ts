@@ -23,7 +23,7 @@ const cancelHandler: Handler = async () => {
             .select('id, customer_name, customer_phone, customer_email, vehicle_name, created_at, booking_details')
             .eq('payment_method', 'Nexi Pay by Link')
             .eq('payment_status', 'pending')
-            .in('status', ['pending'])
+            .in('status', ['pending', 'confirmed'])
             .lt('created_at', oneHourAgo);
 
         if (error) {

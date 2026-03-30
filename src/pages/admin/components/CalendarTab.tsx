@@ -211,8 +211,6 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     const bookingToVehicleId = new Map<string, string>()
     bookings.forEach(b => {
       if (b.status === 'cancelled') return
-      // Exclude pending Nexi Pay by Link bookings (awaiting payment — not confirmed yet)
-      if (b.payment_method === 'Nexi Pay by Link' && b.payment_status === 'pending') return
       const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
       const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
 
@@ -525,8 +523,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
                       // Check if this is an unavailability/mechanic booking
                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
+                      // Check if this is a pending Nexi Pay by Link booking (DA SALDARE)
+                      const isPendingPayment = evt.booking.payment_method === 'Nexi Pay by Link' && evt.booking.payment_status === 'pending'
 
-                      if (isUnavailability) {
+                      if (isPendingPayment) {
+                        bgClass = "bg-amber-500/70"
+                        borderClass = "border-amber-400/50 border-dashed"
+                      } else if (isUnavailability) {
                         bgClass = "bg-orange-500/80"
                         borderClass = "border-orange-400/30"
                       }
@@ -564,7 +567,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         >
                           <div className="px-2 flex flex-col justify-center h-full">
                             <span className="font-bold text-[10px] truncate leading-tight">
-                              {evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
+                              {isPendingPayment ? '⏳ DA SALDARE — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
                                 // Calculate drop-off day: if end time is exactly 00:00, use previous day
                                 const endHours = evt.endLocal.getHours()
                                 const endMinutes = evt.endLocal.getMinutes()

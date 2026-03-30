@@ -852,7 +852,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
       status: 'confirmed',
-      payment_status: formData.payment_status,
+      payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : formData.payment_status,
+      payment_method: formData.payment_status === 'nexi_pay_by_link' ? 'Nexi Pay by Link' : undefined,
       booking_details: bookingDetails
     }
 
@@ -904,12 +905,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // Handle Nexi Pay by Link
     const isNexiPayByLink = formData.payment_status === 'nexi_pay_by_link'
     if (isNexiPayByLink && data) {
-      // Update booking to pending with Nexi payment method
-      await supabase.from('bookings').update({
-        payment_status: 'pending',
-        payment_method: 'Nexi Pay by Link'
-      }).eq('id', data.id)
-
       try {
         const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
           method: 'POST',
@@ -920,7 +915,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             customerEmail: customerEmail || '',
             customerName: customerName || 'Cliente',
             description: `Lavaggio DR7 - ${serviceNames}`,
-            expirationDays: 1
+            expirationHours: 1
           })
         })
         const linkData = await linkRes.json()
