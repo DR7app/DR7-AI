@@ -1552,35 +1552,77 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   async function handleResendPaymentLink(booking: Booking) {
-    const paymentLink = booking.booking_details?.nexi_payment_link
-    if (!paymentLink) {
-      toast.error('Nessun link di pagamento trovato per questa prenotazione')
-      return
-    }
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
-    if (!custPhone) {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(paymentLink)
-      toast.success('Link copiato! Nessun telefono trovato per inviare WhatsApp.')
-      return
-    }
     const custName = booking.booking_details?.customer?.fullName || booking.customer_name || 'Cliente'
+    const custEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
     const bookingRef = booking.id.substring(0, 8).toUpperCase()
     const totalEur = (booking.price_total / 100).toFixed(2)
+
     try {
+      toast.loading('Generazione nuovo link di pagamento...')
+
+      // Always regenerate a fresh link (old one may be expired)
+      const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          amount: booking.price_total / 100,
+          customerEmail: custEmail,
+          customerName: custName,
+          description: `Prenotazione #${bookingRef} - ${booking.vehicle_name || 'Veicolo'}`,
+          expirationHours: 1,
+          paymentPurpose: 'booking',
+        })
+      })
+
+      const linkData = await linkRes.json()
+      if (!linkRes.ok || !linkData.paymentUrl) {
+        toast.dismiss()
+        toast.error('Errore generazione link: ' + (linkData.error || 'Riprova'))
+        return
+      }
+
+      const newPaymentLink = linkData.paymentUrl
+
+      // Update booking with new link
+      await supabase.from('bookings').update({
+        booking_details: {
+          ...booking.booking_details,
+          nexi_payment_link: newPaymentLink,
+          nexi_order_id: linkData.orderId,
+          nexi_link_regenerated_at: new Date().toISOString(),
+        },
+        // Reset the created_at-based 1h timer by updating payment_status
+        payment_status: 'pending',
+      }).eq('id', booking.id)
+
+      toast.dismiss()
+
+      if (!custPhone) {
+        navigator.clipboard.writeText(newPaymentLink)
+        toast.success('Nuovo link generato e copiato! Nessun telefono trovato per WhatsApp.')
+        return
+      }
+
+      // Send via WhatsApp
       await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: custPhone,
-          customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per la prenotazione #${bookingRef} è ancora in sospeso.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link sicuro:\n${paymentLink}\n\nIl link ha validità limitata. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
+          customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per la prenotazione #${bookingRef} è ancora in sospeso.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link sicuro:\n${newPaymentLink}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
         })
       })
-      toast.success('Link di pagamento rinviato via WhatsApp!')
+      toast.success('Nuovo link di pagamento generato e inviato via WhatsApp!')
+
+      // Refresh bookings list
+      await loadData()
     } catch (err: unknown) {
+      toast.dismiss()
       const _errMsg = err instanceof Error ? err.message : String(err)
-      console.error('Error resending payment link:', err)
-      toast.error('Errore invio WhatsApp: ' + _errMsg)
+      console.error('Error regenerating payment link:', err)
+      toast.error('Errore: ' + _errMsg)
     }
   }
 
