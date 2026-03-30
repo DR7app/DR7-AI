@@ -85,14 +85,14 @@ export default function NexiTab() {
         try {
             const { data } = await supabase
                 .from('customers_extended')
-                .select('id, full_name, email, phone, metadata, updated_at')
+                .select('id, nome, cognome, email, telefono, metadata, updated_at')
                 .not('metadata->nexi_contract_id', 'is', null)
                 .order('updated_at', { ascending: false })
             const cards: TokenizedCard[] = (data || []).map((c: any) => ({
                 id: c.id,
-                full_name: c.full_name || '',
+                full_name: [c.nome, c.cognome].filter(Boolean).join(' ') || '',
                 email: c.email || '',
-                phone: c.phone || '',
+                phone: c.telefono || '',
                 contract_id: c.metadata?.nexi_contract_id || '',
                 masked_pan: c.metadata?.nexi_card_masked_pan || '',
                 circuit: c.metadata?.nexi_card_circuit || '',
