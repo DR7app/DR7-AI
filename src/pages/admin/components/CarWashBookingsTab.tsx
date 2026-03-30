@@ -982,7 +982,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: customerPhone,
-                customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\nGentile ${customerName},\n\nIl suo appuntamento lavaggio #${(data.id || '').substring(0, 8).toUpperCase()} è stato registrato.\n\nPer confermare, completi il pagamento di *€${totalPrice.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
+                customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\nGentile ${customerName},\n\nIl suo appuntamento lavaggio #${(data.id || '').substring(0, 8).toUpperCase()} è stato registrato.\n\nPer confermare, completi il pagamento di *€${totalPrice.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
               })
             })
           }
@@ -1054,7 +1054,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         custMsg += `*Totale:* €${totalEur}\n`
         custMsg += `*Pagamento:* ${paymentLabel}\n`
         if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
-        custMsg += `\nCordiali Saluti,\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`
+        custMsg += `\nCordiali Saluti,\nDR7\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
 
         await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
@@ -2096,21 +2096,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <td className="px-4 py-3 text-sm">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
-                            ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                            ? 'bg-emerald-500/15 text-emerald-500' : 'bg-red-500/15 text-red-500'
                         }`}>
                           {booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded' ? 'Pagato' : 'Non Pagato'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
-                          <button onClick={() => setEditingBooking(booking)} className="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors min-h-[44px]">Modifica</button>
-                          <button onClick={() => handleGenerateInvoice(booking)} disabled={generatingInvoice} className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors min-h-[44px]`}>
+                          <button onClick={() => setEditingBooking(booking)} className="px-3 py-1.5 bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold rounded-full text-xs font-medium transition-colors min-h-[44px]">Modifica</button>
+                          <button onClick={() => handleGenerateInvoice(booking)} disabled={generatingInvoice} className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold'} rounded-full text-xs font-medium transition-colors min-h-[44px]`}>
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
                           {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
-                            <button onClick={() => handleResendPaymentLink(booking)} className="px-3 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors min-h-[44px]">Rinvia Link</button>
+                            <button onClick={() => handleResendPaymentLink(booking)} className="px-3 py-1.5 bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold rounded-full text-xs font-medium transition-colors min-h-[44px]">Rinvia Link</button>
                           )}
-                          <button onClick={() => handleDeleteBooking(booking.id, booking.customer_name)} className="px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary rounded-full text-xs font-medium transition-colors min-h-[44px]">×</button>
+                          <button onClick={() => handleDeleteBooking(booking.id, booking.customer_name)} className="px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-full text-xs font-medium transition-colors min-h-[44px]">×</button>
                         </div>
                       </td>
                     </tr>
@@ -2199,28 +2199,28 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <div className="px-4 pb-4 flex gap-2">
                       <button
                         onClick={() => setEditingBooking(booking)}
-                        className="flex-1 py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                        className="flex-1 py-2.5 rounded-xl bg-dr7-gold/10 hover:bg-dr7-gold/20 text-dr7-gold text-xs font-semibold transition-all active:scale-[0.98]"
                       >
                         Modifica
                       </button>
                       <button
                         onClick={() => handleGenerateInvoice(booking)}
                         disabled={generatingInvoice}
-                        className="flex-1 py-2.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                        className="flex-1 py-2.5 rounded-xl bg-dr7-gold/10 hover:bg-dr7-gold/20 text-dr7-gold text-xs font-semibold transition-all active:scale-[0.98]"
                       >
                         {generatingInvoice ? '...' : 'Fattura'}
                       </button>
                       {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                         <button
                           onClick={() => handleResendPaymentLink(booking)}
-                          className="flex-1 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                          className="flex-1 py-2.5 rounded-xl bg-dr7-gold/10 hover:bg-dr7-gold/20 text-dr7-gold text-xs font-semibold transition-all active:scale-[0.98]"
                         >
                           Rinvia Link
                         </button>
                       )}
                       <button
                         onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
-                        className="py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-semibold transition-all active:scale-[0.98]"
+                        className="py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold transition-all active:scale-[0.98]"
                       >
                         ×
                       </button>
