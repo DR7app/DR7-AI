@@ -1416,9 +1416,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
               {/* Targa lookup result card */}
               {targaVehicleInfo && (
-                <div className="p-3 bg-green-900/20 border border-green-600/40 rounded-lg">
+                <div className="p-3 bg-dr7-gold/10 border border-dr7-gold/30 rounded-lg">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-green-400 text-sm font-bold">Veicolo trovato</span>
+                    <span className="text-dr7-gold text-sm font-bold">Veicolo trovato</span>
                   </div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
                     {targaVehicleInfo.brand && (
@@ -1444,8 +1444,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {vehicleCategory && (
                 <div className={`p-4 rounded-lg border-2 ${
                   vehicleCategory === 'urban'
-                    ? 'bg-blue-900/20 border-blue-500/50'
-                    : 'bg-orange-900/20 border-orange-500/50'
+                    ? 'bg-blue-500/10 border-blue-500/30'
+                    : 'bg-orange-500/10 border-orange-500/30'
                 }`}>
                   <div className="flex items-center gap-3">
                     <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${
@@ -1514,8 +1514,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'lavaggio'
-                      ? 'bg-theme-text-primary text-theme-bg-primary border-theme-text-primary'
-                      : 'bg-theme-bg-primary text-theme-text-primary border-white hover:bg-theme-text-primary hover:text-theme-bg-primary'
+                      ? 'bg-dr7-gold text-white border-dr7-gold'
+                      : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border hover:border-dr7-gold hover:text-dr7-gold'
                   }`}
                 >
                   LAVAGGIO
@@ -1533,8 +1533,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   }}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                     selectedMainTab === 'meccanica'
-                      ? 'bg-theme-text-primary text-theme-bg-primary border-theme-text-primary'
-                      : 'bg-theme-bg-primary text-theme-text-primary border-white hover:bg-theme-text-primary hover:text-theme-bg-primary'
+                      ? 'bg-dr7-gold text-white border-dr7-gold'
+                      : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border hover:border-dr7-gold hover:text-dr7-gold'
                   }`}
                 >
                   MECCANICA
@@ -1621,7 +1621,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-theme-text-muted">Categoria:</span>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                    vehicleCategory === 'urban' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'
+                    vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
                   }`}>
                     {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                   </span>
@@ -1806,7 +1806,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {vehicleMakeModel && <span className="text-theme-text-primary">{vehicleMakeModel}</span>}
                     {vehicleCategory && (
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        vehicleCategory === 'urban' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'
+                        vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
                       }`}>
                         {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                       </span>
@@ -1895,8 +1895,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   const sel = customers.find(c => c.id === formData.customer_id)
                   if (!sel) return null
                   return (
-                    <div className="mt-2 p-2 bg-green-900/30 border border-green-600/50 rounded-lg text-sm">
-                      <span className="text-green-400 font-medium">{sel.full_name}</span>
+                    <div className="mt-2 p-2 bg-dr7-gold/10 border border-dr7-gold/30 rounded-lg text-sm">
+                      <span className="text-dr7-gold font-medium">{sel.full_name}</span>
                       {sel.phone && <span className="text-theme-text-muted ml-2">{sel.phone}</span>}
                     </div>
                   )
@@ -2063,7 +2063,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 <span className="text-xs text-theme-text-primary">{booking.booking_details?.vehicleMakeModel || booking.vehicle_name}</span>
                                 {booking.booking_details?.vehicleCategory && (
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-600/30 text-blue-400' : 'bg-orange-600/30 text-orange-400'
+                                    booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-500/15 text-blue-400' : 'bg-orange-500/15 text-orange-400'
                                   }`}>
                                     {booking.booking_details.vehicleCategory === 'urban' ? 'U' : 'M'}
                                   </span>
@@ -2189,8 +2189,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                     {/* Notes */}
                     {booking.booking_details?.notes && (
-                      <div className="mx-4 mb-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-3.5 py-2.5">
-                        <div className="text-yellow-500 text-[10px] font-semibold uppercase tracking-wider mb-1">Note</div>
+                      <div className="mx-4 mb-3 rounded-xl bg-theme-bg-tertiary/60 border border-theme-border/20 px-3.5 py-2.5">
+                        <div className="text-theme-text-muted text-[10px] font-semibold uppercase tracking-wider mb-1">Note</div>
                         <p className="text-theme-text-primary text-xs leading-relaxed">{booking.booking_details.notes}</p>
                       </div>
                     )}

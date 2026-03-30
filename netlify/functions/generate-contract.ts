@@ -246,7 +246,9 @@ export const handler: Handler = async (event) => {
             : (customer?.nome || customer?.cognome)
                 ? `${customer.nome || ''} ${customer.cognome || ''}`.trim()
                 : (customer?.full_name || booking.customer_name || '')
-        const clientAddress = customer?.indirizzo || booking.booking_details?.customer?.address || ''
+        const rawAddress = customer?.indirizzo || booking.booking_details?.customer?.address || ''
+        const civico = customer?.numero_civico || ''
+        const clientAddress = civico ? `${rawAddress} ${civico}`.trim() : rawAddress
         const clientVat = customer?.tipo_cliente === 'azienda' ? customer.partita_iva : customer?.codice_fiscale
         const driverLicense = customer?.numero_patente || customer?.patente || customer?.driver_license_number || ''
 
@@ -658,17 +660,40 @@ ASSICURAZIONE:
 Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tutti i danni fino alla franchigia indicata.`
         }
 
+        // Resolve location ID or label to a printable address for the contract
+        function resolveLocation(loc: string | undefined, details: any, type: 'pickup' | 'return' = 'pickup'): string {
+            const DR7_OFFICE = 'Viale Marconi 229, Cagliari, CA, 09100'
+            const AIRPORT = 'Aeroporto di Cagliari Elmas'
+            if (!loc) return DR7_OFFICE
+            // Handle location IDs stored by edit flow
+            if (loc === 'dr7_office') return DR7_OFFICE
+            if (loc === 'cagliari_airport') return AIRPORT
+            if (loc === 'domicilio') {
+                // Use delivery/pickup address from booking_details
+                const addr = type === 'pickup'
+                    ? details?.delivery_address
+                    : details?.pickup_address  // pickup_address = where vehicle is picked up (return)
+                if (addr) {
+                    const parts = [addr.street, addr.city, addr.province, addr.zip].filter(Boolean)
+                    return parts.join(', ') || DR7_OFFICE
+                }
+                return DR7_OFFICE
+            }
+            // Already a full address string (from new booking flow)
+            return loc
+        }
+
         console.log(`[generate-contract] Using additional terms for category: ${vehicleCategory}`)
 
-        // Map insurance option ID to readable label
+        // Map insurance option ID to readable label (short labels to fit PDF field)
         const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || 'KASKO_BASE'
         const insuranceLabels: Record<string, string> = {
-            'RCA': 'Kasko',
-            'KASKO': 'Kasko',
-            'KASKO_BASE': 'Kasko',
-            'KASKO_BLACK': 'Kasko Black',
-            'KASKO_SIGNATURE': 'Kasko Signature',
-            'DR7': 'Kasko DR7'
+            'RCA': 'RCA Compresa',
+            'KASKO': 'Base',
+            'KASKO_BASE': 'Base',
+            'KASKO_BLACK': 'Black',
+            'KASKO_SIGNATURE': 'Signature',
+            'DR7': 'DR7'
         }
         const insuranceLabel = insuranceLabels[insuranceOptionId] || insuranceOptionId
 
@@ -757,11 +782,11 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'SforoPerKM': booking.km_overage_fee ? `€${(booking.km_overage_fee).toFixed(2)}` : '',
 
 
-            // Rental Specifics
-            'PickupLocation': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'SedeRitiro': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'DropoffLocation': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'SedeRiconsegna': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            // Rental Specifics — resolve location IDs to addresses
+            'PickupLocation': resolveLocation(booking.pickup_location, booking.booking_details),
+            'SedeRitiro': resolveLocation(booking.pickup_location, booking.booking_details),
+            'DropoffLocation': resolveLocation(booking.dropoff_location, booking.booking_details, 'return'),
+            'SedeRiconsegna': resolveLocation(booking.dropoff_location, booking.booking_details, 'return'),
             'PickupDate': formatDateRome(pickupDate),
             'DataInizio': formatDateRome(pickupDate),
             'PickupTime': formatTimeRome(pickupDate),
