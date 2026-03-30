@@ -3980,60 +3980,61 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         logger.log('✅ WhatsApp admin notification sent')
 
-        // Send customer confirmation message (skip for unpaid Nexi Pay by Link — link message is sent separately)
+        // Send customer confirmation message — same full message as admin (skip for unpaid Nexi Pay by Link — link message is sent separately)
         const custPhone = customerInfo?.phone
         if (custPhone && !(formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')) {
-          const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
-          const pickupDt = new Date(pickupDateTime)
-          const dropoffDt = new Date(returnDateTime)
-          const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
-          const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
-          const depositEur = parseFloat(formData.deposit) || 0
-          const depositLabel = depositEur > 0 ? `€${depositEur.toFixed(2)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
-          let kmLabel = '-'
-          if (formData.unlimited_km) {
-            kmLabel = 'Illimitati'
-          } else if (formData.km_limit === DEFAULT_KM_LIMIT) {
-            const pickup = new Date(formData.pickup_date + 'T' + formData.pickup_time)
-            const dropoff = new Date(formData.return_date + 'T' + formData.return_time)
-            const days = Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24))
-            const perDay = parseInt(DEFAULT_KM_LIMIT)
-            kmLabel = `${perDay * days} Km (${perDay}/g x ${days}gg)`
-          } else if (formData.km_limit) {
-            kmLabel = `${formData.km_limit} km`
-          }
-          const insuranceLabel = formData.insurance_option === 'RCA' ? 'RCA Compresa (no Kasko)'
-            : formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
-            : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
-            : formData.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
-            : formData.insurance_option === 'DR7' ? 'Kasko DR7'
-            : formData.insurance_option || '-'
-          const paymentLabel = formData.payment_status === 'paid' ? `Pagato (${formData.payment_method || '-'})` : formData.payment_status === 'partial' ? `Parziale (${formData.payment_method || '-'})` : 'Da saldare'
-          const bookingNotes = formData.notes || insertedBooking?.booking_details?.notes || ''
-
-          const totalEur = insertedBooking?.price_total ? (insertedBooking.price_total / 100).toFixed(2) : parseFloat(formData.total_amount).toFixed(2)
-
-          let custMsg = editingId
-            ? `Salve ${custFirstName},\n\nLa informiamo che la Sua prenotazione è stata modificata.\n\n`
-            : `Salve ${custFirstName},\n\nConfermiamo la sua prenotazione.\n\n`
-          custMsg += `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`
-          custMsg += `*ID:* DR7-${(insertedBooking?.id || '').substring(0, 8).toUpperCase()}\n`
-          custMsg += `*Veicolo:* ${vehicle?.display_name || 'N/A'}\n`
-          custMsg += `*Ritiro:* ${fmtDate(pickupDt)} alle ${fmtTime(pickupDt)}\n`
-          custMsg += `*Riconsegna:* ${fmtDate(dropoffDt)} alle ${fmtTime(dropoffDt)}\n`
-          custMsg += `*Luogo ritiro:* ${pickupLocationLabel}\n`
-          custMsg += `*Assicurazione:* ${insuranceLabel}\n`
-          custMsg += `*Totale:* €${totalEur}\n`
-          custMsg += `*Cauzione:* ${depositLabel}\n`
-          custMsg += `*KM:* ${kmLabel}\n`
-          custMsg += `*Pagamento:* ${paymentLabel}\n`
-          if (bookingNotes) custMsg += `*Note:* ${bookingNotes}\n`
-          custMsg += `\nCordiali Saluti,\nDR7`
-
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customMessage: custMsg, customPhone: custPhone })
+            body: JSON.stringify({
+              customPhone: custPhone,
+              booking: {
+                id: insertedBooking?.id || '',
+                service_type: 'car_rental',
+                isEdit: !!editingId,
+                customer_name: customerInfo?.full_name || '',
+                customer_email: customerInfo?.email || '',
+                customer_phone: customerInfo?.phone || '',
+                vehicle_name: vehicle?.display_name || '',
+                vehicle_plate: vehicle?.plate || '',
+                pickup_date: pickupDateTime,
+                dropoff_date: returnDateTime,
+                pickup_location: pickupLocationLabel,
+                insurance_option: formData.insurance_option || 'KASKO_BASE',
+                price_total: insertedBooking?.price_total || eurToCents(formData.total_amount),
+                payment_status: paymentStatus,
+                payment_method: formData.payment_method || '',
+                deposit_amount: parseFloat(formData.deposit) || 0,
+                km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
+                booking_details: {
+                  amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || eurToCents(formData.total_amount)) : 0,
+                  insuranceOption: formData.insurance_option || 'KASKO_BASE',
+                  deposit: parseFloat(formData.deposit) || 0,
+                  deposit_status: formData.deposit_status,
+                  km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
+                  unlimited_km: formData.unlimited_km,
+                  delivery_enabled: formData.delivery_enabled,
+                  delivery_address: formData.delivery_enabled ? {
+                    street: formData.delivery_street,
+                    city: formData.delivery_city,
+                    zip: formData.delivery_zip,
+                    province: formData.delivery_province
+                  } : null,
+                  delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
+                  pickup_enabled: formData.pickup_enabled,
+                  pickup_address: formData.pickup_enabled ? {
+                    street: formData.pickup_street,
+                    city: formData.pickup_city,
+                    zip: formData.pickup_zip,
+                    province: formData.pickup_province
+                  } : null,
+                  pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+                  notes: formData.notes || null,
+                  depositOption: insertedBooking?.booking_details?.depositOption,
+                  noDepositSurcharge: insertedBooking?.booking_details?.noDepositSurcharge
+                }
+              }
+            })
           })
           logger.log('✅ WhatsApp customer confirmation sent to', custPhone)
         }
