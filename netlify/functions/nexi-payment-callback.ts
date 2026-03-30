@@ -85,7 +85,7 @@ const handler: Handler = async (event) => {
         const result = callbackData.result || op.operationResult;
         const resultCode = callbackData.resultCode;
         const authorizationCode = callbackData.authorizationCode || op.additionalData?.authorizationCode;
-        const contractId = callbackData.contractId;
+        const contractId = callbackData.contractId || op.additionalData?.contractId || orderId;
         const paymentCircuit = callbackData.paymentCircuit || op.paymentCircuit || op.additionalData?.paymentCircuit || '';
         const paymentInstrument = callbackData.paymentInstrument || op.paymentInstrument || '';
 

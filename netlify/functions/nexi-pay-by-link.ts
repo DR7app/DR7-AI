@@ -90,6 +90,11 @@ const handler: Handler = async (event) => {
                 captureType: 'IMPLICIT',  // Force auto-capture — charge immediately, not preauth
                 amount: amountCents.toString(),
                 language: 'ita',
+                recurrence: {
+                    action: 'CONTRACT_CREATION',
+                    contractId: orderId,
+                    contractType: 'MIT_UNSCHEDULED'
+                },
                 expirationDate: expirationDateStr,
                 expirationTime: expirationDate.toISOString(),
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
