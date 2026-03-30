@@ -22,7 +22,32 @@ const handler: Handler = async (event) => {
     }
 
     try {
-        const { orderId } = JSON.parse(event.body || '{}');
+        const { orderId, mode } = JSON.parse(event.body || '{}');
+
+        // Mode 'find_operation': search GET /operations to find operationId for an order
+        if (mode === 'find_operation' && orderId) {
+            const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+            })
+            const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+            const toTime = new Date().toISOString()
+            const url = `${NEXI_BASE_URL}/operations?fromTime=${encodeURIComponent(fromTime)}&toTime=${encodeURIComponent(toTime)}&maxRecords=500`
+            console.log('[nexi-check-status] Searching operations for order:', orderId)
+            const resp = await fetch(url, {
+                headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': correlationId }
+            })
+            const text = await resp.text()
+            let data: any
+            try { data = JSON.parse(text) } catch {
+                return { statusCode: 502, headers, body: JSON.stringify({ error: text.substring(0, 300) }) }
+            }
+            if (!resp.ok) {
+                return { statusCode: resp.status, headers, body: JSON.stringify({ error: data.errors?.[0]?.description || 'API error', raw: data }) }
+            }
+            const ops = (data.operations || []).filter((op: any) => op.orderId === orderId)
+            return { statusCode: 200, headers, body: JSON.stringify({ operations: ops, totalScanned: data.operations?.length || 0 }) }
+        }
 
         if (!orderId) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'orderId is required' }) };
