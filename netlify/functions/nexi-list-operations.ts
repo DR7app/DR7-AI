@@ -17,7 +17,7 @@ const handler: Handler = async (event) => {
     if (!orderId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'orderId required' }) }
 
     try {
-        const res = await fetch(`${NEXI_BASE_URL}/orders/${orderId}/operations`, {
+        const res = await fetch(`${NEXI_BASE_URL}/orders/${orderId}`, {
             headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': `list-${Date.now()}` }
         })
         const text = await res.text()
