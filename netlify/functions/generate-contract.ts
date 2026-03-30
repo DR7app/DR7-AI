@@ -665,10 +665,11 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             const DR7_OFFICE = 'Viale Marconi 229, Cagliari, CA, 09100'
             const AIRPORT = 'Aeroporto di Cagliari Elmas'
             if (!loc) return DR7_OFFICE
+            const locLower = loc.toLowerCase()
             // Handle location IDs stored by edit flow
-            if (loc === 'dr7_office') return DR7_OFFICE
-            if (loc === 'cagliari_airport') return AIRPORT
-            if (loc === 'domicilio') {
+            if (loc === 'dr7_office' || locLower.includes('viale marconi')) return DR7_OFFICE
+            if (loc === 'cagliari_airport' || locLower.includes('aeroporto')) return AIRPORT
+            if (loc === 'domicilio' || locLower.includes('domicilio') || locLower.includes('inserisci indirizzo')) {
                 // Use delivery/pickup address from booking_details
                 const addr = type === 'pickup'
                     ? details?.delivery_address
