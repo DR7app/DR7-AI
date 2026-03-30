@@ -54,25 +54,28 @@ const handler: Handler = async (event) => {
         let realOperationId = inputOperationId
         if (orderId) {
             console.log('[nexi-capture-preauth] Looking up operations for orderId:', orderId);
-            const opsRes = await fetch(`${NEXI_BASE_URL}/operations?orderId=${orderId}`, {
-                headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': correlationId + '-lookup' }
+            const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+            const toTime = new Date().toISOString()
+            const opsUrl = `${NEXI_BASE_URL}/operations?fromTime=${encodeURIComponent(fromTime)}&toTime=${encodeURIComponent(toTime)}&maxRecords=500&operationType=AUTHORIZATION`
+            const opsRes = await fetch(opsUrl, {
+                headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16) }) }
             })
             if (opsRes.ok) {
                 const opsData = await opsRes.json()
-                console.log('[nexi-capture-preauth] Operations response:', JSON.stringify(opsData).substring(0, 500))
-                const operations = opsData.operations || opsData || []
-                // Find the AUTHORIZATION operation
-                const authOp = Array.isArray(operations)
-                    ? operations.find((op: any) => op.operationType === 'AUTHORIZATION' && op.operationResult === 'AUTHORIZED')
-                    || operations.find((op: any) => op.operationType === 'AUTHORIZATION')
-                    || operations[0]
-                    : null
+                const allOps = opsData.operations || []
+                console.log('[nexi-capture-preauth] Scanned', allOps.length, 'operations')
+                // Filter by orderId client-side (Nexi API doesn't support orderId filter)
+                const matchingOps = allOps.filter((op: any) => op.orderId === orderId)
+                const authOp = matchingOps.find((op: any) => op.operationResult === 'AUTHORIZED') || matchingOps[0]
                 if (authOp?.operationId) {
                     realOperationId = authOp.operationId
                     console.log('[nexi-capture-preauth] Found real operationId:', realOperationId)
+                } else {
+                    console.warn('[nexi-capture-preauth] No matching operation found for orderId:', orderId)
                 }
             } else {
-                console.warn('[nexi-capture-preauth] Operations lookup failed:', opsRes.status)
+                const errText = await opsRes.text()
+                console.warn('[nexi-capture-preauth] Operations lookup failed:', opsRes.status, errText.substring(0, 200))
             }
         }
 
@@ -124,7 +127,7 @@ const handler: Handler = async (event) => {
             };
         }
 
-        const captureOpId = responseData.operationId || operationId;
+        const captureOpId = responseData.operationId || realOperationId;
 
         // Update cauzione status
         const { error: updateError } = await supabase
