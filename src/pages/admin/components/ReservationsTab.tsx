@@ -1021,6 +1021,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const LOCATIONS = [
     { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA', fee: 0 },
     { value: 'cagliari_airport', label: 'Aeroporto di Cagliari Elmas (+€50)', fee: 50 },
+    { value: 'alghero_airport', label: 'Aeroporto di Alghero (+€50)', fee: 50 },
     { value: 'domicilio', label: 'Consegna a domicilio (inserisci indirizzo)', fee: 0 },
   ]
 

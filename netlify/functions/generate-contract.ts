@@ -668,7 +668,9 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             const locLower = loc.toLowerCase()
             // Handle location IDs stored by edit flow
             if (loc === 'dr7_office' || locLower.includes('viale marconi')) return DR7_OFFICE
-            if (loc === 'cagliari_airport' || locLower.includes('aeroporto')) return AIRPORT
+            if (loc === 'cagliari_airport' || (locLower.includes('aeroporto') && locLower.includes('cagliari'))) return AIRPORT
+            if (loc === 'alghero_airport' || (locLower.includes('aeroporto') && locLower.includes('alghero'))) return 'Aeroporto di Alghero Fertilia'
+            if (locLower.includes('aeroporto')) return loc // Other airports — use as-is
             if (loc === 'domicilio' || locLower.includes('domicilio') || locLower.includes('inserisci indirizzo')) {
                 // Use delivery/pickup address from booking_details
                 const addr = type === 'pickup'
