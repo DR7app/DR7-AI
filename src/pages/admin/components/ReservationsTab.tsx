@@ -3841,7 +3841,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               customerEmail: customerInfo?.email || '',
               customerName: customerInfo?.full_name || 'Cliente',
               description: `Noleggio DR7 - ${vehicle?.display_name || ''} - ${customerInfo?.full_name || ''}`,
-              expirationDays: 1
+              expirationHours: 1
             })
           })
           const linkData = await linkRes.json()
