@@ -186,6 +186,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     appointment_time: '',
     price_total: 0,
     payment_status: 'nexi_pay_by_link',
+    payment_method: '' as string,
     amount_paid: '0',
     notes: ''
   })
@@ -567,8 +568,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         }
       })
 
+      // Deduplicate customers: keep the most recently updated record per email (or name if no email)
+      const seen = new Map<string, Customer>()
+      for (const c of mappedCustomers) {
+        const key = (c.email || c.full_name || c.id).toLowerCase().trim()
+        if (!seen.has(key)) {
+          seen.set(key, c)
+        }
+      }
+      const dedupedCustomers = Array.from(seen.values())
+
       setBookings(bookingsData || [])
-      setCustomers(mappedCustomers)
+      setCustomers(dedupedCustomers)
       setCarWashServices(mappedServices)
     } catch (error) {
       console.error('Failed to load data:', error)
@@ -681,6 +692,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const ps = booking.payment_status
     if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
       toast.error(`Impossibile generare fattura: il lavaggio non è stato pagato (stato: ${ps || 'N/A'})`)
+      return
+    }
+
+    // Never generate fattura for Wallet or Gift Card payments
+    const pm = booking.payment_method || ''
+    if (pm === 'Wallet' || pm === 'Gift Card' || pm === 'wallet' || pm === 'gift_card' || pm === 'credit') {
+      toast.error('Fattura non prevista per pagamenti con Wallet o Gift Card')
       return
     }
 
@@ -904,6 +922,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       currency: 'EUR',
       status: 'confirmed',
       payment_status: formData.payment_status,
+      payment_method: formData.payment_method || null,
       booking_details: bookingDetails
     }
 
@@ -923,9 +942,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     logger.log('✅ Booking created successfully:', data)
     logAdminAction('create_carwash', 'carwash_booking', data.id, { customer: customerName, service: serviceNames })
 
-    // Generate fattura ONLY if paid — never for unpaid bookings
+    // Generate fattura ONLY if paid — never for unpaid bookings, Wallet, or Gift Card
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
-    if (isPaid) {
+    const skipFattura = formData.payment_method === 'Wallet' || formData.payment_method === 'Gift Card'
+    if (isPaid && !skipFattura) {
       try {
         const invoiceResponse = await fetch('/.netlify/functions/generate-invoice-from-booking', {
           method: 'POST',
@@ -1965,7 +1985,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       const newStatus = e.target.value
                       const total = getFinalPrice()
                       const newAmountPaid = newStatus === 'paid' ? total.toString() : '0'
-                      setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid })
+                      setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid, payment_method: newStatus === 'paid' ? formData.payment_method || '' : '' })
                     }}
                     className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
@@ -1974,6 +1994,25 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <option value="paid">Pagato</option>
                     <option value="unpaid">Non Pagato</option>
                   </select>
+                  {/* Payment method selector — visible only when Pagato */}
+                  {formData.payment_status === 'paid' && (
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo di pagamento *</label>
+                      <select
+                        value={formData.payment_method}
+                        onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+                        className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                      >
+                        <option value="">-- Seleziona metodo --</option>
+                        <option value="Contanti">Contanti</option>
+                        <option value="Carta di credito">Carta di credito</option>
+                        <option value="Carta di debito">Carta di debito</option>
+                        <option value="Bonifico">Bonifico</option>
+                        <option value="Wallet">Wallet</option>
+                        <option value="Gift Card">Gift Card</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Note</label>
@@ -2406,6 +2445,25 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <option value="paid">Pagato</option>
                       <option value="completed">Completato</option>
                     </select>
+                    {/* Payment method selector — visible when paid */}
+                    {(editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded') && (
+                      <div className="mt-2">
+                        <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo di pagamento</label>
+                        <select
+                          value={editingBooking.payment_method || ''}
+                          onChange={(e) => setEditingBooking({ ...editingBooking, payment_method: e.target.value })}
+                          className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                        >
+                          <option value="">-- Seleziona metodo --</option>
+                          <option value="Contanti">Contanti</option>
+                          <option value="Carta di credito">Carta di credito</option>
+                          <option value="Carta di debito">Carta di debito</option>
+                          <option value="Bonifico">Bonifico</option>
+                          <option value="Wallet">Wallet</option>
+                          <option value="Gift Card">Gift Card</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2460,14 +2518,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           price_total: updatedPrice,
                           status: editingBooking.status,
                           payment_status: editingBooking.payment_status,
+                          payment_method: editingBooking.payment_method || null,
                           booking_details: updatedDetails,
                         })
                         .eq('id', editingBooking.id)
 
                       if (error) throw error
 
-                      // Auto-generate fattura if payment changed to paid
-                      if (editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded') {
+                      // Auto-generate fattura if payment changed to paid (skip Wallet & Gift Card)
+                      const editPaymentMethod = editingBooking.payment_method || ''
+                      const editSkipFattura = editPaymentMethod === 'Wallet' || editPaymentMethod === 'Gift Card'
+                      if (!editSkipFattura && (editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded')) {
                         try {
                           // Check if fattura already exists for this booking
                           const { data: existingFattura } = await supabase

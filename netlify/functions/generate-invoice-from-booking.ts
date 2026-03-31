@@ -57,6 +57,16 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Guard: never generate fattura for Wallet or Gift Card payments
+        const paymentMethod = (booking.payment_method || '').toLowerCase()
+        if (paymentMethod === 'wallet' || paymentMethod === 'gift card' || paymentMethod === 'gift_card' || paymentMethod === 'credit_wallet' || paymentMethod === 'credit') {
+            console.log(`[Invoice] Skipping — booking ${bookingId} paid via ${booking.payment_method} (no fattura for Wallet/Gift Card)`)
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ message: 'Fattura non prevista per pagamenti con Wallet o Gift Card', skipped: true })
+            }
+        }
+
         // Test vehicle: generate fattura + WhatsApp PDF, but skip SDI
         const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
         const vehiclePlate = (booking.vehicle_plate || booking.booking_details?.vehicle_plate || booking.booking_details?.vehicle?.plate || '').toUpperCase()
