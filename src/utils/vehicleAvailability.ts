@@ -193,8 +193,7 @@ export function getEarliestValidPickupTime(
     const vehicleBookings = existingBookings.filter(booking => {
         if (excludeBookingId && booking.id === excludeBookingId) return false
         if (booking.status === 'cancelled') return false
-        // Exclude pending Nexi Pay by Link bookings (awaiting payment)
-        if (booking.payment_method === 'Nexi Pay by Link' && booking.payment_status === 'pending') return false
+        // Pending Nexi Pay by Link bookings BLOCK the slot for 1 hour while awaiting payment
         return matchVehicleByPlate(booking, vehicle)
     })
 
