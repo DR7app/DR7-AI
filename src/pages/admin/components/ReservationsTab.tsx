@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import toast from 'react-hot-toast'
-// import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
+import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
 import { supabase } from '../../../supabaseClient'
 
 /** Convert EUR string to integer cents using string parsing (no floating point) */
@@ -40,6 +40,16 @@ import DanniPenaliModal from './DanniPenaliModal'
 import { logger } from '../../../utils/logger'
 import { decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
+import {
+  classifyDriverTier,
+  calculateAge,
+  calculateLicenseYears,
+  TIER_KASKO_BASE_PRICE,
+  TIER_UNLIMITED_KM_PRICE,
+  NO_CAUZIONE_SURCHARGE_PER_DAY,
+  type DriverTier,
+  type TierClassification,
+} from '../../../utils/tierClassification'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -1066,20 +1076,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
    
     if (specialRule) {
       logger.log('[ReservationsTab] Applying special pricing for:', customerName)
-   
-      // Calculate special total
+
+      // Calculate special total (includes tiered discounts + noCents rounding)
       const specialTotal = calculateSpecialPrice(specialRule, diffDays)
-   
+
       setFormData(prev => ({
         ...prev,
         total_amount: specialTotal.toFixed(2),
-        // Force options if specified in rule
+        // Force options to match website config
         insurance_option: specialRule.includesKasko === 'base' ? 'KASKO_BASE' : prev.insurance_option,
-        // We can't easily set "unlimited KM" here as it might be a UI text, but we can store it in metadata if needed
-        // For now, the price includes it.
+        unlimited_km: specialRule.includesUnlimitedKm,
+        km_limit: specialRule.includesUnlimitedKm ? '0' : prev.km_limit,
+        deposit: specialRule.noDeposit ? '0' : prev.deposit,
       }))
-   
-      // Optional: Visual feedback could be added here or in the render
+
       return
     }
    
@@ -1102,6 +1112,32 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }))
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles, formData.customer_id, customers])
   */
+
+  // Auto-apply special pricing for VIP clients (Massimo, Jeanne)
+  useEffect(() => {
+    if (!formData.customer_id || !formData.pickup_date || !formData.return_date) return
+
+    const customerName = customers.find(c => c.id === formData.customer_id)?.full_name
+    const specialRule = getSpecialPricing(customerName)
+    if (!specialRule) return
+
+    const pickupDate = new Date(formData.pickup_date)
+    const returnDate = new Date(formData.return_date)
+    const diffTime = Math.abs(returnDate.getTime() - pickupDate.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) return
+
+    const specialTotal = calculateSpecialPrice(specialRule, diffDays)
+
+    setFormData(prev => ({
+      ...prev,
+      total_amount: specialTotal.toFixed(2),
+      insurance_option: specialRule.includesKasko === 'base' ? 'KASKO_BASE' as KaskoTier : prev.insurance_option,
+      unlimited_km: specialRule.includesUnlimitedKm,
+      km_limit: specialRule.includesUnlimitedKm ? '0' : prev.km_limit,
+      deposit: specialRule.noDeposit ? '0' : prev.deposit,
+    }))
+  }, [formData.customer_id, formData.pickup_date, formData.return_date, customers])
 
   // Reset insurance option to KASKO_BASE when vehicle changes
   useEffect(() => {
