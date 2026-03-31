@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import NuovaCauzioneModal from './NuovaCauzioneModal'
+import CassaCauzioneModal from './CassaCauzioneModal'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 
@@ -39,6 +40,7 @@ export default function CauzioniTab() {
     const [searchTerm, setSearchTerm] = useState('')
     const [filterMetodo, setFilterMetodo] = useState<string>('all')
     const [showStorico, setShowStorico] = useState(false)
+    const [cassaCauzione, setCassaCauzione] = useState<Cauzione | null>(null)
 
     // KPI Stats
     const [stats, setStats] = useState({
@@ -71,7 +73,7 @@ export default function CauzioniTab() {
                 .from('cauzioni')
                 .select(`
           *,
-          customers_extended!cliente_id(nome, cognome, denominazione, ragione_sociale, tipo_cliente, email, phone),
+          customers_extended!cliente_id(nome, cognome, denominazione, ragione_sociale, tipo_cliente, email, telefono),
           vehicles!veicolo_id(display_name, plate)
         `)
                 .order('scadenza_cauzione', { ascending: true })
@@ -153,7 +155,7 @@ export default function CauzioniTab() {
                     days_until_deadline: daysUntilDeadline,
                     cliente_nome: clienteName,
                     cliente_email: c.customers_extended?.email || '',
-                    cliente_telefono: c.customers_extended?.phone || '',
+                    cliente_telefono: c.customers_extended?.telefono || '',
                     veicolo_modello: c.vehicles?.display_name || 'N/A',
                     veicolo_targa: c.vehicles?.plate || 'N/A'
                 }
@@ -645,26 +647,8 @@ export default function CauzioniTab() {
         }
     }
 
-    const handleCassa = async (cauzione: Cauzione) => {
-        try {
-            const { error } = await supabase
-                .from('cauzioni')
-                .update({
-                    stato: 'Bloccata',
-                    note: 'Incassata in cassa',
-                    data_incasso: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', cauzione.id)
-
-            if (error) throw error
-            toast.success('Cauzione incassata in cassa')
-            fetchCauzioni()
-        } catch (error: unknown) {
-          const _errMsg = error instanceof Error ? error.message : String(error)
-            console.error('Error marking cauzione as danno:', error)
-            toast.error(`Errore: ${_errMsg}`)
-        }
+    const handleCassa = (cauzione: Cauzione) => {
+        setCassaCauzione(cauzione)
     }
 
     const handleRevertStato = async (cauzione: Cauzione, newStato: string) => {
@@ -1082,6 +1066,15 @@ export default function CauzioniTab() {
                     cauzione={selectedCauzione}
                     onClose={handleCloseModal}
                     onSave={handleSaveSuccess}
+                />
+            )}
+
+            {/* Cassa Modal */}
+            {cassaCauzione && (
+                <CassaCauzioneModal
+                    cauzione={cassaCauzione}
+                    onClose={() => setCassaCauzione(null)}
+                    onSuccess={() => { setCassaCauzione(null); fetchCauzioni() }}
                 />
             )}
         </div>
