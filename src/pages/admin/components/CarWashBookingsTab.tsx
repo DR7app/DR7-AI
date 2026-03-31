@@ -156,6 +156,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const [editService, setEditService] = useState<CarWashService | null>(null)
   const [editExtras, setEditExtras] = useState<CarWashService[]>([])
+  const [editExtraPriceOptions, setEditExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
+  const [editExtraQuantities, setEditExtraQuantities] = useState<Record<string, number>>({})
   const [selectedMainTab, setSelectedMainTab] = useState<'lavaggio' | 'meccanica'>('lavaggio')
 
   // Wizard state
@@ -264,21 +266,35 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const getEditTotalDuration = () => {
     let d = 0
     if (editService) d += editService.durationMinutes || parseDurationToMinutes(editService.duration)
-    for (const e of editExtras) d += e.durationMinutes || parseDurationToMinutes(e.duration)
+    for (const e of editExtras) {
+      const qty = editExtraQuantities[e.id] || 1
+      d += (e.durationMinutes || parseDurationToMinutes(e.duration)) * qty
+    }
     return d
   }
 
   const getEditTotal = () => {
     let total = 0
     if (editService) total += editService.price
-    for (const e of editExtras) total += e.price
+    for (const e of editExtras) {
+      const ep = editExtraPriceOptions[e.id]
+      const qty = editExtraQuantities[e.id] || 1
+      total += (ep?.price ?? e.price) * qty
+    }
     return total
   }
 
   const buildEditServiceNames = () => {
     const parts: string[] = []
     if (editService) parts.push(editService.name)
-    for (const e of editExtras) parts.push(e.name)
+    for (const e of editExtras) {
+      const ep = editExtraPriceOptions[e.id]
+      const qty = editExtraQuantities[e.id] || 1
+      let name = e.name
+      if (ep) name += ` (${ep.label})`
+      if (qty > 1) name += ` x${qty}`
+      parts.push(name)
+    }
     return parts.join(' + ')
   }
 
@@ -304,6 +320,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       appointment_time: '',
       price_total: 0,
       payment_status: 'nexi_pay_by_link',
+      payment_method: '',
       amount_paid: '0',
       notes: ''
     })
@@ -497,18 +514,37 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         const found = carWashServices.find((s: CarWashService) => s.id === mainItem.serviceId) || null
         setEditService(found)
         const extras: CarWashService[] = []
+        const priceOpts: Record<string, { label: string; price: number }> = {}
+        const qtys: Record<string, number> = {}
         for (let i = 1; i < cartItems.length; i++) {
-          const foundExtra = carWashServices.find((s: CarWashService) => s.id === cartItems[i].serviceId)
-          if (foundExtra) extras.push(foundExtra)
+          const item = cartItems[i]
+          const foundExtra = carWashServices.find((s: CarWashService) => s.id === item.serviceId)
+          if (foundExtra) {
+            extras.push(foundExtra)
+            // Restore price option if it was a variant
+            if (item.option && item.price !== foundExtra.price) {
+              priceOpts[foundExtra.id] = { label: item.option, price: item.price }
+            }
+            // Restore quantity
+            if (item.quantity && item.quantity > 1) {
+              qtys[foundExtra.id] = item.quantity
+            }
+          }
         }
         setEditExtras(extras)
+        setEditExtraPriceOptions(priceOpts)
+        setEditExtraQuantities(qtys)
       } else {
         setEditService(null)
         setEditExtras([])
+        setEditExtraPriceOptions({})
+        setEditExtraQuantities({})
       }
     } else if (!editingBooking) {
       setEditService(null)
       setEditExtras([])
+      setEditExtraPriceOptions({})
+      setEditExtraQuantities({})
     }
   }, [editingBooking, carWashServices])
 
@@ -2356,38 +2392,72 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </select>
                 </div>
 
-                {/* Extras Checkboxes */}
+                {/* Extras with price options & quantities */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Extra</label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     {carWashServices
                       .filter(s => (s.category === 'extra' || s.category === 'experience') && s.id !== editService?.id)
                       .map(extra => {
                         const isSelected = editExtras.some(e => e.id === extra.id)
+                        const hasPriceOptions = extra.price_options && extra.price_options.length > 0
+                        const currentOption = editExtraPriceOptions[extra.id]
                         return (
-                          <button
-                            key={extra.id}
-                            type="button"
-                            onClick={() => {
-                              if (isSelected) {
-                                setEditExtras(prev => prev.filter(e => e.id !== extra.id))
-                              } else {
-                                setEditExtras(prev => [...prev, extra])
-                              }
-                            }}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border flex items-center gap-1.5 ${
-                              isSelected
-                                ? 'bg-dr7-gold/20 border-dr7-gold text-dr7-gold'
-                                : 'bg-theme-bg-tertiary border-theme-border text-theme-text-primary hover:border-dr7-gold'
-                            }`}
-                          >
-                            <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${
-                              isSelected ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-text-muted'
-                            }`}>
-                              {isSelected && '✓'}
-                            </span>
-                            {extra.name} - EUR {extra.price.toFixed(2)}
-                          </button>
+                          <div key={extra.id} className="flex flex-col gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setEditExtras(prev => prev.filter(e => e.id !== extra.id))
+                                  setEditExtraPriceOptions(prev => { const next = { ...prev }; delete next[extra.id]; return next })
+                                  setEditExtraQuantities(prev => { const next = { ...prev }; delete next[extra.id]; return next })
+                                } else {
+                                  setEditExtras(prev => [...prev, extra])
+                                }
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border flex items-center gap-1.5 ${
+                                isSelected
+                                  ? 'bg-dr7-gold/20 border-dr7-gold text-dr7-gold'
+                                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-primary hover:border-dr7-gold'
+                              }`}
+                            >
+                              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${
+                                isSelected ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-text-muted'
+                              }`}>
+                                {isSelected && '✓'}
+                              </span>
+                              {extra.name}
+                              {!hasPriceOptions && <span className="opacity-70">EUR {extra.price.toFixed(2)}</span>}
+                            </button>
+                            {/* Price option variants */}
+                            {isSelected && hasPriceOptions && (
+                              <div className="flex flex-wrap gap-1 ml-2">
+                                {extra.price_options!.map((opt: { label: string; price: number }) => (
+                                  <button
+                                    key={opt.label}
+                                    type="button"
+                                    onClick={() => setEditExtraPriceOptions(prev => ({ ...prev, [extra.id]: opt }))}
+                                    className={`px-2 py-0.5 text-[10px] rounded-full border transition-colors ${
+                                      currentOption?.label === opt.label
+                                        ? 'bg-dr7-gold text-white border-dr7-gold font-bold'
+                                        : 'border-theme-border text-theme-text-secondary hover:border-dr7-gold'
+                                    }`}
+                                  >
+                                    {opt.label} EUR {opt.price}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {/* Quantity selector */}
+                            {isSelected && extra.price_unit && (
+                              <div className="flex items-center gap-2 ml-2">
+                                <span className="text-[10px] text-theme-text-muted">{extra.price_unit}:</span>
+                                <button type="button" onClick={() => setEditExtraQuantities(prev => ({ ...prev, [extra.id]: Math.max(1, (prev[extra.id] || 1) - 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-xs">-</button>
+                                <span className="text-xs font-bold text-theme-text-primary w-5 text-center">{editExtraQuantities[extra.id] || 1}</span>
+                                <button type="button" onClick={() => setEditExtraQuantities(prev => ({ ...prev, [extra.id]: Math.min(10, (prev[extra.id] || 1) + 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-xs">+</button>
+                              </div>
+                            )}
+                          </div>
                         )
                       })}
                   </div>
@@ -2472,7 +2542,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 <button
                   onClick={async () => {
                     try {
-                      // Rebuild cart items from edit selections
+                      // Rebuild cart items from edit selections (with price options + quantities)
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       const editCartItems: any[] = []
                       if (editService) {
@@ -2486,13 +2556,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         })
                       }
                       for (const extra of editExtras) {
+                        const ep = editExtraPriceOptions[extra.id]
+                        const qty = editExtraQuantities[extra.id] || 1
+                        const unitPrice = ep?.price ?? extra.price
                         editCartItems.push({
                           serviceId: extra.id,
                           serviceName: extra.name,
-                          quantity: 1,
-                          price: extra.price,
-                          option: null,
-                          subtotal: extra.price
+                          quantity: qty,
+                          price: unitPrice,
+                          option: ep?.label || null,
+                          subtotal: unitPrice * qty
                         })
                       }
 

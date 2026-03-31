@@ -5,6 +5,7 @@
 
 import type { RentalConfig } from '../types/rentalConfig'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const DEFAULT_RENTAL_CONFIG: RentalConfig = {
   schema_version: 2,
 
@@ -21,7 +22,7 @@ export const DEFAULT_RENTAL_CONFIG: RentalConfig = {
     furgone: { label: 'Furgone / NCC' },
   },
 
-  insurance: {
+  insurance: ({
     exotic: {
       TIER_1: [
         { id: 'RCA', name: 'RCA Compresa (no Kasko)', daily_price: 0, mandatory_deposit: 15000 },
@@ -65,7 +66,7 @@ export const DEFAULT_RENTAL_CONFIG: RentalConfig = {
       utilitaire: { fixed: 2000, percent: 30 },
       exotic: { fixed: 5000, percent: 30 },
     },
-  },
+  }) as RentalConfig['insurance'],
 
   km_included: {
     _global: { table: { '1': 100, '2': 180, '3': 240, '4': 280, '5': 300 }, extra_per_day: 60 },
