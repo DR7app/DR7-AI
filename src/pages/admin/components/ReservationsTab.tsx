@@ -38,6 +38,7 @@ import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import DanniPenaliModal from './DanniPenaliModal'
 import { logger } from '../../../utils/logger'
+import { calcolaCodiceFiscale } from '../../../utils/codiceFiscale'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -752,6 +753,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     codice_fiscale: '',
     data_nascita: '',
     luogo_nascita: '',
+    sesso: '' as '' | 'M' | 'F',
     numero_civico: '',
     codice_postale: '',
     citta_residenza: '',
@@ -4435,9 +4437,40 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <>
                           <Input label="Nome *" required value={newCustomerData.nome} onChange={(e) => setNewCustomerData({ ...newCustomerData, nome: e.target.value })} />
                           <Input label="Cognome *" required value={newCustomerData.cognome} onChange={(e) => setNewCustomerData({ ...newCustomerData, cognome: e.target.value })} />
-                          <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value.toUpperCase() })} />
-                          <Input label="Data di Nascita" type="date" value={newCustomerData.data_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })} />
-                          <Input label="Luogo di Nascita" value={newCustomerData.luogo_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })} />
+                          <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value.toUpperCase() })} />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newCustomerData.cognome || !newCustomerData.nome || !newCustomerData.data_nascita || !newCustomerData.sesso || !newCustomerData.luogo_nascita) {
+                                  toast.error('Compila cognome, nome, data nascita, sesso e luogo nascita per calcolare il CF')
+                                  return
+                                }
+                                const result = calcolaCodiceFiscale({
+                                  cognome: newCustomerData.cognome,
+                                  nome: newCustomerData.nome,
+                                  data_nascita: newCustomerData.data_nascita,
+                                  sesso: newCustomerData.sesso as 'M' | 'F',
+                                  luogo_nascita: newCustomerData.luogo_nascita,
+                                })
+                                if (result.codice_fiscale) {
+                                  setNewCustomerData({ ...newCustomerData, codice_fiscale: result.codice_fiscale })
+                                  toast.success('Codice Fiscale calcolato')
+                                } else {
+                                  toast.error(result.error || 'Errore nel calcolo del CF')
+                                }
+                              }}
+                              className="px-3 py-2 mb-[1px] bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
+                              title="Calcola CF da cognome, nome, data nascita, sesso, luogo nascita"
+                            >
+                              Calcola CF
+                            </button>
+                          </div>
+                          <Input label="Data di Nascita *" type="date" value={newCustomerData.data_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })} />
+                          <Input label="Luogo di Nascita *" value={newCustomerData.luogo_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })} />
+                          <Select label="Sesso *" value={newCustomerData.sesso} onChange={(e) => setNewCustomerData({ ...newCustomerData, sesso: e.target.value as '' | 'M' | 'F' })} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'Maschio' }, { value: 'F', label: 'Femmina' }]} />
                           <Input label="Numero Civico" value={newCustomerData.numero_civico} onChange={(e) => setNewCustomerData({ ...newCustomerData, numero_civico: e.target.value })} />
                           <Input label="Città di Residenza *" required value={newCustomerData.citta_residenza} onChange={(e) => setNewCustomerData({ ...newCustomerData, citta_residenza: e.target.value })} />
                           <Input label="CAP *" required value={newCustomerData.codice_postale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_postale: e.target.value })} />
