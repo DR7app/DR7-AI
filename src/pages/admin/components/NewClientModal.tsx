@@ -4,6 +4,7 @@ import { getResidenceStatus, getProvinciaByCity, getCAPByCity } from '../../../d
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
+import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -1503,13 +1504,50 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
 
                 {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack) && (
-                  <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
-                    <p className="text-sm text-green-300 flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Documenti selezionati verranno caricati al salvataggio.
-                    </p>
+                  <div className="space-y-3">
+                    <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
+                      <p className="text-sm text-green-300 flex items-center gap-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Documenti selezionati verranno caricati al salvataggio.
+                      </p>
+                    </div>
+                    <CompilaButton
+                      documents={[
+                        { file: driversLicenseFront, label: 'Patente Fronte' },
+                        { file: driversLicenseBack, label: 'Patente Retro' },
+                        { file: identityFront, label: 'Carta Identità Fronte' },
+                        { file: identityBack, label: 'Carta Identità Retro' },
+                        { file: codiceFiscaleFront, label: 'Codice Fiscale Fronte' },
+                        { file: codiceFiscaleBack, label: 'Codice Fiscale Retro' },
+                      ]}
+                      currentData={formData}
+                      onDataExtracted={(data: ExtractedData, _conflicts: DataConflict[]) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          ...(data.nome && { nome: data.nome }),
+                          ...(data.cognome && { cognome: data.cognome }),
+                          ...(data.sesso && { sesso: data.sesso as 'M' | 'F' | 'Altro' | '' }),
+                          ...(data.data_nascita && { data_nascita: data.data_nascita }),
+                          ...(data.luogo_nascita && { luogo_nascita: data.luogo_nascita }),
+                          ...(data.provincia_nascita && { provincia_nascita: data.provincia_nascita }),
+                          ...(data.codice_fiscale && { codice_fiscale: data.codice_fiscale }),
+                          ...(data.indirizzo && { indirizzo: data.indirizzo }),
+                          ...(data.numero_civico && { numero_civico: data.numero_civico }),
+                          ...(data.codice_postale && { codice_postale: data.codice_postale }),
+                          ...(data.citta_residenza && { citta_residenza: data.citta_residenza }),
+                          ...(data.provincia_residenza && { provincia_residenza: data.provincia_residenza }),
+                          ...(data.patente_numero && { patente_numero: data.patente_numero }),
+                          ...(data.patente_tipo && { patente_tipo: data.patente_tipo }),
+                          ...(data.patente_rilascio && { patente_rilascio: data.patente_rilascio }),
+                          ...(data.patente_scadenza && { patente_scadenza: data.patente_scadenza }),
+                          ...(data.patente_ente && { patente_ente: data.patente_ente }),
+                        }))
+                        toast.success('Dati compilati automaticamente dai documenti!')
+                      }}
+                      onError={(err) => toast.error(err)}
+                    />
                   </div>
                 )}
               </div>

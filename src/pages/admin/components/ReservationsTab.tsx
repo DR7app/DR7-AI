@@ -54,15 +54,25 @@ import {
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
 
-// SUPERCARS (Exotic) - RCA compresa + KASKO options
+// SUPERCARS (Exotic) - Tier-based insurance options
+// Tier 1 (Fascia B): only RCA + Kasko Base at 119€/day
 // eslint-disable-next-line react-refresh/only-export-components
-export const INSURANCE_OPTIONS = [
+export const INSURANCE_OPTIONS_TIER_1 = [
   { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 119 },
+  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: TIER_KASKO_BASE_PRICE.TIER_1 },
+];
+// Tier 2 (Fascia A): all options, Kasko Base at 89€/day
+// eslint-disable-next-line react-refresh/only-export-components
+export const INSURANCE_OPTIONS_TIER_2 = [
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
+  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: TIER_KASKO_BASE_PRICE.TIER_2 },
   { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 149 },
   { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 189 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 289 },
 ];
+// Fallback when no tier is known yet
+// eslint-disable-next-line react-refresh/only-export-components
+export const INSURANCE_OPTIONS = INSURANCE_OPTIONS_TIER_1;
 
 // URBAN - Kasko Base + Kasko DR7
 // eslint-disable-next-line react-refresh/only-export-components
