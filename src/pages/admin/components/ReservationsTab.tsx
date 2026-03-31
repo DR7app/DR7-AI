@@ -3437,16 +3437,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Helper function to get correct timezone offset for Europe/Rome (handles DST automatically)
       const getRomeOffset = (dateString: string): string => {
-        // Use noon to avoid DST boundary issues (new Date("2026-03-30") parses as UTC midnight)
+        // Use noon to avoid DST boundary issues
         const date = new Date(`${dateString}T12:00:00`)
-        const formatter = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'Europe/Rome',
-          timeZoneName: 'short'
-        })
-        const parts = formatter.formatToParts(date)
-        const tzPart = parts.find(p => p.type === 'timeZoneName')
-        // CET = +01:00 (winter), CEST = +02:00 (summer DST)
-        return tzPart?.value === 'CEST' ? '+02:00' : '+01:00'
+        // Calculate offset by comparing UTC time with Rome local time
+        const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' })
+        const romeStr = date.toLocaleString('en-US', { timeZone: 'Europe/Rome' })
+        const utcDate = new Date(utcStr)
+        const romeDate = new Date(romeStr)
+        const diffMinutes = Math.round((romeDate.getTime() - utcDate.getTime()) / 60000)
+        const sign = diffMinutes >= 0 ? '+' : '-'
+        const absMinutes = Math.abs(diffMinutes)
+        const hours = String(Math.floor(absMinutes / 60)).padStart(2, '0')
+        const mins = String(absMinutes % 60).padStart(2, '0')
+        return `${sign}${hours}:${mins}`
       }
 
       // Get the correct timezone offset for the pickup date
