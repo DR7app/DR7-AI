@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity } from '../data/sardegnaProvince'
 import toast from 'react-hot-toast'
 import { logger } from '../utils/logger'
+import CalcolaCFButton from './CalcolaCFButton'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -704,14 +705,29 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Codice Fiscale {formData.nazione === 'Italia' ? '*' : '(opzionale)'}
                   </label>
-                  <input
-                    type="text"
-                    value={formData.codice_fiscale}
-                    onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
-                    maxLength={16}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
-                    placeholder="RSSMRA80A01H501U"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={formData.codice_fiscale}
+                      onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
+                      maxLength={16}
+                      className="flex-1 px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                      placeholder="RSSMRA80A01H501U"
+                    />
+                    <CalcolaCFButton config={{
+                      getCognome: () => formData.cognome,
+                      getNome: () => formData.nome,
+                      getDataNascita: () => formData.data_nascita,
+                      getSesso: () => formData.sesso,
+                      getLuogoNascita: () => formData.citta_nascita,
+                      getCodiceFiscale: () => formData.codice_fiscale,
+                      setCodiceFiscale: (v) => setFormData(p => ({ ...p, codice_fiscale: v })),
+                      setSesso: (v) => setFormData(p => ({ ...p, sesso: v })),
+                      setDataNascita: (v) => setFormData(p => ({ ...p, data_nascita: v })),
+                      setLuogoNascita: (v) => setFormData(p => ({ ...p, citta_nascita: v })),
+                      setProvinciaNascita: (v) => setFormData(p => ({ ...p, provincia_nascita: v })),
+                    }} />
+                  </div>
                   {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
                 </div>
                 <div>

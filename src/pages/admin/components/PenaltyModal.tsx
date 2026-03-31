@@ -263,7 +263,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     customPhone: custPhone,
-                                    customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nIn riferimento al contratto di noleggio, sono state rilevate penali per un importo di €${cartTotal.toFixed(2)}.\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 1 ora.\n\nGrazie per la collaborazione.\n\nDR7`
+                                    customMessage: `Gentile ${custName},\n\nIn riferimento al contratto di noleggio, sono state rilevate penali per un importo di €${cartTotal.toFixed(2)}.\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 1 ora.\n\nGrazie per la collaborazione.\n\nDR7`
                                 })
                             })
                         }

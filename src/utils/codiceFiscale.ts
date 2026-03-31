@@ -344,14 +344,158 @@ export function getAvailableCities(): string[] {
   return Object.keys(CODICI_CATASTALI).sort()
 }
 
+// ── City to Provincia mapping ─────────────────────────────────────────────
+const CITY_TO_PROVINCIA: Record<string, string> = {
+  // Sardegna — Città Metropolitana di Cagliari
+  'CAGLIARI': 'CA', 'ASSEMINI': 'CA', 'CAPOTERRA': 'CA', 'DECIMOMANNU': 'CA',
+  'ELMAS': 'CA', 'MARACALAGONIS': 'CA', 'MONSERRATO': 'CA', 'PULA': 'CA',
+  'QUARTU SANT\'ELENA': 'CA', 'QUARTUCCIU': 'CA', 'SARROCH': 'CA', 'SELARGIUS': 'CA',
+  'SESTU': 'CA', 'SETTIMO SAN PIETRO': 'CA', 'SINNAI': 'CA', 'UTA': 'CA',
+  // Sardegna — Sud Sardegna
+  'CARBONIA': 'SU', 'IGLESIAS': 'SU', 'VILLACIDRO': 'SU', 'SANLURI': 'SU',
+  'SAN GAVINO MONREALE': 'SU', 'GUSPINI': 'SU', 'MURAVERA': 'SU',
+  'SANT\'ANTIOCO': 'SU', 'DOLIANOVA': 'SU', 'SENORBI': 'SU',
+  'SERRAMANNA': 'SU', 'SAN SPERATE': 'SU', 'VILLASOR': 'SU',
+  'MONASTIR': 'SU', 'VILLAPUTZU': 'SU', 'VILLASIMIUS': 'SU',
+  // Sardegna — Sassari
+  'SASSARI': 'SS', 'ALGHERO': 'SS', 'PORTO TORRES': 'SS', 'SORSO': 'SS',
+  'OZIERI': 'SS', 'TEMPIO PAUSANIA': 'SS', 'LA MADDALENA': 'SS',
+  'CASTELSARDO': 'SS', 'VALLEDORIA': 'SS', 'ITTIRI': 'SS',
+  // Sardegna — Nuoro
+  'NUORO': 'NU', 'SINISCOLA': 'NU', 'TORTOLI': 'NU', 'MACOMER': 'NU',
+  'DORGALI': 'NU', 'OROSEI': 'NU', 'LANUSEI': 'NU',
+  // Sardegna — Oristano
+  'ORISTANO': 'OR', 'TERRALBA': 'OR', 'CABRAS': 'OR', 'BOSA': 'OR',
+  // Sardegna — Olbia-Tempio / Gallura
+  'OLBIA': 'SS', 'ARZACHENA': 'SS', 'BUDONI': 'SS', 'SAN TEODORO': 'SS',
+  'GOLFO ARANCI': 'SS', 'PALAU': 'SS', 'SANTA TERESA GALLURA': 'SS',
+  'LOIRI PORTO SAN PAOLO': 'SS',
+  // Capoluoghi di regione & province principali
+  'ROMA': 'RM', 'MILANO': 'MI', 'NAPOLI': 'NA', 'TORINO': 'TO',
+  'PALERMO': 'PA', 'GENOVA': 'GE', 'BOLOGNA': 'BO', 'FIRENZE': 'FI',
+  'BARI': 'BA', 'CATANIA': 'CT', 'VENEZIA': 'VE', 'VERONA': 'VR',
+  'MESSINA': 'ME', 'PADOVA': 'PD', 'TRIESTE': 'TS', 'BRESCIA': 'BS',
+  'TARANTO': 'TA', 'PRATO': 'PO', 'REGGIO CALABRIA': 'RC',
+  'MODENA': 'MO', 'REGGIO EMILIA': 'RE', 'PERUGIA': 'PG',
+  'RAVENNA': 'RA', 'LIVORNO': 'LI', 'FOGGIA': 'FG',
+  'RIMINI': 'RN', 'SALERNO': 'SA', 'FERRARA': 'FE', 'SIRACUSA': 'SR',
+  'PESCARA': 'PE', 'MONZA': 'MB', 'BERGAMO': 'BG', 'VICENZA': 'VI',
+  'BOLZANO': 'BZ', 'TRENTO': 'TN', 'ANCONA': 'AN', 'UDINE': 'UD',
+  'ANDRIA': 'BT', 'AREZZO': 'AR', 'CATANZARO': 'CZ', 'LECCE': 'LE',
+  'PESARO': 'PU', 'ALESSANDRIA': 'AL', 'PISA': 'PI', 'TERNI': 'TR',
+  'LA SPEZIA': 'SP', 'LUCCA': 'LU', 'COMO': 'CO', 'NOVARA': 'NO',
+  'VARESE': 'VA', 'LATINA': 'LT', 'BRINDISI': 'BR', 'PARMA': 'PR',
+  'PIACENZA': 'PC', 'COSENZA': 'CS', 'TRAPANI': 'TP', 'POTENZA': 'PZ',
+  'AVELLINO': 'AV', 'BENEVENTO': 'BN', 'CASERTA': 'CE', 'CROTONE': 'KR',
+  'VIBO VALENTIA': 'VV', 'AGRIGENTO': 'AG', 'CALTANISSETTA': 'CL',
+  'ENNA': 'EN', 'RAGUSA': 'RG', 'FROSINONE': 'FR', 'ISERNIA': 'IS',
+  'CAMPOBASSO': 'CB', 'MATERA': 'MT', 'L\'AQUILA': 'AQ', 'CHIETI': 'CH',
+  'TERAMO': 'TE', 'RIETI': 'RI', 'VITERBO': 'VT', 'AOSTA': 'AO',
+  'BELLUNO': 'BL', 'ROVIGO': 'RO', 'TREVISO': 'TV', 'PORDENONE': 'PN',
+  'GORIZIA': 'GO', 'SAVONA': 'SV', 'IMPERIA': 'IM', 'ASTI': 'AT',
+  'BIELLA': 'BI', 'CUNEO': 'CN', 'VERBANIA': 'VB', 'VERCELLI': 'VC',
+  'SONDRIO': 'SO', 'CREMONA': 'CR', 'LODI': 'LO', 'MANTOVA': 'MN',
+  'LECCO': 'LC', 'PAVIA': 'PV', 'MASSA': 'MS', 'GROSSETO': 'GR',
+  'SIENA': 'SI', 'PISTOIA': 'PT',
+  // Grandi città
+  'GIUGLIANO IN CAMPANIA': 'NA', 'TORRE DEL GRECO': 'NA',
+  'POZZUOLI': 'NA', 'CASORIA': 'NA', 'ACERRA': 'NA',
+  'AFRAGOLA': 'NA', 'CASTELLAMMARE DI STABIA': 'NA', 'PORTICI': 'NA',
+  'SAN GIORGIO A CREMANO': 'NA', 'ERCOLANO': 'NA', 'CAVA DE\' TIRRENI': 'SA',
+  'BATTIPAGLIA': 'SA', 'SCAFATI': 'SA', 'NOCERA INFERIORE': 'SA',
+  'PAGANI': 'SA', 'SARNO': 'SA', 'AVERSA': 'CE',
+  'MARCIANISE': 'CE', 'MADDALONI': 'CE',
+  'CINISELLO BALSAMO': 'MI', 'SESTO SAN GIOVANNI': 'MI',
+  'RHO': 'MI', 'LEGNANO': 'MI', 'COLOGNO MONZESE': 'MI',
+  'BUSTO ARSIZIO': 'VA', 'GALLARATE': 'VA', 'SARONNO': 'VA',
+  'CESANO MADERNO': 'MB', 'DESIO': 'MB', 'LISSONE': 'MB',
+  'SEREGNO': 'MB', 'MONCALIERI': 'TO', 'COLLEGNO': 'TO',
+  'RIVOLI': 'TO', 'NICHELINO': 'TO', 'SETTIMO TORINESE': 'TO',
+  'GRUGLIASCO': 'TO', 'CHIERI': 'TO',
+  'GUIDONIA MONTECELIO': 'RM', 'FIUMICINO': 'RM', 'TIVOLI': 'RM',
+  'ANZIO': 'RM', 'NETTUNO': 'RM', 'VELLETRI': 'RM', 'CIVITAVECCHIA': 'RM',
+  'POMEZIA': 'RM',
+  // Sicilia
+  'MARSALA': 'TP', 'GELA': 'CL', 'VITTORIA': 'RG',
+  'MODICA': 'RG', 'ACIREALE': 'CT', 'BAGHERIA': 'PA',
+  'MAZARA DEL VALLO': 'TP', 'ALCAMO': 'TP', 'MISTERBIANCO': 'CT',
+  // Puglia
+  'ALTAMURA': 'BA', 'MOLFETTA': 'BA', 'BARLETTA': 'BT',
+  'TRANI': 'BT', 'BISCEGLIE': 'BT', 'BITONTO': 'BA',
+  'CERIGNOLA': 'FG', 'MANFREDONIA': 'FG', 'SAN SEVERO': 'FG',
+  'LUCERA': 'FG', 'NARDO': 'LE', 'GALLIPOLI': 'LE',
+  'MAGLIE': 'LE', 'GALATINA': 'LE',
+  // Calabria
+  'LAMEZIA TERME': 'CZ', 'RENDE': 'CS', 'CASTROVILLARI': 'CS',
+  'CORIGLIANO CALABRO': 'CS', 'ROSSANO': 'CS',
+  // Toscana
+  'EMPOLI': 'FI', 'SCANDICCI': 'FI', 'CAMPI BISENZIO': 'FI',
+  'SESTO FIORENTINO': 'FI', 'PONTEDERA': 'PI', 'PIOMBINO': 'LI',
+  'VIAREGGIO': 'LU', 'CARRARA': 'MS', 'MONTECATINI TERME': 'PT',
+  // Emilia-Romagna
+  'CESENA': 'FC', 'FORLI': 'FC', 'IMOLA': 'BO', 'FAENZA': 'RA',
+  'CARPI': 'MO', 'SASSUOLO': 'MO', 'FIDENZA': 'PR', 'LUGO': 'RA',
+  // Veneto
+  'MESTRE': 'VE', 'CHIOGGIA': 'VE', 'SAN DONA DI PIAVE': 'VE',
+  'MIRA': 'VE', 'JESOLO': 'VE', 'BASSANO DEL GRAPPA': 'VI',
+  'SCHIO': 'VI', 'THIENE': 'VI', 'CASTELFRANCO VENETO': 'TV',
+  'CONEGLIANO': 'TV', 'MONTEBELLUNA': 'TV', 'VITTORIO VENETO': 'TV',
+  // Lombardia (extra)
+  'VIGEVANO': 'PV', 'VOGHERA': 'PV', 'CREMA': 'CR',
+  'CASALMAGGIORE': 'CR', 'DALMINE': 'BG', 'TREVIGLIO': 'BG',
+  'SERIATE': 'BG', 'ROMANO DI LOMBARDIA': 'BG',
+  'CANTÙ': 'CO', 'ERBA': 'CO', 'MARIANO COMENSE': 'CO',
+  // Piemonte (extra)
+  'ALBA': 'CN', 'BRA': 'CN', 'FOSSANO': 'CN', 'SAVIGLIANO': 'CN',
+  'MONDOVI': 'CN', 'CASALE MONFERRATO': 'AL', 'TORTONA': 'AL',
+  'NOVI LIGURE': 'AL', 'ACQUI TERME': 'AL', 'OVADA': 'AL',
+  'DOMODOSSOLA': 'VB', 'BORGOMANERO': 'NO', 'ARONA': 'NO',
+  // Liguria (extra)
+  'SANREMO': 'IM', 'VENTIMIGLIA': 'IM', 'RAPALLO': 'GE',
+  'CHIAVARI': 'GE', 'SESTRI LEVANTE': 'GE',
+  // Friuli Venezia Giulia (extra)
+  'MONFALCONE': 'GO', 'SACILE': 'PN', 'CORDENONS': 'PN',
+  // Trentino-Alto Adige (extra)
+  'MERANO': 'BZ', 'BRESSANONE': 'BZ', 'BRUNICO': 'BZ',
+  'LAIVES': 'BZ', 'ROVERETO': 'TN', 'RIVA DEL GARDA': 'TN',
+  // Marche (extra)
+  'FANO': 'PU', 'SENIGALLIA': 'AN', 'JESI': 'AN',
+  'FABRIANO': 'AN', 'CIVITANOVA MARCHE': 'MC', 'MACERATA': 'MC',
+  'FERMO': 'FM', 'ASCOLI PICENO': 'AP', 'SAN BENEDETTO DEL TRONTO': 'AP',
+  // Umbria (extra)
+  'FOLIGNO': 'PG', 'CITTA DI CASTELLO': 'PG', 'SPOLETO': 'PG',
+  'GUBBIO': 'PG', 'ORVIETO': 'TR', 'NARNI': 'TR',
+  // Abruzzo (extra)
+  'MONTESILVANO': 'PE', 'FRANCAVILLA AL MARE': 'CH',
+  'VASTO': 'CH', 'LANCIANO': 'CH', 'ORTONA': 'CH',
+  'AVEZZANO': 'AQ', 'SULMONA': 'AQ',
+  // Molise (extra)
+  'TERMOLI': 'CB',
+  // Basilicata (extra)
+  'MELFI': 'PZ', 'PISTICCI': 'MT', 'POLICORO': 'MT',
+}
+
 /**
- * Decode a Codice Fiscale to extract birth date, sex, and birthplace.
+ * Validate the check digit (last character) of a Codice Fiscale.
+ */
+export function validateCheckDigit(cf: string): boolean {
+  const code = cf.toUpperCase().replace(/\s/g, '')
+  if (code.length !== 16) return false
+  // Validate basic format
+  if (!/^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/.test(code)) return false
+  const expected = computeCheckChar(code.substring(0, 15))
+  return code[15] === expected
+}
+
+/**
+ * Decode a Codice Fiscale to extract birth date, sex, birthplace, and province.
  * Cannot extract cognome/nome (the encoding is lossy).
  */
 export function decodificaCodiceFiscale(cf: string): {
-  data_nascita: string  // YYYY-MM-DD
+  data_nascita: string       // YYYY-MM-DD
   sesso: 'M' | 'F'
-  luogo_nascita: string // city name or belfiore code if not found
+  luogo_nascita: string      // city name or belfiore code if not found
+  provincia_nascita: string  // 2-letter code or 'EE' for foreign or '' if unknown
 } | null {
   const code = cf.toUpperCase().replace(/\s/g, '')
   if (code.length !== 16) return null
@@ -387,5 +531,82 @@ export function decodificaCodiceFiscale(cf: string): {
     ? cityName.charAt(0) + cityName.slice(1).toLowerCase()
     : belfiore // return raw code if not in our list
 
-  return { data_nascita, sesso, luogo_nascita }
+  // Province lookup
+  let provincia_nascita = ''
+  if (cityName) {
+    if (belfiore.startsWith('Z')) {
+      provincia_nascita = 'EE' // foreign country
+    } else {
+      provincia_nascita = CITY_TO_PROVINCIA[cityName] || ''
+    }
+  }
+
+  return { data_nascita, sesso, luogo_nascita, provincia_nascita }
+}
+
+/**
+ * Verify consistency between a Codice Fiscale and personal data.
+ * Returns mismatches in Italian.
+ */
+export function verificaConsistenza(
+  cf: string,
+  input: Partial<CodiceFiscaleInput>
+): {
+  isConsistent: boolean
+  mismatches: string[]
+  decoded: ReturnType<typeof decodificaCodiceFiscale>
+} {
+  const decoded = decodificaCodiceFiscale(cf)
+  if (!decoded) {
+    return { isConsistent: false, mismatches: ['Il Codice Fiscale inserito non è valido'], decoded: null }
+  }
+
+  if (!validateCheckDigit(cf)) {
+    return { isConsistent: false, mismatches: ['Il carattere di controllo del Codice Fiscale non è corretto'], decoded }
+  }
+
+  const mismatches: string[] = []
+
+  // Check sesso
+  if (input.sesso && input.sesso !== decoded.sesso) {
+    mismatches.push(`Sesso: inserito "${input.sesso}", dal CF risulta "${decoded.sesso}"`)
+  }
+
+  // Check birth date
+  if (input.data_nascita) {
+    const inputDate = new Date(input.data_nascita)
+    const decodedDate = new Date(decoded.data_nascita)
+    if (inputDate.getTime() !== decodedDate.getTime()) {
+      mismatches.push(`Data di nascita: inserita "${input.data_nascita}", dal CF risulta "${decoded.data_nascita}"`)
+    }
+  }
+
+  // Check birthplace
+  if (input.luogo_nascita) {
+    const inputCity = input.luogo_nascita.toUpperCase().trim()
+    const decodedCity = decoded.luogo_nascita.toUpperCase().trim()
+    if (inputCity !== decodedCity) {
+      mismatches.push(`Luogo di nascita: inserito "${input.luogo_nascita}", dal CF risulta "${decoded.luogo_nascita}"`)
+    }
+  }
+
+  // If all fields provided, also try generating CF and compare
+  if (input.cognome && input.nome && input.data_nascita && input.sesso && input.luogo_nascita) {
+    const generated = calcolaCodiceFiscale(input as CodiceFiscaleInput)
+    if (generated.codice_fiscale && generated.codice_fiscale !== cf.toUpperCase().replace(/\s/g, '')) {
+      if (mismatches.length === 0) {
+        mismatches.push('Il Codice Fiscale generato dai dati non corrisponde a quello inserito (possibile omocodia o errore nei dati)')
+      }
+    }
+  }
+
+  return { isConsistent: mismatches.length === 0, mismatches, decoded }
+}
+
+/**
+ * Get provincia code for a city name.
+ * Returns null if not found.
+ */
+export function getProvinciaByCityName(cityName: string): string | null {
+  return CITY_TO_PROVINCIA[cityName.toUpperCase().trim()] || null
 }

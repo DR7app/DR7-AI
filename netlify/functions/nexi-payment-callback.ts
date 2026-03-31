@@ -469,7 +469,7 @@ const handler: Handler = async (event) => {
                         const fmtApptTime = apptDate ? new Date(apptDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '';
 
                         const vehiclePlate = booking.booking_details?.vehicle_plate || booking.booking_details?.vehicle?.plate || '';
-                        custMsg = `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\n`;
+                        custMsg = ``;
                         custMsg += `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`;
                         custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`;
                         custMsg += `*ID:* DR7-${bookingRef}\n`;
@@ -733,7 +733,7 @@ const handler: Handler = async (event) => {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
                                         customPhone: custPhone,
-                                        customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nHa ricevuto *€${bonusEur}* di credito sul suo wallet DR7 grazie al pagamento con ${cardLabel} (${percentLabel}).\n\nSaldo attuale: *€${newBalance.toFixed(2)}*\n\nIl credito è spendibile direttamente sul sito per le prossime prenotazioni.\n\nGrazie per la collaborazione.\n\nDR7`
+                                        customMessage: `Gentile ${custName},\n\nHa ricevuto *€${bonusEur}* di credito sul suo wallet DR7 grazie al pagamento con ${cardLabel} (${percentLabel}).\n\nSaldo attuale: *€${newBalance.toFixed(2)}*\n\nIl credito è spendibile direttamente sul sito per le prossime prenotazioni.\n\nGrazie per la collaborazione.\n\nDR7`
                                     })
                                 });
                             }

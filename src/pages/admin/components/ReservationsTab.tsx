@@ -38,7 +38,8 @@ import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import DanniPenaliModal from './DanniPenaliModal'
 import { logger } from '../../../utils/logger'
-import { calcolaCodiceFiscale, decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
+import { decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
+import CalcolaCFButton from '../../../components/CalcolaCFButton'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -4460,49 +4461,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                 setNewCustomerData(prev => ({ ...prev, codice_fiscale: val }))
                               }} />
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                // If CF is filled but other fields are empty → DECODE CF
-                                if (newCustomerData.codice_fiscale.length === 16 && (!newCustomerData.data_nascita || !newCustomerData.sesso || !newCustomerData.luogo_nascita)) {
-                                  const decoded = decodificaCodiceFiscale(newCustomerData.codice_fiscale)
-                                  if (decoded) {
-                                    setNewCustomerData(prev => ({
-                                      ...prev,
-                                      data_nascita: decoded.data_nascita,
-                                      sesso: decoded.sesso,
-                                      luogo_nascita: decoded.luogo_nascita,
-                                    }))
-                                    toast.success('Dati estratti dal Codice Fiscale')
-                                  } else {
-                                    toast.error('Codice Fiscale non valido')
-                                  }
-                                  return
-                                }
-                                // Otherwise → CALCULATE CF from fields
-                                if (!newCustomerData.cognome || !newCustomerData.nome || !newCustomerData.data_nascita || !newCustomerData.sesso || !newCustomerData.luogo_nascita) {
-                                  toast.error('Compila cognome, nome, data nascita, sesso e luogo nascita')
-                                  return
-                                }
-                                const result = calcolaCodiceFiscale({
-                                  cognome: newCustomerData.cognome,
-                                  nome: newCustomerData.nome,
-                                  data_nascita: newCustomerData.data_nascita,
-                                  sesso: newCustomerData.sesso as 'M' | 'F',
-                                  luogo_nascita: newCustomerData.luogo_nascita,
-                                })
-                                if (result.codice_fiscale) {
-                                  setNewCustomerData({ ...newCustomerData, codice_fiscale: result.codice_fiscale })
-                                  toast.success('Codice Fiscale calcolato')
-                                } else {
-                                  toast.error(result.error || 'Errore nel calcolo del CF')
-                                }
-                              }}
+                            <CalcolaCFButton
                               className="px-3 py-2 mb-[1px] bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
-                              title="Calcola CF da cognome, nome, data nascita, sesso, luogo nascita"
-                            >
-                              Calcola
-                            </button>
+                              config={{
+                                getCognome: () => newCustomerData.cognome,
+                                getNome: () => newCustomerData.nome,
+                                getDataNascita: () => newCustomerData.data_nascita,
+                                getSesso: () => newCustomerData.sesso,
+                                getLuogoNascita: () => newCustomerData.luogo_nascita,
+                                getCodiceFiscale: () => newCustomerData.codice_fiscale,
+                                setCodiceFiscale: (v) => setNewCustomerData(p => ({ ...p, codice_fiscale: v })),
+                                setSesso: (v) => setNewCustomerData(p => ({ ...p, sesso: v as '' | 'M' | 'F' })),
+                                setDataNascita: (v) => setNewCustomerData(p => ({ ...p, data_nascita: v })),
+                                setLuogoNascita: (v) => setNewCustomerData(p => ({ ...p, luogo_nascita: v })),
+                                setProvinciaNascita: (v) => setNewCustomerData(p => ({ ...p, provincia_nascita: v })),
+                              }}
+                            />
                           </div>
                           <Input label="Data di Nascita *" type="date" value={newCustomerData.data_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })} />
                           <Input label="Luogo di Nascita *" value={newCustomerData.luogo_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })} />
@@ -4855,12 +4829,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         value={formData.second_driver_surname}
                         onChange={(e) => setFormData({ ...formData, second_driver_surname: e.target.value })}
                       />
-                      <Input
-                        label="Codice Fiscale *"
-                        required
-                        value={formData.second_driver_codice_fiscale}
-                        onChange={(e) => setFormData({ ...formData, second_driver_codice_fiscale: e.target.value.toUpperCase() })}
-                      />
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text-primary mb-2">Codice Fiscale *</label>
+                        <div className="flex gap-2">
+                          <input
+                            required
+                            value={formData.second_driver_codice_fiscale}
+                            onChange={(e) => setFormData({ ...formData, second_driver_codice_fiscale: e.target.value.toUpperCase() })}
+                            className="flex-1 px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors uppercase"
+                          />
+                          <CalcolaCFButton
+                            className="px-3 py-2 bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
+                            config={{
+                              getCognome: () => formData.second_driver_surname,
+                              getNome: () => formData.second_driver_name,
+                              getDataNascita: () => formData.second_driver_birth_date,
+                              getSesso: () => formData.second_driver_sesso,
+                              getLuogoNascita: () => formData.second_driver_birth_place,
+                              getCodiceFiscale: () => formData.second_driver_codice_fiscale,
+                              setCodiceFiscale: (v) => setFormData(p => ({ ...p, second_driver_codice_fiscale: v })),
+                              setSesso: (v) => setFormData(p => ({ ...p, second_driver_sesso: v })),
+                              setDataNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_date: v })),
+                              setLuogoNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_place: v })),
+                              setProvinciaNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_provincia: v })),
+                            }}
+                          />
+                        </div>
+                      </div>
                       <Select
                         label="Sesso *"
                         required
@@ -5150,7 +5145,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Input label="Nome *" required value={formData.garante_nome} onChange={(e) => setFormData({ ...formData, garante_nome: e.target.value })} />
                             <Input label="Cognome *" required value={formData.garante_cognome} onChange={(e) => setFormData({ ...formData, garante_cognome: e.target.value })} />
-                            <Input label="Codice Fiscale *" required value={formData.garante_codice_fiscale} onChange={(e) => setFormData({ ...formData, garante_codice_fiscale: e.target.value.toUpperCase() })} />
+                            <div>
+                              <label className="block text-sm font-medium text-theme-text-primary mb-2">Codice Fiscale *</label>
+                              <div className="flex gap-2">
+                                <input
+                                  required
+                                  value={formData.garante_codice_fiscale}
+                                  onChange={(e) => setFormData({ ...formData, garante_codice_fiscale: e.target.value.toUpperCase() })}
+                                  className="flex-1 px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors uppercase"
+                                />
+                                <CalcolaCFButton
+                                  className="px-3 py-2 bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
+                                  config={{
+                                    getCognome: () => formData.garante_cognome,
+                                    getNome: () => formData.garante_nome,
+                                    getDataNascita: () => formData.garante_birth_date,
+                                    getSesso: () => formData.garante_sesso,
+                                    getLuogoNascita: () => formData.garante_birth_place,
+                                    getCodiceFiscale: () => formData.garante_codice_fiscale,
+                                    setCodiceFiscale: (v) => setFormData(p => ({ ...p, garante_codice_fiscale: v })),
+                                    setSesso: (v) => setFormData(p => ({ ...p, garante_sesso: v })),
+                                    setDataNascita: (v) => setFormData(p => ({ ...p, garante_birth_date: v })),
+                                    setLuogoNascita: (v) => setFormData(p => ({ ...p, garante_birth_place: v })),
+                                    setProvinciaNascita: (v) => setFormData(p => ({ ...p, garante_birth_provincia: v })),
+                                  }}
+                                />
+                              </div>
+                            </div>
                             <Select label="Sesso" value={formData.garante_sesso} onChange={(e) => setFormData({ ...formData, garante_sesso: e.target.value })} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }]} />
                             <Input label="Indirizzo" value={formData.garante_indirizzo} onChange={(e) => setFormData({ ...formData, garante_indirizzo: e.target.value })} />
                             <Input label="CAP" value={formData.garante_cap} onChange={(e) => setFormData({ ...formData, garante_cap: e.target.value })} maxLength={5} />

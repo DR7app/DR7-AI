@@ -655,7 +655,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: custPhone,
-            customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per il lavaggio è ancora in sospeso.\n\nPer completare il pagamento di *€${totalEur}*, clicchi sul seguente link:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora.\n\nGrazie,\nDR7`
+            customMessage: `Gentile ${custName},\n\nLe ricordiamo che il pagamento per il lavaggio è ancora in sospeso.\n\nPer completare il pagamento di *€${totalEur}*, clicchi sul seguente link:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora.\n\nGrazie,\nDR7`
           })
         })
         toast.success('Nuovo link generato e inviato via WhatsApp!', { id: toastId })
@@ -982,7 +982,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: customerPhone,
-                customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\nGentile ${customerName},\n\nIl suo appuntamento lavaggio #${(data.id || '').substring(0, 8).toUpperCase()} è stato registrato.\n\nPer confermare, completi il pagamento di *€${totalPrice.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+                customMessage: `Gentile ${customerName},\n\nIl suo appuntamento lavaggio #${(data.id || '').substring(0, 8).toUpperCase()} è stato registrato.\n\nPer confermare, completi il pagamento di *€${totalPrice.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7`
               })
             })
           }
@@ -1044,7 +1044,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           paymentLabel = 'Da saldare'
         }
 
-        let custMsg = `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\n`
+        let custMsg = ``
         custMsg += `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`
         custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`
         custMsg += `*ID:* DR7-${bookingIdShort}\n`
@@ -1054,7 +1054,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         custMsg += `*Totale:* €${totalEur}\n`
         custMsg += `*Pagamento:* ${paymentLabel}\n`
         if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
-        custMsg += `\nCordiali Saluti,\nDR7\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+        custMsg += `\nCordiali Saluti,\nDR7`
 
         await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
@@ -1597,7 +1597,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {selectedService?.price_unit === 'custom' && (
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Prezzo (EUR) — Minimo €{selectedService.price.toFixed(0)}
+                    Prezzo (EUR) — Minimo €{selectedService.price.toFixed(2)}
                   </label>
                   <input
                     type="number"
@@ -1610,7 +1610,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   />
                   {customPrice && parseFloat(customPrice) < selectedService.price && (
                     <p className="text-red-400 text-sm mt-1">
-                      Il prezzo deve essere almeno €{selectedService.price.toFixed(0)}
+                      Il prezzo deve essere almeno €{selectedService.price.toFixed(2)}
                     </p>
                   )}
                 </div>

@@ -3,7 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity, getCAPByCity } from '../../../data/sardegnaProvince'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
-import { calcolaCodiceFiscale } from '../../../utils/codiceFiscale'
+import CalcolaCFButton from '../../../components/CalcolaCFButton'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -827,32 +827,19 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                           maxLength={16}
                           className="flex-1 bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono"
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!formData.cognome || !formData.nome || !formData.data_nascita || !formData.sesso || !formData.luogo_nascita) {
-                              toast.error('Compila cognome, nome, data nascita, sesso e luogo nascita per calcolare il CF')
-                              return
-                            }
-                            const result = calcolaCodiceFiscale({
-                              cognome: formData.cognome,
-                              nome: formData.nome,
-                              data_nascita: formData.data_nascita,
-                              sesso: formData.sesso as 'M' | 'F',
-                              luogo_nascita: formData.luogo_nascita,
-                            })
-                            if (result.codice_fiscale) {
-                              setFormData({ ...formData, codice_fiscale: result.codice_fiscale })
-                              toast.success('Codice Fiscale calcolato')
-                            } else {
-                              toast.error(result.error || 'Errore nel calcolo del CF')
-                            }
-                          }}
-                          className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
-                          title="Calcola CF da cognome, nome, data nascita, sesso, luogo nascita"
-                        >
-                          Calcola CF
-                        </button>
+                        <CalcolaCFButton config={{
+                          getCognome: () => formData.cognome,
+                          getNome: () => formData.nome,
+                          getDataNascita: () => formData.data_nascita,
+                          getSesso: () => formData.sesso,
+                          getLuogoNascita: () => formData.luogo_nascita,
+                          getCodiceFiscale: () => formData.codice_fiscale,
+                          setCodiceFiscale: (v) => setFormData(p => ({ ...p, codice_fiscale: v })),
+                          setSesso: (v) => setFormData(p => ({ ...p, sesso: v as typeof p.sesso })),
+                          setDataNascita: (v) => setFormData(p => ({ ...p, data_nascita: v })),
+                          setLuogoNascita: (v) => setFormData(p => ({ ...p, luogo_nascita: v })),
+                          setProvinciaNascita: (v) => setFormData(p => ({ ...p, provincia_nascita: v })),
+                        }} />
                       </div>
                       {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
                     </div>
