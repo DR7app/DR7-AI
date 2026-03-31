@@ -147,12 +147,12 @@ const handler: Handler = async (event) => {
         const paymentUrl = responseData.paymentLink?.link || responseData.hostedPage;
         console.log('[nexi-create-preauth] Payment URL:', paymentUrl);
 
-        // Update cauzione with order ID
+        // Update cauzione with order ID and expiration timestamp
         const { error: updateError } = await supabase
             .from('cauzioni')
             .update({
                 nexi_order_id: orderId,
-                note: `Preautorizzazione in attesa - Order: ${orderId}`,
+                note: `Preautorizzazione in attesa - Order: ${orderId} - Scade: ${expirationDate.toISOString()}`,
                 updated_at: new Date().toISOString()
             })
             .eq('id', cauzioneId);
@@ -175,6 +175,7 @@ const handler: Handler = async (event) => {
                 customer_name: customerName,
                 action_type: 'PREAUTH',
                 capture_type: 'EXPLICIT',
+                expires_at: expirationDate.toISOString(),
                 nexi_response: responseData
             },
             created_at: new Date().toISOString()
