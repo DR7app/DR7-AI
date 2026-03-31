@@ -1,18 +1,19 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { VehicleAlarmProvider } from './contexts/VehicleAlarmContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import AlarmNotification from './components/AlarmNotification'
 import LateReturnAlarm from './components/admin/LateReturnAlarm'
+import lazyWithRetry from './utils/lazyWithRetry'
 
-const Login = lazy(() => import('./pages/Login'))
-const ResetPassword = lazy(() => import('./pages/ResetPassword'))
-const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
-const AdminRoute = lazy(() => import('./components/AdminRoute'))
-const ReferralPage = lazy(() => import('./pages/ReferralPage'))
-const FirmaPage = lazy(() => import('./pages/FirmaPage'))
+const Login = lazyWithRetry(() => import('./pages/Login'))
+const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'))
+const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'))
+const AdminRoute = lazyWithRetry(() => import('./components/AdminRoute'))
+const ReferralPage = lazyWithRetry(() => import('./pages/ReferralPage'))
+const FirmaPage = lazyWithRetry(() => import('./pages/FirmaPage'))
 
 function App() {
   return (
