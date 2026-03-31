@@ -366,7 +366,8 @@ export default function CauzioniTab() {
                     amount: cauzione.importo,
                     customerEmail: cauzione.cliente_email || '',
                     customerName: cauzione.cliente_nome || 'Cliente',
-                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`
+                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`,
+                    expirationHours: 1
                 })
             })
             const result = await response.json()
@@ -417,7 +418,8 @@ export default function CauzioniTab() {
                     amount: cauzione.importo,
                     customerEmail: cauzione.cliente_email,
                     customerName: cauzione.cliente_nome,
-                    description: `Cauzione ${cauzione.veicolo_modello} - ${cauzione.cliente_nome}`
+                    description: `Cauzione ${cauzione.veicolo_modello} - ${cauzione.cliente_nome}`,
+                    expirationHours: 1
                 })
             })
 

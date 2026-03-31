@@ -26,7 +26,7 @@ const handler: Handler = async (event) => {
     }
 
     try {
-        const { cauzioneId, amount, customerEmail, customerName, description } = JSON.parse(event.body || '{}');
+        const { cauzioneId, amount, customerEmail, customerName, description, expirationHours } = JSON.parse(event.body || '{}');
 
         if (!cauzioneId || !amount) {
             return {
@@ -45,10 +45,22 @@ const handler: Handler = async (event) => {
 
         const siteUrl = process.env.URL || 'https://admin.dr7empire.com';
 
-        // Expiration: 7 days from now
+        // Calculate expiration: use hours if specified, otherwise 7 days
         const expirationDate = new Date();
-        expirationDate.setDate(expirationDate.getDate() + 7);
-        const expirationDateStr = expirationDate.toISOString().split('T')[0];
+        if (expirationHours) {
+            expirationDate.setTime(expirationDate.getTime() + expirationHours * 60 * 60 * 1000);
+        } else {
+            expirationDate.setDate(expirationDate.getDate() + 7);
+        }
+        // Nexi interprets expirationDate (yyyy-MM-dd) as "link valid until this date".
+        // If the computed date is today (e.g. expirationHours=1), Nexi treats the
+        // link as already expired. Bump to at least tomorrow so the Pay-by-Link
+        // stays reachable; the paymentSession expirationTime provides the precise cutoff.
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const effectiveDate = expirationDate > tomorrow ? expirationDate : tomorrow;
+        const expirationDateStr = effectiveDate.toISOString().split('T')[0];
+        console.log('[nexi-create-preauth] Expiration:', expirationDate.toISOString(), 'effectiveDate for Nexi:', expirationDateStr);
 
         // Use /v2/orders/paybylink with captureType EXPLICIT for preauth
         // This uses the same API key as regular pay-by-link (no separate HPP key needed)
@@ -69,6 +81,8 @@ const handler: Handler = async (event) => {
                 captureType: 'EXPLICIT',     // EXPLICIT = funds held, not charged until capture API call
                 amount: amountCents.toString(),
                 language: 'ita',
+                expirationDate: expirationDateStr,
+                expirationTime: expirationDate.toISOString(),
                 resultUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=success`,
                 cancelUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=cancelled`,
                 notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback`
