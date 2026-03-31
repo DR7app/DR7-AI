@@ -557,6 +557,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         .select('*')
         .eq('service_type', 'car_wash')
         .neq('status', 'cancelled')
+        .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
 
       if (bookingsError) throw bookingsError
