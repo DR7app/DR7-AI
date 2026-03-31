@@ -56,11 +56,15 @@ const handler: Handler = async (event) => {
         // If the computed date is today (e.g. expirationHours=1), Nexi treats the
         // link as already expired. Bump to at least tomorrow so the Pay-by-Link
         // stays reachable; the paymentSession expirationTime provides the precise cutoff.
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const effectiveDate = expirationDate > tomorrow ? expirationDate : tomorrow;
-        const expirationDateStr = effectiveDate.toISOString().split('T')[0];
-        console.log('[nexi-create-preauth] Expiration:', expirationDate.toISOString(), 'effectiveDate for Nexi:', expirationDateStr);
+        // Use Europe/Rome timezone for the date string to match business hours.
+        const toRomeDate = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }); // sv-SE gives yyyy-MM-dd
+        const todayRome = toRomeDate(new Date());
+        const tomorrowDate = new Date();
+        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+        const tomorrowRome = toRomeDate(tomorrowDate);
+        const expirationRome = toRomeDate(expirationDate);
+        const expirationDateStr = expirationRome <= todayRome ? tomorrowRome : expirationRome;
+        console.log('[nexi-create-preauth] Expiration:', expirationDate.toISOString(), 'Rome date for Nexi:', expirationDateStr);
 
         // Use /v2/orders/paybylink with captureType EXPLICIT for preauth
         // This uses the same API key as regular pay-by-link (no separate HPP key needed)

@@ -72,13 +72,17 @@ const handler: Handler = async (event) => {
         }
         // Nexi interprets expirationDate (yyyy-MM-dd) as "link valid until this date".
         // If the computed date is today (e.g. expirationHours=1), Nexi treats the
-        // link/session as already expired.  Bump to at least tomorrow so the Pay‑by‑Link
+        // link/session as already expired. Bump to at least tomorrow so the Pay-by-Link
         // stays valid; the paymentSession.expirationTime still provides the precise cutoff.
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const effectiveDate = expirationDate > tomorrow ? expirationDate : tomorrow;
-        const expirationDateStr = effectiveDate.toISOString().split('T')[0];
-        console.log('[nexi-pay-by-link] Expiration:', expirationDate.toISOString(), 'effectiveDate for Nexi:', expirationDateStr);
+        // Use Europe/Rome timezone for the date string to match business hours.
+        const toRomeDate = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }); // sv-SE gives yyyy-MM-dd
+        const todayRome = toRomeDate(new Date());
+        const tomorrowDate = new Date();
+        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+        const tomorrowRome = toRomeDate(tomorrowDate);
+        const expirationRome = toRomeDate(expirationDate);
+        const expirationDateStr = expirationRome <= todayRome ? tomorrowRome : expirationRome;
+        console.log('[nexi-pay-by-link] Expiration:', expirationDate.toISOString(), 'Rome date for Nexi:', expirationDateStr);
 
         // Create payment link request (using /v2/orders/paybylink endpoint)
         const payload = {
