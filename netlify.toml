@@ -24,6 +24,18 @@
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
 
+# Prevent caching index.html so users always get fresh asset references
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# Allow long caching for hashed assets (filenames change on each build)
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 # WhatsApp AI Webhook - clean URL for Green API
 [[redirects]]
   from = "/api/whatsapp-webhook"
