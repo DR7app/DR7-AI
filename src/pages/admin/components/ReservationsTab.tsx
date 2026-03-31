@@ -154,27 +154,26 @@ function getSforoForVehicle(vehicleName: string): string {
   return DEFAULT_SFORO
 }
 
-// Helper function to get insurance options for vehicle
-function getInsuranceOptions(vehicle?: Vehicle) {
-  if (!vehicle) return INSURANCE_OPTIONS;
+// Helper: is this vehicle a supercar/exotic (tier-based insurance applies)?
+function isExoticVehicle(vehicle?: Vehicle): boolean {
+  if (!vehicle) return true; // default assumption
+  if (isFurgone(vehicle)) return false;
+  if (vehicle.category === 'aziendali' || vehicle.category === 'urban') return false;
+  const name = vehicle.display_name.toLowerCase();
+  if (name.includes('panda') || name.includes('captur') || name.includes('clio') ||
+    name.includes('citroen') || name.includes('208') || name.includes('urban')) return false;
+  if (name.includes('van') || name.includes('utilitaire')) return false;
+  return true; // exotic / supercar
+}
 
-  // Check if it's a furgone (Ducato/Vito)
-  if (isFurgone(vehicle)) {
-    return FURGONE_INSURANCE_OPTIONS;
-  }
+// Helper function to get insurance options for vehicle + tier
+function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier) {
+  if (!vehicle) return tier === 'TIER_2' ? INSURANCE_OPTIONS_TIER_2 : INSURANCE_OPTIONS_TIER_1;
 
-  // Check vehicle category first (if set)
-  if (vehicle.category === 'aziendali') {
-    return UTILITAIRE_INSURANCE_OPTIONS;
-  }
-
-  if (vehicle.category === 'urban') {
-    return URBAN_INSURANCE_OPTIONS;
-  }
-
-  if (vehicle.category === 'exotic') {
-    return INSURANCE_OPTIONS; // SUPERCAR
-  }
+  // Non-exotic vehicles: tier doesn't affect insurance options
+  if (isFurgone(vehicle)) return FURGONE_INSURANCE_OPTIONS;
+  if (vehicle.category === 'aziendali') return UTILITAIRE_INSURANCE_OPTIONS;
+  if (vehicle.category === 'urban') return URBAN_INSURANCE_OPTIONS;
 
   // Fallback for vehicles without category (legacy)
   const name = vehicle.display_name.toLowerCase();
@@ -186,7 +185,8 @@ function getInsuranceOptions(vehicle?: Vehicle) {
     return UTILITAIRE_INSURANCE_OPTIONS;
   }
 
-  return INSURANCE_OPTIONS; // SUPERCAR
+  // Exotic/Supercar: tier-based insurance
+  return tier === 'TIER_2' ? INSURANCE_OPTIONS_TIER_2 : INSURANCE_OPTIONS_TIER_1;
 }
 interface Customer {
   id: string
@@ -468,7 +468,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Kasko & Deposit
     insurance_option: 'KASKO_BASE' as KaskoTier,
     deposit: '0',
-    deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
+    deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
     // KM Overage Fee
     km_overage_fee: DEFAULT_SFORO,
     unlimited_km: false,
@@ -524,6 +524,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [revenueLoading, setRevenueLoading] = useState(false)
   // revenueExpanded removed — details always shown
 
+  // --- Driver Tier Classification ---
+  const [customerTier, setCustomerTier] = useState<TierClassification | null>(null)
+
   useEffect(() => {
     if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
       setRevenueSuggestion(null)
@@ -548,12 +551,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (data.mode === 'auto_apply') {
             setFormData(prev => {
               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
-              const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle) : []
+              const activeTier = customerTier?.tier
+              const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier) : []
               const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
               const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
                 + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
-              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE
+              // No cauzione surcharge
+              const noCauzioneSurcharge = prev.deposit_status === 'no_cauzione' ? NO_CAUZIONE_SURCHARGE_PER_DAY * data.rentalDays : 0
+              // Unlimited KM surcharge (tier-based)
+              let unlimitedKmSurcharge = 0
+              if (prev.unlimited_km && selectedVehicle && isExoticVehicle(selectedVehicle)) {
+                unlimitedKmSurcharge = (activeTier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1) * data.rentalDays
+              }
+              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               return { ...prev, total_amount: total.toFixed(2) }
             })
@@ -572,17 +583,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   useEffect(() => {
     if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
-      const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle) : []
+      const activeTier = customerTier?.tier || 'TIER_1'
+      const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier) : []
       const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
       const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
       const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
         + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE
+      const noCauzioneSurcharge = formData.deposit_status === 'no_cauzione' ? NO_CAUZIONE_SURCHARGE_PER_DAY * revenueSuggestion.rentalDays : 0
+      let unlimitedKmSurcharge = 0
+      if (formData.unlimited_km && selectedVehicle && isExoticVehicle(selectedVehicle)) {
+        unlimitedKmSurcharge = (activeTier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1) * revenueSuggestion.rentalDays
+      }
+      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       setFormData(prev => ({ ...prev, total_amount: newTotal.toFixed(2) }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, customerTier])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -1149,23 +1166,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }))
   }, [formData.customer_id, formData.pickup_date, formData.return_date, customers])
 
-  // Reset insurance option to KASKO_BASE when vehicle changes
+  // Reset insurance option when vehicle or tier changes
   useEffect(() => {
     if (formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
-      if (!selectedVehicle) return; // Ensure a vehicle is found
+      if (!selectedVehicle) return;
 
-      const availableOptions = getInsuranceOptions(selectedVehicle)
+      const activeTier = customerTier?.tier
+      const availableOptions = getInsuranceOptions(selectedVehicle, activeTier)
 
-      // Check if current insurance option is valid for this vehicle
+      // Check if current insurance option is valid for this vehicle + tier
       const isCurrentOptionValid = availableOptions.some(opt => opt.id === formData.insurance_option)
 
-      // If current option is not available for this vehicle, reset to KASKO_BASE
+      // If current option is not available, reset to KASKO_BASE
       if (!isCurrentOptionValid) {
         setFormData(prev => ({ ...prev, insurance_option: 'KASKO_BASE' }))
       }
     }
-  }, [formData.vehicle_id, vehicles, formData.insurance_option])
+  }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier])
 
   // Auto-set sforo (km_overage_fee) based on vehicle type when vehicle changes
   useEffect(() => {
@@ -1579,14 +1597,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!customer.emessa_da && !customer.metadata?.patente?.ente) missing.push('emessa_da')
       if (!customer.data_rilascio_patente && !customer.metadata?.patente?.rilascio) missing.push('data_rilascio_patente')
       if (!customer.scadenza_patente && !customer.metadata?.patente?.scadenza) missing.push('scadenza_patente')
-      // Check patente is at least 2 years old
+      // Check patente is at least 3 years old
       const patenteDate = customer.data_rilascio_patente || customer.metadata?.patente?.rilascio
       if (patenteDate) {
-        const issueDate = new Date(patenteDate)
-        const twoYearsAgo = new Date()
-        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
-        if (issueDate > twoYearsAgo) {
-          throw new Error('Patente rilasciata da meno di 2 anni. Il cliente non può noleggiare.')
+        const licYears = calculateLicenseYears(patenteDate)
+        if (licYears < 3) {
+          throw new Error('Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
+        }
+      }
+
+      // Tier-based validation: block no_cauzione for TIER_1
+      if (customer.data_nascita && patenteDate) {
+        const age = calculateAge(customer.data_nascita)
+        const licYears = calculateLicenseYears(patenteDate)
+        const tier = classifyDriverTier(age, licYears)
+        if (tier.tier === 'BLOCKED') {
+          throw new Error(`Cliente non idoneo al noleggio: ${tier.reason}`)
+        }
+        if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione') {
+          throw new Error('No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
         }
       }
 
@@ -2260,6 +2289,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_fee: booking.pickup_fee != null ? (Math.round(booking.pickup_fee) / 100).toFixed(2) : (booking.booking_details?.pickup_fee || '0'),
       notes: booking.booking_details?.notes || booking.notes || '',
     })
+
+    // Restore tier from booking_details or re-compute from customer
+    if (booking.booking_details?.driver_tier && booking.booking_details?.driver_age != null && booking.booking_details?.driver_license_years != null) {
+      setCustomerTier({
+        tier: booking.booking_details.driver_tier as DriverTier,
+        driverAge: booking.booking_details.driver_age,
+        licenseYears: booking.booking_details.driver_license_years,
+        reason: booking.booking_details.driver_tier === 'TIER_2' ? 'Fascia A — Conducente esperto' : 'Fascia B — Conducente giovane o patente recente',
+      })
+    } else if (customerId) {
+      // Re-compute tier from customer data
+      fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data?.customer) return
+          const cust = data.customer
+          const birthDate = cust.data_nascita
+          const patenteDate = cust.data_rilascio_patente || cust.metadata?.patente?.rilascio
+          if (birthDate && patenteDate) {
+            setCustomerTier(classifyDriverTier(calculateAge(birthDate), calculateLicenseYears(patenteDate)))
+          }
+        })
+        .catch(() => {})
+    }
 
     setEditingId(booking.id)
     setEditingOriginalPaymentStatus(booking.payment_status || 'pending')
@@ -3621,13 +3674,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           dropoffLocation: formData.dropoff_location,
           amountPaid: eurToCents(formData.amount_paid), // Store amount paid in cents
           source: 'admin_manual',
+          // Driver Tier
+          driver_tier: customerTier?.tier || null,
+          driver_age: customerTier?.driverAge || null,
+          driver_license_years: customerTier?.licenseYears || null,
           // Kasko & Deposit
           insuranceOption: formData.insurance_option,
           deposit: formData.deposit,
           deposit_status: formData.deposit_status,
+          no_cauzione_surcharge_per_day: formData.deposit_status === 'no_cauzione' ? NO_CAUZIONE_SURCHARGE_PER_DAY : 0,
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
+          unlimited_km_price_per_day: formData.unlimited_km && customerTier?.tier
+            ? (customerTier.tier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1)
+            : null,
           // Cauzione Auto
           cauzione_auto: formData.cauzione_auto,
           cauzione_targa: formData.cauzione_auto ? formData.cauzione_targa : null,
@@ -4155,6 +4216,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   function resetForm() {
+    setCustomerTier(null)
     setFormData({
       customer_id: '',
       vehicle_id: '',
@@ -4197,7 +4259,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Kasko & Deposit
       insurance_option: 'KASKO_BASE',
       deposit: '0',
-      deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
+      deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
       unlimited_km: false,
       km_limit: DEFAULT_KM_LIMIT,
       // Home Delivery & Pickup
@@ -4572,27 +4634,54 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       selectedCustomerId={formData.customer_id}
                       onSelectCustomer={async (customerId) => {
                         setFormData(prev => ({ ...prev, customer_id: customerId }))
-                        // Check patente age
-                        if (customerId) {
-                          try {
-                            const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
-                            if (resp.ok) {
-                              const { customer: cust } = await resp.json()
-                              const patenteDate = cust?.data_rilascio_patente || cust?.metadata?.patente?.rilascio
-                              if (patenteDate) {
-                                const issueDate = new Date(patenteDate)
-                                const twoYearsAgo = new Date()
-                                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
-                                if (issueDate > twoYearsAgo) {
-                                  alert('⚠️ PATENTE TROPPO RECENTE\n\nLa patente di questo cliente è stata rilasciata da meno di 2 anni.\n\nNon è possibile procedere con il noleggio.')
-                                  setFormData(prev => ({ ...prev, customer_id: '' }))
-                                  return
-                                }
-                              }
+                        setCustomerTier(null) // Reset tier while loading
+                        if (!customerId) return
+                        try {
+                          const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+                          if (!resp.ok) return
+                          const { customer: cust } = await resp.json()
+                          const birthDate = cust?.data_nascita
+                          const patenteDate = cust?.data_rilascio_patente || cust?.metadata?.patente?.rilascio
+
+                          // Classify driver tier
+                          if (birthDate && patenteDate) {
+                            const age = calculateAge(birthDate)
+                            const licYears = calculateLicenseYears(patenteDate)
+                            const tier = classifyDriverTier(age, licYears)
+                            setCustomerTier(tier)
+
+                            if (tier.tier === 'BLOCKED') {
+                              alert(`⚠️ CLIENTE NON IDONEO\n\n${tier.reason}\n\nEtà: ${age} anni — Patente: ${licYears} anni`)
+                              setFormData(prev => ({ ...prev, customer_id: '' }))
+                              return
                             }
-                          } catch (e) {
-                            logger.warn('Patente check failed:', e)
+
+                            // Reset incompatible options when tier changes
+                            setFormData(prev => {
+                              const updates: Record<string, unknown> = {}
+                              // If TIER_1, block no_cauzione
+                              if (tier.tier === 'TIER_1' && prev.deposit_status === 'no_cauzione') {
+                                updates.deposit_status = 'da_incassare'
+                              }
+                              // Check if current insurance option is valid for this tier
+                              const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
+                              const tierOptions = getInsuranceOptions(selectedVehicle, tier.tier)
+                              if (!tierOptions.some(o => o.id === prev.insurance_option)) {
+                                updates.insurance_option = 'KASKO_BASE'
+                              }
+                              return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev
+                            })
+                          } else if (patenteDate) {
+                            // Only license date available — still check minimum
+                            const licYears = calculateLicenseYears(patenteDate)
+                            if (licYears < 3) {
+                              alert('⚠️ PATENTE TROPPO RECENTE\n\nLa patente di questo cliente è stata rilasciata da meno di 3 anni.\n\nNon è possibile procedere con il noleggio.')
+                              setFormData(prev => ({ ...prev, customer_id: '' }))
+                              return
+                            }
                           }
+                        } catch (e) {
+                          logger.warn('Customer tier check failed:', e)
                         }
                       }}
                       placeholder="Inizia a scrivere nome, email o telefono..."
@@ -4637,6 +4726,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       }
                       return null
                     })()}
+
+                    {/* Tier Badge */}
+                    {customerTier && customerTier.tier !== 'BLOCKED' && (
+                      <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 ${
+                        customerTier.tier === 'TIER_2'
+                          ? 'bg-green-900/20 border border-green-600/50'
+                          : 'bg-amber-900/20 border border-amber-600/50'
+                      }`}>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          customerTier.tier === 'TIER_2' ? 'bg-green-600 text-white' : 'bg-amber-600 text-white'
+                        }`}>
+                          {customerTier.tier === 'TIER_2' ? 'FASCIA A' : 'FASCIA B'}
+                        </span>
+                        <span className="text-sm text-theme-text-secondary">
+                          {customerTier.reason} — Età: {customerTier.driverAge}, Patente: {customerTier.licenseYears} anni
+                        </span>
+                      </div>
+                    )}
 
                     {customers.length === 0 && (
                       <p className="text-sm text-yellow-400 mt-2">
@@ -5047,7 +5154,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   >
                     {(() => {
                       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
-                      return getInsuranceOptions(selectedVehicle).map(opt => (
+                      const activeTier = customerTier?.tier;
+                      return getInsuranceOptions(selectedVehicle, activeTier).map(opt => (
                         <option key={opt.id} value={opt.id}>
                           {opt.label} {opt.pricePerDay > 0 ? `(€${opt.pricePerDay}/giorno)` : '(inclusa)'}
                         </option>
@@ -5066,15 +5174,35 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       value={formData.deposit}
                       onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
                     />
-                    <Select
-                      label="Stato Cauzione"
-                      value={formData.deposit_status}
-                      onChange={(e) => setFormData({ ...formData, deposit_status: e.target.value as 'da_incassare' | 'incassata' })}
-                      options={[
-                        { value: 'da_incassare', label: 'Da incassare' },
-                        { value: 'incassata', label: 'Incassata' },
-                      ]}
-                    />
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato Cauzione</label>
+                      <select
+                        value={formData.deposit_status}
+                        onChange={(e) => {
+                          const val = e.target.value as 'da_incassare' | 'incassata' | 'no_cauzione';
+                          setFormData(prev => ({
+                            ...prev,
+                            deposit_status: val,
+                            // When no_cauzione selected, clear deposit amount
+                            ...(val === 'no_cauzione' ? { deposit: '0' } : {}),
+                          }));
+                        }}
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
+                      >
+                        <option value="da_incassare">Da incassare</option>
+                        <option value="incassata">Incassata</option>
+                        {/* No Cauzione: only available for Fascia A (TIER_2) */}
+                        {(!customerTier || customerTier.tier === 'TIER_2') && (
+                          <option value="no_cauzione">No Cauzione (+€{NO_CAUZIONE_SURCHARGE_PER_DAY}/giorno)</option>
+                        )}
+                      </select>
+                      {formData.deposit_status === 'no_cauzione' && (
+                        <p className="text-xs text-blue-400 mt-1">Supplemento €{NO_CAUZIONE_SURCHARGE_PER_DAY}/giorno aggiunto al totale</p>
+                      )}
+                      {customerTier?.tier === 'TIER_1' && (
+                        <p className="text-xs text-amber-400 mt-1">No Cauzione non disponibile per Fascia B</p>
+                      )}
+                    </div>
                   </>
                 )}
               </div>
@@ -5510,12 +5638,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <div className="flex items-center gap-2">
                         {(() => {
                           const sv = vehicles.find(v => v.id === formData.vehicle_id)
-                          const ko = sv ? getInsuranceOptions(sv) : []
+                          const activeTier = customerTier?.tier || 'TIER_1'
+                          const ko = sv ? getInsuranceOptions(sv, activeTier) : []
                           const sk = ko.find(k => k.id === formData.insurance_option)
                           const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
                           const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
                             + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees + LAVAGGIO_FEE
+                          const noCauzioneCost = formData.deposit_status === 'no_cauzione' ? NO_CAUZIONE_SURCHARGE_PER_DAY * revenueSuggestion.rentalDays : 0
+                          const unlimitedKmCost = (formData.unlimited_km && sv && isExoticVehicle(sv))
+                            ? (activeTier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1) * revenueSuggestion.rentalDays : 0
+                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost
                           const grandTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
                           return (
                             <>
@@ -5565,13 +5697,32 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         ))}
                         {(() => {
                           const sv = vehicles.find(v => v.id === formData.vehicle_id)
-                          const ko = sv ? getInsuranceOptions(sv) : []
+                          const at = customerTier?.tier || 'TIER_1'
+                          const ko = sv ? getInsuranceOptions(sv, at) : []
                           const sk = ko.find(k => k.id === formData.insurance_option)
                           if (!sk || sk.pricePerDay === 0) return null
                           return (
                             <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
                               <span className="text-theme-text-muted">Assicurazione ({sk.label})</span>
                               <span className="text-blue-400 font-mono">+EUR {(sk.pricePerDay * revenueSuggestion.rentalDays).toFixed(2)}</span>
+                            </div>
+                          )
+                        })()}
+                        {formData.deposit_status === 'no_cauzione' && (
+                          <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                            <span className="text-theme-text-muted">No Cauzione (+€{NO_CAUZIONE_SURCHARGE_PER_DAY}/g)</span>
+                            <span className="text-red-400 font-mono">+EUR {(NO_CAUZIONE_SURCHARGE_PER_DAY * revenueSuggestion.rentalDays).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {formData.unlimited_km && (() => {
+                          const sv = vehicles.find(v => v.id === formData.vehicle_id)
+                          if (!sv || !isExoticVehicle(sv)) return null
+                          const at = customerTier?.tier || 'TIER_1'
+                          const kmPrice = at === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1
+                          return (
+                            <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                              <span className="text-theme-text-muted">KM Illimitati (+€{kmPrice}/g)</span>
+                              <span className="text-red-400 font-mono">+EUR {(kmPrice * revenueSuggestion.rentalDays).toFixed(2)}</span>
                             </div>
                           )
                         })()}
@@ -5660,7 +5811,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 placeholder="es. 150 (Lascia vuoto se Illimitati)"
                 disabled={formData.unlimited_km}
               />
-              <div className="flex items-center gap-2 p-3  rounded-lg border border-theme-border">
+              <div className={`flex items-center gap-2 p-3 rounded-lg border ${formData.unlimited_km ? 'border-blue-500 bg-blue-900/10' : 'border-theme-border'}`}>
                 <input
                   type="checkbox"
                   id="unlimited_km"
@@ -5674,6 +5825,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 />
                 <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
                   KM Illimitati
+                  {(() => {
+                    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+                    if (selectedVehicle && isExoticVehicle(selectedVehicle)) {
+                      const tier = customerTier?.tier
+                      const price = tier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1
+                      return ` (+€${price}/giorno)`
+                    }
+                    return ''
+                  })()}
                 </label>
               </div>
               <Input
