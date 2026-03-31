@@ -77,3 +77,8 @@ export const TIER_UNLIMITED_KM_PRICE = {
 } as const;
 
 export const NO_CAUZIONE_SURCHARGE_PER_DAY = 49; // €49/day — only for TIER_2
+
+export const TIER_SECOND_DRIVER_PRICE = {
+  TIER_1: 20, // €20/day for young/risk
+  TIER_2: 10, // €10/day for standard
+} as const;

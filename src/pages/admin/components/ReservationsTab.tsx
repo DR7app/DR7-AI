@@ -47,6 +47,7 @@ import {
   TIER_KASKO_BASE_PRICE,
   TIER_UNLIMITED_KM_PRICE,
   NO_CAUZIONE_SURCHARGE_PER_DAY,
+  TIER_SECOND_DRIVER_PRICE,
   type DriverTier,
   type TierClassification,
 } from '../../../utils/tierClassification'
@@ -564,7 +565,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               if (prev.unlimited_km && selectedVehicle && isExoticVehicle(selectedVehicle)) {
                 unlimitedKmSurcharge = (activeTier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1) * data.rentalDays
               }
-              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge
+              // Second driver surcharge (tier-based)
+              const secondDriverFee = prev.has_second_driver
+                ? (activeTier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1) * data.rentalDays
+                : 0
+              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               return { ...prev, total_amount: total.toFixed(2) }
             })
@@ -594,12 +599,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (formData.unlimited_km && selectedVehicle && isExoticVehicle(selectedVehicle)) {
         unlimitedKmSurcharge = (activeTier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1) * revenueSuggestion.rentalDays
       }
-      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge
+      const secondDriverFee = formData.has_second_driver
+        ? (activeTier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1) * revenueSuggestion.rentalDays
+        : 0
+      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       setFormData(prev => ({ ...prev, total_amount: newTotal.toFixed(2) }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, customerTier])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.has_second_driver, customerTier])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -1617,6 +1625,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione') {
           throw new Error('No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
         }
+        if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA') {
+          throw new Error('No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
+        }
       }
 
       if (!customer.documento_numero) missing.push('documento_numero')
@@ -1665,15 +1676,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       const newPaymentLink = linkData.paymentUrl
 
-      // Update booking with new link
+      // Update booking with new link + exact expiration timestamps
       await supabase.from('bookings').update({
         booking_details: {
           ...booking.booking_details,
           nexi_payment_link: newPaymentLink,
           nexi_order_id: linkData.orderId,
+          nexi_link_id: linkData.nexiLinkId || null,
+          // Exact expiration tracking (UTC)
+          payment_link_sent_at: linkData.sentAt,
+          payment_link_expires_at: linkData.expiresAt,
+          payment_provider_expires_at: linkData.providerExpiresAt,
           nexi_link_regenerated_at: new Date().toISOString(),
         },
-        // Reset the created_at-based 1h timer by updating payment_status
         payment_status: 'pending',
       }).eq('id', booking.id)
 
@@ -3689,6 +3704,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           unlimited_km_price_per_day: formData.unlimited_km && customerTier?.tier
             ? (customerTier.tier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1)
             : null,
+          // Second driver
+          second_driver_fee_per_day: formData.has_second_driver && customerTier?.tier
+            ? (customerTier.tier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1)
+            : null,
           // Cauzione Auto
           cauzione_auto: formData.cauzione_auto,
           cauzione_targa: formData.cauzione_auto ? formData.cauzione_targa : null,
@@ -3847,12 +3866,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const linkData = await linkRes.json()
 
           if (linkRes.ok && linkData.paymentUrl) {
-            // Store link on booking
+            // Store link + exact expiration timestamps on booking
             await supabase.from('bookings').update({
               booking_details: {
                 ...insertedBooking.booking_details,
                 nexi_payment_link: linkData.paymentUrl,
-                nexi_order_id: linkData.orderId
+                nexi_order_id: linkData.orderId,
+                nexi_link_id: linkData.nexiLinkId || null,
+                payment_link_sent_at: linkData.sentAt,
+                payment_link_expires_at: linkData.expiresAt,
+                payment_provider_expires_at: linkData.providerExpiresAt,
               }
             }).eq('id', insertedBooking.id)
 
@@ -4944,6 +4967,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 />
                 <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-theme-text-secondary">
                   Aggiungi Secondo Guidatore
+                  {(() => {
+                    const tier = customerTier?.tier
+                    const price = tier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1
+                    return ` (+€${price}/giorno)`
+                  })()}
                 </label>
               </div>
 
@@ -5148,7 +5176,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     value={formData.insurance_option}
                     onChange={(e) => {
                       const newOption = e.target.value as KaskoTier;
-                      setFormData(prev => ({ ...prev, insurance_option: newOption }));
+                      setFormData(prev => ({
+                        ...prev,
+                        insurance_option: newOption,
+                        // Auto-reset no_cauzione when switching to RCA (requires Kasko)
+                        ...(newOption === 'RCA' && prev.deposit_status === 'no_cauzione' ? { deposit_status: 'da_incassare' as const } : {}),
+                      }));
                     }}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
                   >
@@ -5163,7 +5196,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     })()}
                   </select>
                   {formData.insurance_option === 'RCA' && (
-                    <p className="text-xs text-yellow-400 mt-1">⚠️ Senza Kasko: cauzione obbligatoria €15.000</p>
+                    <p className="text-xs text-yellow-400 mt-1">
+                      ⚠️ Senza Kasko: cauzione obbligatoria €{customerTier?.tier === 'TIER_2' ? '10.000' : '15.000'}
+                    </p>
                   )}
                 </div>
                 {!formData.cauzione_auto && (
@@ -5191,8 +5226,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       >
                         <option value="da_incassare">Da incassare</option>
                         <option value="incassata">Incassata</option>
-                        {/* No Cauzione: only available for Fascia A (TIER_2) */}
-                        {(!customerTier || customerTier.tier === 'TIER_2') && (
+                        {/* No Cauzione: only for Fascia A (TIER_2) AND only with Kasko (not RCA) */}
+                        {(!customerTier || customerTier.tier === 'TIER_2') && formData.insurance_option !== 'RCA' && (
                           <option value="no_cauzione">No Cauzione (+€{NO_CAUZIONE_SURCHARGE_PER_DAY}/giorno)</option>
                         )}
                       </select>
@@ -5201,6 +5236,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       )}
                       {customerTier?.tier === 'TIER_1' && (
                         <p className="text-xs text-amber-400 mt-1">No Cauzione non disponibile per Fascia B</p>
+                      )}
+                      {customerTier?.tier === 'TIER_2' && formData.insurance_option === 'RCA' && (
+                        <p className="text-xs text-amber-400 mt-1">No Cauzione richiede una Kasko attiva</p>
                       )}
                     </div>
                   </>
