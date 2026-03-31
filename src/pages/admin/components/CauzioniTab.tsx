@@ -71,7 +71,7 @@ export default function CauzioniTab() {
                 .from('cauzioni')
                 .select(`
           *,
-          customers_extended!cliente_id(nome, cognome, denominazione, ragione_sociale, tipo_cliente, email),
+          customers_extended!cliente_id(nome, cognome, denominazione, ragione_sociale, tipo_cliente, email, phone),
           vehicles!veicolo_id(display_name, plate)
         `)
                 .order('scadenza_cauzione', { ascending: true })
@@ -153,6 +153,7 @@ export default function CauzioniTab() {
                     days_until_deadline: daysUntilDeadline,
                     cliente_nome: clienteName,
                     cliente_email: c.customers_extended?.email || '',
+                    cliente_telefono: c.customers_extended?.phone || '',
                     veicolo_modello: c.vehicles?.display_name || 'N/A',
                     veicolo_targa: c.vehicles?.plate || 'N/A'
                 }
@@ -372,15 +373,7 @@ export default function CauzioniTab() {
             if (!response.ok) throw new Error(result.error || 'Errore generazione link')
 
             if (result.paymentUrl) {
-                // Copy to clipboard (with fallback)
-                try {
-                    await navigator.clipboard.writeText(result.paymentUrl)
-                    toast.success('Link pre-autorizzazione copiato!')
-                } catch {
-                    prompt('Copia il link:', result.paymentUrl)
-                }
-
-                // Send via WhatsApp with full branded message
+                // Send via WhatsApp first (priority)
                 const phone = cauzione.cliente_telefono
                 if (phone) {
                     await fetch('/.netlify/functions/send-whatsapp-notification', {
@@ -388,10 +381,18 @@ export default function CauzioniTab() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: phone,
-                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nPer completare la pre-autorizzazione della cauzione di *€${Number(cauzione.importo).toFixed(2)}* per ${cauzione.veicolo_modello || 'il veicolo'}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n*IMPORTANTE:* L'importo verrà solo bloccato sulla carta e sbloccato al termine del noleggio. Non verrà effettuato alcun addebito.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIl link ha validità limitata. Il pagamento implica accettazione delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
+                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nLe ricordiamo che la Preautorizzazione per la cauzione riferita alla prenotazione #${(cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'} è ancora in sospeso.\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${Number(cauzione.importo).toFixed(2)}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
                         })
                     })
-                    toast.success('Link cauzione inviato via WhatsApp!')
+                    toast.success('Link cauzione inviato via WhatsApp al cliente!')
+                } else {
+                    // No phone — copy to clipboard as fallback
+                    try {
+                        await navigator.clipboard.writeText(result.paymentUrl)
+                        toast.success('Link copiato! Nessun telefono trovato per inviare WhatsApp.')
+                    } catch {
+                        prompt('Nessun telefono trovato. Copia il link:', result.paymentUrl)
+                    }
                 }
 
                 fetchCauzioni()
@@ -438,7 +439,7 @@ export default function CauzioniTab() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: phone,
-                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nPer completare la pre-autorizzazione della cauzione di *€${Number(cauzione.importo).toFixed(2)}* per ${cauzione.veicolo_modello || 'il veicolo'}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n*IMPORTANTE:* L'importo verrà solo bloccato sulla carta e sbloccato al termine del noleggio. Non verrà effettuato alcun addebito.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIl link ha validità limitata. Il pagamento implica accettazione delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
+                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nLe ricordiamo che la Preautorizzazione per la cauzione riferita alla prenotazione #${(cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'} è ancora in sospeso.\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${Number(cauzione.importo).toFixed(2)}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
                         })
                     })
                     toast.success('Link cauzione inviato via WhatsApp!')

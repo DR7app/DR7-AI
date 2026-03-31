@@ -4196,6 +4196,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       nome: '',
       cognome: '',
       codice_fiscale: '',
+      sesso: '',
       data_nascita: '',
       luogo_nascita: '',
       numero_civico: '',
