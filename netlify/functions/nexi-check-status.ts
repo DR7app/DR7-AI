@@ -46,6 +46,17 @@ const handler: Handler = async (event) => {
                 return { statusCode: resp.status, headers, body: JSON.stringify({ error: data.errors?.[0]?.description || 'API error', raw: data }) }
             }
             const allOps = data.operations || []
+            // If orderId starts with 'verify_op:', verify a single operationId
+            if (orderId.startsWith('verify_op:')) {
+                const opId = orderId.replace('verify_op:', '')
+                const opRes = await fetch(`${NEXI_BASE_URL}/operations/${opId}`, {
+                    headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': correlationId }
+                })
+                const opText = await opRes.text()
+                let opData: any
+                try { opData = JSON.parse(opText) } catch { opData = { raw: opText.substring(0, 500) } }
+                return { statusCode: opRes.status, headers, body: JSON.stringify(opData) }
+            }
             // If orderId starts with 'search_auth:', find by authCode
             if (orderId.startsWith('search_auth:')) {
                 const targetAuth = orderId.replace('search_auth:', '')
