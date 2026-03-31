@@ -38,7 +38,7 @@ import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import DanniPenaliModal from './DanniPenaliModal'
 import { logger } from '../../../utils/logger'
-import { calcolaCodiceFiscale } from '../../../utils/codiceFiscale'
+import { calcolaCodiceFiscale, decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -4439,13 +4439,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           <Input label="Cognome *" required value={newCustomerData.cognome} onChange={(e) => setNewCustomerData({ ...newCustomerData, cognome: e.target.value })} />
                           <div className="flex gap-2 items-end">
                             <div className="flex-1">
-                              <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value.toUpperCase() })} />
+                              <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale} onChange={(e) => {
+                                const val = e.target.value.toUpperCase()
+                                setNewCustomerData({ ...newCustomerData, codice_fiscale: val })
+                                // Auto-decode when 16 chars entered
+                                if (val.length === 16) {
+                                  const decoded = decodificaCodiceFiscale(val)
+                                  if (decoded) {
+                                    setNewCustomerData(prev => ({
+                                      ...prev,
+                                      codice_fiscale: val,
+                                      data_nascita: decoded.data_nascita,
+                                      sesso: decoded.sesso,
+                                      luogo_nascita: decoded.luogo_nascita,
+                                    }))
+                                    toast.success('Dati estratti dal CF')
+                                  }
+                                }
+                              }} />
                             </div>
                             <button
                               type="button"
                               onClick={() => {
                                 if (!newCustomerData.cognome || !newCustomerData.nome || !newCustomerData.data_nascita || !newCustomerData.sesso || !newCustomerData.luogo_nascita) {
-                                  toast.error('Compila cognome, nome, data nascita, sesso e luogo nascita per calcolare il CF')
+                                  toast.error('Compila cognome, nome, data nascita, sesso e luogo nascita')
                                   return
                                 }
                                 const result = calcolaCodiceFiscale({
@@ -4465,7 +4482,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               className="px-3 py-2 mb-[1px] bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
                               title="Calcola CF da cognome, nome, data nascita, sesso, luogo nascita"
                             >
-                              Calcola CF
+                              Calcola
                             </button>
                           </div>
                           <Input label="Data di Nascita *" type="date" value={newCustomerData.data_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })} />

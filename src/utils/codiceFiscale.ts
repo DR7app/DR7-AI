@@ -343,3 +343,49 @@ export function getBelfioreCode(cityName: string): string | null {
 export function getAvailableCities(): string[] {
   return Object.keys(CODICI_CATASTALI).sort()
 }
+
+/**
+ * Decode a Codice Fiscale to extract birth date, sex, and birthplace.
+ * Cannot extract cognome/nome (the encoding is lossy).
+ */
+export function decodificaCodiceFiscale(cf: string): {
+  data_nascita: string  // YYYY-MM-DD
+  sesso: 'M' | 'F'
+  luogo_nascita: string // city name or belfiore code if not found
+} | null {
+  const code = cf.toUpperCase().replace(/\s/g, '')
+  if (code.length !== 16) return null
+
+  // Positions 6-7: year (2 digits)
+  const yearPart = parseInt(code.substring(6, 8), 10)
+  // Position 8: month letter
+  const monthChar = code[8]
+  const monthIndex = MONTH_CODES.indexOf(monthChar)
+  if (monthIndex === -1) return null
+  const month = monthIndex + 1
+  // Positions 9-10: day (1-31 for M, 41-71 for F)
+  let day = parseInt(code.substring(9, 11), 10)
+  let sesso: 'M' | 'F' = 'M'
+  if (day > 40) {
+    sesso = 'F'
+    day -= 40
+  }
+  // Guess century: if yearPart > current 2-digit year + 5, assume 1900s
+  const currentYear2 = new Date().getFullYear() % 100
+  const year = yearPart > currentYear2 + 5 ? 1900 + yearPart : 2000 + yearPart
+  const data_nascita = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+  // Positions 11-14: belfiore code (1 letter + 3 digits)
+  const belfiore = code.substring(11, 15)
+  // Reverse lookup
+  const reverseBelfiore: Record<string, string> = {}
+  for (const [city, bcode] of Object.entries(CODICI_CATASTALI)) {
+    reverseBelfiore[bcode] = city
+  }
+  const cityName = reverseBelfiore[belfiore]
+  const luogo_nascita = cityName
+    ? cityName.charAt(0) + cityName.slice(1).toLowerCase()
+    : belfiore // return raw code if not in our list
+
+  return { data_nascita, sesso, luogo_nascita }
+}
