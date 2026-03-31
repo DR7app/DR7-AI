@@ -4442,7 +4442,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             <div className="flex-1">
                               <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale} onChange={(e) => {
                                 const val = e.target.value.toUpperCase()
-                                setNewCustomerData({ ...newCustomerData, codice_fiscale: val })
                                 // Auto-decode when 16 chars entered
                                 if (val.length === 16) {
                                   const decoded = decodificaCodiceFiscale(val)
@@ -4455,8 +4454,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                       luogo_nascita: decoded.luogo_nascita,
                                     }))
                                     toast.success('Dati estratti dal CF')
+                                    return
                                   }
                                 }
+                                setNewCustomerData(prev => ({ ...prev, codice_fiscale: val }))
                               }} />
                             </div>
                             <button
