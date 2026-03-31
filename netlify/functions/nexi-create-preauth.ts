@@ -80,7 +80,7 @@ const handler: Handler = async (event) => {
                     cardHolderName: customerName || ''
                 }
             },
-            paymentSessions: [{
+            paymentSession: {
                 actionType: 'PAY',           // PAY + EXPLICIT = authorize only, capture manually later
                 captureType: 'EXPLICIT',     // EXPLICIT = funds held, not charged until capture API call
                 amount: amountCents.toString(),
@@ -90,7 +90,7 @@ const handler: Handler = async (event) => {
                 resultUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=success`,
                 cancelUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=cancelled`,
                 notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback`
-            }],
+            },
             expirationDate: expirationDateStr,
         };
 
@@ -105,7 +105,8 @@ const handler: Handler = async (event) => {
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
         })
 
-        const pblUrl = NEXI_BASE_URL + '/orders/paybylink';
+        // Use v2 paybylink endpoint (base URL has /v1, replace with /v2)
+        const pblUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
         console.log('[nexi-create-preauth] URL:', pblUrl);
 
         const response = await fetch(pblUrl, {
