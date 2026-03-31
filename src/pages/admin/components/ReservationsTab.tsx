@@ -4463,6 +4463,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             <button
                               type="button"
                               onClick={() => {
+                                // If CF is filled but other fields are empty → DECODE CF
+                                if (newCustomerData.codice_fiscale.length === 16 && (!newCustomerData.data_nascita || !newCustomerData.sesso || !newCustomerData.luogo_nascita)) {
+                                  const decoded = decodificaCodiceFiscale(newCustomerData.codice_fiscale)
+                                  if (decoded) {
+                                    setNewCustomerData(prev => ({
+                                      ...prev,
+                                      data_nascita: decoded.data_nascita,
+                                      sesso: decoded.sesso,
+                                      luogo_nascita: decoded.luogo_nascita,
+                                    }))
+                                    toast.success('Dati estratti dal Codice Fiscale')
+                                  } else {
+                                    toast.error('Codice Fiscale non valido')
+                                  }
+                                  return
+                                }
+                                // Otherwise → CALCULATE CF from fields
                                 if (!newCustomerData.cognome || !newCustomerData.nome || !newCustomerData.data_nascita || !newCustomerData.sesso || !newCustomerData.luogo_nascita) {
                                   toast.error('Compila cognome, nome, data nascita, sesso e luogo nascita')
                                   return
