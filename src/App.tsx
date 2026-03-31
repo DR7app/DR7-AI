@@ -17,7 +17,10 @@ function lazyRetry(importFn: () => Promise<any>) {
       if (!hasReloaded) {
         sessionStorage.setItem('chunk_reload', '1')
         window.location.reload()
+        // Return a never-resolving promise to prevent React from rendering while reloading
+        return new Promise(() => {})
       }
+      // Already reloaded once — clear flag and try one more time
       sessionStorage.removeItem('chunk_reload')
       return importFn()
     })
