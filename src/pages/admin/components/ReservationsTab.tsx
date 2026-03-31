@@ -48,8 +48,12 @@ import {
   TIER_UNLIMITED_KM_PRICE,
   NO_CAUZIONE_SURCHARGE_PER_DAY,
   TIER_SECOND_DRIVER_PRICE,
+  EXPERIENCE_SERVICES,
+  getExperienceServicesForTier,
+  DR7_FLEX_PRICE_PER_DAY,
   type DriverTier,
   type TierClassification,
+  type ExperienceService,
 } from '../../../utils/tierClassification'
 
 // --- Kasko Constants & Types ---
@@ -146,6 +150,22 @@ export const SFORO_DEFAULTS: { match: (name: string) => boolean; sforo: string; 
 const DEFAULT_SFORO = '1.80'
 const DEFAULT_KM_LIMIT = '100/giorno'
 const LAVAGGIO_FEE = 9.90 // Mandatory car wash fee per booking
+
+/** Calculate total experience services cost */
+function calculateExperienceCost(services: Record<string, number>, rentalDays: number): number {
+  let total = 0
+  for (const [svcId, qty] of Object.entries(services)) {
+    if (qty <= 0) continue
+    const svc = EXPERIENCE_SERVICES.find(s => s.id === svcId)
+    if (!svc) continue
+    if (svc.unit === 'per_day') {
+      total += svc.price * rentalDays * qty
+    } else {
+      total += svc.price * qty
+    }
+  }
+  return Math.round(total * 100) / 100
+}
 
 function getSforoForVehicle(vehicleName: string): string {
   const lower = (vehicleName || '').toLowerCase()
@@ -490,6 +510,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     pickup_notes: '',
     pickup_fee: '0',
     notes: '',
+    // Experience Services & DR7 Flex
+    experience_services: {} as Record<string, number>,
+    dr7_flex: false,
     // Cauzione Auto (Vehicle as Security Deposit)
     cauzione_auto: false,
     cauzione_targa: '',
@@ -569,7 +592,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const secondDriverFee = prev.has_second_driver
                 ? (activeTier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1) * data.rentalDays
                 : 0
-              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee
+              // Experience services + DR7 Flex
+              const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
+              const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? DR7_FLEX_PRICE_PER_DAY * data.rentalDays : 0
+              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               return { ...prev, total_amount: total.toFixed(2) }
             })
@@ -602,12 +628,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const secondDriverFee = formData.has_second_driver
         ? (activeTier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1) * revenueSuggestion.rentalDays
         : 0
-      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee
+      const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
+      const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? DR7_FLEX_PRICE_PER_DAY * revenueSuggestion.rentalDays : 0
+      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       setFormData(prev => ({ ...prev, total_amount: newTotal.toFixed(2) }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.has_second_driver, customerTier])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -2303,6 +2331,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
       pickup_fee: booking.pickup_fee != null ? (Math.round(booking.pickup_fee) / 100).toFixed(2) : (booking.booking_details?.pickup_fee || '0'),
       notes: booking.booking_details?.notes || booking.notes || '',
+      // Experience Services & DR7 Flex
+      experience_services: booking.booking_details?.experience_services || {},
+      dr7_flex: booking.booking_details?.dr7_flex || false,
     })
 
     // Restore tier from booking_details or re-compute from customer
@@ -3708,6 +3739,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           second_driver_fee_per_day: formData.has_second_driver && customerTier?.tier
             ? (customerTier.tier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1)
             : null,
+          // Experience Services & DR7 Flex
+          experience_services: formData.experience_services,
+          experience_cost: calculateExperienceCost(formData.experience_services, revenueSuggestion?.rentalDays || 1),
+          dr7_flex: formData.dr7_flex,
+          dr7_flex_price_per_day: formData.dr7_flex ? DR7_FLEX_PRICE_PER_DAY : 0,
           // Cauzione Auto
           cauzione_auto: formData.cauzione_auto,
           cauzione_targa: formData.cauzione_auto ? formData.cauzione_targa : null,
@@ -4301,6 +4337,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_notes: '',
       pickup_fee: '0',
       notes: '',
+      // Experience Services & DR7 Flex
+      experience_services: {},
+      dr7_flex: false,
       // Cauzione Auto (Vehicle as Security Deposit)
       cauzione_auto: false,
       cauzione_targa: '',
@@ -5791,6 +5830,72 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   )}
                 </div>
               )}
+              {/* Experience Services & DR7 Flex */}
+              <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+                <h4 className="text-theme-text-primary font-semibold mb-3">Servizi Experience</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(() => {
+                    const tier = customerTier?.tier || 'TIER_1'
+                    const availableServices = getExperienceServicesForTier(tier)
+                    return availableServices.map(svc => {
+                      const qty = formData.experience_services[svc.id] || 0
+                      const unitLabel = svc.unit === 'per_day' ? '/giorno' : svc.unit === 'per_hour' ? '/ora' : svc.unit === 'per_item' ? '/unità' : ''
+                      return (
+                        <div key={svc.id} className={`flex items-center justify-between p-2 rounded-md border ${qty > 0 ? 'border-dr7-gold bg-dr7-gold/5' : 'border-theme-border'}`}>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm text-theme-text-primary">{svc.name}</span>
+                            <span className="text-xs text-theme-text-muted ml-1">€{svc.price.toFixed(2)}{unitLabel}</span>
+                          </div>
+                          {(svc.unit === 'per_item' || svc.unit === 'per_hour') ? (
+                            <div className="flex items-center gap-1 ml-2">
+                              <button type="button" onClick={() => setFormData(prev => {
+                                const es = { ...prev.experience_services }
+                                if ((es[svc.id] || 0) > 0) es[svc.id] = (es[svc.id] || 0) - 1
+                                if (es[svc.id] === 0) delete es[svc.id]
+                                return { ...prev, experience_services: es }
+                              })} className="w-6 h-6 rounded bg-theme-bg-tertiary text-theme-text-primary border border-theme-border text-sm">-</button>
+                              <span className="w-6 text-center text-sm text-theme-text-primary">{qty}</span>
+                              <button type="button" onClick={() => setFormData(prev => {
+                                const es = { ...prev.experience_services }
+                                es[svc.id] = (es[svc.id] || 0) + 1
+                                return { ...prev, experience_services: es }
+                              })} className="w-6 h-6 rounded bg-theme-bg-tertiary text-theme-text-primary border border-theme-border text-sm">+</button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => setFormData(prev => {
+                              const es = { ...prev.experience_services }
+                              if (es[svc.id]) delete es[svc.id]
+                              else es[svc.id] = 1
+                              return { ...prev, experience_services: es }
+                            })} className={`ml-2 px-3 py-1 rounded text-xs font-medium ${qty > 0 ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary border border-theme-border'}`}>
+                              {qty > 0 ? 'Aggiunto' : 'Aggiungi'}
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+                {/* DR7 FLEX — only Fascia A */}
+                {(!customerTier || customerTier.tier === 'TIER_2') && (
+                  <div className={`mt-3 flex items-center gap-2 p-3 rounded-lg border ${formData.dr7_flex ? 'border-green-500 bg-green-900/10' : 'border-theme-border'}`}>
+                    <input
+                      type="checkbox"
+                      id="dr7_flex"
+                      checked={formData.dr7_flex}
+                      onChange={(e) => setFormData(prev => ({ ...prev, dr7_flex: e.target.checked }))}
+                      className="w-4 h-4 text-green-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-green-500"
+                    />
+                    <label htmlFor="dr7_flex" className="text-sm text-theme-text-secondary cursor-pointer flex-1">
+                      DR7 FLEX — Cancellazione Premium (+€{DR7_FLEX_PRICE_PER_DAY.toFixed(2)}/giorno)
+                    </label>
+                  </div>
+                )}
+                {customerTier?.tier === 'TIER_1' && (
+                  <p className="text-xs text-amber-400 mt-2">DR7 FLEX non disponibile per Fascia B</p>
+                )}
+              </div>
+
               <Input
                 label="Importo Totale (€)"
                 type="number"

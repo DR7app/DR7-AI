@@ -82,3 +82,31 @@ export const TIER_SECOND_DRIVER_PRICE = {
   TIER_1: 20, // €20/day for young/risk
   TIER_2: 10, // €10/day for standard
 } as const;
+
+// --- Experience Services (mirrors website constants.ts) ---
+
+export interface ExperienceService {
+  id: string;
+  name: string;
+  price: number;
+  unit: 'per_day' | 'per_hour' | 'per_item' | 'flat';
+  tierOnly?: DriverTier;
+}
+
+export const EXPERIENCE_SERVICES: ExperienceService[] = [
+  { id: 'bouquet', name: 'Bouquet di rose', price: 7.90, unit: 'per_item' },
+  { id: 'wedding', name: 'Allestimento matrimonio interno/esterno', price: 150, unit: 'flat' },
+  { id: 'personal_driver', name: 'Autista personale', price: 150, unit: 'per_hour' },
+  { id: 'restaurant', name: 'Prenotazione ristorante', price: 10, unit: 'flat' },
+  { id: 'video_drone', name: 'Video Maker + Drone shooting', price: 200, unit: 'per_hour' },
+  { id: 'premium_24h', name: 'Assistenza premium 24h dedicata', price: 19.90, unit: 'per_day' },
+  { id: 'vehicle_replacement', name: 'Sostituzione immediata veicolo', price: 19.90, unit: 'per_day', tierOnly: 'TIER_2' },
+  { id: 'chauffeur_vip', name: 'Noleggio con autista + itinerario VIP', price: 189, unit: 'per_hour' },
+];
+
+export function getExperienceServicesForTier(tier: DriverTier): ExperienceService[] {
+  if (tier === 'BLOCKED') return [];
+  return EXPERIENCE_SERVICES.filter(s => !s.tierOnly || s.tierOnly === tier);
+}
+
+export const DR7_FLEX_PRICE_PER_DAY = 19.90; // Only for TIER_2 (Fascia A)
