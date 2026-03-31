@@ -1522,7 +1522,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         { file: codiceFiscaleFront, label: 'Codice Fiscale Fronte' },
                         { file: codiceFiscaleBack, label: 'Codice Fiscale Retro' },
                       ]}
-                      currentData={formData}
+                      currentData={formData as unknown as Record<string, string | undefined | null>}
                       onDataExtracted={(data: ExtractedData, _conflicts: DataConflict[]) => {
                         setFormData(prev => ({
                           ...prev,
@@ -1546,7 +1546,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         }))
                         toast.success('Dati compilati automaticamente dai documenti!')
                       }}
-                      onError={(err) => toast.error(err)}
+                      onError={(err: string) => toast.error(err)}
                     />
                   </div>
                 )}
