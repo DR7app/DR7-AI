@@ -337,12 +337,23 @@ export const handler: Handler = async (event) => {
             : (rawKmLimit && rawKmLimit !== '0' && rawKmLimit !== 'Illimitati'
                 ? rawKmLimit
                 : (booking.booking_details?.total_km || 'Illimitati'))
-        // For "50/giorno", calculate total KM based on rental days
+        // Format KM limit for contract display
         let kmLimitValue: string
         if (kmLimitRaw === '50/giorno') {
             const rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
             const totalKm = 50 * rentalDays
             kmLimitValue = `${totalKm} Km (50 Km/Giorno x ${rentalDays} gg)`
+        } else if (kmLimitRaw === '100/giorno') {
+            // Legacy format — calculate total from days
+            const rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+            const table: Record<number, number> = { 1: 100, 2: 180, 3: 240, 4: 280, 5: 300 }
+            const totalKm = rentalDays <= 5 ? (table[rentalDays] || 300) : 300 + ((rentalDays - 5) * 60)
+            kmLimitValue = `${totalKm} Km`
+        } else if (kmLimitRaw === 'Illimitati') {
+            kmLimitValue = 'Illimitati'
+        } else if (kmLimitRaw && !isNaN(Number(kmLimitRaw)) && !kmLimitRaw.includes('Km') && !kmLimitRaw.includes('km')) {
+            // Pure number from auto-calculation — add "Km" suffix
+            kmLimitValue = `${kmLimitRaw} Km`
         } else {
             kmLimitValue = kmLimitRaw
         }

@@ -51,7 +51,8 @@ import {
   type TierClassification,
 } from '../../../utils/tierClassification'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
-import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
+import { buildConfigOverlay } from '../../../utils/configOverlay'
+import { getKmIncluded } from '../../../utils/configLookup'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -145,8 +146,8 @@ export const SFORO_DEFAULTS: { match: (name: string) => boolean; sforo: string; 
   { match: (n) => n.includes('ducato') || n.includes('vito') || n.includes('furgone') || n.includes('ncc') || n.includes('tourer'), sforo: '0.49', label: 'Furgone/NCC' },
 ]
 const DEFAULT_SFORO = '1.80'
-const DEFAULT_KM_LIMIT = '100/giorno'
-const LAVAGGIO_FEE = 9.90 // Mandatory car wash fee per booking
+const DEFAULT_KM_LIMIT = '100'
+// LAVAGGIO_FEE now driven by configOverlay.lavaggioFee
 
 /** Calculate total experience services cost */
 function calculateExperienceCost(services: Record<string, number>, rentalDays: number): number {
@@ -613,7 +614,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
               const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
-              return { ...prev, total_amount: total.toFixed(2) }
+              // Auto-calculate KM limit from rental days (only if not unlimited)
+              const updates: Record<string, string> = { total_amount: total.toFixed(2) }
+              if (!prev.unlimited_km) {
+                const vehCategory = selectedVehicle?.category || ''
+                const kmCat = vehCategory === 'urban' ? 'urban' : (isFurgone(selectedVehicle) ? 'furgone' : '_global')
+                const kmIncluded = getKmIncluded(rentalConfig, data.rentalDays, kmCat)
+                if (kmIncluded !== 'unlimited') {
+                  updates.km_limit = String(kmIncluded)
+                }
+              }
+              return { ...prev, ...updates }
             })
           }
         } else {
@@ -648,7 +659,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
       const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
-      setFormData(prev => ({ ...prev, total_amount: newTotal.toFixed(2) }))
+      const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
+      // Auto-calculate KM limit from rental days
+      if (!formData.unlimited_km) {
+        const vehCategory = selectedVehicle?.category || ''
+        const kmCat = vehCategory === 'urban' ? 'urban' : (isFurgone(selectedVehicle) ? 'furgone' : '_global')
+        const kmIncluded = getKmIncluded(rentalConfig, revenueSuggestion.rentalDays, kmCat)
+        if (kmIncluded !== 'unlimited') {
+          updates.km_limit = String(kmIncluded)
+        }
+      }
+      setFormData(prev => ({ ...prev, ...updates }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier])

@@ -56,7 +56,7 @@ export function buildConfigOverlay(config: RentalConfig | null): ConfigOverlay {
 
   // Sforo — build from config category overrides + vehicle overrides
   const sforoRules: SforoRule[] = []
-  const vehicleOverrides = config.sforo_km?.vehicle_overrides || {}
+  // config.sforo_km?.vehicle_overrides available for per-vehicle sforo lookup
   // Vehicle-level overrides first (highest priority)
   // These are handled separately via vehicleId lookup, not name match
   // Category-level rules
