@@ -6,9 +6,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
-import type { RentalConfig, InsuranceOption, ExperienceService, DepositOption } from '../../../types/rentalConfig'
+import type { RentalConfig, InsuranceOption } from '../../../types/rentalConfig'
 import { DEFAULT_RENTAL_CONFIG } from '../../../hooks/rentalConfigDefaults'
-import Input from './Input'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import _Input from './Input'
 import Button from './Button'
 
 interface Vehicle {
@@ -605,7 +606,8 @@ function DepositsTab({ config, updateConfig }: { config: RentalConfig; updateCon
 // ═══════════════════════════════════════════════════
 // TAB 4: SERVIZI
 // ═══════════════════════════════════════════════════
-function ServicesTab({ config, setConfig, updateConfig }: { config: RentalConfig; setConfig: (c: RentalConfig) => void; updateConfig: (p: string[], v: unknown) => void }) {
+function ServicesTab({ config, setConfig: _setConfig, updateConfig }: { config: RentalConfig; setConfig: (c: RentalConfig) => void; updateConfig: (p: string[], v: unknown) => void }) {
+  void _setConfig
   return (
     <div className="space-y-6">
       {/* Experience Services */}
