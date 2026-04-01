@@ -159,21 +159,6 @@ const handler: Handler = async (event) => {
       if (error) throw error
     }
 
-    // Create audit log table if needed
-    await supabase.rpc('exec_sql', {
-      sql: `CREATE TABLE IF NOT EXISTS config_audit_log (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        changed_at timestamptz NOT NULL DEFAULT now(),
-        changed_by text NOT NULL,
-        section text NOT NULL,
-        changes jsonb NOT NULL DEFAULT '{}',
-        full_snapshot jsonb,
-        description text
-      )`
-    }).catch(() => {
-      // RPC may not exist, that's ok - table might already exist
-    })
-
     return {
       statusCode: 200,
       headers,
