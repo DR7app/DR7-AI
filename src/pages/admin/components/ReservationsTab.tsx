@@ -45,15 +45,13 @@ import {
   calculateAge,
   calculateLicenseYears,
   TIER_KASKO_BASE_PRICE,
-  TIER_UNLIMITED_KM_PRICE,
-  NO_CAUZIONE_SURCHARGE_PER_DAY,
-  TIER_SECOND_DRIVER_PRICE,
   EXPERIENCE_SERVICES,
   getExperienceServicesForTier,
-  DR7_FLEX_PRICE_PER_DAY,
   type DriverTier,
   type TierClassification,
 } from '../../../utils/tierClassification'
+import { useRentalConfig } from '../../../hooks/useRentalConfig'
+import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -187,26 +185,33 @@ function isExoticVehicle(vehicle?: Vehicle): boolean {
 }
 
 // Helper function to get insurance options for vehicle + tier
-function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier) {
-  if (!vehicle) return tier === 'TIER_2' ? INSURANCE_OPTIONS_TIER_2 : INSURANCE_OPTIONS_TIER_1;
+// When overlay is provided, uses Centralina config prices instead of hardcoded
+function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: ReturnType<typeof buildConfigOverlay>) {
+  const t1 = overlay?.insuranceTier1 || INSURANCE_OPTIONS_TIER_1
+  const t2 = overlay?.insuranceTier2 || INSURANCE_OPTIONS_TIER_2
+  const urban = overlay?.urbanInsurance || URBAN_INSURANCE_OPTIONS
+  const util = overlay?.utilitaireInsurance || UTILITAIRE_INSURANCE_OPTIONS
+  const furg = overlay?.furgoneInsurance || FURGONE_INSURANCE_OPTIONS
+
+  if (!vehicle) return tier === 'TIER_2' ? t2 : t1;
 
   // Non-exotic vehicles: tier doesn't affect insurance options
-  if (isFurgone(vehicle)) return FURGONE_INSURANCE_OPTIONS;
-  if (vehicle.category === 'aziendali') return UTILITAIRE_INSURANCE_OPTIONS;
-  if (vehicle.category === 'urban') return URBAN_INSURANCE_OPTIONS;
+  if (isFurgone(vehicle)) return furg;
+  if (vehicle.category === 'aziendali') return util;
+  if (vehicle.category === 'urban') return urban;
 
   // Fallback for vehicles without category (legacy)
   const name = vehicle.display_name.toLowerCase();
   if (name.includes('panda') || name.includes('captur') || name.includes('clio') ||
     name.includes('citroen') || name.includes('208') || name.includes('urban')) {
-    return URBAN_INSURANCE_OPTIONS;
+    return urban;
   }
   if (name.includes('van') || name.includes('utilitaire') || name.includes('ducato') || name.includes('vito')) {
-    return UTILITAIRE_INSURANCE_OPTIONS;
+    return util;
   }
 
   // Exotic/Supercar: tier-based insurance
-  return tier === 'TIER_2' ? INSURANCE_OPTIONS_TIER_2 : INSURANCE_OPTIONS_TIER_1;
+  return tier === 'TIER_2' ? t2 : t1;
 }
 interface Customer {
   id: string
@@ -550,6 +555,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // --- Driver Tier Classification ---
   const [customerTier, setCustomerTier] = useState<TierClassification | null>(null)
 
+  // --- Centralina Config Overlay ---
+  // Loads pricing from Supabase config. Falls back to hardcoded defaults.
+  const { config: rentalConfig } = useRentalConfig()
+  const configOverlay = useMemo(() => buildConfigOverlay(rentalConfig), [rentalConfig])
+
+  // Config-driven price aliases (used throughout the form instead of hardcoded constants)
+  const CFG_LAVAGGIO_FEE = configOverlay.lavaggioFee
+  const CFG_NO_CAUZIONE_PER_DAY = configOverlay.noCauzionePerDay
+  const CFG_UNLIMITED_KM = { TIER_1: configOverlay.unlimitedKmTier1, TIER_2: configOverlay.unlimitedKmTier2 }
+  const CFG_SECOND_DRIVER = { TIER_1: configOverlay.secondDriverTier1, TIER_2: configOverlay.secondDriverTier2 }
+  const CFG_DR7_FLEX_PER_DAY = configOverlay.dr7FlexPerDay
+
   useEffect(() => {
     if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
       setRevenueSuggestion(null)
@@ -575,26 +592,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             setFormData(prev => {
               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
               const activeTier = customerTier?.tier
-              const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier) : []
+              const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay) : []
               const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
               const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
                 + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
               // No cauzione surcharge
-              const noCauzioneSurcharge = prev.deposit_status === 'no_cauzione' ? NO_CAUZIONE_SURCHARGE_PER_DAY * data.rentalDays : 0
+              const noCauzioneSurcharge = prev.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * data.rentalDays : 0
               // Unlimited KM surcharge (tier-based)
               let unlimitedKmSurcharge = 0
               if (prev.unlimited_km && selectedVehicle && isExoticVehicle(selectedVehicle)) {
-                unlimitedKmSurcharge = (activeTier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1) * data.rentalDays
+                unlimitedKmSurcharge = (activeTier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1) * data.rentalDays
               }
               // Second driver surcharge (tier-based)
               const secondDriverFee = prev.has_second_driver
-                ? (activeTier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1) * data.rentalDays
+                ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * data.rentalDays
                 : 0
               // Experience services + DR7 Flex
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
-              const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? DR7_FLEX_PRICE_PER_DAY * data.rentalDays : 0
-              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+              const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
+              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               return { ...prev, total_amount: total.toFixed(2) }
             })
@@ -614,22 +631,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       const activeTier = customerTier?.tier || 'TIER_1'
-      const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier) : []
+      const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay) : []
       const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
       const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
       const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
         + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-      const noCauzioneSurcharge = formData.deposit_status === 'no_cauzione' ? NO_CAUZIONE_SURCHARGE_PER_DAY * revenueSuggestion.rentalDays : 0
+      const noCauzioneSurcharge = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
       let unlimitedKmSurcharge = 0
       if (formData.unlimited_km && selectedVehicle && isExoticVehicle(selectedVehicle)) {
-        unlimitedKmSurcharge = (activeTier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1) * revenueSuggestion.rentalDays
+        unlimitedKmSurcharge = (activeTier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1) * revenueSuggestion.rentalDays
       }
       const secondDriverFee = formData.has_second_driver
-        ? (activeTier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1) * revenueSuggestion.rentalDays
+        ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays
         : 0
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
-      const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? DR7_FLEX_PRICE_PER_DAY * revenueSuggestion.rentalDays : 0
-      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+      const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
+      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       setFormData(prev => ({ ...prev, total_amount: newTotal.toFixed(2) }))
     }
@@ -1160,7 +1177,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const vehicleDailyRate = selectedVehicle.daily_rate / 100
    
     // Get Kasko daily cost
-    const kaskoOptions = getInsuranceOptions(selectedVehicle)
+    const kaskoOptions = getInsuranceOptions(selectedVehicle, undefined, configOverlay)
     const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
     const kaskoDailyCost = selectedKasko?.pricePerDay || 0
    
@@ -1208,7 +1225,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!selectedVehicle) return;
 
       const activeTier = customerTier?.tier
-      const availableOptions = getInsuranceOptions(selectedVehicle, activeTier)
+      const availableOptions = getInsuranceOptions(selectedVehicle, activeTier, configOverlay)
 
       // Check if current insurance option is valid for this vehicle + tier
       const isCurrentOptionValid = availableOptions.some(opt => opt.id === formData.insurance_option)
@@ -3727,22 +3744,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           insuranceOption: formData.insurance_option,
           deposit: formData.deposit,
           deposit_status: formData.deposit_status,
-          no_cauzione_surcharge_per_day: formData.deposit_status === 'no_cauzione' ? NO_CAUZIONE_SURCHARGE_PER_DAY : 0,
+          no_cauzione_surcharge_per_day: formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0,
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
           unlimited_km_price_per_day: formData.unlimited_km && customerTier?.tier
-            ? (customerTier.tier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1)
+            ? (customerTier.tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1)
             : null,
           // Second driver
           second_driver_fee_per_day: formData.has_second_driver && customerTier?.tier
-            ? (customerTier.tier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1)
+            ? (customerTier.tier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1)
             : null,
           // Experience Services & DR7 Flex
           experience_services: formData.experience_services,
           experience_cost: calculateExperienceCost(formData.experience_services, revenueSuggestion?.rentalDays || 1),
           dr7_flex: formData.dr7_flex,
-          dr7_flex_price_per_day: formData.dr7_flex ? DR7_FLEX_PRICE_PER_DAY : 0,
+          dr7_flex_price_per_day: formData.dr7_flex ? CFG_DR7_FLEX_PER_DAY : 0,
           // Cauzione Auto
           cauzione_auto: formData.cauzione_auto,
           cauzione_targa: formData.cauzione_auto ? formData.cauzione_targa : null,
@@ -4726,7 +4743,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               }
                               // Check if current insurance option is valid for this tier
                               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
-                              const tierOptions = getInsuranceOptions(selectedVehicle, tier.tier)
+                              const tierOptions = getInsuranceOptions(selectedVehicle, tier.tier, configOverlay)
                               if (!tierOptions.some(o => o.id === prev.insurance_option)) {
                                 updates.insurance_option = 'KASKO_BASE'
                               }
@@ -5007,7 +5024,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   Aggiungi Secondo Guidatore
                   {(() => {
                     const tier = customerTier?.tier
-                    const price = tier === 'TIER_2' ? TIER_SECOND_DRIVER_PRICE.TIER_2 : TIER_SECOND_DRIVER_PRICE.TIER_1
+                    const price = tier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1
                     return ` (+€${price}/giorno)`
                   })()}
                 </label>
@@ -5226,7 +5243,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     {(() => {
                       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
                       const activeTier = customerTier?.tier;
-                      return getInsuranceOptions(selectedVehicle, activeTier).map(opt => (
+                      return getInsuranceOptions(selectedVehicle, activeTier, configOverlay).map(opt => (
                         <option key={opt.id} value={opt.id}>
                           {opt.label} {opt.pricePerDay > 0 ? `(€${opt.pricePerDay}/giorno)` : '(inclusa)'}
                         </option>
@@ -5266,11 +5283,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <option value="incassata">Incassata</option>
                         {/* No Cauzione: only for Fascia A (TIER_2) AND only with Kasko (not RCA) */}
                         {(!customerTier || customerTier.tier === 'TIER_2') && formData.insurance_option !== 'RCA' && (
-                          <option value="no_cauzione">No Cauzione (+€{NO_CAUZIONE_SURCHARGE_PER_DAY}/giorno)</option>
+                          <option value="no_cauzione">No Cauzione (+€{CFG_NO_CAUZIONE_PER_DAY}/giorno)</option>
                         )}
                       </select>
                       {formData.deposit_status === 'no_cauzione' && (
-                        <p className="text-xs text-blue-400 mt-1">Supplemento €{NO_CAUZIONE_SURCHARGE_PER_DAY}/giorno aggiunto al totale</p>
+                        <p className="text-xs text-blue-400 mt-1">Supplemento €{CFG_NO_CAUZIONE_PER_DAY}/giorno aggiunto al totale</p>
                       )}
                       {customerTier?.tier === 'TIER_1' && (
                         <p className="text-xs text-amber-400 mt-1">No Cauzione non disponibile per Fascia B</p>
@@ -5715,15 +5732,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         {(() => {
                           const sv = vehicles.find(v => v.id === formData.vehicle_id)
                           const activeTier = customerTier?.tier || 'TIER_1'
-                          const ko = sv ? getInsuranceOptions(sv, activeTier) : []
+                          const ko = sv ? getInsuranceOptions(sv, activeTier, configOverlay) : []
                           const sk = ko.find(k => k.id === formData.insurance_option)
                           const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
                           const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
                             + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                          const noCauzioneCost = formData.deposit_status === 'no_cauzione' ? NO_CAUZIONE_SURCHARGE_PER_DAY * revenueSuggestion.rentalDays : 0
+                          const noCauzioneCost = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
                           const unlimitedKmCost = (formData.unlimited_km && sv && isExoticVehicle(sv))
-                            ? (activeTier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1) * revenueSuggestion.rentalDays : 0
-                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees + LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost
+                            ? (activeTier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1) * revenueSuggestion.rentalDays : 0
+                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost
                           const grandTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
                           return (
                             <>
@@ -5774,7 +5791,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         {(() => {
                           const sv = vehicles.find(v => v.id === formData.vehicle_id)
                           const at = customerTier?.tier || 'TIER_1'
-                          const ko = sv ? getInsuranceOptions(sv, at) : []
+                          const ko = sv ? getInsuranceOptions(sv, at, configOverlay) : []
                           const sk = ko.find(k => k.id === formData.insurance_option)
                           if (!sk || sk.pricePerDay === 0) return null
                           return (
@@ -5786,15 +5803,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         })()}
                         {formData.deposit_status === 'no_cauzione' && (
                           <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
-                            <span className="text-theme-text-muted">No Cauzione (+€{NO_CAUZIONE_SURCHARGE_PER_DAY}/g)</span>
-                            <span className="text-red-400 font-mono">+EUR {(NO_CAUZIONE_SURCHARGE_PER_DAY * revenueSuggestion.rentalDays).toFixed(2)}</span>
+                            <span className="text-theme-text-muted">No Cauzione (+€{CFG_NO_CAUZIONE_PER_DAY}/g)</span>
+                            <span className="text-red-400 font-mono">+EUR {(CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays).toFixed(2)}</span>
                           </div>
                         )}
                         {formData.unlimited_km && (() => {
                           const sv = vehicles.find(v => v.id === formData.vehicle_id)
                           if (!sv || !isExoticVehicle(sv)) return null
                           const at = customerTier?.tier || 'TIER_1'
-                          const kmPrice = at === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1
+                          const kmPrice = at === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
                           return (
                             <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
                               <span className="text-theme-text-muted">KM Illimitati (+€{kmPrice}/g)</span>
@@ -5804,7 +5821,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         })()}
                         <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
                           <span className="text-theme-text-muted">Lavaggio</span>
-                          <span className="text-blue-400 font-mono">+EUR {LAVAGGIO_FEE.toFixed(2)}</span>
+                          <span className="text-blue-400 font-mono">+EUR {CFG_LAVAGGIO_FEE.toFixed(2)}</span>
                         </div>
                         {(formData.delivery_enabled && parseFloat(formData.delivery_fee || '0') > 0) && (
                           <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
@@ -5886,7 +5903,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       className="w-4 h-4 text-green-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-green-500"
                     />
                     <label htmlFor="dr7_flex" className="text-sm text-theme-text-secondary cursor-pointer flex-1">
-                      DR7 FLEX — Cancellazione Premium (+€{DR7_FLEX_PRICE_PER_DAY.toFixed(2)}/giorno)
+                      DR7 FLEX — Cancellazione Premium (+€{CFG_DR7_FLEX_PER_DAY.toFixed(2)}/giorno)
                     </label>
                   </div>
                 )}
@@ -5971,7 +5988,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
                     if (selectedVehicle && isExoticVehicle(selectedVehicle)) {
                       const tier = customerTier?.tier
-                      const price = tier === 'TIER_2' ? TIER_UNLIMITED_KM_PRICE.TIER_2 : TIER_UNLIMITED_KM_PRICE.TIER_1
+                      const price = tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
                       return ` (+€${price}/giorno)`
                     }
                     return ''
