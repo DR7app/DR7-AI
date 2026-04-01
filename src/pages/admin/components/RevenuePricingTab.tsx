@@ -15,6 +15,7 @@ import {
   calculateDynamicPrice,
   validateConfig,
 } from '../../../utils/revenuePricingEngine'
+import CentralinaConfig from './CentralinaConfig'
 
 interface Vehicle {
   id: string; display_name: string; daily_rate: number
@@ -465,6 +466,14 @@ export default function RevenuePricingTab() {
 
   return (
     <div className="space-y-6">
+      {/* ═══ CENTRALINA PREZZI & REGOLE ═══ */}
+      <CentralinaConfig />
+
+      {/* ═══ REVENUE ENGINE (Dynamic Pricing) ═══ */}
+      <div className="border-t-2 border-theme-border pt-6 mt-8">
+        <h2 className="text-xl font-bold text-theme-text-primary mb-4">Revenue Engine — Pricing Dinamico</h2>
+      </div>
+
       {/* ─── Header: Enable + Mode + Save ─── */}
       <div className={SECTION}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
