@@ -182,17 +182,6 @@ function getSforoForVehicle(vehicleName: string): string {
   return DEFAULT_SFORO
 }
 
-// Helper: is this vehicle a supercar/exotic (tier-based insurance applies)?
-function isExoticVehicle(vehicle?: Vehicle): boolean {
-  if (!vehicle) return true; // default assumption
-  if (isFurgone(vehicle)) return false;
-  if (vehicle.category === 'aziendali' || vehicle.category === 'urban') return false;
-  const name = vehicle.display_name.toLowerCase();
-  if (name.includes('panda') || name.includes('captur') || name.includes('clio') ||
-    name.includes('citroen') || name.includes('208') || name.includes('urban')) return false;
-  if (name.includes('van') || name.includes('utilitaire')) return false;
-  return true; // exotic / supercar
-}
 
 // Helper function to get insurance options for vehicle + tier
 // When overlay is provided, uses Centralina config prices instead of hardcoded
@@ -3793,7 +3782,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
           unlimited_km_price_per_day: formData.unlimited_km
-            ? getUnlimitedKmPrice(selectedVehicle, customerTier?.tier || activeTier)
+            ? (customerTier?.tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1)
             : null,
           // Second driver
           second_driver_fee_per_day: formData.has_second_driver && customerTier?.tier
