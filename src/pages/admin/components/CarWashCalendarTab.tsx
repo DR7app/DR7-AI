@@ -104,6 +104,12 @@ interface CarWashCalendarTabProps {
   onNewBooking?: (date: string, time: string) => void
 }
 
+interface CarWashService {
+  id: string; name: string; price: number; duration: string; category: string
+  durationMinutes?: number; price_unit?: string
+  price_options?: { label: string; price: number }[]
+}
+
 export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabProps) {
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
@@ -113,6 +119,76 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBooking, setSelectedBooking] = useState<CarWashBooking | null>(null)
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
+
+  // Edit modal: services catalog + selections
+  const [carWashServices, setCarWashServices] = useState<CarWashService[]>([])
+  const [editService, setEditService] = useState<CarWashService | null>(null)
+  const [editExtras, setEditExtras] = useState<CarWashService[]>([])
+  const [editExtraPriceOptions, setEditExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
+  const [editExtraQuantities, setEditExtraQuantities] = useState<Record<string, number>>({})
+
+  // Load car wash services catalog
+  useEffect(() => {
+    supabase.from('car_wash_services').select('*').eq('active', true).order('sort_order').then(({ data }) => {
+      if (data) setCarWashServices(data)
+    })
+  }, [])
+
+  // Populate edit selections when editingBooking changes
+  useEffect(() => {
+    if (editingBooking && carWashServices.length > 0) {
+      const cartItems = editingBooking.booking_details?.cartItems || []
+      if (cartItems.length > 0) {
+        const mainItem = cartItems[0]
+        setEditService(carWashServices.find(s => s.id === mainItem.serviceId) || null)
+        const extras: CarWashService[] = []
+        const epOptions: Record<string, { label: string; price: number }> = {}
+        const eqMap: Record<string, number> = {}
+        for (let i = 1; i < cartItems.length; i++) {
+          const ci = cartItems[i]
+          const found = carWashServices.find(s => s.id === ci.serviceId)
+          if (found) {
+            extras.push(found)
+            if (ci.option) epOptions[found.id] = { label: ci.option, price: ci.price }
+            if (ci.quantity > 1) eqMap[found.id] = ci.quantity
+          }
+        }
+        setEditExtras(extras)
+        setEditExtraPriceOptions(epOptions)
+        setEditExtraQuantities(eqMap)
+      } else {
+        setEditService(null); setEditExtras([]); setEditExtraPriceOptions({}); setEditExtraQuantities({})
+      }
+    } else if (!editingBooking) {
+      setEditService(null); setEditExtras([]); setEditExtraPriceOptions({}); setEditExtraQuantities({})
+    }
+  }, [editingBooking, carWashServices])
+
+  // Edit computed values
+  const getEditTotal = () => {
+    let total = 0
+    if (editService) total += editService.price
+    for (const e of editExtras) {
+      const ep = editExtraPriceOptions[e.id]
+      const qty = editExtraQuantities[e.id] || 1
+      total += (ep?.price ?? e.price) * qty
+    }
+    return total
+  }
+
+  const buildEditServiceNames = () => {
+    const parts: string[] = []
+    if (editService) parts.push(editService.name)
+    for (const e of editExtras) {
+      const ep = editExtraPriceOptions[e.id]
+      const qty = editExtraQuantities[e.id] || 1
+      let name = e.name
+      if (ep) name += ` (${ep.label})`
+      if (qty > 1) name += ` x${qty}`
+      parts.push(name)
+    }
+    return parts.join(' + ')
+  }
 
   useEffect(() => {
     loadData()
@@ -833,46 +909,100 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 </div>
               </div>
 
+              {/* Main Service Dropdown */}
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Servizio</label>
-                <input
-                  type="text"
-                  value={editingBooking.service_name}
-                  onChange={(e) => setEditingBooking({ ...editingBooking, service_name: e.target.value })}
+                <select
+                  value={editService?.id || ''}
+                  onChange={(e) => setEditService(carWashServices.find(s => s.id === e.target.value) || null)}
                   className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                />
+                >
+                  <option value="">Seleziona servizio...</option>
+                  {Object.entries(
+                    carWashServices
+                      .filter(s => s.category !== 'extra' && s.category !== 'experience')
+                      .reduce<Record<string, CarWashService[]>>((acc, s) => { (acc[s.category] ||= []).push(s); return acc }, {})
+                  ).map(([cat, services]) => (
+                    <optgroup key={cat} label={cat.toUpperCase()}>
+                      {services.map(s => <option key={s.id} value={s.id}>{s.name} - EUR {s.price.toFixed(2)}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
+              {/* Extras with price options & quantities */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Extra</label>
+                <div className="flex flex-wrap gap-2">
+                  {carWashServices
+                    .filter(s => (s.category === 'extra' || s.category === 'experience') && s.id !== editService?.id)
+                    .map(extra => {
+                      const isSelected = editExtras.some(e => e.id === extra.id)
+                      const hasPO = extra.price_options && extra.price_options.length > 0
+                      const curOpt = editExtraPriceOptions[extra.id]
+                      return (
+                        <div key={extra.id} className="flex flex-col gap-1">
+                          <button type="button" onClick={() => {
+                            if (isSelected) {
+                              setEditExtras(p => p.filter(e => e.id !== extra.id))
+                              setEditExtraPriceOptions(p => { const n = { ...p }; delete n[extra.id]; return n })
+                              setEditExtraQuantities(p => { const n = { ...p }; delete n[extra.id]; return n })
+                            } else { setEditExtras(p => [...p, extra]) }
+                          }} className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 ${isSelected ? 'bg-dr7-gold/20 border-dr7-gold text-dr7-gold' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-primary hover:border-dr7-gold'}`}>
+                            <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${isSelected ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-text-muted'}`}>{isSelected && '✓'}</span>
+                            {extra.name} {!hasPO && <span className="opacity-70">EUR {extra.price.toFixed(2)}</span>}
+                          </button>
+                          {isSelected && hasPO && (
+                            <div className="flex flex-wrap gap-1 ml-2">
+                              {extra.price_options!.map((opt: { label: string; price: number }) => (
+                                <button key={opt.label} type="button" onClick={() => setEditExtraPriceOptions(p => ({ ...p, [extra.id]: opt }))}
+                                  className={`px-2 py-0.5 text-[10px] rounded-full border ${curOpt?.label === opt.label ? 'bg-dr7-gold text-white border-dr7-gold font-bold' : 'border-theme-border text-theme-text-secondary hover:border-dr7-gold'}`}>
+                                  {opt.label} EUR {opt.price}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {isSelected && extra.price_unit && (
+                            <div className="flex items-center gap-2 ml-2">
+                              <span className="text-[10px] text-theme-text-muted">{extra.price_unit}:</span>
+                              <button type="button" onClick={() => setEditExtraQuantities(p => ({ ...p, [extra.id]: Math.max(1, (p[extra.id] || 1) - 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-xs">-</button>
+                              <span className="text-xs font-bold w-5 text-center">{editExtraQuantities[extra.id] || 1}</span>
+                              <button type="button" onClick={() => setEditExtraQuantities(p => ({ ...p, [extra.id]: Math.min(10, (p[extra.id] || 1) + 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-xs">+</button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+
+              {/* Totale calcolato + override manuale */}
+              <div className="p-3 bg-theme-bg-tertiary/50 rounded-lg flex justify-between items-center">
+                <span className="text-sm text-theme-text-muted">Totale servizi</span>
+                <span className="text-lg font-bold text-dr7-gold">EUR {getEditTotal().toFixed(2)}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data</label>
-                  <input
-                    type="date"
-                    value={editingBooking.appointment_date}
+                  <input type="date" value={editingBooking.appointment_date}
                     onChange={(e) => setEditingBooking({ ...editingBooking, appointment_date: e.target.value })}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                  />
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora</label>
-                  <input
-                    type="time"
-                    value={editingBooking.appointment_time}
+                  <input type="time" value={editingBooking.appointment_time}
                     onChange={(e) => setEditingBooking({ ...editingBooking, appointment_time: e.target.value })}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                  />
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo (€)</label>
-                <input
-                  type="number"
-                  value={editingBooking.price_total / 100}
-                  onChange={(e) => setEditingBooking({ ...editingBooking, price_total: parseFloat(e.target.value) * 100 })}
-                  step="0.01"
-                  className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
-                />
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo manuale (€) — lascia vuoto per usare il totale calcolato</label>
+                <input type="number" step="0.01" placeholder={getEditTotal().toFixed(2)}
+                  value={editingBooking.price_total !== Math.round(getEditTotal() * 100) ? (editingBooking.price_total / 100).toFixed(2) : ''}
+                  onChange={(e) => setEditingBooking({ ...editingBooking, price_total: e.target.value ? parseFloat(e.target.value) * 100 : Math.round(getEditTotal() * 100) })}
+                  className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -908,18 +1038,38 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               <button
                 onClick={async () => {
                   try {
+                    // Rebuild cart items from edit selections
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const editCartItems: any[] = []
+                    if (editService) {
+                      editCartItems.push({ serviceId: editService.id, serviceName: editService.name, quantity: 1, price: editService.price, option: null, subtotal: editService.price })
+                    }
+                    for (const extra of editExtras) {
+                      const ep = editExtraPriceOptions[extra.id]
+                      const qty = editExtraQuantities[extra.id] || 1
+                      const unitPrice = ep?.price ?? extra.price
+                      editCartItems.push({ serviceId: extra.id, serviceName: extra.name, quantity: qty, price: unitPrice, option: ep?.label || null, subtotal: unitPrice * qty })
+                    }
+
+                    const updatedServiceName = editService ? buildEditServiceNames() : editingBooking.service_name
+                    const updatedPrice = editingBooking.price_total || Math.round(getEditTotal() * 100)
+
                     const { error } = await supabase
                       .from('bookings')
                       .update({
                         customer_name: editingBooking.customer_name,
                         customer_email: editingBooking.customer_email,
                         customer_phone: editingBooking.customer_phone,
-                        service_name: editingBooking.service_name,
+                        service_name: updatedServiceName,
                         appointment_date: editingBooking.appointment_date,
                         appointment_time: editingBooking.appointment_time,
-                        price_total: editingBooking.price_total,
+                        price_total: updatedPrice,
                         status: editingBooking.status,
                         payment_status: editingBooking.payment_status,
+                        booking_details: {
+                          ...(editingBooking.booking_details || {}),
+                          cartItems: editService ? editCartItems : (editingBooking.booking_details?.cartItems || []),
+                        },
                       })
                       .eq('id', editingBooking.id)
 

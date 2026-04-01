@@ -2470,6 +2470,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <span className="text-lg font-bold text-dr7-gold">Totale: EUR {getEditTotal().toFixed(2)}</span>
                 </div>
 
+                {/* Manual price override */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo manuale (€) — lascia vuoto per usare il totale calcolato</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    placeholder={getEditTotal().toFixed(2)}
+                    value={editingBooking.price_total !== Math.round(getEditTotal() * 100) ? (editingBooking.price_total / 100).toFixed(2) : ''}
+                    onChange={(e) => setEditingBooking({ ...editingBooking, price_total: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : Math.round(getEditTotal() * 100) })}
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data</label>
@@ -2512,10 +2524,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       onChange={(e) => setEditingBooking({ ...editingBooking, payment_status: e.target.value })}
                       className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                     >
-                      <option value="pending">In Attesa</option>
+                      <option value="pending">Da Saldare</option>
+                      <option value="partial">Parziale (Da Saldare Resto)</option>
                       <option value="paid">Pagato</option>
                       <option value="completed">Completato</option>
                     </select>
+                    {/* Partial payment: amount already paid */}
+                    {editingBooking.payment_status === 'partial' && (
+                      <div className="mt-2">
+                        <label className="block text-xs font-medium text-theme-text-secondary mb-1">Importo già pagato (€)</label>
+                        <input
+                          type="number" step="0.01" min="0"
+                          value={(editingBooking.booking_details?.amountPaid || 0) / 100}
+                          onChange={(e) => setEditingBooking({
+                            ...editingBooking,
+                            booking_details: { ...(editingBooking.booking_details || {}), amountPaid: Math.round(parseFloat(e.target.value || '0') * 100) }
+                          })}
+                          placeholder="0.00"
+                          className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
+                        />
+                        <p className="text-xs text-dr7-gold mt-1">
+                          Rimanente: EUR {(((editingBooking.price_total || 0) - (editingBooking.booking_details?.amountPaid || 0)) / 100).toFixed(2)}
+                        </p>
+                      </div>
+                    )}
                     {/* Payment method selector — visible when paid */}
                     {(editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded') && (
                       <div className="mt-2">
