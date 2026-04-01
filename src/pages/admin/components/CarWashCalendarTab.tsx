@@ -1026,11 +1026,46 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                     onChange={(e) => setEditingBooking({ ...editingBooking, payment_status: e.target.value })}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                   >
-                    <option value="pending">In Attesa</option>
+                    <option value="pending">Da Saldare</option>
+                    <option value="partial">Parziale (Da Saldare Resto)</option>
                     <option value="paid">Pagato</option>
                     <option value="completed">Completato</option>
                   </select>
+                  {/* Partial payment: amount already paid */}
+                  {editingBooking.payment_status === 'partial' && (
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Importo già pagato (€)</label>
+                      <input type="number" step="0.01" min="0"
+                        value={(editingBooking.booking_details?.amountPaid || 0) / 100}
+                        onChange={(e) => setEditingBooking({ ...editingBooking, booking_details: { ...(editingBooking.booking_details || {}), amountPaid: Math.round(parseFloat(e.target.value || '0') * 100) } })}
+                        placeholder="0.00"
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm" />
+                      <p className="text-xs text-dr7-gold mt-1">
+                        Rimanente: EUR {(((editingBooking.price_total || 0) - (editingBooking.booking_details?.amountPaid || 0)) / 100).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              {/* Payment method — always visible */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Metodo di pagamento</label>
+                <select
+                  value={editingBooking.booking_details?.paymentMethod || editingBooking.payment_method || ''}
+                  onChange={(e) => setEditingBooking({ ...editingBooking, payment_method: e.target.value, booking_details: { ...(editingBooking.booking_details || {}), paymentMethod: e.target.value } })}
+                  className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                >
+                  <option value="">-- Seleziona metodo --</option>
+                  <option value="Contanti">Contanti</option>
+                  <option value="POS">POS</option>
+                  <option value="Carta di credito">Carta di credito</option>
+                  <option value="Carta di debito">Carta di debito</option>
+                  <option value="Bonifico">Bonifico</option>
+                  <option value="Nexi Pay by Link">Nexi Pay by Link</option>
+                  <option value="Wallet">Wallet</option>
+                  <option value="Gift Card">Gift Card</option>
+                </select>
               </div>
             </div>
 
