@@ -67,10 +67,12 @@ export async function fetchConflictingBookings(date: string, excludeBookingId?: 
         return []
     }
 
-    // Filter out the current booking if editing
-    return excludeBookingId
-        ? bookings.filter(b => b.id !== excludeBookingId)
-        : bookings
+    // Filter out: current booking if editing + "Lavaggio Rientro" (internal return washes don't block external slots)
+    return (bookings || []).filter(b => {
+        if (excludeBookingId && b.id === excludeBookingId) return false
+        if (b.customer_name === 'Lavaggio Rientro') return false
+        return true
+    })
 }
 
 /**

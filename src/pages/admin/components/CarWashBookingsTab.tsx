@@ -1285,8 +1285,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       let conflictingBooking = null
       let conflictDetails = ''
 
-      if (existingBookings && existingBookings.length > 0) {
-        for (const booking of existingBookings) {
+      // Filter out "Lavaggio Rientro" — internal return washes don't count as conflicts
+      const realBookings = (existingBookings || []).filter(b => b.customer_name !== 'Lavaggio Rientro')
+      if (realBookings.length > 0) {
+        for (const booking of realBookings) {
           const bookingTime = booking.appointment_time || new Date(booking.appointment_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
 
           // Get the service duration of the existing booking
