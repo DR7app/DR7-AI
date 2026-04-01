@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Invoice {
   id: string
@@ -117,7 +118,7 @@ export default function FatturaTab() {
     }
 
     try {
-      const response = await fetch('/.netlify/functions/generate-invoice-pdf', {
+      const response = await authFetch('/.netlify/functions/generate-invoice-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId: invoice.id })

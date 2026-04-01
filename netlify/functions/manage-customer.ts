@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
+import { requireAuth } from './require-auth'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,6 +26,10 @@ const handler: Handler = async (event) => {
       body: JSON.stringify({ error: "Method not allowed" }),
     };
   }
+
+  // Require authentication
+  const { error: authErr } = await requireAuth(event)
+  if (authErr) return authErr
 
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error("Missing Supabase credentials");

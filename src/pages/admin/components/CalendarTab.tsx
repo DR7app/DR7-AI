@@ -6,6 +6,7 @@ import { normalizeBooking, computeLanes, type CalendarEvent } from '../../../uti
 import BookingDetailsPanel from './BookingDetailsPanel'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { authFetch } from '../../../utils/authFetch'
 
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
@@ -81,7 +82,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let allBookings: any[] | null = null
       try {
-        const bookingsResponse = await fetch('/.netlify/functions/list-bookings')
+        const bookingsResponse = await authFetch('/.netlify/functions/list-bookings')
         const bookingsResult = await bookingsResponse.json()
         if (bookingsResponse.ok && bookingsResult.bookings) {
           allBookings = bookingsResult.bookings

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { authFetch } from '../../../utils/authFetch'
 
 interface DashboardData {
   period: { month: string; daysInMonth: number; daysElapsed: number }
@@ -203,7 +204,7 @@ export default function DashboardTab() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/.netlify/functions/dashboard-kpi?month=${selectedMonth}`)
+      const res = await authFetch(`/.netlify/functions/dashboard-kpi?month=${selectedMonth}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setData(json)

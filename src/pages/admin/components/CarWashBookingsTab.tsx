@@ -8,6 +8,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { validateScheduling } from '../../../utils/schedulingRules'
 import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Customer {
   id: string
@@ -644,7 +645,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setGeneratingInvoice(true)
     toast.loading('Generazione fattura in corso...', { id: 'gen-invoice' })
     try {
-      const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+      const response = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: booking.id, includeIVA })
@@ -675,7 +676,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       toast.dismiss('gen-invoice')
       // Generate and open the invoice PDF
       const invoiceId = data.invoice.id
-      const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+      const pdfResponse = await authFetch('/.netlify/functions/generate-invoice-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId })
@@ -737,7 +738,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     // Validate customer has all required fields for fattura
     try {
-      const custResp = await fetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
+      const custResp = await authFetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
       if (custResp.ok) {
         const { customer: custData } = await custResp.json()
         if (custData) {
@@ -878,7 +879,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
     if (isPaid) {
       try {
-        const invoiceResponse = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+        const invoiceResponse = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bookingId: data.id, includeIVA: true })
@@ -907,7 +908,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const isNexiPayByLink = formData.payment_status === 'nexi_pay_by_link'
     if (isNexiPayByLink && data) {
       try {
-        const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2412,7 +2413,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                           if (!existingFattura) {
                             logger.log('[Auto-Gen] Generating fattura for paid car wash:', editingBooking.id)
-                            const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+                            const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ bookingId: editingBooking.id, includeIVA: true })

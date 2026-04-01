@@ -4,6 +4,7 @@ import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import toast from 'react-hot-toast'
+import { authFetch } from '../../../utils/authFetch'
 
 // --- Configuration ---
 const CELL_WIDTH = 52 // Balanced width: fits full month on screen while maintaining readability
@@ -148,7 +149,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let bookingsData: any[] | null = null
       try {
-        const res = await fetch('/.netlify/functions/list-bookings')
+        const res = await authFetch('/.netlify/functions/list-bookings')
         const result = await res.json()
         if (res.ok && result.bookings) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

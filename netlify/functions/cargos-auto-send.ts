@@ -11,7 +11,7 @@ const CARGOS_USERNAME = process.env.CARGOS_USERNAME || 'C00006117'
 const CARGOS_PASSWORD = process.env.CARGOS_PASSWORD || ''
 const CARGOS_APIKEY = process.env.CARGOS_APIKEY || ''
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
+const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 

@@ -62,6 +62,7 @@ import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import DanniPenaliModal from './DanniPenaliModal'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -1412,7 +1413,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Fetch customer via Netlify function (bypasses RLS)
     if (customerId) {
       try {
-        const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+        const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
         if (resp.ok) {
           const result = await resp.json()
           if (result.customer) {
@@ -1431,7 +1432,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     if (!customer && resolvedEmail) {
       try {
-        const resp = await fetch(`/.netlify/functions/get-customer?email=${encodeURIComponent(resolvedEmail)}`)
+        const resp = await authFetch(`/.netlify/functions/get-customer?email=${encodeURIComponent(resolvedEmail)}`)
         if (resp.ok) {
           const result = await resp.json()
           if (result.customer) {
@@ -1450,7 +1451,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         let normPhone = resolvedPhone.replace(/[\s\-+()]/g, '')
         if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
         if (normPhone.length === 10) normPhone = '39' + normPhone
-        const resp = await fetch(`/.netlify/functions/get-customer?phone=${encodeURIComponent(normPhone)}`)
+        const resp = await authFetch(`/.netlify/functions/get-customer?phone=${encodeURIComponent(normPhone)}`)
         if (resp.ok) {
           const result = await resp.json()
           if (result.customer) {
@@ -1586,7 +1587,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     setGeneratingContract(true)
     try {
       // Use the new generic contract generation function
-      const response = await fetch('/.netlify/functions/generate-contract', {
+      const response = await authFetch('/.netlify/functions/generate-contract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: booking.id })
@@ -1638,7 +1639,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       if (customerId) {
         try {
-          const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+          const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
           if (resp.ok) {
             const result = await resp.json()
             customerData = result.customer || { id: customerId }
@@ -1673,7 +1674,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     setGeneratingInvoice(true)
     try {
-      const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+      const response = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: booking.id, includeIVA })
@@ -1699,7 +1700,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Open PDF first as courtesy (non-blocking)
       try {
         const invoiceId = invoice.id
-        const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+        const pdfResponse = await authFetch('/.netlify/functions/generate-invoice-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ invoiceId })
@@ -1790,7 +1791,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Now create the pre-authorization
-      const response = await fetch('/.netlify/functions/nexi-create-preauth', {
+      const response = await authFetch('/.netlify/functions/nexi-create-preauth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1833,7 +1834,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         vehicleName = booking?.vehicle_name || ''
 
         // SOFT DELETE via Netlify function (uses service role key to bypass RLS)
-        const deleteRes = await fetch('/.netlify/functions/delete-booking', {
+        const deleteRes = await authFetch('/.netlify/functions/delete-booking', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bookingId })
@@ -2421,7 +2422,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (extendData.extension_payment_status === 'paid' && additionalAmount > 0) {
         try {
           logger.log('[handleConfirmExtend] Generating extension fattura for €' + additionalAmount.toFixed(2))
-          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bookingId: extendingBooking.id, includeIVA: true, extensionAmount: additionalAmount })
@@ -2455,7 +2456,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
 
           const expirationHours = parseInt(extendData.link_expiration_hours) || 1
-          const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+          const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3684,7 +3685,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             + (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
           const totalEur = totalCents / 100
 
-          const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+          const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3767,7 +3768,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Generate PDF invoice for car rental
       if (!editingId) { // Only for new bookings
         try {
-          await fetch('/.netlify/functions/generate-invoice-pdf', {
+          await authFetch('/.netlify/functions/generate-invoice-pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3988,7 +3989,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (formData.payment_status === 'paid' && insertedBooking?.id) {
         try {
           logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
-          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
@@ -4443,7 +4444,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         // Check patente age
                         if (customerId) {
                           try {
-                            const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+                            const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
                             if (resp.ok) {
                               const { customer: cust } = await resp.json()
                               const patenteDate = cust?.data_rilascio_patente || cust?.metadata?.patente?.rilascio
