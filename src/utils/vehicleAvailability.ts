@@ -314,10 +314,10 @@ export function isVehicleAvailable(
             return false
         }
 
-        // Skip cancelled bookings
-        if (booking.status === 'cancelled') return false
-        // Skip pending Nexi Pay by Link bookings (awaiting payment)
-        if (booking.payment_method === 'Nexi Pay by Link' && booking.payment_status === 'pending') return false
+        // Skip cancelled and expired bookings
+        if (booking.status === 'cancelled' || booking.status === 'expired') return false
+        // Skip pending_payment bookings whose payment has expired (slot should be released)
+        if (booking.status === 'pending_payment' && booking.payment_status === 'expired') return false
 
         // CRITICAL: Skip linked car wash bookings when extending a rental
         // Car wash bookings are automatically created/updated, so they shouldn't block extensions

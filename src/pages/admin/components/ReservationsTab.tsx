@@ -3463,6 +3463,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         customer_phone: customerInfo?.phone || null,
         booked_at: editingId ? undefined : new Date().toISOString(), // Don't update booked_at on edit
         booking_source: 'admin', // Mark as admin booking
+        // Set fallback expiration so cron can expire orphaned pending_payment bookings
+        // even if the Nexi API call fails. The actual value is overwritten after Nexi responds.
+        payment_link_expires_at: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
+          ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : undefined,
         // Home Delivery & Pickup (top-level DB columns)
         delivery_enabled: formData.delivery_enabled,
         delivery_address: formData.delivery_enabled ? {

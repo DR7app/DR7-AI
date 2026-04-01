@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 import { detectCardType, logCardAttempt, voidNexiTransaction, cancelBooking, notifyPrepaidBlocked } from './prepaid-card-guard';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
@@ -18,7 +19,7 @@ async function fetchNexiOperationDetails(operationId: string): Promise<any> {
         const res = await fetch(`${NEXI_BASE_URL}/operations/${operationId}`, {
             headers: {
                 'X-Api-Key': NEXI_API_KEY,
-                'Correlation-Id': `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+                'Correlation-Id': randomUUID()
             }
         });
         if (res.ok) {
@@ -375,6 +376,13 @@ const handler: Handler = async (event) => {
                 if (booking.payment_status === 'paid') {
                     console.log(`[nexi-payment-callback] Booking ${booking.id} already paid — skipping duplicate confirmation`);
                     return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_paid: true }) };
+                }
+
+                // Validate payment amount matches booking price (tolerance: 1 cent for rounding)
+                if (booking.price_total && Math.abs(transaction.amount_cents - booking.price_total) > 1) {
+                    console.error(`[nexi-payment-callback] AMOUNT MISMATCH: paid ${transaction.amount_cents} cents but booking expects ${booking.price_total} cents — booking ${booking.id}`);
+                    // Still confirm (payment was authorized) but log the discrepancy for manual review
+                    // Admin will be notified via the regular WhatsApp notification
                 }
 
                 // Confirm the booking — CONDITIONAL UPDATE for safety

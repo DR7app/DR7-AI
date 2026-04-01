@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -61,7 +62,7 @@ const handler: Handler = async (event) => {
         const ts = Date.now().toString(36)
         const orderId = bookingId
             ? `P${bookingId.slice(0, 8)}${ts}`.slice(0, 18)
-            : `P${ts}${Math.floor(Math.random() * 1000)}`.slice(0, 18);
+            : `P${ts}${randomUUID().slice(0, 6)}`.slice(0, 18);
 
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
@@ -106,10 +107,7 @@ const handler: Handler = async (event) => {
             expirationDate: expirationDateStr
         };
 
-        const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-            const r = Math.random() * 16 | 0
-            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
-        })
+        const correlationId = randomUUID()
         const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
         const response = await fetch(payByLinkUrl, {
             method: 'POST',
