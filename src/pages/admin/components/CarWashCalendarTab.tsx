@@ -25,6 +25,7 @@ interface CarWashBooking {
   created_at: string
   vehicle_name?: string
   vehicle_plate?: string
+  payment_method?: string
 }
 
 // Service durations in minutes by vehicle category

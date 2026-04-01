@@ -2529,23 +2529,60 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <option value="paid">Pagato</option>
                       <option value="completed">Completato</option>
                     </select>
-                    {/* Partial payment: amount already paid */}
+                    {/* Partial payment: amount already paid + method for remainder */}
                     {editingBooking.payment_status === 'partial' && (
-                      <div className="mt-2">
-                        <label className="block text-xs font-medium text-theme-text-secondary mb-1">Importo già pagato (€)</label>
-                        <input
-                          type="number" step="0.01" min="0"
-                          value={(editingBooking.booking_details?.amountPaid || 0) / 100}
-                          onChange={(e) => setEditingBooking({
-                            ...editingBooking,
-                            booking_details: { ...(editingBooking.booking_details || {}), amountPaid: Math.round(parseFloat(e.target.value || '0') * 100) }
-                          })}
-                          placeholder="0.00"
-                          className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
-                        />
-                        <p className="text-xs text-dr7-gold mt-1">
-                          Rimanente: EUR {(((editingBooking.price_total || 0) - (editingBooking.booking_details?.amountPaid || 0)) / 100).toFixed(2)}
-                        </p>
+                      <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary/50 rounded-lg border border-theme-border/30">
+                        <div>
+                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Importo già pagato (€)</label>
+                          <input
+                            type="number" step="0.01" min="0"
+                            value={(editingBooking.booking_details?.amountPaid || 0) / 100}
+                            onChange={(e) => setEditingBooking({
+                              ...editingBooking,
+                              booking_details: { ...(editingBooking.booking_details || {}), amountPaid: Math.round(parseFloat(e.target.value || '0') * 100) }
+                            })}
+                            placeholder="0.00"
+                            className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
+                          />
+                          <p className="text-xs text-dr7-gold mt-1 font-semibold">
+                            Rimanente: EUR {(((editingBooking.price_total || 0) - (editingBooking.booking_details?.amountPaid || 0)) / 100).toFixed(2)}
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo già pagato</label>
+                          <select
+                            value={editingBooking.booking_details?.paidMethod || ''}
+                            onChange={(e) => setEditingBooking({ ...editingBooking, booking_details: { ...(editingBooking.booking_details || {}), paidMethod: e.target.value } })}
+                            className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                          >
+                            <option value="">-- Seleziona --</option>
+                            <option value="Contanti">Contanti</option>
+                            <option value="POS">POS</option>
+                            <option value="Carta di credito">Carta di credito</option>
+                            <option value="Carta di debito">Carta di debito</option>
+                            <option value="Bonifico">Bonifico</option>
+                            <option value="Wallet">Wallet</option>
+                            <option value="Gift Card">Gift Card</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo per il resto</label>
+                          <select
+                            value={editingBooking.booking_details?.remainderMethod || ''}
+                            onChange={(e) => setEditingBooking({ ...editingBooking, booking_details: { ...(editingBooking.booking_details || {}), remainderMethod: e.target.value }, payment_method: e.target.value })}
+                            className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                          >
+                            <option value="">-- Seleziona --</option>
+                            <option value="Contanti">Contanti</option>
+                            <option value="POS">POS</option>
+                            <option value="Carta di credito">Carta di credito</option>
+                            <option value="Carta di debito">Carta di debito</option>
+                            <option value="Bonifico">Bonifico</option>
+                            <option value="Nexi Pay by Link">Nexi Pay by Link</option>
+                            <option value="Wallet">Wallet</option>
+                            <option value="Gift Card">Gift Card</option>
+                          </select>
+                        </div>
                       </div>
                     )}
                     {/* Payment method selector — always visible */}
