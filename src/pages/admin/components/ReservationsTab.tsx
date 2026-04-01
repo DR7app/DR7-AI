@@ -574,6 +574,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const CFG_LAVAGGIO_FEE = configOverlay.lavaggioFee
   const CFG_NO_CAUZIONE_PER_DAY = configOverlay.noCauzionePerDay
   const CFG_UNLIMITED_KM = { TIER_1: configOverlay.unlimitedKmTier1, TIER_2: configOverlay.unlimitedKmTier2 }
+  // Unlimited KM prices per vehicle category (per day)
+  const CFG_UNLIMITED_KM_FURGONE = { TIER_1: 94.50, TIER_2: 94.50 } // Ducato
+  const CFG_UNLIMITED_KM_NCC = { TIER_1: 189, TIER_2: 189 } // Vito Mercedes
+  const CFG_UNLIMITED_KM_URBAN = { TIER_1: 0, TIER_2: 0 } // Urban: KM always unlimited (included)
+
+  function getUnlimitedKmPrice(vehicle?: Vehicle, tier?: string): number {
+    if (!vehicle) return tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
+    const name = vehicle.display_name.toLowerCase()
+    if (vehicle.category === 'urban') return tier === 'TIER_2' ? CFG_UNLIMITED_KM_URBAN.TIER_2 : CFG_UNLIMITED_KM_URBAN.TIER_1
+    if (name.includes('vito') || name.includes('mercedes') || name.includes('ncc') || name.includes('tourer')) return tier === 'TIER_2' ? CFG_UNLIMITED_KM_NCC.TIER_2 : CFG_UNLIMITED_KM_NCC.TIER_1
+    if (isFurgone(vehicle)) return tier === 'TIER_2' ? CFG_UNLIMITED_KM_FURGONE.TIER_2 : CFG_UNLIMITED_KM_FURGONE.TIER_1
+    // Exotic/supercar
+    return tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
+  }
   const CFG_SECOND_DRIVER = { TIER_1: configOverlay.secondDriverTier1, TIER_2: configOverlay.secondDriverTier2 }
   const CFG_DR7_FLEX_PER_DAY = configOverlay.dr7FlexPerDay
 
@@ -611,8 +625,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const noCauzioneSurcharge = prev.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * data.rentalDays : 0
               // Unlimited KM surcharge (tier-based)
               let unlimitedKmSurcharge = 0
-              if (prev.unlimited_km && selectedVehicle && isExoticVehicle(selectedVehicle)) {
-                unlimitedKmSurcharge = (activeTier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1) * data.rentalDays
+              if (prev.unlimited_km) {
+                unlimitedKmSurcharge = getUnlimitedKmPrice(selectedVehicle, activeTier) * data.rentalDays
               }
               // Second driver surcharge (tier-based)
               const secondDriverFee = prev.has_second_driver
@@ -658,8 +672,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
       const noCauzioneSurcharge = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
       let unlimitedKmSurcharge = 0
-      if (formData.unlimited_km && selectedVehicle && isExoticVehicle(selectedVehicle)) {
-        unlimitedKmSurcharge = (activeTier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1) * revenueSuggestion.rentalDays
+      if (formData.unlimited_km) {
+        unlimitedKmSurcharge = getUnlimitedKmPrice(selectedVehicle, activeTier) * revenueSuggestion.rentalDays
       }
       const secondDriverFee = formData.has_second_driver
         ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays
@@ -3778,8 +3792,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
-          unlimited_km_price_per_day: formData.unlimited_km && customerTier?.tier
-            ? (customerTier.tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1)
+          unlimited_km_price_per_day: formData.unlimited_km
+            ? getUnlimitedKmPrice(selectedVehicle, customerTier?.tier || activeTier)
             : null,
           // Second driver
           second_driver_fee_per_day: formData.has_second_driver && customerTier?.tier
@@ -5768,8 +5782,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
                             + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
                           const noCauzioneCost = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
-                          const unlimitedKmCost = (formData.unlimited_km && sv && isExoticVehicle(sv))
-                            ? (activeTier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1) * revenueSuggestion.rentalDays : 0
+                          const unlimitedKmCost = formData.unlimited_km
+                            ? getUnlimitedKmPrice(sv, activeTier) * revenueSuggestion.rentalDays : 0
                           const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost
                           const grandTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
                           return (
@@ -5839,9 +5853,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         )}
                         {formData.unlimited_km && (() => {
                           const sv = vehicles.find(v => v.id === formData.vehicle_id)
-                          if (!sv || !isExoticVehicle(sv)) return null
+                          if (!sv) return null
                           const at = customerTier?.tier || 'TIER_1'
-                          const kmPrice = at === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
+                          const kmPrice = getUnlimitedKmPrice(sv, at)
+                          if (kmPrice === 0) return null // Urban: KM already unlimited
                           return (
                             <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
                               <span className="text-theme-text-muted">KM Illimitati (+€{kmPrice}/g)</span>
@@ -6016,9 +6031,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   KM Illimitati
                   {(() => {
                     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
-                    if (selectedVehicle && isExoticVehicle(selectedVehicle)) {
+                    if (selectedVehicle) {
                       const tier = customerTier?.tier
-                      const price = tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
+                      const price = getUnlimitedKmPrice(selectedVehicle, tier)
+                      if (price === 0) return null // Urban: KM already unlimited
                       return ` (+€${price}/giorno)`
                     }
                     return ''
