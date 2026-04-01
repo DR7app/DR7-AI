@@ -77,24 +77,33 @@ export const INSURANCE_OPTIONS_TIER_2 = [
 // eslint-disable-next-line react-refresh/only-export-components
 export const INSURANCE_OPTIONS = INSURANCE_OPTIONS_TIER_1;
 
-// URBAN - Kasko Base + Kasko DR7
+// URBAN - Full insurance tiers (same structure as supercar)
 // eslint-disable-next-line react-refresh/only-export-components
 export const URBAN_INSURANCE_OPTIONS = [
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
+  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 25 },
+  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 35 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
 ];
 
-// UTILITAIRE - Kasko Base + Kasko DR7 (same as Ducato/Vito)
+// UTILITAIRE - Full insurance tiers (same structure as supercar)
 // eslint-disable-next-line react-refresh/only-export-components
 export const UTILITAIRE_INSURANCE_OPTIONS = [
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
+  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 65 },
+  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 80 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
-// FURGONE (Ducato/Vito/Tourer) - Kasko Base + Kasko DR7
+// FURGONE (Ducato/Vito/Tourer) - Full insurance tiers (same structure as supercar)
 // eslint-disable-next-line react-refresh/only-export-components
 export const FURGONE_INSURANCE_OPTIONS = [
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
+  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 65 },
+  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 80 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
