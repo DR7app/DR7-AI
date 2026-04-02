@@ -225,8 +225,12 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     }
                 }
 
+                // Only external customer washes — exclude internal return washes
                 if (booking.service_type === 'car_wash' &&
-                    isSameDay(booking.appointment_date)) {
+                    isSameDay(booking.appointment_date) &&
+                    booking.customer_name !== 'Lavaggio Rientro' &&
+                    !booking.booking_details?.internal &&
+                    !booking.booking_details?.auto_created) {
                     categorized.push({ ...booking, type: 'lavaggio' })
                 }
 
