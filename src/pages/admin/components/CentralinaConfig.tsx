@@ -191,6 +191,9 @@ export default function CentralinaConfig() {
           {saving ? 'Salvataggio...' : 'Salva Configurazione'}
         </Button>
       </div>
+
+      {/* Audit Log */}
+      <AuditLogSection />
     </div>
   )
 }
@@ -1013,6 +1016,100 @@ function TierSimulator({ rules }: { rules: RentalConfig['tier_rules'] }) {
         <span className="text-sm text-theme-text-muted">anni</span>
       </div>
       <span className={`font-bold text-lg ${color}`}>{result}</span>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════
+// AUDIT LOG — Change History
+// ═══════════════════════════════════════════════════
+interface AuditEntry {
+  id: string
+  changed_at: string
+  changed_by: string
+  section: string
+  description?: string
+}
+
+function AuditLogSection() {
+  const [logs, setLogs] = useState<AuditEntry[]>([])
+  const [loading, setLoading] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  async function loadLogs() {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('config_audit_log')
+        .select('id, changed_at, changed_by, section, description')
+        .order('changed_at', { ascending: false })
+        .limit(20)
+
+      if (!error && data) {
+        setLogs(data)
+      }
+    } catch {
+      // Table might not exist yet
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (expanded) loadLogs()
+  }, [expanded])
+
+  const sectionLabels: Record<string, string> = {
+    insurance: 'Assicurazioni',
+    km: 'KM & Sforo',
+    deposits: 'Cauzioni',
+    services: 'Servizi',
+    rates: 'Tariffe',
+    tiers: 'Fasce Cliente',
+  }
+
+  return (
+    <div className="border border-theme-border rounded-lg">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-bg-tertiary/50 transition-colors"
+      >
+        <span className="text-sm font-semibold text-theme-text-secondary">
+          Cronologia Modifiche
+        </span>
+        <span className="text-theme-text-muted text-xs">{expanded ? 'Chiudi' : 'Apri'}</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-theme-border p-4">
+          {loading ? (
+            <p className="text-sm text-theme-text-muted">Caricamento...</p>
+          ) : logs.length === 0 ? (
+            <p className="text-sm text-theme-text-muted">Nessuna modifica registrata.</p>
+          ) : (
+            <div className="space-y-2">
+              {logs.map(log => (
+                <div key={log.id} className="flex items-center gap-3 text-sm p-2 rounded-md bg-theme-bg-tertiary/30">
+                  <span className="text-theme-text-muted text-xs w-36 shrink-0">
+                    {new Date(log.changed_at).toLocaleString('it-IT')}
+                  </span>
+                  <span className="text-theme-text-primary font-medium w-24 shrink-0">
+                    {sectionLabels[log.section] || log.section}
+                  </span>
+                  <span className="text-theme-text-secondary truncate">
+                    {log.changed_by}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={loadLogs}
+            className="mt-3 text-xs text-dr7-gold hover:text-dr7-gold/80"
+          >
+            Aggiorna
+          </button>
+        </div>
+      )}
     </div>
   )
 }

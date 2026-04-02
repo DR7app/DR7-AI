@@ -51,7 +51,7 @@ import {
   type TierClassification,
 } from '../../../utils/tierClassification'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
-import { buildConfigOverlay } from '../../../utils/configOverlay'
+import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
 import { getKmIncluded } from '../../../utils/configLookup'
 
 // --- Kasko Constants & Types ---
@@ -1270,18 +1270,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier])
 
-  // Auto-set sforo (km_overage_fee) based on vehicle type when vehicle changes
+  // Auto-set sforo (km_overage_fee) based on config overrides > vehicle type
   useEffect(() => {
     if (formData.vehicle_id && !editingId) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       if (!selectedVehicle) return
       if (!formData.unlimited_km) {
-        const newSforo = getSforoForVehicle(selectedVehicle.display_name)
+        // Priority: config vehicle override > config category > old name-matching fallback
+        const vehicleOverride = getVehicleSforoOverride(rentalConfig, formData.vehicle_id)
+        const newSforo = vehicleOverride || getSforoForVehicle(selectedVehicle.display_name)
         setFormData(prev => ({ ...prev, km_overage_fee: newSforo }))
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.vehicle_id])
+  }, [formData.vehicle_id, rentalConfig])
 
   async function loadData() {
     setLoading(true)
@@ -5984,6 +5986,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               </div>
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
+                {/* Show computed KM included from config formula */}
+                {formData.pickup_date && formData.return_date && !formData.unlimited_km && (() => {
+                  const pickup = new Date(formData.pickup_date)
+                  const ret = new Date(formData.return_date)
+                  const days = Math.max(1, Math.ceil((ret.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)))
+                  const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
+                  const cat = selectedVeh?.category === 'urban' ? 'urban' : (isFurgone(selectedVeh) ? 'furgone' : '_global')
+                  const km = getKmIncluded(rentalConfig, days, cat)
+                  if (km === 'unlimited') return <p className="text-xs text-green-400">KM illimitati inclusi per questa categoria</p>
+                  return (
+                    <div className="p-3 rounded-md border border-green-600/40 bg-green-900/10">
+                      <span className="text-green-400 font-bold text-sm">{km} km inclusi</span>
+                      <span className="text-theme-text-muted text-xs ml-2">({days} {days === 1 ? 'giorno' : 'giorni'})</span>
+                    </div>
+                  )
+                })()}
                 <div
                   className={`p-3 rounded-md border cursor-pointer transition-all flex items-center gap-2 ${formData.km_limit === DEFAULT_KM_LIMIT && !formData.unlimited_km
                     ? 'border-theme-text-primary bg-theme-text-primary/5'
@@ -6012,7 +6030,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   onChange={(e) => {
                     const checked = e.target.checked
                     const vehicleName = vehicles.find(v => v.id === formData.vehicle_id)?.display_name || ''
-                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : getSforoForVehicle(vehicleName) }))
+                    const sforo = getVehicleSforoOverride(rentalConfig, formData.vehicle_id) || getSforoForVehicle(vehicleName)
+                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : sforo }))
                   }}
                   className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
                 />
