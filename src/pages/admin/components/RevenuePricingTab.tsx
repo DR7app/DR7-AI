@@ -186,14 +186,21 @@ export default function RevenuePricingTab() {
 
       if (data?.config) {
         const c = data.config as Record<string, ExtraItem[]>
+        // Merge: keep DB items + add any missing defaults (by id)
+        const merge = (dbItems: ExtraItem[] | undefined, defaults: ExtraItem[]): ExtraItem[] => {
+          const existing = dbItems || []
+          const existingIds = new Set(existing.map(i => i.id))
+          const missing = defaults.filter(d => !existingIds.has(d.id))
+          return [...existing, ...missing]
+        }
         setExtrasConfig({
-          insurance: c.insurance || DEFAULT_EXTRAS_CONFIG.insurance,
-          km_packages: c.km_packages || DEFAULT_EXTRAS_CONFIG.km_packages,
-          deposit_options: c.deposit_options || DEFAULT_EXTRAS_CONFIG.deposit_options,
-          driver_extras: c.driver_extras || DEFAULT_EXTRAS_CONFIG.driver_extras,
-          delivery: c.delivery || DEFAULT_EXTRAS_CONFIG.delivery,
-          experience: c.experience || DEFAULT_EXTRAS_CONFIG.experience,
-          cancellation: c.cancellation || DEFAULT_EXTRAS_CONFIG.cancellation,
+          insurance: merge(c.insurance, DEFAULT_EXTRAS_CONFIG.insurance),
+          km_packages: merge(c.km_packages, DEFAULT_EXTRAS_CONFIG.km_packages),
+          deposit_options: merge(c.deposit_options, DEFAULT_EXTRAS_CONFIG.deposit_options),
+          driver_extras: merge(c.driver_extras, DEFAULT_EXTRAS_CONFIG.driver_extras),
+          delivery: merge(c.delivery, DEFAULT_EXTRAS_CONFIG.delivery),
+          experience: merge(c.experience, DEFAULT_EXTRAS_CONFIG.experience),
+          cancellation: merge(c.cancellation, DEFAULT_EXTRAS_CONFIG.cancellation),
         })
       }
     } catch (err: unknown) {
