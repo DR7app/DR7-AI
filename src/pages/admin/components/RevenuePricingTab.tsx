@@ -68,14 +68,31 @@ const PRICE_UNIT_LABELS: Record<string, string> = {
 
 const DEFAULT_EXTRAS_CONFIG: ExtrasConfig = {
   insurance: [
-    { id: 'rca_inclusa', name: 'RCA Compresa', price: 0, price_unit: 'included', deposit_required: 10000, is_active: true, display_order: 1, description: 'Assicurazione base inclusa. Richiede cauzione 10.000€' },
-    { id: 'kasko_base', name: 'Kasko Base', price: 89, price_unit: 'per_day', is_active: true, display_order: 2 },
-    { id: 'kasko_black', name: 'Kasko Black', price: 149, price_unit: 'per_day', is_active: true, display_order: 3 },
-    { id: 'kasko_signature', name: 'Kasko Signature', price: 189, price_unit: 'per_day', is_active: true, display_order: 4 },
-    { id: 'kasko_dr7', name: 'Kasko DR7', price: 289, price_unit: 'per_day', is_active: true, display_order: 5, description: 'Massima protezione' },
+    // Supercar (Fascia A = Tier 2)
+    { id: 'rca_inclusa', name: 'RCA Compresa', price: 0, price_unit: 'included', deposit_required: 10000, is_active: true, display_order: 1, description: 'Supercar — Assicurazione base inclusa. Cauzione €10.000' },
+    { id: 'kasko_base_supercar_t2', name: 'Kasko Base (Supercar Fascia A)', price: 89, price_unit: 'per_day', is_active: true, display_order: 2 },
+    { id: 'kasko_base_supercar_t1', name: 'Kasko Base (Supercar Fascia B)', price: 119, price_unit: 'per_day', is_active: true, display_order: 3 },
+    { id: 'kasko_black', name: 'Kasko Black (Supercar)', price: 149, price_unit: 'per_day', is_active: true, display_order: 4 },
+    { id: 'kasko_signature', name: 'Kasko Signature (Supercar)', price: 189, price_unit: 'per_day', is_active: true, display_order: 5 },
+    { id: 'kasko_dr7_supercar', name: 'Kasko DR7 (Supercar)', price: 289, price_unit: 'per_day', is_active: true, display_order: 6, description: 'Massima protezione' },
+    // Urban
+    { id: 'rca_urban', name: 'RCA Compresa (Urban)', price: 0, price_unit: 'included', is_active: true, display_order: 10 },
+    { id: 'kasko_base_urban', name: 'Kasko Base (Urban)', price: 15, price_unit: 'per_day', is_active: true, display_order: 11 },
+    { id: 'kasko_black_urban', name: 'Kasko Black (Urban)', price: 25, price_unit: 'per_day', is_active: true, display_order: 12 },
+    { id: 'kasko_signature_urban', name: 'Kasko Signature (Urban)', price: 35, price_unit: 'per_day', is_active: true, display_order: 13 },
+    { id: 'kasko_dr7_urban', name: 'Kasko DR7 (Urban)', price: 45, price_unit: 'per_day', is_active: true, display_order: 14 },
+    // Furgone / NCC
+    { id: 'rca_furgone', name: 'RCA Compresa (Furgone/NCC)', price: 0, price_unit: 'included', is_active: true, display_order: 20 },
+    { id: 'kasko_base_furgone', name: 'Kasko Base (Furgone/NCC)', price: 45, price_unit: 'per_day', is_active: true, display_order: 21 },
+    { id: 'kasko_black_furgone', name: 'Kasko Black (Furgone/NCC)', price: 65, price_unit: 'per_day', is_active: true, display_order: 22 },
+    { id: 'kasko_signature_furgone', name: 'Kasko Signature (Furgone/NCC)', price: 80, price_unit: 'per_day', is_active: true, display_order: 23 },
+    { id: 'kasko_dr7_furgone', name: 'Kasko DR7 (Furgone/NCC)', price: 90, price_unit: 'per_day', is_active: true, display_order: 24 },
   ],
   km_packages: [
-    { id: 'unlimited_km', name: 'KM Illimitati', price: 189, price_unit: 'per_day', is_active: true, display_order: 1 },
+    { id: 'unlimited_km_supercar_t1', name: 'KM Illimitati (Supercar Fascia B)', price: 289, price_unit: 'per_day', is_active: true, display_order: 1 },
+    { id: 'unlimited_km_supercar_t2', name: 'KM Illimitati (Supercar Fascia A)', price: 189, price_unit: 'per_day', is_active: true, display_order: 2 },
+    { id: 'unlimited_km_furgone', name: 'KM Illimitati (Ducato)', price: 94.50, price_unit: 'per_day', is_active: true, display_order: 3 },
+    { id: 'unlimited_km_ncc', name: 'KM Illimitati (Vito/NCC)', price: 189, price_unit: 'per_day', is_active: true, display_order: 4 },
   ],
   deposit_options: [
     { id: 'no_deposit', name: 'Senza Cauzione', price: 49, price_unit: 'per_day', is_active: true, display_order: 1 },
