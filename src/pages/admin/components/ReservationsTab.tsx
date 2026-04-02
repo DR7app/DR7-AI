@@ -37,6 +37,8 @@ import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import DanniPenaliModal from './DanniPenaliModal'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { logger } from '../../../utils/logger'
 import { decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
@@ -392,6 +394,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingOriginalPaymentStatus, setEditingOriginalPaymentStatus] = useState<string | null>(null) // Track if payment changed from unpaid → paid
   const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
+
+  // Limitation Override (OTP-based director approval)
+  const {
+    limitationState,
+    requestOverride,
+    handleOverrideApproved,
+    closeLimitation,
+    hasOverride,
+    consumeAllOverrides,
+  } = useLimitationOverride()
 
   // Missing Data Modal State
   // Missing Data Modal State
@@ -800,9 +812,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
       const year = parseInt(data.year)
       if (isNaN(year) || year < 2020) {
-        toast.error('Veicolo deve essere immatricolato dal 2020 in poi')
-        setFormData(prev => ({ ...prev, cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '' }))
-        return
+        if (!hasOverride('vehicle_year_too_old')) {
+          requestOverride('vehicle_year_too_old', `Veicolo immatricolato nel ${data.year || '?'}: deve essere dal 2020 in poi per la cauzione.`)
+          setTargaLoading(false)
+          return
+        }
       }
       setFormData(prev => ({
         ...prev,
@@ -1688,8 +1702,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const patenteDate = customer.data_rilascio_patente || customer.metadata?.patente?.rilascio
       if (patenteDate) {
         const licYears = calculateLicenseYears(patenteDate)
-        if (licYears < 3) {
-          throw new Error('Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
+        if (licYears < 3 && !hasOverride('license_too_recent')) {
+          requestOverride('license_too_recent', `Patente rilasciata da meno di 3 anni (${licYears.toFixed(1)} anni). Il cliente non può noleggiare.`)
+          return ['__limitation_override_requested__']
         }
       }
 
@@ -1698,8 +1713,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const age = calculateAge(customer.data_nascita)
         const licYears = calculateLicenseYears(patenteDate)
         const tier = classifyDriverTier(age, licYears)
-        if (tier.tier === 'BLOCKED') {
-          throw new Error(`Cliente non idoneo al noleggio: ${tier.reason}`)
+        if (tier.tier === 'BLOCKED' && !hasOverride('driver_tier_blocked')) {
+          requestOverride('driver_tier_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
+          return ['__limitation_override_requested__']
         }
         if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione') {
           throw new Error('No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
@@ -1827,6 +1843,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       return
     }
 
+    if (missing.includes('__limitation_override_requested__')) return
+
     if (missing.length > 0) {
       logger.warn('⚠️ Missing fields for contract:', missing)
       // Don't block — generate-contract backend has extensive fallbacks
@@ -1919,6 +1937,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       alert(_errMsg)
       return
     }
+
+    if (missing.includes('__limitation_override_requested__')) return
 
     if (missing.length > 0) {
       logger.warn('⚠️ Missing fields for invoice:', missing)
@@ -3073,8 +3093,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!editingId) {
         const nowRome = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
         const pickupCheck = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
-        if (pickupCheck < nowRome) {
-          alert('DATA RITIRO NEL PASSATO\n\nLa data e ora di ritiro non può essere nel passato.')
+        if (pickupCheck < nowRome && !hasOverride('pickup_in_past')) {
+          requestOverride('pickup_in_past', 'La data e ora di ritiro è nel passato. Serve autorizzazione per procedere.')
           setIsSubmitting(false)
           return
         }
@@ -4311,6 +4331,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       resetForm()
       await loadData()
 
+      await consumeAllOverrides()
       toast.success(editingId ? 'Prenotazione aggiornata!' : 'Prenotazione creata!')
     } catch (error) {
       console.error('Failed to save reservation:', error)
@@ -4597,6 +4618,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           />
         )}
 
+        {/* Limitation Override Modal (OTP director approval) */}
+        <LimitationOverrideModal
+          isOpen={limitationState.isOpen}
+          limitationCode={limitationState.limitationCode}
+          limitationMessage={limitationState.limitationMessage}
+          actionContext={limitationState.actionContext}
+          onClose={closeLimitation}
+          onOverrideApproved={handleOverrideApproved}
+        />
+
         {showForm && (
           <form onSubmit={handleSubmit} className="p-4 sm:p-6 rounded-lg mb-6 border border-theme-border/30">
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
@@ -4764,9 +4795,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             setCustomerTier(tier)
 
                             if (tier.tier === 'BLOCKED') {
-                              alert(`⚠️ CLIENTE NON IDONEO\n\n${tier.reason}\n\nEtà: ${age} anni — Patente: ${licYears} anni`)
-                              setFormData(prev => ({ ...prev, customer_id: '' }))
-                              return
+                              if (!hasOverride('driver_tier_blocked')) {
+                                requestOverride('driver_tier_blocked', `Cliente non idoneo: ${tier.reason} (Età: ${age} anni, Patente: ${licYears.toFixed(1)} anni)`)
+                                setFormData(prev => ({ ...prev, customer_id: '' }))
+                                return
+                              }
                             }
 
                             // Reset incompatible options when tier changes
@@ -4787,8 +4820,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           } else if (patenteDate) {
                             // Only license date available — still check minimum
                             const licYears = calculateLicenseYears(patenteDate)
-                            if (licYears < 3) {
-                              alert('⚠️ PATENTE TROPPO RECENTE\n\nLa patente di questo cliente è stata rilasciata da meno di 3 anni.\n\nNon è possibile procedere con il noleggio.')
+                            if (licYears < 3 && !hasOverride('license_too_recent')) {
+                              requestOverride('license_too_recent', `Patente rilasciata da meno di 3 anni (${licYears.toFixed(1)} anni). Il cliente non può noleggiare.`)
                               setFormData(prev => ({ ...prev, customer_id: '' }))
                               return
                             }
