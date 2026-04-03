@@ -430,7 +430,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     notes: '',
     change_vehicle: false,
     new_vehicle_id: '',
-    show_all_vehicles: false
+    show_all_vehicles: false,
+    update_km: false,
+    unlimited_km: false,
+    km_limit: ''
   })
   const [isExtending, setIsExtending] = useState(false)
 
@@ -2428,6 +2431,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const romeTimeStr = currentReturnDate.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false })
 
     setExtendingBooking(booking)
+    const currentUnlimitedKm = booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false
+    const currentKmLimit = currentUnlimitedKm ? '' : (booking.booking_details?.km_limit || DEFAULT_KM_LIMIT)
+
     setExtendData({
       new_return_date: romeDateStr,
       new_return_time: romeTimeStr,
@@ -2438,7 +2444,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       notes: '',
       change_vehicle: false,
       new_vehicle_id: '',
-      show_all_vehicles: false
+      show_all_vehicles: false,
+      update_km: false,
+      unlimited_km: currentUnlimitedKm,
+      km_limit: String(currentKmLimit)
     })
     setShowExtendModal(true)
   }
@@ -2483,6 +2492,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         iban_request_sent: false,
         day_before_reminder_sent: false,
         day_before_reminder_sent_at: null,
+        // Update KM if toggled
+        ...(extendData.update_km ? {
+          unlimited_km: extendData.unlimited_km,
+          km_limit: extendData.unlimited_km ? 'Illimitati' : extendData.km_limit,
+        } : {}),
         // Update vehicle info in booking_details if car changed
         ...(newVehicle ? {
           vehicle: {
@@ -2502,6 +2516,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             additional_amount: additionalAmount,
             payment_status: extendData.extension_payment_status, // 'paid' or 'pending'
             notes: extendData.notes,
+            ...(extendData.update_km ? {
+              km_updated: true,
+              new_unlimited_km: extendData.unlimited_km,
+              new_km_limit: extendData.unlimited_km ? 'Illimitati' : extendData.km_limit,
+            } : {}),
             ...(newVehicle ? {
               previous_vehicle_id: extendingBooking.vehicle_id,
               previous_vehicle_name: extendingBooking.vehicle_name,
@@ -2569,6 +2588,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
         extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
+        if (extendData.update_km) {
+          extensionMsg += `*KM:* ${extendData.unlimited_km ? 'Illimitati' : `${extendData.km_limit} Km`}\n`
+        }
         extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
         extensionMsg += `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
         extensionMsg += `*Pagamento estensione:* ${adminExtPayLabel}`
@@ -6840,6 +6862,52 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     placeholder="0.00"
                   />
                 </div>
+
+                {/* KM Update */}
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={extendData.update_km}
+                      onChange={(e) => setExtendData({ ...extendData, update_km: e.target.checked })}
+                      className="w-4 h-4 accent-purple-500"
+                    />
+                    <span className="text-sm font-medium text-theme-text-secondary">Aggiorna KM</span>
+                  </label>
+                  {extendingBooking && (
+                    <p className="text-xs text-theme-text-muted mt-1">
+                      Attuale: {extendingBooking.booking_details?.unlimited_km || extendingBooking.booking_details?.km_limit === 'Illimitati' ? 'Illimitati' : `${extendingBooking.booking_details?.km_limit || DEFAULT_KM_LIMIT} Km`}
+                    </p>
+                  )}
+                </div>
+
+                {extendData.update_km && (
+                  <div className="space-y-3 pl-2 border-l-2 border-purple-500/30">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={extendData.unlimited_km}
+                        onChange={(e) => setExtendData({ ...extendData, unlimited_km: e.target.checked, km_limit: e.target.checked ? '' : extendData.km_limit })}
+                        className="w-4 h-4 accent-purple-500"
+                      />
+                      <span className="text-sm font-medium text-theme-text-secondary">KM Illimitati</span>
+                    </label>
+
+                    {!extendData.unlimited_km && (
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-1">Limite KM Totale</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={extendData.km_limit}
+                          onChange={(e) => setExtendData({ ...extendData, km_limit: e.target.value })}
+                          className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
+                          placeholder="Es. 600"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato Pagamento Estensione</label>

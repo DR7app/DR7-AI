@@ -320,7 +320,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
   // When vehicle changes, update daily rate and reset insurance
   useEffect(() => {
     if (!selectedVehicle) return
-    const rate = (selectedVehicle.daily_rate / 100).toFixed(2)
+    const rate = selectedVehicle.daily_rate.toFixed(2)
     const options = getInsuranceOptionsForPreventivo(getVehicleType(selectedVehicle), form.fascia)
     const currentValid = options.find(o => o.id === form.insurance_option)
     const insurance = currentValid || options[0]
@@ -570,7 +570,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 { value: '', label: 'Seleziona veicolo...' },
                 ...vehicles.map(v => ({
                   value: v.id,
-                  label: `${v.display_name}${v.plate || v.targa ? ` (${v.plate || v.targa})` : ''} — €${(v.daily_rate / 100).toFixed(2)}/giorno`
+                  label: `${v.display_name}${v.plate || v.targa ? ` (${v.plate || v.targa})` : ''} — €${v.daily_rate.toFixed(2)}/giorno`
                 }))
               ]}
             />
