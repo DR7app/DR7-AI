@@ -2863,23 +2863,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!newCustomerData.citta_residenza) missing.push('citta_residenza')
           if (!newCustomerData.patente) missing.push('patente')
 
-          // ===== LIMITATION CHECKS: License age & driver tier (new customer) =====
-          const patenteDate = newCustomerData.data_rilascio_patente
-          if (patenteDate) {
-            const licYears = calculateLicenseYears(patenteDate)
-            if (licYears < 3 && !hasOverride('license_too_recent')) {
-              requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
-              return
-            }
-          }
-          if (newCustomerData.data_nascita && patenteDate) {
-            const age = calculateAge(newCustomerData.data_nascita)
-            const licYears = calculateLicenseYears(patenteDate)
-            const tier = classifyDriverTier(age, licYears)
-            if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
-              requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
-              return
-            }
+          // ===== LIMITATION CHECKS: Driver tier (new customer) =====
+          // Note: data_rilascio_patente not collected in new customer form,
+          // so license_too_recent check runs after customer is saved to DB (existing customer path on retry)
+          if (newCustomerData.data_nascita && customerTier?.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+            requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${customerTier.reason}`)
+            return
           }
         } else if (newCustomerData.tipo_cliente === 'azienda') {
           if (!newCustomerData.denominazione) missing.push('denominazione')
