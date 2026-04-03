@@ -21,7 +21,7 @@ const REFRESH_KEY = 'chunk_load_refresh'
  * Wraps a dynamic import with retry logic.
  * Usage: `const MyComponent = lazyWithRetry(() => import('./MyComponent'))`
  */
-export default function lazyWithRetry<T extends ComponentType<unknown>>(
+export default function lazyWithRetry<T extends ComponentType<any>>(
   importFn: () => Promise<{ default: T }>,
   retries = 2,
   retryDelay = 1000
@@ -29,7 +29,7 @@ export default function lazyWithRetry<T extends ComponentType<unknown>>(
   return lazy(() => retryImport(importFn, retries, retryDelay))
 }
 
-async function retryImport<T extends ComponentType<unknown>>(
+async function retryImport<T extends ComponentType<any>>(
   importFn: () => Promise<{ default: T }>,
   retries: number,
   retryDelay: number

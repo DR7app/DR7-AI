@@ -192,7 +192,7 @@ export function buildExpiredBookingFields() {
  * Maps legacy booking statuses to the new system.
  * Used for backward compatibility during transition.
  */
-export function normalizeLegacyStatus(status: string, paymentMethod?: string | null, paymentStatus?: string | null): BookingStatus {
+export function normalizeLegacyStatus(status: string, _paymentMethod?: string | null, _paymentStatus?: string | null): BookingStatus {
   // Already using new statuses
   if (['pending_payment', 'confirmed', 'active', 'completed', 'expired', 'cancelled'].includes(status)) {
     return status as BookingStatus

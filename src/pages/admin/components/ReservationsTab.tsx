@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import toast from 'react-hot-toast'
-// import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing' // Commented out - not used since auto-calc disabled
+import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
 import { supabase } from '../../../supabaseClient'
 
 /**
@@ -60,42 +60,78 @@ import NewClientModal from './NewClientModal'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
+import PreventivoModal from './PreventivoModal'
 import DanniPenaliModal from './DanniPenaliModal'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import { decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
+import CalcolaCFButton from '../../../components/CalcolaCFButton'
+import {
+  classifyDriverTier,
+  calculateAge,
+  calculateLicenseYears,
+  TIER_KASKO_BASE_PRICE,
+  EXPERIENCE_SERVICES,
+  getExperienceServicesForTier,
+  type DriverTier,
+  type TierClassification,
+} from '../../../utils/tierClassification'
+import { useRentalConfig } from '../../../hooks/useRentalConfig'
+import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
+import { getKmIncluded } from '../../../utils/configLookup'
 
 // --- Kasko Constants & Types ---
-type KaskoTier = 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
+type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
 
-// SUPERCARS (Exotic) - KASKO options + Kasko DR7
+// SUPERCARS (Exotic) - Tier-based insurance options
+// Tier 1 (Fascia B): only RCA + Kasko Base at 119€/day
 // eslint-disable-next-line react-refresh/only-export-components
-export const INSURANCE_OPTIONS = [
-  { id: 'KASKO_BASE', label: 'KASKO BASE', pricePerDay: 100 },
-  { id: 'KASKO_BLACK', label: 'KASKO BLACK', pricePerDay: 150 },
-  { id: 'KASKO_SIGNATURE', label: 'KASKO SIGNATURE', pricePerDay: 200 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 300 },
+export const INSURANCE_OPTIONS_TIER_1 = [
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
+  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: TIER_KASKO_BASE_PRICE.TIER_1 },
 ];
+// Tier 2 (Fascia A): all options, Kasko Base at 89€/day
+// eslint-disable-next-line react-refresh/only-export-components
+export const INSURANCE_OPTIONS_TIER_2 = [
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
+  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: TIER_KASKO_BASE_PRICE.TIER_2 },
+  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 149 },
+  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 189 },
+  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 289 },
+];
+// Fallback when no tier is known yet
+// eslint-disable-next-line react-refresh/only-export-components
+export const INSURANCE_OPTIONS = INSURANCE_OPTIONS_TIER_1;
 
-// URBAN - Kasko Base + Kasko DR7
+// URBAN - Full insurance tiers (same structure as supercar)
 // eslint-disable-next-line react-refresh/only-export-components
 export const URBAN_INSURANCE_OPTIONS = [
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
+  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 25 },
+  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 35 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
 ];
 
-// UTILITAIRE - Kasko Base + Kasko DR7 (same as Ducato/Vito)
+// UTILITAIRE - Full insurance tiers (same structure as supercar)
 // eslint-disable-next-line react-refresh/only-export-components
 export const UTILITAIRE_INSURANCE_OPTIONS = [
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
+  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 65 },
+  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 80 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
-// FURGONE (Ducato/Vito/Tourer) - Kasko Base + Kasko DR7
+// FURGONE (Ducato/Vito/Tourer) - Full insurance tiers (same structure as supercar)
 // eslint-disable-next-line react-refresh/only-export-components
 export const FURGONE_INSURANCE_OPTIONS = [
+  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
+  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 65 },
+  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 80 },
   { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
@@ -109,6 +145,7 @@ export const DEPOSIT_AMOUNTS = {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const INSURANCE_ELIGIBILITY = {
+  RCA: { minAge: 18, minLicenseYears: 2 },
   KASKO_BASE: { minAge: 20, minLicenseYears: 2 },
   KASKO_BLACK: { minAge: 25, minLicenseYears: 5 },
   KASKO_SIGNATURE: { minAge: 30, minLicenseYears: 10 },
@@ -139,39 +176,69 @@ function isFurgone(vehicle?: Vehicle): boolean {
   return name.includes('ducato') || name.includes('vito') || name.includes('furgone');
 }
 
-// Helper function to get insurance options for vehicle
-function getInsuranceOptions(vehicle?: Vehicle) {
-  if (!vehicle) return INSURANCE_OPTIONS;
+// Sforo (km overage fee) defaults per vehicle type
+// eslint-disable-next-line react-refresh/only-export-components
+export const SFORO_DEFAULTS: { match: (name: string) => boolean; sforo: string; label: string }[] = [
+  { match: (n) => n.includes('rs3') || n.includes('macan') || n.includes('test'), sforo: '0.89', label: 'RS3/Macan/Test' },
+  { match: (n) => n.includes('ducato') || n.includes('vito') || n.includes('furgone') || n.includes('ncc') || n.includes('tourer'), sforo: '0.49', label: 'Furgone/NCC' },
+]
+const DEFAULT_SFORO = '1.80'
+const DEFAULT_KM_LIMIT = '100'
+// LAVAGGIO_FEE now driven by configOverlay.lavaggioFee
 
-  // Check if it's a furgone (Ducato/Vito)
-  if (isFurgone(vehicle)) {
-    return FURGONE_INSURANCE_OPTIONS;
+/** Calculate total experience services cost */
+function calculateExperienceCost(services: Record<string, number>, rentalDays: number): number {
+  let total = 0
+  for (const [svcId, qty] of Object.entries(services)) {
+    if (qty <= 0) continue
+    const svc = EXPERIENCE_SERVICES.find(s => s.id === svcId)
+    if (!svc) continue
+    if (svc.unit === 'per_day') {
+      total += svc.price * rentalDays * qty
+    } else {
+      total += svc.price * qty
+    }
   }
+  return Math.round(total * 100) / 100
+}
 
-  // Check vehicle category first (if set)
-  if (vehicle.category === 'aziendali') {
-    return UTILITAIRE_INSURANCE_OPTIONS;
+function getSforoForVehicle(vehicleName: string): string {
+  const lower = (vehicleName || '').toLowerCase()
+  for (const rule of SFORO_DEFAULTS) {
+    if (rule.match(lower)) return rule.sforo
   }
+  return DEFAULT_SFORO
+}
 
-  if (vehicle.category === 'urban') {
-    return URBAN_INSURANCE_OPTIONS;
-  }
 
-  if (vehicle.category === 'exotic') {
-    return INSURANCE_OPTIONS; // SUPERCAR
-  }
+// Helper function to get insurance options for vehicle + tier
+// When overlay is provided, uses Centralina config prices instead of hardcoded
+function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: ReturnType<typeof buildConfigOverlay>) {
+  const t1 = overlay?.insuranceTier1 || INSURANCE_OPTIONS_TIER_1
+  const t2 = overlay?.insuranceTier2 || INSURANCE_OPTIONS_TIER_2
+  const urban = overlay?.urbanInsurance || URBAN_INSURANCE_OPTIONS
+  const util = overlay?.utilitaireInsurance || UTILITAIRE_INSURANCE_OPTIONS
+  const furg = overlay?.furgoneInsurance || FURGONE_INSURANCE_OPTIONS
+
+  if (!vehicle) return tier === 'TIER_2' ? t2 : t1;
+
+  // Non-exotic vehicles: tier doesn't affect insurance options
+  if (isFurgone(vehicle)) return furg;
+  if (vehicle.category === 'aziendali') return util;
+  if (vehicle.category === 'urban') return urban;
 
   // Fallback for vehicles without category (legacy)
   const name = vehicle.display_name.toLowerCase();
   if (name.includes('panda') || name.includes('captur') || name.includes('clio') ||
     name.includes('citroen') || name.includes('208') || name.includes('urban')) {
-    return URBAN_INSURANCE_OPTIONS;
+    return urban;
   }
   if (name.includes('van') || name.includes('utilitaire') || name.includes('ducato') || name.includes('vito')) {
-    return UTILITAIRE_INSURANCE_OPTIONS;
+    return util;
   }
 
-  return INSURANCE_OPTIONS; // SUPERCAR
+  // Exotic/Supercar: tier-based insurance
+  return tier === 'TIER_2' ? t2 : t1;
 }
 interface Customer {
   id: string
@@ -351,6 +418,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [showPreventivoModal, setShowPreventivoModal] = useState(false)
+  const [editingOriginalPaymentStatus, setEditingOriginalPaymentStatus] = useState<string | null>(null) // Track if payment changed from unpaid → paid
   const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
 
   // Limitation Override (OTP-based director approval)
@@ -381,7 +450,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
-  const [creatingPreAuth, setCreatingPreAuth] = useState(false)
+  // Pre-auth disabled — Nexi capture not supported via Pay by Link API
 
   const isInitialEditLoad = useRef(false)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
@@ -466,11 +535,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Kasko & Deposit
     insurance_option: 'KASKO_BASE' as KaskoTier,
     deposit: '0',
-    deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
+    deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
     // KM Overage Fee
-    km_overage_fee: '1.80',
+    km_overage_fee: DEFAULT_SFORO,
     unlimited_km: false,
-    km_limit: '50/giorno', // Default KM limit when not unlimited
+    km_limit: DEFAULT_KM_LIMIT, // Default KM limit when not unlimited
     // Home Delivery & Pickup
     delivery_enabled: false,
     delivery_street: '',
@@ -487,6 +556,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     pickup_notes: '',
     pickup_fee: '0',
     notes: '',
+    // Experience Services & DR7 Flex
+    experience_services: {} as Record<string, number>,
+    dr7_flex: false,
     // Cauzione Auto (Vehicle as Security Deposit)
     cauzione_auto: false,
     cauzione_targa: '',
@@ -522,6 +594,35 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [revenueLoading, setRevenueLoading] = useState(false)
   const [revenueExpanded, setRevenueExpanded] = useState(false)
 
+  // --- Driver Tier Classification ---
+  const [customerTier, setCustomerTier] = useState<TierClassification | null>(null)
+
+  // --- Centralina Config Overlay ---
+  // Loads pricing from Supabase config. Falls back to hardcoded defaults.
+  const { config: rentalConfig } = useRentalConfig()
+  const configOverlay = useMemo(() => buildConfigOverlay(rentalConfig), [rentalConfig])
+
+  // Config-driven price aliases (used throughout the form instead of hardcoded constants)
+  const CFG_LAVAGGIO_FEE = configOverlay.lavaggioFee
+  const CFG_NO_CAUZIONE_PER_DAY = configOverlay.noCauzionePerDay
+  const CFG_UNLIMITED_KM = { TIER_1: configOverlay.unlimitedKmTier1, TIER_2: configOverlay.unlimitedKmTier2 }
+  // Unlimited KM prices per vehicle category (per day)
+  const CFG_UNLIMITED_KM_FURGONE = { TIER_1: 94.50, TIER_2: 94.50 } // Ducato
+  const CFG_UNLIMITED_KM_NCC = { TIER_1: 189, TIER_2: 189 } // Vito Mercedes
+  const CFG_UNLIMITED_KM_URBAN = { TIER_1: 0, TIER_2: 0 } // Urban: KM always unlimited (included)
+
+  function getUnlimitedKmPrice(vehicle?: Vehicle, tier?: string): number {
+    if (!vehicle) return tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
+    const name = vehicle.display_name.toLowerCase()
+    if (vehicle.category === 'urban') return tier === 'TIER_2' ? CFG_UNLIMITED_KM_URBAN.TIER_2 : CFG_UNLIMITED_KM_URBAN.TIER_1
+    if (name.includes('vito') || name.includes('mercedes') || name.includes('ncc') || name.includes('tourer')) return tier === 'TIER_2' ? CFG_UNLIMITED_KM_NCC.TIER_2 : CFG_UNLIMITED_KM_NCC.TIER_1
+    if (isFurgone(vehicle)) return tier === 'TIER_2' ? CFG_UNLIMITED_KM_FURGONE.TIER_2 : CFG_UNLIMITED_KM_FURGONE.TIER_1
+    // Exotic/supercar
+    return tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
+  }
+  const CFG_SECOND_DRIVER = { TIER_1: configOverlay.secondDriverTier1, TIER_2: configOverlay.secondDriverTier2 }
+  const CFG_DR7_FLEX_PER_DAY = configOverlay.dr7FlexPerDay
+
   useEffect(() => {
     if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
       setRevenueSuggestion(null)
@@ -542,9 +643,44 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (cancelled) return
         if (data.enabled && data.finalTotalEur) {
           setRevenueSuggestion(data)
-          // AUTO_APPLY: automatically set the total amount
+          // AUTO_APPLY: automatically set the total amount (rental + insurance + delivery + lavaggio + contanti)
           if (data.mode === 'auto_apply') {
-            setFormData(prev => ({ ...prev, total_amount: centsToEurStr(Math.round(data.finalTotalEur * 100)) }))
+            setFormData(prev => {
+              const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
+              const activeTier = customerTier?.tier
+              const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay) : []
+              const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
+              const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
+              const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
+                + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
+              // No cauzione surcharge
+              const noCauzioneSurcharge = prev.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * data.rentalDays : 0
+              // Unlimited KM surcharge (tier-based)
+              let unlimitedKmSurcharge = 0
+              if (prev.unlimited_km) {
+                unlimitedKmSurcharge = getUnlimitedKmPrice(selectedVehicle, activeTier) * data.rentalDays
+              }
+              // Second driver surcharge (tier-based)
+              const secondDriverFee = prev.has_second_driver
+                ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * data.rentalDays
+                : 0
+              // Experience services + DR7 Flex
+              const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
+              const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
+              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+              const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
+              // Auto-calculate KM limit from rental days (only if not unlimited)
+              const updates: Record<string, string> = { total_amount: total.toFixed(2) }
+              if (!prev.unlimited_km) {
+                const vehCategory = selectedVehicle?.category || ''
+                const kmCat = vehCategory === 'urban' ? 'urban' : (isFurgone(selectedVehicle) ? 'furgone' : '_global')
+                const kmIncluded = getKmIncluded(rentalConfig, data.rentalDays, kmCat)
+                if (kmIncluded !== 'unlimited') {
+                  updates.km_limit = String(kmIncluded)
+                }
+              }
+              return { ...prev, ...updates }
+            })
           }
         } else {
           setRevenueSuggestion(null)
@@ -555,6 +691,43 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     return () => { cancelled = true }
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
+
+  // Recalculate total when insurance, delivery fees, or payment method change
+  useEffect(() => {
+    if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id) {
+      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+      const activeTier = customerTier?.tier || 'TIER_1'
+      const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay) : []
+      const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
+      const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
+      const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+        + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+      const noCauzioneSurcharge = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
+      let unlimitedKmSurcharge = 0
+      if (formData.unlimited_km) {
+        unlimitedKmSurcharge = getUnlimitedKmPrice(selectedVehicle, activeTier) * revenueSuggestion.rentalDays
+      }
+      const secondDriverFee = formData.has_second_driver
+        ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays
+        : 0
+      const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
+      const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
+      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+      const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
+      const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
+      // Auto-calculate KM limit from rental days
+      if (!formData.unlimited_km) {
+        const vehCategory = selectedVehicle?.category || ''
+        const kmCat = vehCategory === 'urban' ? 'urban' : (isFurgone(selectedVehicle) ? 'furgone' : '_global')
+        const kmIncluded = getKmIncluded(rentalConfig, revenueSuggestion.rentalDays, kmCat)
+        if (kmIncluded !== 'unlimited') {
+          updates.km_limit = String(kmIncluded)
+        }
+      }
+      setFormData(prev => ({ ...prev, ...updates }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -749,6 +922,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     codice_fiscale: '',
     data_nascita: '',
     luogo_nascita: '',
+    sesso: '' as '' | 'M' | 'F',
     numero_civico: '',
     codice_postale: '',
     citta_residenza: '',
@@ -1016,8 +1190,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes, showAllVehicles])
 
   const LOCATIONS = [
-    { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
-    { value: 'cagliari_airport', label: 'Aeroporto di Cagliari Elmas (+€50)' }
+    { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA', fee: 0 },
+    { value: 'cagliari_airport', label: 'Aeroporto di Cagliari Elmas (+€50)', fee: 50 },
+    { value: 'alghero_airport', label: 'Aeroporto di Alghero (+€50)', fee: 50 },
+    { value: 'domicilio', label: 'Consegna a domicilio (inserisci indirizzo)', fee: 0 },
   ]
 
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -1058,20 +1234,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
    
     if (specialRule) {
       logger.log('[ReservationsTab] Applying special pricing for:', customerName)
-   
-      // Calculate special total
+
+      // Calculate special total (includes tiered discounts + noCents rounding)
       const specialTotal = calculateSpecialPrice(specialRule, diffDays)
-   
+
       setFormData(prev => ({
         ...prev,
         total_amount: specialTotal.toFixed(2),
-        // Force options if specified in rule
+        // Force options to match website config
         insurance_option: specialRule.includesKasko === 'base' ? 'KASKO_BASE' : prev.insurance_option,
-        // We can't easily set "unlimited KM" here as it might be a UI text, but we can store it in metadata if needed
-        // For now, the price includes it.
+        unlimited_km: specialRule.includesUnlimitedKm,
+        km_limit: specialRule.includesUnlimitedKm ? '0' : prev.km_limit,
+        deposit: specialRule.noDeposit ? '0' : prev.deposit,
       }))
-   
-      // Optional: Visual feedback could be added here or in the render
+
       return
     }
    
@@ -1080,7 +1256,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const vehicleDailyRate = selectedVehicle.daily_rate / 100
    
     // Get Kasko daily cost
-    const kaskoOptions = getInsuranceOptions(selectedVehicle)
+    const kaskoOptions = getInsuranceOptions(selectedVehicle, undefined, configOverlay)
     const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
     const kaskoDailyCost = selectedKasko?.pricePerDay || 0
    
@@ -1095,24 +1271,65 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.insurance_option, vehicles, formData.customer_id, customers])
   */
 
-  // Reset insurance option to KASKO_BASE when vehicle changes
+  // Auto-apply special pricing for VIP clients (Massimo, Jeanne)
+  useEffect(() => {
+    if (!formData.customer_id || !formData.pickup_date || !formData.return_date) return
+
+    const customerName = customers.find(c => c.id === formData.customer_id)?.full_name
+    const specialRule = getSpecialPricing(customerName)
+    if (!specialRule) return
+
+    const pickupDate = new Date(formData.pickup_date)
+    const returnDate = new Date(formData.return_date)
+    const diffTime = Math.abs(returnDate.getTime() - pickupDate.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) return
+
+    const specialTotal = calculateSpecialPrice(specialRule, diffDays)
+
+    setFormData(prev => ({
+      ...prev,
+      total_amount: specialTotal.toFixed(2),
+      insurance_option: specialRule.includesKasko === 'base' ? 'KASKO_BASE' as KaskoTier : prev.insurance_option,
+      unlimited_km: specialRule.includesUnlimitedKm,
+      km_limit: specialRule.includesUnlimitedKm ? '0' : prev.km_limit,
+      deposit: specialRule.noDeposit ? '0' : prev.deposit,
+    }))
+  }, [formData.customer_id, formData.pickup_date, formData.return_date, customers])
+
+  // Reset insurance option when vehicle or tier changes
   useEffect(() => {
     if (formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
-      if (!selectedVehicle) return; // Ensure a vehicle is found
+      if (!selectedVehicle) return;
 
-      const availableOptions = getInsuranceOptions(selectedVehicle)
+      const activeTier = customerTier?.tier
+      const availableOptions = getInsuranceOptions(selectedVehicle, activeTier, configOverlay)
 
-      // Check if current insurance option is valid for this vehicle
+      // Check if current insurance option is valid for this vehicle + tier
       const isCurrentOptionValid = availableOptions.some(opt => opt.id === formData.insurance_option)
 
-      // If current option is not available for this vehicle, reset to KASKO_BASE
+      // If current option is not available, reset to KASKO_BASE
       if (!isCurrentOptionValid) {
         setFormData(prev => ({ ...prev, insurance_option: 'KASKO_BASE' }))
       }
     }
-  }, [formData.vehicle_id, vehicles, formData.insurance_option])
+  }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier])
 
+  // Auto-set sforo (km_overage_fee) based on config overrides > vehicle type
+  useEffect(() => {
+    if (formData.vehicle_id && !editingId) {
+      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+      if (!selectedVehicle) return
+      if (!formData.unlimited_km) {
+        // Priority: config vehicle override > config category > old name-matching fallback
+        const vehicleOverride = getVehicleSforoOverride(rentalConfig, formData.vehicle_id)
+        const newSforo = vehicleOverride || getSforoForVehicle(selectedVehicle.display_name)
+        setFormData(prev => ({ ...prev, km_overage_fee: newSforo }))
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.vehicle_id, rentalConfig])
 
   async function loadData() {
     setLoading(true)
@@ -1513,15 +1730,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!customer.emessa_da && !customer.metadata?.patente?.ente) missing.push('emessa_da')
       if (!customer.data_rilascio_patente && !customer.metadata?.patente?.rilascio) missing.push('data_rilascio_patente')
       if (!customer.scadenza_patente && !customer.metadata?.patente?.scadenza) missing.push('scadenza_patente')
-      // Check patente is at least 2 years old
+      // Check patente is at least 3 years old
       const patenteDate = customer.data_rilascio_patente || customer.metadata?.patente?.rilascio
       if (patenteDate) {
-        const issueDate = new Date(patenteDate)
-        const twoYearsAgo = new Date()
-        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
-        if (issueDate > twoYearsAgo && !hasOverride('license_too_recent')) {
-          requestOverride('license_too_recent', 'Patente rilasciata da meno di 2 anni. Il cliente non può noleggiare.')
+        const licYears = calculateLicenseYears(patenteDate)
+        if (licYears < 3 && !hasOverride('license_too_recent')) {
+          requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
           return ['__limitation_override_requested__']
+        }
+      }
+
+      // Tier-based validation: block no_cauzione for TIER_1
+      if (customer.data_nascita && patenteDate) {
+        const age = calculateAge(customer.data_nascita)
+        const licYears = calculateLicenseYears(patenteDate)
+        const tier = classifyDriverTier(age, licYears)
+        if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+          requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
+          return ['__limitation_override_requested__']
+        }
+        if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione') {
+          throw new Error('No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
+        }
+        if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA') {
+          throw new Error('No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
         }
       }
 
@@ -1538,35 +1770,81 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   async function handleResendPaymentLink(booking: Booking) {
-    const paymentLink = booking.booking_details?.nexi_payment_link
-    if (!paymentLink) {
-      toast.error('Nessun link di pagamento trovato per questa prenotazione')
-      return
-    }
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
-    if (!custPhone) {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(paymentLink)
-      toast.success('Link copiato! Nessun telefono trovato per inviare WhatsApp.')
-      return
-    }
     const custName = booking.booking_details?.customer?.fullName || booking.customer_name || 'Cliente'
+    const custEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
     const bookingRef = booking.id.substring(0, 8).toUpperCase()
     const totalEur = (booking.price_total / 100).toFixed(2)
+
     try {
+      toast.loading('Generazione nuovo link di pagamento...')
+
+      // Always regenerate a fresh link (old one may be expired)
+      const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          amount: booking.price_total / 100,
+          customerEmail: custEmail,
+          customerName: custName,
+          description: `Prenotazione #${bookingRef} - ${booking.vehicle_name || 'Veicolo'}`,
+          expirationHours: 1,
+          paymentPurpose: 'booking',
+        })
+      })
+
+      const linkData = await linkRes.json()
+      if (!linkRes.ok || !linkData.paymentUrl) {
+        toast.dismiss()
+        toast.error('Errore generazione link: ' + (linkData.error || 'Riprova'))
+        return
+      }
+
+      const newPaymentLink = linkData.paymentUrl
+
+      // Update booking with new link + exact expiration timestamps
+      await supabase.from('bookings').update({
+        booking_details: {
+          ...booking.booking_details,
+          nexi_payment_link: newPaymentLink,
+          nexi_order_id: linkData.orderId,
+          nexi_link_id: linkData.nexiLinkId || null,
+          // Exact expiration tracking (UTC)
+          payment_link_sent_at: linkData.sentAt,
+          payment_link_expires_at: linkData.expiresAt,
+          payment_provider_expires_at: linkData.providerExpiresAt,
+          nexi_link_regenerated_at: new Date().toISOString(),
+        },
+        payment_status: 'pending',
+      }).eq('id', booking.id)
+
+      toast.dismiss()
+
+      if (!custPhone) {
+        navigator.clipboard.writeText(newPaymentLink)
+        toast.success('Nuovo link generato e copiato! Nessun telefono trovato per WhatsApp.')
+        return
+      }
+
+      // Send via WhatsApp
       await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: custPhone,
-          customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nLe ricordiamo che il pagamento per la prenotazione #${bookingRef} è ancora in sospeso.\n\n*Modalità di pagamento (leggere prima di procedere):*\nSi informano i clienti che non è possibile effettuare pagamenti con carte prepagate.\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link sicuro:\n${paymentLink}\n\nIl link ha validità limitata. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nDR7\n\nSe il messaggio non è destinato a lei o ha già provveduto, può ignorarlo.`
+          customMessage: `Gentile ${custName},\n\nLe ricordiamo che il pagamento per la prenotazione #${bookingRef} è ancora in sospeso.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link sicuro:\n${newPaymentLink}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
         })
       })
-      toast.success('Link di pagamento rinviato via WhatsApp!')
+      toast.success('Nuovo link di pagamento generato e inviato via WhatsApp!')
+
+      // Refresh bookings list
+      await loadData()
     } catch (err: unknown) {
+      toast.dismiss()
       const _errMsg = err instanceof Error ? err.message : String(err)
-      console.error('Error resending payment link:', err)
-      toast.error('Errore invio WhatsApp: ' + _errMsg)
+      console.error('Error regenerating payment link:', err)
+      toast.error('Errore: ' + _errMsg)
     }
   }
 
@@ -1636,6 +1914,45 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       alert('Errore nella generazione del contratto: ' + _errMsg + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
     } finally {
       setGeneratingContract(false)
+    }
+  }
+
+  async function handleResendContract(booking: Booking) {
+    if (!booking.id) return
+    try {
+      toast.loading('Rinvio contratto...', { id: 'resend-contract' })
+
+      // Find the contract
+      const { data: contract } = await supabase
+        .from('contracts')
+        .select('id, pdf_url, signed_pdf_url')
+        .eq('booking_id', booking.id)
+        .single()
+
+      if (!contract) {
+        toast.dismiss('resend-contract')
+        toast.error('Contratto non trovato. Genera prima il contratto.')
+        return
+      }
+
+      // Send signing link via signature-init
+      const sigRes = await fetch('/.netlify/functions/signature-init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contractId: contract.id, bookingId: booking.id })
+      })
+      const sigData = await sigRes.json()
+
+      toast.dismiss('resend-contract')
+      if (sigRes.ok) {
+        toast.success('Link firma contratto rinviato via WhatsApp!')
+        logAdminAction('resend_contract', 'booking', booking.id)
+      } else {
+        toast.error('Errore rinvio: ' + (sigData.error || 'Errore'))
+      }
+    } catch (err: any) {
+      toast.dismiss('resend-contract')
+      toast.error('Errore: ' + err.message)
     }
   }
 
@@ -1765,86 +2082,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
-  // Handle creating Nexi pre-authorization for cauzione
-  async function handleCreatePreAuth(booking: Booking) {
-    if (!booking.id) return
-
-    const depositAmount = booking.booking_details?.deposit
-    if (!depositAmount || depositAmount <= 0) {
-      alert('Nessuna cauzione specificata per questa prenotazione')
-      return
-    }
-
-    setCreatingPreAuth(true)
-    try {
-      // First, find or create the cauzione record for this booking
-      const { data: existingCauzione } = await supabase
-        .from('cauzioni')
-        .select('id')
-        .eq('riferimento_contratto_id', booking.id)
-        .single()
-
-      let cauzioneId: string
-
-      if (existingCauzione) {
-        cauzioneId = existingCauzione.id
-      } else {
-        // Create cauzione via sync function
-        const syncResponse = await fetch('/.netlify/functions/sync-booking-cauzione', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            customerId: booking.user_id || booking.booking_details?.customer?.id,
-            vehicleId: booking.vehicle_id,
-            returnDate: booking.dropoff_date,
-            depositAmount: depositAmount,
-            paymentMethod: 'carta',
-            depositPaid: false
-          })
-        })
-
-        const syncResult = await syncResponse.json()
-        if (!syncResponse.ok) {
-          throw new Error(syncResult.error || 'Failed to create cauzione record')
-        }
-        cauzioneId = syncResult.cauzione?.id
-        if (!cauzioneId) {
-          throw new Error('No cauzione ID returned from sync')
-        }
-      }
-
-      // Now create the pre-authorization
-      const response = await authFetch('/.netlify/functions/nexi-create-preauth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cauzioneId: cauzioneId,
-          amount: depositAmount,
-          customerEmail: booking.customer_email || '',
-          customerName: booking.customer_name || '',
-          description: `Cauzione - ${booking.vehicle_name || 'Veicolo'} - ${booking.customer_name || 'Cliente'}`
-        })
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Errore nella creazione della preautorizzazione')
-      }
-
-      // Open the Nexi payment page
-      if (result.paymentUrl) {
-        window.open(result.paymentUrl, '_blank')
-      }
-    } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
-      console.error('Error creating pre-auth:', error)
-      alert('Errore nella creazione della preautorizzazione: ' + _errMsg)
-    } finally {
-      setCreatingPreAuth(false)
-    }
-  }
+  // Pre-auth function removed — Nexi Pay by Link doesn't support capture via API
 
   async function handleDeleteBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
     try {
@@ -2177,9 +2415,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       garante_birth_provincia: booking.booking_details?.garante_veicolo?.birth_provincia || '',
       garante_phone: booking.booking_details?.garante_veicolo?.phone || '',
       garante_email: booking.booking_details?.garante_veicolo?.email || '',
-      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '1.80',
+      km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : DEFAULT_SFORO,
       unlimited_km: booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false,
-      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || '50/giorno'),
+      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || DEFAULT_KM_LIMIT),
       // Home Delivery & Pickup
       delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
       delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
@@ -2196,10 +2434,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
       pickup_fee: booking.pickup_fee != null ? centsToEurStr(Math.round(booking.pickup_fee)) : (booking.booking_details?.pickup_fee || '0'),
       notes: booking.booking_details?.notes || booking.notes || '',
+      // Experience Services & DR7 Flex
+      experience_services: booking.booking_details?.experience_services || {},
+      dr7_flex: booking.booking_details?.dr7_flex || false,
     })
+
+    // Restore tier from booking_details or re-compute from customer
+    if (booking.booking_details?.driver_tier && booking.booking_details?.driver_age != null && booking.booking_details?.driver_license_years != null) {
+      setCustomerTier({
+        tier: booking.booking_details.driver_tier as DriverTier,
+        driverAge: booking.booking_details.driver_age,
+        licenseYears: booking.booking_details.driver_license_years,
+        reason: booking.booking_details.driver_tier === 'TIER_2' ? 'Fascia A — Conducente esperto' : 'Fascia B — Conducente giovane o patente recente',
+      })
+    } else if (customerId) {
+      // Re-compute tier from customer data
+      fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data?.customer) return
+          const cust = data.customer
+          const birthDate = cust.data_nascita
+          const patenteDate = cust.data_rilascio_patente || cust.metadata?.patente?.rilascio
+          if (birthDate && patenteDate) {
+            setCustomerTier(classifyDriverTier(calculateAge(birthDate), calculateLicenseYears(patenteDate)))
+          }
+        })
+        .catch(() => {})
+    }
 
     setEditingId(booking.id)
     newSession('booking_edit')
+    setEditingOriginalPaymentStatus(booking.payment_status || 'pending')
     setShowForm(true)
   }
 
@@ -2236,7 +2502,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     try {
       // Build new dropoff datetime with explicit Rome timezone offset
       function getRomeOffsetForDate(dateString: string): string {
-        const date = new Date(dateString)
+        // Use noon to avoid DST boundary issues
+        const date = new Date(`${dateString}T12:00:00`)
         const formatter = new Intl.DateTimeFormat('en-US', {
           timeZone: 'Europe/Rome',
           timeZoneName: 'short'
@@ -2513,7 +2780,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: customerPhone,
-                  customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nLa sua prenotazione #${bookingRef} è stata estesa.\n\n*Modalità di pagamento (leggere prima di procedere):*\nSi informano i clienti che non è possibile effettuare pagamenti con carte prepagate.\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nPer completare il pagamento dell'estensione di €${additionalAmount.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità di ${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}.\n\nIl pagamento implica accettazione delle condizioni contrattuali DR7.\n\nGrazie per la collaborazione.\n\nDR7`
+                  customMessage: `Gentile ${custName},\n\nLa sua prenotazione #${bookingRef} è stata estesa.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nPer completare il pagamento dell'estensione di €${additionalAmount.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità di ${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
                 })
               })
             }
@@ -3409,9 +3676,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
       // Note: vehicle is already declared above in scheduling validation block
 
-      // Get location labels
-      const pickupLocationLabel = LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location
-      const dropoffLocationLabel = LOCATIONS.find(l => l.value === formData.dropoff_location)?.label || formData.dropoff_location
+      // Get location labels — use actual address for domicilio, not the dropdown placeholder
+      const pickupLocationLabel = formData.pickup_location === 'domicilio'
+        ? `${formData.delivery_street || ''}, ${formData.delivery_city || ''}${formData.delivery_zip ? ' ' + formData.delivery_zip : ''}${formData.delivery_province ? ' ' + formData.delivery_province : ''}`.trim().replace(/^,\s*/, '') || 'Consegna a domicilio'
+        : LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location
+      const dropoffLocationLabel = formData.dropoff_location === 'domicilio'
+        ? `${formData.pickup_street || ''}, ${formData.pickup_city || ''}${formData.pickup_zip ? ' ' + formData.pickup_zip : ''}${formData.pickup_province ? ' ' + formData.pickup_province : ''}`.trim().replace(/^,\s*/, '') || 'Ritiro a domicilio'
+        : LOCATIONS.find(l => l.value === formData.dropoff_location)?.label || formData.dropoff_location
 
       // SIMPLIFIED TIMEZONE HANDLING: Construct ISO strings directly
       // This ensures times entered in the admin panel are stored EXACTLY as entered
@@ -3419,15 +3690,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Helper function to get correct timezone offset for Europe/Rome (handles DST automatically)
       const getRomeOffset = (dateString: string): string => {
-        const date = new Date(dateString)
-        const formatter = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'Europe/Rome',
-          timeZoneName: 'short'
-        })
-        const parts = formatter.formatToParts(date)
-        const tzPart = parts.find(p => p.type === 'timeZoneName')
-        // CET = +01:00 (winter), CEST = +02:00 (summer DST)
-        return tzPart?.value === 'CEST' ? '+02:00' : '+01:00'
+        // Use noon to avoid DST boundary issues
+        const date = new Date(`${dateString}T12:00:00`)
+        // Calculate offset by comparing UTC time with Rome local time
+        const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' })
+        const romeStr = date.toLocaleString('en-US', { timeZone: 'Europe/Rome' })
+        const utcDate = new Date(utcStr)
+        const romeDate = new Date(romeStr)
+        const diffMinutes = Math.round((romeDate.getTime() - utcDate.getTime()) / 60000)
+        const sign = diffMinutes >= 0 ? '+' : '-'
+        const absMinutes = Math.abs(diffMinutes)
+        const hours = String(Math.floor(absMinutes / 60)).padStart(2, '0')
+        const mins = String(absMinutes % 60).padStart(2, '0')
+        return `${sign}${hours}:${mins}`
       }
 
       // Get the correct timezone offset for the pickup date
@@ -3558,13 +3833,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           dropoffLocation: formData.dropoff_location,
           amountPaid: eurToCents(formData.amount_paid), // Store amount paid in cents
           source: 'admin_manual',
+          // Driver Tier
+          driver_tier: customerTier?.tier || null,
+          driver_age: customerTier?.driverAge || null,
+          driver_license_years: customerTier?.licenseYears || null,
           // Kasko & Deposit
           insuranceOption: formData.insurance_option,
           deposit: formData.deposit,
           deposit_status: formData.deposit_status,
+          no_cauzione_surcharge_per_day: formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0,
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
+          unlimited_km_price_per_day: formData.unlimited_km
+            ? (customerTier?.tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1)
+            : null,
+          // Second driver
+          second_driver_fee_per_day: formData.has_second_driver && customerTier?.tier
+            ? (customerTier.tier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1)
+            : null,
+          // Experience Services & DR7 Flex
+          experience_services: formData.experience_services,
+          experience_cost: calculateExperienceCost(formData.experience_services, revenueSuggestion?.rentalDays || 1),
+          dr7_flex: formData.dr7_flex,
+          dr7_flex_price_per_day: formData.dr7_flex ? CFG_DR7_FLEX_PER_DAY : 0,
           // Cauzione Auto
           cauzione_auto: formData.cauzione_auto,
           cauzione_targa: formData.cauzione_auto ? formData.cauzione_targa : null,
@@ -3739,7 +4031,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 ...insertedBooking.booking_details,
                 nexi_payment_link: linkData.paymentUrl,
                 nexi_order_id: linkData.orderId,
+                nexi_link_id: linkData.nexiLinkId || null,
+                payment_link_sent_at: linkData.sentAt,
                 payment_link_expires_at: linkData.expiresAt,
+                payment_provider_expires_at: linkData.providerExpiresAt,
               }
             }).eq('id', insertedBooking.id)
 
@@ -3751,7 +4046,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: custPhone,
-                  customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${customerInfo?.full_name},\n\nLa sua prenotazione #${insertedBooking.id.substring(0, 8).toUpperCase()} è stata registrata.\n\n*Modalità di pagamento (leggere prima di procedere):*\nSi informano i clienti che non è possibile effettuare pagamenti con carte prepagate.\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer confermare la richiesta, è necessario completare il pagamento di €${totalEur.toFixed(2)} al seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità limitata di 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nDR7\n\nSe il messaggio non è destinato a lei o ha già provveduto, può ignorarlo.`
+                  customMessage: `Gentile ${customerInfo?.full_name},\n\nLe ricordiamo che il pagamento per la prenotazione #${insertedBooking.id.substring(0, 8).toUpperCase()} è ancora in sospeso.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${totalEur.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità limitata. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
                 })
               })
             }
@@ -3906,7 +4201,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         logger.log('✅ WhatsApp admin notification sent')
 
-        // Send customer confirmation message (skip for unpaid Nexi Pay by Link — link message is sent separately)
+        // Send customer confirmation message — same full message as admin (skip for unpaid Nexi Pay by Link — link message is sent separately)
         const custPhone = customerInfo?.phone
         if (custPhone && !(formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')) {
           const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
@@ -3957,7 +4252,55 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customMessage: custMsg, customPhone: custPhone })
+            body: JSON.stringify({
+              customPhone: custPhone,
+              booking: {
+                id: insertedBooking?.id || '',
+                service_type: 'car_rental',
+                isEdit: !!editingId,
+                customer_name: customerInfo?.full_name || '',
+                customer_email: customerInfo?.email || '',
+                customer_phone: customerInfo?.phone || '',
+                vehicle_name: vehicle?.display_name || '',
+                vehicle_plate: vehicle?.plate || '',
+                pickup_date: pickupDateTime,
+                dropoff_date: returnDateTime,
+                pickup_location: pickupLocationLabel,
+                insurance_option: formData.insurance_option || 'KASKO_BASE',
+                price_total: insertedBooking?.price_total || eurToCents(formData.total_amount),
+                payment_status: paymentStatus,
+                payment_method: formData.payment_method || '',
+                deposit_amount: parseFloat(formData.deposit) || 0,
+                km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
+                booking_details: {
+                  amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || eurToCents(formData.total_amount)) : 0,
+                  insuranceOption: formData.insurance_option || 'KASKO_BASE',
+                  deposit: parseFloat(formData.deposit) || 0,
+                  deposit_status: formData.deposit_status,
+                  km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
+                  unlimited_km: formData.unlimited_km,
+                  delivery_enabled: formData.delivery_enabled,
+                  delivery_address: formData.delivery_enabled ? {
+                    street: formData.delivery_street,
+                    city: formData.delivery_city,
+                    zip: formData.delivery_zip,
+                    province: formData.delivery_province
+                  } : null,
+                  delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
+                  pickup_enabled: formData.pickup_enabled,
+                  pickup_address: formData.pickup_enabled ? {
+                    street: formData.pickup_street,
+                    city: formData.pickup_city,
+                    zip: formData.pickup_zip,
+                    province: formData.pickup_province
+                  } : null,
+                  pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+                  notes: formData.notes || null,
+                  depositOption: insertedBooking?.booking_details?.depositOption,
+                  noDepositSurcharge: insertedBooking?.booking_details?.noDepositSurcharge
+                }
+              }
+            })
           })
           logger.log('✅ WhatsApp customer confirmation sent to', custPhone)
         }
@@ -4014,6 +4357,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't alert here to avoid confusion, just log it
       }
 
+      // Detect if payment status just changed from unpaid → paid (on edit)
+      const justMarkedPaid = editingId
+        && formData.payment_status === 'paid'
+        && editingOriginalPaymentStatus !== 'paid'
+        && editingOriginalPaymentStatus !== 'completed'
+        && editingOriginalPaymentStatus !== 'succeeded'
+
       // Auto-generate fattura and send to SDI when payment status is "paid"
       if (formData.payment_status === 'paid' && insertedBooking?.id) {
         try {
@@ -4036,8 +4386,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Auto-send contract for signature via WhatsApp (NEW paid bookings only, after contract + fattura)
-      if (!editingId && formData.payment_status === 'paid' && insertedBooking?.id) {
+      // Auto-send contract for signature via WhatsApp (new paid bookings OR when manually marked paid)
+      if (((!editingId && formData.payment_status === 'paid') || justMarkedPaid) && insertedBooking?.id) {
         try {
           // Fetch the contract that was just generated for this booking
           const { data: contractForSig } = await supabase
@@ -4094,6 +4444,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   function resetForm() {
+    setCustomerTier(null)
     setFormData({
       customer_id: '',
       vehicle_id: '',
@@ -4109,7 +4460,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       source: 'admin',
       total_amount: '0',
       amount_paid: '0',
-      km_overage_fee: '1.80',
+      km_overage_fee: DEFAULT_SFORO,
       payment_status: 'pending',
       payment_method: 'Nexi Pay by Link',
       currency: 'EUR',
@@ -4136,9 +4487,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Kasko & Deposit
       insurance_option: 'KASKO_BASE',
       deposit: '0',
-      deposit_status: 'da_incassare' as 'da_incassare' | 'incassata',
+      deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
       unlimited_km: false,
-      km_limit: '50/giorno',
+      km_limit: DEFAULT_KM_LIMIT,
       // Home Delivery & Pickup
       delivery_enabled: false,
       delivery_street: '',
@@ -4155,6 +4506,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       pickup_notes: '',
       pickup_fee: '0',
       notes: '',
+      // Experience Services & DR7 Flex
+      experience_services: {},
+      dr7_flex: false,
       // Cauzione Auto (Vehicle as Security Deposit)
       cauzione_auto: false,
       cauzione_targa: '',
@@ -4182,6 +4536,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       nome: '',
       cognome: '',
       codice_fiscale: '',
+      sesso: '',
       data_nascita: '',
       luogo_nascita: '',
       numero_civico: '',
@@ -4218,6 +4573,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           {/* Main Title - Italian Translation verified */}
           <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Noleggio</h2>
           <div className="flex gap-2 sm:gap-3">
+            <Button variant="secondary" onClick={() => setShowPreventivoModal(true)} className="flex-1 sm:flex-none text-sm sm:text-base border border-dr7-gold/50 text-dr7-gold hover:bg-dr7-gold/10">
+              <span className="hidden sm:inline">Preventivo</span>
+              <span className="sm:hidden">Prev.</span>
+            </Button>
             <Button onClick={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
               <span className="hidden sm:inline">+ Nuova Prenotazione</span>
               <span className="sm:hidden">+ Nuova</span>
@@ -4450,9 +4809,48 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <>
                           <Input label="Nome *" required value={newCustomerData.nome} onChange={(e) => setNewCustomerData({ ...newCustomerData, nome: e.target.value })} />
                           <Input label="Cognome *" required value={newCustomerData.cognome} onChange={(e) => setNewCustomerData({ ...newCustomerData, cognome: e.target.value })} />
-                          <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_fiscale: e.target.value.toUpperCase() })} />
-                          <Input label="Data di Nascita" type="date" value={newCustomerData.data_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })} />
-                          <Input label="Luogo di Nascita" value={newCustomerData.luogo_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })} />
+                          <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <Input label="Codice Fiscale *" required value={newCustomerData.codice_fiscale} onChange={(e) => {
+                                const val = e.target.value.toUpperCase()
+                                // Auto-decode when 16 chars entered
+                                if (val.length === 16) {
+                                  const decoded = decodificaCodiceFiscale(val)
+                                  if (decoded) {
+                                    setNewCustomerData(prev => ({
+                                      ...prev,
+                                      codice_fiscale: val,
+                                      data_nascita: decoded.data_nascita,
+                                      sesso: decoded.sesso,
+                                      luogo_nascita: decoded.luogo_nascita,
+                                    }))
+                                    toast.success('Dati estratti dal CF')
+                                    return
+                                  }
+                                }
+                                setNewCustomerData(prev => ({ ...prev, codice_fiscale: val }))
+                              }} />
+                            </div>
+                            <CalcolaCFButton
+                              className="px-3 py-2 mb-[1px] bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
+                              config={{
+                                getCognome: () => newCustomerData.cognome,
+                                getNome: () => newCustomerData.nome,
+                                getDataNascita: () => newCustomerData.data_nascita,
+                                getSesso: () => newCustomerData.sesso,
+                                getLuogoNascita: () => newCustomerData.luogo_nascita,
+                                getCodiceFiscale: () => newCustomerData.codice_fiscale,
+                                setCodiceFiscale: (v) => setNewCustomerData(p => ({ ...p, codice_fiscale: v })),
+                                setSesso: (v) => setNewCustomerData(p => ({ ...p, sesso: v as '' | 'M' | 'F' })),
+                                setDataNascita: (v) => setNewCustomerData(p => ({ ...p, data_nascita: v })),
+                                setLuogoNascita: (v) => setNewCustomerData(p => ({ ...p, luogo_nascita: v })),
+                                setProvinciaNascita: (v) => setNewCustomerData(p => ({ ...p, provincia_nascita: v })),
+                              }}
+                            />
+                          </div>
+                          <Input label="Data di Nascita *" type="date" value={newCustomerData.data_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, data_nascita: e.target.value })} />
+                          <Input label="Luogo di Nascita *" value={newCustomerData.luogo_nascita} onChange={(e) => setNewCustomerData({ ...newCustomerData, luogo_nascita: e.target.value })} />
+                          <Select label="Sesso *" value={newCustomerData.sesso} onChange={(e) => setNewCustomerData({ ...newCustomerData, sesso: e.target.value as '' | 'M' | 'F' })} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'Maschio' }, { value: 'F', label: 'Femmina' }]} />
                           <Input label="Numero Civico" value={newCustomerData.numero_civico} onChange={(e) => setNewCustomerData({ ...newCustomerData, numero_civico: e.target.value })} />
                           <Input label="Città di Residenza *" required value={newCustomerData.citta_residenza} onChange={(e) => setNewCustomerData({ ...newCustomerData, citta_residenza: e.target.value })} />
                           <Input label="CAP *" required value={newCustomerData.codice_postale} onChange={(e) => setNewCustomerData({ ...newCustomerData, codice_postale: e.target.value })} />
@@ -4498,27 +4896,54 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       selectedCustomerId={formData.customer_id}
                       onSelectCustomer={async (customerId) => {
                         setFormData(prev => ({ ...prev, customer_id: customerId }))
-                        // Check patente age
-                        if (customerId) {
-                          try {
-                            const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
-                            if (resp.ok) {
-                              const { customer: cust } = await resp.json()
-                              const patenteDate = cust?.data_rilascio_patente || cust?.metadata?.patente?.rilascio
-                              if (patenteDate) {
-                                const issueDate = new Date(patenteDate)
-                                const twoYearsAgo = new Date()
-                                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
-                                if (issueDate > twoYearsAgo && !hasOverride('license_too_recent')) {
-                                  requestOverride('license_too_recent', 'Patente rilasciata da meno di 2 anni. Il cliente non può noleggiare.')
-                                  setFormData(prev => ({ ...prev, customer_id: '' }))
-                                  return
-                                }
-                              }
+                        setCustomerTier(null) // Reset tier while loading
+                        if (!customerId) return
+                        try {
+                          const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
+                          if (!resp.ok) return
+                          const { customer: cust } = await resp.json()
+                          const birthDate = cust?.data_nascita
+                          const patenteDate = cust?.data_rilascio_patente || cust?.metadata?.patente?.rilascio
+
+                          // Classify driver tier
+                          if (birthDate && patenteDate) {
+                            const age = calculateAge(birthDate)
+                            const licYears = calculateLicenseYears(patenteDate)
+                            const tier = classifyDriverTier(age, licYears)
+                            setCustomerTier(tier)
+
+                            if (tier.tier === 'BLOCKED') {
+                              alert(`⚠️ CLIENTE NON IDONEO\n\n${tier.reason}\n\nEtà: ${age} anni — Patente: ${licYears} anni`)
+                              setFormData(prev => ({ ...prev, customer_id: '' }))
+                              return
                             }
-                          } catch (e) {
-                            logger.warn('Patente check failed:', e)
+
+                            // Reset incompatible options when tier changes
+                            setFormData(prev => {
+                              const updates: Record<string, unknown> = {}
+                              // If TIER_1, block no_cauzione
+                              if (tier.tier === 'TIER_1' && prev.deposit_status === 'no_cauzione') {
+                                updates.deposit_status = 'da_incassare'
+                              }
+                              // Check if current insurance option is valid for this tier
+                              const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
+                              const tierOptions = getInsuranceOptions(selectedVehicle, tier.tier, configOverlay)
+                              if (!tierOptions.some(o => o.id === prev.insurance_option)) {
+                                updates.insurance_option = 'KASKO_BASE'
+                              }
+                              return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev
+                            })
+                          } else if (patenteDate) {
+                            // Only license date available — still check minimum
+                            const licYears = calculateLicenseYears(patenteDate)
+                            if (licYears < 3) {
+                              alert('⚠️ PATENTE TROPPO RECENTE\n\nLa patente di questo cliente è stata rilasciata da meno di 3 anni.\n\nNon è possibile procedere con il noleggio.')
+                              setFormData(prev => ({ ...prev, customer_id: '' }))
+                              return
+                            }
                           }
+                        } catch (e) {
+                          logger.warn('Customer tier check failed:', e)
                         }
                       }}
                       placeholder="Inizia a scrivere nome, email o telefono..."
@@ -4564,6 +4989,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       return null
                     })()}
 
+                    {/* Tier Badge */}
+                    {customerTier && customerTier.tier !== 'BLOCKED' && (
+                      <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 ${
+                        customerTier.tier === 'TIER_2'
+                          ? 'bg-green-900/20 border border-green-600/50'
+                          : 'bg-amber-900/20 border border-amber-600/50'
+                      }`}>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          customerTier.tier === 'TIER_2' ? 'bg-green-600 text-white' : 'bg-amber-600 text-white'
+                        }`}>
+                          {customerTier.tier === 'TIER_2' ? 'FASCIA A' : 'FASCIA B'}
+                        </span>
+                        <span className="text-sm text-theme-text-secondary">
+                          {customerTier.reason} — Età: {customerTier.driverAge}, Patente: {customerTier.licenseYears} anni
+                        </span>
+                      </div>
+                    )}
+
                     {customers.length === 0 && (
                       <p className="text-sm text-yellow-400 mt-2">
                         Nessun cliente trovato. Verifica che l'API sia attiva o crea un nuovo cliente.
@@ -4604,9 +5047,42 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   label="Luogo Ritiro"
                   required
                   value={formData.pickup_location}
-                  onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, pickup_location: v })) }}
+                  onChange={(e) => {
+                    const loc = e.target.value
+                    setFormData(prev => ({
+                      ...prev,
+                      pickup_location: loc,
+                      delivery_enabled: loc === 'domicilio' || loc === 'cagliari_airport',
+                      delivery_fee: loc === 'cagliari_airport' ? '50' : loc === 'domicilio' ? prev.delivery_fee : '0',
+                      ...(loc === 'cagliari_airport' ? {
+                        delivery_street: 'Aeroporto di Cagliari Elmas',
+                        delivery_city: 'Elmas', delivery_zip: '09030', delivery_province: 'CA',
+                      } : loc === 'dr7_office' ? {
+                        delivery_enabled: false, delivery_fee: '0',
+                        delivery_street: '', delivery_city: '', delivery_zip: '', delivery_province: '',
+                      } : {}),
+                    }))
+                  }}
                   options={LOCATIONS}
                 />
+                {formData.pickup_location === 'domicilio' && (
+                  <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
+                    <p className="text-xs text-amber-400 font-semibold">Indirizzo di consegna</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input label="Via *" required value={formData.delivery_street}
+                        onChange={(e) => setFormData({ ...formData, delivery_street: e.target.value })} placeholder="Via Roma, 15" />
+                      <Input label="Città *" required value={formData.delivery_city}
+                        onChange={(e) => setFormData({ ...formData, delivery_city: e.target.value })} placeholder="Cagliari" />
+                      <Input label="CAP" value={formData.delivery_zip}
+                        onChange={(e) => setFormData({ ...formData, delivery_zip: e.target.value })} placeholder="09131" maxLength={5} />
+                      <Input label="Provincia" value={formData.delivery_province}
+                        onChange={(e) => setFormData({ ...formData, delivery_province: e.target.value.toUpperCase() })} placeholder="CA" maxLength={2} />
+                    </div>
+                    <Input label="Costo consegna (€) *" type="number" step="0.01" min="0" required
+                      value={formData.delivery_fee}
+                      onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })} placeholder="0.00" />
+                  </div>
+                )}
                 <div className="space-y-3">
                   <Input
                     label="Data Riconsegna"
@@ -4630,9 +5106,42 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   label="Luogo Riconsegna"
                   required
                   value={formData.dropoff_location}
-                  onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, dropoff_location: v })) }}
+                  onChange={(e) => {
+                    const loc = e.target.value
+                    setFormData(prev => ({
+                      ...prev,
+                      dropoff_location: loc,
+                      pickup_enabled: loc === 'domicilio' || loc === 'cagliari_airport',
+                      pickup_fee: loc === 'cagliari_airport' ? '50' : loc === 'domicilio' ? prev.pickup_fee : '0',
+                      ...(loc === 'cagliari_airport' ? {
+                        pickup_street: 'Aeroporto di Cagliari Elmas',
+                        pickup_city: 'Elmas', pickup_zip: '09030', pickup_province: 'CA',
+                      } : loc === 'dr7_office' ? {
+                        pickup_enabled: false, pickup_fee: '0',
+                        pickup_street: '', pickup_city: '', pickup_zip: '', pickup_province: '',
+                      } : {}),
+                    }))
+                  }}
                   options={LOCATIONS}
                 />
+                {formData.dropoff_location === 'domicilio' && (
+                  <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
+                    <p className="text-xs text-amber-400 font-semibold">Indirizzo di ritiro veicolo</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input label="Via *" required value={formData.pickup_street}
+                        onChange={(e) => setFormData({ ...formData, pickup_street: e.target.value })} placeholder="Via Roma, 15" />
+                      <Input label="Città *" required value={formData.pickup_city}
+                        onChange={(e) => setFormData({ ...formData, pickup_city: e.target.value })} placeholder="Cagliari" />
+                      <Input label="CAP" value={formData.pickup_zip}
+                        onChange={(e) => setFormData({ ...formData, pickup_zip: e.target.value })} placeholder="09131" maxLength={5} />
+                      <Input label="Provincia" value={formData.pickup_province}
+                        onChange={(e) => setFormData({ ...formData, pickup_province: e.target.value.toUpperCase() })} placeholder="CA" maxLength={2} />
+                    </div>
+                    <Input label="Costo ritiro (€) *" type="number" step="0.01" min="0" required
+                      value={formData.pickup_fee}
+                      onChange={(e) => setFormData({ ...formData, pickup_fee: e.target.value })} placeholder="0.00" />
+                  </div>
+                )}
               </div>
 
               {/* VEHICLE SELECTION - Now appears after dates */}
@@ -4695,6 +5204,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 />
                 <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-theme-text-secondary">
                   Aggiungi Secondo Guidatore
+                  {(() => {
+                    const tier = customerTier?.tier
+                    const price = tier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1
+                    return ` (+€${price}/giorno)`
+                  })()}
                 </label>
               </div>
 
@@ -4733,12 +5247,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         value={formData.second_driver_surname}
                         onChange={(e) => setFormData(prev => ({ ...prev, second_driver_surname: e.target.value }))}
                       />
-                      <Input
-                        label="Codice Fiscale *"
-                        required
-                        value={formData.second_driver_codice_fiscale}
-                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_codice_fiscale: e.target.value.toUpperCase() }))}
-                      />
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text-primary mb-2">Codice Fiscale *</label>
+                        <div className="flex gap-2">
+                          <input
+                            required
+                            value={formData.second_driver_codice_fiscale}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_codice_fiscale: e.target.value.toUpperCase() }))}
+                            className="flex-1 px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors uppercase"
+                          />
+                          <CalcolaCFButton
+                            className="px-3 py-2 bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
+                            config={{
+                              getCognome: () => formData.second_driver_surname,
+                              getNome: () => formData.second_driver_name,
+                              getDataNascita: () => formData.second_driver_birth_date,
+                              getSesso: () => formData.second_driver_sesso,
+                              getLuogoNascita: () => formData.second_driver_birth_place,
+                              getCodiceFiscale: () => formData.second_driver_codice_fiscale,
+                              setCodiceFiscale: (v) => setFormData(p => ({ ...p, second_driver_codice_fiscale: v })),
+                              setSesso: (v) => setFormData(p => ({ ...p, second_driver_sesso: v })),
+                              setDataNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_date: v })),
+                              setLuogoNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_place: v })),
+                              setProvinciaNascita: (v) => setFormData(p => ({ ...p, second_driver_birth_provincia: v })),
+                            }}
+                          />
+                        </div>
+                      </div>
                       <Select
                         label="Sesso *"
                         required
@@ -4874,9 +5409,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Assicurazione</label>
-                  <div className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary">
-                    Kasko (inclusa)
-                  </div>
+                  <select
+                    value={formData.insurance_option}
+                    onChange={(e) => {
+                      const newOption = e.target.value as KaskoTier;
+                      setFormData(prev => ({
+                        ...prev,
+                        insurance_option: newOption,
+                        // Auto-reset no_cauzione when switching to RCA (requires Kasko)
+                        ...(newOption === 'RCA' && prev.deposit_status === 'no_cauzione' ? { deposit_status: 'da_incassare' as const } : {}),
+                      }));
+                    }}
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
+                  >
+                    {(() => {
+                      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
+                      const activeTier = customerTier?.tier;
+                      return getInsuranceOptions(selectedVehicle, activeTier, configOverlay).map(opt => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label} {opt.pricePerDay > 0 ? `(€${opt.pricePerDay}/giorno)` : '(inclusa)'}
+                        </option>
+                      ));
+                    })()}
+                  </select>
+                  {formData.insurance_option === 'RCA' && (
+                    <p className="text-xs text-yellow-400 mt-1">
+                      ⚠️ Senza Kasko: cauzione obbligatoria €{customerTier?.tier === 'TIER_2' ? '10.000' : '15.000'}
+                    </p>
+                  )}
                 </div>
                 {!formData.cauzione_auto && (
                   <>
@@ -4886,15 +5446,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       value={formData.deposit}
                       onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, deposit: v })) }}
                     />
-                    <Select
-                      label="Stato Cauzione"
-                      value={formData.deposit_status}
-                      onChange={(e) => { const v = e.target.value as 'da_incassare' | 'incassata'; setFormData(prev => ({ ...prev, deposit_status: v })) }}
-                      options={[
-                        { value: 'da_incassare', label: 'Da incassare' },
-                        { value: 'incassata', label: 'Incassata' },
-                      ]}
-                    />
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato Cauzione</label>
+                      <select
+                        value={formData.deposit_status}
+                        onChange={(e) => {
+                          const val = e.target.value as 'da_incassare' | 'incassata' | 'no_cauzione';
+                          setFormData(prev => ({
+                            ...prev,
+                            deposit_status: val,
+                            // When no_cauzione selected, clear deposit amount
+                            ...(val === 'no_cauzione' ? { deposit: '0' } : {}),
+                          }));
+                        }}
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
+                      >
+                        <option value="da_incassare">Da incassare</option>
+                        <option value="incassata">Incassata</option>
+                        {/* No Cauzione: only for Fascia A (TIER_2) AND only with Kasko (not RCA) */}
+                        {(!customerTier || customerTier.tier === 'TIER_2') && formData.insurance_option !== 'RCA' && (
+                          <option value="no_cauzione">No Cauzione (+€{CFG_NO_CAUZIONE_PER_DAY}/giorno)</option>
+                        )}
+                      </select>
+                      {formData.deposit_status === 'no_cauzione' && (
+                        <p className="text-xs text-blue-400 mt-1">Supplemento €{CFG_NO_CAUZIONE_PER_DAY}/giorno aggiunto al totale</p>
+                      )}
+                      {customerTier?.tier === 'TIER_1' && (
+                        <p className="text-xs text-amber-400 mt-1">No Cauzione non disponibile per Fascia B</p>
+                      )}
+                      {customerTier?.tier === 'TIER_2' && formData.insurance_option === 'RCA' && (
+                        <p className="text-xs text-amber-400 mt-1">No Cauzione richiede una Kasko attiva</p>
+                      )}
+                    </div>
                   </>
                 )}
               </div>
@@ -5011,7 +5594,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Input label="Nome *" required value={formData.garante_nome} onChange={(e) => setFormData(prev => ({ ...prev, garante_nome: e.target.value }))} />
                             <Input label="Cognome *" required value={formData.garante_cognome} onChange={(e) => setFormData(prev => ({ ...prev, garante_cognome: e.target.value }))} />
-                            <Input label="Codice Fiscale *" required value={formData.garante_codice_fiscale} onChange={(e) => setFormData(prev => ({ ...prev, garante_codice_fiscale: e.target.value.toUpperCase() }))} />
+                            <div>
+                              <label className="block text-sm font-medium text-theme-text-primary mb-2">Codice Fiscale *</label>
+                              <div className="flex gap-2">
+                                <input
+                                  required
+                                  value={formData.garante_codice_fiscale}
+                                  onChange={(e) => setFormData(prev => ({ ...prev, garante_codice_fiscale: e.target.value.toUpperCase() }))}
+                                  className="flex-1 px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors uppercase"
+                                />
+                                <CalcolaCFButton
+                                  className="px-3 py-2 bg-dr7-gold hover:bg-dr7-gold/80 text-white text-xs font-medium rounded whitespace-nowrap transition-colors"
+                                  config={{
+                                    getCognome: () => formData.garante_cognome,
+                                    getNome: () => formData.garante_nome,
+                                    getDataNascita: () => formData.garante_birth_date,
+                                    getSesso: () => formData.garante_sesso,
+                                    getLuogoNascita: () => formData.garante_birth_place,
+                                    getCodiceFiscale: () => formData.garante_codice_fiscale,
+                                    setCodiceFiscale: (v) => setFormData(p => ({ ...p, garante_codice_fiscale: v })),
+                                    setSesso: (v) => setFormData(p => ({ ...p, garante_sesso: v })),
+                                    setDataNascita: (v) => setFormData(p => ({ ...p, garante_birth_date: v })),
+                                    setLuogoNascita: (v) => setFormData(p => ({ ...p, garante_birth_place: v })),
+                                    setProvinciaNascita: (v) => setFormData(p => ({ ...p, garante_birth_provincia: v })),
+                                  }}
+                                />
+                              </div>
+                            </div>
                             <Select label="Sesso" value={formData.garante_sesso} onChange={(e) => setFormData(prev => ({ ...prev, garante_sesso: e.target.value }))} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }]} />
                             <Input label="Indirizzo" value={formData.garante_indirizzo} onChange={(e) => setFormData(prev => ({ ...prev, garante_indirizzo: e.target.value }))} />
                             <Input label="CAP" value={formData.garante_cap} onChange={(e) => setFormData(prev => ({ ...prev, garante_cap: e.target.value }))} maxLength={5} />
@@ -5304,25 +5913,40 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     </span>
                     {revenueSuggestion && (
                       <div className="flex items-center gap-2">
-                        <span className={`text-lg font-bold ${
-                          revenueSuggestion.mode === 'auto_apply' ? 'text-green-400' : 'text-amber-400'
-                        }`}>
-                          EUR {centsToEurStr(Math.round(revenueSuggestion.finalTotalEur * 100))}
-                        </span>
-                        {revenueSuggestion.mode !== 'auto_apply' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormData(prev => ({
-                                ...prev,
-                                total_amount: centsToEurStr(Math.round(revenueSuggestion.finalTotalEur * 100))
-                              }))
-                            }}
-                            className="text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition-colors"
-                          >
-                            Applica
-                          </button>
-                        )}
+                        {(() => {
+                          const sv = vehicles.find(v => v.id === formData.vehicle_id)
+                          const activeTier = customerTier?.tier || 'TIER_1'
+                          const ko = sv ? getInsuranceOptions(sv, activeTier, configOverlay) : []
+                          const sk = ko.find(k => k.id === formData.insurance_option)
+                          const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
+                          const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
+                            + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                          const noCauzioneCost = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
+                          const unlimitedKmCost = formData.unlimited_km
+                            ? getUnlimitedKmPrice(sv, activeTier) * revenueSuggestion.rentalDays : 0
+                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost
+                          const grandTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
+                          return (
+                            <>
+                              <span className={`text-lg font-bold ${
+                                revenueSuggestion.mode === 'auto_apply' ? 'text-green-400' : 'text-amber-400'
+                              }`}>
+                                EUR {grandTotal.toFixed(2)}
+                              </span>
+                              {revenueSuggestion.mode !== 'auto_apply' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(prev => ({ ...prev, total_amount: grandTotal.toFixed(2) }))
+                                  }}
+                                  className="text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition-colors"
+                                >
+                                  Applica
+                                </button>
+                              )}
+                            </>
+                          )
+                        })()}
                       </div>
                     )}
                   </div>
@@ -5346,22 +5970,142 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div className="space-y-1 pt-1 border-t border-theme-border">
                           <div className="flex justify-between text-xs">
                             <span className="text-theme-text-muted">Base selezionata</span>
-                            <span className="text-theme-text-primary">EUR {centsToEurStr(Math.round(revenueSuggestion.selectedBaseRateEur * 100))}/g</span>
+                            <span className="text-theme-text-primary">EUR {revenueSuggestion.selectedBaseRateEur.toFixed(2)}/g</span>
                           </div>
-                          {revenueSuggestion.breakdown.map((item, i) => (
-                            <div key={i} className="flex justify-between text-xs">
-                              <span className="text-theme-text-muted">{item.label} ({item.description})</span>
-                              <span className={`font-mono ${item.coeff > 1 ? 'text-red-400' : item.coeff < 1 ? 'text-green-400' : 'text-theme-text-primary'}`}>
-                                x{item.coeff.toFixed(2)}
-                              </span>
+                        {revenueSuggestion.breakdown.map((item, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="text-theme-text-muted">{item.label} ({item.description})</span>
+                            <span className={`font-mono ${item.coeff > 1 ? 'text-red-400' : item.coeff < 1 ? 'text-green-400' : 'text-theme-text-primary'}`}>
+                              x{item.coeff.toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                        {(() => {
+                          const sv = vehicles.find(v => v.id === formData.vehicle_id)
+                          const at = customerTier?.tier || 'TIER_1'
+                          const ko = sv ? getInsuranceOptions(sv, at, configOverlay) : []
+                          const sk = ko.find(k => k.id === formData.insurance_option)
+                          if (!sk || sk.pricePerDay === 0) return null
+                          return (
+                            <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                              <span className="text-theme-text-muted">Assicurazione ({sk.label})</span>
+                              <span className="text-blue-400 font-mono">+EUR {(sk.pricePerDay * revenueSuggestion.rentalDays).toFixed(2)}</span>
                             </div>
-                          ))}
+                          )
+                        })()}
+                        {formData.deposit_status === 'no_cauzione' && (
+                          <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                            <span className="text-theme-text-muted">No Cauzione (+€{CFG_NO_CAUZIONE_PER_DAY}/g)</span>
+                            <span className="text-red-400 font-mono">+EUR {(CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {formData.unlimited_km && (() => {
+                          const sv = vehicles.find(v => v.id === formData.vehicle_id)
+                          if (!sv) return null
+                          const at = customerTier?.tier || 'TIER_1'
+                          const kmPrice = getUnlimitedKmPrice(sv, at)
+                          if (kmPrice === 0) return null // Urban: KM already unlimited
+                          return (
+                            <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                              <span className="text-theme-text-muted">KM Illimitati (+€{kmPrice}/g)</span>
+                              <span className="text-red-400 font-mono">+EUR {(kmPrice * revenueSuggestion.rentalDays).toFixed(2)}</span>
+                            </div>
+                          )
+                        })()}
+                        <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                          <span className="text-theme-text-muted">Lavaggio</span>
+                          <span className="text-blue-400 font-mono">+EUR {CFG_LAVAGGIO_FEE.toFixed(2)}</span>
                         </div>
+                        {(formData.delivery_enabled && parseFloat(formData.delivery_fee || '0') > 0) && (
+                          <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                            <span className="text-theme-text-muted">Consegna ({formData.pickup_location === 'cagliari_airport' ? 'Aeroporto' : 'Domicilio'})</span>
+                            <span className="text-blue-400 font-mono">+EUR {parseFloat(formData.delivery_fee).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {(formData.pickup_enabled && parseFloat(formData.pickup_fee || '0') > 0) && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-theme-text-muted">Ritiro ({formData.dropoff_location === 'cagliari_airport' ? 'Aeroporto' : 'Domicilio'})</span>
+                            <span className="text-blue-400 font-mono">+EUR {parseFloat(formData.pickup_fee).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {formData.payment_method === 'Contanti' && (
+                          <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
+                            <span className="text-theme-text-muted">Maggiorazione contanti</span>
+                            <span className="text-red-400 font-mono">+20%</span>
+                          </div>
+                        )}
+                      </div>
                       )}
                     </>
                   )}
                 </div>
               )}
+              {/* Experience Services & DR7 Flex */}
+              <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+                <h4 className="text-theme-text-primary font-semibold mb-3">Servizi Experience</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(() => {
+                    const tier = customerTier?.tier || 'TIER_1'
+                    const availableServices = getExperienceServicesForTier(tier)
+                    return availableServices.map(svc => {
+                      const qty = formData.experience_services[svc.id] || 0
+                      const unitLabel = svc.unit === 'per_day' ? '/giorno' : svc.unit === 'per_hour' ? '/ora' : svc.unit === 'per_item' ? '/unità' : ''
+                      return (
+                        <div key={svc.id} className={`flex items-center justify-between p-2 rounded-md border ${qty > 0 ? 'border-dr7-gold bg-dr7-gold/5' : 'border-theme-border'}`}>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm text-theme-text-primary">{svc.name}</span>
+                            <span className="text-xs text-theme-text-muted ml-1">€{svc.price.toFixed(2)}{unitLabel}</span>
+                          </div>
+                          {(svc.unit === 'per_item' || svc.unit === 'per_hour') ? (
+                            <div className="flex items-center gap-1 ml-2">
+                              <button type="button" onClick={() => setFormData(prev => {
+                                const es = { ...prev.experience_services }
+                                if ((es[svc.id] || 0) > 0) es[svc.id] = (es[svc.id] || 0) - 1
+                                if (es[svc.id] === 0) delete es[svc.id]
+                                return { ...prev, experience_services: es }
+                              })} className="w-6 h-6 rounded bg-theme-bg-tertiary text-theme-text-primary border border-theme-border text-sm">-</button>
+                              <span className="w-6 text-center text-sm text-theme-text-primary">{qty}</span>
+                              <button type="button" onClick={() => setFormData(prev => {
+                                const es = { ...prev.experience_services }
+                                es[svc.id] = (es[svc.id] || 0) + 1
+                                return { ...prev, experience_services: es }
+                              })} className="w-6 h-6 rounded bg-theme-bg-tertiary text-theme-text-primary border border-theme-border text-sm">+</button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => setFormData(prev => {
+                              const es = { ...prev.experience_services }
+                              if (es[svc.id]) delete es[svc.id]
+                              else es[svc.id] = 1
+                              return { ...prev, experience_services: es }
+                            })} className={`ml-2 px-3 py-1 rounded text-xs font-medium ${qty > 0 ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary border border-theme-border'}`}>
+                              {qty > 0 ? 'Aggiunto' : 'Aggiungi'}
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+                {/* DR7 FLEX — only Fascia A */}
+                {(!customerTier || customerTier.tier === 'TIER_2') && (
+                  <div className={`mt-3 flex items-center gap-2 p-3 rounded-lg border ${formData.dr7_flex ? 'border-green-500 bg-green-900/10' : 'border-theme-border'}`}>
+                    <input
+                      type="checkbox"
+                      id="dr7_flex"
+                      checked={formData.dr7_flex}
+                      onChange={(e) => setFormData(prev => ({ ...prev, dr7_flex: e.target.checked }))}
+                      className="w-4 h-4 text-green-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-green-500"
+                    />
+                    <label htmlFor="dr7_flex" className="text-sm text-theme-text-secondary cursor-pointer flex-1">
+                      DR7 FLEX — Cancellazione Premium (+€{CFG_DR7_FLEX_PER_DAY.toFixed(2)}/giorno)
+                    </label>
+                  </div>
+                )}
+                {customerTier?.tier === 'TIER_1' && (
+                  <p className="text-xs text-amber-400 mt-2">DR7 FLEX non disponibile per Fascia B</p>
+                )}
+              </div>
+
               <Input
                 label="Importo Totale (€)"
                 type="number"
@@ -5380,25 +6124,50 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   })
                 }}
               />
-              <Input
-                label="Sforo per KM (€)"
-                type="number"
-                step="0.01"
-                value={formData.km_overage_fee}
-                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_overage_fee: v })) }}
-                placeholder="es. 0.50"
-                disabled={formData.unlimited_km}
-              />
+              <div>
+                <Input
+                  label="Sforo per KM (€)"
+                  type="number"
+                  step="0.01"
+                  value={formData.km_overage_fee}
+                  onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_overage_fee: v })) }}
+                  placeholder="es. 0.50"
+                  disabled={formData.unlimited_km}
+                />
+                {formData.vehicle_id && !formData.unlimited_km && (() => {
+                  const vName = vehicles.find(v => v.id === formData.vehicle_id)?.display_name || ''
+                  const rule = SFORO_DEFAULTS.find(r => r.match(vName.toLowerCase()))
+                  return rule ? (
+                    <p className="text-xs text-amber-400 mt-1">Default {rule.label}: €{rule.sforo}/km</p>
+                  ) : null
+                })()}
+              </div>
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold text-theme-text-secondary mb-2">LIMITE KM:</h4>
+                {/* Show computed KM included from config formula */}
+                {formData.pickup_date && formData.return_date && !formData.unlimited_km && (() => {
+                  const pickup = new Date(formData.pickup_date)
+                  const ret = new Date(formData.return_date)
+                  const days = Math.max(1, Math.ceil((ret.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)))
+                  const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
+                  const cat = selectedVeh?.category === 'urban' ? 'urban' : (isFurgone(selectedVeh) ? 'furgone' : '_global')
+                  const km = getKmIncluded(rentalConfig, days, cat)
+                  if (km === 'unlimited') return <p className="text-xs text-green-400">KM illimitati inclusi per questa categoria</p>
+                  return (
+                    <div className="p-3 rounded-md border border-green-600/40 bg-green-900/10">
+                      <span className="text-green-400 font-bold text-sm">{km} km inclusi</span>
+                      <span className="text-theme-text-muted text-xs ml-2">({days} {days === 1 ? 'giorno' : 'giorni'})</span>
+                    </div>
+                  )
+                })()}
                 <div
-                  className={`p-3 rounded-md border cursor-pointer transition-all flex items-center gap-2 ${formData.km_limit === '50/giorno' && !formData.unlimited_km
+                  className={`p-3 rounded-md border cursor-pointer transition-all flex items-center gap-2 ${formData.km_limit === DEFAULT_KM_LIMIT && !formData.unlimited_km
                     ? 'border-theme-text-primary bg-theme-text-primary/5'
                     : 'border-theme-border hover:border-theme-border'
                     } ${formData.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: '50/giorno' }))}
+                  onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: DEFAULT_KM_LIMIT }))}
                 >
-                  <span className="text-theme-text-primary font-bold text-sm">50 Km / Giorno</span>
+                  <span className="text-theme-text-primary font-bold text-sm">100 Km / Giorno</span>
                 </div>
               </div>
 
@@ -5411,19 +6180,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 placeholder="es. 150 (Lascia vuoto se Illimitati)"
                 disabled={formData.unlimited_km}
               />
-              <div className="flex items-center gap-2 p-3  rounded-lg border border-theme-border">
+              <div className={`flex items-center gap-2 p-3 rounded-lg border ${formData.unlimited_km ? 'border-blue-500 bg-blue-900/10' : 'border-theme-border'}`}>
                 <input
                   type="checkbox"
                   id="unlimited_km"
                   checked={formData.unlimited_km}
                   onChange={(e) => {
                     const checked = e.target.checked
-                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : '1.80' }))
+                    const vehicleName = vehicles.find(v => v.id === formData.vehicle_id)?.display_name || ''
+                    const sforo = getVehicleSforoOverride(rentalConfig, formData.vehicle_id) || getSforoForVehicle(vehicleName)
+                    setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : sforo }))
                   }}
                   className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
                 />
                 <label htmlFor="unlimited_km" className="text-sm text-theme-text-secondary cursor-pointer">
                   KM Illimitati
+                  {(() => {
+                    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
+                    if (selectedVehicle) {
+                      const tier = customerTier?.tier
+                      const price = getUnlimitedKmPrice(selectedVehicle, tier)
+                      if (price === 0) return null // Urban: KM already unlimited
+                      return ` (+€${price}/giorno)`
+                    }
+                    return ''
+                  })()}
                 </label>
               </div>
               <Input
@@ -5622,6 +6403,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         >
                           Contratto
                         </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleResendContract(booking) }}
+                          className="px-3 py-1 min-h-[44px] bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap flex items-center gap-1"
+                          title="Rinvia link firma contratto via WhatsApp"
+                        >
+                          Rinvia
+                        </button>
                         {/* Fattura Button (Mobile) */}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
@@ -5796,6 +6584,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               >
                                 Cancella
                               </button>
+                              {booking.contract_url && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleResendContract(booking) }}
+                                  className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
+                                >
+                                  Rinvia Contratto
+                                </button>
+                              )}
                               {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
@@ -5904,7 +6700,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div><span className="text-theme-text-muted">Luogo Ritiro:</span> <span className="text-theme-text-primary">{selectedBooking.pickup_location || '-'}</span></div>
                         <div><span className="text-theme-text-muted">Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_date ? new Date(typeof selectedBooking.dropoff_date === 'number' ? selectedBooking.dropoff_date * 1000 : selectedBooking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
                         <div><span className="text-theme-text-muted">Luogo Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_location || '-'}</span></div>
-                        <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{({'RCA':'Kasko','KASKO':'Kasko','KASKO_BASE':'Kasko','KASKO_BLACK':'Kasko Black','KASKO_SIGNATURE':'Kasko Signature','DR7':'Kasko DR7'} as Record<string,string>)[selectedBooking.booking_details?.insuranceOption || ''] || selectedBooking.booking_details?.insuranceOption || 'Kasko'}</span></div>
+                        <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{({'RCA':'RCA Compresa (no Kasko)','KASKO':'Kasko Base','KASKO_BASE':'Kasko Base','KASKO_BLACK':'Kasko Black','KASKO_SIGNATURE':'Kasko Signature','DR7':'Kasko DR7'} as Record<string,string>)[selectedBooking.booking_details?.insuranceOption || ''] || selectedBooking.booking_details?.insuranceOption || 'Kasko Base'}</span></div>
                         <div><span className="text-theme-text-muted">Cauzione:</span> <span className="text-theme-text-primary">{
                           selectedBooking.booking_details?.depositOption === 'no_deposit'
                             ? `Senza cauzione (+30% = €${selectedBooking.booking_details?.noDepositSurcharge?.toFixed(2) || '0.00'})`
@@ -5915,9 +6711,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{(() => {
                           const bd = selectedBooking.booking_details;
                           if (bd?.unlimited_km || bd?.km_limit === 'Illimitati') return 'KM Illimitati';
-                          if (bd?.km_limit === '50/giorno' && selectedBooking.pickup_date && selectedBooking.dropoff_date) {
+                          const perDayMatch = bd?.km_limit?.match?.(/^(\d+)\/giorno$/)
+                          if (perDayMatch && selectedBooking.pickup_date && selectedBooking.dropoff_date) {
+                            const kmPerDay = parseInt(perDayMatch[1])
                             const days = Math.ceil((new Date(selectedBooking.dropoff_date).getTime() - new Date(selectedBooking.pickup_date).getTime()) / (1000 * 60 * 60 * 24));
-                            return `${50 * days} Km (50/g x ${days}gg)`;
+                            return `${kmPerDay * days} Km (${kmPerDay}/g x ${days}gg)`;
                           }
                           return bd?.km_limit ? `${bd.km_limit} km` : 'KM Illimitati';
                         })()}</span></div>
@@ -6005,15 +6803,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       {!selectedBooking.contract_url && generatingContract ? 'Generazione in corso...' : selectedBooking.contract_url ? 'Scarica Contratto' : 'Genera Contratto'}
                     </button>
                   )}
-                  {selectedBooking.status !== 'cancelled' && selectedBooking.booking_details?.deposit && selectedBooking.booking_details.deposit > 0 && (
+                  {selectedBooking.contract_url && (
                     <button
-                      onClick={() => handleCreatePreAuth(selectedBooking)}
-                      disabled={creatingPreAuth}
-                      className="flex-1 px-4 py-3 bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary transition-colors font-medium disabled:opacity-50"
+                      onClick={() => handleResendContract(selectedBooking)}
+                      className="flex-1 px-4 py-3 bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary transition-colors font-medium"
                     >
-                      {creatingPreAuth ? 'Creazione Pre-Auth...' : 'Pre-Auth Cauzione'}
+                      Rinvia Contratto
                     </button>
                   )}
+                  {/* Pre-Auth Cauzione disabled — Nexi capture not reliable via API */}
                   {selectedBooking.status !== 'cancelled' && (
                     <button
                       onClick={() => {
@@ -6280,6 +7078,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )}
 
       </div >
+
+      {/* Preventivo Modal */}
+      <PreventivoModal
+        isOpen={showPreventivoModal}
+        onClose={() => setShowPreventivoModal(false)}
+        onSaved={() => {}}
+      />
     </>
   )
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import NuovaCauzioneModal from './NuovaCauzioneModal'
+import CassaCauzioneModal from './CassaCauzioneModal'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
@@ -40,6 +41,7 @@ export default function CauzioniTab() {
     const [searchTerm, setSearchTerm] = useState('')
     const [filterMetodo, setFilterMetodo] = useState<string>('all')
     const [showStorico, setShowStorico] = useState(false)
+    const [cassaCauzione, setCassaCauzione] = useState<Cauzione | null>(null)
 
     // KPI Stats
     const [stats, setStats] = useState({
@@ -72,7 +74,7 @@ export default function CauzioniTab() {
                 .from('cauzioni')
                 .select(`
           *,
-          customers_extended!cliente_id(nome, cognome, denominazione, ragione_sociale, tipo_cliente, email),
+          customers_extended!cliente_id(nome, cognome, denominazione, ragione_sociale, tipo_cliente, email, telefono),
           vehicles!veicolo_id(display_name, plate)
         `)
                 .order('scadenza_cauzione', { ascending: true })
@@ -154,6 +156,7 @@ export default function CauzioniTab() {
                     days_until_deadline: daysUntilDeadline,
                     cliente_nome: clienteName,
                     cliente_email: c.customers_extended?.email || '',
+                    cliente_telefono: c.customers_extended?.telefono || '',
                     veicolo_modello: c.vehicles?.display_name || 'N/A',
                     veicolo_targa: c.vehicles?.plate || 'N/A'
                 }
@@ -242,6 +245,7 @@ export default function CauzioniTab() {
         }
     }
 
+    // @ts-ignore
     const handleAddebitaMIT = async (cauzione: Cauzione) => {
         try {
             // Find customer's contractId from customers_extended or nexi_transactions
@@ -363,7 +367,8 @@ export default function CauzioniTab() {
                     amount: cauzione.importo,
                     customerEmail: cauzione.cliente_email || '',
                     customerName: cauzione.cliente_nome || 'Cliente',
-                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`
+                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`,
+                    expirationHours: 1
                 })
             })
             const result = await response.json()
@@ -372,16 +377,7 @@ export default function CauzioniTab() {
             if (!response.ok) throw new Error(result.error || 'Errore generazione link')
 
             if (result.paymentUrl) {
-                // Copy to clipboard (with fallback)
-                try {
-                    await navigator.clipboard.writeText(result.paymentUrl)
-                    toast.success('Link pre-autorizzazione copiato!')
-                } catch {
-                    // Fallback: prompt user to copy manually
-                    prompt('Copia il link:', result.paymentUrl)
-                }
-
-                // Send via WhatsApp if phone available
+                // Send via WhatsApp first (priority)
                 const phone = cauzione.cliente_telefono
                 if (phone) {
                     await fetch('/.netlify/functions/send-whatsapp-notification', {
@@ -389,10 +385,18 @@ export default function CauzioniTab() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: phone,
-                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nPer completare la pre-autorizzazione della cauzione di *€${Number(cauzione.importo).toFixed(2)}* per ${cauzione.veicolo_modello || 'il veicolo'}, clicchi qui:\n${result.paymentUrl}\n\nL'importo verrà solo bloccato sulla carta e sbloccato al termine del noleggio.\n\nGrazie,\nDR7`
+                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nLe ricordiamo che la Preautorizzazione per la cauzione riferita alla prenotazione #${(cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'} è ancora in sospeso.\n\nPer completare il pagamento di €${Number(cauzione.importo).toFixed(2)}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nNel frattempo può registrarsi gratuitamente sul nostro sito,\nricevere subito 10€ spendibile nel wallet e beneficiare subito dei nostri sconti:\n\n➡️ www.dr7empire.com`
                         })
                     })
-                    toast.success('Link inviato via WhatsApp!')
+                    toast.success('Link cauzione inviato via WhatsApp al cliente!')
+                } else {
+                    // No phone — copy to clipboard as fallback
+                    try {
+                        await navigator.clipboard.writeText(result.paymentUrl)
+                        toast.success('Link copiato! Nessun telefono trovato per inviare WhatsApp.')
+                    } catch {
+                        prompt('Nessun telefono trovato. Copia il link:', result.paymentUrl)
+                    }
                 }
 
                 fetchCauzioni()
@@ -404,6 +408,7 @@ export default function CauzioniTab() {
         }
     }
 
+    // @ts-ignore
     const handleCreatePreauth = async (cauzione: Cauzione) => {
         try {
             const response = await authFetch('/.netlify/functions/nexi-create-preauth', {
@@ -414,7 +419,8 @@ export default function CauzioniTab() {
                     amount: cauzione.importo,
                     customerEmail: cauzione.cliente_email,
                     customerName: cauzione.cliente_nome,
-                    description: `Cauzione ${cauzione.veicolo_modello} - ${cauzione.cliente_nome}`
+                    description: `Cauzione ${cauzione.veicolo_modello} - ${cauzione.cliente_nome}`,
+                    expirationHours: 1
                 })
             })
 
@@ -425,8 +431,26 @@ export default function CauzioniTab() {
             }
 
             if (result.paymentUrl) {
-                window.open(result.paymentUrl, '_blank', 'width=600,height=700')
-                toast.success('Pagina di pagamento Nexi aperta. Completa il pagamento con il cliente.')
+                // Copy to clipboard
+                try {
+                    await navigator.clipboard.writeText(result.paymentUrl)
+                } catch { /* ignore */ }
+
+                // Send via WhatsApp with full branded message
+                const phone = cauzione.cliente_telefono
+                if (phone) {
+                    await fetch('/.netlify/functions/send-whatsapp-notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customPhone: phone,
+                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nLe ricordiamo che la Preautorizzazione per la cauzione riferita alla prenotazione #${(cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'} è ancora in sospeso.\n\nPer completare il pagamento di €${Number(cauzione.importo).toFixed(2)}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nNel frattempo può registrarsi gratuitamente sul nostro sito,\nricevere subito 10€ spendibile nel wallet e beneficiare subito dei nostri sconti:\n\n➡️ www.dr7empire.com`
+                        })
+                    })
+                    toast.success('Link cauzione inviato via WhatsApp!')
+                } else {
+                    toast.success('Link cauzione creato e copiato!')
+                }
             }
 
             fetchCauzioni()
@@ -437,6 +461,7 @@ export default function CauzioniTab() {
         }
     }
 
+    // @ts-ignore
     const handleMarkSbloccataPreauth = async (cauzione: Cauzione) => {
         try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -480,6 +505,53 @@ export default function CauzioniTab() {
         }
     }
 
+    // Capture full preauth amount
+    // @ts-ignore
+    const handleIncassaFull = async (cauzione: Cauzione) => {
+        const amount = Number(cauzione.importo)
+        try {
+            toast.loading(`Incasso €${amount.toFixed(2)} in corso...`, { id: 'capture' })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const nexiTransactionId = (cauzione as any).nexi_transaction_id
+            if (nexiTransactionId) {
+                const response = await fetch('/.netlify/functions/nexi-capture-preauth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cauzioneId: cauzione.id,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        operationId: (cauzione as any).nexi_operation_id || nexiTransactionId,
+                        amount: amount,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        orderId: (cauzione as any).nexi_order_id
+                    })
+                })
+                const result = await response.json()
+                toast.dismiss('capture')
+                if (!response.ok) throw new Error(result.error || 'Errore Nexi')
+                toast.success(`Incassato €${amount.toFixed(2)} con successo!`)
+            } else {
+                toast.dismiss('capture')
+                // No Nexi transaction — mark manually
+                await supabase.from('cauzioni').update({
+                    stato: 'Incassata',
+                    data_incasso: new Date().toISOString(),
+                    note: `Incassato €${amount.toFixed(2)} manualmente`,
+                    updated_at: new Date().toISOString()
+                }).eq('id', cauzione.id)
+                toast.success(`Incassato €${amount.toFixed(2)} (manuale)`)
+            }
+            fetchCauzioni()
+        } catch (error: unknown) {
+            toast.dismiss('capture')
+            const _errMsg = error instanceof Error ? error.message : String(error)
+            console.error('Error capturing:', error)
+            toast.error(`Errore: ${_errMsg}`)
+        }
+    }
+
+    // Capture partial preauth amount (with prompt)
+    // @ts-ignore
     const handleIncassa = async (cauzione: Cauzione) => {
         const importo = prompt(`Importo da incassare (max €${cauzione.importo}):`, String(cauzione.importo))
         if (importo === null) return
@@ -578,26 +650,8 @@ export default function CauzioniTab() {
         }
     }
 
-    const handleCassa = async (cauzione: Cauzione) => {
-        try {
-            const { error } = await supabase
-                .from('cauzioni')
-                .update({
-                    stato: 'Bloccata',
-                    note: 'Incassata in cassa',
-                    data_incasso: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', cauzione.id)
-
-            if (error) throw error
-            toast.success('Cauzione incassata in cassa')
-            fetchCauzioni()
-        } catch (error: unknown) {
-          const _errMsg = error instanceof Error ? error.message : String(error)
-            console.error('Error marking cauzione as danno:', error)
-            toast.error(`Errore: ${_errMsg}`)
-        }
+    const handleCassa = (cauzione: Cauzione) => {
+        setCassaCauzione(cauzione)
     }
 
     const handleRevertStato = async (cauzione: Cauzione, newStato: string) => {
@@ -818,7 +872,6 @@ export default function CauzioniTab() {
                         <option value="all">Tutti i metodi</option>
                         <option value="bonifico">Bonifico</option>
                         <option value="carta">Carta</option>
-                        <option value="preautorizzazione">Preautorizzazione</option>
                     </select>
                 </div>
             </div>
@@ -908,42 +961,13 @@ export default function CauzioniTab() {
                                             >
                                                 INCASSA
                                             </button>
-                                            <button
-                                                onClick={() => handleAddebitaMIT(cauzione)}
-                                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors font-semibold"
-                                            >
-                                                PRE-AUTH
-                                            </button>
+                                            {/* Pre-auth disabled — Nexi Pay by Link doesn't support capture via API */}
                                             <button
                                                 onClick={() => handleSendPayLink(cauzione)}
-                                                className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors font-semibold"
+                                                className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-dr7-gold/80 transition-colors font-semibold"
                                             >
                                                 INVIA LINK
                                             </button>
-                                            {cauzione.metodo === 'preautorizzazione' && !cauzione.nexi_transaction_id && (
-                                                <button
-                                                    onClick={() => handleCreatePreauth(cauzione)}
-                                                    className="px-3 py-2 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors font-semibold"
-                                                >
-                                                    CREA PREAUTH
-                                                </button>
-                                            )}
-                                            {cauzione.metodo === 'preautorizzazione' && cauzione.nexi_transaction_id && (
-                                                <>
-                                                    <button
-                                                        onClick={() => handleIncassa(cauzione)}
-                                                        className="px-3 py-2 bg-purple-600 text-white text-xs rounded-full hover:bg-purple-700 transition-colors"
-                                                    >
-                                                        INCASSA
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleMarkSbloccataPreauth(cauzione)}
-                                                        className="px-3 py-2 bg-theme-bg-hover text-theme-text-primary text-xs rounded-full hover:bg-theme-bg-tertiary transition-colors"
-                                                    >
-                                                        SBLOCCA PREAUTH
-                                                    </button>
-                                                </>
-                                            )}
                                             <button
                                                 onClick={() => handleMarkRestituita(cauzione)}
                                                 className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
@@ -1045,6 +1069,15 @@ export default function CauzioniTab() {
                     cauzione={selectedCauzione}
                     onClose={handleCloseModal}
                     onSave={handleSaveSuccess}
+                />
+            )}
+
+            {/* Cassa Modal */}
+            {cassaCauzione && (
+                <CassaCauzioneModal
+                    cauzione={cassaCauzione}
+                    onClose={() => setCassaCauzione(null)}
+                    onSuccess={() => { setCassaCauzione(null); fetchCauzioni() }}
                 />
             )}
         </div>

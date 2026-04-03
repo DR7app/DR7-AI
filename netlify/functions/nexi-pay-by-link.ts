@@ -83,9 +83,14 @@ const handler: Handler = async (event) => {
             expirationDate.setDate(expirationDate.getDate() + Math.max(expirationDays, 1));
         }
         const linkExpiresAt = expirationDate.toISOString();
-        const expirationDateStr = expirationDate.toISOString().split('T')[0];
+        // Nexi expirationDate only accepts yyyy-MM-dd (no time precision).
+        // For short expiry (expirationHours), use today's date — Nexi keeps the link
+        // valid until end of that day. Our cancel-unpaid-nexi-bookings job enforces
+        // the actual 1-hour booking hold by cancelling unpaid bookings.
+        const toRomeDate = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }); // sv-SE gives yyyy-MM-dd
+        const expirationDateStr = toRomeDate(expirationDate);
 
-        console.log(`[nexi-pay-by-link] bookingId=${bookingId}, amount=${amount}, purpose=${paymentPurpose || 'booking'}, expires=${linkExpiresAt}`);
+        console.log(`[nexi-pay-by-link] bookingId=${bookingId}, amount=${amount}, purpose=${paymentPurpose || 'booking'}, expires=${linkExpiresAt}, Rome date for Nexi: ${expirationDateStr}`);
 
         // Create payment link request (using /v2/orders/paybylink endpoint)
         const payload = {
@@ -101,8 +106,14 @@ const handler: Handler = async (event) => {
             },
             paymentSession: {
                 actionType: 'PAY',
+                captureType: 'IMPLICIT',  // Force auto-capture — charge immediately, not preauth
                 amount: amountCents.toString(),
                 language: 'ita',
+                recurrence: {
+                    action: 'CONTRACT_CREATION',
+                    contractId: orderId,
+                    contractType: 'MIT_UNSCHEDULED'
+                },
                 expirationDate: expirationDateStr,
                 expirationTime: expirationDate.toISOString(),
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,

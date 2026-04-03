@@ -84,6 +84,32 @@ const handler: Handler = async (event) => {
             };
         }
 
+        // Check if the payment link has expired (server-side enforcement)
+        const { data: txn } = await supabase
+            .from('nexi_transactions')
+            .select('metadata')
+            .eq('order_id', orderId)
+            .maybeSingle();
+
+        const expiresAt = txn?.metadata?.expires_at;
+        if (expiresAt && new Date() > new Date(expiresAt)) {
+            console.log(`[nexi-preauth-callback] REJECTED — link expired at ${expiresAt}, payment arrived at ${new Date().toISOString()}`);
+            await supabase.from('cauzioni').update({
+                note: `Pagamento rifiutato — link scaduto (scadenza: ${expiresAt})`,
+                updated_at: new Date().toISOString()
+            }).eq('id', cauzione.id);
+            // Update transaction as expired too
+            await supabase.from('nexi_transactions').update({
+                status: 'expired',
+                metadata: { ...txn.metadata, rejected_at: new Date().toISOString(), reason: 'link_expired' }
+            }).eq('order_id', orderId);
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({ success: false, error: 'Link scaduto' })
+            };
+        }
+
         // Update cauzione based on result
         // AUTHORIZED = funds held (correct for preauth), EXECUTED = funds charged (wrong for preauth)
         const isPreauthorized = result === 'AUTHORIZED' || (resultCode === '00' && result !== 'EXECUTED');

@@ -214,6 +214,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       // Use centralized visibility rule: hide cancelled, expired, and expired pending_payment
       if (b.status === 'cancelled' || b.status === 'expired') return
       if (b.status === 'pending_payment' && b.payment_status === 'expired') return
+      // Pending Nexi Pay by Link bookings are shown on calendar (slot blocked for 1h)
       const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
       const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
 
@@ -523,6 +524,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
                       let bgClass = "bg-dr7-gold"
                       let borderClass = "border-dr7-gold/30"
+
+                      // Pending Nexi payment = dashed border, reduced opacity
+                      const isPendingNexi = evt.booking.payment_method === 'Nexi Pay by Link' && evt.booking.payment_status === 'pending'
+                      if (isPendingNexi) {
+                        bgClass = "bg-amber-500/50"
+                        borderClass = "border-amber-400 border-dashed"
+                      }
 
                       // Check if this is an unavailability/mechanic booking
                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')

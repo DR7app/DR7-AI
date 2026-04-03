@@ -175,14 +175,21 @@ export async function searchIncomingInvoices(params: {
 
     console.log('[Aruba] Searching incoming invoices:', payload)
 
-    const response = await fetch(`${ARUBA_API_URL}/services/invoice/in/findByUsername`, {
-        method: 'POST',
+    // Build query string — Aruba incoming search uses GET with query params
+    const queryParams = new URLSearchParams()
+    queryParams.set('username', USERNAME)
+    if (params.page != null) queryParams.set('page', String(params.page))
+    if (params.pageSize != null) queryParams.set('pageSize', String(params.pageSize))
+    if (params.startDate) queryParams.set('startDate', params.startDate)
+    if (params.endDate) queryParams.set('endDate', params.endDate)
+    if (params.senderDescription) queryParams.set('senderDescription', params.senderDescription)
+
+    const response = await fetch(`${ARUBA_API_URL}/services/invoice/in/findByUsername?${queryParams}`, {
+        method: 'GET',
         headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json;charset=UTF-8',
             'Accept': 'application/json'
         },
-        body: JSON.stringify(payload)
     })
 
     if (!response.ok) {

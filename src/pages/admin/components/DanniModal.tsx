@@ -237,7 +237,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     customPhone: custPhone,
-                                    customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${booking.customer_name},\n\nIn riferimento al contratto di noleggio, sono stati rilevati danni per un importo di €${cartTotal.toFixed(2)}.\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 1 ora.\n\nGrazie per la collaborazione.\n\nDR7`
+                                    customMessage: `Gentile ${booking.customer_name},\n\nIn riferimento al contratto di noleggio, sono stati rilevati danni per un importo di €${cartTotal.toFixed(2)}.\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 1 ora.\n\nGrazie per la collaborazione.\n\nDR7`
                                 })
                             })
                         }

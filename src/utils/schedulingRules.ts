@@ -194,7 +194,7 @@ async function fetchWashEvents(
 ): Promise<SchedulingEvent[]> {
     const { data: bookings, error } = await supabase
         .from('bookings')
-        .select('id, appointment_date, appointment_time, pickup_date, dropoff_date, vehicle_name, vehicle_plate, service_name, booking_details')
+        .select('id, appointment_date, appointment_time, pickup_date, dropoff_date, vehicle_name, vehicle_plate, service_name, customer_name, booking_details')
         .eq('service_type', 'car_wash')
         .neq('status', 'cancelled')
         .gte('appointment_date', startDate.toISOString().split('T')[0])
@@ -206,7 +206,12 @@ async function fetchWashEvents(
     }
 
     return (bookings || [])
-        .filter(b => !excludeBookingId || b.id !== excludeBookingId)
+        .filter(b => {
+            if (excludeBookingId && b.id === excludeBookingId) return false
+            // Exclude "Lavaggio Rientro" — internal return washes don't block external car wash slots
+            if (b.customer_name === 'Lavaggio Rientro' || b.booking_details?.auto_created) return false
+            return true
+        })
         .map(b => {
             // Use pickup_date if available, otherwise construct from appointment_date + appointment_time
             let washDateTime: Date

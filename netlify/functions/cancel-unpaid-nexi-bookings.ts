@@ -5,8 +5,62 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+const NEXI_API_KEY = process.env.NEXI_API_KEY!;
+const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
+
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
+
+/**
+ * Deactivate a Nexi pay-by-link so the customer can no longer pay.
+ * Uses DELETE /v2/orders/paybylink/{linkId} or cancels via orderId lookup.
+ */
+async function deactivateNexiLink(orderId: string): Promise<boolean> {
+    if (!NEXI_API_KEY || !orderId) return false;
+
+    try {
+        // First, look up the order to find the linkId
+        const orderRes = await fetch(`${NEXI_BASE_URL}/orders/${orderId}`, {
+            headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': crypto.randomUUID() }
+        });
+
+        if (!orderRes.ok) {
+            console.log(`[expire-unpaid-nexi] Order lookup failed for ${orderId}: ${orderRes.status}`);
+            return false;
+        }
+
+        const orderData = await orderRes.json();
+        const links = orderData.paymentLink || [];
+        const activeLink = links.find((l: any) => l.status === 'ACTIVE');
+
+        if (!activeLink?.linkId) {
+            console.log(`[expire-unpaid-nexi] No active link found for ${orderId}`);
+            return false;
+        }
+
+        // Cancel the link via Nexi API
+        const cancelUrl = NEXI_BASE_URL.replace('/v1', '/v2') + `/orders/paybylink/${activeLink.linkId}`;
+        const cancelRes = await fetch(cancelUrl, {
+            method: 'DELETE',
+            headers: {
+                'X-Api-Key': NEXI_API_KEY,
+                'Correlation-Id': crypto.randomUUID(),
+            }
+        });
+
+        if (cancelRes.ok || cancelRes.status === 204) {
+            console.log(`[expire-unpaid-nexi] Nexi link ${activeLink.linkId} deactivated for order ${orderId}`);
+            return true;
+        } else {
+            const errText = await cancelRes.text();
+            console.warn(`[expire-unpaid-nexi] Failed to deactivate link ${activeLink.linkId}: ${cancelRes.status} ${errText.substring(0, 200)}`);
+            return false;
+        }
+    } catch (err: any) {
+        console.warn(`[expire-unpaid-nexi] Error deactivating link for ${orderId}: ${err.message}`);
+        return false;
+    }
+}
 
 /**
  * Expire Unpaid Nexi Bookings — Scheduled Job (every 5 minutes)
@@ -22,7 +76,7 @@ const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
  *      - status IN ('pending', 'confirmed', 'pending_payment')
  *      - created_at < 1 hour ago
  *      - paid_at IS NULL
- *   2. For each: set status='expired', payment_status='expired', expired_at=now()
+ *   2. For each: deactivate Nexi link, set status='expired', payment_status='expired', expired_at=now()
  *   3. Notify customer + admin via WhatsApp
  *
  * IDEMPOTENCY: status='expired' bookings are never re-processed (query excludes them).
@@ -87,7 +141,14 @@ const cancelHandler: Handler = async () => {
 
             console.log(`[expire-unpaid-nexi] Processing ${bookingType} #${bookingRef} (status=${booking.status}, payment=${booking.payment_status})`);
 
-            // CONDITIONAL UPDATE: Only expire if still in a pending state
+            // 1. Deactivate the Nexi payment link so customer can't pay anymore
+            const nexiOrderId = booking.booking_details?.nexi_order_id;
+            let linkDeactivated = false;
+            if (nexiOrderId) {
+                linkDeactivated = await deactivateNexiLink(nexiOrderId);
+            }
+
+            // 2. CONDITIONAL UPDATE: Only expire if still in a pending state
             // This prevents race conditions with the payment webhook
             const { data: updated, error: updateErr } = await supabase
                 .from('bookings')
@@ -98,7 +159,8 @@ const cancelHandler: Handler = async () => {
                     booking_details: {
                         ...(booking.booking_details || {}),
                         expired_reason: 'Pagamento Nexi non ricevuto entro 1 ora',
-                        expired_at: now.toISOString()
+                        expired_at: now.toISOString(),
+                        nexi_link_deactivated: linkDeactivated,
                     }
                 })
                 .eq('id', booking.id)
@@ -118,10 +180,9 @@ const cancelHandler: Handler = async () => {
             }
 
             expiredCount++;
-            console.log(`[expire-unpaid-nexi] Expired ${bookingType} #${bookingRef} (${booking.customer_name})`);
+            console.log(`[expire-unpaid-nexi] Expired ${bookingType} #${bookingRef} (${booking.customer_name}), link deactivated: ${linkDeactivated}`);
 
             // Also mark the nexi_transaction as expired
-            const nexiOrderId = booking.booking_details?.nexi_order_id;
             if (nexiOrderId) {
                 await supabase
                     .from('nexi_transactions')
@@ -140,7 +201,7 @@ const cancelHandler: Handler = async () => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: custPhone,
-                            customMessage: `⚠️ *Prenotazione scaduta*\n\nGentile ${custName},\n\nLa prenotazione #${bookingRef} è stata annullata perché il pagamento non è stato ricevuto entro 1 ora.\n\nSe desidera prenotare nuovamente, ci contatti.\n\nDR7`
+                            customMessage: `⚠️ *Prenotazione scaduta*\n\nGentile ${custName},\n\nLa prenotazione #${bookingRef} è stata annullata perché il pagamento non è stato ricevuto entro 1 ora.\n\nIl link di pagamento è stato disattivato.\n\nSe desidera prenotare nuovamente, ci contatti.\n\nDR7`
                         })
                     });
                 } catch (whatsappErr) {
@@ -148,7 +209,7 @@ const cancelHandler: Handler = async () => {
                 }
             }
 
-            // Notify admin
+            // 4. Notify admin
             const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
             if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
                 try {
@@ -157,7 +218,7 @@ const cancelHandler: Handler = async () => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             chatId: `${NOTIFICATION_PHONE}@c.us`,
-                            message: `⏰ *PRENOTAZIONE SCADUTA*\n\n*Tipo:* ${bookingType}\n*Cliente:* ${booking.customer_name}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n*ID:* #${bookingRef}\n\nMotivo: Pagamento non ricevuto entro 1 ora. Slot liberato.`
+                            message: `⏰ *PRENOTAZIONE SCADUTA*\n\n*Tipo:* ${bookingType}\n*Cliente:* ${booking.customer_name}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n*ID:* #${bookingRef}\n\nMotivo: Pagamento non ricevuto entro 1 ora.\nLink Nexi: ${linkDeactivated ? 'disattivato' : 'non trovato/già scaduto'}`
                         })
                     });
                 } catch (adminNotifyErr) {

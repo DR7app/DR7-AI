@@ -9,6 +9,7 @@ interface State {
   hasError: boolean
   error: Error | null
   isChunkError: boolean
+  errorInfo: string | null
 }
 
 /**
@@ -35,10 +36,10 @@ const REFRESH_KEY = 'chunk_error_refresh'
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props)
-    this.state = { hasError: false, error: null, isChunkError: false }
+    this.state = { hasError: false, error: null, isChunkError: false, errorInfo: null }
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return {
       hasError: true,
       error,
@@ -48,6 +49,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('ErrorBoundary caught:', error, info.componentStack)
+    this.setState({ errorInfo: info.componentStack || null })
 
     // For chunk errors, attempt ONE automatic hard refresh
     if (isChunkLoadError(error) && !sessionStorage.getItem(REFRESH_KEY)) {
@@ -62,6 +64,10 @@ export default class ErrorBoundary extends Component<Props, State> {
     // Clear the refresh guard so next time we can auto-refresh again
     sessionStorage.removeItem(REFRESH_KEY)
     window.location.reload()
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null, isChunkError: false, errorInfo: null })
   }
 
   render() {
@@ -95,21 +101,35 @@ export default class ErrorBoundary extends Component<Props, State> {
       // Generic error
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
-          <div className="bg-gray-800 rounded-xl p-8 max-w-md w-full text-center border border-gray-700">
-            <div className="text-4xl mb-4">&#9888;&#65039;</div>
+          <div className="bg-gray-800 rounded-xl p-8 max-w-lg w-full text-center border border-gray-700">
             <h1 className="text-xl font-bold text-white mb-2">Errore imprevisto</h1>
             <p className="text-gray-400 mb-4 text-sm">
-              Si è verificato un errore. Prova a ricaricare la pagina.
+              Si è verificato un errore. Puoi provare a ripristinare o ricaricare la pagina.
             </p>
-            <p className="text-gray-500 text-xs mb-6 font-mono break-all">
-              {this.state.error?.message}
-            </p>
-            <button
-              onClick={this.handleRefresh}
-              className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              Ricarica pagina
-            </button>
+            <div className="bg-gray-900 rounded-lg p-3 mb-6 text-left max-h-40 overflow-auto">
+              <p className="text-red-400 text-xs font-mono break-all">
+                {this.state.error?.message}
+              </p>
+              {this.state.errorInfo && (
+                <p className="text-gray-600 text-xs font-mono mt-2 whitespace-pre-wrap">
+                  {this.state.errorInfo.slice(0, 500)}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={this.handleRetry}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                Riprova
+              </button>
+              <button
+                onClick={this.handleRefresh}
+                className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                Ricarica pagina
+              </button>
+            </div>
           </div>
         </div>
       )

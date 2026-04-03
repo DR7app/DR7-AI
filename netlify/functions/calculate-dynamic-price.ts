@@ -101,7 +101,7 @@ export const handler: Handler = async (event) => {
     const pricingInput: PricingInput = {
       vehicleId: vehicle.id,
       vehicleName: vehicle.display_name,
-      vehicleDailyRateCents: vehicle.daily_rate,
+      vehicleDailyRateCents: vehicle.daily_rate * 100,
       vehicleCategory,
       pickupDate: pickup_date,
       dropoffDate: dropoff_date,

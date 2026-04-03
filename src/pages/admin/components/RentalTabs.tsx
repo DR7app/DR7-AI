@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import ReservationsTab from './ReservationsTab'
 import CalendarTab from './CalendarTab'
+import PreventiviTab from './PreventiviTab'
 
 export default function RentalTabs() {
-    const [activeSubTab, setActiveSubTab] = useState<'bookings' | 'calendar'>('bookings')
+    const [activeSubTab, setActiveSubTab] = useState<'bookings' | 'calendar' | 'preventivi'>('bookings')
 
     return (
         <div className="space-y-4">
@@ -26,11 +27,21 @@ export default function RentalTabs() {
                 >
                     Calendario
                 </button>
+                <button
+                    onClick={() => setActiveSubTab('preventivi')}
+                    className={`px-4 py-2 font-medium transition-colors ${activeSubTab === 'preventivi'
+                        ? 'text-dr7-gold border-b-2 border-dr7-gold'
+                        : 'text-theme-text-muted hover:text-theme-text-primary'
+                        }`}
+                >
+                    Preventivi
+                </button>
             </div>
 
             <div>
                 {activeSubTab === 'bookings' && <ReservationsTab />}
                 {activeSubTab === 'calendar' && <CalendarTab />}
+                {activeSubTab === 'preventivi' && <PreventiviTab />}
             </div>
         </div>
     )

@@ -196,6 +196,7 @@ export function getEarliestValidPickupTime(
         if (booking.status === 'cancelled' || booking.status === 'expired') return false
         // Exclude expired pending_payment bookings (payment link timed out)
         if (booking.status === 'pending_payment' && booking.payment_status === 'expired') return false
+        // Pending Nexi Pay by Link bookings BLOCK the slot for 1 hour while awaiting payment
         return matchVehicleByPlate(booking, vehicle)
     })
 

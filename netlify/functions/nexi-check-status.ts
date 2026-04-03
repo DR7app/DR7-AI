@@ -7,7 +7,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Check status for pre-auth orders needs the explicit key
-const NEXI_API_KEY = process.env.NEXI_API_KEY_EXPLICIT || process.env.NEXI_API_KEY!;
+const NEXI_API_KEY = process.env.NEXI_API_KEY!;
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
 const handler: Handler = async (event) => {
@@ -22,7 +22,65 @@ const handler: Handler = async (event) => {
     }
 
     try {
-        const { orderId } = JSON.parse(event.body || '{}');
+        const { orderId, mode } = JSON.parse(event.body || '{}');
+
+        // Mode 'find_operation': search GET /operations to find operationId for an order
+        if (mode === 'find_operation' && orderId) {
+            const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+            })
+            const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+            const toTime = new Date().toISOString()
+            const url = `${NEXI_BASE_URL}/operations?fromTime=${encodeURIComponent(fromTime)}&toTime=${encodeURIComponent(toTime)}&maxRecords=500`
+            console.log('[nexi-check-status] Searching operations for order:', orderId)
+            const resp = await fetch(url, {
+                headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': correlationId }
+            })
+            const text = await resp.text()
+            let data: any
+            try { data = JSON.parse(text) } catch {
+                return { statusCode: 502, headers, body: JSON.stringify({ error: text.substring(0, 300) }) }
+            }
+            if (!resp.ok) {
+                return { statusCode: resp.status, headers, body: JSON.stringify({ error: data.errors?.[0]?.description || 'API error', raw: data }) }
+            }
+            const allOps = data.operations || []
+            // If orderId starts with 'verify_op:', verify a single operationId
+            if (orderId.startsWith('verify_op:')) {
+                const opId = orderId.replace('verify_op:', '')
+                const opRes = await fetch(`${NEXI_BASE_URL}/operations/${opId}`, {
+                    headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': correlationId }
+                })
+                const opText = await opRes.text()
+                let opData: any
+                try { opData = JSON.parse(opText) } catch { opData = { raw: opText.substring(0, 500) } }
+                return { statusCode: opRes.status, headers, body: JSON.stringify(opData) }
+            }
+            // If orderId starts with 'search_auth:', find by authCode
+            if (orderId.startsWith('search_auth:')) {
+                const targetAuth = orderId.replace('search_auth:', '')
+                const matched = allOps.filter((op: any) => op.additionalData?.authorizationCode === targetAuth)
+                return { statusCode: 200, headers, body: JSON.stringify({ operations: matched, totalScanned: allOps.length }) }
+            }
+            // If orderId is 'all', return all uncaptured authorizations
+            if (orderId === 'all') {
+                // Group by orderId, find those with AUTH but no CAPTURE/VOID
+                const byOrder: Record<string, any[]> = {}
+                for (const op of allOps) { (byOrder[op.orderId] ||= []).push(op) }
+                const uncaptured = []
+                for (const [, opList] of Object.entries(byOrder)) {
+                    const hasAuth = opList.some((o: any) => o.operationType === 'AUTHORIZATION' && o.operationResult === 'AUTHORIZED')
+                    const hasCaptureOrVoid = opList.some((o: any) => ['CAPTURE', 'VOID', 'CANCEL', 'REFUND'].includes(o.operationType))
+                    if (hasAuth && !hasCaptureOrVoid) {
+                        uncaptured.push(opList.find((o: any) => o.operationType === 'AUTHORIZATION')!)
+                    }
+                }
+                return { statusCode: 200, headers, body: JSON.stringify({ operations: uncaptured, totalScanned: allOps.length }) }
+            }
+            const ops = allOps.filter((op: any) => op.orderId === orderId)
+            return { statusCode: 200, headers, body: JSON.stringify({ operations: ops, totalScanned: allOps.length }) }
+        }
 
         if (!orderId) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'orderId is required' }) };

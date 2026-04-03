@@ -86,7 +86,7 @@ const handler: Handler = async (event) => {
         const result = callbackData.result || op.operationResult;
         const resultCode = callbackData.resultCode;
         const authorizationCode = callbackData.authorizationCode || op.additionalData?.authorizationCode;
-        const contractId = callbackData.contractId;
+        const contractId = callbackData.contractId || op.additionalData?.contractId || orderId;
         const paymentCircuit = callbackData.paymentCircuit || op.paymentCircuit || op.additionalData?.paymentCircuit || '';
         const paymentInstrument = callbackData.paymentInstrument || op.paymentInstrument || '';
 
@@ -114,6 +114,34 @@ const handler: Handler = async (event) => {
         if (transaction.status === 'completed' || transaction.status === 'failed') {
             console.log(`[nexi-payment-callback] Transaction ${orderId} already processed (status: ${transaction.status}). Skipping.`);
             return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_processed: true, status: transaction.status }) };
+        }
+
+        // ─── EXPIRY VALIDATION ────────────────────────────────────────
+        // Reject late payments: if payment_link_expires_at has passed, the booking
+        // was already expired. Log it but don't confirm as paid.
+        const expiresAtStr = transaction.metadata?.payment_link_expires_at || transaction.metadata?.link_expires_at;
+        if (isSuccess && expiresAtStr) {
+            const expiresAt = new Date(expiresAtStr);
+            const now = new Date();
+            if (now > expiresAt) {
+                console.warn(`[nexi-payment-callback] LATE PAYMENT REJECTED — order ${orderId} expired at ${expiresAtStr}, callback received at ${now.toISOString()} (${Math.round((now.getTime() - expiresAt.getTime()) / 1000)}s late)`);
+                // Update transaction as expired (don't mark completed)
+                await supabase.from('nexi_transactions').update({
+                    status: 'expired_late_payment',
+                    metadata: {
+                        ...(transaction.metadata || {}),
+                        callback_result: result,
+                        late_payment_at: now.toISOString(),
+                        expired_at: expiresAtStr,
+                        seconds_late: Math.round((now.getTime() - expiresAt.getTime()) / 1000),
+                    },
+                    updated_at: now.toISOString()
+                }).eq('id', transaction.id);
+                // Note: Nexi already charged the card. We need to refund.
+                // For now, flag it for manual review. Auto-refund can be added later.
+                console.warn(`[nexi-payment-callback] ⚠️ MANUAL REFUND NEEDED for order ${orderId} — customer paid after link expired`);
+                return { statusCode: 200, headers, body: JSON.stringify({ status: 'expired', message: 'Payment received after link expiry — flagged for refund' }) };
+            }
         }
 
         // Detect payment purpose from metadata or description
@@ -373,7 +401,7 @@ const handler: Handler = async (event) => {
                 }
 
                 // Skip if already paid (duplicate webhook)
-                if (booking.payment_status === 'paid') {
+                if (booking.booking_details?.nexi_paid_at || booking.payment_status === 'paid' || booking.payment_status === 'succeeded' || booking.payment_status === 'completed') {
                     console.log(`[nexi-payment-callback] Booking ${booking.id} already paid — skipping duplicate confirmation`);
                     return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_paid: true }) };
                 }
@@ -382,7 +410,6 @@ const handler: Handler = async (event) => {
                 if (booking.price_total && Math.abs(transaction.amount_cents - booking.price_total) > 1) {
                     console.error(`[nexi-payment-callback] AMOUNT MISMATCH: paid ${transaction.amount_cents} cents but booking expects ${booking.price_total} cents — booking ${booking.id}`);
                     // Still confirm (payment was authorized) but log the discrepancy for manual review
-                    // Admin will be notified via the regular WhatsApp notification
                 }
 
                 // Confirm the booking — CONDITIONAL UPDATE for safety
@@ -412,11 +439,45 @@ const handler: Handler = async (event) => {
                 console.log(`[nexi-payment-callback] Booking ${booking.id} confirmed — €${amountEur} paid${wasExpired ? ' (recovered from expired)' : ''}`);
 
 
-                // Store contractId on customer for future MIT charges
-                if (contractId) {
-                    // Try by customer ID first
+                // Store contractId + card details on customer
+                {
                     const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id;
                     const custEmail = (booking.customer_email || booking.booking_details?.customer?.email || transaction.customer_email || '').toLowerCase().trim();
+
+                    // Fetch card details from Nexi operation
+                    let cardInfo: Record<string, any> = {}
+                    if (operationId) {
+                        const opDetails = await fetchNexiOperationDetails(operationId);
+                        if (opDetails) {
+                            const maskedPan = opDetails.paymentMethod?.maskedPan || opDetails.maskedPan || op.additionalData?.maskedPan || '';
+                            const circuit = opDetails.paymentMethod?.circuit || opDetails.paymentCircuit || paymentCircuit || '';
+                            const cardType = opDetails.paymentMethod?.cardType || '';
+                            // BIN lookup for credit/debit/prepaid detection
+                            let binType = '';
+                            let binBrand = '';
+                            if (maskedPan && maskedPan.length >= 6) {
+                                const binResult = await lookupBin(maskedPan.substring(0, 6));
+                                if (binResult) {
+                                    binType = binResult.type; // credit, debit, prepaid
+                                    binBrand = binResult.brand;
+                                }
+                            }
+                            cardInfo = {
+                                nexi_card_masked_pan: maskedPan,
+                                nexi_card_circuit: circuit,
+                                nexi_card_type: cardType || binType, // credit/debit/prepaid
+                                nexi_card_brand: binBrand || circuit,
+                                nexi_card_updated: new Date().toISOString(),
+                            }
+                            console.log(`[nexi-payment-callback] Card info: ${circuit} ${maskedPan} (${cardType || binType})`);
+                        }
+                    }
+
+                    const metadataUpdate = {
+                        ...(contractId ? { nexi_contract_id: contractId } : {}),
+                        nexi_contract_updated: new Date().toISOString(),
+                        ...cardInfo,
+                    }
 
                     let savedOnCustomer = false;
 
@@ -424,11 +485,11 @@ const handler: Handler = async (event) => {
                         const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('id', custId).maybeSingle();
                         if (cust) {
                             await supabase.from('customers_extended').update({
-                                metadata: { ...(cust.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                metadata: { ...(cust.metadata || {}), ...metadataUpdate },
                                 updated_at: new Date().toISOString()
                             }).eq('id', cust.id);
                             savedOnCustomer = true;
-                            console.log(`[nexi-payment-callback] Saved contractId ${contractId} on customer ${cust.id} (by ID)`);
+                            console.log(`[nexi-payment-callback] Saved card info + contractId on customer ${cust.id} (by ID)`);
                         }
                     }
 
@@ -437,16 +498,16 @@ const handler: Handler = async (event) => {
                         const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
                         if (custByEmail) {
                             await supabase.from('customers_extended').update({
-                                metadata: { ...(custByEmail.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                metadata: { ...(custByEmail.metadata || {}), ...metadataUpdate },
                                 updated_at: new Date().toISOString()
                             }).eq('id', custByEmail.id);
                             savedOnCustomer = true;
-                            console.log(`[nexi-payment-callback] Saved contractId ${contractId} on customer ${custByEmail.id} (by email: ${custEmail})`);
+                            console.log(`[nexi-payment-callback] Saved card info + contractId on customer ${custByEmail.id} (by email: ${custEmail})`);
                         }
                     }
 
                     if (!savedOnCustomer) {
-                        console.warn(`[nexi-payment-callback] Could not find customer to save contractId. custId=${custId}, email=${custEmail}`);
+                        console.warn(`[nexi-payment-callback] Could not find customer to save card info. custId=${custId}, email=${custEmail}`);
                     }
                 }
 
@@ -476,7 +537,7 @@ const handler: Handler = async (event) => {
                         const fmtApptTime = apptDate ? new Date(apptDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '';
 
                         const vehiclePlate = booking.booking_details?.vehicle_plate || booking.booking_details?.vehicle?.plate || '';
-                        custMsg = `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora.\n\n`;
+                        custMsg = ``;
                         custMsg += `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`;
                         custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`;
                         custMsg += `*ID:* DR7-${bookingRef}\n`;
@@ -740,7 +801,7 @@ const handler: Handler = async (event) => {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
                                         customPhone: custPhone,
-                                        customMessage: `MESSAGGIO AUTOMATICO GENERATO DA RENTORA\nQuesto messaggio è stato inviato tramite il sistema automatizzato Rentora.\n\nGentile ${custName},\n\nHa ricevuto *€${bonusEur}* di credito sul suo wallet DR7 grazie al pagamento con ${cardLabel} (${percentLabel}).\n\nSaldo attuale: *€${newBalance.toFixed(2)}*\n\nIl credito è spendibile direttamente sul sito per le prossime prenotazioni.\n\nGrazie per la collaborazione.\n\nDR7`
+                                        customMessage: `Gentile ${custName},\n\nHa ricevuto *€${bonusEur}* di credito sul suo wallet DR7 grazie al pagamento con ${cardLabel} (${percentLabel}).\n\nSaldo attuale: *€${newBalance.toFixed(2)}*\n\nIl credito è spendibile direttamente sul sito per le prossime prenotazioni.\n\nGrazie per la collaborazione.\n\nDR7`
                                     })
                                 });
                             }

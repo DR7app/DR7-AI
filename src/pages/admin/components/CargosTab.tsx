@@ -416,13 +416,30 @@ export default function CargosTab() {
     // Sub-tab
     const [activeSubTab, setActiveSubTab] = useState<'send' | 'export'>('send')
 
-    // Load saved config from sessionStorage (not localStorage - avoid persisting credentials)
+    // Auto-authenticate: try server-side credentials first, then sessionStorage
     useEffect(() => {
         const saved = sessionStorage.getItem('cargos_session')
         if (saved) {
             setPassword(saved)
             setIsAuthenticated(true)
+            return
         }
+        // Try auto-auth with server-side env credentials (no password needed from UI)
+        ;(async () => {
+            try {
+                const res = await fetch('/.netlify/functions/cargos-api', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'getToken' }),
+                })
+                const data = await res.json()
+                if (!data.error && data.token) {
+                    setIsAuthenticated(true)
+                    setPassword('__server__')
+                    sessionStorage.setItem('cargos_session', '__server__')
+                }
+            } catch { /* ignore - user can auth manually */ }
+        })()
     }, [])
 
     // ── Auth ─────────────────────────────────────────────────────────────────
@@ -517,21 +534,24 @@ export default function CargosTab() {
                             .maybeSingle()
                         if (c) customerData = c
                     }
-                    // Fallback: by customer_id from booking_details
-                    if (!customerData && b.booking_details?.customer?.customerId) {
+                    // Fallback: by customer_id from booking_details (only if UUID format)
+                    const custId = b.booking_details?.customer?.customerId
+                    const isUuid = custId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(custId)
+                    if (!customerData && isUuid) {
                         const { data: c } = await supabase
                             .from('customers_extended')
                             .select('*')
-                            .eq('id', b.booking_details.customer.customerId)
+                            .eq('id', custId)
                             .maybeSingle()
                         if (c) customerData = c
                     }
-                    // Fallback: by email
-                    if (!customerData && b.customer_email) {
+                    // Fallback: by email (from customerId if it's an email, or from customer_email)
+                    const emailToTry = (!isUuid && custId?.includes('@') ? custId : null) || b.customer_email
+                    if (!customerData && emailToTry) {
                         const { data: c } = await supabase
                             .from('customers_extended')
                             .select('*')
-                            .eq('email', b.customer_email)
+                            .eq('email', emailToTry)
                             .maybeSingle()
                         if (c) customerData = c
                     }
@@ -575,11 +595,16 @@ export default function CargosTab() {
     // ── Send to CARGOS ───────────────────────────────────────────────────────
 
     async function handleSend() {
+        console.log('[CARGOS] handleSend called, selectedIds:', selectedIds.size, 'bookings:', bookings.length)
+        toast.loading('Preparazione invio CARGOS...', { id: 'cargos-send' })
+
         const selected = bookings.filter(b => selectedIds.has(b.id))
         if (selected.length === 0) {
-            toast.error('Seleziona almeno una prenotazione')
+            toast.error('Seleziona almeno una prenotazione', { id: 'cargos-send' })
             return
         }
+
+        console.log('[CARGOS] Selected bookings:', selected.length)
 
         // Validate all
         let hasErrors = false
@@ -596,25 +621,29 @@ export default function CargosTab() {
 
         if (hasErrors) {
             setBookings(updatedBookings)
-            toast.error('Alcuni record hanno dati mancanti. Correggi prima di inviare.')
+            toast.error('Alcuni record hanno dati mancanti. Correggi prima di inviare.', { id: 'cargos-send' })
             return
         }
 
         setSending(true)
         setSendResult(null)
+        toast.loading(`Invio ${selected.length} contratti a CARGOS...`, { id: 'cargos-send' })
 
         try {
             // Build records
+            console.log('[CARGOS] Building records for', selected.length, 'bookings...')
             const records = selected.map(b => buildCargosRecord(b))
+            console.log('[CARGOS] Records built, first record length:', records[0]?.length)
 
             // First validate with Check
+            console.log('[CARGOS] Calling Check API...')
             const checkRes = await fetch('/.netlify/functions/cargos-api', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'check', records, password }),
             })
             const checkData = await checkRes.json()
-            logger.log('[CARGOS] Check response:', JSON.stringify(checkData))
+            console.log('[CARGOS] Check response:', JSON.stringify(checkData).substring(0, 500))
 
             // Top-level error (auth failure, etc.)
             if (checkData.error) {
@@ -657,7 +686,7 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'send', records, password }),
             })
             const sendData = await sendRes.json()
-            logger.log('[CARGOS] Send response:', JSON.stringify(sendData))
+            console.log('[CARGOS] Send response:', JSON.stringify(sendData))
 
             // Top-level error
             if (sendData.error) {
@@ -714,9 +743,10 @@ export default function CargosTab() {
                 }
             }
         } catch (err: unknown) {
-          const _errMsg = err instanceof Error ? err.message : String(err)
-            toast.error('Errore invio: ' + _errMsg)
-            setSendResult({ success: 0, errors: selected.length, details: _errMsg })
+            const errMsg = err instanceof Error ? err.message : String(err)
+            console.error('[CARGOS] handleSend error:', err)
+            toast.error('Errore invio CARGOS: ' + errMsg, { id: 'cargos-send', duration: 10000 })
+            setSendResult({ success: 0, errors: selected.length, details: errMsg })
         } finally {
             setSending(false)
         }
@@ -741,7 +771,7 @@ export default function CargosTab() {
                 body: JSON.stringify({ action: 'check', records, password }),
             })
             const data = await res.json()
-            logger.log('[CARGOS] Check response:', JSON.stringify(data))
+            console.log('[CARGOS] Check response:', JSON.stringify(data))
 
             if (data.error) {
                 toast.error('Errori validazione: ' + data.error)
@@ -1059,7 +1089,7 @@ export default function CargosTab() {
                                     </Button>
                                     <Button
                                         onClick={handleSend}
-                                        disabled={sending || selectedIds.size === 0 || !isAuthenticated}
+                                        disabled={sending || selectedIds.size === 0}
                                         className="bg-green-600 hover:bg-green-500 text-sm flex items-center gap-2"
                                     >
                                         {sending ? (

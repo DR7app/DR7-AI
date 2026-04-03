@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Button from './Button'
 import toast from 'react-hot-toast'
+import CalcolaCFButton from '../../../components/CalcolaCFButton'
 
 interface DynamicCustomerFormProps {
   onSuccess: () => void
@@ -25,6 +26,10 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
     // Persona Fisica
     nome: '',
     cognome: '',
+    sesso: '',
+    dataNascita: '',
+    luogoNascita: '',
+    provinciaNascita: '',
     telefono: '',
     email: '',
     pec: '',
@@ -93,6 +98,10 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
       } else if (tipoCliente === 'persona_fisica') {
         customerData.nome = formData.nome
         customerData.cognome = formData.cognome
+        customerData.sesso = formData.sesso
+        customerData.data_nascita = formData.dataNascita
+        customerData.luogo_nascita = formData.luogoNascita
+        customerData.provincia_nascita = formData.provinciaNascita
         customerData.telefono = formData.telefono
         customerData.email = formData.email
         customerData.pec = formData.pec
@@ -259,13 +268,73 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
               placeholder="Rossi"
             />
 
+            <div>
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                Codice Fiscale <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  name="codiceFiscale"
+                  value={formData.codiceFiscale}
+                  onChange={(e) => setFormData(p => ({ ...p, codiceFiscale: e.target.value.toUpperCase() }))}
+                  className="flex-1 px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors uppercase font-mono"
+                  placeholder="RSSMRA80A01H501U"
+                  maxLength={16}
+                  required
+                />
+                <CalcolaCFButton config={{
+                  getCognome: () => formData.cognome,
+                  getNome: () => formData.nome,
+                  getDataNascita: () => formData.dataNascita,
+                  getSesso: () => formData.sesso,
+                  getLuogoNascita: () => formData.luogoNascita,
+                  getCodiceFiscale: () => formData.codiceFiscale,
+                  setCodiceFiscale: (v) => setFormData(p => ({ ...p, codiceFiscale: v })),
+                  setSesso: (v) => setFormData(p => ({ ...p, sesso: v })),
+                  setDataNascita: (v) => setFormData(p => ({ ...p, dataNascita: v })),
+                  setLuogoNascita: (v) => setFormData(p => ({ ...p, luogoNascita: v })),
+                  setProvinciaNascita: (v) => setFormData(p => ({ ...p, provinciaNascita: v })),
+                }} />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">Sesso</label>
+              <select
+                value={formData.sesso}
+                onChange={(e) => setFormData(p => ({ ...p, sesso: e.target.value }))}
+                className="w-full px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+              >
+                <option value="">Seleziona...</option>
+                <option value="M">Maschio</option>
+                <option value="F">Femmina</option>
+              </select>
+            </div>
+
             <Input
-              label="Codice Fiscale"
-              required
-              value={formData.codiceFiscale}
+              label="Data di Nascita"
+              type="date"
+              value={formData.dataNascita}
               onChange={handleChange}
-              name="codiceFiscale"
-              placeholder="RSSMRA80A01H501U"
+              name="dataNascita"
+            />
+
+            <Input
+              label="Luogo di Nascita"
+              value={formData.luogoNascita}
+              onChange={handleChange}
+              name="luogoNascita"
+              placeholder="es. Cagliari"
+            />
+
+            <Input
+              label="Provincia di Nascita"
+              value={formData.provinciaNascita}
+              onChange={(e) => setFormData(p => ({ ...p, provinciaNascita: e.target.value.toUpperCase() }))}
+              name="provinciaNascita"
+              placeholder="es. CA"
+              maxLength={2}
             />
 
             <Input

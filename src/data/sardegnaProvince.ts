@@ -144,19 +144,140 @@ export function isResidentByCity(cityName: string): boolean {
   return false
 }
 
-// Reverse lookup: given a city name, return its province code (or null if not found)
+// Reverse lookup: given a city name, return its province code (with fuzzy matching)
 export function getProvinciaByCity(cityName?: string): string | null {
   if (!cityName) return null
   const normalized = cityName.trim().toLowerCase()
+
+  // Exact match
   for (const prov of SARDEGNA_PROVINCE) {
     if (prov.comuni.some(c => c.toLowerCase() === normalized)) {
       return prov.code
     }
   }
+
+  // Starts-with match
+  for (const prov of SARDEGNA_PROVINCE) {
+    if (prov.comuni.some(c => c.toLowerCase().startsWith(normalized) || normalized.startsWith(c.toLowerCase()))) {
+      return prov.code
+    }
+  }
+
+  // Fuzzy match
+  let bestScore = 0
+  let bestProv: string | null = null
+  for (const prov of SARDEGNA_PROVINCE) {
+    for (const comune of prov.comuni) {
+      const score = similarity(cityName.trim(), comune)
+      if (score > bestScore) {
+        bestScore = score
+        bestProv = prov.code
+      }
+    }
+  }
+  if (bestScore >= 0.6 && bestProv) return bestProv
+
   return null
 }
 
 // Get residence status based on province code or city
+// CAP (Codice Avviamento Postale) lookup by city name
+const CAP_MAP: Record<string, string> = {
+  // Sardegna — Cagliari area
+  'Cagliari': '09124', 'Assemini': '09032', 'Capoterra': '09012', 'Decimomannu': '09033',
+  'Elmas': '09030', 'Maracalagonis': '09040', 'Monserrato': '09042', 'Pula': '09010',
+  'Quartu Sant\'Elena': '09045', 'Quartucciu': '09044', 'Sarroch': '09018', 'Selargius': '09047',
+  'Sestu': '09028', 'Settimo San Pietro': '09040', 'Sinnai': '09048', 'Uta': '09010',
+  // Sardegna — Sud Sardegna
+  'Carbonia': '09013', 'Iglesias': '09016', 'Villacidro': '09039', 'Sanluri': '09025',
+  'San Gavino Monreale': '09037', 'Guspini': '09036', 'Muravera': '09043',
+  'Sant\'Antioco': '09017', 'Dolianova': '09041', 'Monastir': '09023',
+  'San Sperate': '09026', 'Villasor': '09034', 'Serramanna': '09038',
+  'Villasimius': '09049', 'Villaputzu': '09040',
+  // Sardegna — Sassari
+  'Sassari': '07100', 'Alghero': '07041', 'Porto Torres': '07046', 'Sorso': '07037',
+  'Ozieri': '07014', 'Tempio Pausania': '07029', 'La Maddalena': '07024',
+  'Castelsardo': '07031', 'Ittiri': '07044',
+  // Sardegna — Nuoro
+  'Nuoro': '08100', 'Siniscola': '08029', 'Tortolì': '08048', 'Macomer': '08015',
+  'Dorgali': '08022', 'Orosei': '08028', 'Lanusei': '08045',
+  // Sardegna — Oristano
+  'Oristano': '09170', 'Terralba': '09098', 'Cabras': '09072', 'Bosa': '08013',
+  // Sardegna — Olbia-Tempio
+  'Olbia': '07026', 'Arzachena': '07021', 'Budoni': '08020', 'San Teodoro': '08020',
+  'Golfo Aranci': '07020', 'Palau': '07020', 'Santa Teresa Gallura': '07028',
+  // Capoluoghi
+  'Roma': '00100', 'Milano': '20100', 'Napoli': '80100', 'Torino': '10100',
+  'Palermo': '90100', 'Genova': '16100', 'Bologna': '40100', 'Firenze': '50100',
+  'Bari': '70100', 'Catania': '95100', 'Venezia': '30100', 'Verona': '37100',
+  'Messina': '98100', 'Padova': '35100', 'Trieste': '34100', 'Brescia': '25100',
+  'Taranto': '74100', 'Reggio Calabria': '89100', 'Modena': '41100',
+  'Reggio Emilia': '42100', 'Perugia': '06100', 'Ravenna': '48100',
+  'Livorno': '57100', 'Foggia': '71100', 'Rimini': '47921', 'Salerno': '84100',
+  'Ferrara': '44121', 'Siracusa': '96100', 'Pescara': '65100', 'Monza': '20900',
+  'Bergamo': '24100', 'Vicenza': '36100', 'Bolzano': '39100', 'Trento': '38122',
+  'Ancona': '60100', 'Udine': '33100', 'Arezzo': '52100', 'Catanzaro': '88100',
+  'Lecce': '73100', 'Pesaro': '61121', 'Alessandria': '15121', 'Pisa': '56100',
+  'La Spezia': '19100', 'Lucca': '55100', 'Como': '22100', 'Novara': '28100',
+  'Varese': '21100', 'Latina': '04100', 'Brindisi': '72100', 'Parma': '43121',
+  'Piacenza': '29121', 'Cosenza': '87100', 'Potenza': '85100', 'Avellino': '83100',
+  'Caserta': '81100', 'L\'Aquila': '67100', 'Chieti': '66100', 'Teramo': '64100',
+  'Aosta': '11100', 'Prato': '59100', 'Terni': '05100', 'Grosseto': '58100',
+  'Siena': '53100', 'Pistoia': '51100', 'Massa': '54100', 'Frosinone': '03100',
+  'Campobasso': '86100', 'Isernia': '86170', 'Matera': '75100',
+}
+
+// Simple similarity score (0-1) between two strings
+function similarity(a: string, b: string): number {
+  const al = a.toLowerCase(), bl = b.toLowerCase()
+  if (al === bl) return 1
+  if (al.length < 2 || bl.length < 2) return 0
+  // Bigram similarity
+  const bigramsA = new Set<string>()
+  for (let i = 0; i < al.length - 1; i++) bigramsA.add(al.substring(i, i + 2))
+  let matches = 0
+  for (let i = 0; i < bl.length - 1; i++) {
+    if (bigramsA.has(bl.substring(i, i + 2))) matches++
+  }
+  return (2 * matches) / (al.length - 1 + bl.length - 1)
+}
+
+/**
+ * Get CAP (postal code) by city name. Case-insensitive with fuzzy matching.
+ * Handles typos like "Algerho" → "Alghero", "Quartu" → "Quartu Sant'Elena".
+ * Returns null if no good match found.
+ */
+export function getCAPByCity(cityName?: string): string | null {
+  if (!cityName) return null
+  const trimmed = cityName.trim()
+  const lower = trimmed.toLowerCase()
+
+  // 1. Exact match (case-insensitive)
+  for (const [city, cap] of Object.entries(CAP_MAP)) {
+    if (city.toLowerCase() === lower) return cap
+  }
+
+  // 2. Starts-with match (e.g. "Quartu" → "Quartu Sant'Elena")
+  for (const [city, cap] of Object.entries(CAP_MAP)) {
+    if (city.toLowerCase().startsWith(lower) || lower.startsWith(city.toLowerCase())) return cap
+  }
+
+  // 3. Fuzzy match — find best similarity score (handles typos)
+  let bestScore = 0
+  let bestCap: string | null = null
+  for (const [city, cap] of Object.entries(CAP_MAP)) {
+    const score = similarity(trimmed, city)
+    if (score > bestScore) {
+      bestScore = score
+      bestCap = cap
+    }
+  }
+  // Threshold: 0.6 = decent match (e.g., "Algerho"↔"Alghero" ≈ 0.7)
+  if (bestScore >= 0.6 && bestCap) return bestCap
+
+  return null
+}
+
 export function getResidenceStatus(provinciaCode?: string, cityName?: string): 'residente' | 'non_residente' {
   if (provinciaCode && isResidentByProvincia(provinciaCode)) {
     return 'residente'

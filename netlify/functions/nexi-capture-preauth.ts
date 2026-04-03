@@ -7,8 +7,8 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Capture operates on pre-auth created with the explicit key
-const NEXI_API_KEY = process.env.NEXI_API_KEY_EXPLICIT || process.env.NEXI_API_KEY!;
+// Use same API key as pay-by-link
+const NEXI_API_KEY = process.env.NEXI_API_KEY!;
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
 const handler: Handler = async (event) => {
@@ -31,43 +31,73 @@ const handler: Handler = async (event) => {
     if (authErr) return authErr
 
     try {
-        const { cauzioneId, operationId, amount, orderId } = JSON.parse(event.body || '{}');
+        const { cauzioneId, operationId: inputOperationId, amount, orderId } = JSON.parse(event.body || '{}');
 
-        if (!cauzioneId || !operationId || !amount) {
+        if (!amount || (!inputOperationId && !orderId)) {
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'cauzioneId, operationId, and amount are required' })
+                body: JSON.stringify({ error: 'amount and (operationId or orderId) are required' })
             };
         }
 
         const amountCents = Math.round(amount * 100);
-
-        // POST /operations/{operationId}/captures — captures a pre-authorized amount
-        const capturePayload = {
-            amount: amountCents.toString(),
-            currency: 'EUR',
-            description: `Incasso cauzione ${cauzioneId}`
-        };
-
-        console.log('[nexi-capture-preauth] === CAPTURE REQUEST ===');
-        console.log('[nexi-capture-preauth] operationId:', operationId);
-        console.log('[nexi-capture-preauth] amount (cents):', amountCents);
-        console.log('[nexi-capture-preauth] Endpoint:', `${NEXI_BASE_URL}/operations/${operationId}/captures`);
 
         const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = Math.random() * 16 | 0
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
         })
 
-        const response = await fetch(`${NEXI_BASE_URL}/operations/${operationId}/captures`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Api-Key': NEXI_API_KEY,
-                'Correlation-Id': correlationId
-            },
-            body: JSON.stringify(capturePayload)
+        const captureHeaders = {
+            'Content-Type': 'application/json',
+            'X-Api-Key': NEXI_API_KEY,
+            'Correlation-Id': correlationId,
+            'Idempotency-Key': correlationId
+        }
+
+        // Step 1: Find the real operationId by looking up operations for this orderId
+        let realOperationId = inputOperationId
+        if (orderId) {
+            console.log('[nexi-capture-preauth] Looking up operations for orderId:', orderId);
+            const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+            const toTime = new Date().toISOString()
+            const opsUrl = `${NEXI_BASE_URL}/operations?fromTime=${encodeURIComponent(fromTime)}&toTime=${encodeURIComponent(toTime)}&maxRecords=500&operationType=AUTHORIZATION`
+            const opsRes = await fetch(opsUrl, {
+                headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16) }) }
+            })
+            if (opsRes.ok) {
+                const opsData = await opsRes.json()
+                const allOps = opsData.operations || []
+                console.log('[nexi-capture-preauth] Scanned', allOps.length, 'operations')
+                // Filter by orderId client-side (Nexi API doesn't support orderId filter)
+                const matchingOps = allOps.filter((op: any) => op.orderId === orderId)
+                const authOp = matchingOps.find((op: any) => op.operationResult === 'AUTHORIZED') || matchingOps[0]
+                if (authOp?.operationId) {
+                    realOperationId = authOp.operationId
+                    console.log('[nexi-capture-preauth] Found real operationId:', realOperationId)
+                } else {
+                    console.warn('[nexi-capture-preauth] No matching operation found for orderId:', orderId)
+                }
+            } else {
+                const errText = await opsRes.text()
+                console.warn('[nexi-capture-preauth] Operations lookup failed:', opsRes.status, errText.substring(0, 200))
+            }
+        }
+
+        if (!realOperationId) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Could not find operationId' }) }
+        }
+
+        // Step 2: Capture with the real operationId
+        console.log('[nexi-capture-preauth] Capturing with operationId:', realOperationId, 'amount:', amountCents);
+        const capturePayload = {
+            amount: amountCents.toString(),
+            currency: 'EUR',
+            description: `Incasso ${cauzioneId || orderId}`
+        }
+
+        const response = await fetch(`${NEXI_BASE_URL}/operations/${realOperationId}/captures`, {
+            method: 'POST', headers: captureHeaders, body: JSON.stringify(capturePayload)
         });
 
         const responseText = await response.text();
@@ -102,7 +132,7 @@ const handler: Handler = async (event) => {
             };
         }
 
-        const captureOpId = responseData.operationId || operationId;
+        const captureOpId = responseData.operationId || realOperationId;
 
         // Update cauzione status
         const { error: updateError } = await supabase
