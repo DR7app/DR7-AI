@@ -89,6 +89,7 @@ const DEFAULT_EXTRAS_CONFIG: ExtrasConfig = {
     { id: 'kasko_dr7_furgone', name: 'Kasko DR7 (Furgone/NCC)', price: 90, price_unit: 'per_day', is_active: true, display_order: 24 },
   ],
   km_packages: [
+    { id: 'supercar_50km', name: '50 km/giorno (Supercar)', price: 199, price_unit: 'per_day', is_active: true, display_order: 0, description: 'Pacchetto 50km al giorno per supercar' },
     { id: 'unlimited_km_supercar_t1', name: 'KM Illimitati (Supercar Fascia B)', price: 289, price_unit: 'per_day', is_active: true, display_order: 1 },
     { id: 'unlimited_km_supercar_t2', name: 'KM Illimitati (Supercar Fascia A)', price: 189, price_unit: 'per_day', is_active: true, display_order: 2 },
     { id: 'unlimited_km_furgone', name: 'KM Illimitati (Ducato)', price: 94.50, price_unit: 'per_day', is_active: true, display_order: 3 },

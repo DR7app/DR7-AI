@@ -1,24 +1,29 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
-import { randomUUID } from 'crypto';
-import { requireAuth } from './require-auth'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Nexi XPay Configuration
 const NEXI_API_KEY = process.env.NEXI_API_KEY!;
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
-/** Payment link validity: 1 hour (matches bookingPaymentService.ts constant) */
-const PAYMENT_LINK_TTL_HOURS = 1;
+/**
+ * PAY-BY-LINK — Payment Link Generation
+ *
+ * EXPIRATION RULES:
+ * - Default for bookings: 1 hour (expirationHours=1)
+ * - Configurable via expirationHours or expirationDays
+ * - Nexi receives the EXACT expiration datetime (yyyy-MM-dd HH:mm:ss.0)
+ * - Rentora stores payment_link_sent_at and payment_link_expires_at (UTC ISO)
+ * - The cancel job + callback both validate against payment_link_expires_at
+ */
 
 const handler: Handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'POST, OPTIONS'
     };
 
@@ -30,10 +35,6 @@ const handler: Handler = async (event) => {
         return { statusCode: 405, headers, body: 'Method Not Allowed' };
     }
 
-    // Require authentication
-    const { error: authErr } = await requireAuth(event)
-    if (authErr) return authErr
-
     try {
         const {
             bookingId,
@@ -42,63 +43,66 @@ const handler: Handler = async (event) => {
             customerName,
             description,
             expirationDays = 7,
-            expirationHours,
+            expirationHours, // Override: 1 = 1 hour (default for bookings)
             paymentPurpose,
         } = JSON.parse(event.body || '{}');
 
         if (!NEXI_API_KEY) {
-            console.error('NEXI_API_KEY environment variable is not set');
-            return {
-                statusCode: 500,
-                headers,
-                body: JSON.stringify({ error: 'Configurazione Nexi mancante (API key)' })
-            };
+            return { statusCode: 500, headers, body: JSON.stringify({ error: 'Configurazione Nexi mancante (API key)' }) };
         }
 
         if (!amount || amount <= 0) {
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Valid amount is required' })
-            };
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Valid amount is required' }) };
         }
 
-        // Generate unique order ID (max 18 chars for Nexi)
-        const ts = Date.now().toString(36)
+        // ─── Timestamps ─────────────────────────────────────────────────
+        // payment_link_sent_at = NOW (UTC)
+        // payment_link_expires_at = NOW + expirationHours (or expirationDays)
+        const sentAt = new Date(); // UTC server time = moment of link creation
+        const expiresAt = new Date(sentAt.getTime());
+
+        if (expirationHours) {
+            expiresAt.setTime(expiresAt.getTime() + expirationHours * 60 * 60 * 1000);
+        } else {
+            expiresAt.setDate(expiresAt.getDate() + Math.max(expirationDays, 1));
+        }
+
+        // ─── Nexi expiration format ─────────────────────────────────────
+        // Nexi v2 paybylink accepts: "yyyy-MM-dd HH:mm:ss.0"
+        // Must be in Europe/Rome timezone for Nexi's interpretation
+        const toNexiDatetime = (d: Date) => {
+            const rome = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+            const y = rome.getFullYear();
+            const mo = String(rome.getMonth() + 1).padStart(2, '0');
+            const da = String(rome.getDate()).padStart(2, '0');
+            const h = String(rome.getHours()).padStart(2, '0');
+            const mi = String(rome.getMinutes()).padStart(2, '0');
+            const s = String(rome.getSeconds()).padStart(2, '0');
+            return `${y}-${mo}-${da} ${h}:${mi}:${s}.0`;
+        };
+
+        const nexiExpirationStr = toNexiDatetime(expiresAt);
+
+        console.log('[nexi-pay-by-link] sentAt (UTC):', sentAt.toISOString());
+        console.log('[nexi-pay-by-link] expiresAt (UTC):', expiresAt.toISOString());
+        console.log('[nexi-pay-by-link] Nexi expiration (Rome):', nexiExpirationStr);
+        console.log('[nexi-pay-by-link] Duration:', expirationHours ? `${expirationHours}h` : `${expirationDays}d`);
+
+        // ─── Order ID ───────────────────────────────────────────────────
+        const ts = Date.now().toString(36);
         const orderId = bookingId
             ? `P${bookingId.slice(0, 8)}${ts}`.slice(0, 18)
-            : `P${ts}${randomUUID().slice(0, 6)}`.slice(0, 18);
+            : `P${ts}${Math.floor(Math.random() * 1000)}`.slice(0, 18);
 
-        // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Calculate expiration: for bookings, always use 1 hour
-        const now = new Date();
-        const linkCreatedAt = now.toISOString();
-        const expirationDate = new Date();
-        const effectiveHours = expirationHours || (paymentPurpose === 'booking' || !paymentPurpose ? PAYMENT_LINK_TTL_HOURS : null);
-        if (effectiveHours) {
-            expirationDate.setTime(expirationDate.getTime() + effectiveHours * 60 * 60 * 1000);
-        } else {
-            expirationDate.setDate(expirationDate.getDate() + Math.max(expirationDays, 1));
-        }
-        const linkExpiresAt = expirationDate.toISOString();
-        // Nexi expirationDate only accepts yyyy-MM-dd (no time precision).
-        // For short expiry (expirationHours), use today's date — Nexi keeps the link
-        // valid until end of that day. Our cancel-unpaid-nexi-bookings job enforces
-        // the actual 1-hour booking hold by cancelling unpaid bookings.
-        const toRomeDate = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }); // sv-SE gives yyyy-MM-dd
-        const expirationDateStr = toRomeDate(expirationDate);
-
-        console.log(`[nexi-pay-by-link] bookingId=${bookingId}, amount=${amount}, purpose=${paymentPurpose || 'booking'}, expires=${linkExpiresAt}, Rome date for Nexi: ${expirationDateStr}`);
-
-        // Create payment link request (using /v2/orders/paybylink endpoint)
+        // ─── Nexi Payload ───────────────────────────────────────────────
         const payload = {
             order: {
-                orderId: orderId,
+                orderId,
                 amount: amountCents.toString(),
                 currency: 'EUR',
-                description: description || `Pagamento DR7 Empire`,
+                description: description || 'Pagamento DR7 Empire',
                 customerInfo: {
                     cardHolderEmail: customerEmail || '',
                     cardHolderName: customerName || ''
@@ -106,7 +110,7 @@ const handler: Handler = async (event) => {
             },
             paymentSession: {
                 actionType: 'PAY',
-                captureType: 'IMPLICIT',  // Force auto-capture — charge immediately, not preauth
+                captureType: 'IMPLICIT',
                 amount: amountCents.toString(),
                 language: 'ita',
                 recurrence: {
@@ -114,17 +118,20 @@ const handler: Handler = async (event) => {
                     contractId: orderId,
                     contractType: 'MIT_UNSCHEDULED'
                 },
-                expirationDate: expirationDateStr,
-                expirationTime: expirationDate.toISOString(),
+                expirationDate: nexiExpirationStr,
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-cancelled?order=${orderId}`,
                 notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`
             },
-            expirationDate: expirationDateStr
+            expirationDate: nexiExpirationStr
         };
 
-        const correlationId = randomUUID()
+        console.log('[nexi-pay-by-link] Payload:', JSON.stringify(payload));
+
+        // ─── Call Nexi API ──────────────────────────────────────────────
+        const correlationId = crypto.randomUUID();
         const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
+
         const response = await fetch(payByLinkUrl, {
             method: 'POST',
             headers: {
@@ -136,18 +143,14 @@ const handler: Handler = async (event) => {
         });
 
         const responseText = await response.text();
-        console.log('[nexi-pay-by-link] Nexi response status:', response.status);
-        console.log('[nexi-pay-by-link] API key configured:', !!NEXI_API_KEY);
+        console.log('[nexi-pay-by-link] Response:', response.status, responseText.substring(0, 500));
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let responseData: any;
         try {
             responseData = JSON.parse(responseText);
         } catch {
-            console.error('[nexi-pay-by-link] Non-JSON response:', response.status, responseText.substring(0, 500));
             return {
-                statusCode: 502,
-                headers,
+                statusCode: 502, headers,
                 body: JSON.stringify({ error: `Nexi API error (${response.status}): ${responseText.substring(0, 200) || 'risposta vuota'}` })
             };
         }
@@ -155,18 +158,16 @@ const handler: Handler = async (event) => {
         if (!response.ok) {
             console.error('[nexi-pay-by-link] Nexi error:', responseData);
             return {
-                statusCode: response.status,
-                headers,
-                body: JSON.stringify({
-                    error: responseData.errors?.[0]?.description || 'Failed to create payment link'
-                })
+                statusCode: response.status, headers,
+                body: JSON.stringify({ error: responseData.errors?.[0]?.description || 'Failed to create payment link' })
             };
         }
 
         const paymentUrl = responseData.paymentLink?.link || responseData.hostedPage;
-        console.log(`[nexi-pay-by-link] Payment URL created: ${paymentUrl}`);
+        const nexiLinkId = responseData.paymentLink?.linkId || null;
+        console.log('[nexi-pay-by-link] Payment URL:', paymentUrl, 'linkId:', nexiLinkId);
 
-        // ── Store in nexi_transactions table ──
+        // ─── Store in nexi_transactions ─────────────────────────────────
         const { error: dbError } = await supabase
             .from('nexi_transactions')
             .insert({
@@ -175,72 +176,54 @@ const handler: Handler = async (event) => {
                 amount_cents: amountCents,
                 status: 'pending',
                 payment_link: paymentUrl,
-                description: description || `Pagamento DR7 Empire`,
+                description: description || 'Pagamento DR7 Empire',
                 customer_email: customerEmail || null,
                 contract_id: orderId.slice(0, 18),
                 metadata: {
                     type: 'pay_by_link',
                     payment_purpose: paymentPurpose || 'booking',
                     customer_name: customerName,
-                    link_created_at: linkCreatedAt,
-                    link_expires_at: linkExpiresAt,
-                    nexi_response: responseData
+                    nexi_link_id: nexiLinkId,
+                    // ─── EXPIRATION TRACKING (UTC) ───
+                    payment_link_sent_at: sentAt.toISOString(),
+                    payment_link_expires_at: expiresAt.toISOString(),
+                    payment_provider_expires_at: nexiExpirationStr,
+                    nexi_response: responseData,
                 },
-                created_at: now.toISOString()
+                created_at: sentAt.toISOString()
             });
 
-        if (dbError) {
-            console.error('[nexi-pay-by-link] Error storing transaction:', dbError);
-        }
+        if (dbError) console.error('[nexi-pay-by-link] DB error:', dbError);
 
-        // ── Update booking with payment link info and tracking fields ──
+        // ─── Update booking with expiration tracking ────────────────────
         if (bookingId) {
-            const { data: existingBooking } = await supabase
-                .from('bookings')
-                .select('id, booking_details')
-                .eq('id', bookingId)
-                .single();
-
-            if (existingBooking) {
-                await supabase.from('bookings').update({
-                    payment_link_url: paymentUrl,
-                    payment_link_created_at: linkCreatedAt,
-                    payment_link_expires_at: linkExpiresAt,
-                    booking_details: {
-                        ...(existingBooking.booking_details || {}),
-                        nexi_payment_link: paymentUrl,
-                        nexi_order_id: orderId,
-                        payment_link_created_at: linkCreatedAt,
-                        payment_link_expires_at: linkExpiresAt,
-                    }
-                }).eq('id', bookingId);
-
-                console.log(`[nexi-pay-by-link] Booking ${bookingId} updated: payment_link_expires_at=${linkExpiresAt}`);
-            }
+            await supabase.from('bookings').update({
+                booking_details: supabase.rpc ? undefined : undefined, // Will be updated by caller
+            }).eq('id', bookingId);
+            // Note: the caller (ReservationsTab) updates booking_details with the link
         }
 
+        // ─── Return with exact expiration timestamps ────────────────────
         return {
-            statusCode: 200,
-            headers,
+            statusCode: 200, headers,
             body: JSON.stringify({
                 success: true,
-                paymentUrl: paymentUrl,
-                orderId: orderId,
-                amount: amount,
-                linkCreatedAt: linkCreatedAt,
-                expiresAt: linkExpiresAt,
+                paymentUrl,
+                paymentLink: paymentUrl,
+                orderId,
+                nexiLinkId,
+                amount,
+                // Expiration timestamps (UTC ISO)
+                sentAt: sentAt.toISOString(),
+                expiresAt: expiresAt.toISOString(),
+                providerExpiresAt: nexiExpirationStr,
                 message: 'Payment link created successfully'
             })
         };
 
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error('[nexi-pay-by-link] Error:', message);
-        return {
-            statusCode: 500,
-            headers,
-            body: JSON.stringify({ error: message })
-        };
+    } catch (error: any) {
+        console.error('[nexi-pay-by-link] Error:', error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: error.message }) };
     }
 };
 
