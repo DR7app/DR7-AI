@@ -163,7 +163,7 @@ export function buildPaymentConfirmedFields(transactionId: string, contractId: s
   return {
     status: 'confirmed' as const,
     payment_status: 'paid' as const,
-    paid_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     amount_paid: amountCents,
     booking_details_patch: {
       nexi_transaction_id: transactionId,
