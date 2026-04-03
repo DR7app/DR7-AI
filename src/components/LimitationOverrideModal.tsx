@@ -151,12 +151,6 @@ export default function LimitationOverrideModal({
           <h3 className="text-lg font-bold text-amber-400">
             {step === 'blocked' ? 'Limitazione rilevata' : step === 'otp-sent' ? 'Inserisci codice di autorizzazione' : 'Autorizzazione direzionale'}
           </h3>
-          <button
-            onClick={handleClose}
-            className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none min-h-[44px] min-w-[44px] flex items-center justify-center"
-          >
-            &times;
-          </button>
         </div>
 
         {/* Content */}
@@ -169,7 +163,7 @@ export default function LimitationOverrideModal({
 
           {step === 'blocked' && (
             <p className="text-theme-text-muted text-sm">
-              Questa operazione è bloccata da una limitazione di sistema. Puoi prenderne visione e modificare i dati, oppure richiedere un'autorizzazione direzionale via OTP.
+              Questa operazione è bloccata. Per procedere è obbligatorio richiedere e verificare un codice di autorizzazione direzionale via OTP.
             </p>
           )}
 
@@ -216,31 +210,17 @@ export default function LimitationOverrideModal({
         {/* Actions */}
         <div className="p-4 border-t border-theme-border flex flex-col-reverse sm:flex-row gap-3 sm:justify-end rounded-b-lg flex-shrink-0">
           {step === 'blocked' && (
-            <>
-              <button
-                onClick={handleClose}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm"
-              >
-                Ho preso visione
-              </button>
-              <button
-                onClick={sendOtp}
-                disabled={sending}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium"
-              >
-                {sending ? 'Invio...' : 'Richiedi autorizzazione'}
-              </button>
-            </>
+            <button
+              onClick={sendOtp}
+              disabled={sending}
+              className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium w-full sm:w-auto"
+            >
+              {sending ? 'Invio...' : 'Richiedi autorizzazione'}
+            </button>
           )}
 
           {step === 'otp-sent' && (
             <>
-              <button
-                onClick={handleClose}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm"
-              >
-                Annulla
-              </button>
               <button
                 onClick={resendOtp}
                 disabled={sending}
