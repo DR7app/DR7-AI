@@ -19,6 +19,8 @@ interface Vehicle {
   category?: 'exotic' | 'urban' | 'aziendali'
 }
 
+type CauzioneType = 'no_cauzione' | 'carta_debito_credito' | 'contanti_prepagata' | 'carta_credito_non_residente'
+
 interface PreventivoData {
   id?: string
   vehicle_id: string
@@ -42,6 +44,8 @@ interface PreventivoData {
   second_driver_daily: string
   no_cauzione: boolean
   no_cauzione_daily: string
+  cauzione_type: CauzioneType
+  residente_sardegna: boolean
   delivery_enabled: boolean
   delivery_street: string
   delivery_city: string
@@ -93,8 +97,16 @@ const UTIL_INSURANCE = [
 
 // --- Fascia-specific extras (exotic) ---
 const FASCIA_EXTRAS = {
-  A: { secondDriver: 10, unlimitedKm: 189, noCauzione: 49, deposit: 10000 },
-  B: { secondDriver: 20, unlimitedKm: 289, noCauzione: 0, deposit: 15000 },
+  A: { secondDriver: 10, unlimitedKm: 189, noCauzione: 49 },
+  B: { secondDriver: 20, unlimitedKm: 289, noCauzione: 0 },
+}
+
+// --- Cauzione amounts by type, fascia, and residency ---
+const CAUZIONE_AMOUNTS: Record<CauzioneType, { A: number; B: number }> = {
+  no_cauzione: { A: 0, B: 0 }, // No deposit, but €49/day surcharge (Fascia A only)
+  carta_debito_credito: { A: 1000, B: 2000 },
+  contanti_prepagata: { A: 4999, B: 4999 },
+  carta_credito_non_residente: { A: 3500, B: 5000 },
 }
 
 // --- Locations ---
@@ -173,6 +185,21 @@ function defaultValidUntil(): string {
   return d.toISOString().split('T')[0]
 }
 
+// Today's date for min date validation
+function todayStr(): string {
+  return new Date().toISOString().split('T')[0]
+}
+
+// Get deposit amount based on cauzione type, fascia, and residency
+function getCauzioneDeposit(type: CauzioneType, fascia: Fascia, residente: boolean): number {
+  if (type === 'no_cauzione') return 0
+  if (!residente) {
+    // Non-residente: only carta_credito_non_residente option
+    return CAUZIONE_AMOUNTS.carta_credito_non_residente[fascia]
+  }
+  return CAUZIONE_AMOUNTS[type]?.[fascia] || 0
+}
+
 const initialFormData: PreventivoData = {
   vehicle_id: '',
   vehicle_name: '',
@@ -195,6 +222,8 @@ const initialFormData: PreventivoData = {
   second_driver_daily: '0',
   no_cauzione: false,
   no_cauzione_daily: '0',
+  cauzione_type: 'carta_debito_credito',
+  residente_sardegna: true,
   delivery_enabled: false,
   delivery_street: '',
   delivery_city: '',
@@ -297,6 +326,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
     const insurance = currentValid || options[0]
     const isExotic = getVehicleType(selectedVehicle) === 'exotic'
     const extras = FASCIA_EXTRAS[form.fascia]
+    const deposit = getCauzioneDeposit(form.cauzione_type, form.fascia, form.residente_sardegna)
 
     setForm(prev => ({
       ...prev,
@@ -306,14 +336,14 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       daily_rate: rate,
       insurance_option: insurance.id as KaskoTier,
       insurance_daily: insurance.pricePerDay.toString(),
-      deposit_amount: isExotic ? extras.deposit.toString() : (isFurgone(selectedVehicle) ? '2500' : (selectedVehicle.category === 'aziendali' ? '1000' : '0')),
+      deposit_amount: deposit.toString(),
       second_driver_daily: isExotic ? extras.secondDriver.toString() : '0',
       unlimited_km_daily: isExotic ? extras.unlimitedKm.toString() : '0',
       no_cauzione_daily: isExotic && form.fascia === 'A' ? extras.noCauzione.toString() : '0',
     }))
   }, [selectedVehicle])
 
-  // When fascia changes, recalculate insurance + extras
+  // When fascia changes, recalculate insurance + extras + cauzione
   useEffect(() => {
     if (!selectedVehicle) return
     const options = getInsuranceOptionsForPreventivo(getVehicleType(selectedVehicle), form.fascia)
@@ -321,18 +351,30 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
     const insurance = currentValid || options[0]
     const isExotic = getVehicleType(selectedVehicle) === 'exotic'
     const extras = FASCIA_EXTRAS[form.fascia]
+    const deposit = getCauzioneDeposit(form.cauzione_type, form.fascia, form.residente_sardegna)
 
     setForm(prev => ({
       ...prev,
       insurance_option: insurance.id as KaskoTier,
       insurance_daily: insurance.pricePerDay.toString(),
-      deposit_amount: isExotic ? extras.deposit.toString() : prev.deposit_amount,
+      deposit_amount: deposit.toString(),
       second_driver_daily: isExotic ? extras.secondDriver.toString() : prev.second_driver_daily,
       unlimited_km_daily: isExotic ? extras.unlimitedKm.toString() : prev.unlimited_km_daily,
       no_cauzione_daily: isExotic && form.fascia === 'A' ? extras.noCauzione.toString() : '0',
       no_cauzione: form.fascia === 'B' ? false : prev.no_cauzione,
     }))
   }, [form.fascia])
+
+  // When cauzione type or residency changes, recalculate deposit
+  useEffect(() => {
+    const deposit = getCauzioneDeposit(form.cauzione_type, form.fascia, form.residente_sardegna)
+    setForm(prev => ({
+      ...prev,
+      deposit_amount: deposit.toString(),
+      no_cauzione: form.cauzione_type === 'no_cauzione',
+      no_cauzione_daily: form.cauzione_type === 'no_cauzione' && form.fascia === 'A' ? FASCIA_EXTRAS.A.noCauzione.toString() : '0',
+    }))
+  }, [form.cauzione_type, form.residente_sardegna])
 
   // Auto-calculate total
   const breakdown = useMemo(() => {
@@ -486,7 +528,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
           <div className="p-4 rounded-lg border border-theme-border">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-3">
-                <Input label="Data Ritiro" type="date" required value={form.pickup_date}
+                <Input label="Data Ritiro" type="date" required min={todayStr()} value={form.pickup_date}
                   onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
                 <Select label="Ora Ritiro" required value={form.pickup_time}
                   onChange={(e) => {
@@ -604,12 +646,10 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
             </label>
           </div>
 
-          {/* Extras: Second Driver, No Cauzione */}
+          {/* Extras: Second Driver */}
           <div className="p-4 rounded-lg border border-theme-border">
             <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 uppercase tracking-wider">Opzioni Extra</h4>
-
-            {/* Second Driver */}
-            <label className="flex items-center gap-2 cursor-pointer mb-3">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.second_driver}
                 onChange={(e) => setForm(prev => ({ ...prev, second_driver: e.target.checked }))}
                 className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded" />
@@ -618,23 +658,106 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 <span className="text-dr7-gold ml-1">(+€{form.second_driver_daily}/giorno)</span>
               </span>
             </label>
+          </div>
 
-            {/* No Cauzione — only Fascia A */}
-            {form.fascia === 'A' && vehicleType === 'exotic' && (
-              <label className="flex items-center gap-2 cursor-pointer mb-3">
-                <input type="checkbox" checked={form.no_cauzione}
-                  onChange={(e) => setForm(prev => ({ ...prev, no_cauzione: e.target.checked }))}
-                  className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded" />
-                <span className="text-sm text-theme-text-secondary">
-                  No Cauzione
-                  <span className="text-dr7-gold ml-1">(+€{FASCIA_EXTRAS.A.noCauzione}/giorno)</span>
-                </span>
-              </label>
+          {/* Cauzione */}
+          <div className="p-4 rounded-lg border border-theme-border">
+            <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 uppercase tracking-wider">Cauzione</h4>
+
+            {/* Residente toggle */}
+            <div className="flex gap-3 mb-4">
+              {([true, false] as const).map(val => (
+                <button key={String(val)} type="button"
+                  onClick={() => setForm(prev => ({
+                    ...prev,
+                    residente_sardegna: val,
+                    cauzione_type: !val ? 'carta_credito_non_residente' : prev.cauzione_type === 'carta_credito_non_residente' ? 'carta_debito_credito' : prev.cauzione_type,
+                  }))}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                    form.residente_sardegna === val
+                      ? 'bg-theme-text-primary text-black'
+                      : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
+                  }`}
+                >
+                  {val ? 'Residente Sardegna' : 'Non Residente'}
+                </button>
+              ))}
+            </div>
+
+            {/* Cauzione options for residents */}
+            {form.residente_sardegna ? (
+              <div className="space-y-2">
+                {/* No Cauzione - only Fascia A */}
+                {form.fascia === 'A' && (
+                  <label className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                    form.cauzione_type === 'no_cauzione' ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border hover:border-theme-text-muted'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <input type="radio" name="cauzione" checked={form.cauzione_type === 'no_cauzione'}
+                        onChange={() => setForm(prev => ({ ...prev, cauzione_type: 'no_cauzione' }))}
+                        className="w-4 h-4 text-dr7-gold" />
+                      <div>
+                        <div className="text-sm font-medium text-theme-text-primary">No Cauzione</div>
+                        <div className="text-xs text-theme-text-muted">26-69 anni, patente ≥5 anni</div>
+                      </div>
+                    </div>
+                    <span className="text-dr7-gold font-bold">+€49/gg</span>
+                  </label>
+                )}
+
+                {/* Carta debito/credito */}
+                <label className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                  form.cauzione_type === 'carta_debito_credito' ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border hover:border-theme-text-muted'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <input type="radio" name="cauzione" checked={form.cauzione_type === 'carta_debito_credito'}
+                      onChange={() => setForm(prev => ({ ...prev, cauzione_type: 'carta_debito_credito' }))}
+                      className="w-4 h-4 text-dr7-gold" />
+                    <div>
+                      <div className="text-sm font-medium text-theme-text-primary">Carta di debito o credito</div>
+                    </div>
+                  </div>
+                  <span className="text-theme-text-primary font-bold">€{CAUZIONE_AMOUNTS.carta_debito_credito[form.fascia].toLocaleString()}</span>
+                </label>
+
+                {/* Contanti / prepagata */}
+                <label className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                  form.cauzione_type === 'contanti_prepagata' ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border hover:border-theme-text-muted'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <input type="radio" name="cauzione" checked={form.cauzione_type === 'contanti_prepagata'}
+                      onChange={() => setForm(prev => ({ ...prev, cauzione_type: 'contanti_prepagata' }))}
+                      className="w-4 h-4 text-dr7-gold" />
+                    <div>
+                      <div className="text-sm font-medium text-theme-text-primary">Contanti o carta prepagata</div>
+                    </div>
+                  </div>
+                  <span className="text-theme-text-primary font-bold">€{CAUZIONE_AMOUNTS.contanti_prepagata[form.fascia].toLocaleString()}</span>
+                </label>
+              </div>
+            ) : (
+              /* Non-residente: solo carta credito */
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-amber-900/20 border border-amber-500/30 mb-3">
+                  <p className="text-xs text-amber-400 font-medium">Non residente in Sardegna: solo carta di credito o veicolo dal 2020 in poi</p>
+                </div>
+                <div className="p-3 rounded-lg border border-dr7-gold bg-dr7-gold/10">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium text-theme-text-primary">Carta di credito</div>
+                    <span className="text-theme-text-primary font-bold">€{CAUZIONE_AMOUNTS.carta_credito_non_residente[form.fascia].toLocaleString()}</span>
+                  </div>
+                  <div className="text-xs text-theme-text-muted mt-1">
+                    Fascia {form.fascia}: €{CAUZIONE_AMOUNTS.carta_credito_non_residente[form.fascia].toLocaleString()}
+                  </div>
+                </div>
+              </div>
             )}
 
-            {/* Deposit */}
-            <Input label="Cauzione (€)" type="number" step="0.01" value={form.deposit_amount}
-              onChange={(e) => setForm(prev => ({ ...prev, deposit_amount: e.target.value }))} />
+            {/* Manual override */}
+            <div className="mt-3">
+              <Input label="Cauzione (€) — Modificabile" type="number" step="0.01" value={form.deposit_amount}
+                onChange={(e) => setForm(prev => ({ ...prev, deposit_amount: e.target.value }))} />
+            </div>
           </div>
 
           {/* Delivery */}
