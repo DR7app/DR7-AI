@@ -347,8 +347,8 @@ export default function UnpaidBookingsTab() {
         .from('bookings')
         .update({
           payment_status: newStatus,
-          paid_at: newStatus === 'paid' ? new Date().toISOString() : null,
-          status: newStatus === 'paid' ? 'confirmed' : 'pending_payment'
+          status: newStatus === 'paid' ? 'confirmed' : 'pending_payment',
+          updated_at: new Date().toISOString()
         })
         .eq('id', bookingId)
 
