@@ -2691,6 +2691,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               : `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`)
             + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
             + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
+            + `*Km:* ${extendData.extension_unlimited_km ? 'Illimitati' : (extensionKmAdded > 0 ? `+${extensionKmAdded} km (totale: ${newKmLimit} Km)` : `${newKmLimit} Km`)}\n`
             + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
             + `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
             + `*Pagamento estensione:* ${custExtPayLabel}\n`
