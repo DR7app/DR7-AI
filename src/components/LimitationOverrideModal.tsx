@@ -9,7 +9,7 @@ interface LimitationOverrideModalProps {
   actionContext?: string
   draftSessionId: string
   flowType: string
-  onClose: () => void
+  onClose?: () => void
   onOverrideApproved: (overrideId: string) => void
 }
 
@@ -22,7 +22,7 @@ export default function LimitationOverrideModal({
   actionContext,
   draftSessionId,
   flowType,
-  onClose,
+  onClose: _onClose,
   onOverrideApproved,
 }: LimitationOverrideModalProps) {
   const [step, setStep] = useState<Step>('blocked')
@@ -33,14 +33,8 @@ export default function LimitationOverrideModal({
   const [error, setError] = useState<string | null>(null)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
 
-  const reset = useCallback(() => {
-    setStep('blocked')
-    setSending(false)
-    setVerifying(false)
-    setOverrideId(null)
-    setOtpDigits(['', '', '', '', '', ''])
-    setError(null)
-  }, [])
+  // Keep _onClose to satisfy prop interface but modal is not dismissible
+  void _onClose
 
   async function sendOtp() {
     setSending(true)
