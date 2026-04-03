@@ -8,6 +8,13 @@ interface SystemMessage {
     label: string
     description: string
     message_body: string
+    is_automatic: boolean
+    is_enabled: boolean
+    trigger_event: string
+    trigger_offset_hours: number
+    send_hour: number | null
+    target_category: string
+    target_status: string
     created_at: string
     updated_at: string
 }
@@ -30,29 +37,25 @@ interface SentMessageLog {
     status: string
 }
 
-const SYSTEM_KEYS = ['supercar_day_before', 'utilitaria_day_before', 'deposit_return_iban']
-
-// Timeline info for system templates
-const SCHEDULE_INFO: Record<string, { trigger: string; timing: string; frequency: string; target: string }> = {
-    supercar_day_before: {
-        trigger: 'Fine noleggio',
-        timing: '1 giorno prima',
-        frequency: 'Automatico (cron ogni 5 min)',
-        target: 'Clienti Supercar',
-    },
-    utilitaria_day_before: {
-        trigger: 'Fine noleggio',
-        timing: '1 giorno prima',
-        frequency: 'Automatico (cron ogni 5 min)',
-        target: 'Clienti Utilitaria / Furgone / V-Class',
-    },
-    deposit_return_iban: {
-        trigger: 'Fine noleggio',
-        timing: '60 minuti dopo',
-        frequency: 'Automatico (cron ogni 5 min)',
-        target: 'Clienti con cauzione attiva',
-    },
+const TRIGGER_LABELS: Record<string, string> = {
+    'before_pickup': 'Prima del ritiro',
+    'after_pickup': 'Dopo il ritiro',
+    'before_dropoff': 'Prima della riconsegna',
+    'after_dropoff': 'Dopo la riconsegna',
+    'on_booking': 'Alla creazione prenotazione',
+    'on_payment': 'Al pagamento',
 }
+
+const CATEGORY_LABELS: Record<string, string> = {
+    'all': 'Tutti i veicoli',
+    'exotic': 'Supercar / Exotic',
+    'urban': 'Utilitarie',
+    'aziendali': 'Aziendali',
+    'furgone': 'Furgoni',
+}
+
+const SYSTEM_KEYS = ['booking_confirmation', 'booking_reminder', 'return_reminder', 'deposit_reminder']
+
 
 export default function MessaggiSistemaTab() {
     // Template state
@@ -67,6 +70,11 @@ export default function MessaggiSistemaTab() {
     const [newLabel, setNewLabel] = useState('')
     const [newDescription, setNewDescription] = useState('')
     const [newBody, setNewBody] = useState('')
+    const [newIsAutomatic, setNewIsAutomatic] = useState(false)
+    const [newTriggerEvent, setNewTriggerEvent] = useState('before_dropoff')
+    const [newTriggerOffset, setNewTriggerOffset] = useState(24)
+    const [newSendHour, setNewSendHour] = useState<number | null>(9)
+    const [newTargetCategory, setNewTargetCategory] = useState('all')
     const [creatingNew, setCreatingNew] = useState(false)
 
     // Send section state
@@ -112,7 +120,7 @@ export default function MessaggiSistemaTab() {
 
             if (error) throw error
             setTemplates(data || [])
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error loading templates:', err)
             toast.error('Errore caricamento messaggi')
         } finally {
@@ -131,7 +139,7 @@ export default function MessaggiSistemaTab() {
 
             if (error && error.code !== '42P01') throw error
             setSentLogs(data || [])
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error loading sent logs:', err)
         } finally {
             setLogsLoading(false)
@@ -154,9 +162,10 @@ export default function MessaggiSistemaTab() {
             setTemplates(prev => prev.map(t => t.id === id ? { ...t, message_body: editBody, updated_at: new Date().toISOString() } : t))
             setEditingId(null)
             toast.success('Messaggio aggiornato')
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error saving template:', err)
-            toast.error('Errore salvataggio: ' + err.message)
+            toast.error('Errore salvataggio: ' + _errMsg)
         } finally {
             setSaving(false)
         }
@@ -182,6 +191,13 @@ export default function MessaggiSistemaTab() {
                     label: newLabel.trim(),
                     description: newDescription.trim(),
                     message_body: newBody.trim(),
+                    is_automatic: newIsAutomatic,
+                    is_enabled: true,
+                    trigger_event: newTriggerEvent,
+                    trigger_offset_hours: newTriggerOffset,
+                    send_hour: newSendHour,
+                    target_category: newTargetCategory,
+                    target_status: 'confirmed,active',
                 })
                 .select()
                 .single()
@@ -192,12 +208,65 @@ export default function MessaggiSistemaTab() {
             setNewLabel('')
             setNewDescription('')
             setNewBody('')
+            setNewIsAutomatic(false)
+            setNewTriggerEvent('before_dropoff')
+            setNewTriggerOffset(24)
+            setNewSendHour(9)
+            setNewTargetCategory('all')
             toast.success('Nuovo messaggio creato')
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error creating template:', err)
-            toast.error('Errore creazione: ' + err.message)
+            toast.error('Errore creazione: ' + _errMsg)
         } finally {
             setCreatingNew(false)
+        }
+    }
+
+    async function handleToggleAutomatic(template: SystemMessage) {
+        try {
+            const newVal = !template.is_automatic
+            const { error } = await supabase
+                .from('system_messages')
+                .update({ is_automatic: newVal, updated_at: new Date().toISOString() })
+                .eq('id', template.id)
+            if (error) throw error
+            setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_automatic: newVal } : t))
+            toast.success(newVal ? 'Invio automatico attivato' : 'Invio automatico disattivato')
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
+        }
+    }
+
+    async function handleToggleEnabled(template: SystemMessage) {
+        try {
+            const newVal = !template.is_enabled
+            const { error } = await supabase
+                .from('system_messages')
+                .update({ is_enabled: newVal, updated_at: new Date().toISOString() })
+                .eq('id', template.id)
+            if (error) throw error
+            setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_enabled: newVal } : t))
+            toast.success(newVal ? 'Messaggio attivato' : 'Messaggio disattivato')
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
+        }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async function handleUpdateAutomation(templateId: string, field: string, value: any) {
+        try {
+            const { error } = await supabase
+                .from('system_messages')
+                .update({ [field]: value, updated_at: new Date().toISOString() })
+                .eq('id', templateId)
+            if (error) throw error
+            setTemplates(prev => prev.map(t => t.id === templateId ? { ...t, [field]: value } : t))
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
         }
     }
 
@@ -217,9 +286,10 @@ export default function MessaggiSistemaTab() {
             if (error) throw error
             setTemplates(prev => prev.filter(t => t.id !== template.id))
             toast.success('Messaggio eliminato')
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error deleting template:', err)
-            toast.error('Errore eliminazione: ' + err.message)
+            toast.error('Errore eliminazione: ' + _errMsg)
         }
     }
 
@@ -243,7 +313,7 @@ export default function MessaggiSistemaTab() {
                 .limit(20)
 
             // Search by phone
-            const cleanQ = query.replace(/[\s\-\+\(\)]/g, '')
+            const cleanQ = query.replace(/[\s\-+()]/g, '')
             const { data: byPhone } = await supabase
                 .from('customers_extended')
                 .select('id, nome, cognome, telefono')
@@ -251,6 +321,7 @@ export default function MessaggiSistemaTab() {
                 .limit(10)
 
             const merged = new Map<string, CustomerResult>()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const process = (items: any[] | null) => {
                 items?.forEach(c => {
                     if (c.telefono && !merged.has(c.id)) {
@@ -270,7 +341,7 @@ export default function MessaggiSistemaTab() {
             // Filter out already-selected
             const selectedIds = new Set(selectedCustomers.map(c => c.id))
             setCustomerResults(Array.from(merged.values()).filter(c => !selectedIds.has(c.id)))
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error searching customers:', err)
         } finally {
             setSearching(false)
@@ -304,7 +375,7 @@ export default function MessaggiSistemaTab() {
     }
 
     function cleanPhone(phone: string): string {
-        let cleaned = phone.replace(/[\s\-\+\(\)]/g, '').replace(/[^\d]/g, '')
+        let cleaned = phone.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
         if (cleaned.startsWith('00')) {
             cleaned = cleaned.substring(2)
         }
@@ -418,7 +489,7 @@ export default function MessaggiSistemaTab() {
                     </div>
                     <button
                         onClick={() => setShowNewForm(!showNewForm)}
-                        className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-black hover:bg-yellow-500"
+                        className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f]"
                     >
                         + Nuovo Messaggio
                     </button>
@@ -459,8 +530,64 @@ export default function MessaggiSistemaTab() {
                                 placeholder="Buongiorno {nome},&#10;&#10;..."
                                 className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
                             />
-                            <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{'{nome}'}</code> = nome del cliente</p>
+                            <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
                         </div>
+
+                        {/* Automation toggle */}
+                        <div className="border border-theme-border rounded-lg p-4">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={newIsAutomatic}
+                                    onChange={e => setNewIsAutomatic(e.target.checked)}
+                                    className="w-5 h-5 rounded border-theme-border accent-dr7-gold"
+                                />
+                                <div>
+                                    <span className="text-sm font-semibold text-theme-text-primary">Invio Automatico</span>
+                                    <p className="text-xs text-theme-text-muted">Il messaggio verrà inviato automaticamente quando le condizioni sono soddisfatte</p>
+                                </div>
+                            </label>
+
+                            {newIsAutomatic && (
+                                <div className="mt-4 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Evento</label>
+                                        <select value={newTriggerEvent} onChange={e => setNewTriggerEvent(e.target.value)}
+                                            className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                            {Object.entries(TRIGGER_LABELS).map(([k, v]) => (
+                                                <option key={k} value={k}>{v}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Quanto prima/dopo (ore)</label>
+                                        <input type="number" value={newTriggerOffset} onChange={e => setNewTriggerOffset(parseInt(e.target.value) || 0)}
+                                            className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                        <p className="text-xs text-theme-text-muted mt-1">24 = 1 giorno, 48 = 2 giorni</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Ora di invio (Roma)</label>
+                                        <select value={newSendHour ?? ''} onChange={e => setNewSendHour(e.target.value === '' ? null : parseInt(e.target.value))}
+                                            className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                            <option value="">Appena possibile</option>
+                                            {Array.from({ length: 24 }, (_, i) => (
+                                                <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Categoria veicolo</label>
+                                        <select value={newTargetCategory} onChange={e => setNewTargetCategory(e.target.value)}
+                                            className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                            {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                                                <option key={k} value={k}>{v}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="flex gap-2 justify-end">
                             <button
                                 onClick={() => { setShowNewForm(false); setNewLabel(''); setNewDescription(''); setNewBody('') }}
@@ -471,7 +598,7 @@ export default function MessaggiSistemaTab() {
                             <button
                                 onClick={handleCreateTemplate}
                                 disabled={creatingNew || !newLabel.trim() || !newBody.trim()}
-                                className="px-5 py-2 rounded-full text-sm font-semibold bg-dr7-gold text-black hover:bg-yellow-500 transition-colors disabled:opacity-50"
+                                className="px-5 py-2 rounded-full text-sm font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors disabled:opacity-50"
                             >
                                 {creatingNew ? 'Salvataggio...' : 'Crea Messaggio'}
                             </button>
@@ -481,26 +608,38 @@ export default function MessaggiSistemaTab() {
 
                 {/* Template Cards */}
                 <div className="space-y-3">
-                    {templates.map(template => {
-                        const schedule = SCHEDULE_INFO[template.message_key]
-                        return (
-                        <div key={template.id} className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
+                    {templates.map(template => (
+                        <div key={template.id} className={`bg-theme-bg-secondary rounded-xl border ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'} p-4`}>
                             <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <h4 className="font-semibold text-theme-text-primary">{template.label}</h4>
-                                    {template.description && (
-                                        <p className="text-sm text-theme-text-muted">{template.description}</p>
-                                    )}
-                                    {SYSTEM_KEYS.includes(template.message_key) && (
-                                        <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600/20 text-blue-400">
-                                            Automatico
-                                        </span>
-                                    )}
-                                    {!SYSTEM_KEYS.includes(template.message_key) && (
-                                        <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-600/20 text-purple-400">
-                                            Solo manuale
-                                        </span>
-                                    )}
+                                <div className="flex items-center gap-3">
+                                    {/* Enable/disable toggle */}
+                                    <button
+                                        onClick={() => handleToggleEnabled(template)}
+                                        className={`w-10 h-5 rounded-full relative transition-colors ${template.is_enabled !== false ? 'bg-green-500' : 'bg-gray-600'}`}
+                                    >
+                                        <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${template.is_enabled !== false ? 'left-5' : 'left-0.5'}`} />
+                                    </button>
+                                    <div>
+                                        <h4 className="font-semibold text-theme-text-primary">{template.label}</h4>
+                                        {template.description && (
+                                            <p className="text-sm text-theme-text-muted">{template.description}</p>
+                                        )}
+                                        <div className="flex gap-2 mt-1">
+                                            <button
+                                                onClick={() => handleToggleAutomatic(template)}
+                                                className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                                                    template.is_automatic
+                                                        ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
+                                                        : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
+                                                }`}
+                                            >
+                                                {template.is_automatic ? 'Automatico' : 'Solo manuale'}
+                                            </button>
+                                            {template.is_enabled === false && (
+                                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400">Disattivato</span>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="flex gap-2">
                                     {editingId === template.id ? (
@@ -514,7 +653,7 @@ export default function MessaggiSistemaTab() {
                                             <button
                                                 onClick={() => handleSaveEdit(template.id)}
                                                 disabled={saving}
-                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-black hover:bg-yellow-500 transition-colors disabled:opacity-50"
+                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors disabled:opacity-50"
                                             >
                                                 {saving ? 'Salvataggio...' : 'Salva'}
                                             </button>
@@ -527,37 +666,59 @@ export default function MessaggiSistemaTab() {
                                             >
                                                 Modifica
                                             </button>
-                                            {!SYSTEM_KEYS.includes(template.message_key) && (
-                                                <button
-                                                    onClick={() => handleDeleteTemplate(template)}
-                                                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
-                                                >
-                                                    Elimina
-                                                </button>
-                                            )}
+                                            <button
+                                                onClick={() => handleDeleteTemplate(template)}
+                                                className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
+                                            >
+                                                Elimina
+                                            </button>
                                         </>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Timeline visual */}
-                            {schedule && (
-                                <div className="mt-3 mb-3 flex items-center gap-3 px-3 py-2.5 rounded-lg bg-theme-bg-primary border border-theme-border/50">
-                                    <div className="flex items-center gap-2 min-w-0">
+                            {/* Automation config — editable inline */}
+                            {template.is_automatic && (
+                                <div className="mt-3 mb-3 flex flex-wrap items-center gap-3 px-3 py-2.5 rounded-lg bg-theme-bg-primary border border-theme-border/50">
+                                    <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
-                                        <span className="text-xs font-medium text-theme-text-secondary whitespace-nowrap">{schedule.trigger}</span>
+                                        <select value={template.trigger_event || 'before_dropoff'}
+                                            onChange={e => handleUpdateAutomation(template.id, 'trigger_event', e.target.value)}
+                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                            {Object.entries(TRIGGER_LABELS).map(([k, v]) => (
+                                                <option key={k} value={k}>{v}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="text-theme-text-muted text-xs">―</div>
-                                    <div className="px-2.5 py-1 rounded-full bg-dr7-gold/15 text-dr7-gold text-xs font-bold whitespace-nowrap">
-                                        {schedule.timing}
+                                    <div className="flex items-center gap-1">
+                                        <input type="number" value={template.trigger_offset_hours || 24}
+                                            onChange={e => handleUpdateAutomation(template.id, 'trigger_offset_hours', parseInt(e.target.value) || 0)}
+                                            className="w-12 text-xs text-center bg-dr7-gold/15 text-dr7-gold font-bold rounded-full px-2 py-1 border-none focus:outline-none" />
+                                        <span className="text-xs text-dr7-gold font-bold">ore</span>
                                     </div>
                                     <div className="text-theme-text-muted text-xs">―</div>
-                                    <div className="flex items-center gap-2 min-w-0">
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-xs text-theme-text-muted">ore</span>
+                                        <select value={template.send_hour ?? ''}
+                                            onChange={e => handleUpdateAutomation(template.id, 'send_hour', e.target.value === '' ? null : parseInt(e.target.value))}
+                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                            <option value="">Subito</option>
+                                            {Array.from({ length: 24 }, (_, i) => (
+                                                <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="text-theme-text-muted text-xs">―</div>
+                                    <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                                        <span className="text-xs text-theme-text-secondary truncate">{schedule.target}</span>
-                                    </div>
-                                    <div className="ml-auto pl-3 border-l border-theme-border/50">
-                                        <span className="text-[10px] text-theme-text-muted whitespace-nowrap">{schedule.frequency}</span>
+                                        <select value={template.target_category || 'all'}
+                                            onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
+                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                            {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                                                <option key={k} value={k}>{v}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
                             )}
@@ -570,7 +731,7 @@ export default function MessaggiSistemaTab() {
                                         rows={6}
                                         className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
                                     />
-                                    <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{'{nome}'}</code> = nome del cliente</p>
+                                    <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
                                 </div>
                             ) : (
                                 <pre className="mt-2 px-4 py-3 rounded-lg bg-theme-bg-tertiary text-theme-text-secondary text-sm whitespace-pre-wrap font-sans">
@@ -578,8 +739,7 @@ export default function MessaggiSistemaTab() {
                                 </pre>
                             )}
                         </div>
-                        )
-                    })}
+                    ))}
 
                     {templates.length === 0 && (
                         <div className="text-center py-8 text-theme-text-muted">
@@ -602,7 +762,7 @@ export default function MessaggiSistemaTab() {
                         onClick={() => setSendMode('template')}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                             sendMode === 'template'
-                                ? 'bg-dr7-gold text-black'
+                                ? 'bg-dr7-gold text-white'
                                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                         }`}
                     >
@@ -612,7 +772,7 @@ export default function MessaggiSistemaTab() {
                         onClick={() => setSendMode('free')}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                             sendMode === 'free'
-                                ? 'bg-dr7-gold text-black'
+                                ? 'bg-dr7-gold text-white'
                                 : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                         }`}
                     >
@@ -645,7 +805,7 @@ export default function MessaggiSistemaTab() {
                             placeholder="Buongiorno {nome},&#10;&#10;..."
                             className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
                         />
-                        <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{'{nome}'}</code> = nome del cliente</p>
+                        <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
                     </div>
                 )}
 
@@ -727,7 +887,7 @@ export default function MessaggiSistemaTab() {
                     <button
                         onClick={handleSend}
                         disabled={sending || !getMessageText().trim() || selectedCustomers.length === 0}
-                        className="px-6 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-black hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-6 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {sending
                             ? `Invio ${sendProgress.current}/${sendProgress.total}...`

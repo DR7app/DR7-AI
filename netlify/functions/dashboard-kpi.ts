@@ -1,0 +1,581 @@
+import { Handler } from '@netlify/functions'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate()
+}
+
+function computeBillableDays(startDateStr: string, endDateStr: string): number {
+  const start = startDateStr.substring(0, 10)
+  const end = endDateStr.substring(0, 10)
+  const [sY, sM, sD] = start.split('-').map(Number)
+  const [eY, eM, eD] = end.split('-').map(Number)
+  const startMs = Date.UTC(sY, sM - 1, sD)
+  const endMs = Date.UTC(eY, eM - 1, eD)
+  const diffDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24))
+  return Math.max(1, diffDays)
+}
+
+export const handler: Handler = async (event) => {
+  if (event.httpMethod !== 'GET') {
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
+  }
+
+  const params = event.queryStringParameters || {}
+  const month = params.month // YYYY-MM
+
+  if (!month) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Missing required param: month (YYYY-MM)' }) }
+  }
+
+  const [yearStr, monthStr] = month.split('-')
+  const year = parseInt(yearStr)
+  const monthNum = parseInt(monthStr)
+
+  if (!year || !monthNum || monthNum < 1 || monthNum > 12) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid month format. Use YYYY-MM' }) }
+  }
+
+  const daysInMonth = getDaysInMonth(year, monthNum)
+  const monthStartISO = `${year}-${String(monthNum).padStart(2, '0')}-01`
+  const monthEndISO = `${year}-${String(monthNum).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+
+  // Previous month
+  const prevDate = new Date(year, monthNum - 2, 1) // monthNum-1 is 0-based, -1 more for prev
+  const prevYear = prevDate.getFullYear()
+  const prevMonthNum = prevDate.getMonth() + 1
+  const prevDaysInMonth = getDaysInMonth(prevYear, prevMonthNum)
+  const prevMonthStartISO = `${prevYear}-${String(prevMonthNum).padStart(2, '0')}-01`
+  const prevMonthEndISO = `${prevYear}-${String(prevMonthNum).padStart(2, '0')}-${String(prevDaysInMonth).padStart(2, '0')}`
+
+  // Days elapsed in current month (for projections)
+  const now = new Date()
+  const nowYear = now.getFullYear()
+  const nowMonth = now.getMonth() + 1
+  let daysElapsed = daysInMonth
+  if (nowYear === year && nowMonth === monthNum) {
+    daysElapsed = now.getDate()
+  }
+
+  try {
+    // Parallel data fetches
+    const [
+      vehiclesRes,
+      currentBookingsRes,
+      prevBookingsRes,
+      customersRes,
+      cauzioniRes,
+      fattureRes
+    ] = await Promise.all([
+      // 1. All active vehicles
+      supabase.from('vehicles').select('id, display_name, plate, status, daily_rate, category, metadata')
+        .neq('status', 'retired'),
+      // 2. Current month bookings (all types, exclude admin)
+      supabase.from('bookings')
+        .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, payment_method, customer_name, customer_email, appointment_date, created_at')
+        .gte('pickup_date', monthStartISO + 'T00:00:00')
+        .lte('pickup_date', monthEndISO + 'T23:59:59')
+        .neq('customer_email', 'admin@dr7.app'),
+      // 3. Previous month bookings (exclude admin)
+      supabase.from('bookings')
+        .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, customer_name, customer_email, appointment_date, created_at')
+        .gte('pickup_date', prevMonthStartISO + 'T00:00:00')
+        .lte('pickup_date', prevMonthEndISO + 'T23:59:59')
+        .neq('customer_email', 'admin@dr7.app'),
+      // 4. All customers for new/returning analysis
+      supabase.from('customers_extended')
+        .select('id, created_at, nome, cognome'),
+      // 5. Cauzioni for current month
+      supabase.from('cauzioni')
+        .select('id, importo, stato, metodo, updated_at')
+        .gte('updated_at', monthStartISO + 'T00:00:00')
+        .lte('updated_at', monthEndISO + 'T23:59:59'),
+      // 6. Fatture for cash flow
+      supabase.from('fatture')
+        .select('id, importo_totale, stato, data_emissione, booking_id')
+        .gte('data_emissione', monthStartISO)
+        .lte('data_emissione', monthEndISO)
+    ])
+
+    if (vehiclesRes.error) throw vehiclesRes.error
+    if (currentBookingsRes.error) throw currentBookingsRes.error
+    if (prevBookingsRes.error) throw prevBookingsRes.error
+
+    const vehicles = vehiclesRes.data || []
+    const allCurrentBookings = currentBookingsRes.data || []
+    const allPrevBookings = prevBookingsRes.data || []
+    const customers = customersRes.data || []
+    const cauzioni = cauzioniRes.data || []
+    const fatture = fattureRes.data || []
+
+    // Also fetch bookings that started BEFORE this month but overlap (still active)
+    const { data: overlapBookings } = await supabase
+      .from('bookings')
+      .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status')
+      .lt('pickup_date', monthStartISO + 'T00:00:00')
+      .gte('dropoff_date', monthStartISO + 'T00:00:00')
+      .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
+
+    // Filter rental bookings helper
+    const filterRentals = (bookings: any[]) => bookings.filter(b => {
+      if (!b.pickup_date || !b.dropoff_date) return false
+      const st = (b.service_type || '').trim().toLowerCase()
+      if (st === 'car_wash' || st === 'mechanical_service' || st === 'mechanical') return false
+      const details = b.booking_details || {}
+      if (details.internal === true || details.createdBy === 'automatic_system') return false
+      return true
+    })
+
+    const validStatuses = ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending']
+
+    const currentRentals = filterRentals(allCurrentBookings).filter(b => validStatuses.includes(b.status))
+    const prevRentals = filterRentals(allPrevBookings).filter(b => validStatuses.includes(b.status))
+    const overlapRentals = filterRentals(overlapBookings || [])
+
+    // All rentals that were active in this month (started in month + overlap from before)
+    const monthRentals = [...currentRentals, ...overlapRentals]
+
+    // === 1. FATTURATO (Revenue) ===
+    const calcRevenue = (bookings: any[]) => {
+      let rental = 0, wash = 0, penalties = 0, danni = 0
+      bookings.forEach(b => {
+        const rawPrice = b.price_total
+        const price = (typeof rawPrice === 'string' ? parseFloat(rawPrice) : (rawPrice || 0)) / 100
+        const st = (b.service_type || '').trim().toLowerCase()
+        if (st === 'car_wash') {
+          wash += price
+        } else {
+          rental += price
+        }
+        const details = b.booking_details || {}
+        if (Array.isArray(details.penalties)) {
+          details.penalties.forEach((p: any) => {
+            const paid = parseFloat(p.amountPaid || p.total || 0)
+            if (paid > 0) penalties += paid
+          })
+        }
+        if (Array.isArray(details.danni)) {
+          details.danni.forEach((d: any) => {
+            const paid = parseFloat(d.amountPaid || d.total || 0)
+            if (paid > 0) danni += paid
+          })
+        }
+      })
+      return { rental, wash, penalties, danni, total: rental + wash + penalties + danni }
+    }
+
+    // Current month: all bookings starting this month (rentals + washes + everything)
+    const currentAllValid = allCurrentBookings.filter(b => validStatuses.includes(b.status))
+    const prevAllValid = allPrevBookings.filter(b => validStatuses.includes(b.status))
+
+    const currentRevenue = calcRevenue(currentAllValid)
+    const prevRevenue = calcRevenue(prevAllValid)
+
+    // Incassato: bookings that are actually paid
+    const paidStatuses = ['paid', 'completed', 'succeeded']
+    const currentPaid = currentAllValid.filter(b => paidStatuses.includes(b.payment_status))
+    const incassato = calcRevenue(currentPaid).total
+
+    const revenueChangePercent = prevRevenue.total > 0
+      ? Math.round(((currentRevenue.total - prevRevenue.total) / prevRevenue.total) * 100)
+      : 0
+
+    // === 2. OCCUPAZIONE FLOTTA (Fleet Utilization) ===
+    const totalVehicles = vehicles.length
+
+    // Count vehicles currently rented (have an active booking NOW)
+    const nowISO = now.toISOString()
+    const rentedNow = new Set<string>()
+    const allActiveBookings = [...allCurrentBookings, ...(overlapBookings || [])]
+    allActiveBookings.forEach(b => {
+      if (!b.pickup_date || !b.dropoff_date) return
+      if (!['confirmed', 'confermata', 'in_corso', 'active'].includes(b.status)) return
+      const st = (b.service_type || '').trim().toLowerCase()
+      if (st === 'car_wash' || st === 'mechanical_service' || st === 'mechanical') return
+      if (b.pickup_date <= nowISO && b.dropoff_date >= nowISO) {
+        if (b.vehicle_id) rentedNow.add(b.vehicle_id)
+      }
+    })
+
+    const rentedNowCount = rentedNow.size
+    const idleNowCount = totalVehicles - rentedNowCount
+    const occupationRate = totalVehicles > 0 ? Math.round((rentedNowCount / totalVehicles) * 100) : 0
+
+    // Monthly occupation rate (avg across month)
+    const calcMonthlyOccupation = (rentals: any[], vehList: any[], mStart: string, mEnd: string, dim: number) => {
+      if (vehList.length === 0) return 0
+      const vehicleRentedDays: Record<string, Set<number>> = {}
+      vehList.forEach(v => { vehicleRentedDays[v.id] = new Set() })
+
+      rentals.forEach(b => {
+        const vid = b.vehicle_id
+        if (!vid || !vehicleRentedDays[vid]) return
+        const pickup = b.pickup_date.substring(0, 10)
+        const dropoff = b.dropoff_date.substring(0, 10)
+        const [pY, pM, pD] = pickup.split('-').map(Number)
+        const [dY, dM, dD] = dropoff.split('-').map(Number)
+        const mY = parseInt(mStart.substring(0, 4))
+        const mM = parseInt(mStart.substring(5, 7))
+
+        let startDay: number
+        if (pY < mY || (pY === mY && pM < mM)) startDay = 1
+        else if (pY === mY && pM === mM) startDay = pD
+        else return
+
+        let endDay: number
+        if (dY > mY || (dY === mY && dM > mM)) endDay = dim
+        else if (dY === mY && dM === mM) {
+          endDay = dD - 1
+          if (endDay < startDay) {
+            if (pY === mY && pM === mM) endDay = startDay
+            else return
+          }
+        } else return
+
+        for (let d = startDay; d <= endDay; d++) {
+          vehicleRentedDays[vid].add(d)
+        }
+      })
+
+      let totalDays = 0
+      Object.values(vehicleRentedDays).forEach(days => { totalDays += days.size })
+      return Math.round((totalDays / (vehList.length * dim)) * 100)
+    }
+
+    const monthlyOccupationRate = calcMonthlyOccupation(monthRentals, vehicles, monthStartISO, monthEndISO, daysInMonth)
+
+    // Previous month rate - fetch overlap bookings for prev month too
+    const { data: prevOverlapBookings } = await supabase
+      .from('bookings')
+      .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, status, service_type, booking_details')
+      .lt('pickup_date', prevMonthStartISO + 'T00:00:00')
+      .gte('dropoff_date', prevMonthStartISO + 'T00:00:00')
+      .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
+
+    const prevMonthRentals = [...prevRentals, ...filterRentals(prevOverlapBookings || [])]
+    const prevMonthlyOccupationRate = calcMonthlyOccupation(prevMonthRentals, vehicles, prevMonthStartISO, prevMonthEndISO, prevDaysInMonth)
+
+    const fleetChangePercent = prevMonthlyOccupationRate > 0
+      ? monthlyOccupationRate - prevMonthlyOccupationRate
+      : 0
+
+    // Vehicles idle > 10 days
+    const vehicleLastBookingEnd: Record<string, string> = {}
+    allActiveBookings.forEach(b => {
+      if (!b.vehicle_id || !b.dropoff_date) return
+      const st = (b.service_type || '').trim().toLowerCase()
+      if (st === 'car_wash' || st === 'mechanical_service') return
+      if (!vehicleLastBookingEnd[b.vehicle_id] || b.dropoff_date > vehicleLastBookingEnd[b.vehicle_id]) {
+        vehicleLastBookingEnd[b.vehicle_id] = b.dropoff_date
+      }
+    })
+
+    const vehiclesIdleLong: Array<{ name: string; plate: string; idleDays: number }> = []
+    vehicles.forEach(v => {
+      const lastEnd = vehicleLastBookingEnd[v.id]
+      if (!lastEnd) {
+        // No bookings at all - count as idle since start of month
+        vehiclesIdleLong.push({ name: v.display_name, plate: v.plate || '-', idleDays: daysElapsed })
+      } else {
+        const endDate = new Date(lastEnd)
+        const diffMs = now.getTime() - endDate.getTime()
+        const idleDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+        if (idleDays > 10) {
+          vehiclesIdleLong.push({ name: v.display_name, plate: v.plate || '-', idleDays })
+        }
+      }
+    })
+    vehiclesIdleLong.sort((a, b) => b.idleDays - a.idleDays)
+
+    // === 3. RICAVO MEDIO PER VEICOLO (Revenue per Vehicle) ===
+    const vehicleRevenues: Array<{ id: string; name: string; plate: string; revenue: number; rentedDays: number }> = []
+
+    vehicles.forEach(vehicle => {
+      const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
+      let vRevenue = 0
+      let vRentedDays = 0
+
+      monthRentals.forEach(b => {
+        const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
+        const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
+        const matched = (vPlate && (bPlate === vPlate || detailsPlate === vPlate)) ||
+          (b.vehicle_id === vehicle.id && !bPlate && !detailsPlate)
+        if (!matched) return
+
+        const rawPrice = b.price_total
+        const bookingRevenue = (typeof rawPrice === 'string' ? parseFloat(rawPrice) : (rawPrice || 0)) / 100
+        const totalDays = computeBillableDays(b.pickup_date, b.dropoff_date)
+
+        // Prorate to this month
+        const pickup = b.pickup_date.substring(0, 10)
+        const dropoff = b.dropoff_date.substring(0, 10)
+        const pD = parseInt(pickup.substring(8, 10))
+        const dD = parseInt(dropoff.substring(8, 10))
+        const pM = parseInt(pickup.substring(5, 7))
+        const dM = parseInt(dropoff.substring(5, 7))
+        const pY = parseInt(pickup.substring(0, 4))
+        const dY = parseInt(dropoff.substring(0, 4))
+
+        let startDay = (pY < year || (pY === year && pM < monthNum)) ? 1 : pD
+        let endDay: number
+        if (dY > year || (dY === year && dM > monthNum)) endDay = daysInMonth
+        else {
+          endDay = dD - 1
+          if (endDay < startDay) {
+            if (pY === year && pM === monthNum) endDay = startDay
+            else return
+          }
+        }
+        const overlapDays = endDay - startDay + 1
+        vRevenue += (bookingRevenue / totalDays) * overlapDays
+        vRentedDays += overlapDays
+      })
+
+      vehicleRevenues.push({
+        id: vehicle.id,
+        name: vehicle.display_name,
+        plate: vehicle.plate || '-',
+        revenue: vRevenue,
+        rentedDays: vRentedDays
+      })
+    })
+
+    // Average revenue per day across fleet (only count vehicles that were rented)
+    const totalFleetRevenue = vehicleRevenues.reduce((s, v) => s + v.revenue, 0)
+    const totalFleetRentedDays = vehicleRevenues.reduce((s, v) => s + v.rentedDays, 0)
+    const avgPerDay = totalFleetRentedDays > 0 ? totalFleetRevenue / totalFleetRentedDays : 0
+
+    // Same for prev month
+    let prevTotalRevenue = 0, prevTotalRentedDays = 0
+    vehicles.forEach(vehicle => {
+      const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
+      prevMonthRentals.forEach(b => {
+        const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
+        const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
+        const matched = (vPlate && (bPlate === vPlate || detailsPlate === vPlate)) ||
+          (b.vehicle_id === vehicle.id && !bPlate && !detailsPlate)
+        if (!matched) return
+        const rawPrice = b.price_total
+        const rev = (typeof rawPrice === 'string' ? parseFloat(rawPrice) : (rawPrice || 0)) / 100
+        const days = computeBillableDays(b.pickup_date, b.dropoff_date)
+        prevTotalRevenue += rev
+        prevTotalRentedDays += days
+      })
+    })
+    const prevAvgPerDay = prevTotalRentedDays > 0 ? prevTotalRevenue / prevTotalRentedDays : 0
+    const avgPerDayChange = prevAvgPerDay > 0
+      ? Math.round(((avgPerDay - prevAvgPerDay) / prevAvgPerDay) * 100)
+      : 0
+
+    // Top 3 and under-performers
+    const vehiclePerDay = vehicleRevenues
+      .filter(v => v.rentedDays > 0)
+      .map(v => ({ name: v.name, plate: v.plate, perDay: Math.round((v.revenue / v.rentedDays) * 100) / 100, revenue: v.revenue }))
+      .sort((a, b) => b.perDay - a.perDay)
+
+    const topPerformers = vehiclePerDay.slice(0, 3).map(v => ({
+      name: v.name, plate: v.plate, perDay: v.perDay, changePercent: 0
+    }))
+    const underPerformers = vehiclePerDay.filter(v => v.perDay < avgPerDay).map(v => ({
+      name: v.name, plate: v.plate, perDay: v.perDay
+    }))
+
+    // === 4. PRENOTAZIONI (Bookings) ===
+    const currentAllBookings = allCurrentBookings.filter(b => {
+      const st = (b.service_type || '').trim().toLowerCase()
+      return st !== 'car_wash' && st !== 'mechanical_service' && st !== 'mechanical'
+    })
+    const prevAllBookingsFiltered = allPrevBookings.filter(b => {
+      const st = (b.service_type || '').trim().toLowerCase()
+      return st !== 'car_wash' && st !== 'mechanical_service' && st !== 'mechanical'
+    })
+
+    const totalBookings = currentAllBookings.length
+    const prevTotalBookings = prevAllBookingsFiltered.length
+    const bookingsChangePercent = prevTotalBookings > 0
+      ? Math.round(((totalBookings - prevTotalBookings) / prevTotalBookings) * 100)
+      : 0
+
+    const confirmedBookings = currentAllBookings.filter(b =>
+      ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'].includes(b.status)
+    ).length
+    const pendingBookings = currentAllBookings.filter(b => b.status === 'pending').length
+    const cancelledBookings = currentAllBookings.filter(b =>
+      ['cancelled', 'annullata'].includes(b.status)
+    ).length
+    const conversionRate = (confirmedBookings + cancelledBookings) > 0
+      ? Math.round((confirmedBookings / (confirmedBookings + cancelledBookings)) * 100)
+      : 100
+
+    // === 5. CLIENTI (Customers) ===
+    // New customers: created_at in this month
+    const newThisMonth = customers.filter(c => {
+      if (!c.created_at) return false
+      const d = c.created_at.substring(0, 7) // YYYY-MM
+      return d === month
+    }).length
+
+    const prevMonthStr = `${prevYear}-${String(prevMonthNum).padStart(2, '0')}`
+    const prevNewCount = customers.filter(c => {
+      if (!c.created_at) return false
+      return c.created_at.substring(0, 7) === prevMonthStr
+    }).length
+
+    // Active customers: had a booking this month
+    const activeEmails = new Set<string>()
+    allCurrentBookings.forEach(b => {
+      if (b.customer_email) activeEmails.add(b.customer_email.toLowerCase())
+    })
+
+    const customersChangePercent = prevNewCount > 0
+      ? Math.round(((newThisMonth - prevNewCount) / prevNewCount) * 100)
+      : 0
+
+    // === 6. DANNI / RISCHI ===
+    let danniAmount = 0, danniCount = 0, prevDanniAmount = 0
+    let insolutiAmount = 0, insolutiCount = 0
+
+    currentAllValid.forEach(b => {
+      const details = b.booking_details || {}
+      if (Array.isArray(details.danni)) {
+        details.danni.forEach((d: any) => {
+          danniCount++
+          const total = parseFloat(d.total || 0)
+          danniAmount += total
+          const paid = parseFloat(d.amountPaid || 0)
+          if (paid < total) {
+            insolutiAmount += (total - paid)
+            insolutiCount++
+          }
+        })
+      }
+      if (Array.isArray(details.penalties)) {
+        details.penalties.forEach((p: any) => {
+          const total = parseFloat(p.total || 0)
+          const paid = parseFloat(p.amountPaid || 0)
+          if (paid < total) {
+            insolutiAmount += (total - paid)
+            insolutiCount++
+          }
+        })
+      }
+    })
+
+    prevAllValid.forEach(b => {
+      const details = b.booking_details || {}
+      if (Array.isArray(details.danni)) {
+        details.danni.forEach((d: any) => {
+          prevDanniAmount += parseFloat(d.total || 0)
+        })
+      }
+    })
+
+    const danniChangePercent = prevDanniAmount > 0
+      ? Math.round(((danniAmount - prevDanniAmount) / prevDanniAmount) * 100)
+      : 0
+
+    // === 7. PAGAMENTI / CASH FLOW ===
+    const incassatoTotal = incassato
+    // Da incassare: unpaid bookings this month
+    const unpaidBookings = currentAllValid.filter(b => !paidStatuses.includes(b.payment_status))
+    let daIncassare = 0
+    unpaidBookings.forEach(b => {
+      const rawPrice = b.price_total
+      daIncassare += (typeof rawPrice === 'string' ? parseFloat(rawPrice) : (rawPrice || 0)) / 100
+    })
+    daIncassare += insolutiAmount // Add unpaid danni/penalties
+
+    // Scaduti: from fatture with overdue status
+    let insolutiScaduti = 0
+    fatture.forEach((f: any) => {
+      if (f.stato === 'non_pagata' || f.stato === 'scaduta') {
+        insolutiScaduti += parseFloat(f.importo_totale || 0)
+      }
+    })
+
+    // Build response
+    const response = {
+      period: { month, daysInMonth, daysElapsed },
+
+      revenue: {
+        currentMonth: Math.round(currentRevenue.total * 100) / 100,
+        previousMonth: Math.round(prevRevenue.total * 100) / 100,
+        changePercent: revenueChangePercent,
+        incassato: Math.round(incassato * 100) / 100,
+        incassatoPercent: currentRevenue.total > 0 ? Math.round((incassato / currentRevenue.total) * 100) : 0,
+        bySource: {
+          rental: Math.round(currentRevenue.rental * 100) / 100,
+          wash: Math.round(currentRevenue.wash * 100) / 100,
+          penalties: Math.round(currentRevenue.penalties * 100) / 100,
+          danni: Math.round(currentRevenue.danni * 100) / 100
+        }
+      },
+
+      fleet: {
+        totalVehicles,
+        rentedNow: rentedNowCount,
+        idleNow: idleNowCount,
+        occupationRate: monthlyOccupationRate,
+        previousRate: prevMonthlyOccupationRate,
+        changePercent: fleetChangePercent,
+        vehiclesIdleLong: vehiclesIdleLong.slice(0, 10)
+      },
+
+      revenuePerVehicle: {
+        avgPerDay: Math.round(avgPerDay * 100) / 100,
+        previousAvgPerDay: Math.round(prevAvgPerDay * 100) / 100,
+        changePercent: avgPerDayChange,
+        topPerformers,
+        underPerformers: underPerformers.slice(0, 5)
+      },
+
+      bookings: {
+        total: totalBookings,
+        previousTotal: prevTotalBookings,
+        changePercent: bookingsChangePercent,
+        confirmed: confirmedBookings,
+        pending: pendingBookings,
+        cancelled: cancelledBookings,
+        conversionRate
+      },
+
+      customers: {
+        newThisMonth,
+        activeThisMonth: activeEmails.size,
+        previousNewCount: prevNewCount,
+        changePercent: customersChangePercent,
+        totalCustomers: customers.length
+      },
+
+      damages: {
+        danniAmount: Math.round(danniAmount * 100) / 100,
+        previousDanniAmount: Math.round(prevDanniAmount * 100) / 100,
+        changePercent: danniChangePercent,
+        danniCount,
+        insoluti: Math.round(insolutiAmount * 100) / 100,
+        insolutiCount
+      },
+
+      cashFlow: {
+        incassato: Math.round(incassatoTotal * 100) / 100,
+        daIncassare: Math.round(daIncassare * 100) / 100,
+        insolutiScaduti: Math.round(insolutiScaduti * 100) / 100
+      }
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify(response)
+    }
+  } catch (error: any) {
+    console.error('Dashboard KPI error:', error)
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Internal server error', details: error.message })
+    }
+  }
+}

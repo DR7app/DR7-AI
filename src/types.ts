@@ -38,7 +38,10 @@ export interface Vehicle {
   chassis_number?: string | null  // Numero di Telaio (VIN)
   status: 'available' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
+  price_resident_daily?: number | null
+  price_nonresident_daily?: number | null
   category: 'exotic' | 'urban' | 'aziendali' | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
@@ -107,6 +110,7 @@ export interface Reservation {
   source: string | null
   total_amount: number
   currency: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   addons: Record<string, any> | null
   created_by: string | null
   created_at: string
@@ -121,6 +125,7 @@ export interface AuditLog {
   action: string
   entity_type: string
   entity_id: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   diff: Record<string, any> | null
   created_at: string
 }

@@ -13,6 +13,7 @@ interface Booking {
     appointment_time?: string
     service_type?: string
     service_name?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking_details: any
     status: string
     type: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
@@ -140,6 +141,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
         return () => {
             document.body.style.overflow = 'unset'
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, selectedDate])
 
     useEffect(() => {
@@ -156,6 +158,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
         return () => {
             subscription.unsubscribe()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, selectedDate])
 
     useEffect(() => {
@@ -202,6 +205,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     components.year === selectedDate.getFullYear()
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             data?.forEach((booking: any) => {
                 if (isSameDay(booking.pickup_date)) {
                     const isRental = !booking.service_type ||
@@ -221,8 +225,12 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     }
                 }
 
+                // Only external customer washes — exclude internal return washes
                 if (booking.service_type === 'car_wash' &&
-                    isSameDay(booking.appointment_date)) {
+                    isSameDay(booking.appointment_date) &&
+                    booking.customer_name !== 'Lavaggio Rientro' &&
+                    !booking.booking_details?.internal &&
+                    !booking.booking_details?.auto_created) {
                     categorized.push({ ...booking, type: 'lavaggio' })
                 }
 

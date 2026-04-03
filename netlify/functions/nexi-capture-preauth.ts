@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
@@ -5,15 +6,13 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Nexi XPay Configuration - uses API Key authentication (no MAC required)
+// Use same API key as pay-by-link
 const NEXI_API_KEY = process.env.NEXI_API_KEY!;
-
-// Production URL
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
 const handler: Handler = async (event) => {
     const headers = {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'POST, OPTIONS'
     };
@@ -27,43 +26,92 @@ const handler: Handler = async (event) => {
     }
 
     try {
-        const { cauzioneId, transactionId, amount, orderId } = JSON.parse(event.body || '{}');
+        const { cauzioneId, operationId: inputOperationId, amount, orderId } = JSON.parse(event.body || '{}');
 
-        if (!cauzioneId || !transactionId || !amount) {
+        if (!amount || (!inputOperationId && !orderId)) {
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'cauzioneId, transactionId, and amount are required' })
+                body: JSON.stringify({ error: 'amount and (operationId or orderId) are required' })
             };
         }
 
-        // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Nexi Capture API call
+        const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+        })
+
+        const captureHeaders = {
+            'Content-Type': 'application/json',
+            'X-Api-Key': NEXI_API_KEY,
+            'Correlation-Id': correlationId,
+            'Idempotency-Key': correlationId
+        }
+
+        // Step 1: Find the real operationId by looking up operations for this orderId
+        let realOperationId = inputOperationId
+        if (orderId) {
+            console.log('[nexi-capture-preauth] Looking up operations for orderId:', orderId);
+            const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+            const toTime = new Date().toISOString()
+            const opsUrl = `${NEXI_BASE_URL}/operations?fromTime=${encodeURIComponent(fromTime)}&toTime=${encodeURIComponent(toTime)}&maxRecords=500&operationType=AUTHORIZATION`
+            const opsRes = await fetch(opsUrl, {
+                headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16) }) }
+            })
+            if (opsRes.ok) {
+                const opsData = await opsRes.json()
+                const allOps = opsData.operations || []
+                console.log('[nexi-capture-preauth] Scanned', allOps.length, 'operations')
+                // Filter by orderId client-side (Nexi API doesn't support orderId filter)
+                const matchingOps = allOps.filter((op: any) => op.orderId === orderId)
+                const authOp = matchingOps.find((op: any) => op.operationResult === 'AUTHORIZED') || matchingOps[0]
+                if (authOp?.operationId) {
+                    realOperationId = authOp.operationId
+                    console.log('[nexi-capture-preauth] Found real operationId:', realOperationId)
+                } else {
+                    console.warn('[nexi-capture-preauth] No matching operation found for orderId:', orderId)
+                }
+            } else {
+                const errText = await opsRes.text()
+                console.warn('[nexi-capture-preauth] Operations lookup failed:', opsRes.status, errText.substring(0, 200))
+            }
+        }
+
+        if (!realOperationId) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Could not find operationId' }) }
+        }
+
+        // Step 2: Capture with the real operationId
+        console.log('[nexi-capture-preauth] Capturing with operationId:', realOperationId, 'amount:', amountCents);
         const capturePayload = {
-            amount: amountCents,
+            amount: amountCents.toString(),
             currency: 'EUR',
-            description: `Incasso cauzione ${cauzioneId}`
-        };
+            description: `Incasso ${cauzioneId || orderId}`
+        }
 
-        console.log('Capturing pre-authorization:', { transactionId, amountCents });
-
-        const response = await fetch(`${NEXI_BASE_URL}/operations/${transactionId}/captures`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Api-Key': NEXI_API_KEY,
-            },
-            body: JSON.stringify(capturePayload)
+        const response = await fetch(`${NEXI_BASE_URL}/operations/${realOperationId}/captures`, {
+            method: 'POST', headers: captureHeaders, body: JSON.stringify(capturePayload)
         });
 
-        const responseData = await response.json();
+        const responseText = await response.text();
+        console.log('[nexi-capture-preauth] Response:', response.status, responseText.substring(0, 500));
+
+        let responseData: any;
+        try {
+            responseData = JSON.parse(responseText);
+        } catch {
+            return {
+                statusCode: 502,
+                headers,
+                body: JSON.stringify({ error: `Nexi API error (${response.status}): ${responseText.substring(0, 200)}` })
+            };
+        }
 
         if (!response.ok) {
-            console.error('Nexi capture error:', responseData);
+            console.error('[nexi-capture-preauth] ERROR:', responseData);
 
-            // Update cauzione with error
             await supabase
                 .from('cauzioni')
                 .update({
@@ -79,42 +127,46 @@ const handler: Handler = async (event) => {
             };
         }
 
+        const captureOpId = responseData.operationId || realOperationId;
+
         // Update cauzione status
         const { error: updateError } = await supabase
             .from('cauzioni')
             .update({
                 stato: 'Incassata',
                 data_incasso: new Date().toISOString(),
-                note: `Incassato €${amount.toFixed(2)} - Nexi Op: ${responseData.operationId || transactionId}`,
+                note: `Incassato €${amount.toFixed(2)} - Nexi Op: ${captureOpId}`,
                 updated_at: new Date().toISOString()
             })
             .eq('id', cauzioneId);
 
         if (updateError) throw updateError;
 
-        // Update nexi_transactions if exists
+        // Update nexi_transactions
         if (orderId) {
             await supabase
                 .from('nexi_transactions')
                 .update({
                     status: 'captured',
-                    metadata: { capture_response: responseData }
+                    metadata: { capture_operation_id: captureOpId, capture_response: responseData }
                 })
                 .eq('order_id', orderId);
         }
+
+        console.log('[nexi-capture-preauth] SUCCESS: Captured €' + amount.toFixed(2));
 
         return {
             statusCode: 200,
             headers,
             body: JSON.stringify({
                 success: true,
-                operationId: responseData.operationId,
+                operationId: captureOpId,
                 message: `Incassato €${amount.toFixed(2)} con successo`
             })
         };
 
     } catch (error: any) {
-        console.error('Error capturing pre-authorization:', error);
+        console.error('[nexi-capture-preauth] Error:', error);
         return {
             statusCode: 500,
             headers,

@@ -61,11 +61,26 @@ export default function ContrattoTab() {
     try {
       const { data, error } = await supabase
         .from('contracts')
-        .select('*')
+        .select('*, bookings:booking_id(customer_name, customer_email, customer_phone, booking_details)')
         .order('updated_at', { ascending: false })
 
       if (error) throw error
-      setContracts(data || [])
+      // Resolve customer_name from booking if contract's customer_name is empty
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resolved = (data || []).map((c: any) => {
+        const b = c.bookings
+        if (!c.customer_name && b) {
+          c.customer_name = b.customer_name || b.booking_details?.customer?.fullName || ''
+        }
+        if (!c.customer_email && b) {
+          c.customer_email = b.customer_email || b.booking_details?.customer?.email || ''
+        }
+        if (!c.customer_phone && b) {
+          c.customer_phone = b.customer_phone || b.booking_details?.customer?.phone || ''
+        }
+        return c
+      })
+      setContracts(resolved)
     } catch (error) {
       console.error('Failed to load contracts:', error)
     } finally {
@@ -206,7 +221,7 @@ export default function ContrattoTab() {
       } else {
         toast.error(data.error || 'Errore nell\'invio')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Signature init error:', error)
       toast.error('Errore nell\'invio della richiesta di firma')
     } finally {
@@ -394,7 +409,7 @@ export default function ContrattoTab() {
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Stato</label>
                 <select
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
                   className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 >
                   <option value="active">Attivo</option>
@@ -432,7 +447,7 @@ export default function ContrattoTab() {
           <div className="flex gap-3">
             <button
               type="submit"
-              className="flex-1 bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-3 px-4 rounded-full transition-colors"
+              className="flex-1 bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-3 px-4 rounded-full transition-colors"
             >
               {editingId ? 'Aggiorna Contratto' : 'Crea Contratto'}
             </button>
@@ -460,7 +475,7 @@ export default function ContrattoTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">📄 Contratti</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-2 px-4 rounded-full transition-colors"
+          className="bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-2 px-4 rounded-full transition-colors"
         >
           + Nuovo Contratto
         </button>
@@ -483,7 +498,7 @@ export default function ContrattoTab() {
           <p className="text-theme-text-muted text-lg mb-4">Nessun contratto trovato</p>
           <button
             onClick={() => setShowForm(true)}
-            className="bg-dr7-gold hover:bg-yellow-500 text-black font-bold py-2 px-6 rounded-full transition-colors"
+            className="bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-2 px-6 rounded-full transition-colors"
           >
             Crea il primo contratto
           </button>
@@ -561,6 +576,13 @@ export default function ContrattoTab() {
                         Contratto Firmato
                       </button>
                       <button
+                        onClick={() => handleSendSignatureEmail(contract)}
+                        disabled={sendingSignature === contract.id}
+                        className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
+                      >
+                        {sendingSignature === contract.id ? 'Invio...' : 'Reinvia Contratto'}
+                      </button>
+                      <button
                         onClick={() => handleViewAuditTrail(contract)}
                         className="w-full bg-gray-600 hover:bg-gray-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
                       >
@@ -571,11 +593,37 @@ export default function ContrattoTab() {
                     <button
                       onClick={() => handleSendSignatureEmail(contract)}
                       disabled={sendingSignature === contract.id}
-                      className="w-full bg-dr7-gold hover:bg-yellow-500 text-black px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
+                      className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
                     >
-                      {sendingSignature === contract.id ? 'Invio...' : 'Firma via Email'}
+                      {sendingSignature === contract.id ? 'Invio...' : 'Firma via WhatsApp'}
                     </button>
                   ) : null}
+                  {contract.booking_id && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          toast.loading('Rigenerazione contratto...', { id: 'regen' })
+                          const res = await fetch('/.netlify/functions/generate-contract', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ bookingId: contract.booking_id })
+                          })
+                          if (!res.ok) {
+                            const err = await res.json().catch(() => ({}))
+                            throw new Error(err.error || err.message || res.statusText)
+                          }
+                          toast.success('Contratto rigenerato!', { id: 'regen' })
+                          loadContracts()
+                        } catch (err: unknown) {
+                          const _errMsg = err instanceof Error ? err.message : String(err)
+                          toast.error('Errore: ' + _errMsg, { id: 'regen' })
+                        }
+                      }}
+                      className="w-full bg-orange-600/30 hover:bg-orange-600/50 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                    >
+                      Rigenera Contratto
+                    </button>
+                  )}
                   <div className="flex gap-2 w-full">
                     <button
                       onClick={() => handleEdit(contract)}

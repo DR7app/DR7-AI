@@ -1,12 +1,30 @@
 import type { Handler } from "@netlify/functions";
 
-const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY || "6526748"; // Fallback to key found in other file
+const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY;
+const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN;
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return {
             statusCode: 405,
             body: JSON.stringify({ message: 'Method Not Allowed' }),
+        };
+    }
+
+    // Auth check
+    const authHeader = event.headers.authorization || event.headers.Authorization;
+    const token = authHeader?.replace('Bearer ', '');
+    if (!ADMIN_API_TOKEN || token !== ADMIN_API_TOKEN) {
+        return {
+            statusCode: 401,
+            body: JSON.stringify({ error: 'Unauthorized' }),
+        };
+    }
+
+    if (!CALLMEBOT_API_KEY) {
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: 'CallMeBot API key not configured' }),
         };
     }
 
@@ -61,7 +79,9 @@ export const handler: Handler = async (event) => {
                 .replace(/{nome}/g, customer.nome || 'Cliente')
                 .replace(/{cognome}/g, customer.cognome || '');
 
-            const encodedMessage = encodeURIComponent(personalizedMessage);
+            const wrappedMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${personalizedMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+
+            const encodedMessage = encodeURIComponent(wrappedMessage);
             const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedMessage}&apikey=${CALLMEBOT_API_KEY}`;
 
             try {

@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
@@ -20,7 +21,7 @@ const NEXI_URL = process.env.NEXI_ENV === 'production' ? NEXI_PROD_URL : NEXI_TE
 const handler: Handler = async (event, context) => {
     // CORS headers
     const headers = {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'POST, OPTIONS'
     };

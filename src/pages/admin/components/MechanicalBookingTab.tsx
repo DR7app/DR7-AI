@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import MechanicalBookingForm from './MechanicalBookingForm'
 import NewClientModal from './NewClientModal'
+import { logAdminAction } from '../../../utils/logAdminAction'
+import { logger } from '../../../utils/logger'
 
 interface Customer {
   id: string
@@ -30,6 +32,7 @@ interface MechanicalBooking {
   status: string
   payment_status: string
   payment_method?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking_details: any
   created_at: string
 }
@@ -45,6 +48,7 @@ export default function MechanicalBookingTab() {
 
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [customerToEdit, setCustomerToEdit] = useState<any>(null)
 
   async function openEditCustomer(customerId: string) {
@@ -84,6 +88,7 @@ export default function MechanicalBookingTab() {
       if (customersError) throw customersError
 
       // Map customers_extended to Customer interface
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mappedCustomers: Customer[] = (customersData || []).map((c: any) => ({
         id: c.id,
         full_name: c.ragione_sociale || `${c.nome || ''} ${c.cognome || ''}`.trim(),
@@ -120,9 +125,9 @@ export default function MechanicalBookingTab() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bookingId: id }),
         })
-        console.log('Google Calendar event deletion requested for booking:', id)
+        logger.log('Google Calendar event deletion requested for booking:', id)
       } catch (calError) {
-        console.warn('Failed to request deletion from Google Calendar:', calError)
+        logger.warn('Failed to request deletion from Google Calendar:', calError)
         // Continue with database deletion even if Google Calendar deletion fails
       }
 
@@ -138,6 +143,7 @@ export default function MechanicalBookingTab() {
         .eq('id', id)
 
       if (error) throw error
+      logAdminAction('delete_mechanical', 'mechanical_booking', id)
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
@@ -148,6 +154,13 @@ export default function MechanicalBookingTab() {
 
   async function handleGenerateInvoice(booking: MechanicalBooking) {
     if (!booking.id) return
+
+    // Never generate fattura for unpaid bookings
+    const ps = booking.payment_status
+    if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
+      alert('Impossibile generare fattura: la prenotazione non è stata pagata')
+      return
+    }
 
     // Include IVA (22%) in invoice breakdown
     const includeIVA = true
@@ -198,11 +211,13 @@ export default function MechanicalBookingTab() {
         alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
       }
 
+      logAdminAction('generate_mechanical_fattura', 'mechanical_booking', booking.id)
       loadData()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error generating invoice:', error)
       console.error('Error generating invoice:', error)
-      const errorMessage = error.message || ''
+      const errorMessage = _errMsg || ''
 
       // Check for validation errors (missing address/tax code)
       if (errorMessage.includes('obbligatorio') || errorMessage.includes('incomplete') || errorMessage.includes('required') || errorMessage.includes('missing')) {
@@ -234,7 +249,7 @@ export default function MechanicalBookingTab() {
         <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Meccanica</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
+          className="px-4 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors"
         >
           + Nuova Prenotazione
         </button>
@@ -286,8 +301,8 @@ export default function MechanicalBookingTab() {
       />
 
       {/* Bookings Table */}
-      <div className="rounded-lg overflow-hidden">
-        <table className="w-full">
+      <div className="rounded-lg overflow-x-auto">
+        <table className="w-full min-w-[700px]">
           <thead className="">
             <tr>
               <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
@@ -345,20 +360,20 @@ export default function MechanicalBookingTab() {
                         setEditingId(booking.id)
                         setShowForm(true)
                       }}
-                      className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
+                      className="px-3 py-1 min-h-[44px] bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
                       Modifica
                     </button>
                     <button
                       onClick={() => handleGenerateInvoice(booking)}
                       disabled={generatingInvoice}
-                      className={`px-3 py-1 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors disabled:opacity-50`}
+                      className={`px-3 py-1 min-h-[44px] ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-purple-600 hover:bg-purple-700 text-theme-text-primary'} rounded-full text-xs font-medium transition-colors disabled:opacity-50`}
                     >
                       {generatingInvoice ? '...' : 'Fattura'}
                     </button>
                     <button
                       onClick={() => handleDelete(booking.id)}
-                      className="px-3 py-1 bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
+                      className="px-3 py-1 min-h-[44px] bg-red-600/30 hover:bg-red-600/50 text-theme-text-primary text-xs rounded-full transition-colors"
                     >
                       ×
                     </button>

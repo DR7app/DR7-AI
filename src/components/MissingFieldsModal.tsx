@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { logger } from '../utils/logger'
 
 interface MissingFieldsModalProps {
     isOpen: boolean
     onClose: () => void
     customerId: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     customerData: any
     missingFields: string[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSave: (updatedData: any) => void
 }
 
@@ -32,7 +35,12 @@ const FIELD_LABELS: Record<string, string> = {
     codice_univoco: 'Codice Univoco',
     cf_pa: 'Codice Fiscale',
     ente_ufficio: 'Ente/Ufficio',
-    citta: 'Città'
+    citta: 'Città',
+    documento_numero: 'Numero Documento Identità',
+    documento_tipo: 'Tipo Documento',
+    emessa_da: 'Patente Emessa Da',
+    data_rilascio_patente: 'Data Rilascio Patente',
+    scadenza_patente: 'Scadenza Patente'
 }
 
 export default function MissingFieldsModal({
@@ -43,16 +51,18 @@ export default function MissingFieldsModal({
     missingFields,
     onSave
 }: MissingFieldsModalProps) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [isSaving, setIsSaving] = useState(false)
 
-    console.log('[MissingFieldsModal] 🟢 RENDERED', { isOpen, customerId, missingFieldsCount: missingFields?.length })
+    logger.log('[MissingFieldsModal] 🟢 RENDERED', { isOpen, customerId, missingFieldsCount: missingFields?.length })
 
 
     // Initialize form data with existing customer data
     useEffect(() => {
         if (isOpen && customerData) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const initialData: Record<string, any> = {}
             missingFields.forEach(field => {
                 initialData[field] = customerData[field] || ''
@@ -61,6 +71,7 @@ export default function MissingFieldsModal({
         }
     }, [isOpen, customerData, missingFields])
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }))
         // Clear error when user starts typing
@@ -82,6 +93,16 @@ export default function MissingFieldsModal({
             }
         })
 
+        // Block if patente issued less than 2 years ago
+        if (formData.data_rilascio_patente) {
+            const issueDate = new Date(formData.data_rilascio_patente)
+            const twoYearsAgo = new Date()
+            twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+            if (issueDate > twoYearsAgo) {
+                newErrors.data_rilascio_patente = 'Patente rilasciata da meno di 2 anni — noleggio non consentito'
+            }
+        }
+
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
     }
@@ -99,9 +120,10 @@ export default function MissingFieldsModal({
 
         setIsSaving(true)
         try {
-            console.log('[MissingFieldsModal] Saving missing fields:', formData)
+            logger.log('[MissingFieldsModal] Saving missing fields:', formData)
 
             // Build the payload: merge existing customer data with new form values
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const savePayload: any = { ...customerData, ...formData }
 
             // Handle special field mappings
@@ -120,7 +142,7 @@ export default function MissingFieldsModal({
             delete savePayload.booking_details
             delete savePayload.full_name
 
-            console.log('[MissingFieldsModal] Saving via save-customer:', customerId, savePayload)
+            logger.log('[MissingFieldsModal] Saving via save-customer:', customerId, savePayload)
 
             // Use save-customer Netlify function (bypasses RLS, handles update-or-insert)
             const response = await fetch('/.netlify/functions/save-customer', {
@@ -132,23 +154,23 @@ export default function MissingFieldsModal({
                 })
             })
 
-            const result = await response.json()
             if (!response.ok) {
-                console.error('[MissingFieldsModal] Save error:', result)
+                const result = await response.json().catch(() => ({}))
                 throw new Error(result.error || 'Errore nel salvataggio')
             }
 
+            const result = await response.json()
             const data = result.customer
-            console.log('[MissingFieldsModal] Customer saved:', data)
 
             toast.success('Dati aggiornati con successo!')
 
             // Call onSave callback with updated data
             onSave(data)
             onClose()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('[MissingFieldsModal] Save error:', error)
-            toast.error(`Errore durante il salvataggio: ${error.message}`)
+            toast.error(`Errore durante il salvataggio: ${_errMsg}`)
         } finally {
             setIsSaving(false)
         }
@@ -181,7 +203,38 @@ export default function MissingFieldsModal({
             )
         }
 
-        if (field === 'data_nascita' || field.includes('data_')) {
+        if (field === 'documento_tipo') {
+            return (
+                <div key={field} className="mb-4">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                        {label} *
+                    </label>
+                    <select
+                        value={value}
+                        onChange={(e) => handleChange(field, e.target.value)}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    >
+                        <option value="">Seleziona...</option>
+                        <option value="carta_identita">Carta d'Identità</option>
+                        <option value="passaporto">Passaporto</option>
+                        <option value="patente">Patente di Guida</option>
+                    </select>
+                    {errors[field] && (
+                        <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
+                    )}
+                </div>
+            )
+        }
+
+        if (field === 'data_nascita' || field.includes('data_') || field === 'scadenza_patente') {
+            // Check if data_rilascio_patente is less than 2 years ago
+            const showPatenteWarning = field === 'data_rilascio_patente' && value && (() => {
+                const issueDate = new Date(value)
+                const twoYearsAgo = new Date()
+                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+                return issueDate > twoYearsAgo
+            })()
+
             return (
                 <div key={field} className="mb-4">
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">
@@ -191,8 +244,11 @@ export default function MissingFieldsModal({
                         type="date"
                         value={value}
                         onChange={(e) => handleChange(field, e.target.value)}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        className={`w-full bg-theme-bg-tertiary border rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${showPatenteWarning ? 'border-red-500' : 'border-theme-border-light'}`}
                     />
+                    {showPatenteWarning && (
+                        <p className="text-red-500 text-sm font-semibold mt-2">Patente rilasciata da meno di 2 anni — noleggio non consentito</p>
+                    )}
                     {errors[field] && (
                         <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
                     )}

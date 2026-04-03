@@ -53,9 +53,24 @@ export const handler: Handler = async (event) => {
         // Fetch contract info
         const { data: contract } = await supabase
             .from('contracts')
-            .select('contract_number, customer_name, vehicle_name, rental_start_date, rental_end_date')
+            .select('contract_number, customer_name, customer_email, customer_phone, vehicle_name, rental_start_date, rental_end_date, booking_id')
             .eq('id', sigRequests[0].contract_id)
             .single()
+
+        // Fetch customer phone from booking if not on contract
+        let customerPhone = contract?.customer_phone || ''
+        let customerEmail = contract?.customer_email || ''
+        if (contract?.booking_id && (!customerPhone || !customerEmail)) {
+            const { data: booking } = await supabase
+                .from('bookings')
+                .select('customer_phone, customer_email, booking_details')
+                .eq('id', contract.booking_id)
+                .single()
+            if (booking) {
+                if (!customerPhone) customerPhone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
+                if (!customerEmail) customerEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
+            }
+        }
 
         // Build response
         const result = {
@@ -89,7 +104,7 @@ export const handler: Handler = async (event) => {
         // If format=html, return a printable audit trail document
         if (format === 'html') {
             const latestSigned = sigRequests.find(r => r.status === 'signed')
-            const html = generateAuditHTML(result, latestSigned)
+            const html = generateAuditHTML(result, latestSigned, { customerPhone, customerEmail })
             return {
                 statusCode: 200,
                 headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -110,7 +125,7 @@ export const handler: Handler = async (event) => {
     }
 }
 
-function generateAuditHTML(data: any, signedRequest: any): string {
+function generateAuditHTML(data: any, signedRequest: any, extra?: { customerPhone?: string; customerEmail?: string }): string {
     const contract = data.contract
     const trail = data.auditTrail
 
@@ -172,6 +187,8 @@ function generateAuditHTML(data: any, signedRequest: any): string {
         <div class="info-grid">
             <div class="info-item"><label>Contratto</label><span>${contract.contract_number || 'N/A'}</span></div>
             <div class="info-item"><label>Cliente</label><span>${contract.customer_name || 'N/A'}</span></div>
+            <div class="info-item"><label>Email</label><span>${extra?.customerEmail || contract.customer_email || 'N/A'}</span></div>
+            <div class="info-item"><label>Telefono</label><span>${extra?.customerPhone || 'N/A'}</span></div>
             <div class="info-item"><label>Veicolo</label><span>${contract.vehicle_name || 'N/A'}</span></div>
             <div class="info-item"><label>Periodo</label><span>${contract.rental_start_date ? new Date(contract.rental_start_date).toLocaleDateString('it-IT') : 'N/A'} - ${contract.rental_end_date ? new Date(contract.rental_end_date).toLocaleDateString('it-IT') : 'N/A'}</span></div>
         </div>
@@ -179,14 +196,31 @@ function generateAuditHTML(data: any, signedRequest: any): string {
 
     ${signedRequest ? `
     <div class="section">
-        <div class="section-title">Informazioni Firma</div>
+        <div class="section-title">Informazioni Firmatario</div>
         <div class="info-grid">
-            <div class="info-item"><label>Firmatario</label><span>${signedRequest.signer_name}</span></div>
+            <div class="info-item"><label>Nome e Cognome</label><span>${signedRequest.signer_name}</span></div>
             <div class="info-item"><label>Email</label><span>${signedRequest.signer_email}</span></div>
+            <div class="info-item"><label>Telefono</label><span>${extra?.customerPhone || 'N/A'}</span></div>
             <div class="info-item"><label>Data Firma</label><span>${signedRequest.signed_at ? new Date(signedRequest.signed_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : 'N/A'}</span></div>
             <div class="info-item"><label>IP</label><span>${signedRequest.signer_ip || 'N/A'}</span></div>
+            <div class="info-item"><label>User Agent</label><span style="font-size:10px;word-break:break-all;">${signedRequest.signer_user_agent || 'N/A'}</span></div>
         </div>
     </div>
+
+    ${(() => {
+        const signedEvent = trail.find((e: any) => e.eventType === 'document_signed')
+        const mc = signedEvent?.metadata?.marketing_consent
+        if (mc !== undefined) {
+            return `<div class="section">
+                <div class="section-title">Consenso Marketing (Trustera)</div>
+                <div class="info-grid">
+                    <div class="info-item"><label>Consenso</label><span style="color:${mc ? '#16a34a' : '#dc2626'};font-weight:700;">${mc ? 'SI' : 'NO'}</span></div>
+                    <div class="info-item"><label>Data</label><span>${signedEvent?.timestamp ? new Date(signedEvent.timestamp).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : 'N/A'}</span></div>
+                </div>
+            </div>`
+        }
+        return ''
+    })()}
 
     <div class="section">
         <div class="section-title">Verifica Integrita</div>

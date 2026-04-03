@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { supabase } from '../supabaseClient'
 import toast from 'react-hot-toast'
 import type { Session } from '@supabase/supabase-js'
+import { logger } from '../utils/logger'
 
 interface AlarmBooking {
     bookingId: string
@@ -33,6 +34,7 @@ interface VehicleAlarmContextType {
 
 const VehicleAlarmContext = createContext<VehicleAlarmContextType | undefined>(undefined)
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useVehicleAlarm() {
     const context = useContext(VehicleAlarmContext)
     if (!context) {
@@ -50,9 +52,34 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
     const [session, setSession] = useState<Session | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
-    const triggeredAlarmsRef = useRef<Set<string>>(
-        new Set(JSON.parse(localStorage.getItem('triggered_alarms') || '[]'))
-    )
+    const audioContextRef = useRef<AudioContext | null>(null)
+    const triggeredAlarmsRef = useRef<Set<string>>((() => {
+        try {
+            const stored = JSON.parse(localStorage.getItem('triggered_alarms') || '[]')
+            const now = Date.now()
+            const DAY_MS = 24 * 60 * 60 * 1000
+            if (Array.isArray(stored) && stored.length > 0 && typeof stored[0] === 'object') {
+                const valid = stored.filter((entry: { id: string; ts: number }) => now - entry.ts < DAY_MS)
+                localStorage.setItem('triggered_alarms', JSON.stringify(valid))
+                return new Set(valid.map((entry: { id: string }) => entry.id))
+            } else {
+                localStorage.setItem('triggered_alarms', '[]')
+                return new Set<string>()
+            }
+        } catch {
+            return new Set<string>()
+        }
+    })())
+
+    // Helper: add alarm to triggered set with timestamp for cleanup
+    const markAlarmTriggered = (trackingId: string) => {
+        triggeredAlarmsRef.current.add(trackingId)
+        try {
+            const stored = JSON.parse(localStorage.getItem('triggered_alarms') || '[]')
+            stored.push({ id: trackingId, ts: Date.now() })
+            localStorage.setItem('triggered_alarms', JSON.stringify(stored))
+        } catch { /* ignore storage errors */ }
+    }
 
     // Track auth state — only run alarms when logged in
     useEffect(() => {
@@ -76,29 +103,30 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             localStorage.setItem('audioAlertsEnabled', 'true')
             setAlarmState(prev => ({ ...prev, audioEnabled: true }))
 
-            // Try to unlock audio with AudioContext
+            // Try to unlock audio with AudioContext (reuse single instance)
             try {
-                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-                if (audioContext.state === 'suspended') {
-                    await audioContext.resume()
+                if (!audioContextRef.current) {
+                    audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+                }
+                if (audioContextRef.current.state === 'suspended') {
+                    await audioContextRef.current.resume()
                 }
 
-                // Play a very short, quiet beep
-                const oscillator = audioContext.createOscillator()
-                const gainNode = audioContext.createGain()
+                // Play a very short, quiet beep to unlock
+                const oscillator = audioContextRef.current.createOscillator()
+                const gainNode = audioContextRef.current.createGain()
                 oscillator.connect(gainNode)
-                gainNode.connect(audioContext.destination)
+                gainNode.connect(audioContextRef.current.destination)
                 gainNode.gain.value = 0.01
                 oscillator.frequency.value = 440
-                oscillator.start(audioContext.currentTime)
-                oscillator.stop(audioContext.currentTime + 0.01)
-            } catch (audioErr) {
+                oscillator.start(audioContextRef.current.currentTime)
+                oscillator.stop(audioContextRef.current.currentTime + 0.01)
+            } catch {
                 // Ignore unlock errors
-                console.log('Audio unlock:', audioErr)
             }
 
             toast.success('Sound alerts enabled! You will hear an alarm when vehicles are due for return.')
-            console.log('✅ Audio alerts enabled')
+            // Audio alerts enabled
         } catch (err) {
             console.error('Failed to enable audio:', err)
             toast.error('Failed to enable sound alerts. Please try again.')
@@ -133,25 +161,21 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
     // Play alarm sound
     const playAlarm = (booking: AlarmBooking) => {
-        console.log('🚨 TRIGGERING ALARM for booking:', booking.bookingId)
+        // Triggering alarm
 
         if (!alarmState.audioEnabled) {
-            console.warn('⚠️ Audio not enabled, showing visual notification only')
+            // Audio not enabled, visual notification only
         } else {
             try {
                 // Create or reuse audio element
                 if (!audioRef.current) {
-                    console.log('Creating new Audio element for alarm')
+                    logger.log('Creating new Audio element for alarm')
                     audioRef.current = new Audio('/alarm.mp3')
                     audioRef.current.loop = true
                     audioRef.current.volume = 0.8 // Set volume to 80%
 
-                    // Add event listeners for debugging
-                    audioRef.current.addEventListener('canplay', () => {
-                        console.log('✅ Alarm audio ready to play')
-                    })
-                    audioRef.current.addEventListener('error', (e) => {
-                        console.error('❌ Alarm audio error:', e)
+                    audioRef.current.addEventListener('error', () => {
+                        // Audio load error — will fall through to visual notification
                     })
                 }
 
@@ -159,21 +183,18 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 audioRef.current.currentTime = 0
                 audioRef.current.play()
                     .then(() => {
-                        console.log('✅ Alarm sound playing!')
+                        // Alarm playing
                     })
-                    .catch(err => {
-                        console.error('❌ Failed to play alarm:', err)
-                        // Try to resume AudioContext if suspended
-                        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-                        if (audioContext.state === 'suspended') {
-                            audioContext.resume().then(() => {
-                                console.log('Resumed AudioContext, retrying alarm...')
-                                audioRef.current?.play().catch(e => console.error('Retry failed:', e))
+                    .catch(() => {
+                        // Try to resume AudioContext if suspended (reuse existing)
+                        if (audioContextRef.current?.state === 'suspended') {
+                            audioContextRef.current.resume().then(() => {
+                                audioRef.current?.play().catch(() => {})
                             })
                         }
                     })
-            } catch (error) {
-                console.error('❌ Error setting up alarm audio:', error)
+            } catch {
+                // Error setting up alarm audio
             }
         }
 
@@ -218,6 +239,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     if (!booking.appointment_date || !booking.appointment_time) continue
 
                     // Skip internal/rientro washes
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const details = (booking.booking_details || {}) as any
                     if (details.internal === true) continue
                     if (details.createdBy === 'automatic_system') continue
@@ -240,8 +262,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
                     const diff = appointmentDateTime.getTime() - now.getTime()
                     if (diff >= 600000 && diff < 660000) {
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: booking.id,
@@ -275,8 +296,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     returnTime.setSeconds(0, 0)
 
                     if (returnTime.getTime() === tenMinutesFuture.getTime()) {
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: booking.id,
@@ -310,8 +330,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     returnTime.setSeconds(0, 0)
 
                     if (returnTime.getTime() === tenMinutesAgo.getTime()) {
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: booking.id,
@@ -340,6 +359,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             if (!pickupsError && pickups && pickups.length > 0) {
                 for (const booking of pickups) {
                     // Check if deposit exists and > 0
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const details = booking.booking_details as any
                     const deposit = details?.deposit ? Number(details.deposit) : 0
 
@@ -353,8 +373,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     pickupTime.setSeconds(0, 0)
 
                     if (pickupTime.getTime() === tenMinutesFuture.getTime()) {
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: booking.id,
@@ -389,8 +408,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
                     // Double check time match just in case
                     if (pickupTime.getTime() === tenMinutesFuture.getTime()) {
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: booking.id,
@@ -438,8 +456,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         const trackingId = `fleet_service_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: vehicleId,
@@ -468,8 +485,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         const trackingId = `fleet_tires_front_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: vehicleId,
@@ -498,8 +514,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         const trackingId = `fleet_tires_rear_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: vehicleId,
@@ -528,8 +543,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         const trackingId = `fleet_brakes_front_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: vehicleId,
@@ -558,8 +572,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         const trackingId = `fleet_brakes_rear_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: vehicleId,
@@ -587,8 +600,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         const trackingId = `fleet_insurance_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: vehicleId,
@@ -616,8 +628,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         const trackingId = `fleet_tax_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: vehicleId,
@@ -645,8 +656,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         const trackingId = `fleet_inspection_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                        triggeredAlarmsRef.current.add(trackingId)
-                        localStorage.setItem('triggered_alarms', JSON.stringify([...triggeredAlarmsRef.current]))
+                        markAlarmTriggered(trackingId)
 
                         playAlarm({
                             bookingId: vehicleId,
@@ -670,16 +680,52 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
     }
 
-    // Poll every 30 seconds — only when authenticated
+    // Poll every 60 seconds — only when authenticated and tab is visible
     useEffect(() => {
         if (!session) return
-        checkAlarms()
-        checkFleetMaintenanceAlarms()
-        const interval = setInterval(() => {
-            checkAlarms()
-            checkFleetMaintenanceAlarms()
-        }, 30000)
-        return () => clearInterval(interval)
+
+        let interval: ReturnType<typeof setInterval> | null = null
+        let isRunning = false
+
+        const runChecks = async () => {
+            if (isRunning) return
+            isRunning = true
+            try {
+                await Promise.all([checkAlarms(), checkFleetMaintenanceAlarms()])
+            } finally {
+                isRunning = false
+            }
+        }
+
+        const startPolling = () => {
+            runChecks()
+            interval = setInterval(runChecks, 60000)
+        }
+
+        const stopPolling = () => {
+            if (interval) {
+                clearInterval(interval)
+                interval = null
+            }
+        }
+
+        // Pause polling when tab is hidden to save resources
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                stopPolling()
+            } else {
+                startPolling()
+            }
+        }
+
+        startPolling()
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+
+        return () => {
+            stopPolling()
+            document.removeEventListener('visibilitychange', handleVisibilityChange)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session])
 
     // Cleanup audio on unmount
@@ -688,6 +734,10 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             if (audioRef.current) {
                 audioRef.current.pause()
                 audioRef.current = null
+            }
+            if (audioContextRef.current) {
+                audioContextRef.current.close().catch(() => {})
+                audioContextRef.current = null
             }
         }
     }, [])

@@ -15,6 +15,7 @@ const PENALI_KEYWORDS = [
   'subnoleggio', 'neopatentati', 'non abilitati', 'patente', 'riconsegna',
 ]
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function classifyInvoiceItems(items: any[]): 'danni' | 'penali' | null {
   for (const item of items) {
     const desc = (item.description || '').toLowerCase()
@@ -44,6 +45,7 @@ interface PenaltyDannoItem {
   fatturaNumero?: string
   arrayKey: 'penalties' | 'danni'
   arrayIndex: number // index in the booking_details array (for pending items)
+  photos?: string[] // danni photo URLs
 }
 
 interface CustomerGroup {
@@ -82,6 +84,12 @@ export default function GestioneDanniTab() {
   const [newLabel, setNewLabel] = useState('')
   const [newAmount, setNewAmount] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Photo viewer modal
+  const [photoModal, setPhotoModal] = useState<{ customerName: string; photos: string[] } | null>(null)
+
+  // Pay by link
+  const [payByLinkLoading, setPayByLinkLoading] = useState<string | null>(null)
 
   // ── Data loading ────────────────────────────────────────────────────────────
   useEffect(() => { loadData() }, [])
@@ -136,7 +144,9 @@ export default function GestioneDanniTab() {
         const bookingLabel = `${b.vehicle_name || '—'} — ${b.pickup_date || '—'}`
 
         for (const arrayKey of ['penalties', 'danni'] as const) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const entries: any[] = details[arrayKey] || []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           entries.forEach((entry: any, idx: number) => {
             const g = getOrCreate(b.customer_name || '', b.customer_email || '')
             const total = entry.total || (entry.amount || 0) * (entry.quantity || 1)
@@ -159,6 +169,7 @@ export default function GestioneDanniTab() {
               status: 'pending',
               arrayKey,
               arrayIndex: idx,
+              photos: arrayKey === 'danni' && entry.photos ? entry.photos : undefined,
             }
             if (arrayKey === 'penalties') {
               g.penaliItems.push(item)
@@ -178,8 +189,21 @@ export default function GestioneDanniTab() {
       }
 
       // 3b. Scan fatture for invoiced penalty/damage items
+      // Track which booking IDs already have entries from booking_details to avoid duplicates
+      const bookingIdsWithDetails = new Set<string>()
+      for (const b of (bookings || [])) {
+        const details = b.booking_details || {}
+        const hasPenalties = Array.isArray(details.penalties) && details.penalties.length > 0
+        const hasDanni = Array.isArray(details.danni) && details.danni.length > 0
+        if (hasPenalties || hasDanni) bookingIdsWithDetails.add(b.id)
+      }
+
       for (const f of (fatture || [])) {
         if (!f.items || !Array.isArray(f.items)) continue
+        // Skip if this booking's penalties/danni were already added from booking_details
+        if (f.booking_id && bookingIdsWithDetails.has(f.booking_id)) continue
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const hasPenalty = f.items.some((item: any) =>
           item.description && (item.description.includes('Penale prenotazione') || item.description.includes('Danno prenotazione'))
         )
@@ -256,12 +280,67 @@ export default function GestioneDanniTab() {
         .sort((a, b) => (b.penaliTotal + b.danniTotal) - (a.penaliTotal + a.danniTotal))
 
       setCustomers(result)
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
       console.error('GestioneDanniTab load error:', err)
-      setError(err.message || 'Errore nel caricamento dei dati.')
+      setError(_errMsg || 'Errore nel caricamento dei dati.')
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Pay by Link for danni ─────────────────────────────────────────────────
+  async function handlePayByLink(customer: CustomerGroup) {
+    const unpaidDanni = customer.danniItems.filter(d => d.paymentStatus !== 'paid')
+    const totalEur = unpaidDanni.reduce((s, d) => s + (d.total - d.amountPaid), 0)
+    if (totalEur <= 0) {
+      toast.error('Nessun danno da pagare')
+      return
+    }
+
+    setPayByLinkLoading(customer.key)
+    try {
+      const res = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: customer.mostRecentBookingId || null,
+          amount: totalEur,
+          customerEmail: customer.customerEmail,
+          customerName: customer.customerName,
+          description: `Danni — ${customer.customerName}`,
+          expirationHours: 1,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.paymentUrl) {
+        // Try clipboard, but don't fail if blocked
+        try { await navigator.clipboard.writeText(data.paymentUrl) } catch { /* clipboard not available */ }
+        toast.success(`Pay by Link creato! €${totalEur.toFixed(2)}\n${data.paymentUrl}`, { duration: 8000 })
+      } else {
+        toast.error(data.error || 'Errore creazione link')
+      }
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore Pay by Link: ' + _errMsg)
+    } finally {
+      setPayByLinkLoading(null)
+    }
+  }
+
+  // ── Open photo viewer for a customer ──────────────────────────────────────
+  function openPhotos(customer: CustomerGroup) {
+    const allPhotos: string[] = []
+    for (const item of customer.danniItems) {
+      if (item.photos && item.photos.length > 0) {
+        allPhotos.push(...item.photos)
+      }
+    }
+    if (allPhotos.length === 0) {
+      toast.error('Nessuna foto danni trovata per questo cliente')
+      return
+    }
+    setPhotoModal({ customerName: customer.customerName, photos: allPhotos })
   }
 
   // ── Filtered list ──────────────────────────────────────────────────────────
@@ -307,6 +386,7 @@ export default function GestioneDanniTab() {
 
         const details = booking?.booking_details || {}
         // Remove all entries at the given indices (delete from end to preserve indices)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details[arrayKey] || [])]
         const indicesToRemove = items.map(i => i.arrayIndex).sort((a, b) => b - a)
         for (const idx of indicesToRemove) {
@@ -323,8 +403,9 @@ export default function GestioneDanniTab() {
 
       toast.success(`${type === 'penali' ? 'Penali' : 'Danni'} eliminati`)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }
@@ -345,6 +426,7 @@ export default function GestioneDanniTab() {
         if (fetchErr) throw fetchErr
 
         const details = booking?.booking_details || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details[item.arrayKey] || [])]
         arr.splice(item.arrayIndex, 1)
 
@@ -364,8 +446,10 @@ export default function GestioneDanniTab() {
 
         if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
         // Find matching line item by description
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
 
         if (matchIdx >= 0) {
@@ -391,8 +475,9 @@ export default function GestioneDanniTab() {
       toast.success('Voce eliminata')
       setEditModal(null)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }
@@ -413,6 +498,7 @@ export default function GestioneDanniTab() {
         if (fetchErr) throw fetchErr
 
         const details = booking?.booking_details || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details[item.arrayKey] || [])]
         if (arr[item.arrayIndex]) {
           arr[item.arrayIndex] = { ...arr[item.arrayIndex], amount: newTotal, total: newTotal, quantity: 1 }
@@ -434,7 +520,9 @@ export default function GestioneDanniTab() {
 
         if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
 
         if (matchIdx >= 0) {
@@ -454,8 +542,9 @@ export default function GestioneDanniTab() {
       toast.success('Importo aggiornato')
       setEditModal(null)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }
@@ -476,6 +565,7 @@ export default function GestioneDanniTab() {
         if (fetchErr) throw fetchErr
 
         const details = booking?.booking_details || {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const arr: any[] = [...(details[item.arrayKey] || [])]
         if (arr[item.arrayIndex]) {
           const existing = arr[item.arrayIndex]
@@ -504,7 +594,9 @@ export default function GestioneDanniTab() {
 
         if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
 
         if (matchIdx >= 0) {
@@ -529,8 +621,9 @@ export default function GestioneDanniTab() {
       toast.success('Pagamento registrato')
       setEditModal(null)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }
@@ -564,6 +657,7 @@ export default function GestioneDanniTab() {
       if (fetchErr) throw fetchErr
 
       const details = booking?.booking_details || {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const existing: any[] = details[arrayKey] || []
       const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
 
@@ -589,8 +683,9 @@ export default function GestioneDanniTab() {
       setNewAmount('')
       setEditModal(null)
       await loadData()
-    } catch (err: any) {
-      toast.error(err.message || 'Errore')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      toast.error(_errMsg || 'Errore')
     } finally {
       setSaving(false)
     }
@@ -705,7 +800,7 @@ export default function GestioneDanniTab() {
                         <span className="text-xs text-theme-text-muted ml-1">({c.danniItems.length})</span>
                       </td>
                       <td className="text-center px-2 py-3">
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-1 flex-wrap">
                           <button
                             onClick={() => { setEditModal({ customer: c, type: 'danni' }); setNewLabel(''); setNewAmount('') }}
                             className="px-3 py-1 text-xs bg-red-500/15 text-red-400 hover:bg-red-500/25 rounded-full transition-colors"
@@ -719,6 +814,23 @@ export default function GestioneDanniTab() {
                           >
                             Elimina
                           </button>
+                          {c.danniItems.some(d => d.photos && d.photos.length > 0) && (
+                            <button
+                              onClick={() => openPhotos(c)}
+                              className="px-3 py-1 text-xs bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 rounded-full transition-colors"
+                            >
+                              Documenti Integrativi
+                            </button>
+                          )}
+                          {c.danniItems.some(d => d.paymentStatus !== 'paid') && (
+                            <button
+                              onClick={() => handlePayByLink(c)}
+                              disabled={payByLinkLoading === c.key}
+                              className="px-3 py-1 text-xs bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 rounded-full transition-colors disabled:opacity-50"
+                            >
+                              {payByLinkLoading === c.key ? 'Creazione...' : 'Pay by Link'}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -758,7 +870,7 @@ export default function GestioneDanniTab() {
                     <div className="text-center">
                       <p className="text-lg font-bold text-red-400">{formatCurrency(c.danniTotal)}</p>
                       <p className="text-xs text-theme-text-muted mb-2">Danni ({c.danniItems.length})</p>
-                      <div className="flex items-center justify-center gap-1">
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
                         <button
                           onClick={() => { setEditModal({ customer: c, type: 'danni' }); setNewLabel(''); setNewAmount('') }}
                           className="px-3 py-1 text-xs bg-red-500/15 text-red-400 hover:bg-red-500/25 rounded-full transition-colors"
@@ -772,6 +884,23 @@ export default function GestioneDanniTab() {
                         >
                           Elimina
                         </button>
+                        {c.danniItems.some(d => d.photos && d.photos.length > 0) && (
+                          <button
+                            onClick={() => openPhotos(c)}
+                            className="px-3 py-1 text-xs bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 rounded-full transition-colors mt-1"
+                          >
+                            Documenti
+                          </button>
+                        )}
+                        {c.danniItems.some(d => d.paymentStatus !== 'paid') && (
+                          <button
+                            onClick={() => handlePayByLink(c)}
+                            disabled={payByLinkLoading === c.key}
+                            className="px-3 py-1 text-xs bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 rounded-full transition-colors mt-1 disabled:opacity-50"
+                          >
+                            {payByLinkLoading === c.key ? '...' : 'Pay by Link'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -900,6 +1029,48 @@ export default function GestioneDanniTab() {
                 <span className={`text-2xl font-bold tracking-tight tabular-nums ${editModal.type === 'penali' ? 'text-orange-400' : 'text-red-400'}`}>
                   {formatCurrency(editModal.type === 'penali' ? editModal.customer.penaliTotal : editModal.customer.danniTotal)}
                 </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Photo Viewer Modal (Documenti Integrativi) ───────────────────── */}
+      {photoModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setPhotoModal(null)}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className="relative w-full sm:max-w-2xl max-h-[92vh] flex flex-col bg-theme-bg-secondary/95 backdrop-blur-xl rounded-t-3xl sm:rounded-3xl shadow-2xl border border-white/10 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="sm:hidden flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+            <div className="px-6 pt-4 sm:pt-6 pb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-theme-text-primary tracking-tight">Documenti Integrativi</h2>
+                <p className="text-[13px] text-theme-text-muted mt-0.5">{photoModal.customerName} — {photoModal.photos.length} foto</p>
+              </div>
+              <button
+                onClick={() => setPhotoModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {photoModal.photos.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block">
+                    <img
+                      src={url}
+                      alt={`Danno ${i + 1}`}
+                      className="w-full h-40 object-cover rounded-xl border border-white/10 hover:border-blue-400/50 transition-all cursor-pointer"
+                    />
+                  </a>
+                ))}
               </div>
             </div>
           </div>

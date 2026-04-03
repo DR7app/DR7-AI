@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
+import { logger } from '../../../utils/logger'
 
 interface Booking {
     id: string
@@ -13,6 +14,7 @@ interface Booking {
     appointment_time?: string
     service_type?: string
     service_name?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking_details: any
     status: string
     type: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
@@ -55,6 +57,7 @@ export default function DailyCalendarTab() {
         return () => {
             subscription.unsubscribe()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDate])
 
     // Scroll to current time on mount
@@ -69,14 +72,16 @@ export default function DailyCalendarTab() {
     async function loadDayBookings() {
         setLoading(true)
         try {
-            console.log('🔍 Daily Calendar loading for:', selectedDate.toLocaleDateString('it-IT'))
+            logger.log('🔍 Daily Calendar loading for:', selectedDate.toLocaleDateString('it-IT'))
 
             // Fetch ALL bookings via Netlify function (bypasses RLS)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let bookingsToProcess: any[] = []
             try {
                 const res = await fetch('/.netlify/functions/list-bookings')
                 const result = await res.json()
                 if (res.ok && result.bookings) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     bookingsToProcess = result.bookings.filter((b: any) => b.status !== 'cancelled')
                 }
             } catch {
@@ -92,7 +97,7 @@ export default function DailyCalendarTab() {
                 if (error) throw error
                 bookingsToProcess = data || []
             }
-            console.log('📋 Daily Calendar loaded:', bookingsToProcess.length, 'bookings')
+            logger.log('📋 Daily Calendar loaded:', bookingsToProcess.length, 'bookings')
 
             const categorized: Booking[] = []
 
@@ -111,6 +116,7 @@ export default function DailyCalendarTab() {
                     romeComponents.year === selectedComponents.year
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             bookingsToProcess.forEach((booking: any) => {
                 // Check-In (Pickup)
                 if (isSameDay(booking.pickup_date)) {
@@ -132,9 +138,12 @@ export default function DailyCalendarTab() {
                     }
                 }
 
-                // Car Wash
+                // Car Wash — only external customer washes, NOT internal return washes
                 if (booking.service_type === 'car_wash' &&
-                    isSameDay(booking.appointment_date)) {
+                    isSameDay(booking.appointment_date) &&
+                    booking.customer_name !== 'Lavaggio Rientro' &&
+                    !booking.booking_details?.internal &&
+                    !booking.booking_details?.auto_created) {
                     categorized.push({ ...booking, type: 'lavaggio' })
                 }
 
@@ -168,7 +177,7 @@ export default function DailyCalendarTab() {
                 (booking.pickup_date ? new Date(booking.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : null)
 
             if (!time) {
-                console.warn('⚠️ Missing pickup time for booking:', booking.id, booking)
+                logger.warn('⚠️ Missing pickup time for booking:', booking.id, booking)
                 return '09:00' // Default fallback
             }
             return time
@@ -180,7 +189,7 @@ export default function DailyCalendarTab() {
                 (booking.dropoff_date ? new Date(booking.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : null)
 
             if (!time) {
-                console.warn('⚠️ Missing return time for booking:', booking.id, booking)
+                logger.warn('⚠️ Missing return time for booking:', booking.id, booking)
                 return '18:00' // Default fallback
             }
             return time
@@ -287,7 +296,7 @@ export default function DailyCalendarTab() {
                         </button>
                         <button
                             onClick={() => setSelectedDate(new Date())}
-                            className="px-3 py-2 bg-dr7-gold hover:bg-yellow-500 text-black rounded text-xs font-bold"
+                            className="px-3 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-bold"
                         >
                             Oggi
                         </button>

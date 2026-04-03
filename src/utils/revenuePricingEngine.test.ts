@@ -1,0 +1,575 @@
+import { describe, it, expect } from 'vitest'
+import {
+  calculateDynamicPrice,
+  matchBracket,
+  matchSeason,
+  validateConfig,
+  parseConfigFromDB,
+  getDefaultConfig,
+  type RevenueConfig,
+  type PricingInput,
+  type CoefficientRow,
+} from './revenuePricingEngine'
+
+// ─── Helper to create a standard input ─────────────────────────────────────
+
+function makeInput(overrides: Partial<PricingInput> = {}): PricingInput {
+  return {
+    vehicleId: 'v1',
+    vehicleName: 'Test Car',
+    vehicleDailyRateCents: 10000, // EUR 100.00
+    vehicleCategory: 'urban',
+    pickupDate: '2026-04-10',
+    dropoffDate: '2026-04-13', // 3 days
+    occupancyPct: 50,
+    ...overrides,
+  }
+}
+
+function makeConfig(overrides: Partial<RevenueConfig> = {}): RevenueConfig {
+  return {
+    ...getDefaultConfig(),
+    enabled: true,
+    mode: 'suggestion',
+    ...overrides,
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1. DISABLED MODE — uses vehicle base rate only
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Mode: disabled', () => {
+  it('returns enabled=false and mode=disabled', () => {
+    const config = makeConfig({ enabled: false, mode: 'disabled' })
+    const result = calculateDynamicPrice(config, makeInput())
+    expect(result.enabled).toBe(false)
+    expect(result.mode).toBe('disabled')
+  })
+
+  it('still calculates pricing (for preview purposes)', () => {
+    const config = makeConfig({ enabled: false, mode: 'disabled' })
+    const result = calculateDynamicPrice(config, makeInput())
+    // Engine always calculates, caller decides whether to use it
+    expect(result.finalDailyRateEur).toBeGreaterThan(0)
+    expect(result.finalTotalEur).toBeGreaterThan(0)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2. SUGGESTION MODE — computes rate but does not auto-apply
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Mode: suggestion', () => {
+  it('returns mode=suggestion', () => {
+    const config = makeConfig({ mode: 'suggestion' })
+    const result = calculateDynamicPrice(config, makeInput())
+    expect(result.mode).toBe('suggestion')
+    expect(result.enabled).toBe(true)
+  })
+
+  it('computes a suggested rate', () => {
+    const config = makeConfig({ mode: 'suggestion' })
+    const result = calculateDynamicPrice(config, makeInput())
+    expect(result.finalDailyRateEur).toBeGreaterThan(0)
+    expect(result.finalTotalEur).toBeGreaterThan(0)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3. AUTO_APPLY MODE — applies computed dynamic rate
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Mode: auto_apply', () => {
+  it('returns mode=auto_apply', () => {
+    const config = makeConfig({ mode: 'auto_apply' })
+    const result = calculateDynamicPrice(config, makeInput())
+    expect(result.mode).toBe('auto_apply')
+    expect(result.enabled).toBe(true)
+  })
+
+  it('computes the same rate as suggestion mode', () => {
+    const configSugg = makeConfig({ mode: 'suggestion' })
+    const configAuto = makeConfig({ mode: 'auto_apply' })
+    const input = makeInput()
+    const resultSugg = calculateDynamicPrice(configSugg, input)
+    const resultAuto = calculateDynamicPrice(configAuto, input)
+    expect(resultAuto.finalDailyRateEur).toBe(resultSugg.finalDailyRateEur)
+    expect(resultAuto.finalTotalEur).toBe(resultSugg.finalTotalEur)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. VEHICLE OVERRIDE wins over CATEGORY OVERRIDE
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Base rate priority', () => {
+  it('vehicle override wins over category override', () => {
+    const config = makeConfig({
+      base_prices: { 'v1': 200, 'category:urban': 150 },
+      occupation_coefficients: [],
+      advance_coefficients: [],
+      duration_coefficients: [],
+      season_rules: [],
+    })
+    const result = calculateDynamicPrice(config, makeInput())
+    expect(result.selectedBaseRateEur).toBe(200)
+    expect(result.selectedBaseRateSource).toBe('vehicle_override')
+  })
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 5. CATEGORY OVERRIDE wins over vehicle base rate when no vehicle override
+  // ═══════════════════════════════════════════════════════════════════════
+
+  it('category override wins when no vehicle override', () => {
+    const config = makeConfig({
+      base_prices: { 'category:urban': 150 },
+      occupation_coefficients: [],
+      advance_coefficients: [],
+      duration_coefficients: [],
+      season_rules: [],
+    })
+    const result = calculateDynamicPrice(config, makeInput())
+    expect(result.selectedBaseRateEur).toBe(150)
+    expect(result.selectedBaseRateSource).toBe('category_override')
+  })
+
+  it('vehicle daily rate used when no overrides', () => {
+    const config = makeConfig({
+      base_prices: {},
+      occupation_coefficients: [],
+      advance_coefficients: [],
+      duration_coefficients: [],
+      season_rules: [],
+    })
+    const result = calculateDynamicPrice(config, makeInput())
+    expect(result.selectedBaseRateEur).toBe(100) // 10000 cents = EUR 100
+    expect(result.selectedBaseRateSource).toBe('vehicle_daily_rate')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6. OCCUPANCY COEFFICIENT selection
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Occupancy coefficient matching', () => {
+  const brackets: CoefficientRow[] = [
+    { min_pct: 0, max_pct: 40, coeff: 0.90, label: 'Bassa' },
+    { min_pct: 40, max_pct: 70, coeff: 1.00, label: 'Normale' },
+    { min_pct: 70, max_pct: 90, coeff: 1.15, label: 'Alta' },
+    { min_pct: 90, max_pct: 101, coeff: 1.30, label: 'Critica' },
+  ]
+
+  it('selects correct bracket for 0%', () => {
+    expect(matchBracket(brackets, 0, 'pct')?.coeff).toBe(0.90)
+  })
+
+  it('selects correct bracket for 50%', () => {
+    expect(matchBracket(brackets, 50, 'pct')?.coeff).toBe(1.00)
+  })
+
+  it('selects correct bracket for 75%', () => {
+    expect(matchBracket(brackets, 75, 'pct')?.coeff).toBe(1.15)
+  })
+
+  it('selects correct bracket for 95%', () => {
+    expect(matchBracket(brackets, 95, 'pct')?.coeff).toBe(1.30)
+  })
+
+  it('selects correct bracket for 100%', () => {
+    expect(matchBracket(brackets, 100, 'pct')?.coeff).toBe(1.30)
+  })
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 7. NO MATCHING COEFFICIENT defaults to 1.00
+  // ═══════════════════════════════════════════════════════════════════════
+
+  it('returns null when no bracket matches', () => {
+    expect(matchBracket([], 50, 'pct')).toBeNull()
+  })
+
+  it('engine uses 1.00 when no coefficient matches', () => {
+    const config = makeConfig({
+      base_prices: {},
+      occupation_coefficients: [],
+      advance_coefficients: [],
+      duration_coefficients: [],
+      season_rules: [],
+    })
+    const result = calculateDynamicPrice(config, makeInput())
+    // All coefficients should be 1.00
+    result.breakdown.forEach(item => {
+      expect(item.coeff).toBe(1.00)
+    })
+    expect(result.finalDailyRateEur).toBe(100) // base rate unchanged
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8. OVERLAPPING RANGES are rejected by validation
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Validation: overlapping ranges', () => {
+  it('detects overlapping occupation ranges', () => {
+    const config = makeConfig({
+      occupation_coefficients: [
+        { min_pct: 0, max_pct: 50, coeff: 0.90, label: 'A' },
+        { min_pct: 30, max_pct: 70, coeff: 1.00, label: 'B' }, // overlaps with A
+      ],
+    })
+    const errors = validateConfig(config)
+    const overlapErrors = errors.filter(e => e.message.includes('sovrapposto'))
+    expect(overlapErrors.length).toBeGreaterThan(0)
+  })
+
+  it('accepts non-overlapping ranges', () => {
+    const config = makeConfig({
+      occupation_coefficients: [
+        { min_pct: 0, max_pct: 50, coeff: 0.90, label: 'A' },
+        { min_pct: 50, max_pct: 101, coeff: 1.00, label: 'B' },
+      ],
+    })
+    const errors = validateConfig(config)
+    const overlapErrors = errors.filter(e => e.message.includes('sovrapposto'))
+    expect(overlapErrors.length).toBe(0)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 9. INVALID OCCUPANCY VALUES are rejected
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Validation: invalid occupancy', () => {
+  it('rejects min_pct > 100', () => {
+    const config = makeConfig({
+      occupation_coefficients: [
+        { min_pct: 110, max_pct: 120, coeff: 1.0, label: 'Bad' },
+      ],
+    })
+    const errors = validateConfig(config)
+    expect(errors.some(e => e.field.includes('min_pct'))).toBe(true)
+  })
+
+  it('rejects negative min_pct', () => {
+    const config = makeConfig({
+      occupation_coefficients: [
+        { min_pct: -10, max_pct: 50, coeff: 1.0, label: 'Bad' },
+      ],
+    })
+    const errors = validateConfig(config)
+    expect(errors.some(e => e.field.includes('min_pct'))).toBe(true)
+  })
+
+  it('rejects min > max', () => {
+    const config = makeConfig({
+      occupation_coefficients: [
+        { min_pct: 80, max_pct: 50, coeff: 1.0, label: 'Bad' },
+      ],
+    })
+    const errors = validateConfig(config)
+    expect(errors.some(e => e.message.includes('Min') && e.message.includes('Max'))).toBe(true)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 10. NEGATIVE PRICES are rejected
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Validation: negative prices', () => {
+  it('rejects negative base price', () => {
+    const config = makeConfig({ base_prices: { 'v1': -50 } })
+    const errors = validateConfig(config)
+    expect(errors.some(e => e.field.includes('base_prices'))).toBe(true)
+  })
+
+  it('rejects negative min price', () => {
+    const config = makeConfig({ min_prices: { 'v1': -10 } })
+    const errors = validateConfig(config)
+    expect(errors.some(e => e.field.includes('min_prices'))).toBe(true)
+  })
+
+  it('rejects zero coefficient', () => {
+    const config = makeConfig({
+      occupation_coefficients: [
+        { min_pct: 0, max_pct: 50, coeff: 0, label: 'Zero' },
+      ],
+    })
+    const errors = validateConfig(config)
+    expect(errors.some(e => e.message.includes('> 0'))).toBe(true)
+  })
+
+  it('rejects negative coefficient', () => {
+    const config = makeConfig({
+      advance_coefficients: [
+        { min_days: 0, max_days: 10, coeff: -1.5, label: 'Neg' },
+      ],
+    })
+    const errors = validateConfig(config)
+    expect(errors.some(e => e.message.includes('> 0'))).toBe(true)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 11. SAVE THEN RELOAD returns same config (parseConfigFromDB roundtrip)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Config persistence roundtrip', () => {
+  it('parseConfigFromDB roundtrips correctly', () => {
+    const original = makeConfig({
+      base_prices: { 'v1': 150, 'category:exotic': 300 },
+      min_prices: { 'category:urban': 50 },
+      max_prices: { 'v1': 500 },
+      occupation_coefficients: [
+        { min_pct: 0, max_pct: 50, coeff: 0.90, label: 'Low' },
+      ],
+    })
+
+    // Simulate DB row
+    const dbRow = {
+      enabled: original.enabled,
+      mode: original.mode,
+      config: {
+        base_prices: original.base_prices,
+        min_prices: original.min_prices,
+        max_prices: original.max_prices,
+        occupation_coefficients: original.occupation_coefficients,
+        advance_coefficients: original.advance_coefficients,
+        duration_coefficients: original.duration_coefficients,
+        season_rules: original.season_rules,
+      },
+    }
+
+    const parsed = parseConfigFromDB(dbRow)
+    expect(parsed.enabled).toBe(original.enabled)
+    expect(parsed.mode).toBe(original.mode)
+    expect(parsed.base_prices).toEqual(original.base_prices)
+    expect(parsed.min_prices).toEqual(original.min_prices)
+    expect(parsed.max_prices).toEqual(original.max_prices)
+    expect(parsed.occupation_coefficients).toEqual(original.occupation_coefficients)
+  })
+
+  it('handles null DB row gracefully', () => {
+    const parsed = parseConfigFromDB(null)
+    expect(parsed.enabled).toBe(false)
+    expect(parsed.mode).toBe('suggestion')
+  })
+
+  it('maps legacy mode names', () => {
+    const parsed = parseConfigFromDB({ enabled: true, mode: 'auto', config: {} })
+    expect(parsed.mode).toBe('auto_apply')
+
+    const parsed2 = parseConfigFromDB({ enabled: true, mode: 'auto_with_approval', config: {} })
+    expect(parsed2.mode).toBe('auto_apply')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 12. PREVIEW matches backend production pricing exactly
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Preview matches production', () => {
+  it('same config + same input = same result regardless of mode', () => {
+    const config = makeConfig({
+      base_prices: { 'v1': 120 },
+      occupation_coefficients: [
+        { min_pct: 0, max_pct: 50, coeff: 0.90, label: 'Low' },
+        { min_pct: 50, max_pct: 101, coeff: 1.10, label: 'High' },
+      ],
+    })
+    const input = makeInput({ occupancyPct: 60 })
+
+    const resultSugg = calculateDynamicPrice({ ...config, mode: 'suggestion' }, input)
+    const resultAuto = calculateDynamicPrice({ ...config, mode: 'auto_apply' }, input)
+
+    expect(resultSugg.finalDailyRateEur).toBe(resultAuto.finalDailyRateEur)
+    expect(resultSugg.finalTotalEur).toBe(resultAuto.finalTotalEur)
+    expect(resultSugg.selectedBaseRateEur).toBe(resultAuto.selectedBaseRateEur)
+    expect(resultSugg.breakdown).toEqual(resultAuto.breakdown)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 13 & 14. BOOKING FLOW integration
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Booking flow integration logic', () => {
+  it('when enabled=true and mode=auto_apply, price should be applied', () => {
+    const config = makeConfig({ mode: 'auto_apply' })
+    const result = calculateDynamicPrice(config, makeInput())
+    // Integration test: caller checks mode === 'auto_apply' to auto-set price
+    expect(result.mode).toBe('auto_apply')
+    expect(result.enabled).toBe(true)
+    expect(result.finalTotalEur).toBeGreaterThan(0)
+  })
+
+  it('when enabled=false, booking flow should bypass revenue management', () => {
+    const config = makeConfig({ enabled: false, mode: 'disabled' })
+    const result = calculateDynamicPrice(config, makeInput())
+    expect(result.enabled).toBe(false)
+    // Caller should check result.enabled === false and skip applying price
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FORMULA CORRECTNESS
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Formula correctness', () => {
+  it('finalDailyRate = base * occ * adv * dur * season', () => {
+    const config = makeConfig({
+      base_prices: { 'v1': 100 },
+      occupation_coefficients: [
+        { min_pct: 0, max_pct: 101, coeff: 1.20, label: 'All' },
+      ],
+      advance_coefficients: [
+        { min_days: 0, max_days: 9999, coeff: 1.10, label: 'All' },
+      ],
+      duration_coefficients: [
+        { min_days: 0, max_days: 9999, coeff: 0.90, label: 'All' },
+      ],
+      season_rules: [
+        { name: 'Test', start_date: '04-01', end_date: '04-30', coeff: 1.05, type: 'media' },
+      ],
+    })
+
+    const result = calculateDynamicPrice(config, makeInput({ occupancyPct: 50 }))
+
+    // Expected: 100 * 1.20 * 1.10 * 0.90 * 1.05 = 124.74
+    const expected = Math.round(100 * 1.20 * 1.10 * 0.90 * 1.05 * 100) / 100
+    expect(result.finalDailyRateEur).toBe(expected)
+    expect(result.rentalDays).toBe(3) // Apr 10 to Apr 13
+    expect(result.finalTotalEur).toBe(Math.round(expected * 3 * 100) / 100)
+  })
+
+  it('applies min/max clamping correctly', () => {
+    const config = makeConfig({
+      base_prices: { 'v1': 50 },
+      min_prices: { 'v1': 80 },
+      max_prices: { 'v1': 200 },
+      occupation_coefficients: [],
+      advance_coefficients: [],
+      duration_coefficients: [],
+      season_rules: [],
+    })
+
+    const result = calculateDynamicPrice(config, makeInput())
+    // Base = 50, all coefficients = 1.0, so raw = 50
+    // Min = 80, so clamped to 80
+    expect(result.finalDailyRateEur).toBe(80)
+    expect(result.minHit).toBe(true)
+    expect(result.maxHit).toBe(false)
+  })
+
+  it('max clamping works', () => {
+    const config = makeConfig({
+      base_prices: { 'v1': 300 },
+      max_prices: { 'v1': 200 },
+      occupation_coefficients: [],
+      advance_coefficients: [],
+      duration_coefficients: [],
+      season_rules: [],
+    })
+
+    const result = calculateDynamicPrice(config, makeInput())
+    expect(result.finalDailyRateEur).toBe(200)
+    expect(result.maxHit).toBe(true)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEASON MATCHING
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Season matching', () => {
+  it('matches summer season', () => {
+    const rules = [
+      { name: 'Estate', start_date: '06-15', end_date: '09-15', coeff: 1.20, type: 'alta' },
+    ]
+    const result = matchSeason(rules, '2026-07-01', '2026-07-10')
+    expect(result?.coeff).toBe(1.20)
+  })
+
+  it('matches year-wrapping season (Christmas)', () => {
+    const rules = [
+      { name: 'Natale', start_date: '12-20', end_date: '01-06', coeff: 1.25, type: 'picco' },
+    ]
+    const result = matchSeason(rules, '2026-12-25', '2027-01-02')
+    expect(result?.coeff).toBe(1.25)
+  })
+
+  it('no match returns null', () => {
+    const rules = [
+      { name: 'Estate', start_date: '06-15', end_date: '09-15', coeff: 1.20, type: 'alta' },
+    ]
+    const result = matchSeason(rules, '2026-02-01', '2026-02-05')
+    expect(result).toBeNull()
+  })
+
+  it('picks highest coeff when multiple match', () => {
+    const rules = [
+      { name: 'Media', start_date: '04-01', end_date: '04-30', coeff: 1.10, type: 'media' },
+      { name: 'Picco Pasqua', start_date: '04-10', end_date: '04-20', coeff: 1.30, type: 'picco' },
+    ]
+    const result = matchSeason(rules, '2026-04-12', '2026-04-15')
+    expect(result?.coeff).toBe(1.30)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRACE/AUDIT completeness
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Audit trace completeness', () => {
+  it('includes all required trace fields', () => {
+    const config = makeConfig()
+    const result = calculateDynamicPrice(config, makeInput())
+
+    expect(result).toHaveProperty('vehicleId')
+    expect(result).toHaveProperty('vehicleName')
+    expect(result).toHaveProperty('category')
+    expect(result).toHaveProperty('vehicleBaseRateEur')
+    expect(result).toHaveProperty('categoryOverrideEur')
+    expect(result).toHaveProperty('vehicleOverrideEur')
+    expect(result).toHaveProperty('selectedBaseRateEur')
+    expect(result).toHaveProperty('selectedBaseRateSource')
+    expect(result).toHaveProperty('occupancyPct')
+    expect(result).toHaveProperty('occupancyCoefficient')
+    expect(result).toHaveProperty('advanceCoefficient')
+    expect(result).toHaveProperty('durationCoefficient')
+    expect(result).toHaveProperty('seasonalityCoefficient')
+    expect(result).toHaveProperty('rawDailyRate')
+    expect(result).toHaveProperty('finalDailyRateEur')
+    expect(result).toHaveProperty('rentalDays')
+    expect(result).toHaveProperty('finalTotalEur')
+    expect(result).toHaveProperty('mode')
+    expect(result).toHaveProperty('enabled')
+    expect(result).toHaveProperty('breakdown')
+    expect(result.breakdown.length).toBe(4) // occ, adv, dur, season
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VALIDATION: season rules
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Validation: season rules', () => {
+  it('rejects invalid date format', () => {
+    const config = makeConfig({
+      season_rules: [
+        { name: 'Bad', start_date: '2026-01-01', end_date: '04-30', coeff: 1.0, type: 'media' },
+      ],
+    })
+    const errors = validateConfig(config)
+    expect(errors.some(e => e.message.includes('MM-DD'))).toBe(true)
+  })
+
+  it('rejects zero coefficient in season rule', () => {
+    const config = makeConfig({
+      season_rules: [
+        { name: 'Bad', start_date: '04-01', end_date: '04-30', coeff: 0, type: 'media' },
+      ],
+    })
+    const errors = validateConfig(config)
+    expect(errors.some(e => e.message.includes('> 0'))).toBe(true)
+  })
+})

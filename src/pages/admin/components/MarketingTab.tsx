@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import ReferralProgramTab from './ReferralProgramTab'
 import CustomerWalletTab from './CustomerWalletTab'
 import MessaggiSistemaTab from './MessaggiSistemaTab'
+import { logger } from '../../../utils/logger'
 
 interface Customer {
     id: string
@@ -59,7 +60,17 @@ interface DiscountCode {
     last_used_at?: string | null
 }
 
-type ActiveSection = 'customers' | 'consents' | 'discount_codes'
+interface CustomerMarketingConsent {
+    id: string
+    full_name: string
+    email: string | null
+    phone: string | null
+    marketing_consent: boolean | null
+    marketing_consent_date: string | null
+}
+
+type ActiveSection = 'customers' | 'consents' | 'discount_codes' | 'marketing_consent'
+type MarketingConsentFilter = 'all' | 'yes' | 'no' | 'unregistered'
 type DiscountCodeFilter = 'all' | 'active' | 'deactivated' | 'expired'
 type MarketingSubTab = 'marketing' | 'referral' | 'wallet' | 'messaggi'
 
@@ -74,7 +85,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSubTab('marketing')}
                     className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
                         activeSubTab === 'marketing'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-white'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -84,7 +95,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSubTab('referral')}
                     className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
                         activeSubTab === 'referral'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-white'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -94,7 +105,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSubTab('wallet')}
                     className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
                         activeSubTab === 'wallet'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-white'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -104,7 +115,7 @@ export default function MarketingTab() {
                     onClick={() => setActiveSubTab('messaggi')}
                     className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
                         activeSubTab === 'messaggi'
-                            ? 'bg-dr7-gold text-black'
+                            ? 'bg-dr7-gold text-white'
                             : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
                     }`}
                 >
@@ -156,6 +167,14 @@ function MarketingContent() {
     const [selectedCodeForQR, setSelectedCodeForQR] = useState<DiscountCode | null>(null)
     const [editingCode, setEditingCode] = useState<DiscountCode | null>(null)
 
+    // Marketing consent section state
+    const [marketingConsentCustomers, setMarketingConsentCustomers] = useState<CustomerMarketingConsent[]>([])
+    const [marketingConsentLoading, setMarketingConsentLoading] = useState(false)
+    const [marketingConsentFilter, setMarketingConsentFilter] = useState<MarketingConsentFilter>('all')
+    const [marketingConsentSearch, setMarketingConsentSearch] = useState('')
+    const [marketingConsentPage, setMarketingConsentPage] = useState(1)
+    const MARKETING_CONSENT_PER_PAGE = 50
+
     useEffect(() => {
         loadCustomers()
         loadConsents()
@@ -165,6 +184,10 @@ function MarketingContent() {
         if (activeSection === 'discount_codes' && discountCodes.length === 0 && !discountCodesLoading) {
             loadDiscountCodes()
         }
+        if (activeSection === 'marketing_consent' && marketingConsentCustomers.length === 0 && !marketingConsentLoading) {
+            loadMarketingConsentCustomers()
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeSection])
 
     useEffect(() => {
@@ -205,6 +228,7 @@ function MarketingContent() {
             const customerMap = new Map<string, Customer>()
 
             if (bookingsData) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 bookingsData.forEach((booking: any) => {
                     const details = booking.booking_details?.customer || {}
                     const customerName = booking.customer_name || details.fullName || 'Cliente'
@@ -237,6 +261,7 @@ function MarketingContent() {
             if (extendedError && extendedError.code !== '42P01') throw extendedError
 
             if (extendedData) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 extendedData.forEach((c: any) => {
                     const key = c.email || c.telefono || c.id
 
@@ -265,6 +290,7 @@ function MarketingContent() {
                 .order('created_at', { ascending: false })
 
             if (!customersError && customersData) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 customersData.forEach((c: any) => {
                     const key = c.email || c.phone || c.id
                     if (key && !customerMap.has(key)) {
@@ -314,6 +340,7 @@ function MarketingContent() {
                 .in('id', userIds)
 
             const userMap = new Map<string, { name: string; email: string }>()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             usersData?.forEach((u: any) => {
                 const name = u.tipo_cliente === 'persona_fisica'
                     ? `${u.nome || ''} ${u.cognome || ''}`.trim()
@@ -333,6 +360,40 @@ function MarketingContent() {
             setConsents([])
         } finally {
             setConsentsLoading(false)
+        }
+    }
+
+    async function loadMarketingConsentCustomers() {
+        setMarketingConsentLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('customers_extended')
+                .select('id, nome, cognome, email, telefono, ragione_sociale, denominazione, tipo_cliente, marketing_consent, marketing_consent_date')
+                .order('marketing_consent_date', { ascending: false, nullsFirst: false })
+
+            if (error) throw error
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const results: CustomerMarketingConsent[] = (data || []).map((c: any) => {
+                const fullName = c.tipo_cliente === 'persona_fisica'
+                    ? `${c.nome || ''} ${c.cognome || ''}`.trim()
+                    : (c.ragione_sociale || c.denominazione || 'Cliente')
+                return {
+                    id: c.id,
+                    full_name: fullName || 'Cliente',
+                    email: c.email,
+                    phone: c.telefono,
+                    marketing_consent: c.marketing_consent ?? null,
+                    marketing_consent_date: c.marketing_consent_date ?? null,
+                }
+            })
+
+            setMarketingConsentCustomers(results)
+        } catch (error) {
+            console.error('Error loading marketing consent customers:', error)
+            toast.error('Errore nel caricamento dei consensi marketing')
+        } finally {
+            setMarketingConsentLoading(false)
         }
     }
 
@@ -356,6 +417,7 @@ function MarketingContent() {
             const now = new Date()
             const expiredIds: string[] = []
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const processedCodes = codes.map((code: any) => {
                 if (code.status === 'active' && new Date(code.valid_until) < now) {
                     expiredIds.push(code.id)
@@ -384,6 +446,7 @@ function MarketingContent() {
 
             const usageMap = new Map<string, { count: number; total: number; lastUsed: string | null }>()
             if (usageData) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 usageData.forEach((u: any) => {
                     const existing = usageMap.get(u.discount_code_id) || { count: 0, total: 0, lastUsed: null }
                     existing.count += 1
@@ -395,6 +458,7 @@ function MarketingContent() {
                 })
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const codesWithUsage: DiscountCode[] = processedCodes.map((code: any) => {
                 const usage = usageMap.get(code.id)
                 return {
@@ -432,9 +496,10 @@ function MarketingContent() {
             setDiscountCodes(prev => prev.map(c =>
                 c.id === id ? { ...c, status: newStatus as DiscountCode['status'] } : c
             ))
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error toggling code status:', error)
-            toast.error(`Errore: ${error.message}`)
+            toast.error(`Errore: ${_errMsg}`)
         }
     }
 
@@ -473,6 +538,27 @@ function MarketingContent() {
         consentPage * CONSENTS_PER_PAGE
     )
     const totalConsentPages = Math.ceil(filteredConsents.length / CONSENTS_PER_PAGE)
+
+    // Filtered marketing consent customers
+    const filteredMarketingConsentCustomers = marketingConsentCustomers.filter(c => {
+        if (marketingConsentFilter === 'yes' && c.marketing_consent !== true) return false
+        if (marketingConsentFilter === 'no' && c.marketing_consent !== false) return false
+        if (marketingConsentFilter === 'unregistered' && c.marketing_consent !== null) return false
+        if (marketingConsentSearch) {
+            const q = marketingConsentSearch.toLowerCase()
+            return (
+                c.full_name.toLowerCase().includes(q) ||
+                c.email?.toLowerCase().includes(q)
+            )
+        }
+        return true
+    })
+
+    const paginatedMarketingConsentCustomers = filteredMarketingConsentCustomers.slice(
+        (marketingConsentPage - 1) * MARKETING_CONSENT_PER_PAGE,
+        marketingConsentPage * MARKETING_CONSENT_PER_PAGE
+    )
+    const totalMarketingConsentPages = Math.ceil(filteredMarketingConsentCustomers.length / MARKETING_CONSENT_PER_PAGE)
 
     // Filtered discount codes
     const filteredDiscountCodes = discountCodes.filter(code => {
@@ -543,7 +629,7 @@ function MarketingContent() {
                 if (result.success) {
                     toast.success(`Messaggi WhatsApp inviati a ${result.sent} clienti!`)
                     if (result.errors) {
-                        console.warn('WhatsApp errors:', result.errors)
+                        logger.warn('WhatsApp errors:', result.errors)
                         toast.error(`Alcuni messaggi non inviati: ${result.errors.length}`)
                     }
                     setSelectedCustomerIds(new Set())
@@ -591,9 +677,10 @@ function MarketingContent() {
                     throw new Error(result.error || 'Errore sconosciuto')
                 }
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error sending gift vouchers:', error)
-            toast.error('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
+            toast.error('Errore nell\'invio: ' + (_errMsg || 'Errore sconosciuto'))
         }
     }
 
@@ -666,6 +753,16 @@ function MarketingContent() {
                     }`}
                 >
                     Codici Sconto
+                </button>
+                <button
+                    onClick={() => setActiveSection('marketing_consent')}
+                    className={`px-4 py-2 rounded-t font-semibold transition-colors ${
+                        activeSection === 'marketing_consent'
+                            ? 'bg-dr7-gold text-theme-bg-primary'
+                            : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
+                    }`}
+                >
+                    Consenso Marketing
                 </button>
             </div>
 
@@ -1001,7 +1098,7 @@ function MarketingContent() {
                                     onClick={() => setDiscountCodeFilter(f.key)}
                                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                                         discountCodeFilter === f.key
-                                            ? 'bg-dr7-gold text-black'
+                                            ? 'bg-dr7-gold text-white'
                                             : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
                                     }`}
                                 >
@@ -1188,7 +1285,7 @@ function MarketingContent() {
                                 <div className="flex gap-3 justify-center mt-6">
                                     <button
                                         onClick={() => window.print()}
-                                        className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors"
+                                        className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors"
                                     >
                                         Stampa
                                     </button>
@@ -1203,6 +1300,168 @@ function MarketingContent() {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* ===================== MARKETING CONSENT SECTION ===================== */}
+            {activeSection === 'marketing_consent' && (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
+                        <div>
+                            <h2 className="text-xl font-bold text-theme-text-primary">Consenso Marketing</h2>
+                            <p className="text-theme-text-muted text-sm">Consenso raccolto alla firma del contratto (GDPR)</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="text-center">
+                                <span className="block text-2xl font-bold text-green-500">
+                                    {marketingConsentCustomers.filter(c => c.marketing_consent === true).length}
+                                </span>
+                                <span className="text-xs text-theme-text-muted">Si</span>
+                            </div>
+                            <div className="text-center">
+                                <span className="block text-2xl font-bold text-red-500">
+                                    {marketingConsentCustomers.filter(c => c.marketing_consent === false).length}
+                                </span>
+                                <span className="text-xs text-theme-text-muted">No</span>
+                            </div>
+                            <div className="text-center">
+                                <span className="block text-2xl font-bold text-theme-text-muted">
+                                    {marketingConsentCustomers.filter(c => c.marketing_consent === null).length}
+                                </span>
+                                <span className="text-xs text-theme-text-muted">Non registrato</span>
+                            </div>
+                            <Button variant="secondary" onClick={loadMarketingConsentCustomers}>
+                                Aggiorna
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex gap-4 flex-wrap">
+                        <div className="bg-theme-bg-tertiary p-3 rounded-lg border border-theme-border flex-1 min-w-[200px]">
+                            <input
+                                type="text"
+                                placeholder="Cerca per nome o email..."
+                                value={marketingConsentSearch}
+                                onChange={(e) => {
+                                    setMarketingConsentSearch(e.target.value)
+                                    setMarketingConsentPage(1)
+                                }}
+                                className="w-full bg-transparent text-theme-text-primary outline-none"
+                            />
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                            {(
+                                [
+                                    { value: 'all', label: `Tutti (${marketingConsentCustomers.length})` },
+                                    { value: 'yes', label: `Si (${marketingConsentCustomers.filter(c => c.marketing_consent === true).length})`, activeClass: 'bg-green-600 text-white' },
+                                    { value: 'no', label: `No (${marketingConsentCustomers.filter(c => c.marketing_consent === false).length})`, activeClass: 'bg-red-600 text-white' },
+                                    { value: 'unregistered', label: `Non registrato (${marketingConsentCustomers.filter(c => c.marketing_consent === null).length})`, activeClass: 'bg-gray-600 text-white' },
+                                ] as { value: MarketingConsentFilter; label: string; activeClass?: string }[]
+                            ).map(({ value, label, activeClass }) => (
+                                <button
+                                    key={value}
+                                    onClick={() => { setMarketingConsentFilter(value); setMarketingConsentPage(1) }}
+                                    className={`px-4 py-2 rounded font-medium transition-colors ${
+                                        marketingConsentFilter === value
+                                            ? (activeClass || 'bg-dr7-gold text-theme-bg-primary')
+                                            : 'bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Table */}
+                    {marketingConsentLoading ? (
+                        <div className="text-center py-10 text-dr7-gold">Caricamento consensi marketing...</div>
+                    ) : (
+                        <div className="bg-theme-bg-tertiary rounded-lg overflow-hidden border border-theme-border">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm text-theme-text-muted">
+                                    <thead className="bg-theme-bg-secondary/50 text-theme-text-secondary uppercase font-medium">
+                                        <tr>
+                                            <th className="p-4">Nome</th>
+                                            <th className="p-4">Email</th>
+                                            <th className="p-4">Telefono</th>
+                                            <th className="p-4">Consenso</th>
+                                            <th className="p-4">Data Consenso</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-theme-border">
+                                        {paginatedMarketingConsentCustomers.map((c) => (
+                                            <tr key={c.id} className="hover:bg-theme-bg-hover/50 transition-colors">
+                                                <td className="p-4 font-medium text-theme-text-primary">{c.full_name}</td>
+                                                <td className="p-4">{c.email || '-'}</td>
+                                                <td className="p-4">{c.phone || '-'}</td>
+                                                <td className="p-4">
+                                                    {c.marketing_consent === true && (
+                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-600/20 text-green-400">
+                                                            Si
+                                                        </span>
+                                                    )}
+                                                    {c.marketing_consent === false && (
+                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-600/20 text-red-400">
+                                                            No
+                                                        </span>
+                                                    )}
+                                                    {c.marketing_consent === null && (
+                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-600/20 text-gray-400">
+                                                            Non registrato
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="p-4">
+                                                    {c.marketing_consent_date
+                                                        ? new Date(c.marketing_consent_date).toLocaleString('it-IT', {
+                                                            day: '2-digit',
+                                                            month: '2-digit',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                        })
+                                                        : '-'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {paginatedMarketingConsentCustomers.length === 0 && (
+                                            <tr>
+                                                <td colSpan={5} className="p-8 text-center text-theme-text-muted">
+                                                    Nessun cliente trovato
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {totalMarketingConsentPages > 1 && (
+                                <div className="bg-theme-bg-secondary/50 p-4 border-t border-theme-border flex justify-between items-center">
+                                    <span className="text-theme-text-muted text-sm">
+                                        Pagina {marketingConsentPage} di {totalMarketingConsentPages} ({filteredMarketingConsentCustomers.length} clienti)
+                                    </span>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="secondary"
+                                            onClick={() => setMarketingConsentPage(p => Math.max(1, p - 1))}
+                                            disabled={marketingConsentPage === 1}
+                                        >
+                                            Precedente
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            onClick={() => setMarketingConsentPage(p => Math.min(totalMarketingConsentPages, p + 1))}
+                                            disabled={marketingConsentPage === totalMarketingConsentPages}
+                                        >
+                                            Successiva
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             )}
 
             <GiftVoucherModal

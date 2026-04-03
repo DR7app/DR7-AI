@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import NewClientModal from './NewClientModal';
+import { logger } from '../../../utils/logger'
 
 interface ExtractedData {
     // Personal Info
@@ -94,7 +95,7 @@ const compressImage = (file: File, maxSizeMB: number = 4): Promise<string> => {
                     base64 = canvas.toDataURL('image/jpeg', quality);
                 }
 
-                console.log(`Image compressed: ${width}x${height}, quality: ${quality.toFixed(2)}`);
+                logger.log(`Image compressed: ${width}x${height}, quality: ${quality.toFixed(2)}`);
                 resolve(base64);
             };
             img.onerror = () => reject(new Error('Failed to load image'));
@@ -117,6 +118,7 @@ export default function ScannerTab() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [showNewClientModal, setShowNewClientModal] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [clientModalData, setClientModalData] = useState<any>(null);
     const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -206,9 +208,10 @@ export default function ScannerTab() {
             }));
 
             return result.data;
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Extraction error:', err);
-            setError(`Errore estrazione ${slot.label}: ${err.message}`);
+            setError(`Errore estrazione ${slot.label}: ${_errMsg}`);
             setDocuments(prev => ({
                 ...prev,
                 [slotKey]: { ...prev[slotKey], extracting: false }
@@ -222,7 +225,7 @@ export default function ScannerTab() {
         setError(null);
         setSuccess(null);
 
-        const slotsWithImages = Object.entries(documents).filter(([_, slot]) => slot.base64);
+        const slotsWithImages = Object.entries(documents).filter(([, slot]) => slot.base64);
 
         if (slotsWithImages.length === 0) {
             setError('Carica almeno un documento');
@@ -231,7 +234,7 @@ export default function ScannerTab() {
 
         // Extract each document
         const results: ExtractedData[] = [];
-        for (const [key, _] of slotsWithImages) {
+        for (const [key] of slotsWithImages) {
             const data = await extractDocument(key);
             if (data) results.push(data);
         }
@@ -241,6 +244,7 @@ export default function ScannerTab() {
         for (const data of results) {
             Object.entries(data).forEach(([key, value]) => {
                 if (value && value !== '') {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     (merged as any)[key] = value;
                 }
             });
@@ -282,6 +286,7 @@ export default function ScannerTab() {
         if (!mergedData) return;
 
         // Convert scanned documents to File objects for upload
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const scannedFiles: any = {};
 
         if (documents.id_front.preview) {
@@ -298,6 +303,7 @@ export default function ScannerTab() {
         }
 
         // Map extracted data to NewClientModal format (matching expected field names)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const clientData: any = {
             tipo_cliente: 'persona_fisica',
             // Personal info
@@ -433,7 +439,7 @@ export default function ScannerTab() {
                         <button
                             onClick={extractAll}
                             disabled={isExtracting || uploadedCount === 0}
-                            className="px-8 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="px-8 py-3 bg-dr7-gold text-white font-bold rounded-full hover:bg-[#247a6f] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             {isExtracting ? (
                                 <>
@@ -572,7 +578,7 @@ export default function ScannerTab() {
                         </button>
                         <button
                             onClick={openClientModal}
-                            className="px-8 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-all"
+                            className="px-8 py-3 bg-dr7-gold text-white font-bold rounded-full hover:bg-[#247a6f] transition-all"
                         >
                             Apri Form Nuovo Cliente
                         </button>
@@ -625,7 +631,7 @@ export default function ScannerTab() {
                     resetAll();
                 }}
                 onClientCreated={(clientId) => {
-                    console.log('Client created:', clientId);
+                    logger.log('Client created:', clientId);
                     setShowNewClientModal(false);
                     resetAll();
                     setSuccess('Cliente creato con successo!');

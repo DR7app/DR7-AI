@@ -78,6 +78,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
 
   useEffect(() => {
     loadDashboard()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participantId])
 
   async function loadDashboard() {
@@ -138,7 +139,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-2 border-[#d4af37] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#2d8a7e] border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -153,10 +154,10 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Balance Card */}
-      <div className="bg-gradient-to-br from-[#d4af37]/20 to-[#d4af37]/5 border border-[#d4af37]/30 rounded-2xl p-6 text-center relative">
+      <div className="bg-gradient-to-br from-[#2d8a7e]/20 to-[#2d8a7e]/5 border border-[#2d8a7e]/30 rounded-2xl p-6 text-center relative">
         <button
           onClick={() => { setLoading(true); loadDashboard() }}
-          className="absolute top-3 right-3 text-gray-400 hover:text-[#d4af37] transition-colors p-2"
+          className="absolute top-3 right-3 text-gray-400 hover:text-[#2d8a7e] transition-colors p-2"
           title="Aggiorna"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -164,7 +165,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
           </svg>
         </button>
         <p className="text-gray-400 text-sm mb-1">Il tuo saldo Wallet</p>
-        <p className="text-5xl font-bold text-[#d4af37]">&euro;{balance}</p>
+        <p className="text-5xl font-bold text-[#2d8a7e]">&euro;{balance}</p>
         <p className="text-gray-400 text-sm mt-2">Totale guadagnato: &euro;{totalEarned}</p>
       </div>
 
@@ -198,7 +199,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
           <p className="text-gray-400 text-xs mt-1">Amici Invitati</p>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-[#d4af37]">{data.referrals.qualifying}</p>
+          <p className="text-2xl font-bold text-[#2d8a7e]">{data.referrals.qualifying}</p>
           <p className="text-gray-400 text-xs mt-1">Qualificati</p>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-center">
@@ -217,7 +218,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
         </div>
         <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-[#d4af37] to-yellow-500 rounded-full transition-all duration-500"
+            className="h-full bg-gradient-to-r from-[#2d8a7e] to-[#247a6f] rounded-full transition-all duration-500"
             style={{ width: `${(data.referrals.progress_to_milestone / 10) * 100}%` }}
           />
         </div>
@@ -250,7 +251,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
               activeTab === tab
-                ? 'bg-[#d4af37] text-black'
+                ? 'bg-[#2d8a7e] text-black'
                 : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -270,7 +271,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
                 onClick={() => setTopupAmount(String(amt))}
                 className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
                   topupAmount === String(amt)
-                    ? 'bg-[#d4af37] text-black'
+                    ? 'bg-[#2d8a7e] text-black'
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
@@ -285,7 +286,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
                 type="number"
                 value={topupAmount}
                 onChange={(e) => setTopupAmount(e.target.value)}
-                className="w-full pl-8 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:border-[#d4af37] outline-none"
+                className="w-full pl-8 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:border-[#2d8a7e] outline-none"
                 placeholder="Importo"
                 min="10"
               />
@@ -293,7 +294,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
             <button
               onClick={handleTopup}
               disabled={topupLoading || !topupAmount || parseFloat(topupAmount) < 10}
-              className="px-6 py-3 bg-[#d4af37] text-black font-bold rounded-xl hover:bg-[#c4a030] transition-colors disabled:opacity-50"
+              className="px-6 py-3 bg-[#2d8a7e] text-white font-bold rounded-xl hover:bg-[#247a6f] transition-colors disabled:opacity-50"
             >
               {topupLoading ? '...' : 'Ricarica'}
             </button>

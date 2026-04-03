@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import type { Handler } from "@netlify/functions";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -18,7 +19,7 @@ Respond with ONLY a JSON object: {"category":"urban"} or {"category":"maxi"}`;
 
 const handler: Handler = async (event) => {
   const headers = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": getCorsOrigin(event.headers.origin),
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Content-Type": "application/json",

@@ -55,7 +55,7 @@ export default function ConfirmationModal({
                         onClick={handleConfirm}
                         className={`px-4 py-3 sm:py-2 min-h-[44px] text-theme-text-primary rounded-full transition-colors ${isDangerous
                             ? 'bg-red-600 hover:bg-red-700'
-                            : 'bg-dr7-gold hover:bg-yellow-600'
+                            : 'bg-dr7-gold hover:bg-[#247a6f]'
                             }`}
                     >
                         Conferma

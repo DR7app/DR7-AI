@@ -9,6 +9,7 @@ import {
     findNextAvailableSlots,
     formatTimeSlotWithDuration
 } from '../../../utils/bookingConflictUtils'
+import { logger } from '../../../utils/logger'
 
 interface Customer {
     id: string
@@ -18,6 +19,7 @@ interface Customer {
 }
 
 interface MechanicalBookingFormProps {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     initialData?: any
     customers: Customer[]
     onSave: () => void
@@ -91,6 +93,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
 
     // New state for conflict detection
     const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [conflictingBookings, setConflictingBookings] = useState<any[]>([])
 
     const [formData, setFormData] = useState({
@@ -242,7 +245,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             notes: formData.notes || ''
                         })
                     })
-                    console.log('✅ Invoice generated successfully')
+                    logger.log('✅ Invoice generated successfully')
                 } catch (invoiceError) {
                     console.error('⚠️ Failed to generate invoice:', invoiceError)
                     // Don't fail the whole booking if invoice generation fails
@@ -272,7 +275,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             bookingId: insertedBooking.id
                         })
                     })
-                    console.log('✅ Calendar event created')
+                    logger.log('✅ Calendar event created')
                 } catch (calendarError) {
                     console.error('⚠️ Failed to create calendar event:', calendarError)
                 }
@@ -302,7 +305,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ customMessage: custMsg, customPhone: custPhone })
                         })
-                        console.log('✅ WhatsApp mechanical booking confirmation sent to', custPhone)
+                        logger.log('✅ WhatsApp mechanical booking confirmation sent to', custPhone)
                     } catch (waError) {
                         console.error('⚠️ Failed to send WhatsApp:', waError)
                     }
@@ -316,6 +319,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleClientCreated = (newClient: any) => {
         if (newClient?.id) {
             setFormData(prev => ({ ...prev, customer_id: newClient.id }))
@@ -345,7 +349,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             type="button"
                             onClick={() => setIsNewClientModalOpen(false)}
                             className={`px-4 py-2 rounded-full ${!isNewClientModalOpen
-                                ? 'bg-theme-text-primary text-black font-semibold'
+                                ? 'bg-dr7-gold text-white font-semibold'
                                 : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                                 }`}
                         >
@@ -355,7 +359,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             type="button"
                             onClick={() => setIsNewClientModalOpen(true)}
                             className={`px-4 py-2 rounded-full ${isNewClientModalOpen
-                                ? 'bg-theme-text-primary text-black font-semibold'
+                                ? 'bg-dr7-gold text-white font-semibold'
                                 : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
                                 }`}
                         >
@@ -546,7 +550,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 <div className="flex gap-3">
                     <button
                         type="submit"
-                        className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-yellow-500 text-black font-semibold rounded-full transition-colors"
+                        className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors"
                     >
                         Salva
                     </button>

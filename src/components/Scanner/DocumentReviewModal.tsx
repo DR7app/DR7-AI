@@ -3,6 +3,7 @@ import { supabase } from '../../supabaseClient';
 import toast from 'react-hot-toast';
 
 interface DocumentReviewModalProps {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     scan: any;
     isOpen: boolean;
     onClose: () => void;
@@ -19,20 +20,20 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
     const [docType, setDocType] = useState(extractedData.doc_type || 'generic');
 
     // Search state for manual linking
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [customers, setCustomers] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         if (isOpen && scan) {
+            async function loadFileUrl() {
+                const { data } = await supabase.storage.from('scans').createSignedUrl(scan.file_path, 3600);
+                if (data) setFileUrl(data.signedUrl);
+            }
             loadFileUrl();
             if (!scan.customer_id) searchCustomers('');
         }
     }, [isOpen, scan]);
-
-    async function loadFileUrl() {
-        const { data } = await supabase.storage.from('scans').createSignedUrl(scan.file_path, 3600);
-        if (data) setFileUrl(data.signedUrl);
-    }
 
     async function searchCustomers(query: string) {
         let q = supabase.from('customers_extended').select('id, nome, cognome, email').limit(10);
@@ -54,7 +55,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
             // Parse birth date to ISO format
             let birthDate = null;
             if (extractedData.data_nascita) {
-                const parts = extractedData.data_nascita.split(/[\/\-\.]/);
+                const parts = extractedData.data_nascita.split(/[/\-.]/);
                 if (parts.length === 3) {
                     birthDate = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
                 }
@@ -84,9 +85,10 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
             setCustomers([newCustomer, ...customers]);
 
             toast.success(`Cliente "${newCustomer.nome} ${newCustomer.cognome}" creato con successo!`);
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error creating customer:', err);
-            toast.error(`Errore nella creazione del cliente: ${err.message}`);
+            toast.error(`Errore nella creazione del cliente: ${_errMsg}`);
         } finally {
             setLoading(false);
         }
@@ -303,7 +305,7 @@ export default function DocumentReviewModal({ scan, isOpen, onClose, onUpdate }:
                             <button
                                 onClick={handleConfirm}
                                 disabled={loading || !customerId}
-                                className="flex-1 py-3 bg-dr7-gold text-black font-bold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 py-3 bg-dr7-gold text-white font-bold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {loading ? 'Salvataggio...' : customerId ? 'Conferma e Salva' : 'Seleziona Cliente'}
                             </button>

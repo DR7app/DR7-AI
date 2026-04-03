@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
+import { logger } from '../../../utils/logger'
 
 interface CustomerBirthday {
     id: string
@@ -80,9 +81,10 @@ export default function BirthdaysTab() {
             setMessageTemplate(draftMessage)
             setEditingMessage(false)
             alert('Messaggio salvato!')
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error saving message template:', error)
-            alert(`Errore nel salvataggio: ${error.message}`)
+            alert(`Errore nel salvataggio: ${_errMsg}`)
         } finally {
             setSavingMessage(false)
         }
@@ -104,6 +106,7 @@ export default function BirthdaysTab() {
 
     useEffect(() => {
         loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     async function loadData() {
@@ -136,7 +139,7 @@ export default function BirthdaysTab() {
                 .eq('year', currentYear)
 
             if (sentError && sentError.code !== '42P01') {
-                console.warn('birthday_messages table may not exist:', sentError)
+                logger.warn('birthday_messages table may not exist:', sentError)
             }
 
             const sentSet = new Set((sentData || []).map(s => s.customer_id))
@@ -156,6 +159,7 @@ export default function BirthdaysTab() {
             today.setHours(0, 0, 0, 0)
 
             const processedCustomers: CustomerBirthday[] = (customersData || [])
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .map((c: any) => {
                     const fullName = c.tipo_cliente === 'persona_fisica'
                         ? `${c.nome || ''} ${c.cognome || ''}`.trim()
@@ -197,7 +201,7 @@ export default function BirthdaysTab() {
 
         // Try different formats
         // Format: DD/MM/YYYY or DD-MM-YYYY
-        const ddmmyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+        const ddmmyyyy = dateStr.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
         if (ddmmyyyy) {
             return new Date(parseInt(ddmmyyyy[3]), parseInt(ddmmyyyy[2]) - 1, parseInt(ddmmyyyy[1]))
         }
@@ -328,7 +332,7 @@ export default function BirthdaysTab() {
                     .replace('{nome}', firstName)
                     .replace('{codice}', discountCode)
 
-                let cleanPhone = customer.phone!.replace(/[\s\-\+\(\)]/g, '').replace(/[^\d]/g, '')
+                let cleanPhone = customer.phone!.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
                 if (cleanPhone.startsWith('00')) {
                     cleanPhone = cleanPhone.substring(2)
                 }
@@ -431,7 +435,7 @@ export default function BirthdaysTab() {
                 .replace('{codice}', discountCode)
 
             // Clean phone number
-            let cleanPhone = customer.phone.replace(/[\s\-\+\(\)]/g, '').replace(/[^\d]/g, '')
+            let cleanPhone = customer.phone.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
             if (cleanPhone.startsWith('00')) {
                 cleanPhone = cleanPhone.substring(2)
             }
@@ -476,9 +480,10 @@ export default function BirthdaysTab() {
 
             // Show success with code
             alert(`Messaggio inviato a ${customer.full_name}!\n\nCodice sconto generato: ${discountCode}`)
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error sending birthday message:', error)
-            alert('Errore nell\'invio: ' + (error.message || 'Errore sconosciuto'))
+            alert('Errore nell\'invio: ' + (_errMsg || 'Errore sconosciuto'))
         } finally {
             setSending(null)
         }
@@ -503,7 +508,7 @@ export default function BirthdaysTab() {
                     <h2 className="text-xl font-bold text-theme-text-primary flex items-center gap-2">
                         Compleanni
                         {upcomingCount > 0 && (
-                            <span className="bg-dr7-gold text-black text-sm font-bold px-2 py-0.5 rounded-full">
+                            <span className="bg-dr7-gold text-white text-sm font-bold px-2 py-0.5 rounded-full">
                                 {upcomingCount}
                             </span>
                         )}
@@ -807,6 +812,7 @@ export default function BirthdaysTab() {
 }
 
 // Export birthday count for badge in navigation
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBirthdayCount() {
     const [count, setCount] = useState(0)
 
@@ -830,6 +836,7 @@ export function useBirthdayCount() {
                 const sentSet = new Set((sentData || []).map(s => s.customer_id))
 
                 let upcomingCount = 0
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ;(customersData || []).forEach((c: any) => {
                     if (sentSet.has(c.id)) return
 
@@ -859,7 +866,7 @@ export function useBirthdayCount() {
 
 function parseBirthdayForHook(dateStr: string): Date | null {
     if (!dateStr) return null
-    const ddmmyyyy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+    const ddmmyyyy = dateStr.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
     if (ddmmyyyy) {
         return new Date(parseInt(ddmmyyyy[3]), parseInt(ddmmyyyy[2]) - 1, parseInt(ddmmyyyy[1]))
     }

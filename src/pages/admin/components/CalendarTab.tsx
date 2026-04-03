@@ -37,6 +37,9 @@ interface Booking {
   customer_email: string
   price_total: number
   service_type?: string
+  payment_method?: string | null
+  payment_status?: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking_details?: any
   type?: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }
@@ -75,6 +78,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         .or('status.neq.retired,display_name.eq.Test')
 
       // Fetch ALL bookings via Netlify function (bypasses RLS)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let allBookings: any[] | null = null
       try {
         const bookingsResponse = await fetch('/.netlify/functions/list-bookings')
@@ -126,18 +130,20 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             .filter((id): id is string => !!id)
 
           // Lookup by email and id separately
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const customersByEmail = new Map<string, any>()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const customersById = new Map<string, any>()
 
           if (emails.length > 0) {
             const { data } = await supabase.from('customers_extended')
-              .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
+              .select('id, nome, cognome, telefono, email, denominazione, ragione_sociale, tipo_cliente')
               .in('email', emails)
             if (data) for (const c of data) { if (c.email) customersByEmail.set(c.email, c) }
           }
           if (userIds.length > 0) {
             const { data } = await supabase.from('customers_extended')
-              .select('id, nome, cognome, telefono, email, denominazione, tipo_cliente')
+              .select('id, nome, cognome, telefono, email, denominazione, ragione_sociale, tipo_cliente')
               .in('id', userIds)
             if (data) for (const c of data) { customersById.set(c.id, c) }
           }
@@ -147,7 +153,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             const cust = (email && customersByEmail.get(email)) || (b.user_id && customersById.get(b.user_id))
             if (cust) {
               const fullName = cust.tipo_cliente === 'azienda'
-                ? cust.denominazione
+                ? (cust.ragione_sociale || cust.denominazione)
                 : `${cust.nome || ''} ${cust.cognome || ''}`.trim()
               if (fullName) b.customer_name = fullName
               if (!b.customer_phone && cust.telefono) b.customer_phone = cust.telefono
@@ -205,6 +211,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     const bookingToVehicleId = new Map<string, string>()
     bookings.forEach(b => {
       if (b.status === 'cancelled') return
+      // Pending Nexi Pay by Link bookings are shown on calendar (slot blocked for 1h)
       const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
       const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
 
@@ -244,7 +251,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       const maxLane = laningResults.reduce((max, e) => Math.max(max, e.laneIndex), -1)
 
       // Filter by search query if needed
-      let displayEvents = laningResults
+      const displayEvents = laningResults
       if (searchQuery) {
         // If filtering, we still might want to show the row,
         // but maybe dim non-matching? Or just filter the VEHICLES list?
@@ -281,6 +288,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     }
 
     return rows
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicles, bookings, currentRomeComponents, daysInMonth])
 
   // Filter Rows for Display
@@ -352,7 +360,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
               onClick={() => setHideFinancials(!hideFinancials)}
               className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
                 ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
-                : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                : 'bg-dr7-gold text-white hover:bg-[#247a6f]'
                 }`}
             >
               {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
@@ -395,13 +403,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                 <div
                   key={day}
                   className={`
-                    flex flex-col items-center justify-center border-r border-theme-border/10 relative
+                    flex flex-col items-center justify-center border-r border-theme-border/40 relative
                     ${(isHol || isSun) ? 'bg-theme-text-primary/[0.02]' : ''}
                     ${isToday ? 'bg-dr7-gold/40' : ''}
                   `}
                   style={{
                     width: CELL_WIDTH,
-                    boxShadow: isToday ? 'inset 2px 0 0 0 rgba(212, 175, 55, 0.7), inset -2px 0 0 0 rgba(212, 175, 55, 0.7)' : undefined
+                    boxShadow: isToday ? 'inset 2px 0 0 0 rgba(45, 138, 126, 0.7), inset -2px 0 0 0 rgba(45, 138, 126, 0.7)' : undefined
                   }}
                 >
                   {/* Red dot for Sundays and holidays */}
@@ -434,7 +442,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             return (
               <div
                 key={row.vehicle.id}
-                className="flex border-b border-theme-border/50 hover:bg-theme-bg-tertiary/30 transition-colors group relative"
+                className="flex border-b border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors group relative"
                 style={{ height: rowHeight }}
               >
                 {/* Left Sticky Column */}
@@ -475,13 +483,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         <div
                           key={day}
                           className={`
-                                border-r border-white/[0.02] h-full
-                                ${isToday ? 'bg-dr7-gold/40' : 'bg-green-500/[0.15]'}
-                                ${isRedDay && !isToday ? 'bg-theme-text-primary/[0.01]' : ''}
+                                border-r border-theme-border/40 h-full
+                                ${isToday ? 'bg-dr7-gold/20' : ''}
+                                ${isRedDay && !isToday ? 'bg-theme-text-primary/[0.03]' : ''}
                               `}
                           style={{
                             width: CELL_WIDTH,
-                            boxShadow: isToday ? 'inset 2px 0 0 0 rgba(212, 175, 55, 0.7), inset -2px 0 0 0 rgba(212, 175, 55, 0.7)' : undefined
+                            boxShadow: isToday ? 'inset 2px 0 0 0 rgba(45, 138, 126, 0.7), inset -2px 0 0 0 rgba(45, 138, 126, 0.7)' : undefined
                           }}
                         />
                       )
@@ -508,12 +516,18 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                   <div className="absolute inset-0 z-20 pointer-events-none">
                     {row.events.map(evt => {
                       // STRICT COLOR CONTRACT (Premium Dark Theme)
-                      // RED = Customer booking (clean, modern red)
+                      // DR7 BRAND = Customer booking (logo blue/teal)
                       // ORANGE = Unavailable (muted orange)
 
-                      // Color: Darker, less flashy red (like Non pagato but muted)
-                      let bgClass = "bg-red-800"
-                      let borderClass = "border-red-700/30"
+                      let bgClass = "bg-dr7-gold"
+                      let borderClass = "border-dr7-gold/30"
+
+                      // Pending Nexi payment = dashed border, reduced opacity
+                      const isPendingNexi = evt.booking.payment_method === 'Nexi Pay by Link' && evt.booking.payment_status === 'pending'
+                      if (isPendingNexi) {
+                        bgClass = "bg-amber-500/50"
+                        borderClass = "border-amber-400 border-dashed"
+                      }
 
                       // Check if this is an unavailability/mechanic booking
                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')

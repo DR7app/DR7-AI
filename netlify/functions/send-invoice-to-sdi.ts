@@ -31,23 +31,14 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Invoice not found' }) }
         }
 
-        // Skip if already sent/processing (prevent duplicate uploads to Aruba)
-        if (['sending', 'sent', 'accepted'].includes(invoice.sdi_status)) {
-            return {
-                statusCode: 200,
-                body: JSON.stringify({
-                    success: true,
-                    message: `Invoice already in status: ${invoice.sdi_status}`,
-                    skipped: true
-                })
-            }
-        }
-
-        // If invoice was previously sent (rejected/scartata/error), ALWAYS assign a NEW number
+        // If invoice was previously sent/uploaded, ALWAYS assign a NEW number
         // This prevents SDI error 00404 (fattura duplicata) when retrying
         const needsNewNumber = invoice.sdi_status === 'rejected' ||
             invoice.sdi_status === 'scartata' ||
             invoice.sdi_status === 'error' ||
+            invoice.sdi_status === 'sending' ||
+            invoice.sdi_status === 'sent' ||
+            invoice.sdi_status === 'accepted' ||
             invoice.aruba_invoice_id // was already uploaded before
 
         if (needsNewNumber) {
@@ -90,6 +81,83 @@ export const handler: Handler = async (event) => {
             }).eq('id', invoiceId)
 
             invoice.numero_fattura = newNumber
+        }
+
+        // Re-fetch fresh customer data from customers_extended via booking
+        // This ensures that if admin updated the customer profile, the fattura uses the latest info
+        if (invoice.booking_id) {
+            const { data: booking } = await supabase
+                .from('bookings')
+                .select('user_id, customer_name, customer_email, customer_phone, booking_details')
+                .eq('id', invoice.booking_id)
+                .single()
+
+            if (booking) {
+                const custId = booking.booking_details?.customer?.customerId || booking.user_id
+                const custEmail = booking.customer_email || booking.booking_details?.customer?.email
+
+                let customerData: any = null
+
+                // Try by ID first
+                if (custId) {
+                    const { data } = await supabase.from('customers_extended').select('*').eq('id', custId).maybeSingle()
+                    if (data) customerData = data
+                    if (!customerData) {
+                        const { data: byUserId } = await supabase.from('customers_extended').select('*').eq('user_id', custId).maybeSingle()
+                        if (byUserId) customerData = byUserId
+                    }
+                }
+
+                // Fallback by email
+                if (!customerData && custEmail) {
+                    const { data } = await supabase.from('customers_extended').select('*').eq('email', custEmail).maybeSingle()
+                    if (data) customerData = data
+                }
+
+                if (customerData) {
+                    // Build fresh address
+                    const street = customerData.indirizzo || customerData.sede_legale || ''
+                    const num = customerData.numero_civico || ''
+                    const zip = customerData.codice_postale || customerData.cap || ''
+                    const city = customerData.citta_residenza || customerData.citta || ''
+                    const prov = (customerData.provincia_residenza || customerData.provincia || '').toUpperCase().trim()
+
+                    const addressParts: string[] = []
+                    if (street) addressParts.push(num ? `${street} ${num}` : street)
+                    if (city || zip) {
+                        let cityLine = ''
+                        if (zip) cityLine += zip
+                        if (city) cityLine += (cityLine ? ' ' : '') + city
+                        if (prov) cityLine += ` (${prov})`
+                        if (cityLine) addressParts.push(cityLine)
+                    }
+                    const freshAddress = addressParts.join(', ')
+
+                    const freshName = customerData.tipo_cliente === 'azienda'
+                        ? (customerData.ragione_sociale || customerData.denominazione || invoice.customer_name)
+                        : `${customerData.nome || ''} ${customerData.cognome || ''}`.trim() || invoice.customer_name
+                    const freshTaxCode = (customerData.codice_fiscale || '').toUpperCase().trim()
+                    const freshVat = (customerData.partita_iva || '').toUpperCase().trim()
+                    const freshEmail = customerData.email || invoice.customer_email || ''
+                    const freshPhone = customerData.telefono || invoice.customer_phone || ''
+
+                    // Update fatture row with fresh customer data
+                    const updates: Record<string, any> = {}
+                    if (freshName && freshName !== invoice.customer_name) updates.customer_name = freshName
+                    if (freshAddress && freshAddress !== invoice.customer_address) updates.customer_address = freshAddress
+                    if (freshTaxCode && freshTaxCode !== (invoice.customer_tax_code || '').toUpperCase().trim()) updates.customer_tax_code = freshTaxCode
+                    if (freshVat && freshVat !== (invoice.customer_vat || '').toUpperCase().trim()) updates.customer_vat = freshVat
+                    if (freshEmail && freshEmail !== invoice.customer_email) updates.customer_email = freshEmail
+                    if (freshPhone && freshPhone !== invoice.customer_phone) updates.customer_phone = freshPhone
+
+                    if (Object.keys(updates).length > 0) {
+                        console.log('[SDI] Refreshing customer data on fattura:', updates)
+                        await supabase.from('fatture').update(updates).eq('id', invoiceId)
+                        // Apply to in-memory invoice for XML generation
+                        Object.assign(invoice, updates)
+                    }
+                }
+            }
         }
 
         // Normalize customer data (fix lowercase CF/P.IVA/provincia that SDI rejects)

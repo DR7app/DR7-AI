@@ -4,6 +4,7 @@ import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import MechanicalBookingForm from './MechanicalBookingForm'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
+import { logger } from '../../../utils/logger'
 
 interface MechanicalBooking {
   id: string
@@ -17,6 +18,7 @@ interface MechanicalBooking {
   price_total: number
   status: string
   payment_status: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booking_details: any
   created_at: string
 }
@@ -99,6 +101,7 @@ export default function MechanicalCalendarTab() {
       if (customersError) throw customersError
 
       // Map customers_extended to Customer interface
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mappedCustomers: Customer[] = (customersData || []).map((c: any) => ({
         id: c.id,
         full_name: c.ragione_sociale || `${c.nome || ''} ${c.cognome || ''}`.trim(),
@@ -118,7 +121,7 @@ export default function MechanicalCalendarTab() {
 
       if (bookingsError) throw bookingsError
 
-      console.log('🔧 MECHANICAL CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0)
+      logger.log('🔧 MECHANICAL CALENDAR - Prenotazioni caricate:', bookingsData?.length || 0)
 
       setBookings(bookingsData || [])
     } catch (error) {
@@ -268,7 +271,7 @@ export default function MechanicalCalendarTab() {
                 onClick={() => setHideFinancials(!hideFinancials)}
                 className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
                   ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
-                  : 'bg-yellow-600 text-black hover:bg-yellow-700'
+                  : 'bg-dr7-gold text-white hover:bg-[#247a6f]'
                   }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}

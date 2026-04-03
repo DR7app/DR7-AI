@@ -169,7 +169,7 @@ export default function InvoicesTab() {
     setDeleteTarget(null)
   }
 
-  function updateItem(index: number, field: keyof InvoiceItem, value: any) {
+  function updateItem(index: number, field: keyof InvoiceItem, value: unknown) {
     const newItems = [...formData.items]
     newItems[index] = { ...newItems[index], [field]: value }
     setFormData({ ...formData, items: newItems })
@@ -483,7 +483,7 @@ export default function InvoicesTab() {
             <label className="block text-sm text-theme-text-muted mb-1">Stato</label>
             <select
               value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as 'paid' | 'pending' | 'overdue' })}
               className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
             >
               <option value="paid">Pagata</option>

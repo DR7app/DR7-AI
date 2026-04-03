@@ -175,8 +175,9 @@ export default function ReportClientiTab() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.details || data.error || 'Errore nel caricamento')
       setClientiData(data)
-    } catch (err: any) {
-      setError(err.message || 'Errore sconosciuto')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      setError(_errMsg || 'Errore sconosciuto')
     } finally {
       setLoading(false)
     }
@@ -221,7 +222,7 @@ export default function ReportClientiTab() {
         <button
           onClick={fetchClienti}
           disabled={loading}
-          className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50"
+          className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
         >
           {loading ? 'Caricamento...' : 'Genera Report'}
         </button>

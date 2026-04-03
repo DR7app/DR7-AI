@@ -89,7 +89,8 @@ export default function CarWashCatalogTab() {
   async function saveEditing(service: CarWashService) {
     setSaving(true)
     try {
-      const updates: any = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updates: Record<string, any> = {
         price: parseFloat(editPrice) || service.price,
         name: editName.trim() || service.name,
         duration: editDuration.trim() || service.duration,
@@ -110,8 +111,8 @@ export default function CarWashCatalogTab() {
 
       cancelEditing()
       await loadServices()
-    } catch (err: any) {
-      alert('Errore nel salvataggio: ' + err.message)
+    } catch (err: unknown) {
+      alert('Errore nel salvataggio: ' + (err as Error).message)
     } finally {
       setSaving(false)
     }
@@ -344,7 +345,7 @@ function ServiceCard({
           <button
             onClick={onSave}
             disabled={saving}
-            className="px-4 py-1.5 bg-dr7-gold text-black text-sm font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50"
+            className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
           >
             {saving ? 'Salvataggio...' : 'Salva'}
           </button>

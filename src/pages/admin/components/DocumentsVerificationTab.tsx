@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { logger } from '../../../utils/logger'
 
 interface UserDocument {
   id: string
@@ -40,6 +41,7 @@ interface UserDocument {
     codice_ipa?: string
     codice_univoco?: string
     rappresentante_legale?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata?: any
     tipo_cliente?: string
     source?: string
@@ -75,7 +77,7 @@ export default function DocumentsVerificationTab() {
   async function loadDocuments() {
     setLoading(true)
     try {
-      console.log('[DocumentsVerificationTab] Loading documents via Netlify function...')
+      logger.log('[DocumentsVerificationTab] Loading documents via Netlify function...')
 
       let useClientFallback = false
 
@@ -86,7 +88,7 @@ export default function DocumentsVerificationTab() {
           const result = await response.json()
 
           if (result.success && result.documents) {
-            console.log('[DocumentsVerificationTab] Documents loaded via Netlify function:', result.documents.length)
+            logger.log('[DocumentsVerificationTab] Documents loaded via Netlify function:', result.documents.length)
             setDocuments(result.documents)
             return
           }
@@ -96,7 +98,7 @@ export default function DocumentsVerificationTab() {
         useClientFallback = true
       } catch (fetchError) {
         // Netlify function not available or returned invalid response
-        console.log('[DocumentsVerificationTab] Netlify function error:', fetchError)
+        logger.log('[DocumentsVerificationTab] Netlify function error:', fetchError)
         useClientFallback = true
       }
 
@@ -107,7 +109,7 @@ export default function DocumentsVerificationTab() {
 
       // Fallback: Netlify function not available (e.g., running with npm run dev)
       // Fetch data directly from Supabase
-      console.log('[DocumentsVerificationTab] Using client-side fallback...')
+      logger.log('[DocumentsVerificationTab] Using client-side fallback...')
 
       // 1. Fetch all documents
       const { data: docs, error: docsError } = await supabase
@@ -118,7 +120,7 @@ export default function DocumentsVerificationTab() {
       if (docsError) throw docsError
 
       if (!docs || docs.length === 0) {
-        console.log('[DocumentsVerificationTab] No documents found')
+        logger.log('[DocumentsVerificationTab] No documents found')
         setDocuments([])
         return
       }
@@ -201,7 +203,7 @@ export default function DocumentsVerificationTab() {
         }
       })
 
-      console.log('[DocumentsVerificationTab] Documents loaded via client-side fallback:', enrichedDocuments.length)
+      logger.log('[DocumentsVerificationTab] Documents loaded via client-side fallback:', enrichedDocuments.length)
       setDocuments(enrichedDocuments)
 
     } catch (error) {
@@ -216,6 +218,7 @@ export default function DocumentsVerificationTab() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: any = {
         status,
         verified_at: new Date().toISOString(),
@@ -266,12 +269,14 @@ export default function DocumentsVerificationTab() {
         ]
 
         const targetFileName = doc.file_path.split('/').pop()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const match = allDocs.find((d: any) => d.fileName === targetFileName)
 
         if (match?.url) {
           window.open(match.url, '_blank')
         } else {
           // Fallback: try to find by fuzzy match if exact match fails
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const fuzzyMatch = allDocs.find((d: any) =>
             doc.file_path.includes(d.fileName) || d.fileName.includes(targetFileName || '___')
           )
@@ -279,6 +284,7 @@ export default function DocumentsVerificationTab() {
           if (fuzzyMatch?.url) {
             window.open(fuzzyMatch.url, '_blank')
           } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             console.error('Document mismatch. Targets:', targetFileName, 'Found:', allDocs.map((d: any) => d.fileName))
             toast.error('Impossibile recuperare il file sicuro. Riprova')
           }
@@ -434,6 +440,7 @@ export default function DocumentsVerificationTab() {
                     {/* Header with Name and Badges */}
                     <div className="flex items-center gap-3 flex-wrap">
                       <h3 className="text-2xl font-bold text-theme-text-primary">{user?.full_name || 'Nome non disponibile'}</h3>
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       {(user as any)?.is_new && (
                         <span className="px-3 py-1 text-xs font-bold bg-green-600 text-white rounded-full shadow-lg">
                           🆕 NUOVO CLIENTE
@@ -623,7 +630,9 @@ export default function DocumentsVerificationTab() {
                     {/* Registration Metadata */}
                     <div className="pt-2 border-t border-theme-border/30">
                       <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-theme-text-muted">
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {(user as any)?.created_at && (
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           <span>📅 Registrato: {new Date((user as any).created_at).toLocaleDateString('it-IT')} alle {new Date((user as any).created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
                         )}
                         {user?.updated_at && (

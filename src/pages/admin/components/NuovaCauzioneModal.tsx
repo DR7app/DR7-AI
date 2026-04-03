@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 
 interface NuovaCauzioneModalProps {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     cauzione?: any | null
     onClose: () => void
     onSave: () => void
@@ -63,9 +64,10 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
 
             setCustomers(customersData || [])
             setVehicles(vehiclesData || [])
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error loading data:', error)
-            toast.error(`Errore nel caricamento dei dati: ${error.message}`)
+            toast.error(`Errore nel caricamento dei dati: ${_errMsg}`)
         } finally {
             setLoadingData(false)
         }
@@ -116,9 +118,10 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
             }
 
             onSave()
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error saving cauzione:', error)
-            toast.error(`Errore nel salvataggio: ${error.message}`)
+            toast.error(`Errore nel salvataggio: ${_errMsg}`)
         } finally {
             setLoading(false)
         }
@@ -277,7 +280,7 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                         type="submit"
                         onClick={handleSubmit}
                         disabled={loading || loadingData}
-                        className="px-6 py-2 bg-dr7-gold text-black font-semibold rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loading ? 'Salvataggio...' : 'Salva'}
                     </button>

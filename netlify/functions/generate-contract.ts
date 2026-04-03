@@ -76,6 +76,13 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error }) }
         }
 
+        // Block contract generation for non-rental bookings (car wash, mechanical, etc.)
+        const svcType = booking.service_type || booking.booking_details?.service_type || ''
+        if (svcType === 'car_wash' || svcType === 'mechanical_service' || svcType === 'mechanical') {
+            console.log(`[generate-contract] Skipping — service_type=${svcType} is not a car rental`)
+            return { statusCode: 200, body: JSON.stringify({ success: false, skipped: true, reason: `Contratto non necessario per ${svcType}` }) }
+        }
+
         // 2. Fetch Customer Data
         // Priority order:
         // 1. booking.booking_details.customer.customerId (admin-created bookings)
@@ -103,10 +110,10 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // 2. Fallback: Try by email (use maybeSingle to handle duplicates)
+        // 2. Fallback: Try by email (case-insensitive, use maybeSingle to handle duplicates)
         if (!customer && resolvedEmail) {
-            console.log('[generate-contract] Fallback: Fetching by email from customers_extended...')
-            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').eq('email', resolvedEmail).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+            console.log('[generate-contract] Fallback: Fetching by email from customers_extended...', resolvedEmail)
+            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').ilike('email', resolvedEmail).order('updated_at', { ascending: false }).limit(1).maybeSingle()
             if (cError) console.error('[generate-contract] Error fetching by email:', cError)
             if (cData) {
                 console.log('[generate-contract] Found customer by Email:', cData.id, cData.nome, cData.cognome)
@@ -115,17 +122,26 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // 3. Fallback: Try by phone number
+        // 3. Fallback: Try by phone number (multiple format variations)
         if (!customer && resolvedPhone) {
-            console.log('[generate-contract] Fallback: Fetching by phone from customers_extended...')
+            console.log('[generate-contract] Fallback: Fetching by phone from customers_extended...', resolvedPhone)
             let phone = resolvedPhone.replace(/[\s\-\+\(\)]/g, '')
             if (phone.startsWith('00')) phone = phone.substring(2)
-            if (phone.length === 10) phone = '39' + phone
-            const { data: cData } = await supabase.from('customers_extended').select('*').eq('telefono', phone).order('updated_at', { ascending: false }).limit(1).maybeSingle()
-            if (cData) {
-                console.log('[generate-contract] Found customer by Phone:', cData.id, cData.nome, cData.cognome)
-                customer = cData
-                matchedBy = 'phone'
+            if (phone.length === 10 && phone.startsWith('3')) phone = '39' + phone
+            // Try exact match, with prefix, and without prefix
+            const phoneVariants = [phone]
+            if (phone.startsWith('39') && phone.length === 12) phoneVariants.push(phone.substring(2)) // without 39
+            if (!phone.startsWith('39') && phone.length === 10) phoneVariants.push('39' + phone) // with 39
+            phoneVariants.push('+' + phone) // with +
+
+            for (const pv of phoneVariants) {
+                const { data: cData } = await supabase.from('customers_extended').select('*').eq('telefono', pv).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+                if (cData) {
+                    console.log('[generate-contract] Found customer by Phone:', cData.id, cData.nome, cData.cognome, 'variant:', pv)
+                    customer = cData
+                    matchedBy = 'phone'
+                    break
+                }
             }
         }
 
@@ -176,21 +192,24 @@ export const handler: Handler = async (event) => {
         // Final fallback: Use booking data directly if no customer record exists
         if (!customer) {
             console.warn('[generate-contract] WARNING: No customer record found by any method! Using booking data as fallback.')
+            const bd = booking.booking_details?.customer || {}
             const nameParts = (resolvedName || '').split(' ')
             customer = {
                 tipo_cliente: 'persona_fisica',
-                nome: nameParts[0] || '',
-                cognome: nameParts.slice(1).join(' ') || '',
+                nome: bd.firstName || nameParts[0] || '',
+                cognome: bd.lastName || nameParts.slice(1).join(' ') || '',
                 email: resolvedEmail || '',
                 telefono: resolvedPhone || '',
-                indirizzo: booking.booking_details?.customer?.address || '',
-                codice_fiscale: booking.booking_details?.customer?.taxCode || '',
-                patente: booking.booking_details?.customer?.driverLicense || '',
-                data_nascita: booking.booking_details?.customer?.birthDate || null,
-                luogo_nascita: booking.booking_details?.customer?.birthPlace || null,
-                citta_residenza: booking.booking_details?.customer?.city || null,
-                provincia_residenza: booking.booking_details?.customer?.province || null,
-                codice_postale: booking.booking_details?.customer?.zipCode || null,
+                indirizzo: bd.address || '',
+                codice_fiscale: bd.taxCode || bd.codiceFiscale || '',
+                numero_patente: bd.licenseNumber || bd.driverLicense || '',
+                patente: bd.licenseNumber || bd.driverLicense || '',
+                data_nascita: bd.birthDate || null,
+                luogo_nascita: bd.birthPlace || null,
+                citta_residenza: bd.city || null,
+                provincia_residenza: bd.province || null,
+                codice_postale: bd.zipCode || null,
+                data_rilascio_patente: bd.licenseIssueDate || null,
             }
             console.log('[generate-contract] Using fallback customer data:', JSON.stringify(customer))
         }
@@ -227,7 +246,9 @@ export const handler: Handler = async (event) => {
             : (customer?.nome || customer?.cognome)
                 ? `${customer.nome || ''} ${customer.cognome || ''}`.trim()
                 : (customer?.full_name || booking.customer_name || '')
-        const clientAddress = customer?.indirizzo || booking.booking_details?.customer?.address || ''
+        const rawAddress = customer?.indirizzo || booking.booking_details?.customer?.address || ''
+        const civico = customer?.numero_civico || ''
+        const clientAddress = civico ? `${rawAddress} ${civico}`.trim() : rawAddress
         const clientVat = customer?.tipo_cliente === 'azienda' ? customer.partita_iva : customer?.codice_fiscale
         const driverLicense = customer?.numero_patente || customer?.patente || customer?.driver_license_number || ''
 
@@ -311,11 +332,31 @@ export const handler: Handler = async (event) => {
         // KM limit: use unlimited_km flag (strict boolean check) or legacy km_limit === 'Illimitati'
         const isUnlimitedKm = booking.booking_details?.unlimited_km === true || booking.booking_details?.km_limit === 'Illimitati'
         const rawKmLimit = booking.booking_details?.km_limit
-        const kmLimitValue = isUnlimitedKm
+        const kmLimitRaw = isUnlimitedKm
             ? 'Illimitati'
             : (rawKmLimit && rawKmLimit !== '0' && rawKmLimit !== 'Illimitati'
                 ? rawKmLimit
                 : (booking.booking_details?.total_km || 'Illimitati'))
+        // Format KM limit for contract display
+        let kmLimitValue: string
+        if (kmLimitRaw === '50/giorno') {
+            const rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+            const totalKm = 50 * rentalDays
+            kmLimitValue = `${totalKm} Km (50 Km/Giorno x ${rentalDays} gg)`
+        } else if (kmLimitRaw === '100/giorno') {
+            // Legacy format — calculate total from days
+            const rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+            const table: Record<number, number> = { 1: 100, 2: 180, 3: 240, 4: 280, 5: 300 }
+            const totalKm = rentalDays <= 5 ? (table[rentalDays] || 300) : 300 + ((rentalDays - 5) * 60)
+            kmLimitValue = `${totalKm} Km`
+        } else if (kmLimitRaw === 'Illimitati') {
+            kmLimitValue = 'Illimitati'
+        } else if (kmLimitRaw && !isNaN(Number(kmLimitRaw)) && !kmLimitRaw.includes('Km') && !kmLimitRaw.includes('km')) {
+            // Pure number from auto-calculation — add "Km" suffix
+            kmLimitValue = `${kmLimitRaw} Km`
+        } else {
+            kmLimitValue = kmLimitRaw
+        }
         console.log(`[generate-contract] KM DEBUG: unlimited_km=${booking.booking_details?.unlimited_km} (type: ${typeof booking.booking_details?.unlimited_km}), km_limit=${rawKmLimit}, resolved=${kmLimitValue}`)
 
         // Helper to format date/time in Rome timezone correctly
@@ -630,17 +671,43 @@ ASSICURAZIONE:
 Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tutti i danni fino alla franchigia indicata.`
         }
 
+        // Resolve location ID or label to a printable address for the contract
+        function resolveLocation(loc: string | undefined, details: any, type: 'pickup' | 'return' = 'pickup'): string {
+            const DR7_OFFICE = 'Viale Marconi 229, Cagliari, CA, 09100'
+            const AIRPORT = 'Aeroporto di Cagliari Elmas'
+            if (!loc) return DR7_OFFICE
+            const locLower = loc.toLowerCase()
+            // Handle location IDs stored by edit flow
+            if (loc === 'dr7_office' || locLower.includes('viale marconi')) return DR7_OFFICE
+            if (loc === 'cagliari_airport' || (locLower.includes('aeroporto') && locLower.includes('cagliari'))) return AIRPORT
+            if (loc === 'alghero_airport' || (locLower.includes('aeroporto') && locLower.includes('alghero'))) return 'Aeroporto di Alghero Fertilia'
+            if (locLower.includes('aeroporto')) return loc // Other airports — use as-is
+            if (loc === 'domicilio' || locLower.includes('domicilio') || locLower.includes('inserisci indirizzo')) {
+                // Use delivery/pickup address from booking_details
+                const addr = type === 'pickup'
+                    ? details?.delivery_address
+                    : details?.pickup_address  // pickup_address = where vehicle is picked up (return)
+                if (addr) {
+                    const parts = [addr.street, addr.city, addr.province, addr.zip].filter(Boolean)
+                    return parts.join(', ') || DR7_OFFICE
+                }
+                return DR7_OFFICE
+            }
+            // Already a full address string (from new booking flow)
+            return loc
+        }
+
         console.log(`[generate-contract] Using additional terms for category: ${vehicleCategory}`)
 
-        // Map insurance option ID to readable label
+        // Map insurance option ID to readable label (short labels to fit PDF field)
         const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || 'KASKO_BASE'
         const insuranceLabels: Record<string, string> = {
-            'RCA': 'Kasko',
-            'KASKO': 'Kasko',
-            'KASKO_BASE': 'Kasko',
-            'KASKO_BLACK': 'Kasko Black',
-            'KASKO_SIGNATURE': 'Kasko Signature',
-            'DR7': 'Kasko DR7'
+            'RCA': 'RCA Compresa',
+            'KASKO': 'Base',
+            'KASKO_BASE': 'Base',
+            'KASKO_BLACK': 'Black',
+            'KASKO_SIGNATURE': 'Signature',
+            'DR7': 'DR7'
         }
         const insuranceLabel = insuranceLabels[insuranceOptionId] || insuranceOptionId
 
@@ -653,23 +720,23 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // Contract Info
             'ContractNumber': contractNumber,
             'NumeroContratto': contractNumber,
-            'Date': new Date().toLocaleDateString('it-IT'),
-            'Data': new Date().toLocaleDateString('it-IT'),
+            'Date': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            'Data': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
             'PlaceOfIssue': 'Cagliari',
             'LuogoStipula': 'Cagliari',
-            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
-            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
+            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
 
-            // Customer Info
+            // Customer Info — use resolved values (booking top-level can be null for credit wallet bookings)
             'CustomerName': clientName || '',
             'NomeCognome': clientName || '',
             'CustomerVAT': clientVat || '',
             'CodiceFiscale': clientVat || '',
             'PartitaIVA': clientVat || '',
-            'CustomerPhone': booking.customer_phone || '',
-            'Telefono': booking.customer_phone || '',
-            'CustomerEmail': booking.customer_email || '',
-            'Email': booking.customer_email || '',
+            'CustomerPhone': customer?.telefono || resolvedPhone || '',
+            'Telefono': customer?.telefono || resolvedPhone || '',
+            'CustomerEmail': customer?.email || resolvedEmail || '',
+            'Email': customer?.email || resolvedEmail || '',
             'CustomerAddress': clientAddress || '',
             'Indirizzo': clientAddress || '',
             'CustomerCity': customer?.citta_residenza || '',
@@ -729,11 +796,11 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'SforoPerKM': booking.km_overage_fee ? `€${(booking.km_overage_fee).toFixed(2)}` : '',
 
 
-            // Rental Specifics
-            'PickupLocation': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'SedeRitiro': booking.pickup_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'DropoffLocation': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
-            'SedeRiconsegna': booking.dropoff_location || 'Viale Marconi 229, Cagliari, CA, 09100',
+            // Rental Specifics — resolve location IDs to addresses
+            'PickupLocation': resolveLocation(booking.pickup_location, booking.booking_details),
+            'SedeRitiro': resolveLocation(booking.pickup_location, booking.booking_details),
+            'DropoffLocation': resolveLocation(booking.dropoff_location, booking.booking_details, 'return'),
+            'SedeRiconsegna': resolveLocation(booking.dropoff_location, booking.booking_details, 'return'),
             'PickupDate': formatDateRome(pickupDate),
             'DataInizio': formatDateRome(pickupDate),
             'PickupTime': formatTimeRome(pickupDate),
@@ -750,8 +817,8 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // Insurance and Financial
             'Insurance': insuranceLabel,
             'Assicurazione': insuranceLabel,
-            'Deposit': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
-            'Cauzione': booking.booking_details?.deposit || booking.booking_details?.cauzione || '0',
+            'Deposit': booking.booking_details?.cauzione_auto ? (booking.booking_details?.cauzione_targa || '') : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
+            'Cauzione': booking.booking_details?.cauzione_auto ? (booking.booking_details?.cauzione_targa || '') : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
             'TotalKM': kmLimitValue,
             'KMTotaliNoleggio': kmLimitValue,
 
@@ -849,6 +916,82 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'CompanyRepresentativeIssueCombined': `${customer?.metadata?.rappresentante?.documento?.rilascio || customer?.metadata?.rappresentante?.data_rilascio || ''} ${(customer?.metadata?.rappresentante?.documento?.luogo || customer?.metadata?.rappresentante?.luogo_rilascio) ? '- ' + (customer.metadata.rappresentante.documento?.luogo || customer.metadata.rappresentante.luogo_rilascio) : ''}`.trim(),
             'RilascioDocumentoRappresentante': `${customer?.metadata?.rappresentante?.documento?.rilascio || customer?.metadata?.rappresentante?.data_rilascio || ''} ${(customer?.metadata?.rappresentante?.documento?.luogo || customer?.metadata?.rappresentante?.luogo_rilascio) ? '- ' + (customer.metadata.rappresentante.documento?.luogo || customer.metadata.rappresentante.luogo_rilascio) : ''}`.trim(),
 
+            // Garante / Proprietario Veicolo Cauzione
+            'GaranteNomeCognome': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return `${customer?.nome || ''} ${customer?.cognome || ''}`.trim()
+              return `${g.nome || ''} ${g.cognome || ''}`.trim()
+            })(),
+            'GaranteCodiceFiscale': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.codice_fiscale || ''
+              return g.codice_fiscale || ''
+            })(),
+            'GaranteSesso': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.sesso || ''
+              return g.sesso || ''
+            })(),
+            'GaranteIndirizzo': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return `${customer?.indirizzo || ''} ${customer?.codice_postale || ''}`.trim()
+              return `${g.indirizzo || ''} ${g.cap || ''}`.trim()
+            })(),
+            'GaranteCitta': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.citta_residenza || ''
+              return g.citta || ''
+            })(),
+            'GaranteProvincia': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.provincia_residenza || ''
+              return g.provincia || ''
+            })(),
+            'GaranteDataNascita': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : ''
+              return g.birth_date ? new Date(g.birth_date).toLocaleDateString('it-IT') : ''
+            })(),
+            'GaranteLuogoNascita': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.luogo_nascita || ''
+              return g.birth_place || ''
+            })(),
+            'GaranteProvinciaNascita': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.provincia_nascita || ''
+              return g.birth_provincia || ''
+            })(),
+            'GaranteTelefono': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.telefono || ''
+              return g.phone || ''
+            })(),
+            'GaranteEmail': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.email || ''
+              return g.email || ''
+            })(),
+            'GaranteCAP': (() => {
+              const g = booking.booking_details?.garante_veicolo
+              if (!g || !booking.booking_details?.cauzione_auto) return ''
+              if (g.tipo === 'guidatore') return customer?.codice_postale || ''
+              return g.cap || ''
+            })(),
+            'CauzioneVeicolo': booking.booking_details?.cauzione_auto ? `${booking.booking_details?.cauzione_veicolo?.brand || ''} ${booking.booking_details?.cauzione_veicolo?.model || ''} (${booking.booking_details?.cauzione_veicolo?.year || ''}) - ${booking.booking_details?.cauzione_targa || ''}` : '',
+            'TargaCauzione': booking.booking_details?.cauzione_targa || '',
+
             // Penalty Clause (Dynamic based on vehicle category)
             'PenaltyClause': insuranceResponsibilityText,
 
@@ -869,6 +1012,10 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 if (field) {
                     // Sanitize the value to prevent WinAnsi encoding errors
                     const sanitizedValue = sanitizeForPDF(value)
+
+                    // Set font size small enough to fit all fields without text being cut
+                    field.setFontSize(7)
+
                     field.setText(sanitizedValue)
                     filledFields++
 
@@ -980,9 +1127,9 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 booking_id: bookingId,
                 contract_number: contractNumber,
                 contract_date: new Date().toISOString().split('T')[0],
-                customer_name: clientName,
-                customer_email: booking.customer_email || customer?.email,
-                customer_phone: booking.customer_phone || customer?.telefono,
+                customer_name: clientName || resolvedName || '',
+                customer_email: customer?.email || resolvedEmail || '',
+                customer_phone: customer?.telefono || resolvedPhone || '',
                 customer_address: clientAddress,
                 customer_tax_code: clientVat,
                 customer_license_number: driverLicense,

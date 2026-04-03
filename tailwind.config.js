@@ -7,7 +7,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        'dr7-gold': '#C9A55B',
+        'dr7-gold': '#2d8a7e',
         'dr7-dark': '#1a1a1a',
         'dr7-darker': '#0f0f0f',
         'theme-bg-primary': 'var(--color-theme-bg-primary)',

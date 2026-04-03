@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
-import { getResidenceStatus, getProvinciaByCity } from '../../../data/sardegnaProvince'
+import { getResidenceStatus, getProvinciaByCity, getCAPByCity } from '../../../data/sardegnaProvince'
 import toast from 'react-hot-toast'
+import { logger } from '../../../utils/logger'
+import CalcolaCFButton from '../../../components/CalcolaCFButton'
+import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
 
 interface NewClientModalProps {
   isOpen: boolean
   onClose: () => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onClientCreated?: (clientId: string, customerData?: any) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialData?: any // Can be Customer type, but using any for flexibility with the complex objects
 }
 
@@ -57,12 +62,15 @@ interface ClientFormData {
   rappresentante_nome: string
   rappresentante_cognome: string
   rappresentante_cf: string
+  rappresentante_data_nascita: string
+  rappresentante_luogo_nascita: string
   rappresentante_ruolo: string
   rappresentante_doc_tipo: string
   rappresentante_doc_numero: string
   rappresentante_doc_rilascio: string
   rappresentante_doc_scadenza: string
   rappresentante_doc_luogo: string
+  rappresentante_patente: string
 
   // Pubblica Amministrazione
   codice_univoco: string
@@ -112,12 +120,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     rappresentante_nome: '',
     rappresentante_cognome: '',
     rappresentante_cf: '',
+    rappresentante_data_nascita: '',
+    rappresentante_luogo_nascita: '',
     rappresentante_ruolo: '',
     rappresentante_doc_tipo: '',
     rappresentante_doc_numero: '',
     rappresentante_doc_rilascio: '',
     rappresentante_doc_scadenza: '',
     rappresentante_doc_luogo: '',
+    rappresentante_patente: '',
     codice_univoco: '',
     cf_pa: '',
     ente_ufficio: '',
@@ -131,12 +142,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
-        console.log('[NewClientModal] Populating modal with data:', initialData)
-        console.log('[NewClientModal] Setting editingId to:', initialData.id)
+        logger.log('[NewClientModal] Populating modal with data:', initialData)
+        logger.log('[NewClientModal] Setting editingId to:', initialData.id)
         setEditingId(initialData.id || null)
 
         // Determine type
-        let type: ClientType = initialData.tipo_cliente || 'persona_fisica'
+        const type: ClientType = initialData.tipo_cliente || 'persona_fisica'
 
         // Parse metadata safely
         const metadata = initialData.metadata || {}
@@ -204,12 +215,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           rappresentante_nome: metadata.rappresentante?.nome || '',
           rappresentante_cognome: metadata.rappresentante?.cognome || '',
           rappresentante_cf: metadata.rappresentante?.cf || '',
+          rappresentante_data_nascita: metadata.rappresentante?.data_nascita || '',
+          rappresentante_luogo_nascita: metadata.rappresentante?.luogo_nascita || '',
           rappresentante_ruolo: metadata.rappresentante?.ruolo || '',
           rappresentante_doc_tipo: metadata.rappresentante?.documento?.tipo || '',
           rappresentante_doc_numero: metadata.rappresentante?.documento?.numero || '',
           rappresentante_doc_rilascio: metadata.rappresentante?.documento?.rilascio || '',
           rappresentante_doc_scadenza: metadata.rappresentante?.documento?.scadenza || '',
           rappresentante_doc_luogo: metadata.rappresentante?.documento?.luogo || '',
+          rappresentante_patente: metadata.rappresentante?.patente || '',
 
           // PA
           codice_univoco: initialData.codice_univoco || '',
@@ -222,7 +236,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         })
       } else {
         // Reset if opening in new mode
-        console.log('[NewClientModal] Opening in NEW mode - resetting form')
+        logger.log('[NewClientModal] Opening in NEW mode - resetting form')
         setEditingId(null)
         setFormData({
           tipo_cliente: 'persona_fisica',
@@ -259,6 +273,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           contatti_cliente: '',
           rappresentante_nome: '',
           rappresentante_cognome: '',
+          rappresentante_data_nascita: '',
+          rappresentante_luogo_nascita: '',
           rappresentante_cf: '',
           rappresentante_ruolo: '',
           rappresentante_doc_tipo: '',
@@ -266,6 +282,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           rappresentante_doc_rilascio: '',
           rappresentante_doc_scadenza: '',
           rappresentante_doc_luogo: '',
+          rappresentante_patente: '',
           codice_univoco: '',
           cf_pa: '',
           ente_ufficio: '',
@@ -295,7 +312,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   useEffect(() => {
     if (isOpen && initialData?.scannedFiles) {
       const files = initialData.scannedFiles
-      console.log('[NewClientModal] Loading scanned files:', Object.keys(files))
+      logger.log('[NewClientModal] Loading scanned files:', Object.keys(files))
 
       if (files.identityFront) {
         setIdentityFront(files.identityFront)
@@ -321,11 +338,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     return emailRegex.test(email)
   }
 
-  // Basic check for Italian tax code format
+  // Basic check for Italian tax code format (16 chars for persona fisica, 11 digits for azienda)
   const validateCodiceFiscale = (cf: string): boolean => {
-    // 16 alphanumeric characters
-    const cfRegex = /^[A-Z0-9]{16}$/i
-    return cfRegex.test(cf.replace(/\s/g, ''))
+    const clean = cf.replace(/\s/g, '')
+    return /^[A-Z0-9]{16}$/i.test(clean) || /^[0-9]{11}$/.test(clean)
   }
 
   const validatePartitaIVA = (piva: string): boolean => {
@@ -362,6 +378,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       // Auto-detect residence status based on provincia/città di residenza
       const residenceStatus = getResidenceStatus(formData.provincia_residenza, formData.citta_residenza)
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const customerData: any = {
         tipo_cliente: formData.tipo_cliente,
         email: formData.email,
@@ -428,7 +445,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             nome: formData.rappresentante_nome,
             cognome: formData.rappresentante_cognome,
             cf: formData.rappresentante_cf,
+            data_nascita: formData.rappresentante_data_nascita,
+            luogo_nascita: formData.rappresentante_luogo_nascita,
             ruolo: formData.rappresentante_ruolo,
+            patente: formData.rappresentante_patente?.toUpperCase() || '',
             documento: {
               tipo: formData.rappresentante_doc_tipo,
               numero: formData.rappresentante_doc_numero,
@@ -448,22 +468,22 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         if (formData.pec_pa) customerData.pec = formData.pec_pa
       }
 
-      console.log('Saving customer data:', customerData)
+      logger.log('Saving customer data:', customerData)
 
       let resultData;
       let createdClientId: string | null = null;
 
-      console.log('🔍 DEBUG: initialData:', initialData)
-      console.log('🔍 DEBUG: initialData?.id:', initialData?.id)
-      console.log('🔍 DEBUG: editingId state:', editingId)
-      console.log('🔍 DEBUG: Will UPDATE?', !!editingId)
+      logger.log('🔍 DEBUG: initialData:', initialData)
+      logger.log('🔍 DEBUG: initialData?.id:', initialData?.id)
+      logger.log('🔍 DEBUG: editingId state:', editingId)
+      logger.log('🔍 DEBUG: Will UPDATE?', !!editingId)
 
       if (editingId) {
-        console.log('🔄 Updating existing customer:', initialData.id)
-        console.log('📝 Customer data to save:', customerData)
+        logger.log('🔄 Updating existing customer:', initialData.id)
+        logger.log('📝 Customer data to save:', customerData)
 
         // 1. Update customers_extended via Netlify function (bypasses RLS)
-        console.log('[NewClientModal] Updating customer via Netlify function with ID:', initialData.id)
+        logger.log('[NewClientModal] Updating customer via Netlify function with ID:', initialData.id)
         const updateResponse = await fetch('/.netlify/functions/save-customer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -479,7 +499,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           throw { message: updateResult.error, code: updateResult.code }
         }
 
-        console.log('✅ customers_extended updated successfully:', updateResult.customer)
+        logger.log('✅ customers_extended updated successfully:', updateResult.customer)
         resultData = updateResult.customer
         createdClientId = editingId
 
@@ -495,16 +515,16 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           updated_at: new Date().toISOString()
         }
 
-        console.log('📝 Updating basic customers table with:', basicData)
+        logger.log('📝 Updating basic customers table with:', basicData)
         const { error: basicError } = await supabase
           .from('customers')
           .update(basicData)
           .eq('id', editingId)
 
         if (basicError) {
-          console.warn('⚠️ Could not update basic customers table:', basicError)
+          logger.warn('⚠️ Could not update basic customers table:', basicError)
         } else {
-          console.log('✅ Basic customers table updated successfully')
+          logger.log('✅ Basic customers table updated successfully')
         }
 
         toast.success('Cliente aggiornato con successo!')
@@ -519,7 +539,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       // CREATE NEW CUSTOMER
       if (!editingId) {
         // CREATE New via Netlify function (bypasses RLS)
-        console.log('[NewClientModal] Creating customer via Netlify function')
+        logger.log('[NewClientModal] Creating customer via Netlify function')
         const createResponse = await fetch('/.netlify/functions/save-customer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -554,9 +574,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             .from('customers')
             .insert([basicData])
 
-          if (basicError) console.warn('Could not insert into basic customers table (non-fatal):', basicError)
+          if (basicError) logger.warn('Could not insert into basic customers table (non-fatal):', basicError)
         } catch (legacyError) {
-          console.warn('Silent error saving to legacy customers table:', legacyError)
+          logger.warn('Silent error saving to legacy customers table:', legacyError)
         }
 
         toast.success('Cliente creato con successo!')
@@ -566,11 +586,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       const hasAnyFile = driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack
 
       if (createdClientId && hasAnyFile) {
-        console.log('Uploading documents for client:', createdClientId)
+        logger.log('Uploading documents for client:', createdClientId)
 
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (!user || authError) {
-          console.warn('Cannot upload documents: user not authenticated')
+          logger.warn('Cannot upload documents: user not authenticated')
         } else {
           // Helper function to upload a single file
           const uploadFile = async (file: File, bucketParams: string, docType: string, suffix: string = '') => {
@@ -592,6 +612,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 .from('customer_documents')
                 .insert({
                   customer_id: createdClientId,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   document_type: docType as any,
                   file_name: file.name,
                   file_path: filePath,
@@ -601,11 +622,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   uploaded_by: user.id
                 })
 
-              console.log(`✅ ${docType}${suffix} uploaded successfully`)
+              logger.log(`✅ ${docType}${suffix} uploaded successfully`)
               return true
-            } catch (error: any) {
+            } catch (error: unknown) {
+              const _errMsg = error instanceof Error ? error.message : String(error)
               console.error(`Error uploading ${docType}${suffix}:`, error)
-              toast.error(`Errore caricamento ${docType}${suffix}: ${error.message}`)
+              toast.error(`Errore caricamento ${docType}${suffix}: ${_errMsg}`)
               return false
             }
           }
@@ -629,7 +651,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       // with this customer's email (or phone) and update their user_id to this UUID.
       // This ensures the "temp" customer merges into this real one in the UI.
       if (createdClientId && (formData.email || formData.telefono)) {
-        console.log('Linking bookings to customer:', createdClientId)
+        logger.log('Linking bookings to customer:', createdClientId)
         const conditions = []
         if (formData.email) conditions.push(`customer_email.eq.${formData.email}`)
         // Optional: also link by phone if email is missing in booking, but email is safer
@@ -646,7 +668,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           // if (linkError) {
           //   console.error('Error linking bookings:', linkError)
           // } else {
-          //   console.log('✅ Bookings successfully linked to', createdClientId)
+          //   logger.log('✅ Bookings successfully linked to', createdClientId)
           // }
         }
       }
@@ -656,32 +678,36 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       }
       handleClose()
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const errObj = error as Record<string, any> | null
+      const errCode = typeof errObj === 'object' && errObj !== null ? String(errObj.code ?? '') : ''
       console.error('❌ Error saving customer:', error)
       console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
+        message: _errMsg,
+        code: errCode,
+        details: errObj && typeof errObj === 'object' ? errObj.details : undefined,
+        hint: errObj && typeof errObj === 'object' ? errObj.hint : undefined
       })
 
       // Provide specific error messages based on error type
       let errorMessage = 'Errore salvataggio cliente: '
 
-      if (error.code === '42501') {
+      if (errCode === '42501') {
         // Permission denied - RLS policy issue
         errorMessage += 'Permessi insufficienti. Verifica che il tuo account abbia i permessi di amministratore.'
-      } else if (error.code === '42703') {
+      } else if (errCode === '42703') {
         // Column does not exist
-        errorMessage += `Colonna mancante nel database: ${error.message}. Esegui lo script update_customers_extended_schema.sql`
-      } else if (error.message?.includes('duplicate key')) {
+        errorMessage += `Colonna mancante nel database: ${_errMsg}. Esegui lo script update_customers_extended_schema.sql`
+      } else if (_errMsg?.includes('duplicate key')) {
         errorMessage += 'Cliente già esistente con questa email o codice fiscale.'
-      } else if (error.message?.includes('violates check constraint')) {
+      } else if (_errMsg?.includes('violates check constraint')) {
         errorMessage += 'Dati non validi. Verifica i campi obbligatori.'
-      } else if (error.message?.includes('network')) {
+      } else if (_errMsg?.includes('network')) {
         errorMessage += 'Errore di connessione. Verifica la tua connessione internet.'
       } else {
-        errorMessage += error.message || 'Errore sconosciuto'
+        errorMessage += _errMsg || 'Errore sconosciuto'
       }
 
       toast.error(errorMessage)
@@ -794,20 +820,35 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale</label>
-                      <input
-                        type="text"
-                        value={formData.codice_fiscale}
-                        onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
-                        maxLength={16}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={formData.codice_fiscale}
+                          onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
+                          maxLength={16}
+                          className="flex-1 bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono"
+                        />
+                        <CalcolaCFButton config={{
+                          getCognome: () => formData.cognome,
+                          getNome: () => formData.nome,
+                          getDataNascita: () => formData.data_nascita,
+                          getSesso: () => formData.sesso,
+                          getLuogoNascita: () => formData.luogo_nascita,
+                          getCodiceFiscale: () => formData.codice_fiscale,
+                          setCodiceFiscale: (v) => setFormData(p => ({ ...p, codice_fiscale: v })),
+                          setSesso: (v) => setFormData(p => ({ ...p, sesso: v as typeof p.sesso })),
+                          setDataNascita: (v) => setFormData(p => ({ ...p, data_nascita: v })),
+                          setLuogoNascita: (v) => setFormData(p => ({ ...p, luogo_nascita: v })),
+                          setProvinciaNascita: (v) => setFormData(p => ({ ...p, provincia_nascita: v })),
+                        }} />
+                      </div>
                       {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-theme-text-muted mb-1">Sesso</label>
                       <select
                         value={formData.sesso}
-                        onChange={(e) => setFormData({ ...formData, sesso: e.target.value as any })}
+                        onChange={(e) => setFormData({ ...formData, sesso: e.target.value as typeof formData.sesso })}
                         className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                       >
                         {!formData.sesso && <option value="">Seleziona...</option>}
@@ -888,7 +929,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => {
                           const city = e.target.value
                           const prov = getProvinciaByCity(city)
-                          setFormData({ ...formData, citta_residenza: city, ...(prov ? { provincia_residenza: prov } : {}) })
+                          const cap = getCAPByCity(city)
+                          setFormData({ ...formData, citta_residenza: city, ...(prov ? { provincia_residenza: prov } : {}), ...(cap ? { codice_postale: cap } : {}) })
                         }}
                         className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
                         placeholder="es. Cagliari, Torino..."
@@ -1118,6 +1160,28 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     />
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Data di Nascita</label>
+                      <input
+                        type="date"
+                        value={formData.rappresentante_data_nascita}
+                        onChange={(e) => setFormData({ ...formData, rappresentante_data_nascita: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Luogo di Nascita</label>
+                      <input
+                        type="text"
+                        value={formData.rappresentante_luogo_nascita}
+                        onChange={(e) => setFormData({ ...formData, rappresentante_luogo_nascita: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
+                        placeholder="es. Cagliari"
+                      />
+                    </div>
+                  </div>
+
                   <div className="mt-4">
                     <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Documento Rappresentante</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1172,6 +1236,20 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                           placeholder="es. Comune di Roma"
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Patente Rappresentante</h4>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Numero Patente</label>
+                      <input
+                        type="text"
+                        value={formData.rappresentante_patente}
+                        onChange={(e) => setFormData({ ...formData, rappresentante_patente: e.target.value.toUpperCase() })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
+                        placeholder="es. CA1234567X"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1315,8 +1393,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setDriversLicenseFront(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {driversLicenseFront && (
@@ -1330,8 +1408,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setDriversLicenseBack(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {driversLicenseBack && (
@@ -1357,8 +1435,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setIdentityFront(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {identityFront && (
@@ -1372,8 +1450,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setIdentityBack(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {identityBack && (
@@ -1399,8 +1477,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setCodiceFiscaleFront(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {codiceFiscaleFront && (
@@ -1414,8 +1492,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         onChange={(e) => setCodiceFiscaleBack(e.target.files?.[0] || null)}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
                           file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-black
-                          hover:file:bg-yellow-500 file:cursor-pointer"
+                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
+                          hover:file:bg-[#247a6f] file:cursor-pointer"
                         accept="image/*,.pdf"
                       />
                       {codiceFiscaleBack && (
@@ -1426,13 +1504,50 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 </div>
 
                 {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack) && (
-                  <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
-                    <p className="text-sm text-green-300 flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Documenti selezionati verranno caricati al salvataggio.
-                    </p>
+                  <div className="space-y-3">
+                    <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
+                      <p className="text-sm text-green-300 flex items-center gap-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Documenti selezionati verranno caricati al salvataggio.
+                      </p>
+                    </div>
+                    <CompilaButton
+                      documents={[
+                        { file: driversLicenseFront, label: 'Patente Fronte' },
+                        { file: driversLicenseBack, label: 'Patente Retro' },
+                        { file: identityFront, label: 'Carta Identità Fronte' },
+                        { file: identityBack, label: 'Carta Identità Retro' },
+                        { file: codiceFiscaleFront, label: 'Codice Fiscale Fronte' },
+                        { file: codiceFiscaleBack, label: 'Codice Fiscale Retro' },
+                      ]}
+                      currentData={formData as unknown as Record<string, string | undefined | null>}
+                      onDataExtracted={(data: ExtractedData, _conflicts: DataConflict[]) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          ...(data.nome && { nome: data.nome }),
+                          ...(data.cognome && { cognome: data.cognome }),
+                          ...(data.sesso && { sesso: data.sesso as 'M' | 'F' | 'Altro' | '' }),
+                          ...(data.data_nascita && { data_nascita: data.data_nascita }),
+                          ...(data.luogo_nascita && { luogo_nascita: data.luogo_nascita }),
+                          ...(data.provincia_nascita && { provincia_nascita: data.provincia_nascita }),
+                          ...(data.codice_fiscale && { codice_fiscale: data.codice_fiscale }),
+                          ...(data.indirizzo && { indirizzo: data.indirizzo }),
+                          ...(data.numero_civico && { numero_civico: data.numero_civico }),
+                          ...(data.codice_postale && { codice_postale: data.codice_postale }),
+                          ...(data.citta_residenza && { citta_residenza: data.citta_residenza }),
+                          ...(data.provincia_residenza && { provincia_residenza: data.provincia_residenza }),
+                          ...(data.patente_numero && { patente_numero: data.patente_numero }),
+                          ...(data.patente_tipo && { patente_tipo: data.patente_tipo }),
+                          ...(data.patente_rilascio && { patente_rilascio: data.patente_rilascio }),
+                          ...(data.patente_scadenza && { patente_scadenza: data.patente_scadenza }),
+                          ...(data.patente_ente && { patente_ente: data.patente_ente }),
+                        }))
+                        toast.success('Dati compilati automaticamente dai documenti!')
+                      }}
+                      onError={(err: string) => toast.error(err)}
+                    />
                   </div>
                 )}
               </div>
@@ -1451,7 +1566,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-8 py-3 sm:py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-black font-bold hover:bg-yellow-500 transition-colors shadow-lg disabled:opacity-50"
+              className="px-8 py-3 sm:py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-white font-bold hover:bg-[#247a6f] transition-colors shadow-lg disabled:opacity-50"
             >
               {isSaving ? 'Salvataggio...' : (initialData ? 'Aggiorna Cliente' : 'Crea Cliente')}
             </button>

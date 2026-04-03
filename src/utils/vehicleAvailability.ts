@@ -13,6 +13,7 @@
  */
 
 import { createRomeDate, getRomeDateComponents } from './timezoneUtils'
+import { logger } from '../utils/logger'
 
 // Configuration constants
 const BUFFER_MINUTES = 75 // 30min gap + 45min wash
@@ -29,6 +30,7 @@ export interface Vehicle {
     status: 'available' | 'rented' | 'maintenance' | 'retired'
     daily_rate: number
     category?: 'exotic' | 'urban' | 'aziendali'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata: Record<string, any> | null
     created_at: string
     updated_at: string
@@ -44,6 +46,8 @@ export interface Booking {
     dropoff_date: string
     status: string
     service_type?: string
+    payment_method?: string | null
+    payment_status?: string | null
 }
 
 export interface AvailabilityResult {
@@ -66,24 +70,27 @@ function normalizePlate(plate: string | null | undefined): string {
  */
 export function matchVehicleByPlate(booking: Booking, vehicle: Vehicle): boolean {
     // First try vehicle_id (most reliable) - check both top-level and booking_details
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bookingVehicleId = booking.vehicle_id || (booking as any).booking_details?.vehicle_id
     if (bookingVehicleId && bookingVehicleId === vehicle.id) {
-        console.log(`[matchVehicleByPlate] MATCH by vehicle_id: ${bookingVehicleId} === ${vehicle.id}`)
+        logger.log(`[matchVehicleByPlate] MATCH by vehicle_id: ${bookingVehicleId} === ${vehicle.id}`)
         return true
     }
 
     // Then try plate matching - check both top-level and booking_details
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bookingPlate = normalizePlate(booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate)
     const vehiclePlate = normalizePlate(vehicle.plate || vehicle.targa)
 
     if (bookingPlate && vehiclePlate && bookingPlate === vehiclePlate) {
-        console.log(`[matchVehicleByPlate] MATCH by plate: ${bookingPlate} === ${vehiclePlate}`)
+        logger.log(`[matchVehicleByPlate] MATCH by plate: ${bookingPlate} === ${vehiclePlate}`)
         return true
     }
 
     // Debug: log when no match found
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate) {
-        console.log(`[matchVehicleByPlate] NO MATCH: booking plate=${bookingPlate}, vehicle plate=${vehiclePlate}, booking_id=${booking.id?.substring(0,8)}`)
+        logger.log(`[matchVehicleByPlate] NO MATCH: booking plate=${bookingPlate}, vehicle plate=${vehiclePlate}, booking_id=${booking.id?.substring(0,8)}`)
     }
 
     // NO fallback to name matching - this is forbidden
@@ -186,6 +193,7 @@ export function getEarliestValidPickupTime(
     const vehicleBookings = existingBookings.filter(booking => {
         if (excludeBookingId && booking.id === excludeBookingId) return false
         if (booking.status === 'cancelled') return false
+        // Pending Nexi Pay by Link bookings BLOCK the slot for 1 hour while awaiting payment
         return matchVehicleByPlate(booking, vehicle)
     })
 
@@ -255,7 +263,6 @@ export function isVehicleAvailable(
 
     // Check vehicle status
     if (vehicle.status === 'retired' || vehicle.status === 'maintenance') {
-        console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - STATUS: ${vehicle.status}`)
         return {
             available: false,
             reason: `Vehicle is marked as ${vehicle.status}`
@@ -264,7 +271,6 @@ export function isVehicleAvailable(
 
     // Check for maintenance blocks
     if (isVehicleBlocked(vehicle, pickupDate, returnDate, pickupTime, returnTime)) {
-        console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - MAINTENANCE BLOCK: ${vehicle.metadata?.unavailable_from} to ${vehicle.metadata?.unavailable_until}`)
         return {
             available: false,
             reason: 'Vehicle is blocked for maintenance during this period'
@@ -297,26 +303,27 @@ export function isVehicleAvailable(
 
     // Check for booking conflicts
     // CRITICAL: Only check bookings that can be definitively matched to this specific vehicle
-    console.log(`[AVAILABILITY CHECK] Starting filter for vehicle ${vehicle.display_name}, excludeBookingId:`, excludeBookingId)
-    console.log(`[AVAILABILITY CHECK] Total bookings to check:`, existingBookings.length)
+    logger.log(`[AVAILABILITY CHECK] Starting filter for vehicle ${vehicle.display_name}, excludeBookingId:`, excludeBookingId)
+    logger.log(`[AVAILABILITY CHECK] Total bookings to check:`, existingBookings.length)
 
     const vehicleBookings = existingBookings.filter(booking => {
         // Skip the booking we're editing
         if (excludeBookingId && booking.id === excludeBookingId) {
-            console.log('[AVAILABILITY CHECK] ⏭️ Skipping current booking being edited:', booking.id)
             return false
         }
 
         // Skip cancelled bookings
         if (booking.status === 'cancelled') return false
+        // Skip pending Nexi Pay by Link bookings (awaiting payment)
+        if (booking.payment_method === 'Nexi Pay by Link' && booking.payment_status === 'pending') return false
 
         // CRITICAL: Skip linked car wash bookings when extending a rental
         // Car wash bookings are automatically created/updated, so they shouldn't block extensions
         if (excludeBookingId && booking.service_type === 'car_wash') {
-            console.log('[CAR WASH CHECK] Found car wash booking:', booking.id, 'customer:', booking.customer_name)
+            logger.log('[CAR WASH CHECK] Found car wash booking:', booking.id, 'customer:', booking.customer_name)
             // Find the booking being extended to check if this car wash is linked to it
             const editingBooking = existingBookings.find(b => b.id === excludeBookingId)
-            console.log('[CAR WASH CHECK] Editing booking:', editingBooking?.id, 'customer:', editingBooking?.customer_name)
+            logger.log('[CAR WASH CHECK] Editing booking:', editingBooking?.id, 'customer:', editingBooking?.customer_name)
 
             // Check if this car wash is for the same vehicle (by plate or vehicle_id only, NEVER by name)
             const bPlate = normalizePlate(booking.vehicle_plate)
@@ -325,11 +332,9 @@ export function isVehicleAvailable(
                 (booking.vehicle_id && editingBooking?.vehicle_id && booking.vehicle_id === editingBooking.vehicle_id)
 
             if (editingBooking && sameVehicle) {
-                console.log('[CAR WASH CHECK] ✅ EXCLUDING car wash booking for same vehicle', booking.id)
                 // This car wash is for the same vehicle being extended, skip it
                 return false
             }
-            console.log('[CAR WASH CHECK] ❌ NOT excluding car wash - different vehicle')
         }
 
         // CRITICAL: Only include bookings that can be matched to this vehicle by plate
@@ -337,13 +342,13 @@ export function isVehicleAvailable(
         return matchVehicleByPlate(booking, vehicle)
     })
 
-    console.log(`[AVAILABILITY CHECK] After filtering: ${vehicleBookings.length} bookings to check for conflicts`)
+    logger.log(`[AVAILABILITY CHECK] After filtering: ${vehicleBookings.length} bookings to check for conflicts`)
 
     // Log ALL matched bookings for this vehicle to help debug
     if (vehicleBookings.length > 0) {
-        console.log(`[AVAILABILITY CHECK] Bookings matched to ${vehicle.display_name} (${vehiclePlate}):`)
+        logger.log(`[AVAILABILITY CHECK] Bookings matched to ${vehicle.display_name} (${vehiclePlate}):`)
         vehicleBookings.forEach((b, i) => {
-            console.log(`  ${i + 1}. ID: ${b.id?.substring(0, 8)} | ${new Date(b.pickup_date).toLocaleDateString('it-IT')} → ${new Date(b.dropoff_date).toLocaleDateString('it-IT')} | Customer: ${b.customer_name} | Status: ${b.status} | Plate: ${b.vehicle_plate || 'N/A'}`)
+            logger.log(`  ${i + 1}. ID: ${b.id?.substring(0, 8)} | ${new Date(b.pickup_date).toLocaleDateString('it-IT')} → ${new Date(b.dropoff_date).toLocaleDateString('it-IT')} | Customer: ${b.customer_name} | Status: ${b.status} | Plate: ${b.vehicle_plate || 'N/A'}`)
         })
     }
 
@@ -359,16 +364,6 @@ export function isVehicleAvailable(
         if (requestStart < bookingEndWithBuffer && requestEnd > bookingStart) {
             const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
 
-            console.log(`[isVehicleAvailable] ❌ ${vehicle.display_name} (${vehiclePlate}) - BOOKING CONFLICT with booking ${booking.id?.substring(0,8)}:`, {
-                bookingPeriod: `${bookingStart.toISOString()} → ${bookingEnd.toISOString()}`,
-                requestedPeriod: `${requestStart.toISOString()} → ${requestEnd.toISOString()}`,
-                customer: booking.customer_name,
-                matchedBy: booking.vehicle_id === vehicle.id ? `vehicle_id: ${booking.vehicle_id}` :
-                           `plate: ${booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate}`,
-                bookingStatus: booking.status,
-                serviceType: booking.service_type || 'rental'
-            })
-
             return {
                 available: false,
                 reason: `Vehicle is booked until ${bookingEnd.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}. Earliest available: ${earliestTime ? earliestTime.toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) : 'not today'}`,
@@ -377,7 +372,6 @@ export function isVehicleAvailable(
         }
     }
 
-    console.log(`[isVehicleAvailable] ✅ ${vehicle.display_name} (${vehiclePlate}) - AVAILABLE`)
     return { available: true }
 }
 

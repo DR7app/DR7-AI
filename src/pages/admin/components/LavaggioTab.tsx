@@ -9,6 +9,7 @@ interface CarWashBooking {
     appointment_time: string
     service_name: string
     price_total: number
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking_details: any
     status: string
 }

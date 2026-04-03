@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
@@ -17,7 +18,7 @@ function normalizePhone(phone: string): string {
 
 const handler: Handler = async (event) => {
   const headers = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
@@ -89,7 +90,7 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const message = `🔐 *DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP: *${code}*\n\nScade tra 5 minuti.\nNon condividere questo codice con nessuno.`;
+    const message = `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP: *${code}*\n\nScade tra 5 minuti.\nNon condividere questo codice con nessuno.`;
 
     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
@@ -98,7 +99,7 @@ const handler: Handler = async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chatId: `${normalizedPhone}@c.us`,
-        message,
+        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
       }),
     });
 

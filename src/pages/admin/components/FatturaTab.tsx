@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface Invoice {
   id: string
@@ -25,6 +26,7 @@ interface Invoice {
   sdi_status?: 'draft' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'scartata' | 'error'
   sdi_id?: string
   sdi_sent_at?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sdi_response?: any
   customer_sdi_code?: string
   customer_pec?: string
@@ -79,6 +81,7 @@ export default function FatturaTab() {
     try {
       const { error } = await supabase.from('fatture').delete().eq('id', id)
       if (error) throw error
+      logAdminAction('delete_fattura', 'fattura', id)
       loadInvoices()
     } catch (error) {
       console.error('Error deleting invoice:', error)
@@ -192,6 +195,8 @@ export default function FatturaTab() {
 
       if (!response.ok) {
         console.error('SDI send failed:', result.error, result.details)
+      } else {
+        logAdminAction('send_sdi', 'fattura', invoice.id)
       }
 
       loadInvoices()
@@ -340,13 +345,21 @@ export default function FatturaTab() {
                       {invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata' ? 'Reinvia SDI' : 'Invia SDI'}
                     </button>
                   ) : (
-                    <button
-                      onClick={() => handleCheckStatus(invoice.id)}
-                      disabled={checkingStatus === invoice.id}
-                      className="bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
-                    >
-                      {checkingStatus === invoice.id ? 'Controllo...' : 'Stato SDI'}
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleCheckStatus(invoice.id)}
+                        disabled={checkingStatus === invoice.id}
+                        className="bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
+                      >
+                        {checkingStatus === invoice.id ? 'Controllo...' : 'Stato SDI'}
+                      </button>
+                      <button
+                        onClick={() => handleSendToSDI(invoice)}
+                        className="bg-orange-600 hover:bg-orange-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
+                      >
+                        Reinvia SDI
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => handleDelete(invoice.id)}

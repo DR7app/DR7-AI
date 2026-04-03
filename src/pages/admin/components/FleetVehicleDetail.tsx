@@ -29,6 +29,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
     useEffect(() => {
         loadVehicle()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [vehicleId])
 
     async function loadVehicle() {
@@ -73,6 +74,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function updateField(field: keyof Vehicle, value: any) {
         setEditedVehicle(prev => ({ ...prev, [field]: value }))
     }
@@ -269,7 +271,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
             <div className="flex gap-2 mb-6 border-b border-theme-border pb-2 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('dashboard')}
-                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'dashboard' ? 'bg-dr7-gold text-black font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
+                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'dashboard' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
                 >
                     Cruscotto
                     {alerts.length > 0 && (
@@ -278,19 +280,19 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                 </button>
                 <button
                     onClick={() => setActiveTab('maintenance')}
-                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'maintenance' ? 'bg-dr7-gold text-black font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
+                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'maintenance' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
                 >
                     Manutenzione (KM)
                 </button>
                 <button
                     onClick={() => setActiveTab('details')}
-                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'details' ? 'bg-dr7-gold text-black font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
+                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'details' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
                 >
                     Scadenze (Date)
                 </button>
                 <button
                     onClick={() => setActiveTab('history')}
-                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'history' ? 'bg-dr7-gold text-black font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
+                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'history' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
                 >
                     Storico
                 </button>
@@ -469,7 +471,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                     <h4 className="text-lg font-bold text-theme-text-primary">Gomme</h4>
                                     <button
                                         onClick={() => {
-                                            const tireInfo = editedVehicle.metadata?.tire_specs || {}
+                                            const tireInfo = (editedVehicle.metadata?.tire_specs || {}) as Record<string, string>
                                             const subject = encodeURIComponent(`Ordine Gomme - ${editedVehicle.display_name} (${editedVehicle.plate})`)
                                             const body = encodeURIComponent(
                                                 `Buongiorno,\n\n` +
@@ -738,6 +740,26 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                             value={editedVehicle.daily_rate || 0}
                                             onChange={(e) => updateField('daily_rate', parseFloat(e.target.value) || 0)}
                                             className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-theme-text-secondary text-sm mb-2">Prezzo Residenti (€/giorno)</label>
+                                        <input
+                                            type="number"
+                                            value={editedVehicle.price_resident_daily ?? ''}
+                                            onChange={(e) => updateField('price_resident_daily', e.target.value ? parseFloat(e.target.value) : null)}
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            placeholder="Es. 349"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-theme-text-secondary text-sm mb-2">Prezzo Non Residenti (€/giorno)</label>
+                                        <input
+                                            type="number"
+                                            value={editedVehicle.price_nonresident_daily ?? ''}
+                                            onChange={(e) => updateField('price_nonresident_daily', e.target.value ? parseFloat(e.target.value) : null)}
+                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                            placeholder="Es. 449"
                                         />
                                     </div>
                                 </div>

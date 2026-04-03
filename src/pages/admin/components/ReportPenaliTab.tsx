@@ -38,8 +38,9 @@ export default function ReportPenaliTab() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Errore nel caricamento')
       setData(json)
-    } catch (err: any) {
-      setError(err.message || 'Errore sconosciuto')
+    } catch (err: unknown) {
+      const _errMsg = err instanceof Error ? err.message : String(err)
+      setError(_errMsg || 'Errore sconosciuto')
     } finally {
       setLoading(false)
     }

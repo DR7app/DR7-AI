@@ -443,6 +443,19 @@ export const handler: Handler = async (event) => {
             } catch (waErr: any) {
                 console.error('[signature-complete] WhatsApp send failed:', waErr.message)
             }
+
+            // Send signed contract notification to admin via CallMeBot
+            // (Green API can't send to its own number, so we use CallMeBot for text notification)
+            try {
+                const ADMIN_PHONE = '393457905205'
+                const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY || '6526748'
+                const adminMsg = `✅ CONTRATTO FIRMATO\n\n${docIdentifier} firmato da ${sigRequest.signer_name || 'cliente'}\n\nScarica PDF:\n${signedPdfUrl}`
+                const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${ADMIN_PHONE}&text=${encodeURIComponent(adminMsg)}&apikey=${CALLMEBOT_API_KEY}`
+                const adminRes = await fetch(callmebotUrl)
+                console.log('[signature-complete] Admin CallMeBot notification status:', adminRes.status)
+            } catch (adminErr: any) {
+                console.error('[signature-complete] Failed to send to admin:', adminErr.message)
+            }
         }
 
         // Auto-send to CARGOS (Polizia di Stato) after WhatsApp delivery (only for rental contracts)

@@ -1,28 +1,50 @@
 /**
  * Special Pricing Rules for Specific Clients
+ * Matches website clientPricingRules.ts — keep in sync
  */
 
 export interface SpecialPricingRule {
     customerName: string
+    email: string
     dailyRate: number
-    discountThreshold: number // days
-    discountPercent: number
+    discountTiers: { minDays: number; discount: number }[]
     includesUnlimitedKm: boolean
-    includesKasko: 'base' | 'gold' | 'platinum' | null // Assuming insurance options map to these IDs
+    includesKasko: 'base' | 'gold' | 'platinum' | null
+    excludeCarWash: boolean
+    noDeposit: boolean
+    noCents: boolean
 }
 
-// Check ReservationsTab.tsx or common types for precise insurance option IDs.
-// Based on previous context, IDs seem to be like 'kasko_base', 'kasko_gold' etc.
-// Let's verify standard IDs first, but for now we'll use string literal types.
-
-export const SPECIAL_PRICING_RULES: SpecialPricingRule[] = [
+const SPECIAL_PRICING_RULES: SpecialPricingRule[] = [
     {
         customerName: 'massimo runchina',
-        dailyRate: 305, // €305 fixed per day
-        discountThreshold: 3, // From 3rd day (meaning 3 days or more)
-        discountPercent: 10, // 10% discount
+        email: 'massimorunchina69@gmail.com',
+        dailyRate: 339,
+        discountTiers: [
+            { minDays: 7, discount: 0.20 },   // 7+ days: -20%
+            { minDays: 4, discount: 0.15 },    // 4-6 days: -15%
+            { minDays: 3, discount: 0.10 },    // 3 days: -10%
+        ],
         includesUnlimitedKm: true,
-        includesKasko: 'base' // Maps to KASKO_BASE usually
+        includesKasko: 'base',
+        excludeCarWash: true,
+        noDeposit: true,
+        noCents: true,
+    },
+    {
+        customerName: 'jeanne giraud',
+        email: 'jeannegiraud92@gmail.com',
+        dailyRate: 305,
+        discountTiers: [
+            { minDays: 7, discount: 0.20 },
+            { minDays: 4, discount: 0.15 },
+            { minDays: 3, discount: 0.10 },
+        ],
+        includesUnlimitedKm: true,
+        includesKasko: 'base',
+        excludeCarWash: true,
+        noDeposit: false,
+        noCents: true,
     }
 ]
 
@@ -35,11 +57,19 @@ export const getSpecialPricing = (customerName: string | null | undefined): Spec
 export const calculateSpecialPrice = (rule: SpecialPricingRule, days: number): number => {
     if (days <= 0) return 0
 
-    let total = rule.dailyRate * days // Base calculation: Rate * Days
+    let total = rule.dailyRate * days
 
-    // Apply discount if meeting threshold (e.g. 3 consecutive days)
-    if (days >= rule.discountThreshold) {
-        total = total * (1 - rule.discountPercent / 100)
+    // Apply tiered discount — first matching tier wins (sorted highest minDays first)
+    for (const tier of rule.discountTiers) {
+        if (days >= tier.minDays) {
+            total = total * (1 - tier.discount)
+            break
+        }
+    }
+
+    // Round to whole euros if noCents
+    if (rule.noCents) {
+        total = Math.round(total)
     }
 
     return total

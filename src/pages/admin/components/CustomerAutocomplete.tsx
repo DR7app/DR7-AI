@@ -5,6 +5,7 @@ interface Customer {
     full_name: string
     email: string | null
     phone: string | null
+    scadenza_patente?: string | null
 }
 
 interface CustomerAutocompleteProps {
@@ -163,7 +164,12 @@ export default function CustomerAutocomplete({
                                 : 'hover:bg-theme-bg-secondary/50 border-l-4 border-l-transparent'
                                 }`}
                         >
-                            <div className="font-semibold text-theme-text-primary">{customer.full_name}</div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-semibold text-theme-text-primary">{customer.full_name}</span>
+                                {customer.scadenza_patente && new Date(customer.scadenza_patente) < new Date() && (
+                                    <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/40 rounded text-[10px] font-bold text-red-400 uppercase whitespace-nowrap">Patente scaduta</span>
+                                )}
+                            </div>
                             <div className="text-xs text-theme-text-muted mt-0.5">
                                 {customer.email || customer.phone || 'N/A'}
                             </div>

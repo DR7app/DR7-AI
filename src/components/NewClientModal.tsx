@@ -2,11 +2,14 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity } from '../data/sardegnaProvince'
 import toast from 'react-hot-toast'
+import { logger } from '../utils/logger'
+import CalcolaCFButton from './CalcolaCFButton'
 
 interface NewClientModalProps {
   isOpen: boolean
   onClose: () => void
   onClientCreated?: (clientId: string) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialData?: any // Customer data for editing
 }
 
@@ -49,6 +52,7 @@ interface ClientFormData {
   pec_azienda: string
   nome_rappresentante: string
   cognome_rappresentante: string
+  data_nascita_rappresentante: string
   cf_rappresentante: string
   ruolo_rappresentante: string
   tipo_documento_rappresentante: string
@@ -101,6 +105,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     pec_azienda: '',
     nome_rappresentante: '',
     cognome_rappresentante: '',
+    data_nascita_rappresentante: '',
     cf_rappresentante: '',
     ruolo_rappresentante: '',
     tipo_documento_rappresentante: '',
@@ -123,27 +128,28 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   // Load initial data when editing
   useEffect(() => {
     if (isOpen) {
-      console.log('[NewClientModal] Modal opened. initialData:', initialData)
+      logger.log('[NewClientModal] Modal opened. initialData:', initialData)
       if (initialData) {
-        console.log('[NewClientModal] Populating modal with data:', initialData)
-        console.log('[NewClientModal] initialData.id:', initialData.id)
+        logger.log('[NewClientModal] Populating modal with data:', initialData)
+        logger.log('[NewClientModal] initialData.id:', initialData.id)
 
         // CRITICAL: Check if this is a "new" customer placeholder from booking
         // If so, we want to CREATE a new record, not update the temp ID
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if ((initialData as any)._isNew) {
-          console.log('[NewClientModal] _isNew flag detected -> Force CREATE mode')
+          logger.log('[NewClientModal] _isNew flag detected -> Force CREATE mode')
           setEditingId(null) // Force create mode
         } else {
           // If ID is a temp placeholder (starts with "temp-"), treat as CREATE 
           // so we get a real UUID from DB. 
           // The dedupe logic in CustomersTab will then hide the temp one.
           if (initialData.id && String(initialData.id).startsWith('temp-')) {
-            console.log('[NewClientModal] Temp ID detected -> Force CREATE mode to generate real UUID')
+            logger.log('[NewClientModal] Temp ID detected -> Force CREATE mode to generate real UUID')
             setEditingId(null)
           } else {
             // Real UUID -> UPDATE mode
             setEditingId(initialData.id || null)
-            console.log('[NewClientModal] Setting editingId to:', initialData.id)
+            logger.log('[NewClientModal] Setting editingId to:', initialData.id)
           }
         }
 
@@ -179,6 +185,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           pec_azienda: initialData.tipo_cliente === 'azienda' ? (initialData.pec || '') : '',
           nome_rappresentante: initialData.nome_rappresentante || '',
           cognome_rappresentante: initialData.cognome_rappresentante || '',
+          data_nascita_rappresentante: initialData.data_nascita_rappresentante || '',
           cf_rappresentante: initialData.cf_rappresentante || '',
           ruolo_rappresentante: initialData.ruolo_rappresentante || '',
           tipo_documento_rappresentante: initialData.tipo_documento_rappresentante || '',
@@ -229,6 +236,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           pec_azienda: '',
           nome_rappresentante: '',
           cognome_rappresentante: '',
+          data_nascita_rappresentante: '',
           cf_rappresentante: '',
           ruolo_rappresentante: '',
           tipo_documento_rappresentante: '',
@@ -329,11 +337,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       }
       if (!formData.sede_legale) newErrors.sede_legale = 'Sede legale obbligatoria'
 
-      // Optional CF validation if provided
-      if (formData.cf_azienda && !validateCodiceFiscale(formData.cf_azienda)) {
-        newErrors.cf_azienda = 'Codice Fiscale non valido (16 caratteri)'
-      }
-
       // Legal representative validations
       if (!formData.nome_rappresentante) newErrors.nome_rappresentante = 'Nome rappresentante obbligatorio'
       if (!formData.cognome_rappresentante) newErrors.cognome_rappresentante = 'Cognome rappresentante obbligatorio'
@@ -364,9 +367,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   }
 
   const handleSave = async () => {
-    console.log('[NewClientModal] HandleSave triggered. FormData:', formData)
+    logger.log('[NewClientModal] HandleSave triggered. FormData:', formData)
     if (!validateForm()) {
-      console.log('[NewClientModal] Validation failed. Errors:', errors)
+      logger.log('[NewClientModal] Validation failed. Errors:', errors)
       return
     }
 
@@ -375,6 +378,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       // Auto-detect residence status based on provincia/città di residenza
       const residenceStatus = getResidenceStatus(formData.provincia_residenza, formData.citta_residenza)
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const customerData: any = {
         tipo_cliente: formData.tipo_cliente,
         email: formData.email,
@@ -423,6 +427,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         // Legal representative information
         customerData.nome_rappresentante = formData.nome_rappresentante
         customerData.cognome_rappresentante = formData.cognome_rappresentante
+        if (formData.data_nascita_rappresentante) customerData.data_nascita_rappresentante = formData.data_nascita_rappresentante
         customerData.cf_rappresentante = formData.cf_rappresentante.toUpperCase()
         if (formData.ruolo_rappresentante) customerData.ruolo_rappresentante = formData.ruolo_rappresentante
         if (formData.tipo_documento_rappresentante) customerData.tipo_documento_rappresentante = formData.tipo_documento_rappresentante
@@ -447,8 +452,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         if (formData.pec_pa) customerData.pec = formData.pec_pa
       }
 
-      console.log('[NewClientModal] Saving customer. editingId:', editingId)
-      console.log('[NewClientModal] Customer data to save:', customerData)
+      logger.log('[NewClientModal] Saving customer. editingId:', editingId)
+      logger.log('[NewClientModal] Customer data to save:', customerData)
 
       let result
       if (editingId) {
@@ -522,6 +527,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       pec_azienda: '',
       nome_rappresentante: '',
       cognome_rappresentante: '',
+      data_nascita_rappresentante: '',
       cf_rappresentante: '',
       ruolo_rappresentante: '',
       tipo_documento_rappresentante: '',
@@ -548,16 +554,17 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       email: !!formData.email && validateEmail(formData.email),
       phone: !!formData.telefono && validateItalianPhone(formData.telefono),
       nazione: !!formData.nazione,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       type_checks: {} as any
     }
 
     // Check global fields
     if (!formData.email || !formData.telefono || !formData.nazione) {
-      console.log('[NewClientModal] Save disabled: Missing global fields', validationStatus)
+      logger.log('[NewClientModal] Save disabled: Missing global fields', validationStatus)
       return true
     }
     if (!validateEmail(formData.email) || !validateItalianPhone(formData.telefono)) {
-      console.log('[NewClientModal] Save disabled: Invalid email or phone', validationStatus)
+      logger.log('[NewClientModal] Save disabled: Invalid email or phone', validationStatus)
       return true
     }
 
@@ -574,7 +581,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
       // RELAXED VALIDATION: Address fields are now optional for saving
       if (!formData.nome || !formData.cognome || cfRequired) {
-        console.log('[NewClientModal] Save disabled: Missing persona_fisica fields', validationStatus)
+        logger.log('[NewClientModal] Save disabled: Missing persona_fisica fields', validationStatus)
         return true
       }
     }
@@ -587,7 +594,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
       // RELAXED VALIDATION: Only Require Denominazione and P.IVA
       if (!formData.denominazione || !formData.partita_iva) {
-        console.log('[NewClientModal] Save disabled: Missing azienda fields', validationStatus)
+        logger.log('[NewClientModal] Save disabled: Missing azienda fields', validationStatus)
         return true
       }
     }
@@ -698,14 +705,29 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Codice Fiscale {formData.nazione === 'Italia' ? '*' : '(opzionale)'}
                   </label>
-                  <input
-                    type="text"
-                    value={formData.codice_fiscale}
-                    onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
-                    maxLength={16}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
-                    placeholder="RSSMRA80A01H501U"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={formData.codice_fiscale}
+                      onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
+                      maxLength={16}
+                      className="flex-1 px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+                      placeholder="RSSMRA80A01H501U"
+                    />
+                    <CalcolaCFButton config={{
+                      getCognome: () => formData.cognome,
+                      getNome: () => formData.nome,
+                      getDataNascita: () => formData.data_nascita,
+                      getSesso: () => formData.sesso,
+                      getLuogoNascita: () => formData.citta_nascita,
+                      getCodiceFiscale: () => formData.codice_fiscale,
+                      setCodiceFiscale: (v) => setFormData(p => ({ ...p, codice_fiscale: v })),
+                      setSesso: (v) => setFormData(p => ({ ...p, sesso: v })),
+                      setDataNascita: (v) => setFormData(p => ({ ...p, data_nascita: v })),
+                      setLuogoNascita: (v) => setFormData(p => ({ ...p, citta_nascita: v })),
+                      setProvinciaNascita: (v) => setFormData(p => ({ ...p, provincia_nascita: v })),
+                    }} />
+                  </div>
                   {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
                 </div>
                 <div>
@@ -971,19 +993,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   />
                   {errors.partita_iva && <p className="text-red-500 text-xs mt-1">{errors.partita_iva}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Codice Fiscale
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.cf_azienda}
-                    onChange={(e) => setFormData({ ...formData, cf_azienda: e.target.value.toUpperCase() })}
-                    maxLength={16}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
-                  />
-                  {errors.cf_azienda && <p className="text-red-500 text-xs mt-1">{errors.cf_azienda}</p>}
-                </div>
+                <div></div>
               </div>
 
               <div>
@@ -1070,7 +1080,18 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                      Data di Nascita
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.data_nascita_rappresentante}
+                      onChange={(e) => setFormData({ ...formData, data_nascita_rappresentante: e.target.value })}
+                      className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Codice Fiscale *

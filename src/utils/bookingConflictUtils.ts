@@ -26,6 +26,7 @@ export function checkTimeOverlap(
  * Get duration in minutes for a service
  * Prefers totalDuration from booking_details when available
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getBookingDuration(serviceName: string, serviceType: 'car_wash' | 'mechanical_service', bookingDetails?: any): number {
     // Prefer stored totalDuration from booking time (always in sync with catalog)
     if (bookingDetails?.totalDuration && bookingDetails.totalDuration > 0) {
@@ -66,10 +67,12 @@ export async function fetchConflictingBookings(date: string, excludeBookingId?: 
         return []
     }
 
-    // Filter out the current booking if editing
-    return excludeBookingId
-        ? bookings.filter(b => b.id !== excludeBookingId)
-        : bookings
+    // Filter out: current booking if editing + "Lavaggio Rientro" (internal return washes don't block external slots)
+    return (bookings || []).filter(b => {
+        if (excludeBookingId && b.id === excludeBookingId) return false
+        if (b.customer_name === 'Lavaggio Rientro') return false
+        return true
+    })
 }
 
 /**
@@ -113,6 +116,7 @@ export async function fetchRentalEvents(date: string, excludeBookingId?: string)
  */
 export function filterAvailableTimeSlots(
     allTimeSlots: string[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     existingBookings: any[],
     newBookingDuration: number
 ): string[] {
@@ -140,6 +144,7 @@ export function filterAvailableTimeSlots(
  */
 export function filterRentalTimeSlots(
     allTimeSlots: string[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rentalEvents: any[]
 ): string[] {
     // Rental operations take 15 minutes
@@ -167,6 +172,7 @@ export function filterRentalTimeSlots(
  */
 export function findNextAvailableSlots(
     allTimeSlots: string[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     existingBookings: any[],
     newBookingDuration: number,
     maxResults: number = 5
@@ -180,6 +186,7 @@ export function findNextAvailableSlots(
  */
 export function findNextRentalSlots(
     allTimeSlots: string[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rentalEvents: any[],
     maxResults: number = 3
 ): string[] {

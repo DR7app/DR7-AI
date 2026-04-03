@@ -39,8 +39,19 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
     const month = parts[1].padStart(2, '0');
     const year = parts[2];
 
-    // Validate
+    // Validate format
     if (day.length !== 2 || month.length !== 2 || year.length !== 4) return '';
+
+    // Validate logical date values
+    const d = parseInt(day, 10);
+    const m = parseInt(month, 10);
+    const y = parseInt(year, 10);
+    if (isNaN(d) || isNaN(m) || isNaN(y)) return '';
+    if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > 2100) return '';
+
+    // Validate the actual date (handles months with less than 31 days, leap years)
+    const testDate = new Date(y, m - 1, d);
+    if (testDate.getFullYear() !== y || testDate.getMonth() !== m - 1 || testDate.getDate() !== d) return '';
 
     return `${year}-${month}-${day}`;
   };

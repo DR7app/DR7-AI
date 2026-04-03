@@ -1,3 +1,4 @@
+import { getCorsOrigin } from './cors-headers'
 import type { Handler } from "@netlify/functions";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
@@ -37,7 +38,7 @@ const conversationHistory: Map<string, Array<{role: string, content: string}>> =
 const handler: Handler = async (event) => {
   // CORS headers
   const headers = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": getCorsOrigin(event.headers.origin),
     "Access-Control-Allow-Headers": "Content-Type",
     "Content-Type": "application/json",
   };
@@ -187,7 +188,7 @@ async function sendWhatsAppMessage(chatId: string, message: string): Promise<boo
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chatId: chatId,
-        message: message,
+        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
       }),
     });
 

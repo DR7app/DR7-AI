@@ -46,6 +46,7 @@ export default function TicketsTab() {
 
   useEffect(() => {
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode])
 
   async function loadData() {

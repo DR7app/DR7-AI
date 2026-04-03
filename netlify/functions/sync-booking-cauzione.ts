@@ -30,11 +30,11 @@ export const handler: Handler = async (event) => {
 
         console.log('🔄 Syncing cauzione for booking:', bookingId)
 
-        // Validate required fields
-        if (!bookingId || !customerId || !vehicleId || !returnDate) {
+        // Validate required fields (customerId and vehicleId only required for new cauzioni)
+        if (!bookingId || !returnDate) {
             return {
                 statusCode: 400,
-                body: JSON.stringify({ error: 'Missing required fields' })
+                body: JSON.stringify({ error: 'Missing required fields: bookingId and returnDate are required' })
             }
         }
 
@@ -61,16 +61,44 @@ export const handler: Handler = async (event) => {
         }
 
         // Check if cauzione already exists for this booking
-        const { data: existingCauzione, error: fetchError } = await supabase
+        let existingCauzione: any = null
+        let fetchError: any = null
+
+        // First try matching by booking ID
+        const { data: byBooking, error: byBookingErr } = await supabase
             .from('cauzioni')
             .select('*')
             .eq('riferimento_contratto_id', bookingId)
             .maybeSingle()
 
-        if (fetchError) {
-            console.error('Error fetching existing cauzione:', fetchError)
-            throw new Error(`Failed to fetch existing cauzione: ${fetchError.message}`)
+        if (byBookingErr && byBookingErr.code !== 'PGRST116') {
+            console.error('Error fetching cauzione by booking:', byBookingErr)
         }
+
+        existingCauzione = byBooking
+
+        // If not found by booking, try matching by customer ID (cauzioni follow the client)
+        if (!existingCauzione && customerId) {
+            const { data: byCustomer, error: byCustomerErr } = await supabase
+                .from('cauzioni')
+                .select('*')
+                .eq('cliente_id', customerId)
+                .not('stato', 'in', '("Restituita","Sbloccata")')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+
+            if (byCustomerErr && byCustomerErr.code !== 'PGRST116') {
+                console.error('Error fetching cauzione by customer:', byCustomerErr)
+            }
+
+            if (byCustomer) {
+                existingCauzione = byCustomer
+                console.log(`📌 Found cauzione by cliente_id instead of bookingId: ${byCustomer.id}`)
+            }
+        }
+
+        fetchError = null // handled above
 
         // Determine payment method based on booking payment method
         let cauzioneMetodo: 'bonifico' | 'carta' | 'preautorizzazione' = paymentMethod || 'carta'
@@ -82,6 +110,29 @@ export const handler: Handler = async (event) => {
             cauzioneMetodo = 'bonifico'
         }
 
+        // Calculate scadenza: 14 business days starting the day after return
+        function calcScadenza(returnDateStr: string): string {
+            const returnD = new Date(returnDateStr)
+            let current = new Date(returnD)
+            current.setDate(current.getDate() + 1) // start day after return
+            let businessDays = 0
+            // skip to first weekday if starting on weekend
+            while (current.getDay() === 0 || current.getDay() === 6) {
+                current.setDate(current.getDate() + 1)
+            }
+            businessDays = 1
+            while (businessDays < 14) {
+                current.setDate(current.getDate() + 1)
+                if (current.getDay() !== 0 && current.getDay() !== 6) {
+                    businessDays++
+                }
+            }
+            return current.toISOString().split('T')[0]
+        }
+
+        const scadenzaDate = calcScadenza(returnDate)
+        console.log(`📅 Calculated scadenza: ${scadenzaDate} (14 business days after ${returnDate})`)
+
         const cauzioneData: Record<string, any> = {
             cliente_id: customerId,
             veicolo_id: vehicleId,
@@ -89,19 +140,34 @@ export const handler: Handler = async (event) => {
             data_restituzione_veicolo: returnDate,
             importo: depositAmount,
             metodo: cauzioneMetodo,
-            // scadenza_cauzione will be auto-calculated by database trigger
-            // stato will be auto-calculated by database trigger
+            scadenza_cauzione: scadenzaDate,
             // Set data_incasso when deposit is marked as collected
             data_incasso: depositStatus === 'incassata' ? new Date().toISOString() : null,
         }
 
         if (existingCauzione) {
-            // Update existing cauzione
+            // Update existing cauzione — only update return date and amount, don't reset incasso status
             console.log('📝 Updating existing cauzione:', existingCauzione.id)
+
+            const updateData: Record<string, any> = {
+                data_restituzione_veicolo: returnDate,
+                scadenza_cauzione: scadenzaDate,
+                riferimento_contratto_id: bookingId,
+                updated_at: new Date().toISOString(),
+            }
+            // Only update these if explicitly provided
+            if (customerId) updateData.cliente_id = customerId
+            if (vehicleId) updateData.veicolo_id = vehicleId
+            if (depositAmount > 0) updateData.importo = depositAmount
+            if (paymentMethod) updateData.metodo = cauzioneMetodo
+            // Only update data_incasso if explicitly setting to incassata, never reset an existing incasso
+            if (depositStatus === 'incassata' && !existingCauzione.data_incasso) {
+                updateData.data_incasso = new Date().toISOString()
+            }
 
             const { data: updatedCauzione, error: updateError } = await supabase
                 .from('cauzioni')
-                .update(cauzioneData)
+                .update(updateData)
                 .eq('id', existingCauzione.id)
                 .select()
                 .single()
@@ -122,7 +188,13 @@ export const handler: Handler = async (event) => {
                 })
             }
         } else {
-            // Create new cauzione
+            // Create new cauzione — customerId and vehicleId are required
+            if (!customerId || !vehicleId) {
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({ error: 'Missing customerId or vehicleId for new cauzione' })
+                }
+            }
             console.log('➕ Creating new cauzione for booking:', bookingId)
 
             const { data: newCauzione, error: insertError } = await supabase

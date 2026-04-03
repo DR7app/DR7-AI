@@ -1,3 +1,5 @@
+import { logger } from './logger'
+
 /**
  * Timezone Utilities for Europe/Rome
  * 
@@ -24,16 +26,16 @@ const ROME_TIMEZONE = 'Europe/Rome'
  * @example
  * // UTC: Jan 9, 2026 10:00 PM → Rome: Jan 9, 2026 11:00 PM (UTC+1 in winter)
  * const date = parseUTCToRome("2026-01-09T22:00:00Z")
- * console.log(date.getDate()) // 9
+ * logger.log(date.getDate()) // 9
  * 
  * @example
  * // UTC: Jan 9, 2026 11:00 PM → Rome: Jan 10, 2026 12:00 AM (next day!)
  * const date = parseUTCToRome("2026-01-09T23:00:00Z")
- * console.log(date.getDate()) // 10
+ * logger.log(date.getDate()) // 10
  */
 export function parseUTCToRome(utcString: string): Date {
     if (!utcString) {
-        console.warn('parseUTCToRome: Empty string provided, returning current date')
+        logger.warn('parseUTCToRome: Empty string provided, returning current date')
         return new Date()
     }
 
@@ -167,7 +169,8 @@ export function createRomeDate(
     const ROME_TIMEZONE = 'Europe/Rome'
 
     // Start with a reasonable UTC guess (subtract typical offset of 1-2 hours)
-    let utcGuess = new Date(Date.UTC(year, month - 1, day, hour - 2, minute, second))
+    // Use -1 as a middle ground between UTC+1 (winter) and UTC+2 (summer)
+    let utcGuess = new Date(Date.UTC(year, month - 1, day, hour - 1, minute, second))
 
     const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: ROME_TIMEZONE,
@@ -200,13 +203,6 @@ export function createRomeDate(
         if (romeYear === year && romeMonth === month && romeDay === day &&
             romeHour === hour && romeMinute === minute && romeSecond === second) {
 
-            // Debug logging (can be removed after verification)
-            console.log(`[createRomeDate] ✅ Converted Rome time to UTC:`, {
-                input: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`,
-                utc: utcGuess.toISOString(),
-                iterations: attempt + 1
-            })
-
             return utcGuess
         }
 
@@ -219,7 +215,7 @@ export function createRomeDate(
     }
 
     // Fallback: shouldn't reach here, but return best guess with warning
-    console.warn('[createRomeDate] ⚠️ Failed to converge after 24 iterations, returning best guess')
+    logger.warn('[createRomeDate] ⚠️ Failed to converge after 24 iterations, returning best guess')
     return utcGuess
 }
 
@@ -292,12 +288,12 @@ export function debugTimezone(label: string, utcString: string): void {
     const date = parseUTCToRome(utcString)
     const components = getRomeDateComponents(utcString)
 
-    console.log(`🕐 [TIMEZONE DEBUG] ${label}`)
-    console.log(`   UTC Input:    "${utcString}"`)
-    console.log(`   UTC ISO:      ${date.toISOString()}`)
-    console.log(`   Rome Display: ${formatRomeDate(date)}`)
-    console.log(`   Rome Components: ${components.year}-${String(components.month).padStart(2, '0')}-${String(components.day).padStart(2, '0')} ${String(components.hour).padStart(2, '0')}:${String(components.minute).padStart(2, '0')}`)
-    console.log(`   Rome Day:     ${components.day}`)
+    logger.log(`🕐 [TIMEZONE DEBUG] ${label}`)
+    logger.log(`   UTC Input:    "${utcString}"`)
+    logger.log(`   UTC ISO:      ${date.toISOString()}`)
+    logger.log(`   Rome Display: ${formatRomeDate(date)}`)
+    logger.log(`   Rome Components: ${components.year}-${String(components.month).padStart(2, '0')}-${String(components.day).padStart(2, '0')} ${String(components.hour).padStart(2, '0')}:${String(components.minute).padStart(2, '0')}`)
+    logger.log(`   Rome Day:     ${components.day}`)
 }
 
 /**

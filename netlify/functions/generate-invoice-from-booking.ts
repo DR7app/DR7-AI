@@ -24,7 +24,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId, includeIVA = true, extensionAmount, includeExtensions } = JSON.parse(event.body || '{}')
+        const { bookingId, includeIVA = true, extensionAmount, includePenalties = false, includeExtensions } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return {
@@ -47,9 +47,30 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Guard: never generate fattura for unpaid bookings
+        const paymentStatus = booking.payment_status || ''
+        if (paymentStatus !== 'paid' && paymentStatus !== 'completed' && paymentStatus !== 'succeeded') {
+            console.log(`[Invoice] Skipping — booking ${bookingId} not paid (status: ${paymentStatus})`)
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'Booking non pagato. Fattura non generata.' })
+            }
+        }
+
+        // Guard: never generate fattura for Wallet or Gift Card payments
+        const paymentMethod = (booking.payment_method || '').toLowerCase()
+        if (paymentMethod === 'wallet' || paymentMethod === 'gift card' || paymentMethod === 'gift_card' || paymentMethod === 'credit_wallet' || paymentMethod === 'credit') {
+            console.log(`[Invoice] Skipping — booking ${bookingId} paid via ${booking.payment_method} (no fattura for Wallet/Gift Card)`)
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ message: 'Fattura non prevista per pagamenti con Wallet o Gift Card', skipped: true })
+            }
+        }
+
         // Test vehicle: generate fattura + WhatsApp PDF, but skip SDI
         const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
-        const isTestVehicle = vehicleName === 'test'
+        const vehiclePlate = (booking.vehicle_plate || booking.booking_details?.vehicle_plate || booking.booking_details?.vehicle?.plate || '').toUpperCase()
+        const isTestVehicle = vehicleName === 'test' || vehiclePlate.startsWith('TEST')
 
         // Fetch customer data with robust fallback (Logic from generate-contract.ts)
         const bookingDetails = booking.booking_details || {}
@@ -78,6 +99,7 @@ export const handler: Handler = async (event) => {
         for (const tryId of uniqueIds) {
             if (customerData) break
             console.log(`[Invoice] Trying customer lookup by ID: ${tryId}`)
+            // Try by table PK first
             const { data, error: customerError } = await supabase
                 .from('customers_extended')
                 .select('*')
@@ -87,8 +109,18 @@ export const handler: Handler = async (event) => {
             if (data) {
                 customerData = data
                 console.log(`✅ Found customer by ID: ${tryId}`)
-            } else if (customerError) {
-                console.warn(`Customer fetch error for ID ${tryId}:`, customerError.message)
+            } else {
+                if (customerError) console.warn(`Customer fetch error for ID ${tryId}:`, customerError.message)
+                // Fallback: try by user_id (auth user ID — for website bookings)
+                const { data: dataByUserId } = await supabase
+                    .from('customers_extended')
+                    .select('*')
+                    .eq('user_id', tryId)
+                    .maybeSingle()
+                if (dataByUserId) {
+                    customerData = dataByUserId
+                    console.log(`✅ Found customer by user_id: ${tryId}`)
+                }
             }
         }
 
@@ -108,6 +140,27 @@ export const handler: Handler = async (event) => {
             if (data) {
                 customerData = data
                 console.log('✅ Found customer by Email (extended)')
+            }
+        }
+
+        // 2b. Fallback: Try by customer_name in customers_extended
+        if (!customerData && booking.customer_name) {
+            console.log(`Fallback: Fetching by name from customers_extended: ${booking.customer_name}`)
+            const nameParts = booking.customer_name.trim().split(/\s+/)
+            if (nameParts.length >= 2) {
+                const nome = nameParts.slice(0, -1).join(' ')
+                const cognome = nameParts[nameParts.length - 1]
+                const { data } = await supabase
+                    .from('customers_extended')
+                    .select('*')
+                    .ilike('nome', nome)
+                    .ilike('cognome', cognome)
+                    .limit(1)
+                    .maybeSingle()
+                if (data) {
+                    customerData = data
+                    console.log('✅ Found customer by Name (extended)')
+                }
             }
         }
 
@@ -163,11 +216,11 @@ export const handler: Handler = async (event) => {
         if (customerData) {
             const addressParts = []
             // Check various potential address fields
-            const street = customerData.indirizzo || customerData.address || customerData.street || ''
+            const street = customerData.indirizzo || customerData.sede_legale || customerData.address || customerData.street || ''
             const num = customerData.numero_civico || customerData.streetNumber || ''
-            const zip = customerData.codice_postale || customerData.zipCode || customerData.zip || ''
-            const city = customerData.citta_residenza || customerData.city || ''
-            const prov = (customerData.provincia_residenza || customerData.province || '').toUpperCase().trim()
+            const zip = customerData.codice_postale || customerData.cap || customerData.zipCode || customerData.zip || ''
+            const city = customerData.citta_residenza || customerData.citta || customerData.city || ''
+            const prov = (customerData.provincia_residenza || customerData.provincia || customerData.province || '').toUpperCase().trim()
 
             if (street) {
                 let streetAddress = street
@@ -230,13 +283,13 @@ export const handler: Handler = async (event) => {
                 })
             }
         }
-        if (!taxCode || taxCode.trim() === '') {
+        if (!taxCode && !vatNumber) {
             return {
                 statusCode: 400,
                 body: JSON.stringify({
                     error: 'Client data incomplete',
-                    message: 'Codice Fiscale cliente obbligatorio. Aggiorna il profilo cliente o la prenotazione.',
-                    details: `Tax Code missing. Debug: customerId=${customerId}, customerFound=${!!customerData}, dbCF=${customerData?.codice_fiscale || 'NULL'}, dbPIVA=${customerData?.partita_iva || 'NULL'}`
+                    message: 'Codice Fiscale o Partita IVA obbligatorio. Aggiorna il profilo cliente.',
+                    details: `Tax Code/VAT missing. Debug: customerId=${customerId}, customerFound=${!!customerData}, dbCF=${customerData?.codice_fiscale || 'NULL'}, dbPIVA=${customerData?.partita_iva || 'NULL'}`
                 })
             }
         }
@@ -247,10 +300,23 @@ export const handler: Handler = async (event) => {
         if (!extensionAmount) {
             const { data } = await supabase
                 .from('fatture')
-                .select('id, numero_fattura')
+                .select('id, numero_fattura, sdi_status, aruba_invoice_id')
                 .eq('booking_id', bookingId)
                 .single()
             existingInvoice = data
+
+            // If fattura already exists and was already sent to SDI, return it immediately
+            if (existingInvoice && (existingInvoice.sdi_status === 'sending' || existingInvoice.sdi_status === 'sent' || existingInvoice.sdi_status === 'delivered' || existingInvoice.aruba_invoice_id)) {
+                console.log(`[Invoice] Fattura ${existingInvoice.numero_fattura} already sent to SDI — returning existing`)
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({
+                        error: 'Fattura già inviata a SDI',
+                        invoiceNumber: existingInvoice.numero_fattura,
+                        message: `Fattura ${existingInvoice.numero_fattura} già esistente e inviata a SDI.`
+                    })
+                }
+            }
         }
 
         let invoiceNumber: string
@@ -287,7 +353,14 @@ export const handler: Handler = async (event) => {
         const items = []
         let rentalDays = 1
 
-        if (extensionAmount && extensionAmount > 0) {
+        // When includePenalties is true and main booking is already paid,
+        // skip main items (they already have their own fattura) — only include penalties/danni
+        const mainAlreadyPaid = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
+        const skipMainItems = includePenalties && mainAlreadyPaid
+
+        if (skipMainItems) {
+            // Main booking already invoiced — penalties/danni will be added below
+        } else if (extensionAmount && extensionAmount > 0) {
             // Extension invoice: single line for the additional amount
             const extGross = extensionAmount // Amount in EUR, includes IVA
             const vatRate = includeIVA ? 22 : 0
@@ -369,6 +442,60 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Include pending penalties and danni as line items (for "Segna Pagato Tutto")
+        if (includePenalties) {
+            const vatRate = includeIVA ? 22 : 0
+            const vatDivisor = 1.22
+
+            // Only include PENDING items (not already-paid ones that have their own fattura)
+            const penalties = bookingDetails.penalties || []
+            penalties.forEach((p: any) => {
+                if (p.paymentStatus === 'pending') {
+                    const gross = (p.total || (p.amount || 0) * (p.quantity || 1))
+                    if (gross > 0) {
+                        items.push({
+                            description: `Penale: ${p.label || 'Penale'}`,
+                            unit_price: gross / vatDivisor,
+                            quantity: 1,
+                            vat_rate: vatRate,
+                            total: gross / vatDivisor
+                        })
+                    }
+                }
+            })
+
+            const danni = bookingDetails.danni || []
+            danni.forEach((d: any) => {
+                if (d.paymentStatus === 'pending') {
+                    const gross = (d.total || (d.amount || 0) * (d.quantity || 1))
+                    if (gross > 0) {
+                        items.push({
+                            description: `Danno: ${d.label || 'Danno'}`,
+                            unit_price: gross / vatDivisor,
+                            quantity: 1,
+                            vat_rate: vatRate,
+                            total: gross / vatDivisor
+                        })
+                    }
+                }
+            })
+
+            // Only include PENDING extension amounts
+            const extensions = bookingDetails.extension_history || []
+            extensions.forEach((ext: any) => {
+                if (ext.payment_status === 'pending' && ext.additional_amount) {
+                    const extGross = ext.additional_amount
+                    items.push({
+                        description: `Estensione noleggio ${booking.vehicle_name || ''}`,
+                        unit_price: extGross / vatDivisor,
+                        quantity: 1,
+                        vat_rate: vatRate,
+                        total: extGross / vatDivisor
+                    })
+                }
+            })
+        }
+
         // Include extensions as line items in the same fattura (all extensions, already marked paid)
         if (includeExtensions) {
             const extensions = bookingDetails.extension_history || []
@@ -411,15 +538,25 @@ export const handler: Handler = async (event) => {
 
         const total = subtotal + vatAmount + exemptAmount
 
+        // Skip fattura if total is 0
+        if (total <= 0) {
+            console.log('[Invoice] Total is €0 — skipping fattura generation')
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ message: 'Importo totale €0 — fattura non generata', skipped: true })
+            }
+        }
+
         // Create invoice
         const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
         const invoiceData = {
             numero_fattura: invoiceNumber,
             data_emissione: italyDate,
             importo_totale: total,
-            stato: booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded' ? 'paid' :
+            stato: includePenalties ? 'paid' :
+                (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') ? 'paid' :
                 booking.payment_status === 'pending' ? 'pending' : 'unpaid',
-            customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.fullName || bookingCustomer.fullName || customerData?.nome || 'Cliente',
+            customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || bookingCustomer.fullName || (customerData?.nome ? `${customerData.nome} ${customerData.cognome || ''}`.trim() : null) || 'Cliente',
             customer_address: fullAddress || '',
             customer_phone: customerData?.telefono || customerData?.phone || bookingCustomer.phone || resolvedPhone || '',
             customer_email: customerData?.email || bookingCustomer.email || resolvedEmail || '',

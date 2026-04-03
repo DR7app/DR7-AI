@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
+import { logger } from '../../../utils/logger'
 
 interface CustomerDocumentsProps {
   customerId: string
@@ -88,6 +89,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
   useEffect(() => {
     loadCustomerData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId])
 
   async function loadCustomerData() {
@@ -125,9 +127,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         }
         setPreviewUrls(urls)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error loading customer data:', error)
-      toast.error(`Errore nel caricamento dati: ${error.message}`)
+      toast.error(`Errore nel caricamento dati: ${_errMsg}`)
     } finally {
       setLoading(false)
     }
@@ -157,9 +160,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
         }
         setPreviewUrls(urls)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error loading documents:', error)
-      toast.error(`Errore nel caricamento documenti: ${error.message}`)
+      toast.error(`Errore nel caricamento documenti: ${_errMsg}`)
     }
   }
 
@@ -194,7 +198,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
           upsert: true
         })
 
-      console.log('Upload result:', uploadData)
+      logger.log('Upload result:', uploadData)
       if (uploadError) throw uploadError
 
       // Check if document already exists for this type
@@ -243,9 +247,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
       toast.success('Documento caricato con successo!')
       setSelectedFiles({ ...selectedFiles, [documentType]: null })
       await loadDocuments()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error uploading document:', error)
-      toast.error(`ERRORE nel caricamento: ${error.message}`)
+      toast.error(`ERRORE nel caricamento: ${_errMsg}`)
     } finally {
       setUploading({ ...uploading, [documentType]: false })
     }
@@ -270,9 +275,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
 
       toast.success('Documento eliminato')
       await loadDocuments()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error deleting document:', error)
-      toast.error(`ERRORE nell'eliminazione: ${error.message}`)
+      toast.error(`ERRORE nell'eliminazione: ${_errMsg}`)
     }
   }
 
@@ -392,8 +398,8 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
               onChange={(e) => setSelectedFiles({ ...selectedFiles, [type]: e.target.files?.[0] || null })}
               className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm
                 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0
-                file:text-sm file:font-semibold file:bg-dr7-gold file:text-black
-                hover:file:bg-yellow-500 file:cursor-pointer"
+                file:text-sm file:font-semibold file:bg-dr7-gold file:text-white
+                hover:file:bg-[#247a6f] file:cursor-pointer"
               accept="image/*,.pdf"
               disabled={isUploading}
             />
@@ -481,7 +487,16 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
                         {customerDetails.numero_patente && <div><span className="text-theme-text-muted">Numero:</span> <span className="text-theme-text-primary">{customerDetails.numero_patente}</span></div>}
                         {customerDetails.emessa_da && <div><span className="text-theme-text-muted">Emessa da:</span> <span className="text-theme-text-primary">{customerDetails.emessa_da}</span></div>}
                         {customerDetails.data_rilascio_patente && <div><span className="text-theme-text-muted">Rilascio:</span> <span className="text-theme-text-primary">{new Date(customerDetails.data_rilascio_patente).toLocaleDateString('it-IT')}</span></div>}
-                        {customerDetails.scadenza_patente && <div><span className="text-theme-text-muted">Scadenza:</span> <span className="text-theme-text-primary">{new Date(customerDetails.scadenza_patente).toLocaleDateString('it-IT')}</span></div>}
+                        {customerDetails.scadenza_patente && (() => {
+                          const isExpired = new Date(customerDetails.scadenza_patente) < new Date()
+                          return (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Scadenza:</span>
+                              <span className={isExpired ? 'text-red-400 font-bold' : 'text-theme-text-primary'}>{new Date(customerDetails.scadenza_patente).toLocaleDateString('it-IT')}</span>
+                              {isExpired && <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/40 rounded text-[10px] font-bold text-red-400">SCADUTA</span>}
+                            </div>
+                          )
+                        })()}
                       </div>
                     )}
                   </div>

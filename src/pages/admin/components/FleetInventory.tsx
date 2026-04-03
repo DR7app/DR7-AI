@@ -7,6 +7,7 @@ interface Vehicle {
     display_name: string
     plate: string | null
     category: string | null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata: Record<string, any> | null
 }
 
@@ -135,7 +136,7 @@ export default function FleetInventory() {
             setEditingVehicle(null)
             setEditForm({})
             await loadVehiclesWithInventory()
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error saving inventory:', error)
             toast.error('Errore nel salvataggio')
         } finally {
@@ -171,7 +172,7 @@ export default function FleetInventory() {
 
     function formatPhoneForWhatsApp(phone: string): string {
         // Remove spaces, dashes, and + sign
-        let cleaned = phone.replace(/[\s\-\+]/g, '')
+        let cleaned = phone.replace(/[\s\-+]/g, '')
         // Add Italy prefix if starts with 0
         if (cleaned.startsWith('0')) {
             cleaned = '39' + cleaned.substring(1)

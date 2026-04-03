@@ -54,6 +54,7 @@ export default function ReviewsTab() {
             const now = new Date()
             const completed: CompletedBooking[] = []
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             data?.forEach((b: any) => {
                 let endDateStr = b.dropoff_date
                 if (!endDateStr && b.appointment_date) {
@@ -136,9 +137,10 @@ export default function ReviewsTab() {
             setWaTemplate(waDraft)
             setWaEditing(false)
             toast.success('Template WhatsApp salvato!')
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error saving WhatsApp template:', error)
-            toast.error(`Errore nel salvataggio: ${error.message}`)
+            toast.error(`Errore nel salvataggio: ${_errMsg}`)
         } finally {
             setWaSaving(false)
         }
@@ -165,9 +167,10 @@ export default function ReviewsTab() {
             } else {
                 throw new Error(result.message || result.error || 'Errore invio')
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error sending test WhatsApp:', error)
-            toast.error('Errore test: ' + error.message)
+            toast.error('Errore test: ' + _errMsg)
         } finally {
             setWaTesting(false)
         }
@@ -245,9 +248,10 @@ export default function ReviewsTab() {
                 throw new Error(result.error || 'Errore invio')
             }
 
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error sending review requests:', error)
-            toast.error('Errore: ' + error.message)
+            toast.error('Errore: ' + _errMsg)
         } finally {
             setSending(false)
         }
@@ -282,7 +286,7 @@ export default function ReviewsTab() {
                         onClick={handleSendReviews}
                         disabled={selectedIds.size === 0 || sending}
                         className={selectedIds.size > 0 && !sending
-                            ? 'bg-dr7-gold hover:bg-yellow-500 text-black shadow-[0_0_15px_rgba(212,175,55,0.4)]'
+                            ? 'bg-dr7-gold hover:bg-[#247a6f] text-white shadow-[0_0_15px_rgba(212,175,55,0.4)]'
                             : ''
                         }
                     >
@@ -331,7 +335,7 @@ export default function ReviewsTab() {
                                     <Button
                                         onClick={saveWaTemplate}
                                         disabled={waSaving}
-                                        className="bg-dr7-gold hover:bg-yellow-500 text-black"
+                                        className="bg-dr7-gold hover:bg-[#247a6f] text-white"
                                     >
                                         {waSaving ? 'Salvataggio...' : 'Salva Template'}
                                     </Button>
