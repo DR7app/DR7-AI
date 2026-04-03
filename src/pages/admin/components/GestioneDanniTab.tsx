@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { authFetch } from '../../../utils/authFetch'
 
 // ── Keyword classification (mirrors report-danni.ts) ──────────────────────────
 const DANNI_KEYWORDS = [
@@ -300,7 +301,7 @@ export default function GestioneDanniTab() {
 
     setPayByLinkLoading(customer.key)
     try {
-      const res = await fetch('/.netlify/functions/nexi-pay-by-link', {
+      const res = await authFetch('/.netlify/functions/nexi-pay-by-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

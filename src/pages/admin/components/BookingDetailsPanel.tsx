@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface BookingDetailsPanelProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -183,7 +184,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                       onClick={async () => {
                         setGeneratingLink(true)
                         try {
-                          const res = await fetch('/.netlify/functions/nexi-pay-by-link', {
+                          const res = await authFetch('/.netlify/functions/nexi-pay-by-link', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({

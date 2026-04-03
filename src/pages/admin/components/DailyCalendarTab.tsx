@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Booking {
     id: string
@@ -78,7 +79,7 @@ export default function DailyCalendarTab() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let bookingsToProcess: any[] = []
             try {
-                const res = await fetch('/.netlify/functions/list-bookings')
+                const res = await authFetch('/.netlify/functions/list-bookings')
                 const result = await res.json()
                 if (res.ok && result.bookings) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any

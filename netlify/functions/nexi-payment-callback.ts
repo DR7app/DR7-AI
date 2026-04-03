@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 import { detectCardType, logCardAttempt, voidNexiTransaction, cancelBooking, notifyPrepaidBlocked } from './prepaid-card-guard';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
@@ -18,7 +19,7 @@ async function fetchNexiOperationDetails(operationId: string): Promise<any> {
         const res = await fetch(`${NEXI_BASE_URL}/operations/${operationId}`, {
             headers: {
                 'X-Api-Key': NEXI_API_KEY,
-                'Correlation-Id': `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+                'Correlation-Id': randomUUID()
             }
         });
         if (res.ok) {
@@ -100,7 +101,7 @@ const handler: Handler = async (event) => {
         // Find the nexi_transaction by order_id
         const { data: transaction } = await supabase
             .from('nexi_transactions')
-            .select('id, booking_id, amount_cents, customer_email, contract_id, metadata, description')
+            .select('id, booking_id, amount_cents, customer_email, contract_id, metadata, description, status')
             .eq('order_id', orderId)
             .single();
 
@@ -109,10 +110,16 @@ const handler: Handler = async (event) => {
             return { statusCode: 404, headers, body: JSON.stringify({ error: 'Transaction not found' }) };
         }
 
+        // Idempotency: if transaction already processed, return success without re-processing
+        if (transaction.status === 'completed' || transaction.status === 'failed') {
+            console.log(`[nexi-payment-callback] Transaction ${orderId} already processed (status: ${transaction.status}). Skipping.`);
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_processed: true, status: transaction.status }) };
+        }
+
         // ─── EXPIRY VALIDATION ────────────────────────────────────────
         // Reject late payments: if payment_link_expires_at has passed, the booking
-        // was already cancelled. Log it but don't confirm as paid.
-        const expiresAtStr = transaction.metadata?.payment_link_expires_at;
+        // was already expired. Log it but don't confirm as paid.
+        const expiresAtStr = transaction.metadata?.payment_link_expires_at || transaction.metadata?.link_expires_at;
         if (isSuccess && expiresAtStr) {
             const expiresAt = new Date(expiresAtStr);
             const now = new Date();
@@ -376,46 +383,61 @@ const handler: Handler = async (event) => {
         if (isSuccess && transaction.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
-                .select('id, user_id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, service_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee')
+                .select('id, user_id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, service_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee, status, payment_status')
                 .eq('id', transaction.booking_id)
                 .single();
 
             if (booking) {
                 const amountEur = (transaction.amount_cents / 100).toFixed(2);
+                const paidAt = new Date().toISOString();
 
-                // ── IDEMPOTENCY CHECK: skip if already paid ──
+                // RACE CONDITION GUARD: Only confirm if booking is still in a payable state
+                // If the expiration job already ran, booking.status might be 'expired'
+                // In that case, we still confirm — payment was authorized before expiry
+                // (Nexi authorized the charge, so the customer DID pay)
+                const wasExpired = booking.status === 'expired';
+                if (wasExpired) {
+                    console.log(`[nexi-payment-callback] Booking ${booking.id} was expired but payment came through — re-confirming (payment wins over expiry)`);
+                }
+
+                // Skip if already paid (duplicate webhook)
                 if (booking.booking_details?.nexi_paid_at || booking.payment_status === 'paid' || booking.payment_status === 'succeeded' || booking.payment_status === 'completed') {
-                    console.log(`[nexi-payment-callback] Booking ${booking.id} already paid — skipping duplicate callback`);
-                    return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: 'already_paid', bookingId: booking.id }) };
+                    console.log(`[nexi-payment-callback] Booking ${booking.id} already paid — skipping duplicate confirmation`);
+                    return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_paid: true }) };
                 }
 
-                // ── EXPIRATION CHECK: reject if booking was cancelled (race with cancel-unpaid job) ──
-                if (booking.status === 'cancelled') {
-                    console.warn(`[nexi-payment-callback] Booking ${booking.id} was already cancelled — late payment callback ignored`);
-                    // TODO: Could issue refund here if needed
-                    return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: 'booking_cancelled_late_payment', bookingId: booking.id }) };
+                // Validate payment amount matches booking price (tolerance: 1 cent for rounding)
+                if (booking.price_total && Math.abs(transaction.amount_cents - booking.price_total) > 1) {
+                    console.error(`[nexi-payment-callback] AMOUNT MISMATCH: paid ${transaction.amount_cents} cents but booking expects ${booking.price_total} cents — booking ${booking.id}`);
+                    // Still confirm (payment was authorized) but log the discrepancy for manual review
                 }
 
-                // ── ATOMIC UPDATE: only update if still pending (prevents race condition) ──
-                const { data: updated, error: updateErr } = await supabase.from('bookings').update({
+                // Confirm the booking — CONDITIONAL UPDATE for safety
+                const { data: confirmedRows } = await supabase.from('bookings').update({
                     payment_status: 'paid',
                     status: 'confirmed',
+                    paid_at: paidAt,
                     amount_paid: transaction.amount_cents,
+                    expired_at: null,  // Clear expiry if it was set by the cron job
                     booking_details: {
                         ...booking.booking_details,
                         nexi_transaction_id: transactionId || operationId,
                         nexi_contract_id: contractId,
-                        nexi_paid_at: new Date().toISOString(),
+                        nexi_paid_at: paidAt,
                         paymentStatus: 'paid'
                     }
-                }).eq('id', booking.id).eq('payment_status', 'pending').select('id').maybeSingle();
+                })
+                .eq('id', booking.id)
+                .neq('payment_status', 'paid')  // Guard: don't re-confirm
+                .select('id');
 
-                if (updateErr || !updated) {
-                    console.warn(`[nexi-payment-callback] Atomic update failed for booking ${booking.id} — booking may have been cancelled or already paid`);
-                    return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: 'update_skipped', bookingId: booking.id }) };
+                if (!confirmedRows || confirmedRows.length === 0) {
+                    console.log(`[nexi-payment-callback] Booking ${booking.id} — conditional update matched 0 rows (already paid by another webhook)`);
+                    return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_paid: true }) };
                 }
 
-                console.log(`[nexi-payment-callback] Booking ${booking.id} confirmed — €${amountEur} paid`);
+                console.log(`[nexi-payment-callback] Booking ${booking.id} confirmed — €${amountEur} paid${wasExpired ? ' (recovered from expired)' : ''}`);
+
 
                 // Store contractId + card details on customer
                 {

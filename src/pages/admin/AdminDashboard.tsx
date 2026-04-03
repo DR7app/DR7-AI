@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
@@ -7,41 +7,42 @@ import { useBirthdayCount } from './components/BirthdaysTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
+import lazyWithRetry from '../../utils/lazyWithRetry'
 
-// Lazy-load all tabs except the default (ReservationsTab) for code splitting
-const CustomersTab = lazy(() => import('./components/CustomersTab'))
-const CustomerWalletTab = lazy(() => import('./components/CustomerWalletTab'))
-const VehiclesTab = lazy(() => import('./components/VehiclesTab'))
-const CalendarTab = lazy(() => import('./components/CalendarTab'))
-const CarWashBookingsTab = lazy(() => import('./components/CarWashBookingsTab'))
-const CarWashCalendarTab = lazy(() => import('./components/CarWashCalendarTab'))
-const UnpaidBookingsTab = lazy(() => import('./components/UnpaidBookingsTab'))
-const MarketingTab = lazy(() => import('./components/MarketingTab'))
-const ReviewManagementTab = lazy(() => import('./components/ReviewManagementTab'))
-const FatturaTab = lazy(() => import('./components/FatturaTab'))
-const ContrattoTab = lazy(() => import('./components/ContrattoTab'))
-const GestioneMulteTab = lazy(() => import('./components/GestioneMulteTab'))
-const DailyCalendarModal = lazy(() => import('./components/DailyCalendarModal'))
-const ScannerTab = lazy(() => import('./components/ScannerTab'))
-const CauzioniTab = lazy(() => import('./components/CauzioniTab'))
-const NexiTab = lazy(() => import('./components/NexiTab'))
-const BirthdaysTab = lazy(() => import('./components/BirthdaysTab'))
-const FleetManagementTab = lazy(() => import('./components/FleetManagementTab'))
-const ScadenzeTab = lazy(() => import('./components/ScadenzeTab'))
-const ReportsTab = lazy(() => import('./components/ReportsTab'))
-const ReportLavaggioTab = lazy(() => import('./components/ReportLavaggioTab'))
-const ReportClientiTab = lazy(() => import('./components/ReportClientiTab'))
-const ReportPenaliDanniTab = lazy(() => import('./components/ReportPenaliDanniTab'))
-const BulkImportTab = lazy(() => import('./components/BulkImportTab'))
-const ReferralProgramTab = lazy(() => import('./components/ReferralProgramTab'))
-const CodiciScontoTab = lazy(() => import('./components/CodiciScontoTab'))
-const GestioneDanniTab = lazy(() => import('./components/GestioneDanniTab'))
-const CargosTab = lazy(() => import('./components/CargosTab'))
-const TrusteraTab = lazy(() => import('./components/TrusteraTab'))
-const CarWashCatalogTab = lazy(() => import('./components/CarWashCatalogTab'))
-const OperatoriTab = lazy(() => import('./components/OperatoriTab'))
-const DashboardTab = lazy(() => import('./components/DashboardTab'))
-const RevenuePricingTab = lazy(() => import('./components/RevenuePricingTab'))
+// Lazy-load all tabs with automatic retry on chunk load failure (post-deploy resilience)
+const CustomersTab = lazyWithRetry(() => import('./components/CustomersTab'))
+const CustomerWalletTab = lazyWithRetry(() => import('./components/CustomerWalletTab'))
+const VehiclesTab = lazyWithRetry(() => import('./components/VehiclesTab'))
+const CalendarTab = lazyWithRetry(() => import('./components/CalendarTab'))
+const CarWashBookingsTab = lazyWithRetry(() => import('./components/CarWashBookingsTab'))
+const CarWashCalendarTab = lazyWithRetry(() => import('./components/CarWashCalendarTab'))
+const UnpaidBookingsTab = lazyWithRetry(() => import('./components/UnpaidBookingsTab'))
+const MarketingTab = lazyWithRetry(() => import('./components/MarketingTab'))
+const ReviewManagementTab = lazyWithRetry(() => import('./components/ReviewManagementTab'))
+const FatturaTab = lazyWithRetry(() => import('./components/FatturaTab'))
+const ContrattoTab = lazyWithRetry(() => import('./components/ContrattoTab'))
+const GestioneMulteTab = lazyWithRetry(() => import('./components/GestioneMulteTab'))
+const DailyCalendarModal = lazyWithRetry(() => import('./components/DailyCalendarModal'))
+const ScannerTab = lazyWithRetry(() => import('./components/ScannerTab'))
+const CauzioniTab = lazyWithRetry(() => import('./components/CauzioniTab'))
+const NexiTab = lazyWithRetry(() => import('./components/NexiTab'))
+const BirthdaysTab = lazyWithRetry(() => import('./components/BirthdaysTab'))
+const FleetManagementTab = lazyWithRetry(() => import('./components/FleetManagementTab'))
+const ScadenzeTab = lazyWithRetry(() => import('./components/ScadenzeTab'))
+const ReportsTab = lazyWithRetry(() => import('./components/ReportsTab'))
+const ReportLavaggioTab = lazyWithRetry(() => import('./components/ReportLavaggioTab'))
+const ReportClientiTab = lazyWithRetry(() => import('./components/ReportClientiTab'))
+const ReportPenaliDanniTab = lazyWithRetry(() => import('./components/ReportPenaliDanniTab'))
+const BulkImportTab = lazyWithRetry(() => import('./components/BulkImportTab'))
+const ReferralProgramTab = lazyWithRetry(() => import('./components/ReferralProgramTab'))
+const CodiciScontoTab = lazyWithRetry(() => import('./components/CodiciScontoTab'))
+const GestioneDanniTab = lazyWithRetry(() => import('./components/GestioneDanniTab'))
+const CargosTab = lazyWithRetry(() => import('./components/CargosTab'))
+const TrusteraTab = lazyWithRetry(() => import('./components/TrusteraTab'))
+const CarWashCatalogTab = lazyWithRetry(() => import('./components/CarWashCatalogTab'))
+const OperatoriTab = lazyWithRetry(() => import('./components/OperatoriTab'))
+const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
+const RevenuePricingTab = lazyWithRetry(() => import('./components/RevenuePricingTab'))
 
 const TabLoader = () => (
   <div className="flex items-center justify-center py-12">

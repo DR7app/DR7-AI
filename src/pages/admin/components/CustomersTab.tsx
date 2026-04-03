@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Customer {
   id: string
@@ -369,7 +370,7 @@ export default function CustomersTab() {
         }
 
         try {
-          const response = await fetch('/.netlify/functions/save-customer', {
+          const response = await authFetch('/.netlify/functions/save-customer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ customerData })
@@ -750,7 +751,7 @@ export default function CustomersTab() {
     try {
       // Update keeper with merged fields if any
       if (Object.keys(updates).length > 0) {
-        const response = await fetch('/.netlify/functions/manage-customer', {
+        const response = await authFetch('/.netlify/functions/manage-customer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'update', customerId: keeper.id, updates })
@@ -763,7 +764,7 @@ export default function CustomersTab() {
 
       // Delete less complete duplicates
       for (const dup of toDelete) {
-        const response = await fetch('/.netlify/functions/manage-customer', {
+        const response = await authFetch('/.netlify/functions/manage-customer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'delete', customerId: dup.id })
@@ -787,7 +788,7 @@ export default function CustomersTab() {
     logger.log('[handleDelete] Starting delete for ID:', id)
 
     try {
-      const response = await fetch('/.netlify/functions/manage-customer', {
+      const response = await authFetch('/.netlify/functions/manage-customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', customerId: id })
@@ -975,7 +976,7 @@ export default function CustomersTab() {
 
     try {
       logger.log('[CustomersTab] Fetching documents via Netlify function for:', userId)
-      const response = await fetch('/.netlify/functions/get-customer-documents', {
+      const response = await authFetch('/.netlify/functions/get-customer-documents', {
         method: 'POST',
         body: JSON.stringify({ userId }),
         headers: { 'Content-Type': 'application/json' }
@@ -1234,7 +1235,7 @@ export default function CustomersTab() {
         newStatus === 'member' ? 'Member' : 'Nessuno'
 
     try {
-      const response = await fetch('/.netlify/functions/manage-customer', {
+      const response = await authFetch('/.netlify/functions/manage-customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'updateStatus', customerId, status: newStatus })
@@ -1266,7 +1267,7 @@ export default function CustomersTab() {
     try {
       const customerIds = Array.from(selectedCustomerIds)
 
-      const response = await fetch('/.netlify/functions/manage-customer', {
+      const response = await authFetch('/.netlify/functions/manage-customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'bulkUpdateStatus', customerIds, status: newStatus })
@@ -1306,7 +1307,7 @@ export default function CustomersTab() {
     try {
       const customerIds = Array.from(selectedCustomerIds)
 
-      const response = await fetch('/.netlify/functions/manage-customer', {
+      const response = await authFetch('/.netlify/functions/manage-customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'bulkDelete', customerIds })

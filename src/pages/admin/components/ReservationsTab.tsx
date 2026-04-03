@@ -3,9 +3,13 @@ import toast from 'react-hot-toast'
 import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
 import { supabase } from '../../../supabaseClient'
 
-/** Convert EUR string to integer cents using string parsing (no floating point) */
-function eurToCents(eur: string): number {
-  const s = (eur || '0').trim()
+/**
+ * Convert EUR string to integer cents using string parsing (no floating point).
+ * Handles >2 decimal digits by rounding (e.g. "19.895" → 1990, not 1989).
+ * This is the ONLY approved EUR→cents conversion in the reservation flow.
+ */
+function eurToCents(eur: string | number): number {
+  const s = String(eur ?? '0').trim()
   const negative = s.startsWith('-')
   const abs = negative ? s.substring(1) : s
   const dotIdx = abs.indexOf('.')
@@ -14,10 +18,30 @@ function eurToCents(eur: string): number {
     totalCents = (parseInt(abs, 10) || 0) * 100
   } else {
     const wholePart = parseInt(abs.substring(0, dotIdx), 10) || 0
-    const decimalStr = abs.substring(dotIdx + 1).padEnd(2, '0').substring(0, 2)
-    totalCents = wholePart * 100 + (parseInt(decimalStr, 10) || 0)
+    const fracStr = abs.substring(dotIdx + 1)
+    if (fracStr.length <= 2) {
+      // Exact: pad to 2 digits
+      const decimalStr = fracStr.padEnd(2, '0')
+      totalCents = wholePart * 100 + (parseInt(decimalStr, 10) || 0)
+    } else {
+      // >2 decimals: use first 3 digits to round properly
+      // e.g. "19.895" → first3 = "895" → 895 → Math.round(895/10) = 90 → 1990
+      const first3 = fracStr.substring(0, 3).padEnd(3, '0')
+      const millis = parseInt(first3, 10) || 0
+      totalCents = wholePart * 100 + Math.round(millis / 10)
+    }
   }
   return negative ? -totalCents : totalCents
+}
+
+/** Convert integer cents to EUR string with exactly 2 decimal places (no floating point) */
+function centsToEurStr(cents: number): string {
+  const rounded = Math.round(cents)
+  const negative = rounded < 0
+  const abs = Math.abs(rounded)
+  const whole = Math.floor(abs / 100)
+  const frac = abs % 100
+  return (negative ? '-' : '') + whole + '.' + String(frac).padStart(2, '0')
 }
 import { useAdminRole } from '../../../hooks/useAdminRole'
 // bookingConflictUtils imports removed - admin can select any time
@@ -38,7 +62,10 @@ import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import PreventivoModal from './PreventivoModal'
 import DanniPenaliModal from './DanniPenaliModal'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 import { decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import {
@@ -395,7 +422,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [editingOriginalPaymentStatus, setEditingOriginalPaymentStatus] = useState<string | null>(null) // Track if payment changed from unpaid → paid
   const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
 
-  // Missing Data Modal State
+  // Limitation Override (OTP-based director approval)
+  const {
+    limitationState,
+    requestOverride,
+    handleOverrideApproved,
+    closeLimitation,
+    hasOverride,
+    consumeAllOverrides,
+    activeOverrides,
+    draftSessionId,
+    flowType,
+    newSession,
+    getOverrideAuditSnapshot,
+  } = useLimitationOverride()
+
   // Missing Data Modal State
   const [showMissingDataModal, setShowMissingDataModal] = useState(false)
   const [missingFields, setMissingFields] = useState<string[]>([])
@@ -431,9 +472,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     change_vehicle: false,
     new_vehicle_id: '',
     show_all_vehicles: false,
-    update_km: false,
-    unlimited_km: false,
-    km_limit: ''
+    extension_km_added: '',
+    extension_unlimited_km: false
   })
   const [isExtending, setIsExtending] = useState(false)
 
@@ -466,11 +506,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return_time: '10:00',
     pickup_location: 'dr7_office',
     dropoff_location: 'dr7_office',
-    status: 'confirmed',
+    status: 'pending_payment',
     source: 'admin',
     total_amount: '0',
     amount_paid: '0',
-    payment_status: 'pending',
+    payment_status: 'unpaid',
     payment_method: 'Nexi Pay by Link',
     currency: 'EUR',
     // 2nd Driver - Required fields for contract generation validation
@@ -554,7 +594,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     vehicleName: string; category: string
   } | null>(null)
   const [revenueLoading, setRevenueLoading] = useState(false)
-  // revenueExpanded removed — details always shown
+  const [revenueExpanded, setRevenueExpanded] = useState(false)
 
   // --- Driver Tier Classification ---
   const [customerTier, setCustomerTier] = useState<TierClassification | null>(null)
@@ -805,9 +845,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
       const year = parseInt(data.year)
       if (isNaN(year) || year < 2020) {
-        toast.error('Veicolo deve essere immatricolato dal 2020 in poi')
-        setFormData(prev => ({ ...prev, cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '' }))
-        return
+        if (!hasOverride('vehicle_year_too_old')) {
+          requestOverride('vehicle_year_too_old', `Veicolo immatricolato nel ${data.year || '?'}: deve essere dal 2020 in poi per la cauzione.`)
+          setTargaLoading(false)
+          return
+        }
       }
       setFormData(prev => ({
         ...prev,
@@ -863,6 +905,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           category: vehicle.category,
         }));
 
+        newSession(initialData?.bookingId ? 'booking_edit' : 'booking_create')
         setShowForm(true)
 
         // Notify parent to clear data
@@ -1608,7 +1651,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Fetch customer via Netlify function (bypasses RLS)
     if (customerId) {
       try {
-        const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+        const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
         if (resp.ok) {
           const result = await resp.json()
           if (result.customer) {
@@ -1627,7 +1670,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     if (!customer && resolvedEmail) {
       try {
-        const resp = await fetch(`/.netlify/functions/get-customer?email=${encodeURIComponent(resolvedEmail)}`)
+        const resp = await authFetch(`/.netlify/functions/get-customer?email=${encodeURIComponent(resolvedEmail)}`)
         if (resp.ok) {
           const result = await resp.json()
           if (result.customer) {
@@ -1646,7 +1689,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         let normPhone = resolvedPhone.replace(/[\s\-+()]/g, '')
         if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
         if (normPhone.length === 10) normPhone = '39' + normPhone
-        const resp = await fetch(`/.netlify/functions/get-customer?phone=${encodeURIComponent(normPhone)}`)
+        const resp = await authFetch(`/.netlify/functions/get-customer?phone=${encodeURIComponent(normPhone)}`)
         if (resp.ok) {
           const result = await resp.json()
           if (result.customer) {
@@ -1693,8 +1736,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const patenteDate = customer.data_rilascio_patente || customer.metadata?.patente?.rilascio
       if (patenteDate) {
         const licYears = calculateLicenseYears(patenteDate)
-        if (licYears < 3) {
-          throw new Error('Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
+        if (licYears < 3 && !hasOverride('license_too_recent')) {
+          requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
+          return ['__limitation_override_requested__']
         }
       }
 
@@ -1703,8 +1747,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const age = calculateAge(customer.data_nascita)
         const licYears = calculateLicenseYears(patenteDate)
         const tier = classifyDriverTier(age, licYears)
-        if (tier.tier === 'BLOCKED') {
-          throw new Error(`Cliente non idoneo al noleggio: ${tier.reason}`)
+        if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+          requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
+          return ['__limitation_override_requested__']
         }
         if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione') {
           throw new Error('No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
@@ -1832,6 +1877,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       return
     }
 
+    if (missing.includes('__limitation_override_requested__')) return
+
     if (missing.length > 0) {
       logger.warn('⚠️ Missing fields for contract:', missing)
       // Don't block — generate-contract backend has extensive fallbacks
@@ -1842,7 +1889,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     setGeneratingContract(true)
     try {
       // Use the new generic contract generation function
-      const response = await fetch('/.netlify/functions/generate-contract', {
+      const response = await authFetch('/.netlify/functions/generate-contract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: booking.id })
@@ -1925,6 +1972,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       return
     }
 
+    if (missing.includes('__limitation_override_requested__')) return
+
     if (missing.length > 0) {
       logger.warn('⚠️ Missing fields for invoice:', missing)
 
@@ -1933,7 +1982,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       if (customerId) {
         try {
-          const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+          const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
           if (resp.ok) {
             const result = await resp.json()
             customerData = result.customer || { id: customerId }
@@ -1968,7 +2017,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     setGeneratingInvoice(true)
     try {
-      const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+      const response = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: booking.id, includeIVA })
@@ -1994,7 +2043,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Open PDF first as courtesy (non-blocking)
       try {
         const invoiceId = invoice.id
-        const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+        const pdfResponse = await authFetch('/.netlify/functions/generate-invoice-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ invoiceId })
@@ -2049,7 +2098,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         vehicleName = booking?.vehicle_name || ''
 
         // SOFT DELETE via Netlify function (uses service role key to bypass RLS)
-        const deleteRes = await fetch('/.netlify/functions/delete-booking', {
+        const deleteRes = await authFetch('/.netlify/functions/delete-booking', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bookingId })
@@ -2313,14 +2362,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       status: booking.status,
       payment_status: booking.payment_status || 'paid',
       payment_method: booking.payment_method || 'Contanti',
-      amount_paid: booking.booking_details?.amountPaid ? (booking.booking_details.amountPaid / 100).toFixed(2) : '0',
+      amount_paid: booking.booking_details?.amountPaid ? centsToEurStr(Math.round(booking.booking_details.amountPaid)) : '0',
       // Subtract delivery/pickup fees to get BASE rental amount only
       // (fees are re-added on save at price_total calculation)
       // Only subtract if the corresponding flag is enabled to avoid drift when toggling off
-      total_amount: (Math.round(booking.price_total
+      total_amount: centsToEurStr(Math.round(booking.price_total
         - ((booking.delivery_enabled || booking.booking_details?.delivery_enabled) ? (booking.delivery_fee || 0) : 0)
         - ((booking.pickup_enabled || booking.booking_details?.pickup_enabled) ? (booking.pickup_fee || 0) : 0)
-      ) / 100).toFixed(2),
+      )),
       currency: booking.currency.toUpperCase(),
       source: 'admin',
       // 2nd Driver
@@ -2378,14 +2427,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       delivery_zip: booking.delivery_address?.zip || booking.booking_details?.delivery_address?.zip || '',
       delivery_province: booking.delivery_address?.province || booking.booking_details?.delivery_address?.province || '',
       delivery_notes: booking.delivery_address?.notes || booking.booking_details?.delivery_address?.notes || '',
-      delivery_fee: booking.delivery_fee != null ? (Math.round(booking.delivery_fee) / 100).toFixed(2) : (booking.booking_details?.delivery_fee || '0'),
+      delivery_fee: booking.delivery_fee != null ? centsToEurStr(Math.round(booking.delivery_fee)) : (booking.booking_details?.delivery_fee || '0'),
       pickup_enabled: booking.pickup_enabled || booking.booking_details?.pickup_enabled || false,
       pickup_street: booking.pickup_address?.street || booking.booking_details?.pickup_address?.street || '',
       pickup_city: booking.pickup_address?.city || booking.booking_details?.pickup_address?.city || '',
       pickup_zip: booking.pickup_address?.zip || booking.booking_details?.pickup_address?.zip || '',
       pickup_province: booking.pickup_address?.province || booking.booking_details?.pickup_address?.province || '',
       pickup_notes: booking.pickup_address?.notes || booking.booking_details?.pickup_address?.notes || '',
-      pickup_fee: booking.pickup_fee != null ? (Math.round(booking.pickup_fee) / 100).toFixed(2) : (booking.booking_details?.pickup_fee || '0'),
+      pickup_fee: booking.pickup_fee != null ? centsToEurStr(Math.round(booking.pickup_fee)) : (booking.booking_details?.pickup_fee || '0'),
       notes: booking.booking_details?.notes || booking.notes || '',
       // Experience Services & DR7 Flex
       experience_services: booking.booking_details?.experience_services || {},
@@ -2417,6 +2466,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
 
     setEditingId(booking.id)
+    newSession('booking_edit')
     setEditingOriginalPaymentStatus(booking.payment_status || 'pending')
     setShowForm(true)
   }
@@ -2431,9 +2481,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const romeTimeStr = currentReturnDate.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false })
 
     setExtendingBooking(booking)
-    const currentUnlimitedKm = booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false
-    const currentKmLimit = currentUnlimitedKm ? '' : (booking.booking_details?.km_limit || DEFAULT_KM_LIMIT)
-
+    const currentUnlimitedKm = booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati'
     setExtendData({
       new_return_date: romeDateStr,
       new_return_time: romeTimeStr,
@@ -2445,9 +2493,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       change_vehicle: false,
       new_vehicle_id: '',
       show_all_vehicles: false,
-      update_km: false,
-      unlimited_km: currentUnlimitedKm,
-      km_limit: String(currentKmLimit)
+      extension_km_added: '',
+      extension_unlimited_km: currentUnlimitedKm || false
     })
     setShowExtendModal(true)
   }
@@ -2473,14 +2520,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const dropoffOffset = getRomeOffsetForDate(extendData.new_return_date)
       const newDropoffDateTime = new Date(`${extendData.new_return_date}T${extendData.new_return_time}:00${dropoffOffset}`)
 
-      // Calculate new total
-      const additionalAmount = parseFloat(extendData.additional_amount) || 0
-      const newTotal = extendingBooking.price_total + (additionalAmount * 100) // price_total is in cents
+      // Calculate new total — use eurToCents (string-based) to avoid float drift
+      const additionalAmountCents = eurToCents(extendData.additional_amount || '0')
+      const additionalAmount = additionalAmountCents / 100
+      const newTotal = Math.round(extendingBooking.price_total + additionalAmountCents)
 
       // Resolve new vehicle if car change requested
       let newVehicle: Vehicle | null = null
       if (extendData.change_vehicle && extendData.new_vehicle_id) {
         newVehicle = vehicles.find(v => v.id === extendData.new_vehicle_id) || null
+      }
+
+      // Calculate KM limit update
+      const extensionKmAdded = parseInt(extendData.extension_km_added) || 0
+      const previousKmLimit = extendingBooking.booking_details?.km_limit
+      let newKmLimit = previousKmLimit
+
+      if (extendData.extension_unlimited_km) {
+        newKmLimit = 'Illimitati'
+      } else if (extensionKmAdded > 0 && previousKmLimit && previousKmLimit !== 'Illimitati') {
+        newKmLimit = String(parseInt(String(previousKmLimit)) + extensionKmAdded)
       }
 
       // Update booking_details with extension info
@@ -2492,11 +2551,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         iban_request_sent: false,
         day_before_reminder_sent: false,
         day_before_reminder_sent_at: null,
-        // Update KM if toggled
-        ...(extendData.update_km ? {
-          unlimited_km: extendData.unlimited_km,
-          km_limit: extendData.unlimited_km ? 'Illimitati' : extendData.km_limit,
-        } : {}),
+        km_limit: newKmLimit,
+        unlimited_km: extendData.extension_unlimited_km,
         // Update vehicle info in booking_details if car changed
         ...(newVehicle ? {
           vehicle: {
@@ -2516,11 +2572,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             additional_amount: additionalAmount,
             payment_status: extendData.extension_payment_status, // 'paid' or 'pending'
             notes: extendData.notes,
-            ...(extendData.update_km ? {
-              km_updated: true,
-              new_unlimited_km: extendData.unlimited_km,
-              new_km_limit: extendData.unlimited_km ? 'Illimitati' : extendData.km_limit,
-            } : {}),
+            km_added: extensionKmAdded > 0 ? extensionKmAdded : undefined,
+            unlimited_km: extendData.extension_unlimited_km || undefined,
             ...(newVehicle ? {
               previous_vehicle_id: extendingBooking.vehicle_id,
               previous_vehicle_name: extendingBooking.vehicle_name,
@@ -2588,11 +2641,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         extensionMsg += `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
         extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
-        if (extendData.update_km) {
-          extensionMsg += `*KM:* ${extendData.unlimited_km ? 'Illimitati' : `${extendData.km_limit} Km`}\n`
-        }
         extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
         extensionMsg += `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
+        extensionMsg += `*Km:* ${extendData.extension_unlimited_km ? 'Illimitati' : (extensionKmAdded > 0 ? `+${extensionKmAdded} km (totale: ${newKmLimit} Km)` : `${newKmLimit} Km (invariato)`)}\n`
         extensionMsg += `*Pagamento estensione:* ${adminExtPayLabel}`
 
         // Send to admin notification phone
@@ -2684,7 +2735,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (extendData.extension_payment_status === 'paid' && additionalAmount > 0) {
         try {
           logger.log('[handleConfirmExtend] Generating extension fattura for €' + additionalAmount.toFixed(2))
-          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bookingId: extendingBooking.id, includeIVA: true, extensionAmount: additionalAmount })
@@ -2718,7 +2769,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
 
           const expirationHours = parseInt(extendData.link_expiration_hours) || 1
-          const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+          const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3097,8 +3148,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!editingId) {
         const nowRome = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
         const pickupCheck = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
-        if (pickupCheck < nowRome) {
-          alert('DATA RITIRO NEL PASSATO\n\nLa data e ora di ritiro non può essere nel passato.')
+        if (pickupCheck < nowRome && !hasOverride('pickup_in_past')) {
+          requestOverride('pickup_in_past', 'La data e ora di ritiro è nel passato. Serve autorizzazione per procedere.')
           setIsSubmitting(false)
           return
         }
@@ -3722,14 +3773,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0)),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
-        status: formData.status,
-        payment_status: formData.payment_status,
+        // Pay by Link bookings start as pending_payment/unpaid;
+        // other payment methods start as confirmed/paid
+        status: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
+          ? 'pending_payment' : formData.status === 'pending_payment' ? 'pending_payment' : (formData.status || 'confirmed'),
+        payment_status: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
+          ? 'unpaid' : formData.payment_status,
         payment_method: formData.payment_method,
         customer_name: customerInfo?.full_name || 'N/A',
         customer_email: customerInfo?.email || null,
         customer_phone: customerInfo?.phone || null,
         booked_at: editingId ? undefined : new Date().toISOString(), // Don't update booked_at on edit
         booking_source: 'admin', // Mark as admin booking
+        // Set fallback expiration so cron can expire orphaned pending_payment bookings
+        // even if the Nexi API call fails. The actual value is overwritten after Nexi responds.
+        payment_link_expires_at: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
+          ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : undefined,
         // Home Delivery & Pickup (top-level DB columns)
         delivery_enabled: formData.delivery_enabled,
         delivery_address: formData.delivery_enabled ? {
@@ -3906,7 +3965,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             revenue_base_price: revenueSuggestion.selectedBaseRateEur,
             revenue_mode: revenueSuggestion.mode,
             revenue_base_source: revenueSuggestion.selectedBaseRateSource,
-            operator_override: Math.abs(parseFloat(formData.total_amount || '0') - revenueSuggestion.finalTotalEur) > 0.01
+            operator_override: Math.abs(eurToCents(formData.total_amount || '0') - Math.round(revenueSuggestion.finalTotalEur * 100)) > 1
+          } : {}),
+          // Limitation override audit trail
+          ...(getOverrideAuditSnapshot() ? {
+            limitation_overrides: getOverrideAuditSnapshot()
           } : {})
         }
       }
@@ -3958,11 +4021,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Generate Nexi Pay by Link if payment method is Nexi AND not already paid
       if (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid' && insertedBooking) {
         try {
-          const totalEur = parseFloat(formData.total_amount || '0')
-            + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
-            + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+          // Use cents-based addition to avoid float drift, then convert to EUR
+          const totalCents = eurToCents(formData.total_amount || '0')
+            + (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0)
+            + (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+          const totalEur = totalCents / 100
 
-          const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+          const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3977,8 +4042,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const linkData = await linkRes.json()
 
           if (linkRes.ok && linkData.paymentUrl) {
-            // Store link + exact expiration timestamps on booking
+            // Payment link tracking fields are now set by the backend (nexi-pay-by-link),
+            // but we also update booking_details for backward compatibility
             await supabase.from('bookings').update({
+              payment_link_url: linkData.paymentUrl,
+              payment_link_created_at: linkData.linkCreatedAt || new Date().toISOString(),
+              payment_link_expires_at: linkData.expiresAt,
               booking_details: {
                 ...insertedBooking.booking_details,
                 nexi_payment_link: linkData.paymentUrl,
@@ -4031,7 +4100,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             returnTime: formData.return_time,
             pickupLocation: pickupLocationLabel,
             returnLocation: dropoffLocationLabel,
-            totalPrice: parseFloat(formData.total_amount),
+            totalPrice: eurToCents(formData.total_amount) / 100,
             bookingId: insertedBooking?.id?.substring(0, 8)
           })
         })
@@ -4044,7 +4113,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Generate PDF invoice for car rental
       if (!editingId) { // Only for new bookings
         try {
-          await fetch('/.netlify/functions/generate-invoice-pdf', {
+          await authFetch('/.netlify/functions/generate-invoice-pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -4156,6 +4225,51 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Send customer confirmation message — same full message as admin (skip for unpaid Nexi Pay by Link — link message is sent separately)
         const custPhone = customerInfo?.phone
         if (custPhone && !(formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')) {
+          const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
+          const pickupDt = new Date(pickupDateTime)
+          const dropoffDt = new Date(returnDateTime)
+          const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+          const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+          const depositCents = eurToCents(formData.deposit || '0')
+          const depositLabel = depositCents > 0 ? `€${centsToEurStr(depositCents)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
+          let kmLabel = '-'
+          if (formData.unlimited_km) {
+            kmLabel = 'Illimitati'
+          } else if (formData.km_limit === '50/giorno') {
+            const pickup = new Date(formData.pickup_date + 'T' + formData.pickup_time)
+            const dropoff = new Date(formData.return_date + 'T' + formData.return_time)
+            const days = Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24))
+            kmLabel = `${50 * days} Km (50/g x ${days}gg)`
+          } else if (formData.km_limit) {
+            kmLabel = `${formData.km_limit} km`
+          }
+          const insuranceLabel = formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
+            : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
+            : formData.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
+            : formData.insurance_option === 'DR7' ? 'Kasko DR7'
+            : formData.insurance_option || '-'
+          const paymentLabel = formData.payment_status === 'paid' ? `Pagato (${formData.payment_method || '-'})` : formData.payment_status === 'partial' ? `Parziale (${formData.payment_method || '-'})` : 'Da saldare'
+          const bookingNotes = formData.notes || insertedBooking?.booking_details?.notes || ''
+
+          const totalEur = insertedBooking?.price_total ? centsToEurStr(Math.round(insertedBooking.price_total)) : centsToEurStr(eurToCents(formData.total_amount))
+
+          let custMsg = editingId
+            ? `Salve ${custFirstName},\n\nLa informiamo che la Sua prenotazione è stata modificata.\n\n`
+            : `Salve ${custFirstName},\n\nConfermiamo la sua prenotazione.\n\n`
+          custMsg += `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`
+          custMsg += `*ID:* DR7-${(insertedBooking?.id || '').substring(0, 8).toUpperCase()}\n`
+          custMsg += `*Veicolo:* ${vehicle?.display_name || 'N/A'}\n`
+          custMsg += `*Ritiro:* ${fmtDate(pickupDt)} alle ${fmtTime(pickupDt)}\n`
+          custMsg += `*Riconsegna:* ${fmtDate(dropoffDt)} alle ${fmtTime(dropoffDt)}\n`
+          custMsg += `*Luogo ritiro:* ${pickupLocationLabel}\n`
+          custMsg += `*Assicurazione:* ${insuranceLabel}\n`
+          custMsg += `*Totale:* €${totalEur}\n`
+          custMsg += `*Cauzione:* ${depositLabel}\n`
+          custMsg += `*KM:* ${kmLabel}\n`
+          custMsg += `*Pagamento:* ${paymentLabel}\n`
+          if (bookingNotes) custMsg += `*Note:* ${bookingNotes}\n`
+          custMsg += `\nCordiali Saluti,\nDR7`
+
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -4275,7 +4389,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (formData.payment_status === 'paid' && insertedBooking?.id) {
         try {
           logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
-          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
@@ -4335,6 +4449,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       resetForm()
       await loadData()
 
+      await consumeAllOverrides(insertedBooking?.id)
       toast.success(editingId ? 'Prenotazione aggiornata!' : 'Prenotazione creata!')
     } catch (error) {
       console.error('Failed to save reservation:', error)
@@ -4483,7 +4598,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <span className="hidden sm:inline">Preventivo</span>
               <span className="sm:hidden">Prev.</span>
             </Button>
-            <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
+            <Button onClick={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
               <span className="hidden sm:inline">+ Nuova Prenotazione</span>
               <span className="sm:hidden">+ Nuova</span>
             </Button>
@@ -4625,11 +4740,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           />
         )}
 
+        {/* Limitation Override Modal (OTP director approval) */}
+        <LimitationOverrideModal
+          isOpen={limitationState.isOpen}
+          limitationCode={limitationState.limitationCode}
+          limitationMessage={limitationState.limitationMessage}
+          actionContext={limitationState.actionContext}
+          draftSessionId={draftSessionId}
+          flowType={flowType}
+          onClose={closeLimitation}
+          onOverrideApproved={handleOverrideApproved}
+        />
+
         {showForm && (
           <form onSubmit={handleSubmit} className="p-4 sm:p-6 rounded-lg mb-6 border border-theme-border/30">
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
               {editingId ? 'Modifica Prenotazione' : 'Nuova Prenotazione'}
             </h3>
+
+            {/* Active override badges */}
+            {activeOverrides.length > 0 && (
+              <div className="mb-4 space-y-1">
+                {activeOverrides.map((o) => (
+                  <div key={o.overrideId} className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs">
+                    <svg className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-amber-300">Limitazione bypassata con autorizzazione OTP:</span>
+                    <span className="text-theme-text-muted font-mono">{o.limitationCode}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Booking Type Selection - Mobile Optimized */}
             {/* Customer Selection - Mobile Optimized */}
@@ -4778,7 +4920,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         setCustomerTier(null) // Reset tier while loading
                         if (!customerId) return
                         try {
-                          const resp = await fetch(`/.netlify/functions/get-customer?id=${customerId}`)
+                          const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
                           if (!resp.ok) return
                           const { customer: cust } = await resp.json()
                           const birthDate = cust?.data_nascita
@@ -4907,9 +5049,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     required
                     min={editingId ? undefined : new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })}
                     value={formData.pickup_date}
-                    onChange={(e) => {
-                      setFormData({ ...formData, pickup_date: e.target.value })
-                    }}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, pickup_date: v })) }}
                   />
                   <Select
                     label="Ora Ritiro"
@@ -4918,7 +5058,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     onChange={(e) => {
                       const pickupTime = e.target.value
                       const returnTime = calculateReturnTime(pickupTime)
-                      setFormData({ ...formData, pickup_time: pickupTime, return_time: returnTime })
+                      setFormData(prev => ({ ...prev, pickup_time: pickupTime, return_time: returnTime }))
                     }}
                     options={TIME_OPTIONS}
                   />
@@ -4971,13 +5111,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     required
                     min={formData.pickup_date}
                     value={formData.return_date}
-                    onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, return_date: v })) }}
                   />
                   <Select
                     label="Ora Riconsegna"
                     required
                     value={formData.return_time}
-                    onChange={(e) => setFormData({ ...formData, return_time: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, return_time: v })) }}
                     options={TIME_OPTIONS}
                   />
                   <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
@@ -5039,7 +5179,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label={`Veicolo (${vehiclesForDropdown.length} ${showAllVehicles ? 'totali' : 'disponibili'})`}
                       required
                       value={formData.vehicle_id}
-                      onChange={(e) => setFormData({ ...formData, vehicle_id: e.target.value })}
+                      onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, vehicle_id: v })) }}
                       options={[
                         { value: '', label: 'Seleziona veicolo...' },
                         ...vehiclesForDropdown.map((v: Vehicle) => {
@@ -5080,7 +5220,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   type="checkbox"
                   id="has_second_driver"
                   checked={formData.has_second_driver}
-                  onChange={(e) => setFormData({ ...formData, has_second_driver: e.target.checked })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, has_second_driver: e.target.checked }))}
                   className="w-4 h-4 text-dr7-gold bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-dr7-gold focus:ring-offset-gray-800"
                 />
                 <label htmlFor="has_second_driver" className="ml-2 text-sm font-medium text-theme-text-secondary">
@@ -5120,13 +5260,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         label="Nome *"
                         required
                         value={formData.second_driver_name}
-                        onChange={(e) => setFormData({ ...formData, second_driver_name: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_name: e.target.value }))}
                       />
                       <Input
                         label="Cognome *"
                         required
                         value={formData.second_driver_surname}
-                        onChange={(e) => setFormData({ ...formData, second_driver_surname: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_surname: e.target.value }))}
                       />
                       <div>
                         <label className="block text-sm font-medium text-theme-text-primary mb-2">Codice Fiscale *</label>
@@ -5134,7 +5274,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           <input
                             required
                             value={formData.second_driver_codice_fiscale}
-                            onChange={(e) => setFormData({ ...formData, second_driver_codice_fiscale: e.target.value.toUpperCase() })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_codice_fiscale: e.target.value.toUpperCase() }))}
                             className="flex-1 px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors uppercase"
                           />
                           <CalcolaCFButton
@@ -5159,7 +5299,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         label="Sesso *"
                         required
                         value={formData.second_driver_sesso}
-                        onChange={(e) => setFormData({ ...formData, second_driver_sesso: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_sesso: e.target.value }))}
                         options={[
                           { value: '', label: 'Seleziona...' },
                           { value: 'M', label: 'Maschio' },
@@ -5170,25 +5310,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         label="Indirizzo *"
                         required
                         value={formData.second_driver_indirizzo}
-                        onChange={(e) => setFormData({ ...formData, second_driver_indirizzo: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_indirizzo: e.target.value }))}
                       />
                       <Input
                         label="CAP *"
                         required
                         value={formData.second_driver_cap}
-                        onChange={(e) => setFormData({ ...formData, second_driver_cap: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_cap: e.target.value }))}
                       />
                       <Input
                         label="Città *"
                         required
                         value={formData.second_driver_citta}
-                        onChange={(e) => setFormData({ ...formData, second_driver_citta: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_citta: e.target.value }))}
                       />
                       <Input
                         label="Provincia *"
                         required
                         value={formData.second_driver_provincia}
-                        onChange={(e) => setFormData({ ...formData, second_driver_provincia: e.target.value.toUpperCase() })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_provincia: e.target.value.toUpperCase() }))}
                         maxLength={2}
                       />
                       <Input
@@ -5196,19 +5336,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         type="date"
                         required
                         value={formData.second_driver_birth_date}
-                        onChange={(e) => setFormData({ ...formData, second_driver_birth_date: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_date: e.target.value }))}
                       />
                       <Input
                         label="Città di Nascita *"
                         required
                         value={formData.second_driver_birth_place}
-                        onChange={(e) => setFormData({ ...formData, second_driver_birth_place: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_place: e.target.value }))}
                       />
                       <Input
                         label="Provincia di Nascita *"
                         required
                         value={formData.second_driver_birth_provincia}
-                        onChange={(e) => setFormData({ ...formData, second_driver_birth_provincia: e.target.value.toUpperCase() })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_birth_provincia: e.target.value.toUpperCase() }))}
                         maxLength={2}
                       />
                       <Input
@@ -5216,14 +5356,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         type="tel"
                         required
                         value={formData.second_driver_phone}
-                        onChange={(e) => setFormData({ ...formData, second_driver_phone: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_phone: e.target.value }))}
                       />
                       <Input
                         label="E-mail *"
                         type="email"
                         required
                         value={formData.second_driver_email}
-                        onChange={(e) => setFormData({ ...formData, second_driver_email: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, second_driver_email: e.target.value }))}
                       />
 
                       {/* License Details */}
@@ -5234,20 +5374,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             label="Tipo di Patente *"
                             required
                             value={formData.second_driver_license_type}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_type: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_type: e.target.value }))}
                             placeholder="es. B"
                           />
                           <Input
                             label="Numero Patente *"
                             required
                             value={formData.second_driver_license_number}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_number: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_number: e.target.value }))}
                           />
                           <Input
                             label="Emessa da *"
                             required
                             value={formData.second_driver_license_issued_by}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_issued_by: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_issued_by: e.target.value }))}
                             placeholder="es. Motorizzazione Civile"
                           />
                           <Input
@@ -5255,14 +5395,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             type="date"
                             required
                             value={formData.second_driver_license_issue_date}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_issue_date: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_issue_date: e.target.value }))}
                           />
                           <Input
                             label="Scadenza Patente *"
                             type="date"
                             required
                             value={formData.second_driver_license_expiry}
-                            onChange={(e) => setFormData({ ...formData, second_driver_license_expiry: e.target.value })}
+                            onChange={(e) => setFormData(prev => ({ ...prev, second_driver_license_expiry: e.target.value }))}
                           />
                         </div>
                       </div>
@@ -5325,7 +5465,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Cauzione (€)"
                       type="number"
                       value={formData.deposit}
-                      onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
+                      onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, deposit: v })) }}
                     />
                     <div>
                       <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato Cauzione</label>
@@ -5399,7 +5539,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <Input
                           label="Targa Veicolo Cauzione *"
                           value={formData.cauzione_targa}
-                          onChange={(e) => setFormData({ ...formData, cauzione_targa: e.target.value.toUpperCase() })}
+                          onChange={(e) => setFormData(prev => ({ ...prev, cauzione_targa: e.target.value.toUpperCase() }))}
                           placeholder="es. AB123CD"
                         />
                       </div>
@@ -5473,15 +5613,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                         {newGaranteMode ? (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input label="Nome *" required value={formData.garante_nome} onChange={(e) => setFormData({ ...formData, garante_nome: e.target.value })} />
-                            <Input label="Cognome *" required value={formData.garante_cognome} onChange={(e) => setFormData({ ...formData, garante_cognome: e.target.value })} />
+                            <Input label="Nome *" required value={formData.garante_nome} onChange={(e) => setFormData(prev => ({ ...prev, garante_nome: e.target.value }))} />
+                            <Input label="Cognome *" required value={formData.garante_cognome} onChange={(e) => setFormData(prev => ({ ...prev, garante_cognome: e.target.value }))} />
                             <div>
                               <label className="block text-sm font-medium text-theme-text-primary mb-2">Codice Fiscale *</label>
                               <div className="flex gap-2">
                                 <input
                                   required
                                   value={formData.garante_codice_fiscale}
-                                  onChange={(e) => setFormData({ ...formData, garante_codice_fiscale: e.target.value.toUpperCase() })}
+                                  onChange={(e) => setFormData(prev => ({ ...prev, garante_codice_fiscale: e.target.value.toUpperCase() }))}
                                   className="flex-1 px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors uppercase"
                                 />
                                 <CalcolaCFButton
@@ -5502,16 +5642,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                 />
                               </div>
                             </div>
-                            <Select label="Sesso" value={formData.garante_sesso} onChange={(e) => setFormData({ ...formData, garante_sesso: e.target.value })} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }]} />
-                            <Input label="Indirizzo" value={formData.garante_indirizzo} onChange={(e) => setFormData({ ...formData, garante_indirizzo: e.target.value })} />
-                            <Input label="CAP" value={formData.garante_cap} onChange={(e) => setFormData({ ...formData, garante_cap: e.target.value })} maxLength={5} />
-                            <Input label="Città" value={formData.garante_citta} onChange={(e) => setFormData({ ...formData, garante_citta: e.target.value })} />
-                            <Input label="Provincia" value={formData.garante_provincia} onChange={(e) => setFormData({ ...formData, garante_provincia: e.target.value.toUpperCase() })} maxLength={2} />
-                            <Input label="Data di Nascita" type="date" value={formData.garante_birth_date} onChange={(e) => setFormData({ ...formData, garante_birth_date: e.target.value })} />
-                            <Input label="Luogo di Nascita" value={formData.garante_birth_place} onChange={(e) => setFormData({ ...formData, garante_birth_place: e.target.value })} />
-                            <Input label="Provincia di Nascita" value={formData.garante_birth_provincia} onChange={(e) => setFormData({ ...formData, garante_birth_provincia: e.target.value.toUpperCase() })} maxLength={2} />
-                            <Input label="Telefono" value={formData.garante_phone} onChange={(e) => setFormData({ ...formData, garante_phone: e.target.value })} />
-                            <Input label="Email" type="email" value={formData.garante_email} onChange={(e) => setFormData({ ...formData, garante_email: e.target.value })} />
+                            <Select label="Sesso" value={formData.garante_sesso} onChange={(e) => setFormData(prev => ({ ...prev, garante_sesso: e.target.value }))} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }]} />
+                            <Input label="Indirizzo" value={formData.garante_indirizzo} onChange={(e) => setFormData(prev => ({ ...prev, garante_indirizzo: e.target.value }))} />
+                            <Input label="CAP" value={formData.garante_cap} onChange={(e) => setFormData(prev => ({ ...prev, garante_cap: e.target.value }))} maxLength={5} />
+                            <Input label="Città" value={formData.garante_citta} onChange={(e) => setFormData(prev => ({ ...prev, garante_citta: e.target.value }))} />
+                            <Input label="Provincia" value={formData.garante_provincia} onChange={(e) => setFormData(prev => ({ ...prev, garante_provincia: e.target.value.toUpperCase() }))} maxLength={2} />
+                            <Input label="Data di Nascita" type="date" value={formData.garante_birth_date} onChange={(e) => setFormData(prev => ({ ...prev, garante_birth_date: e.target.value }))} />
+                            <Input label="Luogo di Nascita" value={formData.garante_birth_place} onChange={(e) => setFormData(prev => ({ ...prev, garante_birth_place: e.target.value }))} />
+                            <Input label="Provincia di Nascita" value={formData.garante_birth_provincia} onChange={(e) => setFormData(prev => ({ ...prev, garante_birth_provincia: e.target.value.toUpperCase() }))} maxLength={2} />
+                            <Input label="Telefono" value={formData.garante_phone} onChange={(e) => setFormData(prev => ({ ...prev, garante_phone: e.target.value }))} />
+                            <Input label="Email" type="email" value={formData.garante_email} onChange={(e) => setFormData(prev => ({ ...prev, garante_email: e.target.value }))} />
                           </div>
                         ) : (
                           <div>
@@ -5565,21 +5705,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Via e numero civico *"
                       required
                       value={formData.delivery_street}
-                      onChange={(e) => setFormData({ ...formData, delivery_street: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, delivery_street: e.target.value }))}
                       placeholder="es. Via Roma, 15"
                     />
                     <Input
                       label="Città *"
                       required
                       value={formData.delivery_city}
-                      onChange={(e) => setFormData({ ...formData, delivery_city: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, delivery_city: e.target.value }))}
                       placeholder="es. Cagliari"
                     />
                     <Input
                       label="CAP *"
                       required
                       value={formData.delivery_zip}
-                      onChange={(e) => setFormData({ ...formData, delivery_zip: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, delivery_zip: e.target.value }))}
                       placeholder="es. 09131"
                       maxLength={5}
                     />
@@ -5587,7 +5727,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Provincia *"
                       required
                       value={formData.delivery_province}
-                      onChange={(e) => setFormData({ ...formData, delivery_province: e.target.value.toUpperCase() })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, delivery_province: e.target.value.toUpperCase() }))}
                       placeholder="es. CA"
                       maxLength={2}
                     />
@@ -5595,7 +5735,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <Input
                         label="Note / istruzioni"
                         value={formData.delivery_notes}
-                        onChange={(e) => setFormData({ ...formData, delivery_notes: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, delivery_notes: e.target.value }))}
                         placeholder="es. Citofono 3, secondo piano"
                       />
                     </div>
@@ -5607,7 +5747,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     min="0"
                     required
                     value={formData.delivery_fee}
-                    onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, delivery_fee: v })) }}
                     placeholder="0.00"
                   />
                 </div>
@@ -5647,21 +5787,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Via e numero civico *"
                       required
                       value={formData.pickup_street}
-                      onChange={(e) => setFormData({ ...formData, pickup_street: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, pickup_street: e.target.value }))}
                       placeholder="es. Via Roma, 15"
                     />
                     <Input
                       label="Città *"
                       required
                       value={formData.pickup_city}
-                      onChange={(e) => setFormData({ ...formData, pickup_city: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, pickup_city: e.target.value }))}
                       placeholder="es. Cagliari"
                     />
                     <Input
                       label="CAP *"
                       required
                       value={formData.pickup_zip}
-                      onChange={(e) => setFormData({ ...formData, pickup_zip: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, pickup_zip: e.target.value }))}
                       placeholder="es. 09131"
                       maxLength={5}
                     />
@@ -5669,7 +5809,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Provincia *"
                       required
                       value={formData.pickup_province}
-                      onChange={(e) => setFormData({ ...formData, pickup_province: e.target.value.toUpperCase() })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, pickup_province: e.target.value.toUpperCase() }))}
                       placeholder="es. CA"
                       maxLength={2}
                     />
@@ -5677,7 +5817,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <Input
                         label="Note / istruzioni"
                         value={formData.pickup_notes}
-                        onChange={(e) => setFormData({ ...formData, pickup_notes: e.target.value })}
+                        onChange={(e) => setFormData(prev => ({ ...prev, pickup_notes: e.target.value }))}
                         placeholder="es. Citofono 3, secondo piano"
                       />
                     </div>
@@ -5689,7 +5829,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     min="0"
                     required
                     value={formData.pickup_fee}
-                    onChange={(e) => setFormData({ ...formData, pickup_fee: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, pickup_fee: v })) }}
                     placeholder="0.00"
                   />
                 </div>
@@ -5707,11 +5847,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                   // Auto-update amount_paid based on status
                   if (newStatus === 'paid') {
-                    // Full payment = base + delivery fee + pickup fee
-                    const fullTotal = parseFloat(formData.total_amount || '0')
-                      + (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
-                      + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                    newAmountPaid = fullTotal.toFixed(2)
+                    // Full payment = base + delivery fee + pickup fee (cents-based to avoid float drift)
+                    const fullTotalCents = eurToCents(formData.total_amount || '0')
+                      + (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0)
+                      + (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+                    newAmountPaid = centsToEurStr(fullTotalCents)
                   } else if (newStatus === 'unpaid') {
                     newAmountPaid = '0' // No payment
                   }
@@ -5721,7 +5861,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     ...formData,
                     payment_status: newStatus,
                     amount_paid: newAmountPaid,
-                    status: newStatus === 'paid' ? 'confirmed' : 'pending',
+                    // Map payment status to booking status consistently
+                    status: newStatus === 'paid' ? 'confirmed'
+                      : (formData.payment_method === 'Nexi Pay by Link' ? 'pending_payment' : 'confirmed'),
                     payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
                   })
                 }}
@@ -5832,17 +5974,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   {revenueSuggestion && (
                     <>
                       <div className="text-xs text-theme-text-muted">
-                        EUR {revenueSuggestion.finalDailyRateEur.toFixed(2)}/giorno x {revenueSuggestion.rentalDays} giorni
+                        EUR {centsToEurStr(Math.round(revenueSuggestion.finalDailyRateEur * 100))}/giorno x {revenueSuggestion.rentalDays} giorni
                         {' '}({revenueSuggestion.selectedBaseRateSource === 'vehicle_override' ? 'override veicolo' :
                               revenueSuggestion.selectedBaseRateSource === 'category_override' ? 'override categoria' : 'tariffa base'})
                         {revenueSuggestion.minHit && ' | Min raggiunto'}
                         {revenueSuggestion.maxHit && ' | Max raggiunto'}
                       </div>
-                      <div className="space-y-1 pt-1 border-t border-theme-border">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-theme-text-muted">Base selezionata</span>
-                          <span className="text-theme-text-primary">EUR {revenueSuggestion.selectedBaseRateEur.toFixed(2)}/g</span>
-                        </div>
+                      <button
+                        type="button"
+                        onClick={() => setRevenueExpanded(!revenueExpanded)}
+                        className="text-xs text-blue-400 hover:text-blue-300"
+                      >
+                        {revenueExpanded ? 'Nascondi dettagli' : 'Mostra dettagli'}
+                      </button>
+                      {revenueExpanded && (
+                        <div className="space-y-1 pt-1 border-t border-theme-border">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-theme-text-muted">Base selezionata</span>
+                            <span className="text-theme-text-primary">EUR {revenueSuggestion.selectedBaseRateEur.toFixed(2)}/g</span>
+                          </div>
                         {revenueSuggestion.breakdown.map((item, i) => (
                           <div key={i} className="flex justify-between text-xs">
                             <span className="text-theme-text-muted">{item.label} ({item.description})</span>
@@ -5906,6 +6056,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           </div>
                         )}
                       </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -5985,11 +6136,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 onChange={(e) => {
                   const newTotal = e.target.value
                   setFormData(prev => {
-                    // If currently paid, update paid amount to match new total (including delivery/pickup fees)
-                    const fullTotal = parseFloat(newTotal || '0')
-                      + (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
-                      + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
-                    const newPaid = prev.payment_status === 'paid' ? fullTotal.toFixed(2) : prev.amount_paid
+                    // If currently paid, update paid amount to match new total (cents-based to avoid float drift)
+                    const fullTotalCents = eurToCents(newTotal || '0')
+                      + (prev.delivery_enabled ? eurToCents(prev.delivery_fee || '0') : 0)
+                      + (prev.pickup_enabled ? eurToCents(prev.pickup_fee || '0') : 0)
+                    const newPaid = prev.payment_status === 'paid' ? centsToEurStr(fullTotalCents) : prev.amount_paid
                     return { ...prev, total_amount: newTotal, amount_paid: newPaid }
                   })
                 }}
@@ -6000,7 +6151,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   type="number"
                   step="0.01"
                   value={formData.km_overage_fee}
-                  onChange={(e) => setFormData({ ...formData, km_overage_fee: e.target.value })}
+                  onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_overage_fee: v })) }}
                   placeholder="es. 0.50"
                   disabled={formData.unlimited_km}
                 />
@@ -6046,7 +6197,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 label="Limite KM Personale"
                 type="number"
                 value={formData.km_limit}
-                onChange={(e) => setFormData({ ...formData, km_limit: e.target.value })}
+                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, km_limit: v })) }}
                 placeholder="es. 150 (Lascia vuoto se Illimitati)"
                 disabled={formData.unlimited_km}
               />
@@ -6095,7 +6246,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <Input
                 label="Valuta"
                 value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, currency: v })) }}
               />
             </div>
 
@@ -6104,7 +6255,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Note (opzionale)</label>
               <textarea
                 value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, notes: v })) }}
                 placeholder="Note interne sulla prenotazione..."
                 rows={2}
                 className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold text-sm resize-none"
@@ -6118,29 +6269,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between items-center">
                     <span className="text-theme-text-muted">Noleggio base</span>
-                    <span className="font-mono text-theme-text-primary">€{parseFloat(formData.total_amount || '0').toFixed(2)}</span>
+                    <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.total_amount || '0'))}</span>
                   </div>
                   {formData.delivery_enabled && (
                     <div className="flex justify-between items-center">
                       <span className="text-theme-text-muted">Consegna a domicilio</span>
-                      <span className="font-mono text-theme-text-primary">€{parseFloat(formData.delivery_fee || '0').toFixed(2)}</span>
+                      <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.delivery_fee || '0'))}</span>
                     </div>
                   )}
                   {formData.pickup_enabled && (
                     <div className="flex justify-between items-center">
                       <span className="text-theme-text-muted">Ritiro a domicilio</span>
-                      <span className="font-mono text-theme-text-primary">€{parseFloat(formData.pickup_fee || '0').toFixed(2)}</span>
+                      <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.pickup_fee || '0'))}</span>
                     </div>
                   )}
                   <div className="border-t border-theme-border/50 pt-2 mt-2">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-dr7-gold">Totale da saldare</span>
                       <span className="font-mono text-xl font-bold text-dr7-gold">
-                        €{(
-                          parseFloat(formData.total_amount || '0') +
-                          (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0) +
-                          (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                        ).toFixed(2)}
+                        €{centsToEurStr(
+                          eurToCents(formData.total_amount || '0') +
+                          (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0) +
+                          (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+                        )}
                       </span>
                     </div>
                   </div>
@@ -6631,18 +6782,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         selectedBooking.payment_status === 'succeeded' ||
                         (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                         ? 'bg-green-900 text-green-300'
-                        : selectedBooking.payment_status === 'pending'
+                        : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending_payment')
                           ? 'bg-yellow-900 text-yellow-300'
-                          : 'bg-red-900 text-red-300'
+                          : selectedBooking.payment_status === 'expired'
+                            ? 'bg-orange-900 text-orange-300'
+                            : 'bg-red-900 text-red-300'
                         }`}>
                         {selectedBooking.payment_status === 'completed' ||
                           selectedBooking.payment_status === 'paid' ||
                           selectedBooking.payment_status === 'succeeded' ||
                           (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                           ? 'Pagato'
-                          : selectedBooking.payment_status === 'pending'
+                          : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending_payment')
                             ? 'Da Saldare'
-                            : 'Non Pagato'}
+                            : selectedBooking.payment_status === 'expired'
+                              ? 'Scaduto'
+                              : 'Non Pagato'}
                       </span>
                     </div>
                   </div>
@@ -6863,51 +7018,46 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   />
                 </div>
 
-                {/* KM Update */}
-                <div>
+                {/* KM Extension */}
+                <div className="bg-theme-bg-secondary/50 rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-theme-text-secondary">
+                      Km attuali: <span className="text-theme-text-primary font-bold">
+                        {extendingBooking.booking_details?.unlimited_km || extendingBooking.booking_details?.km_limit === 'Illimitati'
+                          ? 'Illimitati'
+                          : `${extendingBooking.booking_details?.km_limit || '0'} Km`}
+                      </span>
+                    </span>
+                  </div>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={extendData.update_km}
-                      onChange={(e) => setExtendData({ ...extendData, update_km: e.target.checked })}
+                      checked={extendData.extension_unlimited_km}
+                      onChange={(e) => setExtendData({ ...extendData, extension_unlimited_km: e.target.checked, extension_km_added: '' })}
                       className="w-4 h-4 accent-purple-500"
                     />
-                    <span className="text-sm font-medium text-theme-text-secondary">Aggiorna KM</span>
+                    <span className="text-sm font-medium text-theme-text-secondary">Km Illimitati</span>
                   </label>
-                  {extendingBooking && (
-                    <p className="text-xs text-theme-text-muted mt-1">
-                      Attuale: {extendingBooking.booking_details?.unlimited_km || extendingBooking.booking_details?.km_limit === 'Illimitati' ? 'Illimitati' : `${extendingBooking.booking_details?.km_limit || DEFAULT_KM_LIMIT} Km`}
-                    </p>
+                  {!extendData.extension_unlimited_km && (
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Km da Aggiungere</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="10"
+                        value={extendData.extension_km_added}
+                        onChange={(e) => setExtendData({ ...extendData, extension_km_added: e.target.value })}
+                        className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
+                        placeholder="es. 100"
+                      />
+                      {extendData.extension_km_added && parseInt(extendData.extension_km_added) > 0 && (
+                        <p className="text-xs text-purple-400 mt-1">
+                          Nuovo totale: {parseInt(String(extendingBooking.booking_details?.km_limit || '0')) + parseInt(extendData.extension_km_added)} Km
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
-
-                {extendData.update_km && (
-                  <div className="space-y-3 pl-2 border-l-2 border-purple-500/30">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={extendData.unlimited_km}
-                        onChange={(e) => setExtendData({ ...extendData, unlimited_km: e.target.checked, km_limit: e.target.checked ? '' : extendData.km_limit })}
-                        className="w-4 h-4 accent-purple-500"
-                      />
-                      <span className="text-sm font-medium text-theme-text-secondary">KM Illimitati</span>
-                    </label>
-
-                    {!extendData.unlimited_km && (
-                      <div>
-                        <label className="block text-sm font-medium text-theme-text-secondary mb-1">Limite KM Totale</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={extendData.km_limit}
-                          onChange={(e) => setExtendData({ ...extendData, km_limit: e.target.value })}
-                          className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
-                          placeholder="Es. 600"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato Pagamento Estensione</label>

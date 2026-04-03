@@ -168,5 +168,5 @@ const cancelHandler: Handler = async () => {
     }
 };
 
-// Run every 15 minutes
-export const handler = schedule('*/15 * * * *', cancelHandler);
+// Run every 5 minutes for tighter expiry enforcement
+export const handler = schedule('*/5 * * * *', cancelHandler);

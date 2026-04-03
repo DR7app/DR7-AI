@@ -10,6 +10,7 @@ import {
     formatTimeSlotWithDuration
 } from '../../../utils/bookingConflictUtils'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Customer {
     id: string
@@ -221,7 +222,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
 
                 // Generate PDF invoice for mechanical service
                 try {
-                    await fetch('/.netlify/functions/generate-invoice-pdf', {
+                    await authFetch('/.netlify/functions/generate-invoice-pdf', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
