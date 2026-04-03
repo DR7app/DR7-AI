@@ -42,11 +42,6 @@ export default function LimitationOverrideModal({
     setError(null)
   }, [])
 
-  const handleClose = () => {
-    reset()
-    onClose()
-  }
-
   async function sendOtp() {
     setSending(true)
     setError(null)
