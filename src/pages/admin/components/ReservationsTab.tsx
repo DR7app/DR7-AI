@@ -1751,11 +1751,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
           return ['__limitation_override_requested__']
         }
-        if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione') {
-          throw new Error('No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
+        if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
+          requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
+          return ['__limitation_override_requested__']
         }
-        if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA') {
-          throw new Error('No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
+        if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
+          requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
+          return ['__limitation_override_requested__']
         }
       }
 
@@ -4933,10 +4935,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             const tier = classifyDriverTier(age, licYears)
                             setCustomerTier(tier)
 
-                            if (tier.tier === 'BLOCKED') {
-                              alert(`⚠️ CLIENTE NON IDONEO\n\n${tier.reason}\n\nEtà: ${age} anni — Patente: ${licYears} anni`)
-                              setFormData(prev => ({ ...prev, customer_id: '' }))
-                              return
+                            if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+                              requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason} (Età: ${age} anni — Patente: ${licYears} anni)`)
+                              // Keep customer selected — override modal will show
                             }
 
                             // Reset incompatible options when tier changes
