@@ -43,7 +43,6 @@ const CarWashCatalogTab = lazyWithRetry(() => import('./components/CarWashCatalo
 const OperatoriTab = lazyWithRetry(() => import('./components/OperatoriTab'))
 const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
 const RevenuePricingTab = lazyWithRetry(() => import('./components/RevenuePricingTab'))
-const PreventiviTab = lazyWithRetry(() => import('./components/PreventiviTab'))
 
 const TabLoader = () => (
   <div className="flex items-center justify-center py-12">
@@ -51,7 +50,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing'
+type TabType = 'reservations' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing'
 
 export default function AdminDashboard() {
   const [activeTab, _setActiveTab] = useState<TabType>('reservations')
@@ -167,7 +166,6 @@ export default function AdminDashboard() {
   // Mobile tab labels
   const tabLabels: Record<string, string> = {
     'reservations': 'Prenotazioni Noleggio',
-    'preventivi': 'Preventivi',
     'calendar': 'Calendario Noleggio',
     'cauzioni': 'Cauzioni',
     'contratto': 'Contratti',
@@ -240,7 +238,6 @@ export default function AdminDashboard() {
         <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto scrollbar-thin">
           <div className={sidebarSectionClass}>Noleggio</div>
           <button onClick={() => { setActiveTab('reservations'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reservations')}>Prenotazioni</button>
-          <button onClick={() => { setActiveTab('preventivi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'preventivi')}>Preventivi</button>
           <button onClick={() => { setActiveTab('calendar'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'calendar')}>Calendario</button>
           <button onClick={() => { setActiveTab('cauzioni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
           <button onClick={() => { setActiveTab('contratto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'contratto')}>Contratti</button>
@@ -392,8 +389,7 @@ export default function AdminDashboard() {
               onDataConsumed={() => setInitialReservationData(null)}
             />
           )}
-          {activeTab === 'preventivi' && <PreventiviTab />}
-          {activeTab === 'unpaid' && (isTabRestricted('unpaid') ? <PlaceholderTab title="Accesso non autorizzato" /> : <UnpaidBookingsTab />)}
+{activeTab === 'unpaid' && (isTabRestricted('unpaid') ? <PlaceholderTab title="Accesso non autorizzato" /> : <UnpaidBookingsTab />)}
           {activeTab === 'customers' && <CustomersTab />}
           {activeTab === 'customer-wallet' && <CustomerWalletTab />}
           {activeTab === 'vehicles' && <VehiclesTab />}

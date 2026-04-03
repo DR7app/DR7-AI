@@ -59,6 +59,9 @@ export default function PreventiviTab() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [assigningCustomer, setAssigningCustomer] = useState<string | null>(null)
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
+  const [rinviaId, setRinviaId] = useState<string | null>(null)
+  const [rinviaPhone, setRinviaPhone] = useState('')
+  const [rinviaSending, setRinviaSending] = useState(false)
 
   const loadPreventivi = async () => {
     setLoading(true)
@@ -76,30 +79,34 @@ export default function PreventiviTab() {
   }
 
   const loadCustomers = async () => {
-    // Fetch all customers with pagination (supabase default limit is 1000)
-    let allCustomers: Customer[] = []
-    let from = 0
-    const pageSize = 1000
-    let hasMore = true
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from('customers_extended')
-        .select('id, full_name, email, phone')
-        .order('full_name')
-        .range(from, from + pageSize - 1)
-      if (error) {
-        console.error('Error loading customers:', error)
-        break
-      }
-      if (data && data.length > 0) {
-        allCustomers = [...allCustomers, ...data]
-        from += pageSize
-        if (data.length < pageSize) hasMore = false
+    try {
+      const res = await fetch('/.netlify/functions/list-customers')
+      const result = await res.json()
+      if (res.ok && result.customers) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mapped: Customer[] = result.customers.map((c: any) => {
+          let fullName = 'N/A'
+          if (c.tipo_cliente === 'azienda') {
+            fullName = c.denominazione || c.ragione_sociale || 'N/A'
+          } else if (c.tipo_cliente === 'persona_fisica') {
+            fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A'
+          } else {
+            fullName = c.full_name || c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A'
+          }
+          return {
+            id: c.id,
+            full_name: fullName,
+            email: c.email || null,
+            phone: c.telefono || c.phone || null,
+          }
+        })
+        setCustomers(mapped)
       } else {
-        hasMore = false
+        console.error('Error loading customers:', result.error)
       }
+    } catch (err) {
+      console.error('Error loading customers:', err)
     }
-    setCustomers(allCustomers)
   }
 
   useEffect(() => {
@@ -139,18 +146,13 @@ export default function PreventiviTab() {
     }
   }
 
-  const handleRinvia = async (p: Preventivo) => {
-    if (!p.customer_id) {
-      toast.error('Assegna prima un cliente al preventivo')
+  const handleRinvia = async (p: Preventivo, phone: string) => {
+    if (!phone.trim()) {
+      toast.error('Inserisci un numero di telefono')
       return
     }
 
-    const customer = customers.find(c => c.id === p.customer_id)
-    const phone = customer?.phone
-    if (!phone) {
-      toast.error('Il cliente non ha un numero di telefono')
-      return
-    }
+    setRinviaSending(true)
 
     const pickupStr = formatDateTime(p.pickup_date)
     const dropoffStr = formatDateTime(p.dropoff_date)
@@ -176,12 +178,16 @@ export default function PreventiviTab() {
       await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customPhone: phone, customMessage: message })
+        body: JSON.stringify({ customPhone: phone.trim(), customMessage: message })
       })
-      toast.success(`Preventivo inviato via WhatsApp a ${p.customer_name}!`)
+      toast.success(`Preventivo inviato via WhatsApp!`)
+      setRinviaId(null)
+      setRinviaPhone('')
     } catch (err) {
       console.error('Errore invio WhatsApp:', err)
       toast.error('Errore invio WhatsApp')
+    } finally {
+      setRinviaSending(false)
     }
   }
 
@@ -328,14 +334,16 @@ export default function PreventiviTab() {
                           Modifica
                         </button>
                         {/* Rinvia via WhatsApp */}
-                        {p.customer_id && (
-                          <button
-                            onClick={() => handleRinvia(p)}
-                            className="px-3 py-1.5 text-xs rounded-full bg-green-600/20 text-green-400 hover:bg-green-600/30 transition-colors"
-                          >
-                            Rinvia
-                          </button>
-                        )}
+                        <button
+                          onClick={() => {
+                            const customer = customers.find(c => c.id === p.customer_id)
+                            setRinviaId(rinviaId === p.id ? null : p.id)
+                            setRinviaPhone(customer?.phone || '')
+                          }}
+                          className="px-3 py-1.5 text-xs rounded-full bg-green-600/20 text-green-400 hover:bg-green-600/30 transition-colors"
+                        >
+                          Rinvia
+                        </button>
                       </>
                     )}
                     {/* Duplicate */}
@@ -372,6 +380,26 @@ export default function PreventiviTab() {
                   <div className="flex gap-2 mt-2">
                     <Button onClick={() => handleAssignCustomer(p.id)} className="text-xs">Assegna</Button>
                     <Button variant="secondary" onClick={() => setAssigningCustomer(null)} className="text-xs">Annulla</Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Rinvia WhatsApp inline */}
+              {rinviaId === p.id && (
+                <div className="mt-3 p-3 rounded-lg border border-green-500/30 bg-green-900/10">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Invia Preventivo via WhatsApp</label>
+                  <input
+                    type="tel"
+                    value={rinviaPhone}
+                    onChange={(e) => setRinviaPhone(e.target.value)}
+                    placeholder="Numero telefono (es. +39 333 1234567)"
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <Button onClick={() => handleRinvia(p, rinviaPhone)} className="text-xs bg-green-600 hover:bg-green-700" disabled={rinviaSending}>
+                      {rinviaSending ? 'Invio...' : 'Invia WhatsApp'}
+                    </Button>
+                    <Button variant="secondary" onClick={() => { setRinviaId(null); setRinviaPhone('') }} className="text-xs">Annulla</Button>
                   </div>
                 </div>
               )}
