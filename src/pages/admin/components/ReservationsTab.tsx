@@ -2693,6 +2693,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               : `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`)
             + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
             + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
+            + `*Km:* ${extendData.extension_unlimited_km ? 'Illimitati' : (extensionKmAdded > 0 ? `+${extensionKmAdded} km (totale: ${newKmLimit} Km)` : `${newKmLimit} Km`)}\n`
             + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
             + `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
             + `*Pagamento estensione:* ${custExtPayLabel}\n`
@@ -2863,6 +2864,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!newCustomerData.indirizzo) missing.push('indirizzo')
           if (!newCustomerData.citta_residenza) missing.push('citta_residenza')
           if (!newCustomerData.patente) missing.push('patente')
+
+          // ===== LIMITATION CHECKS: License age & driver tier (new customer) =====
+          const patenteDate = newCustomerData.data_rilascio_patente
+          if (patenteDate) {
+            const licYears = calculateLicenseYears(patenteDate)
+            if (licYears < 3 && !hasOverride('license_too_recent')) {
+              requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
+              return
+            }
+          }
+          if (newCustomerData.data_nascita && patenteDate) {
+            const age = calculateAge(newCustomerData.data_nascita)
+            const licYears = calculateLicenseYears(patenteDate)
+            const tier = classifyDriverTier(age, licYears)
+            if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+              requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
+              return
+            }
+          }
         } else if (newCustomerData.tipo_cliente === 'azienda') {
           if (!newCustomerData.denominazione) missing.push('denominazione')
           if (!newCustomerData.partita_iva) missing.push('partita_iva')
@@ -3006,6 +3026,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } else {
             if (!customer.nome) missing.push('nome')
             if (!customer.cognome) missing.push('cognome')
+
+            // ===== LIMITATION CHECKS: License age & driver tier =====
+            const patenteDate = customer.data_rilascio_patente || customer.metadata?.patente?.rilascio
+            if (patenteDate) {
+              const licYears = calculateLicenseYears(patenteDate)
+              if (licYears < 3 && !hasOverride('license_too_recent')) {
+                requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
+                return
+              }
+            }
+            if (customer.data_nascita && patenteDate) {
+              const age = calculateAge(customer.data_nascita)
+              const licYears = calculateLicenseYears(patenteDate)
+              const tier = classifyDriverTier(age, licYears)
+              if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+                requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
+                return
+              }
+            }
           }
 
           if (missing.length > 0) {
