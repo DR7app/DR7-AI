@@ -386,7 +386,7 @@ export default function UnpaidBookingsTab() {
       loadUnpaidBookings()
     } catch (error: unknown) {
       console.error('Failed to update payment status:', error)
-      const _errMsg = error instanceof Error ? error.message : String(error)
+      const _errMsg = error instanceof Error ? error.message : ((error as any)?.message || JSON.stringify(error))
       const errorMessage = _errMsg || JSON.stringify(error)
       toast.error(`Errore: ${errorMessage}`)
     }
@@ -417,9 +417,9 @@ export default function UnpaidBookingsTab() {
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
+      const _errMsg = error instanceof Error ? error.message : ((error as any)?.message || JSON.stringify(error))
       console.error('Failed to remove item:', error)
-      toast.error('Errore: ' + (_errMsg || error))
+      toast.error('Errore: ' + (_errMsg || JSON.stringify(error)))
     }
   }
 
@@ -450,9 +450,9 @@ export default function UnpaidBookingsTab() {
       setEditAmountKey(null)
       loadUnpaidBookings()
     } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
+      const _errMsg = error instanceof Error ? error.message : ((error as any)?.message || JSON.stringify(error))
       console.error('Failed to update amount:', error)
-      toast.error('Errore: ' + (_errMsg || error))
+      toast.error('Errore: ' + (_errMsg || JSON.stringify(error)))
     }
   }
 
@@ -473,8 +473,8 @@ export default function UnpaidBookingsTab() {
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
-      toast.error('Errore: ' + (_errMsg || error))
+      const _errMsg = error instanceof Error ? error.message : ((error as any)?.message || JSON.stringify(error))
+      toast.error('Errore: ' + (_errMsg || JSON.stringify(error)))
     }
   }
 
@@ -518,8 +518,8 @@ export default function UnpaidBookingsTab() {
 
       loadUnpaidBookings()
     } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
-      toast.error('Errore: ' + (_errMsg || error))
+      const _errMsg = error instanceof Error ? error.message : ((error as any)?.message || JSON.stringify(error))
+      toast.error('Errore: ' + (_errMsg || JSON.stringify(error)))
     }
   }
 
@@ -571,8 +571,8 @@ export default function UnpaidBookingsTab() {
 
       loadUnpaidBookings()
     } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
-      toast.error('Errore: ' + (_errMsg || error))
+      const _errMsg = error instanceof Error ? error.message : ((error as any)?.message || JSON.stringify(error))
+      toast.error('Errore: ' + (_errMsg || JSON.stringify(error)))
     }
   }
 
@@ -621,9 +621,9 @@ export default function UnpaidBookingsTab() {
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
+      const _errMsg = error instanceof Error ? error.message : ((error as any)?.message || JSON.stringify(error))
       console.error('Failed to delete booking:', error)
-      toast.error('Errore: ' + (_errMsg || error))
+      toast.error('Errore: ' + (_errMsg || JSON.stringify(error)))
     }
   }
 
@@ -805,7 +805,8 @@ export default function UnpaidBookingsTab() {
 
       loadUnpaidBookings()
     } catch (err: unknown) {
-      const _errMsg = err instanceof Error ? err.message : String(err)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const _errMsg = err instanceof Error ? err.message : (err as any)?.message || JSON.stringify(err)
       toast.error(_errMsg || 'Errore')
     } finally {
       setProcessingKey(null)
@@ -963,7 +964,8 @@ export default function UnpaidBookingsTab() {
 
       loadUnpaidBookings()
     } catch (err: unknown) {
-      const _errMsg = err instanceof Error ? err.message : String(err)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const _errMsg = err instanceof Error ? err.message : (err as any)?.message || JSON.stringify(err)
       toast.error(_errMsg || 'Errore')
     } finally {
       setProcessingKey(null)
@@ -1239,7 +1241,8 @@ export default function UnpaidBookingsTab() {
       logAdminAction('mark_all_customer_paid', 'customer', group.customerKey)
       loadUnpaidBookings()
     } catch (err: unknown) {
-      const _errMsg = err instanceof Error ? err.message : String(err)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const _errMsg = err instanceof Error ? err.message : (err as any)?.message || JSON.stringify(err)
       toast.error(_errMsg || 'Errore')
     } finally {
       setProcessingKey(null)
