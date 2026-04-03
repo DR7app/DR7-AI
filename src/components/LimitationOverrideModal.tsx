@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../utils/authFetch'
 

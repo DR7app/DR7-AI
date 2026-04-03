@@ -4,6 +4,8 @@ import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
+import { useRentalConfig } from '../../../hooks/useRentalConfig'
+import { getKmIncluded } from '../../../utils/configLookup'
 
 // --- Types ---
 type Fascia = 'A' | 'B'
@@ -307,6 +309,9 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
     }
   }, [editData, isOpen])
 
+  // Rental config from Centralina (for KM auto-calculation)
+  const { config: rentalConfig } = useRentalConfig()
+
   // Selected vehicle
   const selectedVehicle = useMemo(() => vehicles.find(v => v.id === form.vehicle_id), [vehicles, form.vehicle_id])
   const vehicleType = useMemo(() => getVehicleType(selectedVehicle), [selectedVehicle])
@@ -316,6 +321,19 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
 
   // Rental days
   const rentalDays = useMemo(() => calculateRentalDays(form.pickup_date, form.pickup_time, form.return_date, form.return_time), [form.pickup_date, form.pickup_time, form.return_date, form.return_time])
+
+  // Auto-calculate KM from rentalConfig when dates or vehicle change
+  useEffect(() => {
+    if (!rentalDays || rentalDays <= 0 || form.unlimited_km) return
+    // Map vehicleType to config key
+    const kmCategory = vehicleType === 'util' ? '_global' : vehicleType
+    const km = getKmIncluded(rentalConfig, rentalDays, kmCategory)
+    if (km === 'unlimited') {
+      setForm(prev => ({ ...prev, unlimited_km: true, km_limit: '0', km_overage_fee: '0' }))
+    } else if (km > 0) {
+      setForm(prev => ({ ...prev, km_limit: km.toString() }))
+    }
+  }, [rentalDays, vehicleType, rentalConfig])
 
   // When vehicle changes, update daily rate and reset insurance
   useEffect(() => {
@@ -612,23 +630,13 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
           {/* KM Limit */}
           <div className="p-4 rounded-lg border border-theme-border">
             <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 uppercase tracking-wider">Chilometraggio</h4>
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-2 mb-3">
-              {[100, 180, 240, 280, 300].map(km => (
-                <div
-                  key={km}
-                  className={`p-2 rounded-md border cursor-pointer text-center transition-all ${
-                    parseInt(form.km_limit) === km && !form.unlimited_km
-                      ? 'border-dr7-gold bg-dr7-gold/10'
-                      : 'border-theme-border hover:border-theme-text-muted'
-                  } ${form.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onClick={() => !form.unlimited_km && setForm(prev => ({ ...prev, km_limit: km.toString() }))}
-                >
-                  <span className="text-theme-text-primary font-bold text-xs">{km} km</span>
-                </div>
-              ))}
-            </div>
+            {rentalDays > 0 && !form.unlimited_km && parseInt(form.km_limit) > 0 && (
+              <p className="text-xs text-dr7-gold mb-3">
+                Auto-calcolato: {form.km_limit} km per {rentalDays} giorn{rentalDays === 1 ? 'o' : 'i'}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
-              <Input label="Limite KM Personale" type="number" value={form.km_limit}
+              <Input label="Limite KM" type="number" value={form.km_limit}
                 onChange={(e) => setForm(prev => ({ ...prev, km_limit: e.target.value }))}
                 disabled={form.unlimited_km} />
               <Input label="Sforo per KM (€)" type="number" step="0.01" value={form.km_overage_fee}
