@@ -2,7 +2,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
-import ReservationsTab from './components/ReservationsTab'
+import RentalTabs from './components/RentalTabs'
 import { useBirthdayCount } from './components/BirthdaysTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import { useAdminRole } from '../../hooks/useAdminRole'
@@ -384,7 +384,7 @@ export default function AdminDashboard() {
           <Suspense fallback={<TabLoader />}>
           <div>
           {activeTab === 'reservations' && (
-            <ReservationsTab
+            <RentalTabs
               initialData={initialReservationData}
               onDataConsumed={() => setInitialReservationData(null)}
             />

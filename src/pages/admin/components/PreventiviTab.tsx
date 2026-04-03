@@ -76,11 +76,30 @@ export default function PreventiviTab() {
   }
 
   const loadCustomers = async () => {
-    const { data } = await supabase
-      .from('customers_extended')
-      .select('id, full_name, email, phone')
-      .order('full_name')
-    if (data) setCustomers(data)
+    // Fetch all customers with pagination (supabase default limit is 1000)
+    let allCustomers: Customer[] = []
+    let from = 0
+    const pageSize = 1000
+    let hasMore = true
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('customers_extended')
+        .select('id, full_name, email, phone')
+        .order('full_name')
+        .range(from, from + pageSize - 1)
+      if (error) {
+        console.error('Error loading customers:', error)
+        break
+      }
+      if (data && data.length > 0) {
+        allCustomers = [...allCustomers, ...data]
+        from += pageSize
+        if (data.length < pageSize) hasMore = false
+      } else {
+        hasMore = false
+      }
+    }
+    setCustomers(allCustomers)
   }
 
   useEffect(() => {
@@ -117,6 +136,52 @@ export default function PreventiviTab() {
       setAssigningCustomer(null)
       setSelectedCustomerId('')
       loadPreventivi()
+    }
+  }
+
+  const handleRinvia = async (p: Preventivo) => {
+    if (!p.customer_id) {
+      toast.error('Assegna prima un cliente al preventivo')
+      return
+    }
+
+    const customer = customers.find(c => c.id === p.customer_id)
+    const phone = customer?.phone
+    if (!phone) {
+      toast.error('Il cliente non ha un numero di telefono')
+      return
+    }
+
+    const pickupStr = formatDateTime(p.pickup_date)
+    const dropoffStr = formatDateTime(p.dropoff_date)
+    const kmInfo = p.unlimited_km ? 'Illimitati' : `${p.km_limit} Km`
+
+    const message = `Gentile ${p.customer_name || 'Cliente'},\n\n`
+      + `Le inviamo il preventivo per il noleggio richiesto:\n\n`
+      + `*PREVENTIVO NOLEGGIO DR7*\n\n`
+      + `*Veicolo:* ${p.vehicle_name}${p.vehicle_plate ? ` (${p.vehicle_plate})` : ''}\n`
+      + `*Periodo:* ${pickupStr} → ${dropoffStr} (${p.rental_days}g)\n`
+      + `*Assicurazione:* ${p.insurance_option}\n`
+      + `*KM inclusi:* ${kmInfo}\n`
+      + (p.second_driver ? `*Secondo guidatore:* Incluso\n` : '')
+      + (p.delivery_enabled ? `*Consegna:* €${p.delivery_fee.toFixed(2)}\n` : '')
+      + (p.pickup_enabled ? `*Ritiro:* €${p.pickup_fee.toFixed(2)}\n` : '')
+      + `\n*Totale:* €${p.total_amount.toFixed(2)}\n`
+      + (p.deposit_amount > 0 ? `*Cauzione:* €${p.deposit_amount.toFixed(0)}\n` : '')
+      + (p.valid_until ? `\n⏳ Preventivo valido fino al ${formatDate(p.valid_until)}\n` : '')
+      + `\nPer confermare, risponda a questo messaggio o visiti www.dr7empire.com\n`
+      + `\nGrazie per averci scelto!\nDR7 Empire`
+
+    try {
+      await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customPhone: phone, customMessage: message })
+      })
+      toast.success(`Preventivo inviato via WhatsApp a ${p.customer_name}!`)
+    } catch (err) {
+      console.error('Errore invio WhatsApp:', err)
+      toast.error('Errore invio WhatsApp')
     }
   }
 
@@ -262,6 +327,15 @@ export default function PreventiviTab() {
                         >
                           Modifica
                         </button>
+                        {/* Rinvia via WhatsApp */}
+                        {p.customer_id && (
+                          <button
+                            onClick={() => handleRinvia(p)}
+                            className="px-3 py-1.5 text-xs rounded-full bg-green-600/20 text-green-400 hover:bg-green-600/30 transition-colors"
+                          >
+                            Rinvia
+                          </button>
+                        )}
                       </>
                     )}
                     {/* Duplicate */}
