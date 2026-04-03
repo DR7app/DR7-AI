@@ -2,7 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 // import fetch from 'node-fetch' // Using native fetch in Node 18+
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
+const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const YOUSIGN_API_KEY = process.env.YOUSIGN_API_KEY
 let YOUSIGN_API_BASE_URL = process.env.YOUSIGN_API_BASE_URL || 'https://api-sandbox.yousign.app/v3'

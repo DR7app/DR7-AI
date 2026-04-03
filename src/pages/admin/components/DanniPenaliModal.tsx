@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { authFetch } from '../../../utils/authFetch'
 
 interface DanniPenaliModalProps {
     isOpen: boolean
@@ -299,7 +300,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     ...danniItems.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
                     ...penaliItems.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
                 ]
-                const response = await fetch('/.netlify/functions/generate-penalty-invoice', {
+                const response = await authFetch('/.netlify/functions/generate-penalty-invoice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -318,7 +319,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     throw new Error(errMsg)
                 }
                 if (data.invoiceId) {
-                    const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+                    const pdfResponse = await authFetch('/.netlify/functions/generate-invoice-pdf', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ invoiceId: data.invoiceId })
@@ -340,7 +341,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     const custEmail = currentBooking?.customer_email || booking.customer_email || booking.booking_details?.customer?.email
                     const custName = currentBooking?.customer_name || booking.customer_name
 
-                    const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+                    const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

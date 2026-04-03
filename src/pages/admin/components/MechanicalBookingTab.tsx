@@ -4,6 +4,7 @@ import MechanicalBookingForm from './MechanicalBookingForm'
 import NewClientModal from './NewClientModal'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Customer {
   id: string
@@ -167,7 +168,7 @@ export default function MechanicalBookingTab() {
 
     setGeneratingInvoice(true)
     try {
-      const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+      const response = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: booking.id, includeIVA })
@@ -188,7 +189,7 @@ export default function MechanicalBookingTab() {
 
       // Generate and open the invoice PDF
       const invoiceId = data.invoice.id
-      const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+      const pdfResponse = await authFetch('/.netlify/functions/generate-invoice-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId })

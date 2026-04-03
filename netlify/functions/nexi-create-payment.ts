@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { requireAuth } from './require-auth'
 
 // Environment variables for Nexi
 // these should be set in Netlify env vars
@@ -22,7 +23,7 @@ const handler: Handler = async (event, context) => {
     // CORS headers
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Methods': 'POST, OPTIONS'
     };
 
@@ -33,6 +34,10 @@ const handler: Handler = async (event, context) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, headers, body: 'Method Not Allowed' };
     }
+
+    // Require authentication
+    const { error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
 
     try {
         const { bookingId, amount, email, description, orderId: providedOrderId } = JSON.parse(event.body || '{}');

@@ -1,38 +1,19 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { VehicleAlarmProvider } from './contexts/VehicleAlarmContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import AlarmNotification from './components/AlarmNotification'
 import LateReturnAlarm from './components/admin/LateReturnAlarm'
+import lazyWithRetry from './utils/lazyWithRetry'
 
-// Retry lazy imports — handles stale chunks after Netlify deploys
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function lazyRetry(importFn: () => Promise<any>) {
-  return lazy(() =>
-    importFn().catch(() => {
-      // Chunk failed to load (likely new deploy) — reload page once
-      const hasReloaded = sessionStorage.getItem('chunk_reload')
-      if (!hasReloaded) {
-        sessionStorage.setItem('chunk_reload', '1')
-        window.location.reload()
-        // Return a never-resolving promise to prevent React from rendering while reloading
-        return new Promise(() => {})
-      }
-      // Already reloaded once — clear flag and try one more time
-      sessionStorage.removeItem('chunk_reload')
-      return importFn()
-    })
-  )
-}
-
-const Login = lazyRetry(() => import('./pages/Login'))
-const ResetPassword = lazyRetry(() => import('./pages/ResetPassword'))
-const AdminDashboard = lazyRetry(() => import('./pages/admin/AdminDashboard'))
-const AdminRoute = lazyRetry(() => import('./components/AdminRoute'))
-const ReferralPage = lazyRetry(() => import('./pages/ReferralPage'))
-const FirmaPage = lazyRetry(() => import('./pages/FirmaPage'))
+const Login = lazyWithRetry(() => import('./pages/Login'))
+const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'))
+const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'))
+const AdminRoute = lazyWithRetry(() => import('./components/AdminRoute'))
+const ReferralPage = lazyWithRetry(() => import('./pages/ReferralPage'))
+const FirmaPage = lazyWithRetry(() => import('./pages/FirmaPage'))
 
 function App() {
   return (

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface UserDocument {
   id: string
@@ -250,7 +251,7 @@ export default function DocumentsVerificationTab() {
   async function viewDocument(doc: UserDocument) {
     try {
       // Use secure server-side function to bypass RLS
-      const response = await fetch('/.netlify/functions/get-customer-documents', {
+      const response = await authFetch('/.netlify/functions/get-customer-documents', {
         method: 'POST',
         body: JSON.stringify({ userId: doc.user_id }),
         headers: { 'Content-Type': 'application/json' }

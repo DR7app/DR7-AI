@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from './require-auth'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -13,7 +14,7 @@ const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 const handler: Handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Methods': 'POST, OPTIONS'
     };
 
@@ -24,6 +25,10 @@ const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, headers, body: 'Method Not Allowed' };
     }
+
+    // Require authentication
+    const { error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
 
     try {
         const { cauzioneId, operationId: inputOperationId, amount, orderId } = JSON.parse(event.body || '{}');

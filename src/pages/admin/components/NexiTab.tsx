@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR } from '../../../utils/moneyUtils'
 import toast from 'react-hot-toast'
+import { authFetch } from '../../../utils/authFetch'
 
 interface PendingAddebito {
     id: string
@@ -165,7 +166,7 @@ export default function NexiTab() {
     async function fetchTransactions() {
         try {
             setLoading(true)
-            const response = await fetch('/.netlify/functions/nexi-list-orders')
+            const response = await authFetch('/.netlify/functions/nexi-list-orders')
             const data = await response.json()
 
             if (!response.ok) throw new Error(data.error || 'Failed to fetch messages')
@@ -252,7 +253,7 @@ export default function NexiTab() {
                 photoUrls = await uploadPhotos(tempId)
             }
 
-            const res = await fetch('/.netlify/functions/nexi-nuovo-addebito', {
+            const res = await authFetch('/.netlify/functions/nexi-nuovo-addebito', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

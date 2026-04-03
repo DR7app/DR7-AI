@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity, getCAPByCity } from '../../../data/sardegnaProvince'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
 
@@ -484,7 +485,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         // 1. Update customers_extended via Netlify function (bypasses RLS)
         logger.log('[NewClientModal] Updating customer via Netlify function with ID:', initialData.id)
-        const updateResponse = await fetch('/.netlify/functions/save-customer', {
+        const updateResponse = await authFetch('/.netlify/functions/save-customer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -540,7 +541,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       if (!editingId) {
         // CREATE New via Netlify function (bypasses RLS)
         logger.log('[NewClientModal] Creating customer via Netlify function')
-        const createResponse = await fetch('/.netlify/functions/save-customer', {
+        const createResponse = await authFetch('/.netlify/functions/save-customer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ customerData })

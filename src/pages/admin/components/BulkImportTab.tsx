@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface ExtractedData {
   nome?: string
@@ -521,7 +522,7 @@ export default function BulkImportTab() {
         let createdClientId: string | null = existingId
 
         if (existingId) {
-          const response = await fetch(`${FUNCTIONS_BASE}/.netlify/functions/save-customer`, {
+          const response = await authFetch(`${FUNCTIONS_BASE}/.netlify/functions/save-customer`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ customerData, customerId: existingId })
@@ -529,7 +530,7 @@ export default function BulkImportTab() {
           const result = await response.json()
           if (!response.ok) throw new Error(result.error || 'Update failed')
         } else {
-          const response = await fetch(`${FUNCTIONS_BASE}/.netlify/functions/save-customer`, {
+          const response = await authFetch(`${FUNCTIONS_BASE}/.netlify/functions/save-customer`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ customerData })

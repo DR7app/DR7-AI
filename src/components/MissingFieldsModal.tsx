@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { logger } from '../utils/logger'
+import { authFetch } from '../utils/authFetch'
 
 interface MissingFieldsModalProps {
     isOpen: boolean
@@ -145,7 +146,7 @@ export default function MissingFieldsModal({
             logger.log('[MissingFieldsModal] Saving via save-customer:', customerId, savePayload)
 
             // Use save-customer Netlify function (bypasses RLS, handles update-or-insert)
-            const response = await fetch('/.netlify/functions/save-customer', {
+            const response = await authFetch('/.netlify/functions/save-customer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

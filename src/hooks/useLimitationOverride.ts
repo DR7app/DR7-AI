@@ -1,0 +1,174 @@
+import { useState, useCallback, useRef, useMemo } from 'react'
+import { authFetch } from '../utils/authFetch'
+import { logAdminAction } from '../utils/logAdminAction'
+
+interface LimitationState {
+  isOpen: boolean
+  limitationCode: string
+  limitationMessage: string
+  actionContext: string
+}
+
+interface OverrideEntry {
+  overrideId: string
+  limitationCode: string
+  limitationMessage: string
+  approvedAt: string
+}
+
+/**
+ * Hook to manage limitation override flow with session-scoped draftSessionId.
+ *
+ * Each form open (new booking or edit) gets a unique draftSessionId.
+ * Overrides are only valid for that specific session — a new session requires new OTP.
+ *
+ * Usage:
+ *   const override = useLimitationOverride()
+ *
+ *   // Generate new session when form opens:
+ *   override.newSession('booking_create')
+ *
+ *   // In validation:
+ *   if (licenseAge < 2 && !override.hasOverride('license_too_recent')) {
+ *     override.requestOverride('license_too_recent', 'Patente rilasciata da meno di 2 anni')
+ *     return // stop flow
+ *   }
+ *
+ *   // After booking succeeds:
+ *   await override.consumeAllOverrides(bookingId)
+ */
+export function useLimitationOverride() {
+  const [limitationState, setLimitationState] = useState<LimitationState>({
+    isOpen: false,
+    limitationCode: '',
+    limitationMessage: '',
+    actionContext: '',
+  })
+
+  // Session identity
+  const draftSessionIdRef = useRef<string>(crypto.randomUUID())
+  const flowTypeRef = useRef<string>('booking_create')
+
+  // Map of limitationCode -> OverrideEntry (approved but not yet consumed)
+  const overrideMap = useRef<Map<string, OverrideEntry>>(new Map())
+
+  // Expose a simple Set for checking (triggers re-render on change)
+  const [overrideCodes, setOverrideCodes] = useState<Set<string>>(new Set())
+
+  // Computed list for display badges
+  const activeOverrides = useMemo(() => {
+    return Array.from(overrideMap.current.values())
+  }, [overrideCodes]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const draftSessionId = draftSessionIdRef.current
+  const flowType = flowTypeRef.current
+
+  /** Generate a new session (call when form opens or resets) */
+  const newSession = useCallback((ft: 'booking_create' | 'booking_edit' = 'booking_create') => {
+    draftSessionIdRef.current = crypto.randomUUID()
+    flowTypeRef.current = ft
+    overrideMap.current.clear()
+    setOverrideCodes(new Set())
+  }, [])
+
+  const requestOverride = useCallback((code: string, message: string, context?: string) => {
+    setLimitationState({
+      isOpen: true,
+      limitationCode: code,
+      limitationMessage: message,
+      actionContext: context || `${code}_${Date.now()}`,
+    })
+  }, [])
+
+  const handleOverrideApproved = useCallback((overrideId: string) => {
+    const code = limitationState.limitationCode
+    overrideMap.current.set(code, {
+      overrideId,
+      limitationCode: code,
+      limitationMessage: limitationState.limitationMessage,
+      approvedAt: new Date().toISOString(),
+    })
+    setOverrideCodes(new Set(overrideMap.current.keys()))
+
+    // Audit log
+    logAdminAction('limitation_override_approved', 'limitation', overrideId, {
+      limitation_code: code,
+      limitation_message: limitationState.limitationMessage,
+      action_context: limitationState.actionContext,
+      draft_session_id: draftSessionIdRef.current,
+      flow_type: flowTypeRef.current,
+    })
+
+    setLimitationState(prev => ({ ...prev, isOpen: false }))
+  }, [limitationState])
+
+  const closeLimitation = useCallback(() => {
+    setLimitationState(prev => ({ ...prev, isOpen: false }))
+  }, [])
+
+  const hasOverride = useCallback((code: string) => {
+    return overrideMap.current.has(code)
+  }, [])
+
+  /** Consume a single override (link to bookingId) */
+  const consumeOverride = useCallback(async (code: string, bookingId?: string) => {
+    const entry = overrideMap.current.get(code)
+    if (!entry) return
+
+    try {
+      await authFetch('/.netlify/functions/limitation-override-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'consume',
+          overrideId: entry.overrideId,
+          bookingId: bookingId || null
+        })
+      })
+    } catch {
+      // Non-critical: override was already used, just log
+    }
+
+    overrideMap.current.delete(code)
+    setOverrideCodes(new Set(overrideMap.current.keys()))
+  }, [])
+
+  /** Consume all overrides for the current session and link to final bookingId */
+  const consumeAllOverrides = useCallback(async (bookingId?: string) => {
+    const entries = Array.from(overrideMap.current.entries())
+    for (const [code] of entries) {
+      await consumeOverride(code, bookingId)
+    }
+  }, [consumeOverride])
+
+  /**
+   * Build audit snapshot of all overrides used in this session.
+   * Call before booking insert to embed in booking_details.
+   */
+  const getOverrideAuditSnapshot = useCallback(() => {
+    if (overrideMap.current.size === 0) return null
+    return Array.from(overrideMap.current.values()).map(e => ({
+      overrideId: e.overrideId,
+      limitationCode: e.limitationCode,
+      limitationMessage: e.limitationMessage,
+      approvedAt: e.approvedAt,
+      draftSessionId: draftSessionIdRef.current,
+    }))
+  }, [])
+
+  return {
+    limitationState,
+    overrideCodes,
+    activeOverrides,
+    draftSessionId,
+    flowType,
+    newSession,
+    requestOverride,
+    handleOverrideApproved,
+    closeLimitation,
+    hasOverride,
+    consumeOverride,
+    consumeAllOverrides,
+    getOverrideAuditSnapshot,
+  }
+}

@@ -1,7 +1,7 @@
 import { Handler, HandlerEvent, HandlerResponse } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
+const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const adminApiToken = process.env.ADMIN_API_TOKEN!
 

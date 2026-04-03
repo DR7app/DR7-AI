@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -204,7 +205,7 @@ export default function UnpaidBookingsTab() {
     if (amount <= 0) return
     setAddebitoSending(true)
     try {
-      const res = await fetch('/.netlify/functions/nexi-nuovo-addebito', {
+      const res = await authFetch('/.netlify/functions/nexi-nuovo-addebito', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -346,7 +347,8 @@ export default function UnpaidBookingsTab() {
         .from('bookings')
         .update({
           payment_status: newStatus,
-          status: newStatus === 'paid' ? 'confirmed' : 'pending'
+          paid_at: newStatus === 'paid' ? new Date().toISOString() : null,
+          status: newStatus === 'paid' ? 'confirmed' : 'pending_payment'
         })
         .eq('id', bookingId)
 
@@ -366,7 +368,7 @@ export default function UnpaidBookingsTab() {
           if (existingFattura) {
             toast.success(`Fattura ${existingFattura.numero_fattura} già esistente`)
           } else {
-            const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+            const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ bookingId, includeIVA: true })
@@ -497,7 +499,7 @@ export default function UnpaidBookingsTab() {
       const extAmount = ext.additional_amount || 0
       if (extAmount > 0) {
         try {
-          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: extAmount })
@@ -550,7 +552,7 @@ export default function UnpaidBookingsTab() {
       // Generate fattura when fully paid
       if (newPaid >= total && total > 0) {
         try {
-          const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: total })
@@ -603,7 +605,7 @@ export default function UnpaidBookingsTab() {
         }
       }
 
-      const res = await fetch('/.netlify/functions/delete-booking', {
+      const res = await authFetch('/.netlify/functions/delete-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId })
@@ -665,7 +667,7 @@ export default function UnpaidBookingsTab() {
   async function sendPayByLink(booking: UnpaidBooking, amountEur: number, description: string) {
     try {
       toast.loading('Generazione link...', { id: 'paylink' })
-      const res = await fetch('/.netlify/functions/nexi-pay-by-link', {
+      const res = await authFetch('/.netlify/functions/nexi-pay-by-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -776,7 +778,7 @@ export default function UnpaidBookingsTab() {
 
         if (invoiceItems.length > 0) {
           try {
-            const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+            const res = await authFetch('/.netlify/functions/generate-penalty-invoice', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -935,7 +937,7 @@ export default function UnpaidBookingsTab() {
       if (invoiceLineItems.length > 0) {
         const firstItem = items.find(i => i.source === 'booking_details')!
         try {
-          const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+          const res = await authFetch('/.netlify/functions/generate-penalty-invoice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1017,7 +1019,7 @@ export default function UnpaidBookingsTab() {
 
       // 3. Generate fattura FIRST — if it fails, abort before marking as paid
       if (invoiceLineItems.length > 0) {
-        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+        const res = await authFetch('/.netlify/functions/generate-penalty-invoice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1164,7 +1166,7 @@ export default function UnpaidBookingsTab() {
 
       // 5. Generate fattura FIRST — if it fails, abort before marking anything as paid
       if (invoiceLineItems.length > 0 && anchorBookingId) {
-        const res = await fetch('/.netlify/functions/generate-penalty-invoice', {
+        const res = await authFetch('/.netlify/functions/generate-penalty-invoice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

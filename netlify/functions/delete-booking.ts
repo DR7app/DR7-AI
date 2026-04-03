@@ -1,12 +1,13 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { requireAuth } from './require-auth'
 
 export const handler: Handler = async (event) => {
     // CORS headers
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Content-Type': 'application/json'
     }
 
@@ -17,6 +18,9 @@ export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, headers, body: 'Method Not Allowed' }
     }
+
+    const { user: authUser, error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
 
     try {
         const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL

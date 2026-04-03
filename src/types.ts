@@ -106,7 +106,7 @@ export interface Reservation {
   vehicle_id: string
   start_at: string
   end_at: string
-  status: 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled'
+  status: 'pending' | 'pending_payment' | 'confirmed' | 'active' | 'completed' | 'cancelled' | 'expired'
   source: string | null
   total_amount: number
   currency: string

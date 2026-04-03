@@ -1,6 +1,8 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
+import { requireAuth } from './require-auth'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -10,10 +12,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const NEXI_API_KEY = process.env.NEXI_API_KEY!;
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
+/** Payment link validity: 1 hour (matches bookingPaymentService.ts constant) */
+const PAYMENT_LINK_TTL_HOURS = 1;
+
 const handler: Handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Methods': 'POST, OPTIONS'
     };
 
@@ -25,6 +30,10 @@ const handler: Handler = async (event) => {
         return { statusCode: 405, headers, body: 'Method Not Allowed' };
     }
 
+    // Require authentication
+    const { error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
+
     try {
         const {
             bookingId,
@@ -32,9 +41,9 @@ const handler: Handler = async (event) => {
             customerEmail,
             customerName,
             description,
-            expirationDays = 7, // Link valid for 7 days by default
-            expirationHours, // Optional: override with hours (e.g. 1 = 1 hour)
-            paymentPurpose, // 'booking' | 'danni' | 'penali' | 'danni_penali' — used by callback
+            expirationDays = 7,
+            expirationHours,
+            paymentPurpose,
         } = JSON.parse(event.body || '{}');
 
         if (!NEXI_API_KEY) {
@@ -58,25 +67,30 @@ const handler: Handler = async (event) => {
         const ts = Date.now().toString(36)
         const orderId = bookingId
             ? `P${bookingId.slice(0, 8)}${ts}`.slice(0, 18)
-            : `P${ts}${Math.floor(Math.random() * 1000)}`.slice(0, 18);
+            : `P${ts}${randomUUID().slice(0, 6)}`.slice(0, 18);
 
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        // Calculate expiration: use hours if specified, otherwise days
+        // Calculate expiration: for bookings, always use 1 hour
+        const now = new Date();
+        const linkCreatedAt = now.toISOString();
         const expirationDate = new Date();
-        if (expirationHours) {
-            expirationDate.setTime(expirationDate.getTime() + expirationHours * 60 * 60 * 1000);
+        const effectiveHours = expirationHours || (paymentPurpose === 'booking' || !paymentPurpose ? PAYMENT_LINK_TTL_HOURS : null);
+        if (effectiveHours) {
+            expirationDate.setTime(expirationDate.getTime() + effectiveHours * 60 * 60 * 1000);
         } else {
             expirationDate.setDate(expirationDate.getDate() + Math.max(expirationDays, 1));
         }
+        const linkExpiresAt = expirationDate.toISOString();
         // Nexi expirationDate only accepts yyyy-MM-dd (no time precision).
         // For short expiry (expirationHours), use today's date — Nexi keeps the link
         // valid until end of that day. Our cancel-unpaid-nexi-bookings job enforces
         // the actual 1-hour booking hold by cancelling unpaid bookings.
         const toRomeDate = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }); // sv-SE gives yyyy-MM-dd
         const expirationDateStr = toRomeDate(expirationDate);
-        console.log('[nexi-pay-by-link] Expiration:', expirationDate.toISOString(), 'Rome date for Nexi:', expirationDateStr);
+
+        console.log(`[nexi-pay-by-link] bookingId=${bookingId}, amount=${amount}, purpose=${paymentPurpose || 'booking'}, expires=${linkExpiresAt}, Rome date for Nexi: ${expirationDateStr}`);
 
         // Create payment link request (using /v2/orders/paybylink endpoint)
         const payload = {
@@ -109,15 +123,8 @@ const handler: Handler = async (event) => {
             expirationDate: expirationDateStr
         };
 
-        console.log('[nexi-pay-by-link] Request:', JSON.stringify(payload));
-
-        const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-            const r = Math.random() * 16 | 0
-            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
-        })
-        // Use v2 paybylink endpoint (base URL has /v1, replace with /v2)
+        const correlationId = randomUUID()
         const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
-        console.log('[nexi-pay-by-link] URL:', payByLinkUrl);
         const response = await fetch(payByLinkUrl, {
             method: 'POST',
             headers: {
@@ -129,16 +136,15 @@ const handler: Handler = async (event) => {
         });
 
         const responseText = await response.text();
-        console.log('Nexi response status:', response.status);
-        console.log('Nexi response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
-        console.log('Nexi response body:', responseText || '(empty)');
-        console.log('API key first/last 4:', NEXI_API_KEY?.slice(0, 4) + '...' + NEXI_API_KEY?.slice(-4));
+        console.log('[nexi-pay-by-link] Nexi response status:', response.status);
+        console.log('[nexi-pay-by-link] API key configured:', !!NEXI_API_KEY);
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let responseData: any;
         try {
             responseData = JSON.parse(responseText);
         } catch {
-            console.error('Nexi returned non-JSON response:', response.status, responseText.substring(0, 500));
+            console.error('[nexi-pay-by-link] Non-JSON response:', response.status, responseText.substring(0, 500));
             return {
                 statusCode: 502,
                 headers,
@@ -147,7 +153,7 @@ const handler: Handler = async (event) => {
         }
 
         if (!response.ok) {
-            console.error('Nexi Pay by Link error:', responseData);
+            console.error('[nexi-pay-by-link] Nexi error:', responseData);
             return {
                 statusCode: response.status,
                 headers,
@@ -157,11 +163,10 @@ const handler: Handler = async (event) => {
             };
         }
 
-        // paybylink returns paymentLink.link, build returns hostedPage
         const paymentUrl = responseData.paymentLink?.link || responseData.hostedPage;
-        console.log('[nexi-pay-by-link] Payment URL:', paymentUrl);
+        console.log(`[nexi-pay-by-link] Payment URL created: ${paymentUrl}`);
 
-        // Store in database
+        // ── Store in nexi_transactions table ──
         const { error: dbError } = await supabase
             .from('nexi_transactions')
             .insert({
@@ -177,27 +182,41 @@ const handler: Handler = async (event) => {
                     type: 'pay_by_link',
                     payment_purpose: paymentPurpose || 'booking',
                     customer_name: customerName,
-                    expiration_date: expirationDate.toISOString(),
+                    link_created_at: linkCreatedAt,
+                    link_expires_at: linkExpiresAt,
                     nexi_response: responseData
                 },
-                created_at: new Date().toISOString()
+                created_at: now.toISOString()
             });
 
         if (dbError) {
-            console.error('Error storing transaction:', dbError);
-            // Don't fail - payment link was created successfully
+            console.error('[nexi-pay-by-link] Error storing transaction:', dbError);
         }
 
-        // If linked to a booking, update booking with payment link info
+        // ── Update booking with payment link info and tracking fields ──
         if (bookingId) {
-            await supabase
-                .from('booking_details')
-                .update({
-                    nexi_order_id: orderId,
-                    payment_link: paymentUrl,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', bookingId);
+            const { data: existingBooking } = await supabase
+                .from('bookings')
+                .select('id, booking_details')
+                .eq('id', bookingId)
+                .single();
+
+            if (existingBooking) {
+                await supabase.from('bookings').update({
+                    payment_link_url: paymentUrl,
+                    payment_link_created_at: linkCreatedAt,
+                    payment_link_expires_at: linkExpiresAt,
+                    booking_details: {
+                        ...(existingBooking.booking_details || {}),
+                        nexi_payment_link: paymentUrl,
+                        nexi_order_id: orderId,
+                        payment_link_created_at: linkCreatedAt,
+                        payment_link_expires_at: linkExpiresAt,
+                    }
+                }).eq('id', bookingId);
+
+                console.log(`[nexi-pay-by-link] Booking ${bookingId} updated: payment_link_expires_at=${linkExpiresAt}`);
+            }
         }
 
         return {
@@ -208,17 +227,19 @@ const handler: Handler = async (event) => {
                 paymentUrl: paymentUrl,
                 orderId: orderId,
                 amount: amount,
-                expiresAt: expirationDate.toISOString(),
+                linkCreatedAt: linkCreatedAt,
+                expiresAt: linkExpiresAt,
                 message: 'Payment link created successfully'
             })
         };
 
-    } catch (error: any) {
-        console.error('Error creating pay by link:', error);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[nexi-pay-by-link] Error:', message);
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ error: error.message })
+            body: JSON.stringify({ error: message })
         };
     }
 };
