@@ -7,6 +7,8 @@ interface LimitationOverrideModalProps {
   limitationCode: string
   limitationMessage: string
   actionContext?: string
+  draftSessionId: string
+  flowType: string
   onClose: () => void
   onOverrideApproved: (overrideId: string) => void
 }
@@ -18,6 +20,8 @@ export default function LimitationOverrideModal({
   limitationCode,
   limitationMessage,
   actionContext,
+  draftSessionId,
+  flowType,
   onClose,
   onOverrideApproved,
 }: LimitationOverrideModalProps) {
@@ -55,6 +59,8 @@ export default function LimitationOverrideModal({
           limitationCode,
           limitationMessage,
           actionContext: actionContext || `${limitationCode}_${Date.now()}`,
+          draftSessionId,
+          flowType,
         })
       })
       const data = await res.json()
@@ -91,7 +97,7 @@ export default function LimitationOverrideModal({
         return
       }
       setStep('verified')
-      toast.success('Autorizzazione approvata')
+      toast.success('Autorizzazione concessa solo per questo evento.')
       onOverrideApproved(overrideId!)
     } catch {
       setError('Verifica non riuscita, riprova')
@@ -138,18 +144,18 @@ export default function LimitationOverrideModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-theme-bg-primary w-full sm:max-w-md rounded-t-lg sm:rounded-lg shadow-xl flex flex-col max-h-full sm:max-h-[90vh]">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-theme-bg-primary w-full sm:max-w-md rounded-t-lg sm:rounded-lg shadow-xl flex flex-col max-h-full sm:max-h-[90vh] border border-theme-border">
         {/* Header */}
-        <div className="bg-theme-bg-primaryer p-4 border-b border-theme-border flex justify-between items-center rounded-t-lg flex-shrink-0">
+        <div className="p-4 border-b border-theme-border flex justify-between items-center rounded-t-lg flex-shrink-0">
           <h3 className="text-lg font-bold text-amber-400">
-            {step === 'blocked' ? 'Operazione limitata' : 'Autorizzazione direzionale'}
+            {step === 'blocked' ? 'Limitazione rilevata' : step === 'otp-sent' ? 'Inserisci codice di autorizzazione' : 'Autorizzazione direzionale'}
           </h3>
           <button
             onClick={handleClose}
             className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
-            ×
+            &times;
           </button>
         </div>
 
@@ -158,18 +164,19 @@ export default function LimitationOverrideModal({
           {/* Limitation message (always visible) */}
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-4">
             <p className="text-amber-300 text-sm font-medium">{limitationMessage}</p>
+            <p className="text-amber-300/60 text-xs mt-1 font-mono">{limitationCode}</p>
           </div>
 
           {step === 'blocked' && (
             <p className="text-theme-text-muted text-sm">
-              Per procedere è necessaria l'autorizzazione della direzione.
+              Questa operazione è bloccata da una limitazione di sistema. Puoi prenderne visione e modificare i dati, oppure richiedere un'autorizzazione direzionale via OTP.
             </p>
           )}
 
           {step === 'otp-sent' && (
             <>
               <p className="text-theme-text-muted text-sm mb-4">
-                Inserisci il codice OTP inviato alla direzione per autorizzare questa specifica operazione.
+                Il codice è stato inviato al numero autorizzativo configurato per le ricariche wallet. Inserisci il codice per autorizzare questa specifica operazione.
               </p>
 
               {/* OTP Input */}
@@ -197,7 +204,7 @@ export default function LimitationOverrideModal({
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
-              Autorizzazione approvata
+              Autorizzazione concessa solo per questo evento.
             </div>
           )}
 
@@ -208,40 +215,45 @@ export default function LimitationOverrideModal({
 
         {/* Actions */}
         <div className="p-4 border-t border-theme-border flex flex-col-reverse sm:flex-row gap-3 sm:justify-end rounded-b-lg flex-shrink-0">
-          {step !== 'verified' && (
-            <button
-              onClick={handleClose}
-              className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-hover hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors"
-            >
-              Annulla
-            </button>
-          )}
-
           {step === 'blocked' && (
-            <button
-              onClick={sendOtp}
-              disabled={sending}
-              className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-theme-text-primary rounded-full transition-colors disabled:opacity-50"
-            >
-              {sending ? 'Invio...' : 'Chiedi alla direzione'}
-            </button>
+            <>
+              <button
+                onClick={handleClose}
+                className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm"
+              >
+                Ho preso visione
+              </button>
+              <button
+                onClick={sendOtp}
+                disabled={sending}
+                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium"
+              >
+                {sending ? 'Invio...' : 'Richiedi autorizzazione'}
+              </button>
+            </>
           )}
 
           {step === 'otp-sent' && (
             <>
               <button
+                onClick={handleClose}
+                className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-full transition-colors text-sm"
+              >
+                Annulla
+              </button>
+              <button
                 onClick={resendOtp}
                 disabled={sending}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-hover hover:bg-theme-bg-hover text-theme-text-muted rounded-full transition-colors text-sm disabled:opacity-50"
+                className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-muted rounded-full transition-colors text-sm disabled:opacity-50"
               >
                 {sending ? 'Invio...' : 'Reinvia codice'}
               </button>
               <button
                 onClick={verifyCode}
                 disabled={otpDigits.join('').length < 6 || verifying}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-theme-text-primary rounded-full transition-colors disabled:opacity-50"
+                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium"
               >
-                {verifying ? 'Verifica...' : 'Verifica codice'}
+                {verifying ? 'Verifica...' : 'Verifica'}
               </button>
             </>
           )}

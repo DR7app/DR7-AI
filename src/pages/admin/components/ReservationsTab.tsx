@@ -361,6 +361,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     closeLimitation,
     hasOverride,
     consumeAllOverrides,
+    activeOverrides,
+    draftSessionId,
+    flowType,
+    newSession,
+    getOverrideAuditSnapshot,
   } = useLimitationOverride()
 
   // Missing Data Modal State
@@ -725,6 +730,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           category: vehicle.category,
         }));
 
+        newSession(initialData?.bookingId ? 'booking_edit' : 'booking_create')
         setShowForm(true)
 
         // Notify parent to clear data
@@ -2193,6 +2199,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     })
 
     setEditingId(booking.id)
+    newSession('booking_edit')
     setShowForm(true)
   }
 
@@ -3646,6 +3653,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             revenue_mode: revenueSuggestion.mode,
             revenue_base_source: revenueSuggestion.selectedBaseRateSource,
             operator_override: Math.abs(eurToCents(formData.total_amount || '0') - Math.round(revenueSuggestion.finalTotalEur * 100)) > 1
+          } : {}),
+          // Limitation override audit trail
+          ...(getOverrideAuditSnapshot() ? {
+            limitation_overrides: getOverrideAuditSnapshot()
           } : {})
         }
       }
@@ -4067,7 +4078,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       resetForm()
       await loadData()
 
-      await consumeAllOverrides()
+      await consumeAllOverrides(insertedBooking?.id)
       toast.success(editingId ? 'Prenotazione aggiornata!' : 'Prenotazione creata!')
     } catch (error) {
       console.error('Failed to save reservation:', error)
@@ -4207,7 +4218,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           {/* Main Title - Italian Translation verified */}
           <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Noleggio</h2>
           <div className="flex gap-2 sm:gap-3">
-            <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
+            <Button onClick={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
               <span className="hidden sm:inline">+ Nuova Prenotazione</span>
               <span className="sm:hidden">+ Nuova</span>
             </Button>
@@ -4355,6 +4366,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           limitationCode={limitationState.limitationCode}
           limitationMessage={limitationState.limitationMessage}
           actionContext={limitationState.actionContext}
+          draftSessionId={draftSessionId}
+          flowType={flowType}
           onClose={closeLimitation}
           onOverrideApproved={handleOverrideApproved}
         />
@@ -4364,6 +4377,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
               {editingId ? 'Modifica Prenotazione' : 'Nuova Prenotazione'}
             </h3>
+
+            {/* Active override badges */}
+            {activeOverrides.length > 0 && (
+              <div className="mb-4 space-y-1">
+                {activeOverrides.map((o) => (
+                  <div key={o.overrideId} className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs">
+                    <svg className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-amber-300">Limitazione bypassata con autorizzazione OTP:</span>
+                    <span className="text-theme-text-muted font-mono">{o.limitationCode}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Booking Type Selection - Mobile Optimized */}
             {/* Customer Selection - Mobile Optimized */}

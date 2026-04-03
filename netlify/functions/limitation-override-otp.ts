@@ -11,6 +11,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const OTP_RECIPIENT = 'valesaja91@icloud.com'
 const OTP_TTL_MINUTES = 10
+const OVERRIDE_TTL_HOURS = 2
 
 export const handler: Handler = async (event) => {
   const headers = {
@@ -37,14 +38,19 @@ export const handler: Handler = async (event) => {
 
     // ── SEND OTP ──
     if (action === 'send') {
-      const { limitationCode, limitationMessage, actionContext } = body
+      const { limitationCode, limitationMessage, actionContext, draftSessionId, flowType } = body
 
       if (!limitationCode || !limitationMessage) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing limitationCode or limitationMessage' }) }
       }
 
+      if (!draftSessionId) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing draftSessionId' }) }
+      }
+
       const code = String(randomInt(100000, 999999))
-      const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString()
+      const otpExpiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString()
+      const overrideExpiresAt = new Date(Date.now() + OVERRIDE_TTL_HOURS * 60 * 60 * 1000).toISOString()
 
       // Store OTP server-side
       const { data: override, error: insertErr } = await supabase
@@ -52,10 +58,19 @@ export const handler: Handler = async (event) => {
         .insert({
           limitation_code: limitationCode,
           action_context: actionContext || null,
+          draft_session_id: draftSessionId,
+          flow_type: flowType || 'booking_create',
+          status: 'pending',
           otp_code: code,
-          otp_expires_at: expiresAt,
+          otp_expires_at: otpExpiresAt,
+          expires_at: overrideExpiresAt,
           approved_by_user_id: authUser!.id !== 'admin' ? authUser!.id : null,
-          metadata: { limitation_message: limitationMessage, requested_by: authUser!.email }
+          metadata: {
+            limitation_message: limitationMessage,
+            requested_by: authUser!.email,
+            draft_session_id: draftSessionId,
+            flow_type: flowType || 'booking_create'
+          }
         })
         .select('id')
         .single()
@@ -89,7 +104,8 @@ export const handler: Handler = async (event) => {
             <table style="width: 100%; margin: 20px 0; font-size: 14px; color: #333;">
               <tr><td style="padding: 6px 0; font-weight: 600;">Codice:</td><td>${limitationCode}</td></tr>
               <tr><td style="padding: 6px 0; font-weight: 600;">Richiesto da:</td><td>${authUser!.email || 'Operatore'}</td></tr>
-              <tr><td style="padding: 6px 0; font-weight: 600;">Scadenza:</td><td>${OTP_TTL_MINUTES} minuti</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: 600;">Sessione:</td><td>${draftSessionId.substring(0, 8)}</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: 600;">Scadenza OTP:</td><td>${OTP_TTL_MINUTES} minuti</td></tr>
             </table>
             <div style="text-align: center; margin: 30px 0;">
               <div style="display: inline-block; background: #f5f5f5; padding: 20px 40px; border-radius: 12px; letter-spacing: 8px; font-size: 32px; font-weight: 700; color: #111; border: 2px solid #d4af37;">
@@ -108,7 +124,7 @@ export const handler: Handler = async (event) => {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to send OTP email' }) }
       }
 
-      console.log(`[limitation-override-otp] OTP sent for ${limitationCode}, override ${override.id}`)
+      console.log(`[limitation-override-otp] OTP sent for ${limitationCode}, override ${override.id}, session ${draftSessionId.substring(0, 8)}`)
       return { statusCode: 200, headers, body: JSON.stringify({ success: true, overrideId: override.id }) }
     }
 
@@ -131,13 +147,19 @@ export const handler: Handler = async (event) => {
         return { statusCode: 404, headers, body: JSON.stringify({ error: 'Override request not found' }) }
       }
 
-      // Check if already verified
-      if (override.otp_verified) {
+      // Check if already verified/active
+      if (override.status === 'active' || override.otp_verified) {
         return { statusCode: 200, headers, body: JSON.stringify({ success: true, already_verified: true }) }
       }
 
-      // Check expiry
+      // Check if consumed or expired status
+      if (override.status === 'consumed' || override.status === 'expired' || override.status === 'revoked') {
+        return { statusCode: 410, headers, body: JSON.stringify({ error: 'Override non più valido.' }) }
+      }
+
+      // Check OTP expiry
       if (new Date(override.otp_expires_at) < new Date()) {
+        await supabase.from('limitation_overrides').update({ status: 'expired' }).eq('id', overrideId)
         return { statusCode: 410, headers, body: JSON.stringify({ error: 'Codice scaduto. Richiedi un nuovo codice.' }) }
       }
 
@@ -149,7 +171,7 @@ export const handler: Handler = async (event) => {
       // Increment attempts
       await supabase
         .from('limitation_overrides')
-        .update({ otp_attempts: override.otp_attempts + 1 })
+        .update({ otp_attempts: override.otp_attempts + 1, updated_at: new Date().toISOString() })
         .eq('id', overrideId)
 
       // Verify code
@@ -157,17 +179,64 @@ export const handler: Handler = async (event) => {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Codice non valido' }) }
       }
 
-      // Mark as verified
+      // Mark as active (verified + usable)
+      const overrideExpiresAt = new Date(Date.now() + OVERRIDE_TTL_HOURS * 60 * 60 * 1000).toISOString()
       await supabase
         .from('limitation_overrides')
         .update({
           otp_verified: true,
-          approved_at: new Date().toISOString()
+          status: 'active',
+          approved_at: new Date().toISOString(),
+          expires_at: overrideExpiresAt,
+          updated_at: new Date().toISOString()
         })
         .eq('id', overrideId)
 
       console.log(`[limitation-override-otp] Override ${overrideId} verified for ${override.limitation_code}`)
       return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }
+    }
+
+    // ── VALIDATE (backend check before booking creation) ──
+    if (action === 'validate') {
+      const { draftSessionId, flowType, ruleCodes } = body
+
+      if (!draftSessionId || !ruleCodes || !Array.isArray(ruleCodes)) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing draftSessionId or ruleCodes' }) }
+      }
+
+      // Find all active overrides for this session
+      const { data: overrides } = await supabase
+        .from('limitation_overrides')
+        .select('id, limitation_code, status, expires_at, otp_verified')
+        .eq('draft_session_id', draftSessionId)
+        .eq('status', 'active')
+        .eq('otp_verified', true)
+
+      const now = new Date()
+      const validOverrides: Record<string, string> = {} // ruleCode -> overrideId
+
+      for (const o of (overrides || [])) {
+        // Check TTL
+        if (o.expires_at && new Date(o.expires_at) < now) {
+          // Expire it lazily
+          await supabase.from('limitation_overrides').update({ status: 'expired', updated_at: now.toISOString() }).eq('id', o.id)
+          continue
+        }
+        if (flowType && o.flow_type && o.flow_type !== flowType) continue
+        validOverrides[o.limitation_code] = o.id
+      }
+
+      // For each requested ruleCode, check if there's a valid override
+      const results: Record<string, { valid: boolean; overrideId?: string }> = {}
+      for (const code of ruleCodes) {
+        if (validOverrides[code]) {
+          results[code] = { valid: true, overrideId: validOverrides[code] }
+        } else {
+          results[code] = { valid: false }
+        }
+      }
+
+      return { statusCode: 200, headers, body: JSON.stringify({ results }) }
     }
 
     // ── CHECK OVERRIDE ──
@@ -180,7 +249,7 @@ export const handler: Handler = async (event) => {
 
       const { data: override } = await supabase
         .from('limitation_overrides')
-        .select('otp_verified, consumed_at, otp_expires_at, limitation_code')
+        .select('otp_verified, consumed_at, otp_expires_at, expires_at, limitation_code, status, draft_session_id')
         .eq('id', overrideId)
         .single()
 
@@ -188,27 +257,42 @@ export const handler: Handler = async (event) => {
         return { statusCode: 404, headers, body: JSON.stringify({ valid: false }) }
       }
 
-      const valid = override.otp_verified
+      const now = new Date()
+      const valid = override.status === 'active'
+        && override.otp_verified
         && !override.consumed_at
-        && new Date(override.otp_expires_at) > new Date()
+        && (!override.expires_at || new Date(override.expires_at) > now)
 
-      return { statusCode: 200, headers, body: JSON.stringify({ valid, limitationCode: override.limitation_code }) }
+      return { statusCode: 200, headers, body: JSON.stringify({
+        valid,
+        limitationCode: override.limitation_code,
+        draftSessionId: override.draft_session_id
+      })}
     }
 
-    // ── CONSUME OVERRIDE ──
+    // ── CONSUME OVERRIDE (link to booking) ──
     if (action === 'consume') {
-      const { overrideId } = body
+      const { overrideId, bookingId } = body
 
       if (!overrideId) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing overrideId' }) }
       }
 
+      const updateData: Record<string, unknown> = {
+        status: 'consumed',
+        consumed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      if (bookingId) {
+        updateData.booking_id = bookingId
+      }
+
       await supabase
         .from('limitation_overrides')
-        .update({ consumed_at: new Date().toISOString() })
+        .update(updateData)
         .eq('id', overrideId)
         .eq('otp_verified', true)
-        .is('consumed_at', null)
+        .in('status', ['active', 'pending'])
 
       return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }
     }
