@@ -2872,6 +2872,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${customerTier.reason}`)
             return
           }
+          if (customerTier?.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
+            requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
+            return
+          }
+          if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
+            requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
+            return
+          }
         } else if (newCustomerData.tipo_cliente === 'azienda') {
           if (!newCustomerData.denominazione) missing.push('denominazione')
           if (!newCustomerData.partita_iva) missing.push('partita_iva')
@@ -3033,6 +3041,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
                 return
               }
+              if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
+                requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
+                return
+              }
+            }
+            if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
+              requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
+              return
             }
           }
 
