@@ -26,6 +26,7 @@ const TABS = [
   { id: 'services', label: 'Servizi' },
   { id: 'rates', label: 'Tariffe' },
   { id: 'tiers', label: 'Fasce Cliente' },
+  { id: 'preventivi', label: 'Preventivi' },
 ] as const
 
 type TabId = typeof TABS[number]['id']

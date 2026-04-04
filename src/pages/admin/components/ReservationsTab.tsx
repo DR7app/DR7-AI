@@ -407,7 +407,8 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   return false
 }
 
-export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string } | null; onDataConsumed?: () => void }) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -879,6 +880,39 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           logger.log('📝 Opening booking in edit mode:', bookingId)
           handleEditBooking(booking)
           // Notify parent to clear data
+          if (onDataConsumed) onDataConsumed()
+          return
+        }
+      }
+
+      // Handle fromPreventivo: pre-fill form with quote data
+      if (initialData.fromPreventivo) {
+        const prev = initialData.fromPreventivo
+        const vehicle = vehicles.find(v => v.id === prev.vehicle_id)
+        if (vehicle) {
+          const pickupStr = prev.pickup_date ? new Date(prev.pickup_date).toISOString().split('T')[0] : ''
+          const dropoffStr = prev.dropoff_date ? new Date(prev.dropoff_date).toISOString().split('T')[0] : ''
+          const pickupTimeStr = prev.pickup_date ? new Date(prev.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '10:30'
+          const returnTimeStr = prev.dropoff_date ? new Date(prev.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '10:00'
+
+          logger.log('📋 Prefilling from preventivo:', prev.preventivoId)
+
+          setFormData(p => ({
+            ...p,
+            vehicle_id: vehicle.id,
+            pickup_date: pickupStr,
+            pickup_time: pickupTimeStr,
+            return_date: dropoffStr,
+            return_time: returnTimeStr,
+            category: vehicle.category,
+            insurance_option: prev.insurance_option || p.insurance_option,
+            unlimited_km: !!prev.unlimited_km,
+            deposit_status: prev.no_cauzione ? 'no_cauzione' : p.deposit_status,
+            total_amount: prev.total_amount ? String(prev.total_amount) : p.total_amount,
+          }))
+
+          newSession('booking_create')
+          setShowForm(true)
           if (onDataConsumed) onDataConsumed()
           return
         }

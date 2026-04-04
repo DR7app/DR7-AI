@@ -44,13 +44,19 @@ export const DEFAULT_RENTAL_CONFIG: RentalConfig = {
     },
     utilitaire: {
       _all_tiers: [
+        { id: 'RCA', name: 'RCA Compresa (no Kasko)', daily_price: 0 },
         { id: 'KASKO_BASE', name: 'Kasko Base', daily_price: 45 },
+        { id: 'KASKO_BLACK', name: 'Kasko Black', daily_price: 65 },
+        { id: 'KASKO_SIGNATURE', name: 'Kasko Signature', daily_price: 80 },
         { id: 'KASKO_DR7', name: 'Kasko DR7', daily_price: 90 },
       ],
     },
     furgone: {
       _all_tiers: [
+        { id: 'RCA', name: 'RCA Compresa (no Kasko)', daily_price: 0 },
         { id: 'KASKO_BASE', name: 'Kasko Base', daily_price: 45 },
+        { id: 'KASKO_BLACK', name: 'Kasko Black', daily_price: 65 },
+        { id: 'KASKO_SIGNATURE', name: 'Kasko Signature', daily_price: 80 },
         { id: 'KASKO_DR7', name: 'Kasko DR7', daily_price: 90 },
       ],
     },
@@ -155,4 +161,10 @@ export const DEFAULT_RENTAL_CONFIG: RentalConfig = {
     { id: 'full', label: 'Paga tutto subito', surcharge_percent: 0 },
     { id: 'deposit_30', label: 'Prenota con il 30%', surcharge_percent: 50 },
   ],
+
+  preventivi: {
+    maggiorazione_pct: 0,
+    default_expiry_hours: 24,
+    whatsapp_footer: '',
+  },
 }

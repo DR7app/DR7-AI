@@ -596,8 +596,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // Map customers_extended to Customer interface
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mappedCustomers: Customer[] = (customersData || []).map((c: any) => {
-        const fullName = `${c.nome || ''} ${c.cognome || ''}`.trim()
-          || c.ragione_sociale || c.denominazione || c.ente_ufficio || 'N/A'
+        let fullName = 'N/A'
+        if (c.tipo_cliente === 'azienda') {
+          fullName = c.denominazione || c.ragione_sociale || 'N/A'
+        } else if (c.tipo_cliente === 'pubblica_amministrazione') {
+          fullName = c.ente_ufficio || 'N/A'
+        } else {
+          fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || c.ragione_sociale || 'N/A'
+        }
         return {
           id: c.id,
           full_name: fullName,
@@ -623,6 +629,50 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       console.error('Failed to load data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Lightweight refresh that only reloads customers (no loading spinner, no form reset)
+  async function refreshCustomers() {
+    try {
+      const { data: customersData } = await supabase
+        .from('customers_extended')
+        .select('id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono')
+        .order('cognome')
+
+      const customerMap = new Map<string, Customer>();
+      (customersData || []).forEach((c: any) => {
+        let fullName = 'N/A'
+        if (c.tipo_cliente === 'azienda') {
+          fullName = c.denominazione || c.ragione_sociale || 'N/A'
+        } else if (c.tipo_cliente === 'pubblica_amministrazione') {
+          fullName = c.ente_ufficio || 'N/A'
+        } else {
+          fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || c.ragione_sociale || 'N/A'
+        }
+        customerMap.set(c.id, {
+          id: c.id,
+          full_name: fullName,
+          email: c.email || null,
+          phone: c.telefono || null
+        })
+      })
+
+      const { data: legacyCustomers } = await supabase
+        .from('customers')
+        .select('id, full_name, email, phone')
+
+      if (legacyCustomers) {
+        legacyCustomers.forEach((c: any) => {
+          if (!customerMap.has(c.id)) {
+            customerMap.set(c.id, c)
+          }
+        })
+      }
+
+      setCustomers(Array.from(customerMap.values()))
+    } catch (error) {
+      console.error('Failed to refresh customers:', error)
     }
   }
 
@@ -1379,7 +1429,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         onClose={() => setEditModalOpen(false)}
         initialData={customerToEdit}
         onClientCreated={() => {
-          loadData()
+          refreshCustomers()
         }}
       />
 
@@ -1390,7 +1440,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         onClientCreated={(clientId) => {
           setFormData(prev => ({ ...prev, customer_id: clientId }))
           setShowNewClientModal(false)
-          loadData()
+          refreshCustomers()
         }}
       />
 
@@ -2170,9 +2220,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <td className="px-4 py-3 text-sm">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
-                            ? 'bg-emerald-500/15 text-emerald-500' : 'bg-red-500/15 text-red-500'
+                            ? 'bg-emerald-500/15 text-emerald-500'
+                            : booking.payment_status === 'pending'
+                              ? 'bg-orange-500/15 text-orange-500'
+                              : 'bg-red-500/15 text-red-500'
                         }`}>
-                          {booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded' ? 'Pagato' : 'Non Pagato'}
+                          {booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
+                            ? 'Pagato'
+                            : booking.payment_status === 'pending'
+                              ? 'In Attesa'
+                              : 'Non Pagato'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
@@ -2202,6 +2259,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 return words.every(word => customerName.includes(word))
               }).map((booking) => {
                 const bPaid = booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
+                const bPending = booking.payment_status === 'pending'
                 const isRientro = booking.customer_name === 'Lavaggio Rientro'
                 return (
                   <div key={booking.id} className="rounded-2xl bg-theme-bg-secondary border border-theme-border/30 shadow-sm overflow-hidden">
@@ -2218,9 +2276,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         )}
                       </div>
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0 ml-2 ${
-                        bPaid ? 'bg-emerald-500/15 text-emerald-500' : 'bg-red-500/15 text-red-500'
+                        bPaid ? 'bg-emerald-500/15 text-emerald-500' : bPending ? 'bg-orange-500/15 text-orange-500' : 'bg-red-500/15 text-red-500'
                       }`}>
-                        {bPaid ? 'Pagato' : 'Non Pagato'}
+                        {bPaid ? 'Pagato' : bPending ? 'In Attesa' : 'Non Pagato'}
                       </span>
                     </div>
 
