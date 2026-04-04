@@ -1861,8 +1861,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.dismiss()
 
       if (!custPhone) {
-        navigator.clipboard.writeText(newPaymentLink)
-        toast.success('Nuovo link generato e copiato! Nessun telefono trovato per WhatsApp.')
+        try { await navigator.clipboard.writeText(newPaymentLink) } catch { /* clipboard blocked */ }
+        toast.success(`Link generato: ${newPaymentLink}`, { duration: 10000 })
         return
       }
 
