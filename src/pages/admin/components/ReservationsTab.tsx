@@ -379,7 +379,8 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   return false
 }
 
-export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string } | null; onDataConsumed?: () => void }) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -428,7 +429,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     notes: '',
     change_vehicle: false,
     new_vehicle_id: '',
-    show_all_vehicles: false
+    show_all_vehicles: false,
+    extension_km_added: '',
+    extension_unlimited_km: false,
   })
   const [isExtending, setIsExtending] = useState(false)
 
@@ -831,6 +834,40 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           logger.log('📝 Opening booking in edit mode:', bookingId)
           handleEditBooking(booking)
           // Notify parent to clear data
+          if (onDataConsumed) onDataConsumed()
+          return
+        }
+      }
+
+      // Handle fromPreventivo: pre-fill form with quote data
+      if (initialData.fromPreventivo) {
+        const prev = initialData.fromPreventivo
+        const vehicle = vehicles.find(v => v.id === prev.vehicle_id)
+        if (vehicle) {
+          const pickupStr = prev.pickup_date ? new Date(prev.pickup_date).toISOString().split('T')[0] : ''
+          const dropoffStr = prev.dropoff_date ? new Date(prev.dropoff_date).toISOString().split('T')[0] : ''
+          const pickupTimeStr = prev.pickup_date ? new Date(prev.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '10:30'
+          const returnTimeStr = prev.dropoff_date ? new Date(prev.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '10:00'
+
+          logger.log('📋 Prefilling from preventivo:', prev.preventivoId)
+
+          setFormData(p => ({
+            ...p,
+            vehicle_id: vehicle.id,
+            pickup_date: pickupStr,
+            pickup_time: pickupTimeStr,
+            return_date: dropoffStr,
+            return_time: returnTimeStr,
+            category: vehicle.category,
+            insurance_option: prev.insurance_option || p.insurance_option,
+            unlimited_km: !!prev.unlimited_km,
+            deposit_status: prev.no_cauzione ? 'no_cauzione' : p.deposit_status,
+            total_amount: prev.total_amount ? String(prev.total_amount) : p.total_amount,
+            customer_phone: prev.customer_phone || p.customer_phone,
+            customer_name: prev.customer_name || p.customer_name,
+          }))
+
+          setShowForm(true)
           if (onDataConsumed) onDataConsumed()
           return
         }
@@ -2426,6 +2463,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const romeTimeStr = currentReturnDate.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false })
 
     setExtendingBooking(booking)
+    const currentUnlimitedKm = booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati'
     setExtendData({
       new_return_date: romeDateStr,
       new_return_time: romeTimeStr,
@@ -2436,7 +2474,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       notes: '',
       change_vehicle: false,
       new_vehicle_id: '',
-      show_all_vehicles: false
+      show_all_vehicles: false,
+      extension_km_added: '',
+      extension_unlimited_km: currentUnlimitedKm || false,
     })
     setShowExtendModal(true)
   }
@@ -2472,6 +2512,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         newVehicle = vehicles.find(v => v.id === extendData.new_vehicle_id) || null
       }
 
+      // Calculate updated KM limit
+      const extensionKmAdded = parseInt(extendData.extension_km_added) || 0
+      const previousKmLimit = extendingBooking.booking_details?.km_limit
+      let newKmLimit: string | number
+      if (extendData.extension_unlimited_km) {
+        newKmLimit = 'Illimitati'
+      } else if (extensionKmAdded > 0 && previousKmLimit && previousKmLimit !== 'Illimitati') {
+        newKmLimit = String(parseInt(String(previousKmLimit)) + extensionKmAdded)
+      } else {
+        newKmLimit = previousKmLimit || '0'
+      }
+
       // Update booking_details with extension info
       // Reset deposit_reminder_sent so IBAN message re-sends 60 min after the NEW dropoff
       const updatedBookingDetails = {
@@ -2481,6 +2533,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         iban_request_sent: false,
         day_before_reminder_sent: false,
         day_before_reminder_sent_at: null,
+        // Update KM limit
+        km_limit: newKmLimit,
+        unlimited_km: extendData.extension_unlimited_km,
         // Update vehicle info in booking_details if car changed
         ...(newVehicle ? {
           vehicle: {
@@ -2500,6 +2555,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             additional_amount: additionalAmount,
             payment_status: extendData.extension_payment_status, // 'paid' or 'pending'
             notes: extendData.notes,
+            km_added: extensionKmAdded > 0 ? extensionKmAdded : undefined,
+            unlimited_km: extendData.extension_unlimited_km || undefined,
+            previous_km_limit: previousKmLimit,
             ...(newVehicle ? {
               previous_vehicle_id: extendingBooking.vehicle_id,
               previous_vehicle_name: extendingBooking.vehicle_name,
@@ -2569,6 +2627,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         extensionMsg += `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
         extensionMsg += `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
         extensionMsg += `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
+        extensionMsg += `*Km:* ${extendData.extension_unlimited_km ? 'Illimitati' : (extensionKmAdded > 0 ? `+${extensionKmAdded} km (totale: ${newKmLimit} Km)` : `${newKmLimit} Km (invariato)`)}\n`
         extensionMsg += `*Pagamento estensione:* ${adminExtPayLabel}`
 
         // Send to admin notification phone
@@ -2710,12 +2769,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const linkData = await linkRes.json()
 
           if (linkRes.ok && linkData.paymentUrl) {
-            // Store link on booking
+            // Store link on booking with expiration for 1-hour auto-cancel
+            const extensionExpiresAt = new Date(Date.now() + (expirationHours * 60 * 60 * 1000)).toISOString()
             await supabase.from('bookings').update({
+              payment_status: 'pending',
+              payment_method: 'Nexi Pay by Link',
               booking_details: {
                 ...updatedBookingDetails,
                 nexi_payment_link: linkData.paymentUrl,
                 nexi_order_id: linkData.orderId,
+                nexi_link_id: linkData.nexiLinkId || null,
+                payment_link_sent_at: linkData.sentAt || new Date().toISOString(),
+                payment_link_expires_at: linkData.expiresAt || extensionExpiresAt,
+                payment_provider_expires_at: linkData.providerExpiresAt || null,
               }
             }).eq('id', extendingBooking.id)
 
@@ -6833,6 +6899,47 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                     placeholder="0.00"
                   />
+                </div>
+
+                {/* KM Extension */}
+                <div className="bg-theme-bg-secondary/50 rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-theme-text-secondary">
+                      Km attuali: <span className="text-theme-text-primary font-bold">
+                        {extendingBooking.booking_details?.unlimited_km || extendingBooking.booking_details?.km_limit === 'Illimitati'
+                          ? 'Illimitati'
+                          : `${extendingBooking.booking_details?.km_limit || '0'} Km`}
+                      </span>
+                    </span>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={extendData.extension_unlimited_km}
+                      onChange={(e) => setExtendData({ ...extendData, extension_unlimited_km: e.target.checked, extension_km_added: '' })}
+                      className="w-4 h-4 accent-purple-500"
+                    />
+                    <span className="text-sm font-medium text-theme-text-secondary">Km Illimitati</span>
+                  </label>
+                  {!extendData.extension_unlimited_km && (
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Km da Aggiungere</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="10"
+                        value={extendData.extension_km_added}
+                        onChange={(e) => setExtendData({ ...extendData, extension_km_added: e.target.value })}
+                        className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
+                        placeholder="es. 100"
+                      />
+                      {extendData.extension_km_added && parseInt(extendData.extension_km_added) > 0 && (
+                        <p className="text-xs text-purple-400 mt-1">
+                          Nuovo totale: {parseInt(String(extendingBooking.booking_details?.km_limit || '0')) + parseInt(extendData.extension_km_added)} Km
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>

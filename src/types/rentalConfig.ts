@@ -155,6 +155,12 @@ export interface RentalConfig {
   rental_day_rates: Record<string, DayRateTable>
 
   payment_modes: PaymentMode[]
+
+  preventivi: {
+    maggiorazione_pct: number
+    default_expiry_hours: number
+    whatsapp_footer: string
+  }
 }
 
 /** Type for the driver tier */

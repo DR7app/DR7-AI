@@ -34,6 +34,8 @@ export interface ConfigOverlay {
   secondDriverTier2: number
   dr7FlexPerDay: number
   deliveryPerKm: number
+  maggiorazionePct: number
+  defaultExpiryHours: number
   depositDefaults: { UTILITAIRE: number; FURGONE: number; SUPERCAR: number }
   experienceServices: { id: string; name: string; price: number; unit: string; tierOnly?: string | null }[]
 }
@@ -96,6 +98,8 @@ export function buildConfigOverlay(config: RentalConfig | null): ConfigOverlay {
     secondDriverTier2: config.second_driver?.TIER_2 ?? defaults.secondDriverTier2,
     dr7FlexPerDay: config.dr7_flex?.daily_price ?? defaults.dr7FlexPerDay,
     deliveryPerKm: config.delivery?.price_per_km ?? defaults.deliveryPerKm,
+    maggiorazionePct: config.preventivi?.maggiorazione_pct ?? defaults.maggiorazionePct,
+    defaultExpiryHours: config.preventivi?.default_expiry_hours ?? defaults.defaultExpiryHours,
     depositDefaults: {
       UTILITAIRE: config.deposits?.category_defaults?.utilitaire ?? defaults.depositDefaults.UTILITAIRE,
       FURGONE: config.deposits?.category_defaults?.furgone ?? defaults.depositDefaults.FURGONE,
@@ -152,6 +156,8 @@ function getHardcodedDefaults(): ConfigOverlay {
     secondDriverTier2: 10,
     dr7FlexPerDay: 19.90,
     deliveryPerKm: 3,
+    maggiorazionePct: 0,
+    defaultExpiryHours: 24,
     depositDefaults: { UTILITAIRE: 1000, FURGONE: 2500, SUPERCAR: 10000 },
     experienceServices: [
       { id: 'bouquet', name: 'Bouquet di rose', price: 7.90, unit: 'per_item', tierOnly: null },

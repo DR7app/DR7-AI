@@ -155,4 +155,10 @@ export const DEFAULT_RENTAL_CONFIG: RentalConfig = {
     { id: 'full', label: 'Paga tutto subito', surcharge_percent: 0 },
     { id: 'deposit_30', label: 'Prenota con il 30%', surcharge_percent: 50 },
   ],
+
+  preventivi: {
+    maggiorazione_pct: 0,
+    default_expiry_hours: 24,
+    whatsapp_footer: '',
+  },
 }

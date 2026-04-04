@@ -46,7 +46,10 @@ export default function VehiclesTab() {
     unavailable_until: '',
     unavailable_from_time: '',
     unavailable_until_time: '',
-    unavailable_reason: ''
+    unavailable_reason: '',
+    model_year: '',
+    cv: '',
+    acceleration_0_100: ''
   })
 
   useEffect(() => {
@@ -112,7 +115,10 @@ export default function VehiclesTab() {
           unavailable_until: formData.unavailable_until || null,
           unavailable_from_time: formData.unavailable_from_time || null,
           unavailable_until_time: formData.unavailable_until_time || null,
-          unavailable_reason: formData.unavailable_reason || null
+          unavailable_reason: formData.unavailable_reason || null,
+          model_year: formData.model_year ? parseInt(formData.model_year) : null,
+          cv: formData.cv ? parseInt(formData.cv) : null,
+          acceleration_0_100: formData.acceleration_0_100 ? parseFloat(formData.acceleration_0_100) : null
         }
       }
 
@@ -420,7 +426,10 @@ export default function VehiclesTab() {
       unavailable_until: '',
       unavailable_from_time: '',
       unavailable_until_time: '',
-      unavailable_reason: ''
+      unavailable_reason: '',
+      model_year: '',
+      cv: '',
+      acceleration_0_100: ''
     })
   }
 
@@ -440,7 +449,13 @@ export default function VehiclesTab() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       unavailable_until_time: (vehicle.metadata as any)?.unavailable_until_time || '',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      unavailable_reason: (vehicle.metadata as any)?.unavailable_reason || ''
+      unavailable_reason: (vehicle.metadata as any)?.unavailable_reason || '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model_year: (vehicle.metadata as any)?.model_year?.toString() || '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cv: (vehicle.metadata as any)?.cv?.toString() || '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      acceleration_0_100: (vehicle.metadata as any)?.acceleration_0_100?.toString() || ''
     })
     setEditingId(vehicle.id)
     setShowForm(true)
@@ -687,6 +702,33 @@ export default function VehiclesTab() {
               required
               value={formData.daily_rate}
               onChange={(e) => setFormData({ ...formData, daily_rate: e.target.value })}
+            />
+          </div>
+
+          {/* Scheda Tecnica - Vehicle Specs */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-theme-bg-tertiary/50 border border-theme-border rounded-lg">
+            <p className="col-span-full text-sm text-theme-text-muted font-semibold mb-1">Scheda Tecnica (per Preventivi)</p>
+            <Input
+              label="Anno Modello"
+              type="number"
+              value={formData.model_year}
+              onChange={(e) => setFormData({ ...formData, model_year: e.target.value })}
+              placeholder="2025"
+            />
+            <Input
+              label="Cavalli (CV)"
+              type="number"
+              value={formData.cv}
+              onChange={(e) => setFormData({ ...formData, cv: e.target.value })}
+              placeholder="400"
+            />
+            <Input
+              label="0-100 km/h (s)"
+              type="number"
+              step="0.1"
+              value={formData.acceleration_0_100}
+              onChange={(e) => setFormData({ ...formData, acceleration_0_100: e.target.value })}
+              placeholder="3.8"
             />
           </div>
 
