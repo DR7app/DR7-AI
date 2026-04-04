@@ -311,24 +311,16 @@ const handler: Handler = async (event) => {
 
     console.log('✅ WhatsApp notification sent via Green API:', result.idMessage);
 
-    // Log to sent_messages_log for admin visibility
+    // Log to sent_messages_log — fire and forget, never blocks the response
     if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-      try {
-        const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-        const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${message}`;
-        const customerName = booking?.customer_name || booking?.booking_details?.customer?.fullName || body.customerName || 'N/A';
-        const templateLabel = body.type || (customMessage ? 'Messaggio Manuale' : booking?.service_type || 'Notifica');
-
-        await sb.from('sent_messages_log').insert({
-          customer_name: customerName,
-          customer_phone: targetPhone,
-          message_text: fullMessage,
-          template_label: templateLabel,
-          status: 'sent',
-        });
-      } catch (logErr) {
-        console.error('Failed to log message (non-blocking):', logErr);
-      }
+      const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${message}`;
+      const customerName = booking?.customer_name || booking?.booking_details?.customer?.fullName || body.customerName || 'N/A';
+      const templateLabel = body.type || (customMessage ? 'Messaggio Manuale' : booking?.service_type || 'Notifica');
+      createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        .from('sent_messages_log')
+        .insert({ customer_name: customerName, customer_phone: targetPhone, message_text: fullMessage, template_label: templateLabel, status: 'sent' })
+        .then(() => {})
+        .catch((e: unknown) => console.error('Log failed:', e));
     }
 
     return {
