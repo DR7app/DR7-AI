@@ -508,7 +508,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return_time: '10:00',
     pickup_location: 'dr7_office',
     dropoff_location: 'dr7_office',
-    status: 'pending_payment',
+    status: 'pending',
     source: 'admin',
     total_amount: '0',
     amount_paid: '0',
@@ -5946,7 +5946,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     amount_paid: newAmountPaid,
                     // Map payment status to booking status consistently
                     status: newStatus === 'paid' ? 'confirmed'
-                      : (formData.payment_method === 'Nexi Pay by Link' ? 'pending_payment' : 'confirmed'),
+                      : (formData.payment_method === 'Nexi Pay by Link' ? 'pending' : 'confirmed'),
                     payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
                   })
                 }}
@@ -6535,12 +6535,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     )}
 
 
-                    {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
+                    {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
                         className="px-3 py-1 min-h-[44px] bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
                       >
-                        Rinvia Link
+                        {booking.booking_details?.nexi_payment_link ? 'Rinvia Link' : 'Genera Link'}
                       </button>
                     )}
 
@@ -6696,12 +6696,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                   Rinvia Contratto
                                 </button>
                               )}
-                              {booking.booking_details?.nexi_payment_link && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
+                              {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
                                   className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
                                 >
-                                  Rinvia Link
+                                  {booking.booking_details?.nexi_payment_link ? 'Rinvia Link' : 'Genera Link'}
                                 </button>
                               )}
                             </>
@@ -6865,7 +6865,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         selectedBooking.payment_status === 'succeeded' ||
                         (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                         ? 'bg-green-900 text-green-300'
-                        : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending_payment')
+                        : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending')
                           ? 'bg-yellow-900 text-yellow-300'
                           : selectedBooking.payment_status === 'expired'
                             ? 'bg-orange-900 text-orange-300'
@@ -6876,7 +6876,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           selectedBooking.payment_status === 'succeeded' ||
                           (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                           ? 'Pagato'
-                          : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending_payment')
+                          : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending')
                             ? 'Da Saldare'
                             : selectedBooking.payment_status === 'expired'
                               ? 'Scaduto'
