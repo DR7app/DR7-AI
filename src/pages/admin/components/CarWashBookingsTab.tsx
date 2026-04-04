@@ -1494,6 +1494,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Targa</label>
                 <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVehicleCategory(vehicleCategory === 'moto' ? null : 'moto')
+                      setTargaVehicleInfo(vehicleCategory === 'moto' ? null : { brand: 'Moto', model: '' })
+                    }}
+                    className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
+                      vehicleCategory === 'moto'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
+                    }`}
+                  >
+                    Moto
+                  </button>
                   <input
                     type="text"
                     value={vehiclePlate}
@@ -1519,20 +1533,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     }`}
                   >
                     {lookingUpTarga ? 'Ricerca...' : 'Cerca'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVehicleCategory(vehicleCategory === 'moto' ? null : 'moto')
-                      setTargaVehicleInfo(vehicleCategory === 'moto' ? null : { brand: 'Moto', model: '' })
-                    }}
-                    className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
-                      vehicleCategory === 'moto'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
-                    }`}
-                  >
-                    Moto
                   </button>
                 </div>
               </div>
