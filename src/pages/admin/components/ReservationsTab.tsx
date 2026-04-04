@@ -4299,9 +4299,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         logger.log('✅ WhatsApp admin notification sent')
 
-        // Send customer confirmation message — same full message as admin (skip for unpaid Nexi Pay by Link — link message is sent separately)
+        // Send customer confirmation message
         const custPhone = customerInfo?.phone
-        if (custPhone && !(formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')) {
+        if (custPhone) {
           const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
           const pickupDt = new Date(pickupDateTime)
           const dropoffDt = new Date(returnDateTime)
