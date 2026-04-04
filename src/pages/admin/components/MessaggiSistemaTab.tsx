@@ -10,6 +10,7 @@ interface SystemMessage {
     message_body: string
     is_automatic: boolean
     is_enabled: boolean
+    include_header: boolean
     trigger_event: string
     trigger_offset_hours: number
     send_hour: number | null
@@ -251,6 +252,22 @@ export default function MessaggiSistemaTab() {
             toast.success(newVal ? 'Messaggio attivato' : 'Messaggio disattivato')
         } catch (err: unknown) {
           const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
+        }
+    }
+
+    async function handleToggleHeader(template: SystemMessage) {
+        try {
+            const newVal = !template.include_header
+            const { error } = await supabase
+                .from('system_messages')
+                .update({ include_header: newVal, updated_at: new Date().toISOString() })
+                .eq('id', template.id)
+            if (error) throw error
+            setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, include_header: newVal } : t))
+            toast.success(newVal ? 'Header RENTORA attivato' : 'Header RENTORA disattivato')
+        } catch (err: unknown) {
+            const _errMsg = err instanceof Error ? err.message : String(err)
             toast.error('Errore: ' + _errMsg)
         }
     }
@@ -630,6 +647,16 @@ export default function MessaggiSistemaTab() {
                                     >
                                         {template.is_automatic ? 'Automatico' : 'Manuale'}
                                     </button>
+                                    <button
+                                        onClick={(e) => { e.preventDefault(); handleToggleHeader(template) }}
+                                        className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                                            template.include_header !== false
+                                                ? 'bg-amber-600/20 text-amber-400 hover:bg-amber-600/30'
+                                                : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                                        }`}
+                                    >
+                                        {template.include_header !== false ? 'Header ON' : 'Header OFF'}
+                                    </button>
                                     {template.is_enabled === false && (
                                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400">OFF</span>
                                     )}
@@ -696,7 +723,9 @@ export default function MessaggiSistemaTab() {
                                     </div>
                                 ) : (
                                     <pre className="px-4 py-3 rounded-lg bg-theme-bg-primary text-xs text-theme-text-secondary whitespace-pre-wrap max-h-72 overflow-y-auto border border-theme-border">
-                                        {template.message_body}
+                                        {template.include_header !== false
+                                            ? `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${template.message_body}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+                                            : template.message_body}
                                     </pre>
                                 )}
 
