@@ -606,143 +606,126 @@ export default function MessaggiSistemaTab() {
                     </div>
                 )}
 
-                {/* Template Cards */}
+                {/* Template Cards — Expandable style */}
                 <div className="space-y-3">
-                    {templates.map(template => (
-                        <div key={template.id} className={`bg-theme-bg-secondary rounded-xl border ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'} p-4`}>
-                            <div className="flex justify-between items-start mb-2">
+                    {templates.map((template, idx) => (
+                        <details key={template.id} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
+                            <summary className="p-3 cursor-pointer hover:bg-theme-bg-hover/30 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    {/* Enable/disable toggle */}
                                     <button
-                                        onClick={() => handleToggleEnabled(template)}
-                                        className={`w-10 h-5 rounded-full relative transition-colors ${template.is_enabled !== false ? 'bg-green-500' : 'bg-gray-600'}`}
+                                        onClick={(e) => { e.preventDefault(); handleToggleEnabled(template) }}
+                                        className={`w-10 h-5 rounded-full relative transition-colors shrink-0 ${template.is_enabled !== false ? 'bg-green-500' : 'bg-gray-600'}`}
                                     >
                                         <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${template.is_enabled !== false ? 'left-5' : 'left-0.5'}`} />
                                     </button>
-                                    <div>
-                                        <h4 className="font-semibold text-theme-text-primary">{template.label}</h4>
-                                        {template.description && (
-                                            <p className="text-sm text-theme-text-muted">{template.description}</p>
-                                        )}
-                                        <div className="flex gap-2 mt-1">
-                                            <button
-                                                onClick={() => handleToggleAutomatic(template)}
-                                                className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                                                    template.is_automatic
-                                                        ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
-                                                        : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
-                                                }`}
-                                            >
-                                                {template.is_automatic ? 'Automatico' : 'Solo manuale'}
-                                            </button>
-                                            {template.is_enabled === false && (
-                                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400">Disattivato</span>
-                                            )}
+                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600/20 text-blue-400">{idx + 1}</span>
+                                    <span className="font-medium text-theme-text-primary text-sm">{template.label}</span>
+                                    <button
+                                        onClick={(e) => { e.preventDefault(); handleToggleAutomatic(template) }}
+                                        className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                                            template.is_automatic
+                                                ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30'
+                                                : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
+                                        }`}
+                                    >
+                                        {template.is_automatic ? 'Automatico' : 'Manuale'}
+                                    </button>
+                                    {template.is_enabled === false && (
+                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400">OFF</span>
+                                    )}
+                                </div>
+                                <span className="text-xs text-theme-text-muted">{template.description}</span>
+                            </summary>
+
+                            <div className="p-4 border-t border-theme-border space-y-3">
+                                {/* Automation config */}
+                                {template.is_automatic && (
+                                    <div className="flex flex-wrap items-center gap-3 px-3 py-2.5 rounded-lg bg-theme-bg-primary border border-theme-border/50">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+                                            <select value={template.trigger_event || 'before_dropoff'}
+                                                onChange={e => handleUpdateAutomation(template.id, 'trigger_event', e.target.value)}
+                                                className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                {Object.entries(TRIGGER_LABELS).map(([k, v]) => (
+                                                    <option key={k} value={k}>{v}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <span className="text-theme-text-muted text-xs">―</span>
+                                        <div className="flex items-center gap-1">
+                                            <input type="number" value={template.trigger_offset_hours || 24}
+                                                onChange={e => handleUpdateAutomation(template.id, 'trigger_offset_hours', parseInt(e.target.value) || 0)}
+                                                className="w-12 text-xs text-center bg-dr7-gold/15 text-dr7-gold font-bold rounded-full px-2 py-1 border-none focus:outline-none" />
+                                            <span className="text-xs text-dr7-gold font-bold">ore</span>
+                                        </div>
+                                        <span className="text-theme-text-muted text-xs">―</span>
+                                        <div className="flex items-center gap-1">
+                                            <select value={template.send_hour ?? ''}
+                                                onChange={e => handleUpdateAutomation(template.id, 'send_hour', e.target.value === '' ? null : parseInt(e.target.value))}
+                                                className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                <option value="">Subito</option>
+                                                {Array.from({ length: 24 }, (_, i) => (
+                                                    <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <span className="text-theme-text-muted text-xs">―</span>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                                            <select value={template.target_category || 'all'}
+                                                onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
+                                                className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                                                    <option key={k} value={k}>{v}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="flex gap-2">
+                                )}
+
+                                {/* Message body */}
+                                {editingId === template.id ? (
+                                    <div>
+                                        <textarea
+                                            value={editBody}
+                                            onChange={e => setEditBody(e.target.value)}
+                                            rows={6}
+                                            className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
+                                        />
+                                        <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
+                                    </div>
+                                ) : (
+                                    <pre className="px-4 py-3 rounded-lg bg-theme-bg-primary text-xs text-theme-text-secondary whitespace-pre-wrap max-h-72 overflow-y-auto border border-theme-border">
+                                        {template.message_body}
+                                    </pre>
+                                )}
+
+                                {/* Actions */}
+                                <div className="flex gap-2 justify-end">
                                     {editingId === template.id ? (
                                         <>
-                                            <button
-                                                onClick={() => setEditingId(null)}
-                                                className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors"
-                                            >
-                                                Annulla
-                                            </button>
-                                            <button
-                                                onClick={() => handleSaveEdit(template.id)}
-                                                disabled={saving}
-                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors disabled:opacity-50"
-                                            >
+                                            <button onClick={() => setEditingId(null)}
+                                                className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors">Annulla</button>
+                                            <button onClick={() => handleSaveEdit(template.id)} disabled={saving}
+                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors disabled:opacity-50">
                                                 {saving ? 'Salvataggio...' : 'Salva'}
                                             </button>
                                         </>
                                     ) : (
                                         <>
-                                            <button
-                                                onClick={() => { setEditingId(template.id); setEditBody(template.message_body) }}
-                                                className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
-                                            >
-                                                Modifica
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteTemplate(template)}
-                                                className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
-                                            >
-                                                Elimina
-                                            </button>
+                                            <button onClick={() => { setEditingId(template.id); setEditBody(template.message_body) }}
+                                                className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors">Modifica</button>
+                                            <button onClick={() => handleDeleteTemplate(template)}
+                                                className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors">Elimina</button>
                                         </>
                                     )}
                                 </div>
                             </div>
-
-                            {/* Automation config — editable inline */}
-                            {template.is_automatic && (
-                                <div className="mt-3 mb-3 flex flex-wrap items-center gap-3 px-3 py-2.5 rounded-lg bg-theme-bg-primary border border-theme-border/50">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
-                                        <select value={template.trigger_event || 'before_dropoff'}
-                                            onChange={e => handleUpdateAutomation(template.id, 'trigger_event', e.target.value)}
-                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                            {Object.entries(TRIGGER_LABELS).map(([k, v]) => (
-                                                <option key={k} value={k}>{v}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="text-theme-text-muted text-xs">―</div>
-                                    <div className="flex items-center gap-1">
-                                        <input type="number" value={template.trigger_offset_hours || 24}
-                                            onChange={e => handleUpdateAutomation(template.id, 'trigger_offset_hours', parseInt(e.target.value) || 0)}
-                                            className="w-12 text-xs text-center bg-dr7-gold/15 text-dr7-gold font-bold rounded-full px-2 py-1 border-none focus:outline-none" />
-                                        <span className="text-xs text-dr7-gold font-bold">ore</span>
-                                    </div>
-                                    <div className="text-theme-text-muted text-xs">―</div>
-                                    <div className="flex items-center gap-1">
-                                        <span className="text-xs text-theme-text-muted">ore</span>
-                                        <select value={template.send_hour ?? ''}
-                                            onChange={e => handleUpdateAutomation(template.id, 'send_hour', e.target.value === '' ? null : parseInt(e.target.value))}
-                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                            <option value="">Subito</option>
-                                            {Array.from({ length: 24 }, (_, i) => (
-                                                <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="text-theme-text-muted text-xs">―</div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                                        <select value={template.target_category || 'all'}
-                                            onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
-                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                            {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                                                <option key={k} value={k}>{v}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-                            )}
-
-                            {editingId === template.id ? (
-                                <div>
-                                    <textarea
-                                        value={editBody}
-                                        onChange={e => setEditBody(e.target.value)}
-                                        rows={6}
-                                        className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
-                                    />
-                                    <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
-                                </div>
-                            ) : (
-                                <pre className="mt-2 px-4 py-3 rounded-lg bg-theme-bg-tertiary text-theme-text-secondary text-sm whitespace-pre-wrap font-sans">
-                                    {template.message_body}
-                                </pre>
-                            )}
-                        </div>
+                        </details>
                     ))}
 
                     {templates.length === 0 && (
-                        <div className="text-center py-8 text-theme-text-muted">
+                        <div className="text-center py-8 text-theme-text-muted border border-theme-border rounded-lg">
                             Nessun messaggio trovato
                         </div>
                     )}
@@ -750,11 +733,15 @@ export default function MessaggiSistemaTab() {
             </div>
 
             {/* ═══════════ SECTION B: Invia Messaggio Manuale ═══════════ */}
-            <div className="space-y-4 border-t border-theme-border pt-8">
-                <div>
-                    <h3 className="text-lg font-bold text-theme-text-primary">Invia Messaggio Manuale</h3>
-                    <p className="text-theme-text-muted text-sm">Seleziona un template o scrivi un messaggio libero da inviare via WhatsApp</p>
-                </div>
+            <details className="border border-theme-border rounded-lg overflow-hidden">
+                <summary className="p-4 cursor-pointer hover:bg-theme-bg-hover/30 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-600/20 text-green-400">INVIO</span>
+                        <span className="font-medium text-theme-text-primary">Invia Messaggio Manuale</span>
+                    </div>
+                    <span className="text-xs text-theme-text-muted">Template o testo libero via WhatsApp</span>
+                </summary>
+            <div className="p-4 border-t border-theme-border space-y-4">
 
                 {/* Mode toggle */}
                 <div className="flex gap-2">
@@ -901,14 +888,14 @@ export default function MessaggiSistemaTab() {
                     )}
                 </div>
             </div>
+            </details>
+
+            {/* Section B2 removed — all messages are in Section A (editable templates) */}
 
             {/* ═══════════ SECTION C: Storico Messaggi Inviati ═══════════ */}
-            <div className="space-y-4 border-t border-theme-border pt-8">
+            <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                    <div>
-                        <h3 className="text-lg font-bold text-theme-text-primary">Storico Messaggi Inviati</h3>
-                        <p className="text-theme-text-muted text-sm">Ultimi 100 messaggi manuali inviati via WhatsApp</p>
-                    </div>
+                    <h3 className="text-lg font-bold text-theme-text-primary">Storico Messaggi Inviati</h3>
                     <button
                         onClick={loadSentLogs}
                         className="px-4 py-2 rounded-full text-sm font-medium bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
@@ -920,66 +907,35 @@ export default function MessaggiSistemaTab() {
                 {logsLoading ? (
                     <div className="text-center py-6 text-dr7-gold">Caricamento storico...</div>
                 ) : sentLogs.length === 0 ? (
-                    <div className="text-center py-8 text-theme-text-muted bg-theme-bg-secondary rounded-xl border border-theme-border">
-                        Nessun messaggio manuale inviato
+                    <div className="text-center py-8 text-theme-text-muted border border-theme-border rounded-lg">
+                        Nessun messaggio inviato ancora
                     </div>
                 ) : (
-                    <div className="bg-theme-bg-tertiary rounded-lg overflow-hidden border border-theme-border">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm text-theme-text-muted">
-                                <thead className="bg-theme-bg-secondary/50 text-theme-text-secondary uppercase font-medium">
-                                    <tr>
-                                        <th className="p-4">Data</th>
-                                        <th className="p-4">Destinatario</th>
-                                        <th className="p-4">Telefono</th>
-                                        <th className="p-4">Template</th>
-                                        <th className="p-4">Messaggio</th>
-                                        <th className="p-4">Stato</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-theme-border">
-                                    {sentLogs.map(log => (
-                                        <tr key={log.id} className="hover:bg-theme-bg-hover/50 transition-colors">
-                                            <td className="p-4 whitespace-nowrap">
-                                                {new Date(log.sent_at).toLocaleString('it-IT', {
-                                                    day: '2-digit',
-                                                    month: '2-digit',
-                                                    year: 'numeric',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })}
-                                            </td>
-                                            <td className="p-4 font-medium text-theme-text-primary">{log.customer_name}</td>
-                                            <td className="p-4 font-mono text-xs">{log.customer_phone}</td>
-                                            <td className="p-4">
-                                                {log.template_label ? (
-                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600/20 text-blue-400">
-                                                        {log.template_label}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-theme-text-muted text-xs">Testo libero</span>
-                                                )}
-                                            </td>
-                                            <td className="p-4 max-w-md">
-                                                <details className="cursor-pointer">
-                                                    <summary className="truncate text-theme-text-secondary text-xs">
-                                                        {log.message_text.substring(0, 80)}...
-                                                    </summary>
-                                                    <pre className="mt-2 p-3 bg-theme-bg-primary rounded-lg text-xs text-theme-text-primary whitespace-pre-wrap max-h-64 overflow-y-auto border border-theme-border">
-                                                        {log.message_text}
-                                                    </pre>
-                                                </details>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-600/20 text-green-400">
-                                                    {log.status === 'sent' ? 'Inviato' : log.status}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div className="space-y-2">
+                        {sentLogs.map(log => (
+                            <details key={log.id} className="border border-theme-border rounded-lg overflow-hidden">
+                                <summary className="p-3 cursor-pointer hover:bg-theme-bg-hover/30 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-600/20 text-green-400">
+                                            {log.status === 'sent' ? 'Inviato' : log.status}
+                                        </span>
+                                        {log.template_label && (
+                                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600/20 text-blue-400">
+                                                {log.template_label}
+                                            </span>
+                                        )}
+                                        <span className="font-medium text-theme-text-primary text-sm">{log.customer_name}</span>
+                                        <span className="text-xs text-theme-text-muted font-mono">{log.customer_phone}</span>
+                                    </div>
+                                    <span className="text-xs text-theme-text-muted">
+                                        {new Date(log.sent_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </summary>
+                                <pre className="p-4 bg-theme-bg-primary text-xs text-theme-text-secondary whitespace-pre-wrap border-t border-theme-border max-h-72 overflow-y-auto">
+                                    {log.message_text}
+                                </pre>
+                            </details>
+                        ))}
                     </div>
                 )}
             </div>
