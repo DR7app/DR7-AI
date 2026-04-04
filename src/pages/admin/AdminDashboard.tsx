@@ -393,14 +393,7 @@ export default function AdminDashboard() {
               onDataConsumed={() => setInitialReservationData(null)}
             />
           )}
-          {activeTab === 'preventivi' && (
-            <PreventiviTab
-              onConvertToBooking={(data) => {
-                setInitialReservationData(data)
-                setActiveTab('reservations')
-              }}
-            />
-          )}
+          {activeTab === 'preventivi' && <PreventiviTab />}
           {activeTab === 'unpaid' && (isTabRestricted('unpaid') ? <PlaceholderTab title="Accesso non autorizzato" /> : <UnpaidBookingsTab />)}
           {activeTab === 'customers' && <CustomersTab />}
           {activeTab === 'customer-wallet' && <CustomerWalletTab />}
