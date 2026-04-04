@@ -216,7 +216,12 @@ function InsuranceTab({ config, updateConfig }: { config: RentalConfig; updateCo
 
         return (
           <div key={cat} className="border border-theme-border rounded-lg p-4">
-            <h4 className="font-medium text-theme-text-primary mb-3">{CATEGORY_LABELS[cat]}</h4>
+            <input
+              type="text"
+              value={config.insurance?.category_labels?.[cat] || CATEGORY_LABELS[cat]}
+              onChange={e => updateConfig(['insurance', 'category_labels', cat], e.target.value)}
+              className="font-medium text-theme-text-primary mb-3 bg-transparent border-b border-transparent hover:border-theme-border focus:border-dr7-gold focus:outline-none px-0 py-1 text-base"
+            />
 
             {hasTiers ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -97,6 +97,7 @@ export interface RentalConfig {
   } & {
     eligibility?: Record<string, InsuranceEligibility>
     deductibles?: Record<string, InsuranceDeductible>
+    category_labels?: Record<string, string>
   }
 
   km_included: {
