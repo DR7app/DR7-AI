@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from './require-auth'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -9,13 +10,17 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const handler: Handler = async (event, context) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Methods': 'GET, OPTIONS'
     };
 
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers, body: '' };
     }
+
+    // Require authentication
+    const { error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
 
     try {
         // 1. Fetch local transactions from DB

@@ -33,7 +33,18 @@ export default function CustomerAutocomplete({
     const selectedCustomer = customers.find(c => c.id === selectedCustomerId)
 
     // Filter customers based on search query
-    const filteredCustomers = customers.filter(customer => {
+    // Deduplicate customers by email (or name if no email) — keep first occurrence
+    const deduped = (() => {
+        const seen = new Set<string>()
+        return customers.filter(c => {
+            const key = (c.email || c.full_name || c.id).toLowerCase().trim()
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+        })
+    })()
+
+    const filteredCustomers = deduped.filter(customer => {
         if (!searchQuery.trim()) return true
         const words = searchQuery.toLowerCase().split(/\s+/).filter(Boolean)
         const name = customer.full_name.toLowerCase()

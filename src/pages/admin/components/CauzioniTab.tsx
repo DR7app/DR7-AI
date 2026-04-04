@@ -4,6 +4,7 @@ import NuovaCauzioneModal from './NuovaCauzioneModal'
 import CassaCauzioneModal from './CassaCauzioneModal'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Cauzione {
     id: string
@@ -319,7 +320,7 @@ export default function CauzioniTab() {
                 captureType: 'EXPLICIT'
             }
 
-            const res = await fetch('/.netlify/functions/nexi-charge-mit', {
+            const res = await authFetch('/.netlify/functions/nexi-charge-mit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(mitPayload)
@@ -358,7 +359,7 @@ export default function CauzioniTab() {
             toast.loading('Generazione link pre-autorizzazione...', { id: 'paylink' })
 
             // Use nexi-create-preauth for cauzioni — holds the money without charging
-            const response = await fetch('/.netlify/functions/nexi-create-preauth', {
+            const response = await authFetch('/.netlify/functions/nexi-create-preauth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -410,7 +411,7 @@ export default function CauzioniTab() {
     // @ts-ignore
     const handleCreatePreauth = async (cauzione: Cauzione) => {
         try {
-            const response = await fetch('/.netlify/functions/nexi-create-preauth', {
+            const response = await authFetch('/.netlify/functions/nexi-create-preauth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -467,7 +468,7 @@ export default function CauzioniTab() {
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
 
             if (nexiTransactionId) {
-                const response = await fetch('/.netlify/functions/nexi-void-preauth', {
+                const response = await authFetch('/.netlify/functions/nexi-void-preauth', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -566,7 +567,7 @@ export default function CauzioniTab() {
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
 
             if (nexiTransactionId) {
-                const response = await fetch('/.netlify/functions/nexi-capture-preauth', {
+                const response = await authFetch('/.netlify/functions/nexi-capture-preauth', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

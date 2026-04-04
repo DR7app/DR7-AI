@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Customer {
   id: string
@@ -369,7 +370,7 @@ export default function CustomersTab() {
         }
 
         try {
-          const response = await fetch('/.netlify/functions/save-customer', {
+          const response = await authFetch('/.netlify/functions/save-customer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ customerData })
@@ -636,28 +637,26 @@ export default function CustomersTab() {
   async function handleRemoveDuplicates() {
     setMergingDuplicates(true)
 
-    // Group by normalized email or phone — same name alone is NOT enough
+    // Group by normalized email — phone alone is NOT enough (family members can share phones)
     const emailGroups = new Map<string, Customer[]>()
-    const phoneGroups = new Map<string, Customer[]>()
 
     allCustomers.forEach(c => {
       if (c.id.startsWith('temp-')) return
-
       const email = (c.email || '').trim().toLowerCase()
-      const phone = (c.phone || c.telefono || '').trim().replace(/\s/g, '')
-
       if (email) {
         if (!emailGroups.has(email)) emailGroups.set(email, [])
         emailGroups.get(email)!.push(c)
-      }
-      if (phone && phone.length >= 8) {
-        if (!phoneGroups.has(phone)) phoneGroups.set(phone, [])
-        phoneGroups.get(phone)!.push(c)
       }
     })
 
     const seenIds = new Set<string>()
     const groups: Customer[][] = []
+
+    const normName = (c: Customer) => {
+      const n = (c.nome || '').trim().toLowerCase()
+      const cog = (c.cognome || '').trim().toLowerCase()
+      return `${n}|${cog}`
+    }
 
     const addGroup = (group: Customer[]) => {
       if (group.some(c => seenIds.has(c.id))) return
@@ -670,14 +669,25 @@ export default function CustomersTab() {
       })
       byType.forEach(subGroup => {
         if (subGroup.length < 2) return
-        if (subGroup.some(c => seenIds.has(c.id))) return
-        subGroup.forEach(c => seenIds.add(c.id))
-        groups.push(subGroup)
+        // Further split by name — only merge customers with matching nome+cognome
+        const byName = new Map<string, Customer[]>()
+        subGroup.forEach(c => {
+          const name = normName(c)
+          // Skip customers with no name — can't safely match them
+          if (name === '|') return
+          if (!byName.has(name)) byName.set(name, [])
+          byName.get(name)!.push(c)
+        })
+        byName.forEach(nameGroup => {
+          if (nameGroup.length < 2) return
+          if (nameGroup.some(c => seenIds.has(c.id))) return
+          nameGroup.forEach(c => seenIds.add(c.id))
+          groups.push(nameGroup)
+        })
       })
     }
 
     emailGroups.forEach(group => { if (group.length >= 2) addGroup(group) })
-    phoneGroups.forEach(group => { if (group.length >= 2) addGroup(group) })
 
     if (groups.length === 0) {
       toast.success('Nessun duplicato trovato!')
@@ -685,9 +695,25 @@ export default function CustomersTab() {
       return
     }
 
+    // Confirmation: show user what will be merged
+    const totalToRemove = groups.reduce((s, g) => s + g.length - 1, 0)
+    const summary = groups.slice(0, 10).map(g => {
+      const sorted = [...g].sort((a, b) => getCompleteness(b) - getCompleteness(a))
+      const keeper = sorted[0]
+      const dups = sorted.slice(1)
+      return `• "${keeper.nome || ''} ${keeper.cognome || ''}" (${keeper.email || 'no email'}) — mantieni, rimuovi ${dups.length} duplicat${dups.length === 1 ? 'o' : 'i'}`
+    }).join('\n')
+
+    const confirmMsg = `Trovati ${groups.length} gruppi di duplicati (${totalToRemove} da rimuovere).\n\nPrenotazioni e dati verranno trasferiti al profilo più completo.\n\n${summary}${groups.length > 10 ? `\n... e altri ${groups.length - 10} gruppi` : ''}\n\nProcedere?`
+
+    if (!window.confirm(confirmMsg)) {
+      setMergingDuplicates(false)
+      toast('Unificazione annullata')
+      return
+    }
+
     let merged = 0
     let failed = 0
-    const totalToRemove = groups.reduce((s, g) => s + g.length - 1, 0)
 
     for (const group of groups) {
       const ok = await mergeDuplicateGroup(group)
@@ -748,30 +774,20 @@ export default function CustomersTab() {
     }
 
     try {
-      // Update keeper with merged fields if any
-      if (Object.keys(updates).length > 0) {
-        const response = await fetch('/.netlify/functions/manage-customer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'update', customerId: keeper.id, updates })
+      // Single call: update keeper fields + reassign all data from duplicates + delete duplicate shells
+      const response = await authFetch('/.netlify/functions/manage-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mergeDuplicate',
+          keeperId: keeper.id,
+          duplicateIds: toDelete.map(d => d.id),
+          updates: Object.keys(updates).length > 0 ? updates : undefined
         })
-        if (!response.ok) {
-          const err = await response.json()
-          throw new Error(err.error || 'Errore aggiornamento')
-        }
-      }
-
-      // Delete less complete duplicates
-      for (const dup of toDelete) {
-        const response = await fetch('/.netlify/functions/manage-customer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'delete', customerId: dup.id })
-        })
-        if (!response.ok) {
-          const err = await response.json()
-          console.error(`Failed to delete duplicate ${dup.id}:`, err)
-        }
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'Errore merge')
       }
 
       return true
@@ -787,7 +803,7 @@ export default function CustomersTab() {
     logger.log('[handleDelete] Starting delete for ID:', id)
 
     try {
-      const response = await fetch('/.netlify/functions/manage-customer', {
+      const response = await authFetch('/.netlify/functions/manage-customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', customerId: id })
@@ -975,7 +991,7 @@ export default function CustomersTab() {
 
     try {
       logger.log('[CustomersTab] Fetching documents via Netlify function for:', userId)
-      const response = await fetch('/.netlify/functions/get-customer-documents', {
+      const response = await authFetch('/.netlify/functions/get-customer-documents', {
         method: 'POST',
         body: JSON.stringify({ userId }),
         headers: { 'Content-Type': 'application/json' }
@@ -1234,7 +1250,7 @@ export default function CustomersTab() {
         newStatus === 'member' ? 'Member' : 'Nessuno'
 
     try {
-      const response = await fetch('/.netlify/functions/manage-customer', {
+      const response = await authFetch('/.netlify/functions/manage-customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'updateStatus', customerId, status: newStatus })
@@ -1266,7 +1282,7 @@ export default function CustomersTab() {
     try {
       const customerIds = Array.from(selectedCustomerIds)
 
-      const response = await fetch('/.netlify/functions/manage-customer', {
+      const response = await authFetch('/.netlify/functions/manage-customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'bulkUpdateStatus', customerIds, status: newStatus })
@@ -1306,7 +1322,7 @@ export default function CustomersTab() {
     try {
       const customerIds = Array.from(selectedCustomerIds)
 
-      const response = await fetch('/.netlify/functions/manage-customer', {
+      const response = await authFetch('/.netlify/functions/manage-customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'bulkDelete', customerIds })

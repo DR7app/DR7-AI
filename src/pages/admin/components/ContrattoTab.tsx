@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Contract {
   id: string
@@ -603,7 +604,7 @@ export default function ContrattoTab() {
                       onClick={async () => {
                         try {
                           toast.loading('Rigenerazione contratto...', { id: 'regen' })
-                          const res = await fetch('/.netlify/functions/generate-contract', {
+                          const res = await authFetch('/.netlify/functions/generate-contract', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ bookingId: contract.booking_id })

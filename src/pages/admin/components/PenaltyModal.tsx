@@ -2,6 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { authFetch } from '../../../utils/authFetch'
 
 interface PenaltyModalProps {
     isOpen: boolean
@@ -149,7 +150,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
         try {
             if (paymentStatus === 'paid') {
                 // PAGATO: generate fattura + send to SDI
-                const response = await fetch('/.netlify/functions/generate-penalty-invoice', {
+                const response = await authFetch('/.netlify/functions/generate-penalty-invoice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -165,7 +166,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 if (!response.ok) throw new Error(data.message || data.error || 'Errore nella generazione.')
 
                 if (data.invoiceId) {
-                    const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+                    const pdfResponse = await authFetch('/.netlify/functions/generate-invoice-pdf', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ invoiceId: data.invoiceId })
@@ -241,7 +242,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                     const custEmail = currentBookingNexi?.customer_email || booking.booking_details?.customer?.email
                     const custName = currentBookingNexi?.customer_name || booking.customer_name
 
-                    const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+                    const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

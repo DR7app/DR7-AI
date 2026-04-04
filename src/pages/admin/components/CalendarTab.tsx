@@ -6,6 +6,7 @@ import { normalizeBooking, computeLanes, type CalendarEvent } from '../../../uti
 import BookingDetailsPanel from './BookingDetailsPanel'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { authFetch } from '../../../utils/authFetch'
 
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
@@ -81,7 +82,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let allBookings: any[] | null = null
       try {
-        const bookingsResponse = await fetch('/.netlify/functions/list-bookings')
+        const bookingsResponse = await authFetch('/.netlify/functions/list-bookings')
         const bookingsResult = await bookingsResponse.json()
         if (bookingsResponse.ok && bookingsResult.bookings) {
           allBookings = bookingsResult.bookings
@@ -210,7 +211,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     // Priority: 1) plate match (targa), 2) vehicle_id match (fallback)
     const bookingToVehicleId = new Map<string, string>()
     bookings.forEach(b => {
-      if (b.status === 'cancelled') return
+      // Use centralized visibility rule: hide cancelled, expired, and expired pending_payment
+      if (b.status === 'cancelled' || b.status === 'expired') return
+      if (b.status === 'pending_payment' && b.payment_status === 'expired') return
       // Pending Nexi Pay by Link bookings are shown on calendar (slot blocked for 1h)
       const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
       const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
@@ -531,8 +534,15 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
                       // Check if this is an unavailability/mechanic booking
                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
+                      // Check if this is a pending payment booking (DA SALDARE)
+                      // Supports both new status model (pending_payment) and legacy (Nexi Pay by Link + pending/unpaid)
+                      const isPendingPayment = evt.booking.status === 'pending_payment'
+                        || (evt.booking.payment_method === 'Nexi Pay by Link' && (evt.booking.payment_status === 'pending' || evt.booking.payment_status === 'unpaid'))
 
-                      if (isUnavailability) {
+                      if (isPendingPayment) {
+                        bgClass = "bg-amber-500/70"
+                        borderClass = "border-amber-400/50 border-dashed"
+                      } else if (isUnavailability) {
                         bgClass = "bg-orange-500/80"
                         borderClass = "border-orange-400/30"
                       }
@@ -570,7 +580,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         >
                           <div className="px-2 flex flex-col justify-center h-full">
                             <span className="font-bold text-[10px] truncate leading-tight">
-                              {evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
+                              {isPendingPayment ? '⏳ DA SALDARE — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
                                 // Calculate drop-off day: if end time is exactly 00:00, use previous day
                                 const endHours = evt.endLocal.getHours()
                                 const endMinutes = evt.endLocal.getMinutes()

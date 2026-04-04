@@ -1,14 +1,19 @@
 
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { requireAuth } from './require-auth'
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ahpmzjgkfxrrgxyirasa.supabase.co'
+const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' }
+
+    // Require authentication
+    const { error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
     }
 
     try {

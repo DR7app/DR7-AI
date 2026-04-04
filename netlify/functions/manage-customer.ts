@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
+import { requireAuth } from './require-auth'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -26,6 +27,10 @@ const handler: Handler = async (event) => {
     };
   }
 
+  // Require authentication
+  const { error: authErr } = await requireAuth(event)
+  if (authErr) return authErr
+
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error("Missing Supabase credentials");
     return {
@@ -41,7 +46,7 @@ const handler: Handler = async (event) => {
   });
 
   try {
-    const { action, customerId, customerIds, status } = JSON.parse(event.body || "{}");
+    const { action, customerId, customerIds, status, keeperId, duplicateIds, updates, sourceId } = JSON.parse(event.body || "{}");
 
     if (!action) {
       return {
@@ -313,6 +318,81 @@ const handler: Handler = async (event) => {
           success: true,
           message: `Deleted ${realIds.length} customers`,
           skippedTemp: customerIds.length - realIds.length,
+        }),
+      };
+    }
+
+    // MERGE DUPLICATE — reassign all related data to keeper, then delete duplicates
+    if (action === "mergeDuplicate" && keeperId && duplicateIds && Array.isArray(duplicateIds)) {
+      console.log("[manage-customer] Merging duplicates into keeper:", keeperId, "duplicates:", duplicateIds);
+
+      const realDupIds = duplicateIds.filter((id: string) => !id.startsWith("temp-"));
+      if (realDupIds.length === 0) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, message: "No real duplicates to merge" }),
+        };
+      }
+
+      // Update keeper fields if provided
+      if (updates && Object.keys(updates).length > 0) {
+        const { error: updateError } = await supabaseAdmin
+          .from("customers_extended")
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq("id", keeperId);
+        if (updateError) {
+          console.error("[manage-customer] Error updating keeper:", updateError);
+          return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: "Failed to update keeper: " + updateError.message }),
+          };
+        }
+      }
+
+      // Reassign bookings from duplicates to keeper
+      const { error: bookingsErr } = await supabaseAdmin
+        .from("bookings")
+        .update({ customer_id: keeperId })
+        .in("customer_id", realDupIds);
+      if (bookingsErr) console.warn("[manage-customer] Bookings reassign warning:", bookingsErr.message);
+
+      // Reassign cauzioni (by cliente_id) from duplicates to keeper
+      const { error: cauzioniErr } = await supabaseAdmin
+        .from("cauzioni")
+        .update({ cliente_id: keeperId })
+        .in("cliente_id", realDupIds);
+      if (cauzioniErr) console.warn("[manage-customer] Cauzioni reassign warning:", cauzioniErr.message);
+
+      // Reassign birthday_messages
+      const { error: bdayErr } = await supabaseAdmin
+        .from("birthday_messages")
+        .update({ customer_id: keeperId })
+        .in("customer_id", realDupIds);
+      if (bdayErr) console.warn("[manage-customer] Birthday messages reassign warning:", bdayErr.message);
+
+      // Reassign customer_memberships
+      const { error: memberErr } = await supabaseAdmin
+        .from("customer_memberships")
+        .update({ client_id: keeperId })
+        .in("client_id", realDupIds);
+      if (memberErr) console.warn("[manage-customer] Memberships reassign warning:", memberErr.message);
+
+      // Now safe to delete the duplicate customer records (no data loss)
+      await supabaseAdmin.from("customers_extended").delete().in("id", realDupIds);
+      await supabaseAdmin.from("customers").delete().in("id", realDupIds);
+
+      console.log("[manage-customer] Merge complete. Reassigned all data from", realDupIds.length, "duplicates to keeper:", keeperId);
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          message: `Merged ${realDupIds.length} duplicates into keeper`,
+          keeperId,
+          mergedCount: realDupIds.length,
         }),
       };
     }

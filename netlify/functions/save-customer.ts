@@ -1,11 +1,12 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from './require-auth'
 
 export const handler: Handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Content-Type': 'application/json'
     };
@@ -23,6 +24,10 @@ export const handler: Handler = async (event) => {
         process.env.VITE_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+
+    // Require authentication
+    const { error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
 
     try {
         const { customerData, customerId } = JSON.parse(event.body || '{}');

@@ -8,6 +8,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { validateScheduling } from '../../../utils/schedulingRules'
 import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface Customer {
   id: string
@@ -800,7 +801,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setGeneratingInvoice(true)
     toast.loading('Generazione fattura in corso...', { id: 'gen-invoice' })
     try {
-      const response = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+      const response = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: booking.id, includeIVA })
@@ -831,7 +832,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       toast.dismiss('gen-invoice')
       // Generate and open the invoice PDF
       const invoiceId = data.invoice.id
-      const pdfResponse = await fetch('/.netlify/functions/generate-invoice-pdf', {
+      const pdfResponse = await authFetch('/.netlify/functions/generate-invoice-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoiceId })
@@ -893,7 +894,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     // Validate customer has all required fields for fattura
     try {
-      const custResp = await fetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
+      const custResp = await authFetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
       if (custResp.ok) {
         const { customer: custData } = await custResp.json()
         if (custData) {
@@ -1007,9 +1008,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       dropoff_location: 'DR7 Empire - Car Wash',
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
-      status: 'confirmed',
-      payment_status: formData.payment_status,
-      payment_method: formData.payment_method || null,
+      // Pay by Link: pending_payment/unpaid; all others: confirmed
+      status: formData.payment_status === 'nexi_pay_by_link' ? 'pending_payment' : 'confirmed',
+      payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'unpaid' : formData.payment_status,
+      payment_method: formData.payment_status === 'nexi_pay_by_link' ? 'Nexi Pay by Link' : (formData.payment_method || null),
       booking_details: bookingDetails
     }
 
@@ -1034,7 +1036,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const skipFattura = formData.payment_method === 'Wallet' || formData.payment_method === 'Gift Card'
     if (isPaid && !skipFattura) {
       try {
-        const invoiceResponse = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+        const invoiceResponse = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bookingId: data.id, includeIVA: true })
@@ -1062,14 +1064,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // Handle Nexi Pay by Link
     const isNexiPayByLink = formData.payment_status === 'nexi_pay_by_link'
     if (isNexiPayByLink && data) {
-      // Update booking to pending with Nexi payment method
-      await supabase.from('bookings').update({
-        payment_status: 'pending',
-        payment_method: 'Nexi Pay by Link'
-      }).eq('id', data.id)
-
       try {
-        const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1105,7 +1101,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     // Send WhatsApp notification
     try {
-      const paymentStatus = isNexiPayByLink ? 'pending' : (formData.payment_status || 'pending')
+      const paymentStatus = isNexiPayByLink ? 'unpaid' : (formData.payment_status || 'unpaid')
       const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : 0
 
       // Send admin notification (detailed internal format)
@@ -2742,7 +2738,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                           if (!existingFattura) {
                             logger.log('[Auto-Gen] Generating fattura for paid car wash:', editingBooking.id)
-                            const invoiceRes = await fetch('/.netlify/functions/generate-invoice-from-booking', {
+                            const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ bookingId: editingBooking.id, includeIVA: true })

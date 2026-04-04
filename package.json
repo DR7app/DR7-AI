@@ -17,7 +17,6 @@
     "@netlify/functions": "^5.1.0",
     "@supabase/supabase-js": "^2.75.0",
     "@tailwindcss/postcss": "^4.1.14",
-    "canvas": "^3.2.0",
     "dotenv": "^17.2.3",
     "framer-motion": "^12.23.26",
     "jszip": "^3.10.1",
@@ -31,8 +30,7 @@
     "react-dom": "^19.1.1",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.9.4",
-    "resend": "^6.9.1",
-    "tesseract.js": "^7.0.0"
+    "resend": "^6.9.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
