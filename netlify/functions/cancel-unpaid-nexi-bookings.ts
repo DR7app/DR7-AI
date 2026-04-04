@@ -148,14 +148,28 @@ const cancelHandler: Handler = async () => {
             // 4. Notify admin
             const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
             if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                const adminMessage = `*PRENOTAZIONE AUTO-ANNULLATA*\n\n*Cliente:* ${booking.customer_name}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n*ID:* #${booking.id.substring(0, 8).toUpperCase()}\n\nMotivo: Pagamento Nexi non ricevuto entro 1 ora.\nLink Nexi: ${linkDeactivated ? 'disattivato' : 'non trovato/già scaduto'}`;
                 await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         chatId: `${NOTIFICATION_PHONE}@c.us`,
-                        message: `*PRENOTAZIONE AUTO-ANNULLATA*\n\n*Cliente:* ${booking.customer_name}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n*ID:* #${booking.id.substring(0, 8).toUpperCase()}\n\nMotivo: Pagamento Nexi non ricevuto entro 1 ora.\nLink Nexi: ${linkDeactivated ? 'disattivato' : 'non trovato/già scaduto'}`
+                        message: adminMessage
                     })
                 });
+
+                // Log to sent_messages_log
+                try {
+                    await supabase.from('sent_messages_log').insert({
+                        customer_name: booking.customer_name || 'N/A',
+                        customer_phone: NOTIFICATION_PHONE,
+                        message_text: adminMessage,
+                        template_label: 'Cancellation Notification (Admin)',
+                        status: 'sent',
+                    });
+                } catch (logErr) {
+                    console.error('Failed to log message:', logErr);
+                }
             }
         }
 

@@ -250,13 +250,27 @@ export async function notifyPrepaidBlocked(params: {
 
     // Notify admin
     if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+        const adminMessage = `🚫 *CARTA PREPAGATA BLOCCATA*\n\n*Cliente:* ${params.customerName || '-'}\n${params.amount ? `*Importo:* €${params.amount}\n` : ''}${params.bookingRef ? `*Prenotazione:* #${params.bookingRef}\n` : ''}\nOperazione rifiutata e rimborso avviato.`
         await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chatId: `${NOTIFICATION_PHONE}@c.us`,
-                message: `🚫 *CARTA PREPAGATA BLOCCATA*\n\n*Cliente:* ${params.customerName || '-'}\n${params.amount ? `*Importo:* €${params.amount}\n` : ''}${params.bookingRef ? `*Prenotazione:* #${params.bookingRef}\n` : ''}\nOperazione rifiutata e rimborso avviato.`
+                message: adminMessage
             })
         })
+
+        // Log to sent_messages_log
+        try {
+            await supabase.from('sent_messages_log').insert({
+                customer_name: params.customerName || 'N/A',
+                customer_phone: NOTIFICATION_PHONE,
+                message_text: adminMessage,
+                template_label: 'Prepaid Card Blocked (Admin)',
+                status: 'sent',
+            })
+        } catch (logErr) {
+            console.error('Failed to log message:', logErr)
+        }
     }
 }

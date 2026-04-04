@@ -282,14 +282,28 @@ const handler: Handler = async (event) => {
                 // Admin notification
                 const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
                 if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    const adminMsg = `💰 *PAGAMENTO ${paymentPurpose.toUpperCase()} RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Tipo:* ${paymentPurpose}\n\nFattura generata automaticamente.`;
                     await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             chatId: `${NOTIFICATION_PHONE}@c.us`,
-                            message: `💰 *PAGAMENTO ${paymentPurpose.toUpperCase()} RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Tipo:* ${paymentPurpose}\n\nFattura generata automaticamente.`
+                            message: adminMsg
                         })
                     });
+
+                    // Log to sent_messages_log
+                    try {
+                        await supabase.from('sent_messages_log').insert({
+                            customer_name: booking.customer_name || 'N/A',
+                            customer_phone: NOTIFICATION_PHONE,
+                            message_text: adminMsg,
+                            template_label: `Payment Confirmation Admin (${paymentPurpose})`,
+                            status: 'sent',
+                        });
+                    } catch (logErr) {
+                        console.error('Failed to log message:', logErr);
+                    }
                 }
             }
 
@@ -364,14 +378,28 @@ const handler: Handler = async (event) => {
                 // Admin notification
                 const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
                 if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    const adminMsg = `💰 *PAGAMENTO ESTENSIONE RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n\nFattura estensione generata automaticamente.`;
                     await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             chatId: `${NOTIFICATION_PHONE}@c.us`,
-                            message: `💰 *PAGAMENTO ESTENSIONE RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n\nFattura estensione generata automaticamente.`
+                            message: adminMsg
                         })
                     });
+
+                    // Log to sent_messages_log
+                    try {
+                        await supabase.from('sent_messages_log').insert({
+                            customer_name: booking.customer_name || 'N/A',
+                            customer_phone: NOTIFICATION_PHONE,
+                            message_text: adminMsg,
+                            template_label: 'Payment Confirmation Admin (extension)',
+                            status: 'sent',
+                        });
+                    } catch (logErr) {
+                        console.error('Failed to log message:', logErr);
+                    }
                 }
             }
 
@@ -605,14 +633,28 @@ const handler: Handler = async (event) => {
                 // Send admin notification
                 const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
                 if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    const adminMsg = `💰 *PAGAMENTO NEXI RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Prenotazione:* #${booking.id.substring(0, 8).toUpperCase()}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n\nPrenotazione confermata automaticamente.`;
                     await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             chatId: `${NOTIFICATION_PHONE}@c.us`,
-                            message: `💰 *PAGAMENTO NEXI RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Prenotazione:* #${booking.id.substring(0, 8).toUpperCase()}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n\nPrenotazione confermata automaticamente.`
+                            message: adminMsg
                         })
                     });
+
+                    // Log to sent_messages_log
+                    try {
+                        await supabase.from('sent_messages_log').insert({
+                            customer_name: booking.customer_name || 'N/A',
+                            customer_phone: NOTIFICATION_PHONE,
+                            message_text: adminMsg,
+                            template_label: 'Payment Confirmation Admin (booking)',
+                            status: 'sent',
+                        });
+                    } catch (logErr) {
+                        console.error('Failed to log message:', logErr);
+                    }
                 }
 
                 // Auto-generate contract → then send signing link via WhatsApp
