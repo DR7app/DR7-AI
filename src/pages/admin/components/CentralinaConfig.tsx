@@ -365,7 +365,7 @@ function InsuranceTab({ config, updateConfig }: { config: RentalConfig; updateCo
             if (typeof ded !== 'object' || !('fixed' in ded)) return null
             return (
               <div key={cat} className="space-y-2">
-                <p className="text-sm font-medium text-theme-text-secondary">{CATEGORY_LABELS[cat] || cat}</p>
+                <p className="text-sm font-medium text-theme-text-secondary">{config.insurance?.category_labels?.[cat] || CATEGORY_LABELS[cat] || cat}</p>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-theme-text-muted">Fisso €</span>
                   <input
@@ -430,6 +430,18 @@ function KmSforoTab({ config, updateConfig, vehicles }: { config: RentalConfig; 
             />
             <p className="text-xs text-theme-text-muted mt-1">km/g</p>
           </div>
+          <div className="text-center flex flex-col items-center justify-center">
+            <button
+              onClick={() => {
+                if (!globalKm) return
+                const keys = Object.keys(globalKm.table || {}).map(Number)
+                const nextDay = keys.length > 0 ? Math.max(...keys) + 1 : 1
+                const lastVal = keys.length > 0 ? (globalKm.table[String(Math.max(...keys))] || 0) + (globalKm.extra_per_day || 60) : 100
+                updateConfig(['km_included', '_global', 'table', String(nextDay)], lastVal)
+              }}
+              className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium"
+            >+ Giorno</button>
+          </div>
         </div>
         <p className="text-xs text-green-400 mt-2">
           Esempio: 10 giorni = {globalKm ? (globalKm.table?.['5'] || 300) + ((10 - 5) * (globalKm.extra_per_day || 60)) : 600} km
@@ -462,7 +474,7 @@ function KmSforoTab({ config, updateConfig, vehicles }: { config: RentalConfig; 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {CATEGORIES.map(cat => (
                 <div key={cat} className="flex items-center gap-2">
-                  <span className="text-sm text-theme-text-primary">{CATEGORY_LABELS[cat]}</span>
+                  <span className="text-sm text-theme-text-primary">{config.insurance?.category_labels?.[cat] || CATEGORY_LABELS[cat]}</span>
                   <input
                     type="number"
                     step="0.01"
@@ -543,7 +555,7 @@ function KmSforoTab({ config, updateConfig, vehicles }: { config: RentalConfig; 
             const hasTiers = !!(catUk.TIER_1 || catUk.TIER_2)
             return (
               <div key={cat} className="space-y-2">
-                <p className="text-sm font-medium text-theme-text-secondary">{CATEGORY_LABELS[cat]}</p>
+                <p className="text-sm font-medium text-theme-text-secondary">{config.insurance?.category_labels?.[cat] || CATEGORY_LABELS[cat]}</p>
                 {hasTiers ? (
                   <>
                     <div className="flex items-center gap-2">
@@ -613,8 +625,17 @@ function DepositsTab({ config, updateConfig }: { config: RentalConfig; updateCon
             <div key={key} className="border border-theme-border rounded-lg p-4">
               <h4 className="text-sm font-medium text-theme-text-secondary mb-3">{keyLabels[key]}</h4>
               {options.map((opt, idx) => (
-                <div key={opt.id} className="flex items-center gap-2 mb-2">
-                  <span className="text-sm text-theme-text-primary w-40 truncate">{opt.label}</span>
+                <div key={opt.id} className="flex items-center gap-2 mb-2 flex-wrap">
+                  <input
+                    type="text"
+                    value={opt.label}
+                    onChange={e => {
+                      const newOpts = [...options]
+                      newOpts[idx] = { ...opt, label: e.target.value }
+                      updateConfig(['deposits', key], newOpts)
+                    }}
+                    className="w-40 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
+                  />
                   <span className="text-xs text-theme-text-muted">€</span>
                   <input
                     type="number"
@@ -626,24 +647,35 @@ function DepositsTab({ config, updateConfig }: { config: RentalConfig; updateCon
                     }}
                     className="w-20 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
                   />
-                  {opt.surcharge_per_day != null && opt.surcharge_per_day > 0 && (
-                    <>
-                      <span className="text-xs text-amber-400">+€</span>
-                      <input
-                        type="number"
-                        value={opt.surcharge_per_day}
-                        onChange={e => {
-                          const newOpts = [...options]
-                          newOpts[idx] = { ...opt, surcharge_per_day: parseInt(e.target.value) || 0 }
-                          updateConfig(['deposits', key], newOpts)
-                        }}
-                        className="w-16 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
-                      />
-                      <span className="text-xs text-theme-text-muted">/g</span>
-                    </>
-                  )}
+                  <span className="text-xs text-amber-400">+€</span>
+                  <input
+                    type="number"
+                    value={opt.surcharge_per_day ?? 0}
+                    onChange={e => {
+                      const newOpts = [...options]
+                      newOpts[idx] = { ...opt, surcharge_per_day: parseInt(e.target.value) || 0 }
+                      updateConfig(['deposits', key], newOpts)
+                    }}
+                    className="w-16 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
+                  />
+                  <span className="text-xs text-theme-text-muted">/g</span>
+                  <button
+                    onClick={() => {
+                      const newOpts = options.filter((_, i) => i !== idx)
+                      updateConfig(['deposits', key], newOpts)
+                    }}
+                    className="text-red-400 hover:text-red-300 text-sm px-1"
+                    title="Rimuovi"
+                  >✕</button>
                 </div>
               ))}
+              <button
+                onClick={() => {
+                  const newOpt = { id: `dep_${Date.now()}`, label: 'Nuova opzione', amount: 0, surcharge_per_day: 0 }
+                  updateConfig(['deposits', key], [...options, newOpt])
+                }}
+                className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium mt-1"
+              >+ Aggiungi opzione</button>
             </div>
           )
         })}
@@ -655,7 +687,7 @@ function DepositsTab({ config, updateConfig }: { config: RentalConfig; updateCon
         <div className="grid grid-cols-3 gap-4">
           {Object.entries(config.deposits?.category_defaults || {}).map(([cat, amt]) => (
             <div key={cat} className="flex items-center gap-2">
-              <span className="text-sm text-theme-text-primary">{CATEGORY_LABELS[cat] || cat}</span>
+              <span className="text-sm text-theme-text-primary">{config.insurance?.category_labels?.[cat] || CATEGORY_LABELS[cat] || cat}</span>
               <span className="text-xs">€</span>
               <input
                 type="number"
@@ -683,7 +715,7 @@ function ServicesTab({ config, setConfig: _setConfig, updateConfig }: { config: 
         <h4 className="font-medium text-theme-text-primary mb-3">Servizi Experience</h4>
         <div className="space-y-2">
           {(config.experience_services || []).map((svc, idx) => (
-            <div key={svc.id} className="flex items-center gap-3 p-2 rounded-md border border-theme-border/50">
+            <div key={svc.id} className="flex items-center gap-3 p-2 rounded-md border border-theme-border/50 flex-wrap">
               <input
                 type="checkbox"
                 checked={svc.is_active}
@@ -694,7 +726,16 @@ function ServicesTab({ config, setConfig: _setConfig, updateConfig }: { config: 
                 }}
                 className="w-4 h-4"
               />
-              <span className="text-sm text-theme-text-primary w-56 truncate">{svc.name}</span>
+              <input
+                type="text"
+                value={svc.name}
+                onChange={e => {
+                  const svcs = [...config.experience_services]
+                  svcs[idx] = { ...svc, name: e.target.value }
+                  updateConfig(['experience_services'], svcs)
+                }}
+                className="w-56 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
+              />
               <span className="text-xs text-theme-text-muted">€</span>
               <input
                 type="number"
@@ -707,7 +748,20 @@ function ServicesTab({ config, setConfig: _setConfig, updateConfig }: { config: 
                 }}
                 className="w-20 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
               />
-              <span className="text-xs text-theme-text-muted">{UNIT_LABELS[svc.unit] || svc.unit}</span>
+              <select
+                value={svc.unit}
+                onChange={e => {
+                  const svcs = [...config.experience_services]
+                  svcs[idx] = { ...svc, unit: e.target.value as 'per_day' | 'per_hour' | 'per_item' | 'flat' }
+                  updateConfig(['experience_services'], svcs)
+                }}
+                className="px-2 py-1 text-xs bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
+              >
+                <option value="per_day">/giorno</option>
+                <option value="per_hour">/ora</option>
+                <option value="per_item">/unita</option>
+                <option value="flat">fisso</option>
+              </select>
               <select
                 value={svc.tier_only || ''}
                 onChange={e => {
@@ -721,8 +775,23 @@ function ServicesTab({ config, setConfig: _setConfig, updateConfig }: { config: 
                 <option value="TIER_1">Solo Fascia B</option>
                 <option value="TIER_2">Solo Fascia A</option>
               </select>
+              <button
+                onClick={() => {
+                  const svcs = config.experience_services.filter((_, i) => i !== idx)
+                  updateConfig(['experience_services'], svcs)
+                }}
+                className="text-red-400 hover:text-red-300 text-sm px-1"
+                title="Rimuovi"
+              >✕</button>
             </div>
           ))}
+          <button
+            onClick={() => {
+              const newSvc = { id: `svc_${Date.now()}`, name: 'Nuovo servizio', price: 0, unit: 'per_day' as const, is_active: true, tier_only: null }
+              updateConfig(['experience_services'], [...(config.experience_services || []), newSvc])
+            }}
+            className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium mt-2"
+          >+ Aggiungi servizio</button>
         </div>
       </div>
 
@@ -856,7 +925,7 @@ function RatesTab({ config, updateConfig }: { config: RentalConfig; updateConfig
 
       {Object.entries(config.rental_day_rates || {}).map(([cat, rates]) => (
         <div key={cat} className="border border-theme-border rounded-lg p-4">
-          <h4 className="font-medium text-theme-text-primary mb-3">{CATEGORY_LABELS[cat] || cat}</h4>
+          <h4 className="font-medium text-theme-text-primary mb-3">{config.insurance?.category_labels?.[cat] || CATEGORY_LABELS[cat] || cat}</h4>
 
           {rates.resident && (
             <div className="mb-3">
@@ -873,6 +942,13 @@ function RatesTab({ config, updateConfig }: { config: RentalConfig; updateConfig
                     />
                   </div>
                 ))}
+                <div className="text-center flex items-end">
+                  <button onClick={() => {
+                    const keys = Object.keys(rates.resident!).map(Number)
+                    const next = keys.length > 0 ? Math.max(...keys) + 1 : 1
+                    updateConfig(['rental_day_rates', cat, 'resident', String(next)], 0)
+                  }} className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium pb-1">+ Giorno</button>
+                </div>
               </div>
             </div>
           )}
@@ -892,6 +968,13 @@ function RatesTab({ config, updateConfig }: { config: RentalConfig; updateConfig
                     />
                   </div>
                 ))}
+                <div className="text-center flex items-end">
+                  <button onClick={() => {
+                    const keys = Object.keys(rates.non_resident!).map(Number)
+                    const next = keys.length > 0 ? Math.max(...keys) + 1 : 1
+                    updateConfig(['rental_day_rates', cat, 'non_resident', String(next)], 0)
+                  }} className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium pb-1">+ Giorno</button>
+                </div>
               </div>
             </div>
           )}
@@ -911,6 +994,13 @@ function RatesTab({ config, updateConfig }: { config: RentalConfig; updateConfig
                     />
                   </div>
                 ))}
+                <div className="text-center flex items-end">
+                  <button onClick={() => {
+                    const keys = Object.keys(rates.flat!).map(Number)
+                    const next = keys.length > 0 ? Math.max(...keys) + 1 : 1
+                    updateConfig(['rental_day_rates', cat, 'flat', String(next)], 0)
+                  }} className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium pb-1">+ Giorno</button>
+                </div>
               </div>
             </div>
           )}
