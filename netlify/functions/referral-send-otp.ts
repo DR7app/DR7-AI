@@ -116,6 +116,20 @@ const handler: Handler = async (event) => {
 
     console.log('✅ OTP sent to', normalizedPhone);
 
+    // Log to sent_messages_log
+    try {
+      const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+      await supabase.from('sent_messages_log').insert({
+        customer_name: 'N/A',
+        customer_phone: normalizedPhone,
+        message_text: fullMessage,
+        template_label: 'Referral OTP',
+        status: 'sent',
+      });
+    } catch (logErr) {
+      console.error('Failed to log message:', logErr);
+    }
+
     return {
       statusCode: 200,
       headers,

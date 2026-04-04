@@ -235,6 +235,20 @@ const birthdayHandler: Handler = async (event) => {
             sent_via: 'green_api_auto'
           });
 
+        // Log to sent_messages_log
+        try {
+          const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${personalizedMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+          await supabase.from('sent_messages_log').insert({
+            customer_name: fullName,
+            customer_phone: customer.telefono,
+            message_text: fullMessage,
+            template_label: 'Birthday Greeting',
+            status: 'sent',
+          });
+        } catch (logErr) {
+          console.error('Failed to log message:', logErr);
+        }
+
         sent++;
 
         // Delay between messages to avoid rate limiting

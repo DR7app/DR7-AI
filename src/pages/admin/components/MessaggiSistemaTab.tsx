@@ -902,6 +902,46 @@ export default function MessaggiSistemaTab() {
                 </div>
             </div>
 
+            {/* ═══════════ SECTION B2: Tutti i Messaggi di Sistema ═══════════ */}
+            <div className="space-y-4 border-t border-theme-border pt-8">
+                <h3 className="text-lg font-bold text-theme-text-primary">Tutti i Messaggi Automatici del Sistema</h3>
+                <p className="text-theme-text-muted text-sm">Ogni messaggio WhatsApp inviato dal sistema include l'header RENTORA. Clicca per espandere.</p>
+                <div className="space-y-3">
+                    {[
+                        { label: 'Conferma Prenotazione Noleggio', desc: 'Inviato quando viene creata una prenotazione', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n*NUOVA PRENOTAZIONE NOLEGGIO*\n\n*ID:* DR7-XXXXXXXX\n*Cliente:* [Nome Cliente]\n*Email:* [email]\n*Telefono:* [telefono]\n*Veicolo:* [Nome Veicolo] ([Targa])\n*Ritiro:* [data] alle [ora]\n*Riconsegna:* [data] alle [ora]\n*Luogo Ritiro:* [indirizzo]\n*Assicurazione:* [tipo kasko]\n*Totale:* €[importo]\n*Cauzione:* €[importo]\n*KM:* [limite] km\n*Pagamento:* [stato]\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._` },
+                        { label: 'Modifica Prenotazione Noleggio', desc: 'Inviato quando viene modificata una prenotazione', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\n*MODIFICA PRENOTAZIONE NOLEGGIO*\n\n[stessa struttura della conferma]` },
+                        { label: 'Prenotazione in Attesa (Nexi Pay by Link)', desc: 'Inviato con link di pagamento Nexi', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\n*PRENOTAZIONE IN ATTESA DI PAGAMENTO*\n\n*ID:* DR7-XXXXXXXX\n*Veicolo:* [veicolo]\n*Totale:* €[importo]\n*Pagamento:* In attesa di pagamento (Nexi Pay by Link) - se non pagato entro 1 ora, la prenotazione verrà annullata` },
+                        { label: 'Conferma Prenotazione Autolavaggio', desc: 'Inviato per prenotazioni Prime Wash', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\nSalve [Nome],\n\nConfermiamo il suo appuntamento.\n\n*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n*ID:* DR7-XXXXXXXX\n*Servizio:* [servizio]\n*Targa:* [targa]\n*Data e Ora:* [data] alle [ora]\n*Totale:* €[importo]\n*Pagamento:* [stato]\n\nCordiali Saluti,\nDR7` },
+                        { label: 'Conferma Prenotazione Meccanica', desc: 'Inviato per prenotazioni meccanica', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\nSalve [Nome],\n\nConfermiamo il suo appuntamento.\n\n*NUOVA PRENOTAZIONE MECCANICA*\n\n*ID:* DR7-XXXXXXXX\n*Servizio:* [servizio]\n*Data e Ora:* [data] alle [ora]\n*Totale:* €[importo]\n\nCordiali Saluti,\nDR7` },
+                        { label: 'Preventivo Noleggio', desc: 'Inviato quando si invia un preventivo al cliente', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\nGentile [Nome],\n\nLe inviamo il preventivo per il noleggio richiesto:\n\n*PREVENTIVO NOLEGGIO DR7*\n\n*Veicolo:* [veicolo] ([targa])\n*Periodo:* [data] → [data] ([N]g)\n*Assicurazione:* [tipo]\n*KM inclusi:* [km]\n\n*Totale:* €[importo]\n*Cauzione:* €[importo]\n\n⏳ Preventivo valido fino al [data]\n\nPer confermare, risponda a questo messaggio o visiti www.dr7empire.com\n\nGrazie per averci scelto!\nDR7 Empire` },
+                        { label: 'Check-in Reminder', desc: 'Promemoria giorno del ritiro veicolo', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\nCiao [Nome]!\n\nTi ricordiamo che oggi è il giorno del ritiro del tuo veicolo:\n\n*Veicolo:* [veicolo]\n*Orario:* [ora]\n*Luogo:* [indirizzo]\n*Cauzione:* €[importo] - [stato]` },
+                        { label: 'Check-out Reminder', desc: 'Promemoria giorno della riconsegna', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\nCiao [Nome]!\n\nTi ricordiamo che oggi è il giorno della riconsegna del veicolo:\n\n*Veicolo:* [veicolo]\n*Orario:* [ora]\n*Luogo:* [indirizzo]\n\nTi preghiamo di riconsegnare il veicolo nelle stesse condizioni in cui lo hai ritirato.\n\nGrazie per aver scelto DR7 Empire!` },
+                        { label: 'Booking Extension Offer', desc: 'Proposta estensione noleggio (24h e <24h)', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\nCiao [Nome],\nvuoi prolungare il noleggio della tua [veicolo]?\n\nPrenota subito la tua estensione su dr7empire.com\no rispondi a questo messaggio.` },
+                        { label: 'Birthday Greeting', desc: 'Auguri di compleanno automatici', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\n[Messaggio personalizzato di compleanno]` },
+                        { label: 'Review Request', desc: 'Richiesta recensione dopo il noleggio', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\n[Richiesta di lasciare una recensione su Google/TrustPilot]` },
+                        { label: 'Signature Request', desc: 'Richiesta firma contratto digitale', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\nGentile [Nome],\n\nClicca sul link seguente per firmare il contratto:\n[link firma]\n\nIl link scade tra 24 ore.` },
+                        { label: 'Signature Reminder', desc: 'Promemoria firma contratto', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\nGentile [Nome],\n\nle ricordiamo di firmare il contratto. Clicca qui:\n[link firma]` },
+                        { label: 'Signature OTP', desc: 'Codice OTP per firma', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\nIl tuo codice OTP per la firma è: [CODICE]\nValido per 10 minuti.` },
+                        { label: 'Cancellation (Nexi)', desc: 'Notifica cancellazione per mancato pagamento', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\n[Notifica admin: prenotazione annullata per mancato pagamento Nexi entro 1 ora]` },
+                        { label: 'Payment Confirmation', desc: 'Conferma pagamento ricevuto (Nexi callback)', example: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n...\n\n[Notifica admin: pagamento ricevuto per prenotazione/estensione/penale]` },
+                        { label: 'AI Chatbot Response', desc: 'Risposte automatiche del chatbot AI', example: `[Risposta AI generata da Claude — senza header RENTORA per sembrare naturale]` },
+                    ].map((msg, i) => (
+                        <details key={i} className="border border-theme-border rounded-lg overflow-hidden">
+                            <summary className="p-3 cursor-pointer hover:bg-theme-bg-hover/30 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600/20 text-blue-400">{i + 1}</span>
+                                    <span className="font-medium text-theme-text-primary text-sm">{msg.label}</span>
+                                </div>
+                                <span className="text-xs text-theme-text-muted">{msg.desc}</span>
+                            </summary>
+                            <pre className="p-4 bg-theme-bg-primary text-xs text-theme-text-secondary whitespace-pre-wrap border-t border-theme-border max-h-72 overflow-y-auto">
+                                {msg.example.replace(/\\n/g, '\n')}
+                            </pre>
+                        </details>
+                    ))}
+                </div>
+            </div>
+
             {/* ═══════════ SECTION C: Storico Messaggi Inviati ═══════════ */}
             <div className="space-y-4 border-t border-theme-border pt-8">
                 <div className="flex justify-between items-center">
@@ -960,10 +1000,15 @@ export default function MessaggiSistemaTab() {
                                                     <span className="text-theme-text-muted text-xs">Testo libero</span>
                                                 )}
                                             </td>
-                                            <td className="p-4 max-w-xs">
-                                                <p className="truncate text-theme-text-secondary" title={log.message_text}>
-                                                    {log.message_text}
-                                                </p>
+                                            <td className="p-4 max-w-md">
+                                                <details className="cursor-pointer">
+                                                    <summary className="truncate text-theme-text-secondary text-xs">
+                                                        {log.message_text.substring(0, 80)}...
+                                                    </summary>
+                                                    <pre className="mt-2 p-3 bg-theme-bg-primary rounded-lg text-xs text-theme-text-primary whitespace-pre-wrap max-h-64 overflow-y-auto border border-theme-border">
+                                                        {log.message_text}
+                                                    </pre>
+                                                </details>
                                             </td>
                                             <td className="p-4">
                                                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-600/20 text-green-400">

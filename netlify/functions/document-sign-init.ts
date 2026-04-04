@@ -115,6 +115,20 @@ export const handler: Handler = async (event) => {
                 if (waResponse.ok && waResult.idMessage) {
                     sentVia = 'whatsapp'
                     console.log(`[document-sign-init] Signing link sent via WhatsApp to ${cleanedPhone}`)
+
+                    // Log to sent_messages_log
+                    try {
+                        const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\nGentile *${signerName}*,\n\ndi seguito trova il documento "${docName}" da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore.\n\nCordiali Saluti,\nDR7\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+                        await supabase.from('sent_messages_log').insert({
+                            customer_name: signerName,
+                            customer_phone: signerPhone,
+                            message_text: fullMessage,
+                            template_label: 'Document Signing Link',
+                            status: 'sent',
+                        })
+                    } catch (logErr) {
+                        console.error('Failed to log message:', logErr)
+                    }
                 } else {
                     console.warn('[document-sign-init] WhatsApp failed:', waResult)
                 }

@@ -194,6 +194,21 @@ const handler: Handler = async (event) => {
         `[checkin-checkout] Sent ${type} to ${cleanPhone}:`,
         result.idMessage
       );
+
+      // Log to sent_messages_log
+      try {
+        const fullMsg = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}`;
+        await supabase.from('sent_messages_log').insert({
+          customer_name: booking.customer_name || 'N/A',
+          customer_phone: cleanPhone,
+          message_text: fullMsg,
+          template_label: type === 'checkin' ? 'Check-in Reminder' : 'Check-out Reminder',
+          status: 'sent',
+        });
+      } catch (logErr) {
+        console.error('Failed to log message:', logErr);
+      }
+
       successCount++;
 
       // Rate limit: 1s between messages

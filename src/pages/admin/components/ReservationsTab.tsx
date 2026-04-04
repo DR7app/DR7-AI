@@ -909,8 +909,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             unlimited_km: !!prev.unlimited_km,
             deposit_status: prev.no_cauzione ? 'no_cauzione' : p.deposit_status,
             total_amount: prev.total_amount ? String(prev.total_amount) : p.total_amount,
-            customer_phone: prev.customer_phone || p.customer_phone,
-            customer_name: prev.customer_name || p.customer_name,
           }))
 
           newSession('booking_create')
