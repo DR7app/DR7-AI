@@ -771,8 +771,7 @@ function KmSforoTab({ config, updateConfig, vehicles }: { config: RentalConfig; 
 // ═══════════════════════════════════════════════════
 // TAB 3: CAUZIONI
 // ═══════════════════════════════════════════════════
-function DepositsTab({ config, updateConfig, setConfig: _setConfig }: { config: RentalConfig; updateConfig: (p: string[], v: unknown) => void; setConfig: (c: RentalConfig) => void }) {
-  void _setConfig
+function DepositsTab({ config, updateConfig }: { config: RentalConfig; updateConfig: (p: string[], v: unknown) => void; setConfig: (c: RentalConfig) => void }) {
   const categories = getCategories(config)
   const depositKeys = ['TIER_1_RESIDENT', 'TIER_2_RESIDENT', 'TIER_1_NON_RESIDENT', 'TIER_2_NON_RESIDENT'] as const
   const keyLabels: Record<string, string> = {
