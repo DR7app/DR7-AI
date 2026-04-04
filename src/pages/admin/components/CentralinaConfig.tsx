@@ -228,8 +228,17 @@ function InsuranceTab({ config, updateConfig }: { config: RentalConfig; updateCo
                         {tier === 'TIER_1' ? 'Fascia B (giovane)' : 'Fascia A (esperto)'}
                       </p>
                       {options.map((opt, idx) => (
-                        <div key={opt.id} className="flex items-center gap-2">
-                          <span className="text-sm text-theme-text-primary w-40 truncate">{opt.name}</span>
+                        <div key={opt.id} className="flex items-center gap-2 flex-wrap">
+                          <input
+                            type="text"
+                            value={opt.name}
+                            onChange={e => {
+                              const newOpts = [...options]
+                              newOpts[idx] = { ...opt, name: e.target.value }
+                              updateConfig(['insurance', cat, tier], newOpts)
+                            }}
+                            className="w-40 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
+                          />
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-theme-text-muted">€</span>
                             <input
@@ -245,23 +254,36 @@ function InsuranceTab({ config, updateConfig }: { config: RentalConfig; updateCo
                             />
                             <span className="text-xs text-theme-text-muted">/giorno</span>
                           </div>
-                          {opt.mandatory_deposit != null && (
-                            <div className="flex items-center gap-1 ml-2">
-                              <span className="text-xs text-amber-400">Cauz.€</span>
-                              <input
-                                type="number"
-                                value={opt.mandatory_deposit}
-                                onChange={e => {
-                                  const newOpts = [...options]
-                                  newOpts[idx] = { ...opt, mandatory_deposit: parseInt(e.target.value) || 0 }
-                                  updateConfig(['insurance', cat, tier], newOpts)
-                                }}
-                                className="w-20 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
-                              />
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-amber-400">Cauz.€</span>
+                            <input
+                              type="number"
+                              value={opt.mandatory_deposit ?? 0}
+                              onChange={e => {
+                                const newOpts = [...options]
+                                newOpts[idx] = { ...opt, mandatory_deposit: parseInt(e.target.value) || 0 }
+                                updateConfig(['insurance', cat, tier], newOpts)
+                              }}
+                              className="w-20 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              const newOpts = options.filter((_, i) => i !== idx)
+                              updateConfig(['insurance', cat, tier], newOpts)
+                            }}
+                            className="text-red-400 hover:text-red-300 text-sm px-1"
+                            title="Rimuovi"
+                          >✕</button>
                         </div>
                       ))}
+                      <button
+                        onClick={() => {
+                          const newOpt: InsuranceOption = { id: `custom_${Date.now()}`, name: 'Nuova opzione', daily_price: 0, mandatory_deposit: 0 }
+                          updateConfig(['insurance', cat, tier], [...options, newOpt])
+                        }}
+                        className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium mt-1"
+                      >+ Aggiungi opzione</button>
                     </div>
                   )
                 })}
@@ -270,8 +292,17 @@ function InsuranceTab({ config, updateConfig }: { config: RentalConfig; updateCo
               <div className="space-y-2">
                 <p className="text-sm text-theme-text-muted">Stesse opzioni per tutte le fasce</p>
                 {allTiers.map((opt, idx) => (
-                  <div key={opt.id} className="flex items-center gap-2">
-                    <span className="text-sm text-theme-text-primary w-40">{opt.name}</span>
+                  <div key={opt.id} className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="text"
+                      value={opt.name}
+                      onChange={e => {
+                        const newOpts = [...allTiers]
+                        newOpts[idx] = { ...opt, name: e.target.value }
+                        updateConfig(['insurance', cat, '_all_tiers'], newOpts)
+                      }}
+                      className="w-40 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
+                    />
                     <span className="text-xs text-theme-text-muted">€</span>
                     <input
                       type="number"
@@ -285,8 +316,36 @@ function InsuranceTab({ config, updateConfig }: { config: RentalConfig; updateCo
                       className="w-20 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
                     />
                     <span className="text-xs text-theme-text-muted">/giorno</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-amber-400">Cauz.€</span>
+                      <input
+                        type="number"
+                        value={opt.mandatory_deposit ?? 0}
+                        onChange={e => {
+                          const newOpts = [...allTiers]
+                          newOpts[idx] = { ...opt, mandatory_deposit: parseInt(e.target.value) || 0 }
+                          updateConfig(['insurance', cat, '_all_tiers'], newOpts)
+                        }}
+                        className="w-20 px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        const newOpts = allTiers.filter((_, i) => i !== idx)
+                        updateConfig(['insurance', cat, '_all_tiers'], newOpts)
+                      }}
+                      className="text-red-400 hover:text-red-300 text-sm px-1"
+                      title="Rimuovi"
+                    >✕</button>
                   </div>
                 ))}
+                <button
+                  onClick={() => {
+                    const newOpt: InsuranceOption = { id: `custom_${Date.now()}`, name: 'Nuova opzione', daily_price: 0, mandatory_deposit: 0 }
+                    updateConfig(['insurance', cat, '_all_tiers'], [...allTiers, newOpt])
+                  }}
+                  className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium mt-1"
+                >+ Aggiungi opzione</button>
               </div>
             ) : null}
           </div>
