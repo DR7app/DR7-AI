@@ -317,6 +317,7 @@ interface Booking {
   deposit_amount?: number | null
   contract_url?: string
   km_overage_fee?: number
+  amount_paid?: number
   // Home delivery & pickup
   delivery_enabled?: boolean
   delivery_address?: { street: string; city: string; zip: string; province: string; notes: string } | null
