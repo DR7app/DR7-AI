@@ -1009,7 +1009,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
       // Pay by Link: pending_payment/unpaid; all others: confirmed
-      status: formData.payment_status === 'nexi_pay_by_link' ? 'pending_payment' : 'confirmed',
+      status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : 'confirmed',
       payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'unpaid' : formData.payment_status,
       payment_method: formData.payment_status === 'nexi_pay_by_link' ? 'Nexi Pay by Link' : (formData.payment_method || null),
       booking_details: bookingDetails
