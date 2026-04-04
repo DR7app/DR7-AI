@@ -127,7 +127,7 @@ export default function ConvertPreventivoModal({ isOpen, preventivo, customers, 
 
       // Update preventivo status
       await supabase.from('preventivi').update({
-        status: 'convertito',
+        status: 'accettato',
         booking_id: booking.id,
         customer_id: customerId,
         customer_name: selectedCustomer.full_name,

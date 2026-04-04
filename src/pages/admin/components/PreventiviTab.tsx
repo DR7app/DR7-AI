@@ -207,7 +207,7 @@ export default function PreventiviTab() {
     const { id, created_at, updated_at, booking_id, status, pdf_url, customer_id, customer_name, ...rest } = p
     const { error } = await supabase.from('preventivi').insert({
       ...rest,
-      status: 'preventivo',
+      status: 'bozza',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -233,8 +233,10 @@ export default function PreventiviTab() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'bozza':
       case 'preventivo':
         return <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400">Preventivo</span>
+      case 'accettato':
       case 'convertito':
         return <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">Convertito</span>
       case 'scaduto':
@@ -260,15 +262,15 @@ export default function PreventiviTab() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="p-3 rounded-lg border border-theme-border text-center">
-          <div className="text-2xl font-bold text-blue-400">{preventivi.filter(p => p.status === 'preventivo').length}</div>
+          <div className="text-2xl font-bold text-blue-400">{preventivi.filter(p => (p.status === 'bozza' || p.status === 'preventivo')).length}</div>
           <div className="text-xs text-theme-text-muted">Attivi</div>
         </div>
         <div className="p-3 rounded-lg border border-theme-border text-center">
-          <div className="text-2xl font-bold text-green-400">{preventivi.filter(p => p.status === 'convertito').length}</div>
+          <div className="text-2xl font-bold text-green-400">{preventivi.filter(p => (p.status === 'accettato' || p.status === 'convertito')).length}</div>
           <div className="text-xs text-theme-text-muted">Convertiti</div>
         </div>
         <div className="p-3 rounded-lg border border-theme-border text-center">
-          <div className="text-2xl font-bold text-dr7-gold">€{preventivi.filter(p => p.status === 'preventivo').reduce((s, p) => s + (p.total_amount || 0), 0).toFixed(0)}</div>
+          <div className="text-2xl font-bold text-dr7-gold">€{preventivi.filter(p => (p.status === 'bozza' || p.status === 'preventivo')).reduce((s, p) => s + (p.total_amount || 0), 0).toFixed(0)}</div>
           <div className="text-xs text-theme-text-muted">Valore Attivi</div>
         </div>
       </div>
@@ -281,7 +283,7 @@ export default function PreventiviTab() {
       ) : (
         <div className="space-y-3">
           {preventivi.map(p => (
-            <div key={p.id} className={`rounded-lg border p-4 ${p.status === 'convertito' ? 'border-green-600/30 bg-green-900/10' : 'border-theme-border'}`}>
+            <div key={p.id} className={`rounded-lg border p-4 ${(p.status === 'accettato' || p.status === 'convertito') ? 'border-green-600/30 bg-green-900/10' : 'border-theme-border'}`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 {/* Left: main info */}
                 <div className="flex-1 min-w-0">
@@ -320,7 +322,7 @@ export default function PreventiviTab() {
                     <div className="text-xs text-theme-text-muted">Cauzione: €{p.deposit_amount.toFixed(0)}</div>
                   )}
                   <div className="flex gap-2 flex-wrap justify-end">
-                    {p.status === 'preventivo' && (
+                    {(p.status === 'bozza' || p.status === 'preventivo') && (
                       <>
                         {/* Assign customer */}
                         {!p.customer_id && (

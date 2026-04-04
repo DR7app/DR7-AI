@@ -481,12 +481,15 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
         pickup_notes: form.pickup_enabled ? form.pickup_notes : '',
         pickup_fee: form.pickup_enabled ? parseFloat(form.pickup_fee) : 0,
         daily_rate: parseFloat(form.daily_rate),
+        base_daily_rate: parseFloat(form.daily_rate),
         rental_days: rentalDays,
         total_amount: parseFloat(form.total_amount),
+        subtotal: parseFloat(form.total_amount),
+        total_final: parseFloat(form.total_amount),
         deposit_amount: parseFloat(form.deposit_amount),
         notes: form.notes,
         valid_until: form.valid_until,
-        status: 'preventivo',
+        status: 'bozza',
         updated_at: new Date().toISOString(),
       }
 
