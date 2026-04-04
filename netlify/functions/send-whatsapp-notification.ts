@@ -1,8 +1,11 @@
 import type { Handler } from "@netlify/functions";
+import { createClient } from "@supabase/supabase-js";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || "393457905205";
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 /**
  * Sends WhatsApp notification using Green API
@@ -307,6 +310,26 @@ const handler: Handler = async (event) => {
     }
 
     console.log('✅ WhatsApp notification sent via Green API:', result.idMessage);
+
+    // Log to sent_messages_log for admin visibility
+    if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      try {
+        const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+        const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${message}`;
+        const customerName = booking?.customer_name || booking?.booking_details?.customer?.fullName || body.customerName || 'N/A';
+        const templateLabel = body.type || (customMessage ? 'Messaggio Manuale' : booking?.service_type || 'Notifica');
+
+        await sb.from('sent_messages_log').insert({
+          customer_name: customerName,
+          customer_phone: targetPhone,
+          message_text: fullMessage,
+          template_label: templateLabel,
+          status: 'sent',
+        });
+      } catch (logErr) {
+        console.error('Failed to log message (non-blocking):', logErr);
+      }
+    }
 
     return {
       statusCode: 200,

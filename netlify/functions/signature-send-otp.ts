@@ -146,6 +146,20 @@ export const handler: Handler = async (event) => {
                 if (waResponse.ok && waResult.idMessage) {
                     channel = 'whatsapp'
                     console.log(`[signature-send-otp] OTP sent via WhatsApp to ${cleanPhone}:`, waResult.idMessage)
+
+                    // Log to sent_messages_log
+                    try {
+                        const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP per la firma del contratto e:\n\n*${otp}*\n\nIl codice scade tra ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice, ignora questo messaggio.\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+                        await supabase.from('sent_messages_log').insert({
+                            customer_name: sigRequest.signer_name || 'N/A',
+                            customer_phone: cleanPhone,
+                            message_text: fullMessage,
+                            template_label: 'Signature OTP',
+                            status: 'sent',
+                        })
+                    } catch (logErr) {
+                        console.error('Failed to log message:', logErr)
+                    }
                 } else {
                     console.warn('[signature-send-otp] WhatsApp send failed, falling back to email:', waResult)
                 }

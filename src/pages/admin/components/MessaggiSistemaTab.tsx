@@ -960,10 +960,15 @@ export default function MessaggiSistemaTab() {
                                                     <span className="text-theme-text-muted text-xs">Testo libero</span>
                                                 )}
                                             </td>
-                                            <td className="p-4 max-w-xs">
-                                                <p className="truncate text-theme-text-secondary" title={log.message_text}>
-                                                    {log.message_text}
-                                                </p>
+                                            <td className="p-4 max-w-md">
+                                                <details className="cursor-pointer">
+                                                    <summary className="truncate text-theme-text-secondary text-xs">
+                                                        {log.message_text.substring(0, 80)}...
+                                                    </summary>
+                                                    <pre className="mt-2 p-3 bg-theme-bg-primary rounded-lg text-xs text-theme-text-primary whitespace-pre-wrap max-h-64 overflow-y-auto border border-theme-border">
+                                                        {log.message_text}
+                                                    </pre>
+                                                </details>
                                             </td>
                                             <td className="p-4">
                                                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-600/20 text-green-400">
