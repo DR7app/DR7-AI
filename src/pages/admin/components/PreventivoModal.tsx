@@ -5,7 +5,8 @@ import Input from './Input'
 import Select from './Select'
 import Button from './Button'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
-import { getKmIncluded } from '../../../utils/configLookup'
+import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice, getSecondDriverPrice, getNoCauzioneSurcharge, getSforoKm } from '../../../utils/configLookup'
+import type { DriverTier } from '../../../types/rentalConfig'
 
 // --- Types ---
 type Fascia = 'A' | 'B'
@@ -69,39 +70,23 @@ interface PreventivoData {
   valid_until: string
 }
 
-// --- Insurance by Fascia & Category ---
-// Exotic / Supercar
-const EXOTIC_INSURANCE_FASCIA_A = [
-  { id: 'RCA', label: 'RCA Compresa', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 89 },
-  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 149 },
-  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 189 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 289 },
-]
-const EXOTIC_INSURANCE_FASCIA_B = [
-  { id: 'RCA', label: 'RCA Compresa', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 119 },
-]
-
-// Urban
-const URBAN_INSURANCE = [
-  { id: 'RCA', label: 'RCA Compresa', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
-]
-
-// Utilitaire / Furgone
-const UTIL_INSURANCE = [
-  { id: 'RCA', label: 'RCA Compresa', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
-]
-
-// --- Fascia-specific extras (exotic) ---
-const FASCIA_EXTRAS = {
-  A: { secondDriver: 10, unlimitedKm: 189, noCauzione: 49 },
-  B: { secondDriver: 20, unlimitedKm: 289, noCauzione: 0 },
+// Map Fascia to DriverTier
+function fasciaToTier(fascia: Fascia): DriverTier {
+  return fascia === 'A' ? 'TIER_2' : 'TIER_1'
 }
+
+// Map vehicle type to Centralina config category key
+function vehicleTypeToConfigCategory(vType: string): string {
+  if (vType === 'exotic') return 'supercar'
+  if (vType === 'urban') return 'urban'
+  if (vType === 'furgone') return 'furgone'
+  return 'aziendali'
+}
+
+// Fallback insurance arrays (used if Centralina not loaded yet)
+const FALLBACK_INSURANCE = [
+  { id: 'RCA', label: 'RCA Compresa', pricePerDay: 0 },
+]
 
 // --- Cauzione amounts by type, fascia, and residency ---
 const CAUZIONE_AMOUNTS: Record<CauzioneType, { A: number; B: number }> = {
@@ -142,12 +127,14 @@ function getVehicleType(vehicle?: Vehicle): 'exotic' | 'urban' | 'util' | 'furgo
   return 'exotic'
 }
 
-function getInsuranceOptionsForPreventivo(vehicleType: string, fascia: Fascia) {
-  if (vehicleType === 'exotic') {
-    return fascia === 'A' ? EXOTIC_INSURANCE_FASCIA_A : EXOTIC_INSURANCE_FASCIA_B
-  }
-  if (vehicleType === 'urban') return URBAN_INSURANCE
-  return UTIL_INSURANCE // util & furgone same
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getInsuranceOptionsFromConfig(rentalConfig: any, vehicleType: string, fascia: Fascia) {
+  if (!rentalConfig?.insurance) return FALLBACK_INSURANCE
+  const category = vehicleTypeToConfigCategory(vehicleType)
+  const tier = fasciaToTier(fascia)
+  const options = getInsuranceOptions(rentalConfig, category, tier)
+  if (options.length === 0) return FALLBACK_INSURANCE
+  return options.map(o => ({ id: o.id, label: o.name, pricePerDay: o.daily_price ?? 0 }))
 }
 
 function getNext15MinuteTime(): string {
@@ -170,11 +157,22 @@ function calculateReturnTime(pickupTime: string): string {
   return `${String(tempDate.getHours()).padStart(2, '0')}:${String(tempDate.getMinutes()).padStart(2, '0')}`
 }
 
+// Get Rome timezone offset for a given date (handles CET/CEST)
+function getRomeOffsetForDate(dateString: string): string {
+  const date = new Date(`${dateString}T12:00:00`)
+  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Rome', timeZoneName: 'short' })
+  const parts = formatter.formatToParts(date)
+  const tzPart = parts.find(p => p.type === 'timeZoneName')
+  return tzPart?.value === 'CEST' ? '+02:00' : '+01:00'
+}
+
 // Calculate rental days from dates (ceil like booking form)
 function calculateRentalDays(pickupDate: string, pickupTime: string, returnDate: string, returnTime: string): number {
   if (!pickupDate || !returnDate) return 0
-  const start = new Date(`${pickupDate}T${pickupTime || '10:00'}:00`)
-  const end = new Date(`${returnDate}T${returnTime || '10:00'}:00`)
+  const pickupOffset = getRomeOffsetForDate(pickupDate)
+  const returnOffset = getRomeOffsetForDate(returnDate)
+  const start = new Date(`${pickupDate}T${pickupTime || '10:00'}:00${pickupOffset}`)
+  const end = new Date(`${returnDate}T${returnTime || '10:00'}:00${returnOffset}`)
   const diffMs = end.getTime() - start.getTime()
   if (diffMs <= 0) return 0
   return Math.ceil(diffMs / (24 * 60 * 60 * 1000))
@@ -278,10 +276,10 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       setForm({
         ...initialFormData,
         ...editData,
-        pickup_date: editData.pickup_date ? new Date(editData.pickup_date).toISOString().split('T')[0] : '',
-        pickup_time: editData.pickup_date ? new Date(editData.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }) : getNext15MinuteTime(),
-        return_date: editData.dropoff_date ? new Date(editData.dropoff_date).toISOString().split('T')[0] : '',
-        return_time: editData.dropoff_date ? new Date(editData.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }) : '10:00',
+        pickup_date: editData.pickup_date ? new Date(editData.pickup_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }) : '',
+        pickup_time: editData.pickup_date ? new Date(editData.pickup_date).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }) : getNext15MinuteTime(),
+        return_date: editData.dropoff_date ? new Date(editData.dropoff_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }) : '',
+        return_time: editData.dropoff_date ? new Date(editData.dropoff_date).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }) : '10:00',
         daily_rate: editData.daily_rate?.toString() || '0',
         total_amount: editData.total_amount?.toString() || '0',
         deposit_amount: editData.deposit_amount?.toString() || '0',
@@ -317,7 +315,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
   const vehicleType = useMemo(() => getVehicleType(selectedVehicle), [selectedVehicle])
 
   // Insurance options based on vehicle type + fascia
-  const insuranceOptions = useMemo(() => getInsuranceOptionsForPreventivo(vehicleType, form.fascia), [vehicleType, form.fascia])
+  const insuranceOptions = useMemo(() => getInsuranceOptionsFromConfig(rentalConfig, vehicleType, form.fascia), [rentalConfig, vehicleType, form.fascia])
 
   // Rental days
   const rentalDays = useMemo(() => calculateRentalDays(form.pickup_date, form.pickup_time, form.return_date, form.return_time), [form.pickup_date, form.pickup_time, form.return_date, form.return_time])
@@ -339,12 +337,18 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
   useEffect(() => {
     if (!selectedVehicle) return
     const rate = selectedVehicle.daily_rate.toFixed(2)
-    const options = getInsuranceOptionsForPreventivo(getVehicleType(selectedVehicle), form.fascia)
+    const vType = getVehicleType(selectedVehicle)
+    const tier = fasciaToTier(form.fascia)
+    const configCategory = vehicleTypeToConfigCategory(vType)
+    const options = getInsuranceOptionsFromConfig(rentalConfig, vType, form.fascia)
     const currentValid = options.find(o => o.id === form.insurance_option)
     const insurance = currentValid || options[0]
-    const isExotic = getVehicleType(selectedVehicle) === 'exotic'
-    const extras = FASCIA_EXTRAS[form.fascia]
     const deposit = getCauzioneDeposit(form.cauzione_type, form.fascia, form.residente_sardegna)
+
+    const secondDriverPrice = getSecondDriverPrice(rentalConfig, tier)
+    const unlimitedKmPrice = getUnlimitedKmPrice(rentalConfig, configCategory, tier)
+    const noCauzionePrice = getNoCauzioneSurcharge(rentalConfig)
+    const sforoKm = getSforoKm(rentalConfig, selectedVehicle.id, configCategory)
 
     setForm(prev => ({
       ...prev,
@@ -355,30 +359,38 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       insurance_option: insurance.id as KaskoTier,
       insurance_daily: insurance.pricePerDay.toString(),
       deposit_amount: deposit.toString(),
-      second_driver_daily: isExotic ? extras.secondDriver.toString() : '0',
-      unlimited_km_daily: isExotic ? extras.unlimitedKm.toString() : '0',
-      no_cauzione_daily: isExotic && form.fascia === 'A' ? extras.noCauzione.toString() : '0',
+      second_driver_daily: secondDriverPrice.toString(),
+      unlimited_km_daily: unlimitedKmPrice.toString(),
+      no_cauzione_daily: (form.fascia === 'A' ? noCauzionePrice : 0).toString(),
+      km_overage_fee: sforoKm.toString(),
     }))
-  }, [selectedVehicle])
+  }, [selectedVehicle, rentalConfig])
 
   // When fascia changes, recalculate insurance + extras + cauzione
   useEffect(() => {
     if (!selectedVehicle) return
-    const options = getInsuranceOptionsForPreventivo(getVehicleType(selectedVehicle), form.fascia)
+    const vType = getVehicleType(selectedVehicle)
+    const tier = fasciaToTier(form.fascia)
+    const configCategory = vehicleTypeToConfigCategory(vType)
+    const options = getInsuranceOptionsFromConfig(rentalConfig, vType, form.fascia)
     const currentValid = options.find(o => o.id === form.insurance_option)
     const insurance = currentValid || options[0]
-    const isExotic = getVehicleType(selectedVehicle) === 'exotic'
-    const extras = FASCIA_EXTRAS[form.fascia]
     const deposit = getCauzioneDeposit(form.cauzione_type, form.fascia, form.residente_sardegna)
+
+    const secondDriverPrice = getSecondDriverPrice(rentalConfig, tier)
+    const unlimitedKmPrice = getUnlimitedKmPrice(rentalConfig, configCategory, tier)
+    const noCauzionePrice = getNoCauzioneSurcharge(rentalConfig)
+    const sforoKm = getSforoKm(rentalConfig, selectedVehicle.id, configCategory)
 
     setForm(prev => ({
       ...prev,
       insurance_option: insurance.id as KaskoTier,
       insurance_daily: insurance.pricePerDay.toString(),
       deposit_amount: deposit.toString(),
-      second_driver_daily: isExotic ? extras.secondDriver.toString() : prev.second_driver_daily,
-      unlimited_km_daily: isExotic ? extras.unlimitedKm.toString() : prev.unlimited_km_daily,
-      no_cauzione_daily: isExotic && form.fascia === 'A' ? extras.noCauzione.toString() : '0',
+      second_driver_daily: secondDriverPrice.toString(),
+      unlimited_km_daily: unlimitedKmPrice.toString(),
+      no_cauzione_daily: (form.fascia === 'A' ? noCauzionePrice : 0).toString(),
+      km_overage_fee: sforoKm.toString(),
       no_cauzione: form.fascia === 'B' ? false : prev.no_cauzione,
     }))
   }, [form.fascia])
@@ -390,7 +402,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       ...prev,
       deposit_amount: deposit.toString(),
       no_cauzione: form.cauzione_type === 'no_cauzione',
-      no_cauzione_daily: form.cauzione_type === 'no_cauzione' && form.fascia === 'A' ? FASCIA_EXTRAS.A.noCauzione.toString() : '0',
+      no_cauzione_daily: form.cauzione_type === 'no_cauzione' && form.fascia === 'A' ? getNoCauzioneSurcharge(rentalConfig).toString() : '0',
     }))
   }, [form.cauzione_type, form.residente_sardegna])
 
@@ -442,9 +454,11 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
 
     setSaving(true)
     try {
-      // Build ISO dates with time
-      const pickupISO = `${form.pickup_date}T${form.pickup_time}:00+02:00`
-      const dropoffISO = `${form.return_date}T${form.return_time}:00+02:00`
+      // Build ISO dates with correct Rome timezone offset
+      const pickupOffset = getRomeOffsetForDate(form.pickup_date)
+      const dropoffOffset = getRomeOffsetForDate(form.return_date)
+      const pickupISO = `${form.pickup_date}T${form.pickup_time}:00${pickupOffset}`
+      const dropoffISO = `${form.return_date}T${form.return_time}:00${dropoffOffset}`
 
       const record: any = {
         vehicle_id: form.vehicle_id,
@@ -660,7 +674,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded" />
               <span className="text-sm text-theme-text-secondary">
                 KM Illimitati
-                {vehicleType === 'exotic' && <span className="text-dr7-gold ml-1">(+€{FASCIA_EXTRAS[form.fascia].unlimitedKm}/giorno)</span>}
+                {<span className="text-dr7-gold ml-1">(+€{form.unlimited_km_daily}/giorno)</span>}
               </span>
             </label>
           </div>

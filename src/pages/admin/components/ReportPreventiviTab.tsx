@@ -40,8 +40,6 @@ function formatCurrency(amount: number): string {
   return `€${amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-
-
 function formatDateShort(d: string): string {
   if (!d) return '-'
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
@@ -101,7 +99,6 @@ export default function ReportPreventiviTab() {
   const isActive = (p: Preventivo) => p.status === 'bozza' || p.status === 'preventivo'
   const isConverted = (p: Preventivo) => p.status === 'accettato' || p.status === 'convertito'
   const isExpired = (p: Preventivo) => p.status === 'scaduto'
-  void isExpired // used in template below
 
   // ===== OVERVIEW METRICS =====
   const overview = useMemo(() => {
