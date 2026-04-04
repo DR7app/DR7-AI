@@ -3867,10 +3867,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         customer_phone: customerInfo?.phone || null,
         booked_at: editingId ? undefined : new Date().toISOString(), // Don't update booked_at on edit
         booking_source: 'admin', // Mark as admin booking
-        // Set fallback expiration so cron can expire orphaned pending_payment bookings
-        // even if the Nexi API call fails. The actual value is overwritten after Nexi responds.
-        payment_link_expires_at: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
-          ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : undefined,
+        // payment_link_expires_at set after Nexi responds (via update)
         // Home Delivery & Pickup (top-level DB columns)
         delivery_enabled: formData.delivery_enabled,
         delivery_address: formData.delivery_enabled ? {
@@ -4127,9 +4124,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // Payment link tracking fields are now set by the backend (nexi-pay-by-link),
             // but we also update booking_details for backward compatibility
             await supabase.from('bookings').update({
-              payment_link_url: linkData.paymentUrl,
-              payment_link_created_at: linkData.linkCreatedAt || new Date().toISOString(),
-              payment_link_expires_at: linkData.expiresAt,
               booking_details: {
                 ...insertedBooking.booking_details,
                 nexi_payment_link: linkData.paymentUrl,
@@ -4137,6 +4131,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 nexi_link_id: linkData.nexiLinkId || null,
                 payment_link_sent_at: linkData.sentAt,
                 payment_link_expires_at: linkData.expiresAt,
+                payment_link_created_at: linkData.linkCreatedAt || new Date().toISOString(),
                 payment_provider_expires_at: linkData.providerExpiresAt,
               }
             }).eq('id', insertedBooking.id)
