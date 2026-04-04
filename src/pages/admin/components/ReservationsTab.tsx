@@ -3858,7 +3858,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Pay by Link bookings start as pending_payment/unpaid;
         // other payment methods start as confirmed/paid
         status: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
-          ? 'pending_payment' : formData.status === 'pending_payment' ? 'pending_payment' : (formData.status || 'confirmed'),
+          ? 'pending' : formData.status === 'pending_payment' ? 'pending' : (formData.status || 'confirmed'),
         payment_status: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
           ? 'unpaid' : formData.payment_status,
         payment_method: formData.payment_method,
