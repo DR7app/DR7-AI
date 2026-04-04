@@ -71,21 +71,13 @@ const handler: Handler = async (event) => {
         // Nexi v2 paybylink accepts: "yyyy-MM-dd HH:mm:ss.0"
         // Must be in Europe/Rome timezone for Nexi's interpretation
         const toNexiDatetime = (d: Date) => {
-            // Nexi v2 paybylink requires ISO8601 format
+            // Nexi v2 paybylink: use date-only ISO format yyyy-MM-dd
+            // This is the safest format that Nexi accepts
             const rome = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
             const y = rome.getFullYear();
             const mo = String(rome.getMonth() + 1).padStart(2, '0');
             const da = String(rome.getDate()).padStart(2, '0');
-            const h = String(rome.getHours()).padStart(2, '0');
-            const mi = String(rome.getMinutes()).padStart(2, '0');
-            const s = String(rome.getSeconds()).padStart(2, '0');
-            // Determine Rome timezone offset (CET +01:00 or CEST +02:00)
-            const jan = new Date(y, 0, 1);
-            const jul = new Date(y, 6, 1);
-            const stdOffset = Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
-            const isDST = rome.getTimezoneOffset() < stdOffset;
-            const tzOffset = isDST ? '+02:00' : '+01:00';
-            return `${y}-${mo}-${da}T${h}:${mi}:${s}.000${tzOffset}`;
+            return `${y}-${mo}-${da}`;
         };
 
         const nexiExpirationStr = toNexiDatetime(expiresAt);
