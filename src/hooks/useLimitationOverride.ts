@@ -106,6 +106,13 @@ export function useLimitationOverride() {
     setLimitationState(prev => ({ ...prev, isOpen: false }))
   }, [])
 
+  /** Cancel limitation and reset the entire session (user chose "Annulla") */
+  const cancelLimitation = useCallback(() => {
+    setLimitationState(prev => ({ ...prev, isOpen: false }))
+    overrideMap.current.clear()
+    setOverrideCodes(new Set())
+  }, [])
+
   const hasOverride = useCallback((code: string) => {
     return overrideMap.current.has(code)
   }, [])
@@ -166,6 +173,7 @@ export function useLimitationOverride() {
     requestOverride,
     handleOverrideApproved,
     closeLimitation,
+    cancelLimitation,
     hasOverride,
     consumeOverride,
     consumeAllOverrides,

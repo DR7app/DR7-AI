@@ -428,6 +428,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     requestOverride,
     handleOverrideApproved,
     closeLimitation,
+    cancelLimitation,
     hasOverride,
     consumeAllOverrides,
     activeOverrides,
@@ -4795,6 +4796,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           draftSessionId={draftSessionId}
           flowType={flowType}
           onClose={closeLimitation}
+          onCancel={() => {
+            cancelLimitation()
+            resetForm()
+            setEditingId(null)
+            setShowForm(false)
+            setNewCustomerMode(false)
+          }}
           onOverrideApproved={handleOverrideApproved}
         />
 

@@ -10,6 +10,7 @@ interface LimitationOverrideModalProps {
   draftSessionId: string
   flowType: string
   onClose?: () => void
+  onCancel?: () => void
   onOverrideApproved: (overrideId: string) => void
 }
 
@@ -23,6 +24,7 @@ export default function LimitationOverrideModal({
   draftSessionId,
   flowType,
   onClose: _onClose,
+  onCancel,
   onOverrideApproved,
 }: LimitationOverrideModalProps) {
   const [step, setStep] = useState<Step>('blocked')
@@ -199,13 +201,23 @@ export default function LimitationOverrideModal({
         {/* Actions */}
         <div className="p-4 border-t border-theme-border flex flex-col-reverse sm:flex-row gap-3 sm:justify-end rounded-b-lg flex-shrink-0">
           {step === 'blocked' && (
-            <button
-              onClick={sendOtp}
-              disabled={sending}
-              className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium w-full sm:w-auto"
-            >
-              {sending ? 'Invio...' : 'Richiedi autorizzazione'}
-            </button>
+            <>
+              {onCancel && (
+                <button
+                  onClick={onCancel}
+                  className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-muted rounded-full transition-colors text-sm w-full sm:w-auto"
+                >
+                  Annulla
+                </button>
+              )}
+              <button
+                onClick={sendOtp}
+                disabled={sending}
+                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium w-full sm:w-auto"
+              >
+                {sending ? 'Invio...' : 'Richiedi autorizzazione'}
+              </button>
+            </>
           )}
 
           {step === 'otp-sent' && (
