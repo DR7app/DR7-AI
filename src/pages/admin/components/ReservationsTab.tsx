@@ -3448,7 +3448,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      let customerId = formData.customer_id || null
+      let customerId = overrideCustomerId || formData.customer_id || null
       let secondDriverId = formData.second_driver_id || null
 
       // If creating new second driver, create them in customers_extended table first
@@ -3533,7 +3533,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // If creating new customer, create them in customers_extended table
       // BUT FIRST check if an identical customer already exists (prevent duplicates)
-      if (newCustomerMode) {
+      // Skip entirely if overrideCustomerId is provided (customer already created by NewClientModal)
+      if (newCustomerMode && !overrideCustomerId) {
         try {
           // DEDUP CHECK: Look for existing customer by type-specific unique field, then email, then telefono (with phone normalization)
           let existingCustomer: { id: string } | null = null
