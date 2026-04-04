@@ -170,11 +170,22 @@ function calculateReturnTime(pickupTime: string): string {
   return `${String(tempDate.getHours()).padStart(2, '0')}:${String(tempDate.getMinutes()).padStart(2, '0')}`
 }
 
+// Get Rome timezone offset for a given date (handles CET/CEST)
+function getRomeOffsetForDate(dateString: string): string {
+  const date = new Date(`${dateString}T12:00:00`)
+  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Rome', timeZoneName: 'short' })
+  const parts = formatter.formatToParts(date)
+  const tzPart = parts.find(p => p.type === 'timeZoneName')
+  return tzPart?.value === 'CEST' ? '+02:00' : '+01:00'
+}
+
 // Calculate rental days from dates (ceil like booking form)
 function calculateRentalDays(pickupDate: string, pickupTime: string, returnDate: string, returnTime: string): number {
   if (!pickupDate || !returnDate) return 0
-  const start = new Date(`${pickupDate}T${pickupTime || '10:00'}:00`)
-  const end = new Date(`${returnDate}T${returnTime || '10:00'}:00`)
+  const pickupOffset = getRomeOffsetForDate(pickupDate)
+  const returnOffset = getRomeOffsetForDate(returnDate)
+  const start = new Date(`${pickupDate}T${pickupTime || '10:00'}:00${pickupOffset}`)
+  const end = new Date(`${returnDate}T${returnTime || '10:00'}:00${returnOffset}`)
   const diffMs = end.getTime() - start.getTime()
   if (diffMs <= 0) return 0
   return Math.ceil(diffMs / (24 * 60 * 60 * 1000))
@@ -278,10 +289,10 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       setForm({
         ...initialFormData,
         ...editData,
-        pickup_date: editData.pickup_date ? new Date(editData.pickup_date).toISOString().split('T')[0] : '',
-        pickup_time: editData.pickup_date ? new Date(editData.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }) : getNext15MinuteTime(),
-        return_date: editData.dropoff_date ? new Date(editData.dropoff_date).toISOString().split('T')[0] : '',
-        return_time: editData.dropoff_date ? new Date(editData.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }) : '10:00',
+        pickup_date: editData.pickup_date ? new Date(editData.pickup_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }) : '',
+        pickup_time: editData.pickup_date ? new Date(editData.pickup_date).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }) : getNext15MinuteTime(),
+        return_date: editData.dropoff_date ? new Date(editData.dropoff_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }) : '',
+        return_time: editData.dropoff_date ? new Date(editData.dropoff_date).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }) : '10:00',
         daily_rate: editData.daily_rate?.toString() || '0',
         total_amount: editData.total_amount?.toString() || '0',
         deposit_amount: editData.deposit_amount?.toString() || '0',
@@ -442,9 +453,11 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
 
     setSaving(true)
     try {
-      // Build ISO dates with time
-      const pickupISO = `${form.pickup_date}T${form.pickup_time}:00+02:00`
-      const dropoffISO = `${form.return_date}T${form.return_time}:00+02:00`
+      // Build ISO dates with correct Rome timezone offset
+      const pickupOffset = getRomeOffsetForDate(form.pickup_date)
+      const dropoffOffset = getRomeOffsetForDate(form.return_date)
+      const pickupISO = `${form.pickup_date}T${form.pickup_time}:00${pickupOffset}`
+      const dropoffISO = `${form.return_date}T${form.return_time}:00${dropoffOffset}`
 
       const record: any = {
         vehicle_id: form.vehicle_id,
