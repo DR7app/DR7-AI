@@ -578,6 +578,18 @@ function KmSforoTab({ config, updateConfig, vehicles }: { config: RentalConfig; 
             />
             <p className="text-xs text-theme-text-muted mt-1">km/g</p>
           </div>
+          <div className="text-center flex flex-col items-center justify-center">
+            <button
+              onClick={() => {
+                if (!globalKm) return
+                const keys = Object.keys(globalKm.table || {}).map(Number)
+                const nextDay = keys.length > 0 ? Math.max(...keys) + 1 : 1
+                const lastVal = keys.length > 0 ? (globalKm.table[String(Math.max(...keys))] || 0) + (globalKm.extra_per_day || 60) : 100
+                updateConfig(['km_included', '_global', 'table', String(nextDay)], lastVal)
+              }}
+              className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium"
+            >+ Giorno</button>
+          </div>
         </div>
         <p className="text-xs text-green-400 mt-2">
           Esempio: 10 giorni = {globalKm ? (globalKm.table?.['5'] || 300) + ((10 - 5) * (globalKm.extra_per_day || 60)) : 600} km
@@ -954,6 +966,13 @@ function ServicesTab({ config, setConfig, updateConfig }: { config: RentalConfig
               <button onClick={() => removeExperienceService(idx)} className="text-red-400 text-xs hover:text-red-300">✕</button>
             </div>
           ))}
+          <button
+            onClick={() => {
+              const newSvc = { id: `svc_${Date.now()}`, name: 'Nuovo servizio', price: 0, unit: 'per_day' as const, is_active: true, tier_only: null }
+              updateConfig(['experience_services'], [...(config.experience_services || []), newSvc])
+            }}
+            className="text-xs text-dr7-gold hover:text-[#247a6f] font-medium mt-2"
+          >+ Aggiungi servizio</button>
         </div>
       </div>
 
