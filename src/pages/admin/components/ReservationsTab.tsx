@@ -5952,6 +5952,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 }}
                 options={[
                   { value: 'pending', label: 'Da Saldare' },
+                  { value: 'partial', label: 'Parziale' },
                   { value: 'paid', label: 'Pagato' }
                 ]}
               />
@@ -6440,6 +6441,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     booking.payment_status === 'succeeded' ||
                     (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                     ? 'bg-green-900 text-green-300'
+                    : booking.payment_status === 'partial'
+                    ? 'bg-amber-900 text-amber-300'
                     : 'bg-red-900 text-red-300'
                     }`}>
                     {booking.payment_status === 'completed' ||
@@ -6447,6 +6450,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       booking.payment_status === 'succeeded' ||
                       (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                       ? 'Pagato'
+                      : booking.payment_status === 'partial'
+                      ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
                       : 'Non Pagato'}
                   </span>
                 </div>
@@ -6637,6 +6642,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           booking.payment_status === 'succeeded' ||
                           (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                           ? 'bg-green-900 text-green-300'
+                          : booking.payment_status === 'partial'
+                          ? 'bg-amber-900 text-amber-300'
                           : 'bg-red-900 text-red-300'
                           }`}>
                           {booking.payment_status === 'completed' ||
@@ -6644,6 +6651,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             booking.payment_status === 'succeeded' ||
                             (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
                             ? 'Pagato'
+                            : booking.payment_status === 'partial'
+                            ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
                             : 'Non Pagato'}
                         </span>
                       </td>
@@ -6865,7 +6874,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         selectedBooking.payment_status === 'succeeded' ||
                         (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                         ? 'bg-green-900 text-green-300'
-                        : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending')
+                        : selectedBooking.payment_status === 'partial'
+                          ? 'bg-amber-900 text-amber-300'
+                          : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending')
                           ? 'bg-yellow-900 text-yellow-300'
                           : selectedBooking.payment_status === 'expired'
                             ? 'bg-orange-900 text-orange-300'
@@ -6876,6 +6887,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           selectedBooking.payment_status === 'succeeded' ||
                           (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
                           ? 'Pagato'
+                          : selectedBooking.payment_status === 'partial'
+                            ? `Parziale €${((selectedBooking.amount_paid || 0) / 100).toFixed(0)}`
                           : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending')
                             ? 'Da Saldare'
                             : selectedBooking.payment_status === 'expired'
