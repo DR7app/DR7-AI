@@ -134,7 +134,7 @@ export function isPaymentLinkExpired(expiresAt: string | null | undefined): bool
 export function buildPendingPaymentBookingFields() {
   const { createdAt, expiresAt } = calculatePaymentLinkExpiry()
   return {
-    status: 'pending_payment' as const,
+    status: 'pending' as const,
     payment_status: 'unpaid' as const,
     payment_method: 'Nexi Pay by Link' as const,
     payment_link_created_at: createdAt,
