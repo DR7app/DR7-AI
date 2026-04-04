@@ -70,17 +70,12 @@ const handler: Handler = async (event) => {
         // ─── Nexi expiration format ─────────────────────────────────────
         // Nexi v2 paybylink accepts: "yyyy-MM-dd HH:mm:ss.0"
         // Must be in Europe/Rome timezone for Nexi's interpretation
-        const toNexiDatetime = (d: Date) => {
-            // Nexi v2 paybylink: use date-only ISO format yyyy-MM-dd
-            // This is the safest format that Nexi accepts
-            const rome = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
-            const y = rome.getFullYear();
-            const mo = String(rome.getMonth() + 1).padStart(2, '0');
-            const da = String(rome.getDate()).padStart(2, '0');
-            return `${y}-${mo}-${da}`;
-        };
-
-        const nexiExpirationStr = toNexiDatetime(expiresAt);
+        // Nexi date-level expiry: must be at least tomorrow
+        // Server-side callback enforces the actual 1-hour expiry
+        const romeNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+        const nexiExpiry = new Date(romeNow);
+        nexiExpiry.setDate(nexiExpiry.getDate() + 1); // always tomorrow minimum
+        const nexiExpirationStr = `${nexiExpiry.getFullYear()}-${String(nexiExpiry.getMonth() + 1).padStart(2, '0')}-${String(nexiExpiry.getDate()).padStart(2, '0')}`;
 
         console.log('[nexi-pay-by-link] sentAt (UTC):', sentAt.toISOString());
         console.log('[nexi-pay-by-link] expiresAt (UTC):', expiresAt.toISOString());
