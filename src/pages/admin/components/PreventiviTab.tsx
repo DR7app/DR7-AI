@@ -81,74 +81,40 @@ export default function PreventiviTab() {
   const loadCustomers = async () => {
     const customerMap = new Map<string, Customer>()
 
-    // 1. Fetch from list-customers Netlify function (bypasses RLS, gets customers_extended)
-    try {
-      const res = await fetch('/.netlify/functions/list-customers')
-      const result = await res.json()
-      if (res.ok && result.customers) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        result.customers.forEach((c: any) => {
-          let fullName = 'N/A'
-          if (c.tipo_cliente === 'azienda') {
-            fullName = c.denominazione || c.ragione_sociale || 'N/A'
-          } else if (c.tipo_cliente === 'persona_fisica') {
-            fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A'
-          } else if (c.tipo_cliente === 'pubblica_amministrazione') {
-            fullName = c.ente_ufficio || 'N/A'
-          } else {
-            fullName = c.full_name || c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A'
-          }
-          customerMap.set(c.id, {
-            id: c.id,
-            full_name: fullName,
-            email: c.email || null,
-            phone: c.telefono || c.phone || null,
-          })
-        })
-      }
-    } catch (err) {
-      console.error('[PreventiviTab] Error loading customers from function:', err)
-    }
+    // Fetch from customers_extended with pagination (service-role not needed, anon has read access)
+    let from = 0
+    const PAGE_SIZE = 1000
+    while (true) {
+      const { data, error } = await supabase
+        .from('customers_extended')
+        .select('id, nome, cognome, email, telefono, tipo_cliente, denominazione, ragione_sociale, scadenza_patente')
+        .order('cognome')
+        .range(from, from + PAGE_SIZE - 1)
 
-    // 2. Also fetch from customers table directly (legacy/fallback)
-    try {
-      const { data } = await supabase
-        .from('customers')
-        .select('id, full_name, email, phone')
-        .order('full_name')
-      if (data) {
-        data.forEach(c => {
-          if (!customerMap.has(c.id)) {
-            customerMap.set(c.id, c)
-          }
-        })
+      if (error) {
+        console.error('[PreventiviTab] Error loading customers:', error)
+        break
       }
-    } catch (err) {
-      console.error('[PreventiviTab] Error loading from customers table:', err)
-    }
+      if (!data || data.length === 0) break
 
-    // 3. Also extract customers from bookings (catches unregistered ones)
-    try {
-      const { data: bookings } = await supabase
-        .from('bookings')
-        .select('customer_name, customer_email, customer_phone, user_id, booking_details')
-      if (bookings) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        bookings.forEach((b: any) => {
-          const details = b.booking_details?.customer || {}
-          const id = b.user_id || details.customerId || b.booking_details?.customer_id
-          if (!id || customerMap.has(id)) return
-          const name = b.customer_name || details.fullName || 'Cliente'
-          customerMap.set(id, {
-            id,
-            full_name: name,
-            email: b.customer_email || details.email || null,
-            phone: b.customer_phone || details.phone || null,
-          })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data.forEach((c: any) => {
+        let fullName = 'N/A'
+        if (c.tipo_cliente === 'azienda') {
+          fullName = c.denominazione || c.ragione_sociale || 'N/A'
+        } else {
+          fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A'
+        }
+        customerMap.set(c.id, {
+          id: c.id,
+          full_name: fullName,
+          email: c.email || null,
+          phone: c.telefono || null,
         })
-      }
-    } catch (err) {
-      console.error('[PreventiviTab] Error loading from bookings:', err)
+      })
+
+      from += data.length
+      if (data.length < PAGE_SIZE) break
     }
 
     console.log('[PreventiviTab] Total customers loaded:', customerMap.size)
