@@ -1819,7 +1819,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.loading('Generazione nuovo link di pagamento...')
 
       // Always regenerate a fresh link (old one may be expired)
-      const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+      const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
