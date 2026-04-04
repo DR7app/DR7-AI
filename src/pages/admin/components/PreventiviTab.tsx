@@ -126,6 +126,34 @@ function getUnlimitedKmPrice(vehicle: Vehicle | undefined, tier: DriverTier, ove
   return tier === 'TIER_2' ? overlay.unlimitedKmTier2 : overlay.unlimitedKmTier1
 }
 
+function calculateExperienceCost(services: Record<string, number>, rentalDays: number, allServices: { id: string; name: string; price: number; unit: string }[]): number {
+  let total = 0
+  for (const [id, qty] of Object.entries(services)) {
+    if (qty <= 0) continue
+    const svc = allServices.find(s => s.id === id)
+    if (!svc) continue
+    if (svc.unit === 'per_day') total += svc.price * rentalDays * qty
+    else if (svc.unit === 'per_hour') total += svc.price * qty
+    else if (svc.unit === 'per_item') total += svc.price * qty
+    else if (svc.unit === 'flat') total += svc.price * qty
+  }
+  return Math.round(total * 100) / 100
+}
+
+const UNIT_LABELS: Record<string, string> = {
+  per_day: '/giorno',
+  per_hour: '/ora',
+  per_item: '/unita',
+  flat: 'fisso',
+}
+
+const LOCATIONS = [
+  { value: 'dr7_office', label: 'DR7 — Viale Marconi 229, Cagliari', fee: 0 },
+  { value: 'cagliari_airport', label: 'Aeroporto Cagliari Elmas', fee: 50 },
+  { value: 'alghero_airport', label: 'Aeroporto Alghero', fee: 50 },
+  { value: 'domicilio', label: 'Domicilio (indirizzo custom)', fee: 0 },
+]
+
 const STATUS_LABELS: Record<string, string> = {
   bozza: 'Bozza',
   inviato: 'Inviato',
@@ -145,7 +173,7 @@ const STATUS_COLORS: Record<string, string> = {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function PreventiviTab({ onConvertToBooking }: Props) {
-  const [view, setView] = useState<'list' | 'form' | 'detail'>('list')
+  const [view, setView] = useState<'list' | 'form'>('list')
   const [preventivi, setPreventivi] = useState<Preventivo[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(true)
@@ -171,9 +199,22 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     driver_tier: 'TIER_2' as DriverTier,
     maggiorazione_pct: String(configOverlay.maggiorazionePct),
     insurance_option: '',
+    // Extras
     include_lavaggio: true,
     include_no_cauzione: false,
     include_unlimited_km: false,
+    include_second_driver: false,
+    include_dr7_flex: false,
+    // Delivery / Pickup
+    pickup_location: 'dr7_office',
+    dropoff_location: 'dr7_office',
+    delivery_fee: '0',
+    pickup_fee: '0',
+    delivery_address: '',
+    pickup_address: '',
+    // Experience services: id → quantity
+    experience_services: {} as Record<string, number>,
+    // Discount
     sconto: '',
     sconto_note: 'valido solo 24h',
     // Vehicle specs (auto-filled from vehicle, editable)
@@ -198,6 +239,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const insuranceOptions = useMemo(
     () => getInsuranceOptionsForVehicle(selectedVehicle, form.driver_tier, configOverlay),
     [selectedVehicle, form.driver_tier, configOverlay]
+  )
+
+  const availableExperienceServices = useMemo(
+    () => configOverlay.experienceServices.filter(s => !s.tierOnly || s.tierOnly === form.driver_tier),
+    [configOverlay.experienceServices, form.driver_tier]
   )
 
   // Revenue pricing
@@ -277,7 +323,20 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       : 0
     const unlimitedKmTotal = Math.round(unlimitedKmDaily * rentalDays * 100) / 100
 
-    const subtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal) * 100) / 100
+    const secondDriverDaily = form.include_second_driver
+      ? (form.driver_tier === 'TIER_2' ? configOverlay.secondDriverTier2 : configOverlay.secondDriverTier1)
+      : 0
+    const secondDriverTotal = Math.round(secondDriverDaily * rentalDays * 100) / 100
+
+    const dr7FlexDaily = form.include_dr7_flex ? configOverlay.dr7FlexPerDay : 0
+    const dr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
+
+    const deliveryFee = parseFloat(form.delivery_fee) || 0
+    const pickupFee = parseFloat(form.pickup_fee) || 0
+
+    const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
+
+    const subtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost) * 100) / 100
     const sconto = parseFloat(form.sconto) || 0
     const totalFinal = Math.round((subtotal - sconto) * 100) / 100
 
@@ -293,6 +352,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       noCauzioneTotal,
       unlimitedKmDaily,
       unlimitedKmTotal,
+      secondDriverDaily,
+      secondDriverTotal,
+      dr7FlexDaily,
+      dr7FlexTotal,
+      deliveryFee,
+      pickupFee,
+      experienceCost,
       subtotal,
       sconto,
       totalFinal,
@@ -316,11 +382,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
       if (error) throw error
 
-      // Auto-expire sent quotes past their expiry time
       const now = new Date()
       const updated: Preventivo[] = (data || []).map(p => {
         if (p.status === 'inviato' && p.expires_at && new Date(p.expires_at) < now) {
-          // Fire-and-forget update
           supabase.from('preventivi').update({ status: 'scaduto' }).eq('id', p.id).then(() => {})
           return { ...p, status: 'scaduto' }
         }
@@ -336,6 +400,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }
 
   async function loadVehicles() {
+    // Load ALL vehicles (including unavailable) — preventivo is a quote, not a booking
     const { data } = await supabase
       .from('vehicles')
       .select('*')
@@ -383,6 +448,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         no_cauzione_total: pricing.noCauzioneTotal,
         unlimited_km_daily: pricing.unlimitedKmDaily,
         unlimited_km_total: pricing.unlimitedKmTotal,
+        second_driver_daily: pricing.secondDriverDaily,
+        second_driver_total: pricing.secondDriverTotal,
         subtotal: pricing.subtotal,
         sconto: pricing.sconto,
         sconto_note: form.sconto_note || null,
@@ -393,6 +460,18 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           include_lavaggio: form.include_lavaggio,
           include_no_cauzione: form.include_no_cauzione,
           include_unlimited_km: form.include_unlimited_km,
+          include_second_driver: form.include_second_driver,
+          include_dr7_flex: form.include_dr7_flex,
+          dr7_flex_daily: pricing.dr7FlexDaily,
+          dr7_flex_total: pricing.dr7FlexTotal,
+          delivery_fee: pricing.deliveryFee,
+          pickup_fee: pricing.pickupFee,
+          pickup_location: form.pickup_location,
+          dropoff_location: form.dropoff_location,
+          delivery_address: form.delivery_address,
+          pickup_address: form.pickup_address,
+          experience_services: form.experience_services,
+          experience_cost: pricing.experienceCost,
         },
         status: 'bozza',
       }
@@ -429,6 +508,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       include_lavaggio: true,
       include_no_cauzione: false,
       include_unlimited_km: false,
+      include_second_driver: false,
+      include_dr7_flex: false,
+      pickup_location: 'dr7_office',
+      dropoff_location: 'dr7_office',
+      delivery_fee: '0',
+      pickup_fee: '0',
+      delivery_address: '',
+      pickup_address: '',
+      experience_services: {},
       sconto: '',
       sconto_note: 'valido solo 24h',
       model_year: '',
@@ -449,35 +537,32 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     ].filter(Boolean).join(' ')
 
     let msg = `Preventivo ${specs}\n\n`
-    msg += `${p.rental_days}gg = ${formatEur(p.daily_rate_after_markup ? p.daily_rate_after_markup * p.rental_days : p.base_daily_rate * p.rental_days)}\n`
+    msg += `${p.rental_days}gg x ${formatEur(p.daily_rate_after_markup || p.base_daily_rate)}/g = ${formatEur((p.daily_rate_after_markup || p.base_daily_rate) * p.rental_days)}\n`
 
     if (p.insurance_total > 0) {
-      const insLabel = p.insurance_option === 'KASKO_BASE' ? 'Kasko base'
-        : p.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
-        : p.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
-        : p.insurance_option === 'DR7' ? 'Kasko DR7'
-        : p.insurance_option === 'RCA' ? 'RCA'
-        : 'Kasko'
+      const insLabel = insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko'
       msg += `${insLabel} = ${formatEur(p.insurance_total)}\n`
     }
 
-    if (p.lavaggio_fee > 0) {
-      msg += `Lavaggio = ${formatEur(p.lavaggio_fee)}\n`
-    }
+    if (p.lavaggio_fee > 0) msg += `Lavaggio = ${formatEur(p.lavaggio_fee)}\n`
+    if (p.no_cauzione_total > 0) msg += `No cauzione = ${formatEur(p.no_cauzione_total)}\n`
+    if (p.unlimited_km_total > 0) msg += `Km illimitati = ${formatEur(p.unlimited_km_total)}\n`
+    if (p.second_driver_total > 0) msg += `Secondo guidatore = ${formatEur(p.second_driver_total)}\n`
 
-    if (p.no_cauzione_total > 0) {
-      msg += `No cauzione = ${formatEur(p.no_cauzione_total)}\n`
-    }
-
-    if (p.unlimited_km_total > 0) {
-      msg += `Km illimitati = ${formatEur(p.unlimited_km_total)}\n`
-    }
+    const extras = p.extras_detail as Record<string, unknown> | null
+    if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) msg += `DR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}\n`
+    if (extras?.delivery_fee && Number(extras.delivery_fee) > 0) msg += `Consegna = ${formatEur(Number(extras.delivery_fee))}\n`
+    if (extras?.pickup_fee && Number(extras.pickup_fee) > 0) msg += `Ritiro = ${formatEur(Number(extras.pickup_fee))}\n`
+    if (extras?.experience_cost && Number(extras.experience_cost) > 0) msg += `Servizi experience = ${formatEur(Number(extras.experience_cost))}\n`
 
     msg += `\nTotale = ${formatEur(p.subtotal)}\n`
 
     if (p.sconto > 0) {
       msg += `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}`
     }
+
+    const footer = rentalConfig?.preventivi?.whatsapp_footer
+    if (footer) msg += `\n\n${footer}`
 
     return msg.trim()
   }
@@ -490,16 +575,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customPhone: phone,
-          customMessage: message,
-        })
+        body: JSON.stringify({ customPhone: phone, customMessage: message })
       })
 
       const result = await response.json()
       if (!response.ok) throw new Error(result.message || 'Errore invio WhatsApp')
 
-      // Update preventivo status
       const expiryHours = configOverlay.defaultExpiryHours || 24
       const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString()
 
@@ -529,7 +610,6 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── Convert to Booking ─────────────────────────────────────────────────
 
   async function handleConvertToBooking(preventivo: Preventivo) {
-    // Update status to accettato
     await supabase
       .from('preventivi')
       .update({ status: 'accettato' })
@@ -558,15 +638,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     toast.success('Preventivo accettato - compila la prenotazione')
   }
 
-  // ─── Update Status ──────────────────────────────────────────────────────
-
   async function updateStatus(id: string, newStatus: string) {
     await supabase.from('preventivi').update({ status: newStatus }).eq('id', id)
     loadPreventivi()
     toast.success(`Stato aggiornato: ${STATUS_LABELS[newStatus]}`)
   }
-
-  // ─── Filtered list ──────────────────────────────────────────────────────
 
   const filtered = useMemo(
     () => statusFilter === 'all' ? preventivi : preventivi.filter(p => p.status === statusFilter),
@@ -579,13 +655,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   if (view === 'list') {
     return (
       <div className="space-y-4">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-2xl font-bold text-theme-text-primary">Preventivi</h2>
           <Button onClick={() => { resetForm(); setView('form') }}>+ Nuovo Preventivo</Button>
         </div>
 
-        {/* Filter */}
         <div className="flex flex-wrap gap-2">
           {['all', 'bozza', 'inviato', 'accettato', 'rifiutato', 'scaduto'].map(s => (
             <button
@@ -602,7 +676,6 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           ))}
         </div>
 
-        {/* Table */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold"></div>
@@ -652,7 +725,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                             onClick={() => { setSelectedPreventivo(p); setWhatsappPhone(p.customer_phone || ''); setShowPhoneModal(true) }}
                             className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
                           >
-                            Invia a Cliente
+                            Invia
                           </button>
                         )}
                         {(p.status === 'inviato' || p.status === 'bozza') && (
@@ -695,7 +768,6 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                 placeholder="393xxxxxxxxx"
               />
 
-              {/* Message Preview */}
               <div className="bg-theme-bg-primary rounded p-3 text-xs text-theme-text-muted whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
                 {formatWhatsAppMessage(selectedPreventivo)}
               </div>
@@ -726,7 +798,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         <Button variant="secondary" onClick={() => setView('list')}>Torna alla Lista</Button>
       </div>
 
-      {/* Vehicle Selection */}
+      {/* Vehicle Selection — ALL vehicles, no availability check */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select
           label="Veicolo *"
@@ -734,7 +806,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           onChange={(e) => setForm(prev => ({ ...prev, vehicle_id: e.target.value, insurance_option: '' }))}
           options={[
             { value: '', label: 'Seleziona veicolo...' },
-            ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}` }))
+            ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}${v.status === 'maintenance' ? ' [Manutenzione]' : ''}` }))
           ]}
         />
         <Select
@@ -754,57 +826,18 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           <p className="col-span-full text-sm text-theme-text-muted font-semibold">
             Scheda Tecnica (visibile nel preventivo WhatsApp)
           </p>
-          <Input
-            label="Anno Modello"
-            type="number"
-            value={form.model_year}
-            onChange={(e) => setForm(prev => ({ ...prev, model_year: e.target.value }))}
-            placeholder="2025"
-          />
-          <Input
-            label="Cavalli (CV)"
-            type="number"
-            value={form.cv}
-            onChange={(e) => setForm(prev => ({ ...prev, cv: e.target.value }))}
-            placeholder="400"
-          />
-          <Input
-            label="0-100 km/h (s)"
-            type="number"
-            step="0.1"
-            value={form.acceleration_0_100}
-            onChange={(e) => setForm(prev => ({ ...prev, acceleration_0_100: e.target.value }))}
-            placeholder="3.8"
-          />
+          <Input label="Anno Modello" type="number" value={form.model_year} onChange={(e) => setForm(prev => ({ ...prev, model_year: e.target.value }))} placeholder="2025" />
+          <Input label="Cavalli (CV)" type="number" value={form.cv} onChange={(e) => setForm(prev => ({ ...prev, cv: e.target.value }))} placeholder="400" />
+          <Input label="0-100 km/h (s)" type="number" step="0.1" value={form.acceleration_0_100} onChange={(e) => setForm(prev => ({ ...prev, acceleration_0_100: e.target.value }))} placeholder="3.8" />
         </div>
       )}
 
       {/* Dates */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Input
-          label="Data Ritiro *"
-          type="date"
-          value={form.pickup_date}
-          onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))}
-        />
-        <Input
-          label="Ora Ritiro"
-          type="time"
-          value={form.pickup_time}
-          onChange={(e) => setForm(prev => ({ ...prev, pickup_time: e.target.value }))}
-        />
-        <Input
-          label="Data Riconsegna *"
-          type="date"
-          value={form.return_date}
-          onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))}
-        />
-        <Input
-          label="Ora Riconsegna"
-          type="time"
-          value={form.return_time}
-          onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))}
-        />
+        <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
+        <Input label="Ora Ritiro" type="time" value={form.pickup_time} onChange={(e) => setForm(prev => ({ ...prev, pickup_time: e.target.value }))} />
+        <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
+        <Input label="Ora Riconsegna" type="time" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} />
       </div>
 
       {rentalDays > 0 && (
@@ -812,6 +845,54 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           Durata: <strong className="text-theme-text-primary">{rentalDays} giorn{rentalDays === 1 ? 'o' : 'i'}</strong>
         </p>
       )}
+
+      {/* Pickup / Dropoff Locations */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Select
+            label="Luogo Ritiro"
+            value={form.pickup_location}
+            onChange={(e) => {
+              const loc = LOCATIONS.find(l => l.value === e.target.value)
+              setForm(prev => ({
+                ...prev,
+                pickup_location: e.target.value,
+                delivery_fee: loc && e.target.value !== 'domicilio' ? String(loc.fee) : prev.delivery_fee,
+                delivery_address: '',
+              }))
+            }}
+            options={LOCATIONS.map(l => ({ value: l.value, label: l.label }))}
+          />
+          {form.pickup_location === 'domicilio' && (
+            <div className="grid grid-cols-2 gap-2">
+              <Input label="Indirizzo consegna" value={form.delivery_address} onChange={(e) => setForm(prev => ({ ...prev, delivery_address: e.target.value }))} placeholder="Via, citta, CAP" />
+              <Input label="Costo consegna (€)" type="number" value={form.delivery_fee} onChange={(e) => setForm(prev => ({ ...prev, delivery_fee: e.target.value }))} placeholder="0" />
+            </div>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Select
+            label="Luogo Riconsegna"
+            value={form.dropoff_location}
+            onChange={(e) => {
+              const loc = LOCATIONS.find(l => l.value === e.target.value)
+              setForm(prev => ({
+                ...prev,
+                dropoff_location: e.target.value,
+                pickup_fee: loc && e.target.value !== 'domicilio' ? String(loc.fee) : prev.pickup_fee,
+                pickup_address: '',
+              }))
+            }}
+            options={LOCATIONS.map(l => ({ value: l.value, label: l.label }))}
+          />
+          {form.dropoff_location === 'domicilio' && (
+            <div className="grid grid-cols-2 gap-2">
+              <Input label="Indirizzo ritiro" value={form.pickup_address} onChange={(e) => setForm(prev => ({ ...prev, pickup_address: e.target.value }))} placeholder="Via, citta, CAP" />
+              <Input label="Costo ritiro (€)" type="number" value={form.pickup_fee} onChange={(e) => setForm(prev => ({ ...prev, pickup_fee: e.target.value }))} placeholder="0" />
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Revenue Pricing Info */}
       {revenueLoading && (
@@ -867,40 +948,91 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       {/* Extras Toggles */}
       <div className="space-y-3">
         <p className="text-sm font-semibold text-theme-text-primary">Extra</p>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.include_lavaggio}
-            onChange={(e) => setForm(prev => ({ ...prev, include_lavaggio: e.target.checked }))}
-            className="w-4 h-4 accent-dr7-gold"
-          />
-          <span className="text-sm text-theme-text-primary">
-            Lavaggio ({formatEur(configOverlay.lavaggioFee)})
-          </span>
-        </label>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.include_no_cauzione}
-            onChange={(e) => setForm(prev => ({ ...prev, include_no_cauzione: e.target.checked }))}
-            className="w-4 h-4 accent-dr7-gold"
-          />
-          <span className="text-sm text-theme-text-primary">
-            No Cauzione ({formatEur(configOverlay.noCauzionePerDay)}/giorno)
-          </span>
-        </label>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.include_unlimited_km}
-            onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked }))}
-            className="w-4 h-4 accent-dr7-gold"
-          />
-          <span className="text-sm text-theme-text-primary">
-            Km Illimitati ({formatEur(getUnlimitedKmPrice(selectedVehicle, form.driver_tier, configOverlay))}/giorno)
-          </span>
-        </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
+            <input type="checkbox" checked={form.include_lavaggio} onChange={(e) => setForm(prev => ({ ...prev, include_lavaggio: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
+            <span className="text-sm text-theme-text-primary">Lavaggio ({formatEur(configOverlay.lavaggioFee)})</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
+            <input type="checkbox" checked={form.include_no_cauzione} onChange={(e) => setForm(prev => ({ ...prev, include_no_cauzione: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
+            <span className="text-sm text-theme-text-primary">No Cauzione ({formatEur(configOverlay.noCauzionePerDay)}/giorno)</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
+            <input type="checkbox" checked={form.include_unlimited_km} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
+            <span className="text-sm text-theme-text-primary">
+              Km Illimitati ({formatEur(getUnlimitedKmPrice(selectedVehicle, form.driver_tier, configOverlay))}/giorno)
+            </span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
+            <input type="checkbox" checked={form.include_second_driver} onChange={(e) => setForm(prev => ({ ...prev, include_second_driver: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
+            <span className="text-sm text-theme-text-primary">
+              Secondo Guidatore ({formatEur(form.driver_tier === 'TIER_2' ? configOverlay.secondDriverTier2 : configOverlay.secondDriverTier1)}/giorno)
+            </span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
+            <input type="checkbox" checked={form.include_dr7_flex} onChange={(e) => setForm(prev => ({ ...prev, include_dr7_flex: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
+            <span className="text-sm text-theme-text-primary">
+              DR7 FLEX — Cancellazione Premium ({formatEur(configOverlay.dr7FlexPerDay)}/giorno)
+            </span>
+          </label>
+        </div>
       </div>
+
+      {/* Experience Services */}
+      {availableExperienceServices.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-theme-text-primary">Servizi Experience</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {availableExperienceServices.map(svc => {
+              const qty = form.experience_services[svc.id] || 0
+              const isQuantity = svc.unit === 'per_item' || svc.unit === 'per_hour'
+              return (
+                <div
+                  key={svc.id}
+                  className={`flex items-center justify-between gap-3 p-2 rounded-lg border transition-colors ${
+                    qty > 0 ? 'border-dr7-gold/50 bg-dr7-gold/5' : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-theme-text-primary">{svc.name}</span>
+                    <span className="text-xs text-theme-text-muted ml-2">
+                      {formatEur(svc.price)}{UNIT_LABELS[svc.unit] || ''}
+                    </span>
+                  </div>
+                  {isQuantity ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setForm(prev => {
+                          const svcs = { ...prev.experience_services }
+                          if (qty <= 1) delete svcs[svc.id]; else svcs[svc.id] = qty - 1
+                          return { ...prev, experience_services: svcs }
+                        })}
+                        className="w-7 h-7 rounded bg-theme-bg-tertiary text-theme-text-primary text-sm hover:bg-theme-bg-hover"
+                      >-</button>
+                      <span className="w-6 text-center text-sm text-theme-text-primary">{qty}</span>
+                      <button
+                        onClick={() => setForm(prev => ({ ...prev, experience_services: { ...prev.experience_services, [svc.id]: qty + 1 } }))}
+                        className="w-7 h-7 rounded bg-theme-bg-tertiary text-theme-text-primary text-sm hover:bg-theme-bg-hover"
+                      >+</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setForm(prev => {
+                        const svcs = { ...prev.experience_services }
+                        if (qty > 0) delete svcs[svc.id]; else svcs[svc.id] = 1
+                        return { ...prev, experience_services: svcs }
+                      })}
+                      className={`px-3 py-1 text-xs rounded ${qty > 0 ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'}`}
+                    >
+                      {qty > 0 ? 'Aggiunto' : 'Aggiungi'}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Pricing Summary */}
       <div className="p-4 bg-theme-bg-tertiary border border-theme-border rounded-lg space-y-2">
@@ -935,6 +1067,36 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <span>{formatEur(pricing.unlimitedKmTotal)}</span>
           </div>
         )}
+        {pricing.secondDriverTotal > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>Secondo Guidatore ({rentalDays}gg x {formatEur(pricing.secondDriverDaily)})</span>
+            <span>{formatEur(pricing.secondDriverTotal)}</span>
+          </div>
+        )}
+        {pricing.dr7FlexTotal > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>DR7 FLEX ({rentalDays}gg x {formatEur(pricing.dr7FlexDaily)})</span>
+            <span>{formatEur(pricing.dr7FlexTotal)}</span>
+          </div>
+        )}
+        {pricing.deliveryFee > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>Consegna ({LOCATIONS.find(l => l.value === form.pickup_location)?.label || 'Domicilio'})</span>
+            <span>{formatEur(pricing.deliveryFee)}</span>
+          </div>
+        )}
+        {pricing.pickupFee > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>Ritiro ({LOCATIONS.find(l => l.value === form.dropoff_location)?.label || 'Domicilio'})</span>
+            <span>{formatEur(pricing.pickupFee)}</span>
+          </div>
+        )}
+        {pricing.experienceCost > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>Servizi Experience</span>
+            <span>{formatEur(pricing.experienceCost)}</span>
+          </div>
+        )}
 
         <div className="border-t border-theme-border pt-2 flex justify-between text-theme-text-primary font-semibold">
           <span>Subtotale</span>
@@ -943,20 +1105,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
         {/* Sconto */}
         <div className="grid grid-cols-2 gap-3 pt-2">
-          <Input
-            label="Sconto (€)"
-            type="number"
-            step="0.01"
-            value={form.sconto}
-            onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))}
-            placeholder="0"
-          />
-          <Input
-            label="Nota sconto"
-            value={form.sconto_note}
-            onChange={(e) => setForm(prev => ({ ...prev, sconto_note: e.target.value }))}
-            placeholder="valido solo 24h"
-          />
+          <Input label="Sconto (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="0" />
+          <Input label="Nota sconto" value={form.sconto_note} onChange={(e) => setForm(prev => ({ ...prev, sconto_note: e.target.value }))} placeholder="valido solo 24h" />
         </div>
 
         {pricing.sconto > 0 && (
