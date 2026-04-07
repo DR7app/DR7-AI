@@ -45,6 +45,7 @@ const TRIGGER_LABELS: Record<string, string> = {
     'after_dropoff': 'Dopo la riconsegna',
     'on_booking': 'Alla creazione prenotazione',
     'on_payment': 'Al pagamento',
+    'on_preventivo': 'Invio preventivo',
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
