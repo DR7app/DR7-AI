@@ -256,22 +256,6 @@ export default function MessaggiSistemaTab() {
         }
     }
 
-    async function handleToggleHeader(_template: SystemMessage) {
-        try {
-            const newVal = !template.include_header
-            const { error } = await supabase
-                .from('system_messages')
-                .update({ include_header: newVal, updated_at: new Date().toISOString() })
-                .eq('id', template.id)
-            if (error) throw error
-            setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, include_header: newVal } : t))
-            toast.success(newVal ? 'Header RENTORA attivato' : 'Header RENTORA disattivato')
-        } catch (err: unknown) {
-            const _errMsg = err instanceof Error ? err.message : String(err)
-            toast.error('Errore: ' + _errMsg)
-        }
-    }
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async function handleUpdateAutomation(templateId: string, field: string, value: any) {
         try {
