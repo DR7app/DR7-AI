@@ -231,7 +231,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         if (res.ok && result.bookings) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           bookingsData = result.bookings.filter((b: any) =>
-            b.service_type === 'car_wash' && b.status !== 'cancelled' && b.customer_name !== 'Lavaggio Rientro'
+            b.service_type === 'car_wash' &&
+            b.status !== 'cancelled' && b.status !== 'annullata' && b.status !== 'expired' &&
+            b.customer_name !== 'Lavaggio Rientro'
           )
         }
       } catch {
@@ -243,7 +245,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           .from('bookings')
           .select('*')
           .eq('service_type', 'car_wash')
-          .neq('status', 'cancelled')
+          .not('status', 'in', '(cancelled,annullata,expired)')
           .neq('customer_name', 'Lavaggio Rientro')
           .order('appointment_date', { ascending: true })
         if (bookingsError) throw bookingsError

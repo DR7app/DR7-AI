@@ -45,6 +45,7 @@ const TRIGGER_LABELS: Record<string, string> = {
     'after_dropoff': 'Dopo la riconsegna',
     'on_booking': 'Alla creazione prenotazione',
     'on_payment': 'Al pagamento',
+    'on_preventivo': 'Invio preventivo',
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -252,22 +253,6 @@ export default function MessaggiSistemaTab() {
             toast.success(newVal ? 'Messaggio attivato' : 'Messaggio disattivato')
         } catch (err: unknown) {
           const _errMsg = err instanceof Error ? err.message : String(err)
-            toast.error('Errore: ' + _errMsg)
-        }
-    }
-
-    async function handleToggleHeader(template: SystemMessage) {
-        try {
-            const newVal = !template.include_header
-            const { error } = await supabase
-                .from('system_messages')
-                .update({ include_header: newVal, updated_at: new Date().toISOString() })
-                .eq('id', template.id)
-            if (error) throw error
-            setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, include_header: newVal } : t))
-            toast.success(newVal ? 'Header RENTORA attivato' : 'Header RENTORA disattivato')
-        } catch (err: unknown) {
-            const _errMsg = err instanceof Error ? err.message : String(err)
             toast.error('Errore: ' + _errMsg)
         }
     }
@@ -644,7 +629,7 @@ export default function MessaggiSistemaTab() {
 
                 {/* Template Cards — Expandable style */}
                 <div className="space-y-3">
-                    {templates.map((template, idx) => (
+                    {templates.map((template) => (
                         <details key={template.id} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
                             <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30">
                                 <div className="flex items-center gap-3">

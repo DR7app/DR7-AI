@@ -79,10 +79,10 @@ function fasciaToTier(fascia: Fascia): DriverTier {
 
 // Map vehicle type to Centralina config category key
 function vehicleTypeToConfigCategory(vType: string): string {
-  if (vType === 'exotic') return 'supercar'
+  if (vType === 'exotic') return 'exotic'
   if (vType === 'urban') return 'urban'
   if (vType === 'furgone') return 'furgone'
-  return 'aziendali'
+  return 'utilitaire'
 }
 
 // Fallback insurance arrays (used if Centralina not loaded yet)

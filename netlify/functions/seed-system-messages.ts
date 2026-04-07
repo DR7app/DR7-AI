@@ -399,6 +399,30 @@ Grazie per la collaborazione.`,
     target_category: 'all',
   },
 
+  // ── PREVENTIVO ──
+  {
+    message_key: 'preventivo_send',
+    label: 'Invio Preventivo al Cliente',
+    description: 'Inviato al cliente via WhatsApp quando si invia un preventivo',
+    message_body: `Preventivo {vehicle_specs}
+
+{rental_days}gg x {daily_rate}/g = {rental_total}
+{insurance_line}
+{lavaggio_line}
+{no_cauzione_line}
+{km_illimitati_line}
+{second_driver_line}
+{extras_lines}
+
+Totale = {subtotal}
+{sconto_line}`,
+    is_automatic: false,
+    is_enabled: true,
+    include_header: false,
+    trigger_event: 'on_preventivo',
+    target_category: 'all',
+  },
+
   // ── WELCOME ──
   {
     message_key: 'welcome_registration',
