@@ -4,6 +4,7 @@ import Input from './Input'
 import Button from './Button'
 import toast from 'react-hot-toast'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
+import AddressAutocomplete from './AddressAutocomplete'
 
 interface DynamicCustomerFormProps {
   onSuccess: () => void
@@ -221,12 +222,11 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
               placeholder="00000000000"
             />
 
-            <Input
+            <AddressAutocomplete
               label="Indirizzo"
               required
               value={formData.indirizzo}
-              onChange={handleChange}
-              name="indirizzo"
+              onChange={(val) => setFormData(prev => ({ ...prev, indirizzo: val }))}
               placeholder="Via, Numero Civico, CAP, Città"
             />
 
@@ -337,12 +337,11 @@ export default function DynamicCustomerForm({ onSuccess, onCancel }: DynamicCust
               maxLength={2}
             />
 
-            <Input
+            <AddressAutocomplete
               label="Indirizzo"
               required
               value={formData.indirizzo}
-              onChange={handleChange}
-              name="indirizzo"
+              onChange={(val) => setFormData(prev => ({ ...prev, indirizzo: val }))}
               placeholder="Via, Numero Civico, CAP, Città"
             />
 

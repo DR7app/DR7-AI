@@ -459,16 +459,43 @@ export default function UnpaidBookingsTab() {
   async function deleteSingleExtension(booking: UnpaidBooking, extIndex: number) {
     try {
       const extensions = [...(booking.booking_details?.extension_history || [])]
-      if (!extensions[extIndex]) return
+      const deletedExt = extensions[extIndex]
+      if (!deletedExt) return
       extensions.splice(extIndex, 1)
+
+      // Revert dropoff_date: if no extensions remain, use the deleted one's previous_dropoff.
+      // If other extensions remain, use the last remaining extension's new_dropoff.
+      let revertedDropoff: string | undefined
+      let revertedTotal: number | undefined
+      if (extensions.length === 0 && deletedExt.previous_dropoff) {
+        revertedDropoff = deletedExt.previous_dropoff
+        // Subtract extension amount from total
+        const extAmount = deletedExt.additional_amount || 0
+        const currentTotal = booking.price_total || 0
+        revertedTotal = Math.max(0, currentTotal - extAmount)
+      } else if (extensions.length > 0) {
+        // Last remaining extension's new_dropoff becomes the dropoff_date
+        const lastExt = extensions[extensions.length - 1]
+        revertedDropoff = lastExt.new_dropoff
+        // Subtract only the deleted extension's amount
+        const extAmount = deletedExt.additional_amount || 0
+        const currentTotal = booking.price_total || 0
+        revertedTotal = Math.max(0, currentTotal - extAmount)
+      }
+
+      const updatePayload: any = {
+        booking_details: { ...booking.booking_details, extension_history: extensions },
+      }
+      if (revertedDropoff) updatePayload.dropoff_date = revertedDropoff
+      if (revertedTotal !== undefined) updatePayload.price_total = revertedTotal
 
       const { error } = await supabase
         .from('bookings')
-        .update({ booking_details: { ...booking.booking_details, extension_history: extensions } })
+        .update(updatePayload)
         .eq('id', booking.id)
 
       if (error) throw error
-      toast.success('Estensione rimossa!')
+      toast.success('Estensione rimossa e date ripristinate!')
       logAdminAction('delete_extension', 'booking', booking.id)
       setConfirmDeleteKey(null)
       loadUnpaidBookings()

@@ -845,7 +845,11 @@ export default function VehiclesTab() {
                     )}
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
-                      <div className="text-xs text-theme-text-muted">{vehicle.plate || '-'}</div>
+                      <div className="text-xs text-theme-text-muted">
+                        {vehicle.plate || '-'}
+                        {(vehicle.metadata as any)?.cv && <span className="ml-2">{(vehicle.metadata as any).cv} CV</span>}
+                        {(vehicle.metadata as any)?.model_year && <span className="ml-2">{(vehicle.metadata as any).model_year}</span>}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -899,6 +903,8 @@ export default function VehiclesTab() {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">CV</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Anno</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                 </tr>
@@ -931,6 +937,8 @@ export default function VehiclesTab() {
                               vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.cv || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.model_year || '-'}</td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2">
@@ -962,7 +970,7 @@ export default function VehiclesTab() {
                 ))}
                 {urbanVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-theme-text-muted">
+                    <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
                       Nessun veicolo Urban trovato
                     </td>
                   </tr>
@@ -996,7 +1004,11 @@ export default function VehiclesTab() {
                     )}
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
-                      <div className="text-xs text-theme-text-muted">{vehicle.plate || '-'}</div>
+                      <div className="text-xs text-theme-text-muted">
+                        {vehicle.plate || '-'}
+                        {(vehicle.metadata as any)?.cv && <span className="ml-2">{(vehicle.metadata as any).cv} CV</span>}
+                        {(vehicle.metadata as any)?.model_year && <span className="ml-2">{(vehicle.metadata as any).model_year}</span>}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -1050,6 +1062,8 @@ export default function VehiclesTab() {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">CV</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Anno</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                 </tr>
@@ -1082,6 +1096,8 @@ export default function VehiclesTab() {
                               vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.cv || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.model_year || '-'}</td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2">
@@ -1113,7 +1129,7 @@ export default function VehiclesTab() {
                 ))}
                 {exoticVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-theme-text-muted">
+                    <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
                       Nessun veicolo Exotic trovato
                     </td>
                   </tr>
@@ -1147,7 +1163,11 @@ export default function VehiclesTab() {
                     )}
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
-                      <div className="text-xs text-theme-text-muted">{vehicle.plate || '-'}</div>
+                      <div className="text-xs text-theme-text-muted">
+                        {vehicle.plate || '-'}
+                        {(vehicle.metadata as any)?.cv && <span className="ml-2">{(vehicle.metadata as any).cv} CV</span>}
+                        {(vehicle.metadata as any)?.model_year && <span className="ml-2">{(vehicle.metadata as any).model_year}</span>}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -1201,6 +1221,8 @@ export default function VehiclesTab() {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">CV</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Anno</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                 </tr>
@@ -1233,6 +1255,8 @@ export default function VehiclesTab() {
                               vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.cv || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.model_year || '-'}</td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2">
@@ -1264,7 +1288,7 @@ export default function VehiclesTab() {
                 ))}
                 {aziendaliVehicles.length === 0 && (
                   <tr>
-                    <td colSpan={multiSelectMode ? 6 : 5} className="px-4 py-8 text-center text-theme-text-muted">
+                    <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
                       Nessun veicolo Aziendali trovato
                     </td>
                   </tr>
