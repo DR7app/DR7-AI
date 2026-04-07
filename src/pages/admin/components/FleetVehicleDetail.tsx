@@ -341,6 +341,42 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                     </div>
                                 </div>
                             </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                                <div>
+                                    <label className="text-theme-text-muted text-sm block mb-1">Cavalli (CV)</label>
+                                    <input
+                                        type="number"
+                                        value={editedVehicle.metadata?.cv || ''}
+                                        onChange={(e) => updateField('metadata', { ...editedVehicle.metadata, cv: e.target.value ? parseInt(e.target.value) : null })}
+                                        onFocus={(e) => e.target.select()}
+                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        placeholder="es. 400"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-theme-text-muted text-sm block mb-1">Anno</label>
+                                    <input
+                                        type="number"
+                                        value={editedVehicle.metadata?.model_year || ''}
+                                        onChange={(e) => updateField('metadata', { ...editedVehicle.metadata, model_year: e.target.value ? parseInt(e.target.value) : null })}
+                                        onFocus={(e) => e.target.select()}
+                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        placeholder="es. 2025"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-theme-text-muted text-sm block mb-1">0-100 km/h (sec)</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        value={editedVehicle.metadata?.acceleration_0_100 || ''}
+                                        onChange={(e) => updateField('metadata', { ...editedVehicle.metadata, acceleration_0_100: e.target.value ? parseFloat(e.target.value) : null })}
+                                        onFocus={(e) => e.target.select()}
+                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        placeholder="es. 3.8"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         {alerts.length === 0 ? (
@@ -382,7 +418,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                             </div>
                         )}
 
-                        <div className="mt-6 grid grid-cols-2 gap-4">
+                        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <p className="text-theme-text-muted text-sm">KM Attuali</p>
                                 <p className="text-2xl font-bold text-theme-text-primary">{editedVehicle.current_km?.toLocaleString() || 0}</p>
@@ -390,6 +426,14 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                             <div className="bg-theme-bg-tertiary rounded-lg p-4">
                                 <p className="text-theme-text-muted text-sm">Stato</p>
                                 <p className="text-2xl font-bold text-theme-text-primary capitalize">{editedVehicle.status}</p>
+                            </div>
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                                <p className="text-theme-text-muted text-sm">Cavalli</p>
+                                <p className="text-2xl font-bold text-theme-text-primary">{editedVehicle.metadata?.cv ? `${editedVehicle.metadata.cv} CV` : '-'}</p>
+                            </div>
+                            <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                                <p className="text-theme-text-muted text-sm">Anno</p>
+                                <p className="text-2xl font-bold text-theme-text-primary">{editedVehicle.metadata?.model_year || '-'}</p>
                             </div>
                         </div>
                     </div>
