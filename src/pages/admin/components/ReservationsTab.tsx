@@ -1874,7 +1874,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: custPhone,
-          customMessage: `Gentile ${custName},\n\nLe ricordiamo che il pagamento per la prenotazione #${bookingRef} è ancora in sospeso.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link sicuro:\n${newPaymentLink}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
+          customMessage: `Gentile ${custName},\n\nLe ricordiamo che il pagamento per la prenotazione #${bookingRef} è ancora in sospeso.\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link sicuro:\n${newPaymentLink}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nGrazie per la collaborazione.`
         })
       })
       toast.success('Nuovo link di pagamento generato e inviato via WhatsApp!')
@@ -2546,15 +2546,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     try {
       // Build new dropoff datetime with explicit Rome timezone offset
       function getRomeOffsetForDate(dateString: string): string {
-        // Use noon to avoid DST boundary issues
-        const date = new Date(`${dateString}T12:00:00`)
-        const formatter = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'Europe/Rome',
-          timeZoneName: 'short'
-        })
-        const parts = formatter.formatToParts(date)
-        const tzPart = parts.find(p => p.type === 'timeZoneName')
-        return tzPart?.value === 'CEST' ? '+02:00' : '+01:00'
+        // Calculate actual UTC offset for Europe/Rome on the given date
+        const date = new Date(`${dateString}T12:00:00Z`)
+        const romeStr = date.toLocaleString('en-US', { timeZone: 'Europe/Rome', hour: 'numeric', hour12: false })
+        const romeHour = parseInt(romeStr.split(',').pop()?.trim() || '12')
+        const utcHour = date.getUTCHours()
+        const diff = romeHour - utcHour
+        return diff === 2 ? '+02:00' : '+01:00'
       }
       const dropoffOffset = getRomeOffsetForDate(extendData.new_return_date)
       const newDropoffDateTime = new Date(`${extendData.new_return_date}T${extendData.new_return_time}:00${dropoffOffset}`)
@@ -2841,7 +2839,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: customerPhone,
-                  customMessage: `Gentile ${custName},\n\nLa sua prenotazione #${bookingRef} è stata estesa.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nPer completare il pagamento dell'estensione di €${additionalAmount.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità di ${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
+                  customMessage: `Gentile ${custName},\n\nLa sua prenotazione #${bookingRef} è stata estesa.\n\nPer completare il pagamento dell'estensione di €${additionalAmount.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità di ${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nGrazie per la collaborazione.`
                 })
               })
             }
@@ -4146,7 +4144,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: custPhone,
-                  customMessage: `Gentile ${customerInfo?.full_name},\n\nLe ricordiamo che il pagamento per la prenotazione #${insertedBooking.id.substring(0, 8).toUpperCase()} è ancora in sospeso.\n\n*Modalità di pagamento (leggere prima di procedere):*\n\n •⁠Carta Prepagata o contanti → +20% della tariffa totale\n•⁠ Carta di debito → credito wallet spendibile sul sito +3%\n•⁠ Carta di credito → credito wallet spendibile sul sito +6%\n\nIscriviti subito sul sito www.dr7empire.com\n\nPer completare il pagamento di €${totalEur.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità limitata. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.`
+                  customMessage: `Gentile ${customerInfo?.full_name},\n\nLe ricordiamo che il pagamento per la prenotazione #${insertedBooking.id.substring(0, 8).toUpperCase()} è ancora in sospeso.\n\nPer completare il pagamento di €${totalEur.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità limitata. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nGrazie per la collaborazione.`
                 })
               })
             }
