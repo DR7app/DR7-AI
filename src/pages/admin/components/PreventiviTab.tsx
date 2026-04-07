@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
 import Input from './Input'
@@ -595,6 +596,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         })
         .eq('id', preventivo.id)
 
+      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: phone })
       toast.success('Preventivo inviato via WhatsApp!')
       setShowPhoneModal(false)
       setWhatsappPhone('')

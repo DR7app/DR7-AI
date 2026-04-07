@@ -6,6 +6,7 @@ import AddressAutocomplete from './AddressAutocomplete'
 import Select from './Select'
 import Button from './Button'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
+import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice, getSecondDriverPrice, getNoCauzioneSurcharge, getSforoKm } from '../../../utils/configLookup'
 import type { DriverTier } from '../../../types/rentalConfig'
 
@@ -511,10 +512,12 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       if (editData?.id) {
         const { error } = await supabase.from('preventivi').update(record).eq('id', editData.id)
         if (error) throw error
+        appendPreventivoEvent(editData.id, 'preventivo_aggiornato', { value: record.total_amount })
       } else {
         record.created_at = new Date().toISOString()
-        const { error } = await supabase.from('preventivi').insert(record).select('id').single()
+        const { data: inserted, error } = await supabase.from('preventivi').insert(record).select('id').single()
         if (error) throw error
+        if (inserted?.id) appendPreventivoEvent(inserted.id, 'preventivo_creato', { value: record.total_amount })
       }
 
       toast.success('Preventivo salvato!')

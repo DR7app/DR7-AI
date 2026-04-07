@@ -1,37 +1,75 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 
 interface Preventivo {
   id: string
-  vehicle_name: string
-  vehicle_plate: string
-  vehicle_category: string
-  fascia: string
-  pickup_date: string
-  dropoff_date: string
-  pickup_location: string
-  dropoff_location: string
-  insurance_option: string
-  rental_days: number
-  daily_rate: number
-  total_amount: number
-  deposit_amount: number
-  km_limit: number
-  unlimited_km: boolean
-  second_driver: boolean
-  no_cauzione: boolean
-  delivery_enabled: boolean
-  delivery_fee: number
-  pickup_enabled: boolean
-  pickup_fee: number
-  notes: string
-  customer_id: string | null
-  customer_name: string | null
-  status: string
-  booking_id: string | null
-  valid_until: string | null
-  created_at: string
-  updated_at: string
+  vehicle_id?: string
+  vehicle_name?: string
+  vehicle_plate?: string
+  vehicle_category?: string
+  vehicle_model_year?: number
+  vehicle_cv?: number
+  vehicle_0_100?: number
+  pickup_date?: string
+  dropoff_date?: string
+  rental_days?: number
+  base_daily_rate?: number
+  maggiorazione_pct?: number
+  daily_rate_after_markup?: number
+  insurance_option?: string
+  insurance_daily_price?: number
+  insurance_total?: number
+  lavaggio_fee?: number
+  no_cauzione_daily?: number
+  no_cauzione_total?: number
+  unlimited_km_daily?: number
+  unlimited_km_total?: number
+  second_driver_daily?: number
+  second_driver_total?: number
+  subtotal?: number
+  sconto?: number
+  sconto_note?: string
+  total_final?: number
+  pricing_trace?: Record<string, unknown>
+  extras_detail?: Record<string, unknown>
+  customer_phone?: string
+  customer_name?: string | null
+  driver_tier?: string
+  status?: string
+  booking_id?: string | null
+  whatsapp_sent_at?: string | null
+  whatsapp_message_id?: string | null
+  created_by?: string
+  created_at?: string
+  updated_at?: string
+  expires_at?: string | null
+  events?: unknown[] | null
+  // Legacy / cross-version fields
+  daily_rate?: number
+  delivery_address?: string
+  pickup_location?: string
+  delivery_enabled?: boolean
+  pickup_enabled?: boolean
+  delivery_fee?: number
+  pickup_fee?: number
+  notes?: string
+  km_limit?: number
+  sforo_km?: number
+  second_driver?: boolean
+  fascia?: string
+  total_amount?: number
+  valid_until?: string | null
+  customer_id?: string | null
+  [key: string]: unknown
+}
+
+// ===== BACKWARDS-COMPAT HELPERS =====
+function getAmount(p: Preventivo): number {
+  return (p.total_final ?? p.total_amount ?? p.subtotal ?? 0) as number
+}
+
+function getTier(p: Preventivo): string {
+  return (p.driver_tier || p.fascia || '') as string
 }
 
 type Section = 'overview' | 'domanda' | 'conversione' | 'perdite' | 'azioni'
@@ -40,9 +78,76 @@ function formatCurrency(amount: number): string {
   return `€${amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function formatDateShort(d: string): string {
+function formatDateShort(d: string | undefined | null): string {
   if (!d) return '-'
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
+}
+
+function getDayOfWeek(dateStr: string | undefined | null): number {
+  if (!dateStr) return -1
+  const d = new Date(dateStr)
+  return d.getDay() // 0=Sun, 1=Mon...
+}
+
+function getWeekOfMonth(dateStr: string | undefined | null): number {
+  if (!dateStr) return -1
+  const d = new Date(dateStr)
+  return Math.ceil(d.getDate() / 7)
+}
+
+// ===== STATUS HELPERS =====
+function isActive(p: Preventivo): boolean {
+  return p.status === 'bozza' || p.status === 'preventivo'
+}
+function isConverted(p: Preventivo): boolean {
+  return p.status === 'accettato' || p.status === 'convertito'
+}
+function isExpired(p: Preventivo): boolean {
+  return p.status === 'scaduto'
+}
+function isRifiutato(p: Preventivo): boolean {
+  return p.status === 'rifiutato'
+}
+
+// ===== PRICE RANGE FILTER =====
+const PRICE_RANGE_OPTIONS = [
+  { label: 'Tutte le fasce', value: '' },
+  { label: '0-100€', value: '0-100', min: 0, max: 100 },
+  { label: '100-300€', value: '100-300', min: 100, max: 300 },
+  { label: '300-500€', value: '300-500', min: 300, max: 500 },
+  { label: '500-1000€', value: '500-1000', min: 500, max: 1000 },
+  { label: '1000€+', value: '1000+', min: 1000, max: Infinity },
+]
+
+const DURATION_OPTIONS = [
+  { label: 'Tutte le durate', value: '' },
+  { label: '1 giorno', value: '1g', min: 1, max: 1 },
+  { label: '2-3 giorni', value: '2-3g', min: 2, max: 3 },
+  { label: '4-7 giorni', value: '4-7g', min: 4, max: 7 },
+  { label: '7+ giorni', value: '7g+', min: 8, max: Infinity },
+]
+
+// ===== TREND COMPONENT =====
+function Trend({ current, previous, format = 'number' }: { current: number; previous: number; format?: 'number' | 'currency' | 'percent' }) {
+  if (previous === 0 && current === 0) return null
+  if (previous === 0) return <span className="text-green-400 text-xs font-semibold ml-1">Nuovo</span>
+
+  const delta = current - previous
+  const pct = Math.abs((delta / previous) * 100)
+  const isUp = delta >= 0
+  const color = isUp ? 'text-green-400' : 'text-red-400'
+  const arrow = isUp ? '↑' : '↓'
+
+  let label = ''
+  if (format === 'currency') label = formatCurrency(Math.abs(delta))
+  else if (format === 'percent') label = `${Math.abs(delta).toFixed(1)}pp`
+  else label = `${pct.toFixed(0)}%`
+
+  return (
+    <span className={`text-xs font-semibold ml-1 ${color}`}>
+      {arrow}{label}
+    </span>
+  )
 }
 
 export default function ReportPreventiviTab() {
@@ -53,12 +158,15 @@ export default function ReportPreventiviTab() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [preventivi, setPreventivi] = useState<Preventivo[]>([])
+  const [prevMonthData, setPrevMonthData] = useState<Preventivo[]>([])
   const [loaded, setLoaded] = useState(false)
   const [activeSection, setActiveSection] = useState<Section>('overview')
   // Filters
   const [filterVehicle, setFilterVehicle] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterFascia, setFilterFascia] = useState('')
+  const [filterPriceRange, setFilterPriceRange] = useState('')
+  const [filterDuration, setFilterDuration] = useState('')
 
   async function fetchReport() {
     setLoading(true)
@@ -68,15 +176,31 @@ export default function ReportPreventiviTab() {
       const startDate = new Date(year, month - 1, 1).toISOString()
       const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
 
-      const { data, error: dbError } = await supabase
-        .from('preventivi')
-        .select('*')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate)
-        .order('created_at', { ascending: false })
+      // Previous month range
+      const prevYear = month === 1 ? year - 1 : year
+      const prevMonth = month === 1 ? 12 : month - 1
+      const prevStartDate = new Date(prevYear, prevMonth - 1, 1).toISOString()
+      const prevEndDate = new Date(prevYear, prevMonth, 0, 23, 59, 59).toISOString()
+
+      const [{ data, error: dbError }, { data: prevData, error: prevDbError }] = await Promise.all([
+        supabase
+          .from('preventivi')
+          .select('*')
+          .gte('created_at', startDate)
+          .lte('created_at', endDate)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('preventivi')
+          .select('id, status, total_final, total_amount, subtotal, whatsapp_sent_at, customer_name, customer_id, created_at')
+          .gte('created_at', prevStartDate)
+          .lte('created_at', prevEndDate),
+      ])
 
       if (dbError) throw new Error(dbError.message)
+      if (prevDbError) throw new Error(prevDbError.message)
+
       setPreventivi(data || [])
+      setPrevMonthData(prevData || [])
       setLoaded(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Errore sconosciuto')
@@ -85,20 +209,46 @@ export default function ReportPreventiviTab() {
     }
   }
 
-  // Filtered data
+  // Reset loaded state when month changes
+  useEffect(() => {
+    setLoaded(false)
+    setPreventivi([])
+    setPrevMonthData([])
+  }, [selectedMonth])
+
+  // ===== FILTERED DATA =====
   const filtered = useMemo(() => {
     return preventivi.filter(p => {
       if (filterVehicle && !p.vehicle_name?.toLowerCase().includes(filterVehicle.toLowerCase())) return false
       if (filterCategory && p.vehicle_category !== filterCategory) return false
-      if (filterFascia && p.fascia !== filterFascia) return false
+      if (filterFascia && getTier(p) !== filterFascia) return false
+      if (filterPriceRange) {
+        const opt = PRICE_RANGE_OPTIONS.find(o => o.value === filterPriceRange)
+        if (opt && 'min' in opt) {
+          const amt = getAmount(p)
+          if (amt < (opt.min ?? 0) || amt >= (opt.max ?? Infinity)) return false
+        }
+      }
+      if (filterDuration) {
+        const opt = DURATION_OPTIONS.find(o => o.value === filterDuration)
+        if (opt && 'min' in opt) {
+          const days = p.rental_days || 1
+          if (days < (opt.min ?? 0) || days > (opt.max ?? Infinity)) return false
+        }
+      }
       return true
     })
-  }, [preventivi, filterVehicle, filterCategory, filterFascia])
+  }, [preventivi, filterVehicle, filterCategory, filterFascia, filterPriceRange, filterDuration])
 
-  // Status helpers
-  const isActive = (p: Preventivo) => p.status === 'bozza' || p.status === 'preventivo'
-  const isConverted = (p: Preventivo) => p.status === 'accettato' || p.status === 'convertito'
-  const isExpired = (p: Preventivo) => p.status === 'scaduto'
+  const hasActiveFilters = !!(filterVehicle || filterCategory || filterFascia || filterPriceRange || filterDuration)
+
+  function clearFilters() {
+    setFilterVehicle('')
+    setFilterCategory('')
+    setFilterFascia('')
+    setFilterPriceRange('')
+    setFilterDuration('')
+  }
 
   // ===== OVERVIEW METRICS =====
   const overview = useMemo(() => {
@@ -106,15 +256,26 @@ export default function ReportPreventiviTab() {
     const active = filtered.filter(isActive).length
     const converted = filtered.filter(isConverted).length
     const expired = filtered.filter(isExpired).length
-    const totalValue = filtered.reduce((s, p) => s + (p.total_amount || 0), 0)
-    const convertedValue = filtered.filter(isConverted).reduce((s, p) => s + (p.total_amount || 0), 0)
-    const lostValue = filtered.filter(p => !isConverted(p)).reduce((s, p) => s + (p.total_amount || 0), 0)
+    const totalValue = filtered.reduce((s, p) => s + getAmount(p), 0)
+    const convertedValue = filtered.filter(isConverted).reduce((s, p) => s + getAmount(p), 0)
+    const lostValue = filtered.filter(p => !isConverted(p)).reduce((s, p) => s + getAmount(p), 0)
     const conversionRate = total > 0 ? (converted / total) * 100 : 0
-    const withCustomer = filtered.filter(p => p.customer_id).length
+    const withCustomer = filtered.filter(p => p.customer_id || p.customer_name).length
     const withDelivery = filtered.filter(p => p.delivery_enabled).length
 
-    return { total, active, converted, expired, totalValue, convertedValue, lostValue, conversionRate, withCustomer, withDelivery }
-  }, [filtered])
+    // Previous month metrics (no filter applied — raw totals)
+    const prevTotal = prevMonthData.length
+    const prevConverted = prevMonthData.filter(isConverted).length
+    const prevConversionRate = prevTotal > 0 ? (prevConverted / prevTotal) * 100 : 0
+    const prevTotalValue = prevMonthData.reduce((s, p) => s + getAmount(p), 0)
+
+    return {
+      total, active, converted, expired,
+      totalValue, convertedValue, lostValue, conversionRate,
+      withCustomer, withDelivery,
+      prevTotal, prevConverted, prevConversionRate, prevTotalValue,
+    }
+  }, [filtered, prevMonthData])
 
   // ===== DOMANDA (DEMAND) METRICS =====
   const domanda = useMemo(() => {
@@ -124,7 +285,7 @@ export default function ReportPreventiviTab() {
       const key = p.vehicle_name || 'N/A'
       const entry = vehicleMap.get(key) || { count: 0, value: 0, converted: 0 }
       entry.count++
-      entry.value += p.total_amount || 0
+      entry.value += getAmount(p)
       if (isConverted(p)) entry.converted++
       vehicleMap.set(key, entry)
     })
@@ -138,7 +299,7 @@ export default function ReportPreventiviTab() {
       const key = p.vehicle_category || 'N/A'
       const entry = categoryMap.get(key) || { count: 0, value: 0, converted: 0 }
       entry.count++
-      entry.value += p.total_amount || 0
+      entry.value += getAmount(p)
       if (isConverted(p)) entry.converted++
       categoryMap.set(key, entry)
     })
@@ -147,7 +308,7 @@ export default function ReportPreventiviTab() {
       .sort((a, b) => b.count - a.count)
 
     // By rental duration
-    const durationBuckets = { '1g': 0, '2-3g': 0, '4-7g': 0, '7g+': 0 }
+    const durationBuckets: Record<string, number> = { '1g': 0, '2-3g': 0, '4-7g': 0, '7g+': 0 }
     filtered.forEach(p => {
       const d = p.rental_days || 1
       if (d === 1) durationBuckets['1g']++
@@ -170,11 +331,34 @@ export default function ReportPreventiviTab() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
 
-    return { topVehicles, byCategory, byDuration, topCombos }
+    // By day of week (pickup_date)
+    const DOW_LABELS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
+    const dowCounts: number[] = [0, 0, 0, 0, 0, 0, 0]
+    filtered.forEach(p => {
+      const dow = getDayOfWeek(p.pickup_date)
+      if (dow >= 0) dowCounts[dow]++
+    })
+    const byDayOfWeek = DOW_LABELS.map((label, i) => ({ label, count: dowCounts[i] }))
+
+    // By week of month (pickup_date)
+    const wom: Record<string, number> = { 'Sett 1': 0, 'Sett 2': 0, 'Sett 3': 0, 'Sett 4': 0 }
+    filtered.forEach(p => {
+      const w = getWeekOfMonth(p.pickup_date)
+      if (w >= 1 && w <= 4) wom[`Sett ${w}`]++
+    })
+    const byWeekOfMonth = Object.entries(wom).map(([label, count]) => ({ label, count }))
+
+    return { topVehicles, byCategory, byDuration, topCombos, byDayOfWeek, byWeekOfMonth }
   }, [filtered])
 
   // ===== CONVERSIONE METRICS =====
   const conversione = useMemo(() => {
+    // Funnel phases
+    const total = filtered.length
+    const sent = filtered.filter(p => p.whatsapp_sent_at != null).length
+    const withClient = filtered.filter(p => p.customer_name || p.customer_id).length
+    const converted = filtered.filter(isConverted).length
+
     // By price range
     const priceRanges = [
       { label: '0-100€', min: 0, max: 100 },
@@ -184,14 +368,14 @@ export default function ReportPreventiviTab() {
       { label: '1000€+', min: 1000, max: Infinity },
     ]
     const byPrice = priceRanges.map(r => {
-      const inRange = filtered.filter(p => (p.total_amount || 0) >= r.min && (p.total_amount || 0) < r.max)
+      const inRange = filtered.filter(p => getAmount(p) >= r.min && getAmount(p) < r.max)
       const conv = inRange.filter(isConverted).length
       return { label: r.label, total: inRange.length, converted: conv, rate: inRange.length > 0 ? (conv / inRange.length) * 100 : 0 }
     }).filter(r => r.total > 0)
 
-    // By fascia
+    // By tier (fascia)
     const byFascia = ['A', 'B'].map(f => {
-      const inFascia = filtered.filter(p => p.fascia === f)
+      const inFascia = filtered.filter(p => getTier(p) === f)
       const conv = inFascia.filter(isConverted).length
       return { fascia: f, total: inFascia.length, converted: conv, rate: inFascia.length > 0 ? (conv / inFascia.length) * 100 : 0 }
     }).filter(r => r.total > 0)
@@ -209,7 +393,7 @@ export default function ReportPreventiviTab() {
       .map(([option, data]) => ({ option, ...data, rate: data.total > 0 ? (data.converted / data.total) * 100 : 0 }))
       .sort((a, b) => b.total - a.total)
 
-    return { byPrice, byFascia, byInsurance }
+    return { funnel: { total, sent, withClient, converted }, byPrice, byFascia, byInsurance }
   }, [filtered])
 
   // ===== PERDITE (LOSSES) =====
@@ -222,7 +406,7 @@ export default function ReportPreventiviTab() {
       const key = p.vehicle_name || 'N/A'
       const entry = lostByVehicle.get(key) || { count: 0, value: 0 }
       entry.count++
-      entry.value += p.total_amount || 0
+      entry.value += getAmount(p)
       lostByVehicle.set(key, entry)
     })
     const topLost = Array.from(lostByVehicle.entries())
@@ -233,32 +417,102 @@ export default function ReportPreventiviTab() {
     // Status breakdown of non-converted
     const stillActive = nonConverted.filter(isActive).length
     const expired = nonConverted.filter(isExpired).length
-    const noCustomer = nonConverted.filter(p => !p.customer_id).length
-    const withCustomerNotConverted = nonConverted.filter(p => p.customer_id).length
+    const noCustomer = nonConverted.filter(p => !p.customer_id && !p.customer_name).length
+    const withCustomerNotConverted = nonConverted.filter(p => p.customer_id || p.customer_name).length
 
     // Top non-converted preventivi by value
-    const topByValue = nonConverted
-      .sort((a, b) => (b.total_amount || 0) - (a.total_amount || 0))
+    const topByValue = [...nonConverted]
+      .sort((a, b) => getAmount(b) - getAmount(a))
       .slice(0, 15)
 
-    return { nonConverted, topLost, stillActive, expired, noCustomer, withCustomerNotConverted, topByValue }
+    // Periodo passato vs attivo
+    const nowTs = Date.now()
+    const periodoPast = nonConverted.filter(p => p.dropoff_date && new Date(p.dropoff_date).getTime() < nowTs).length
+    const periodoActive = nonConverted.filter(p => p.dropoff_date && new Date(p.dropoff_date).getTime() >= nowTs).length
+    const periodoNoDate = nonConverted.length - periodoPast - periodoActive
+
+    // Average and stddev for amount
+    const allAmounts = filtered.map(getAmount)
+    const avg = allAmounts.length > 0 ? allAmounts.reduce((s, v) => s + v, 0) / allAmounts.length : 0
+    const variance = allAmounts.length > 0 ? allAmounts.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / allAmounts.length : 0
+    const stddev = Math.sqrt(variance)
+
+    // Motivo stimato abbandono heuristics
+    const motivoCounts: Record<string, number> = {
+      'Preventivo mai inviato al cliente': 0,
+      'Cliente non ha risposto': 0,
+      'Rifiutato dal cliente': 0,
+      'Prezzo superiore alla media': 0,
+      'Nessun follow-up possibile': 0,
+    }
+    nonConverted.forEach(p => {
+      if (p.status === 'bozza' && !p.whatsapp_sent_at) {
+        motivoCounts['Preventivo mai inviato al cliente']++
+      } else if (isExpired(p) && p.whatsapp_sent_at) {
+        motivoCounts['Cliente non ha risposto']++
+      } else if (isRifiutato(p)) {
+        motivoCounts['Rifiutato dal cliente']++
+      } else if (getAmount(p) > avg + stddev && getAmount(p) > 0) {
+        motivoCounts['Prezzo superiore alla media']++
+      } else if (!p.customer_name && !p.customer_id && p.status !== 'bozza') {
+        motivoCounts['Nessun follow-up possibile']++
+      }
+    })
+    const motivoList = Object.entries(motivoCounts)
+      .filter(([, count]) => count > 0)
+      .sort(([, a], [, b]) => b - a)
+
+    return {
+      nonConverted, topLost, stillActive, expired, noCustomer,
+      withCustomerNotConverted, topByValue,
+      periodoPast, periodoActive, periodoNoDate,
+      motivoList,
+    }
   }, [filtered])
 
   // ===== AZIONI SUGGERITE =====
   const azioni = useMemo(() => {
-    const suggestions: { icon: string; title: string; detail: string; priority: 'alta' | 'media' | 'bassa' }[] = []
+    const suggestions: { icon: string; title: string; detail: string; metric: string; priority: 'alta' | 'media' | 'bassa' }[] = []
 
     // High demand low conversion vehicles
     domanda.topVehicles.forEach(v => {
       if (v.count >= 3 && v.conversionRate < 20) {
         suggestions.push({
           icon: '⚠️',
-          title: `${v.name}: alta richiesta, bassa conversione (${v.conversionRate.toFixed(0)}%)`,
+          title: `${v.name}: alta richiesta, bassa conversione`,
           detail: `${v.count} preventivi, solo ${v.converted} convertiti. Verifica pricing o condizioni.`,
-          priority: 'alta'
+          metric: `${v.conversionRate.toFixed(0)}% conv.`,
+          priority: 'alta',
         })
       }
     })
+
+    // Funnel drop: inviato → convertito
+    const { funnel } = conversione
+    if (funnel.sent >= 3) {
+      const sentToConvRate = (funnel.converted / funnel.sent) * 100
+      if (sentToConvRate < 30) {
+        suggestions.push({
+          icon: '📉',
+          title: `Solo ${sentToConvRate.toFixed(0)}% dei preventivi inviati viene convertito`,
+          detail: `${funnel.sent} inviati, ${funnel.converted} convertiti. Valuta follow-up o promozioni.`,
+          metric: `${funnel.converted}/${funnel.sent} inviati`,
+          priority: 'alta',
+        })
+      }
+    }
+
+    // Many never-sent preventivi
+    const neverSent = filtered.filter(p => p.status === 'bozza' && !p.whatsapp_sent_at).length
+    if (neverSent >= 3) {
+      suggestions.push({
+        icon: '📤',
+        title: `${neverSent} preventivi in bozza mai inviati al cliente`,
+        detail: `Verifica se sono da completare o eliminare. I preventivi non inviati non possono convertirsi.`,
+        metric: `${neverSent} bozze`,
+        priority: 'alta',
+      })
+    }
 
     // High delivery drop-off
     const deliveryPrev = filtered.filter(p => p.delivery_enabled)
@@ -270,9 +524,10 @@ export default function ReportPreventiviTab() {
       if (deliveryRate < noDeliveryRate - 10) {
         suggestions.push({
           icon: '🚗',
-          title: `Preventivi con domicilio convertono meno (${deliveryRate.toFixed(0)}% vs ${noDeliveryRate.toFixed(0)}%)`,
+          title: `Preventivi con consegna domicilio convertono meno`,
           detail: `${deliveryPrev.length} preventivi con consegna domicilio. Rivedere costo consegna.`,
-          priority: 'media'
+          metric: `${deliveryRate.toFixed(0)}% vs ${noDeliveryRate.toFixed(0)}%`,
+          priority: 'media',
         })
       }
     }
@@ -281,9 +536,10 @@ export default function ReportPreventiviTab() {
     if (overview.lostValue > 5000) {
       suggestions.push({
         icon: '💰',
-        title: `${formatCurrency(overview.lostValue)} di valore potenziale perso`,
+        title: `Valore potenziale perso elevato`,
         detail: `${perdite.nonConverted.length} preventivi non convertiti. ${perdite.noCustomer} senza cliente assegnato.`,
-        priority: 'alta'
+        metric: formatCurrency(overview.lostValue),
+        priority: 'alta',
       })
     }
 
@@ -293,7 +549,8 @@ export default function ReportPreventiviTab() {
         icon: '👤',
         title: `${perdite.noCustomer} preventivi senza cliente assegnato`,
         detail: `Assegna un cliente per poter inviare il preventivo e aumentare le conversioni.`,
-        priority: 'media'
+        metric: `${perdite.noCustomer} senza cliente`,
+        priority: 'media',
       })
     }
 
@@ -302,9 +559,22 @@ export default function ReportPreventiviTab() {
     if (highPriceBucket && highPriceBucket.total >= 3 && highPriceBucket.rate < 15) {
       suggestions.push({
         icon: '📊',
-        title: `Fascia prezzo ${highPriceBucket.label}: conversione bassa (${highPriceBucket.rate.toFixed(0)}%)`,
+        title: `Fascia prezzo ${highPriceBucket.label}: conversione bassa`,
         detail: `${highPriceBucket.total} preventivi, solo ${highPriceBucket.converted} convertiti. Valuta sconti o promozioni.`,
-        priority: 'media'
+        metric: `${highPriceBucket.rate.toFixed(0)}% conv.`,
+        priority: 'media',
+      })
+    }
+
+    // High demand period
+    const maxDow = domanda.byDayOfWeek.reduce((a, b) => (b.count > a.count ? b : a), { label: '', count: 0 })
+    if (maxDow.count >= 3) {
+      suggestions.push({
+        icon: '📅',
+        title: `Alta richiesta il ${maxDow.label}`,
+        detail: `Il giorno con più richieste è ${maxDow.label} (${maxDow.count} preventivi). Assicura disponibilità veicoli.`,
+        metric: `${maxDow.count} richieste`,
+        priority: 'bassa',
       })
     }
 
@@ -314,12 +584,13 @@ export default function ReportPreventiviTab() {
         icon: '⏳',
         title: `${perdite.expired} preventivi scaduti`,
         detail: `Valuta di estendere la validità o contattare i clienti prima della scadenza.`,
-        priority: 'bassa'
+        metric: `${perdite.expired} scaduti`,
+        priority: 'bassa',
       })
     }
 
     // Sort by priority
-    const priorityOrder = { alta: 0, media: 1, bassa: 2 }
+    const priorityOrder: Record<string, number> = { alta: 0, media: 1, bassa: 2 }
     suggestions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
 
     return suggestions
@@ -333,7 +604,7 @@ export default function ReportPreventiviTab() {
     { key: 'azioni', label: 'Azioni Suggerite' },
   ]
 
-  const categories = [...new Set(preventivi.map(p => p.vehicle_category).filter(Boolean))]
+  const categories = [...new Set(preventivi.map(p => p.vehicle_category).filter(Boolean))] as string[]
 
   return (
     <div className="space-y-6">
@@ -414,9 +685,23 @@ export default function ReportPreventiviTab() {
               <option value="A">Fascia A</option>
               <option value="B">Fascia B</option>
             </select>
-            {(filterVehicle || filterCategory || filterFascia) && (
+            <select
+              value={filterPriceRange}
+              onChange={(e) => setFilterPriceRange(e.target.value)}
+              className="px-3 py-1.5 text-sm bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+            >
+              {PRICE_RANGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <select
+              value={filterDuration}
+              onChange={(e) => setFilterDuration(e.target.value)}
+              className="px-3 py-1.5 text-sm bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+            >
+              {DURATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {hasActiveFilters && (
               <button
-                onClick={() => { setFilterVehicle(''); setFilterCategory(''); setFilterFascia('') }}
+                onClick={clearFilters}
                 className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300"
               >
                 Rimuovi filtri
@@ -428,15 +713,34 @@ export default function ReportPreventiviTab() {
           {activeSection === 'overview' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <StatCard label="Preventivi Totali" value={overview.total} />
+                <StatCard
+                  label="Preventivi Totali"
+                  value={overview.total}
+                  trend={<Trend current={overview.total} previous={overview.prevTotal} />}
+                />
                 <StatCard label="Attivi" value={overview.active} color="text-blue-400" />
-                <StatCard label="Convertiti" value={overview.converted} color="text-green-400" />
+                <StatCard
+                  label="Convertiti"
+                  value={overview.converted}
+                  color="text-green-400"
+                  trend={<Trend current={overview.converted} previous={overview.prevConverted} />}
+                />
                 <StatCard label="Scaduti" value={overview.expired} color="text-red-400" />
-                <StatCard label="Conversion Rate" value={`${overview.conversionRate.toFixed(1)}%`} color="text-dr7-gold" />
+                <StatCard
+                  label="Conversion Rate"
+                  value={`${overview.conversionRate.toFixed(1)}%`}
+                  color="text-dr7-gold"
+                  trend={<Trend current={overview.conversionRate} previous={overview.prevConversionRate} format="percent" />}
+                />
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <StatCard label="Valore Totale" value={formatCurrency(overview.totalValue)} color="text-theme-text-primary" />
+                <StatCard
+                  label="Valore Totale"
+                  value={formatCurrency(overview.totalValue)}
+                  color="text-theme-text-primary"
+                  trend={<Trend current={overview.totalValue} previous={overview.prevTotalValue} format="currency" />}
+                />
                 <StatCard label="Valore Convertito" value={formatCurrency(overview.convertedValue)} color="text-green-400" />
                 <StatCard label="Valore Potenziale Perso" value={formatCurrency(overview.lostValue)} color="text-red-400" highlight />
               </div>
@@ -451,7 +755,6 @@ export default function ReportPreventiviTab() {
           {/* ===== DOMANDA ===== */}
           {activeSection === 'domanda' && (
             <div className="space-y-6">
-              {/* Top Vehicles */}
               <ReportTable
                 title="Top Veicoli per Preventivi"
                 headers={['Veicolo', 'Richieste', 'Valore', 'Conv.', 'Rate']}
@@ -464,7 +767,6 @@ export default function ReportPreventiviTab() {
                 ])}
               />
 
-              {/* By Category */}
               <ReportTable
                 title="Per Categoria"
                 headers={['Categoria', 'Richieste', 'Valore', 'Conv.', 'Rate']}
@@ -477,14 +779,26 @@ export default function ReportPreventiviTab() {
                 ])}
               />
 
-              {/* By Duration */}
               <ReportTable
                 title="Per Durata Noleggio"
                 headers={['Durata', 'Richieste']}
                 rows={domanda.byDuration.filter(d => d.count > 0).map(d => [d.range, String(d.count)])}
               />
 
-              {/* Top Combos */}
+              {/* Top Periodi Richiesti — Day of week */}
+              <ReportTable
+                title="Top Periodi Richiesti — Giorno della Settimana (pickup)"
+                headers={['Giorno', 'Richieste']}
+                rows={domanda.byDayOfWeek.filter(d => d.count > 0).map(d => [d.label, String(d.count)])}
+              />
+
+              {/* Top Periodi Richiesti — Week of month */}
+              <ReportTable
+                title="Top Periodi Richiesti — Settimana del Mese (pickup)"
+                headers={['Settimana', 'Richieste']}
+                rows={domanda.byWeekOfMonth.filter(d => d.count > 0).map(d => [d.label, String(d.count)])}
+              />
+
               {domanda.topCombos.length > 0 && (
                 <ReportTable
                   title="Top Combinazioni Richieste"
@@ -498,7 +812,37 @@ export default function ReportPreventiviTab() {
           {/* ===== CONVERSIONE ===== */}
           {activeSection === 'conversione' && (
             <div className="space-y-6">
-              {/* Conversion by Vehicle */}
+              {/* Funnel visualization */}
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+                <h3 className="text-sm font-semibold text-theme-text-primary mb-4">Funnel di Conversione</h3>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Creato', count: conversione.funnel.total, color: 'from-dr7-gold to-[#2a8a7e]' },
+                    { label: 'Inviato (WhatsApp)', count: conversione.funnel.sent, color: 'from-[#2a8a7e] to-[#1f6b61]' },
+                    { label: 'Con Cliente', count: conversione.funnel.withClient, color: 'from-[#1f6b61] to-[#155249]' },
+                    { label: 'Convertito', count: conversione.funnel.converted, color: 'from-green-600 to-green-800' },
+                  ].map((phase, i) => {
+                    const pct = conversione.funnel.total > 0
+                      ? Math.round((phase.count / conversione.funnel.total) * 100)
+                      : 0
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-28 text-right text-xs text-theme-text-muted shrink-0">{phase.label}</div>
+                        <div className="flex-1 bg-theme-bg-primary/50 rounded-full h-7 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full bg-gradient-to-r ${phase.color} flex items-center justify-end pr-2 transition-all duration-500`}
+                            style={{ width: `${Math.max(pct, 2)}%` }}
+                          >
+                            <span className="text-white text-xs font-bold whitespace-nowrap">{pct}%</span>
+                          </div>
+                        </div>
+                        <div className="w-10 text-xs text-theme-text-muted shrink-0">{phase.count}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
               <ReportTable
                 title="Conversione per Veicolo"
                 headers={['Veicolo', 'Richieste', 'Convertiti', 'Rate']}
@@ -511,7 +855,6 @@ export default function ReportPreventiviTab() {
                 highlightLowRate
               />
 
-              {/* Conversion by Price */}
               <ReportTable
                 title="Conversione per Fascia Prezzo"
                 headers={['Fascia', 'Totale', 'Convertiti', 'Rate']}
@@ -524,7 +867,6 @@ export default function ReportPreventiviTab() {
                 highlightLowRate
               />
 
-              {/* Conversion by Fascia */}
               {conversione.byFascia.length > 0 && (
                 <ReportTable
                   title="Conversione per Fascia Cliente"
@@ -538,7 +880,6 @@ export default function ReportPreventiviTab() {
                 />
               )}
 
-              {/* Conversion by Insurance */}
               <ReportTable
                 title="Conversione per Assicurazione"
                 headers={['Assicurazione', 'Totale', 'Convertiti', 'Rate']}
@@ -561,6 +902,57 @@ export default function ReportPreventiviTab() {
                 <StatCard label="Ancora Attivi" value={perdite.stillActive} color="text-blue-400" />
                 <StatCard label="Scaduti" value={perdite.expired} color="text-orange-400" />
                 <StatCard label="Senza Cliente" value={perdite.noCustomer} color="text-purple-400" />
+              </div>
+
+              {/* Motivo Stimato Abbandono */}
+              {perdite.motivoList.length > 0 && (
+                <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+                  <h3 className="text-sm font-semibold text-theme-text-primary mb-4">Motivo Stimato Abbandono</h3>
+                  <div className="space-y-3">
+                    {(() => {
+                      const maxCount = Math.max(...perdite.motivoList.map(([, c]) => c), 1)
+                      return perdite.motivoList.map(([motivo, count]) => {
+                        const pct = Math.round((count / maxCount) * 100)
+                        return (
+                          <div key={motivo} className="flex items-center gap-3">
+                            <div className="w-52 text-right text-xs text-theme-text-muted shrink-0 hidden md:block">{motivo}</div>
+                            <div className="flex-1">
+                              <p className="text-xs text-theme-text-muted mb-1 md:hidden">{motivo}</p>
+                              <div className="bg-theme-bg-primary/50 rounded-full h-5 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-red-600 to-red-800 flex items-center justify-end pr-2"
+                                  style={{ width: `${Math.max(pct, 4)}%` }}
+                                >
+                                  <span className="text-white text-[10px] font-bold">{count}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="w-8 text-xs text-theme-text-muted shrink-0">{count}</div>
+                          </div>
+                        )
+                      })
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* Stato Attuale Non-Convertiti — periodo */}
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+                <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Stato Periodo Non-Convertiti</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg bg-theme-bg-tertiary/40 p-3 text-center">
+                    <p className="text-2xl font-bold text-orange-400">{perdite.periodoPast}</p>
+                    <p className="text-xs text-theme-text-muted mt-1">Periodo passato</p>
+                  </div>
+                  <div className="rounded-lg bg-theme-bg-tertiary/40 p-3 text-center">
+                    <p className="text-2xl font-bold text-blue-400">{perdite.periodoActive}</p>
+                    <p className="text-xs text-theme-text-muted mt-1">Ancora attivo</p>
+                  </div>
+                  <div className="rounded-lg bg-theme-bg-tertiary/40 p-3 text-center">
+                    <p className="text-2xl font-bold text-gray-400">{perdite.periodoNoDate}</p>
+                    <p className="text-xs text-theme-text-muted mt-1">Senza data</p>
+                  </div>
+                </div>
               </div>
 
               {/* Top lost by vehicle */}
@@ -594,14 +986,24 @@ export default function ReportPreventiviTab() {
                       {perdite.topByValue.map(p => (
                         <tr key={p.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30">
                           <td className="px-4 py-3 font-medium text-theme-text-primary">{p.vehicle_name}</td>
-                          <td className="px-4 py-3 text-theme-text-muted">{formatDateShort(p.pickup_date)} → {formatDateShort(p.dropoff_date)} ({p.rental_days}g)</td>
-                          <td className="px-4 py-3 text-theme-text-muted">{p.customer_name || <span className="text-purple-400 text-xs">Non assegnato</span>}</td>
+                          <td className="px-4 py-3 text-theme-text-muted">
+                            {formatDateShort(p.pickup_date)} → {formatDateShort(p.dropoff_date)}
+                            {p.rental_days ? ` (${p.rental_days}g)` : ''}
+                          </td>
+                          <td className="px-4 py-3 text-theme-text-muted">
+                            {p.customer_name || <span className="text-purple-400 text-xs">Non assegnato</span>}
+                          </td>
                           <td className="text-center px-4 py-3">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isActive(p) ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
-                              {isActive(p) ? 'Attivo' : 'Scaduto'}
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              isActive(p) ? 'bg-blue-500/20 text-blue-400' :
+                              isExpired(p) ? 'bg-orange-500/20 text-orange-400' :
+                              isRifiutato(p) ? 'bg-red-500/20 text-red-400' :
+                              'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {p.status || '-'}
                             </span>
                           </td>
-                          <td className="text-right px-4 py-3 font-semibold text-red-400">{formatCurrency(p.total_amount)}</td>
+                          <td className="text-right px-4 py-3 font-semibold text-red-400">{formatCurrency(getAmount(p))}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -617,7 +1019,7 @@ export default function ReportPreventiviTab() {
                           <p className="text-xs text-theme-text-muted">{formatDateShort(p.pickup_date)} → {formatDateShort(p.dropoff_date)}</p>
                           <p className="text-xs text-theme-text-muted">{p.customer_name || 'Non assegnato'}</p>
                         </div>
-                        <p className="font-bold text-red-400">{formatCurrency(p.total_amount)}</p>
+                        <p className="font-bold text-red-400">{formatCurrency(getAmount(p))}</p>
                       </div>
                     </div>
                   ))}
@@ -643,13 +1045,16 @@ export default function ReportPreventiviTab() {
                     <div className="flex items-start gap-3">
                       <span className="text-xl">{a.icon}</span>
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           <h4 className="font-semibold text-theme-text-primary text-sm">{a.title}</h4>
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                             a.priority === 'alta' ? 'bg-red-500/20 text-red-400' :
                             a.priority === 'media' ? 'bg-orange-500/20 text-orange-400' :
                             'bg-gray-500/20 text-gray-400'
                           }`}>{a.priority}</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-theme-bg-tertiary text-dr7-gold border border-dr7-gold/30">
+                            {a.metric}
+                          </span>
                         </div>
                         <p className="text-sm text-theme-text-muted">{a.detail}</p>
                       </div>
@@ -685,11 +1090,26 @@ export default function ReportPreventiviTab() {
 
 // ===== REUSABLE COMPONENTS =====
 
-function StatCard({ label, value, color, highlight }: { label: string; value: string | number; color?: string; highlight?: boolean }) {
+function StatCard({
+  label,
+  value,
+  color,
+  highlight,
+  trend,
+}: {
+  label: string
+  value: string | number
+  color?: string
+  highlight?: boolean
+  trend?: React.ReactNode
+}) {
   return (
     <div className={`rounded-xl border p-4 ${highlight ? 'border-red-500/40 bg-red-500/5' : 'border-theme-border bg-theme-bg-secondary/50'}`}>
       <p className="text-xs text-theme-text-muted">{label}</p>
-      <p className={`text-2xl font-bold ${color || 'text-theme-text-primary'}`}>{value}</p>
+      <p className={`text-2xl font-bold ${color || 'text-theme-text-primary'}`}>
+        {value}
+        {trend}
+      </p>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import Button from './Button'
 import Select from './Select'
 import CustomerAutocomplete from './CustomerAutocomplete'
@@ -134,6 +135,7 @@ export default function ConvertPreventivoModal({ isOpen, preventivo, customers, 
         updated_at: new Date().toISOString(),
       }).eq('id', preventivo.id)
 
+      appendPreventivoEvent(preventivo.id, 'preventivo_convertito', { detail: booking.id })
       toast.success(`Preventivo convertito in prenotazione!`)
       onConverted()
     } catch (err: any) {
