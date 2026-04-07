@@ -650,7 +650,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (data.enabled && data.finalTotalEur) {
           setRevenueSuggestion(data)
           // AUTO_APPLY: automatically set the total amount (rental + insurance + delivery + lavaggio + contanti)
-          if (data.mode === 'auto_apply') {
+          if (data.mode === 'auto_apply' && !editingId) {
             setFormData(prev => {
               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
               const activeTier = customerTier?.tier
@@ -700,7 +700,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // Recalculate total when insurance, delivery fees, or payment method change
   useEffect(() => {
-    if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id) {
+    if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id && !editingId) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       const activeTier = customerTier?.tier || 'TIER_1'
       const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay) : []
