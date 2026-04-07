@@ -561,7 +561,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         .from('bookings')
         .select('*')
         .eq('service_type', 'car_wash')
-        .neq('status', 'cancelled')
+        .not('status', 'in', '(cancelled,annullata,expired)')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
 
@@ -1322,7 +1322,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         .from('bookings')
         .select('id, customer_name, appointment_date, appointment_time, service_name, booking_details')
         .eq('service_type', 'car_wash')
-        .neq('status', 'cancelled')
+        .not('status', 'in', '(cancelled,annullata,expired)')
         .gte('appointment_date', formData.appointment_date)
         .lte('appointment_date', `${formData.appointment_date}T23:59:59`)
 
