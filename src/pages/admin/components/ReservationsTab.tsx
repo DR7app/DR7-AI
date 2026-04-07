@@ -2545,15 +2545,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     try {
       // Build new dropoff datetime with explicit Rome timezone offset
       function getRomeOffsetForDate(dateString: string): string {
-        // Use noon to avoid DST boundary issues
-        const date = new Date(`${dateString}T12:00:00`)
-        const formatter = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'Europe/Rome',
-          timeZoneName: 'short'
-        })
-        const parts = formatter.formatToParts(date)
-        const tzPart = parts.find(p => p.type === 'timeZoneName')
-        return tzPart?.value === 'CEST' ? '+02:00' : '+01:00'
+        // Calculate actual UTC offset for Europe/Rome on the given date
+        const date = new Date(`${dateString}T12:00:00Z`)
+        const romeStr = date.toLocaleString('en-US', { timeZone: 'Europe/Rome', hour: 'numeric', hour12: false })
+        const romeHour = parseInt(romeStr.split(',').pop()?.trim() || '12')
+        const utcHour = date.getUTCHours()
+        const diff = romeHour - utcHour
+        return diff === 2 ? '+02:00' : '+01:00'
       }
       const dropoffOffset = getRomeOffsetForDate(extendData.new_return_date)
       const newDropoffDateTime = new Date(`${extendData.new_return_date}T${extendData.new_return_time}:00${dropoffOffset}`)
