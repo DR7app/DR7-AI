@@ -355,6 +355,31 @@ const handler: Handler = async (event) => {
           vars.time = ad.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
         }
 
+        // Cauzione (deposit) for template
+        const depAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0);
+        const depOption = booking.booking_details?.depositOption;
+        const depStatus = booking.booking_details?.deposit_status;
+        if (depOption === 'no_deposit') {
+          const surcharge = Number(booking.booking_details?.noDepositSurcharge ?? 0);
+          vars.deposit = `Senza cauzione (+30% = €${surcharge.toFixed(2)})`;
+        } else if (depAmount > 0) {
+          const statusLbl = depStatus === 'incassata' ? 'Pagata' : 'Da saldare';
+          vars.deposit = `€${depAmount.toFixed(2)} - ${statusLbl}`;
+        } else {
+          vars.deposit = '€0';
+        }
+
+        // KM info for template
+        const tplUnlimitedKm = booking.booking_details?.unlimited_km;
+        const tplKmLimit = booking.booking_details?.km_limit;
+        if (tplUnlimitedKm || tplKmLimit === 'Illimitati') {
+          vars.km_info = 'Illimitati';
+        } else if (tplKmLimit && tplKmLimit !== '0') {
+          vars.km_info = `${tplKmLimit} km`;
+        } else {
+          vars.km_info = 'Standard';
+        }
+
         // Replace all {variable} placeholders
         for (const [k, v] of Object.entries(vars)) {
           finalMessage = finalMessage.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '');
