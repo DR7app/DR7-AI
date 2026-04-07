@@ -50,6 +50,78 @@ export const handler: Handler = async (event) => {
 
         console.log('[save-customer] Saving customer:', customerId ? 'UPDATE' : 'INSERT');
 
+        // ===== DEDUP GUARD: Before any INSERT, check if customer already exists =====
+        // This prevents duplicate customers when the caller doesn't provide a customerId
+        if (!customerId) {
+            let existingId: string | null = null;
+
+            // 1. Check by codice_fiscale (strongest identifier for persona_fisica)
+            if (!existingId && customerData.codice_fiscale?.trim()) {
+                const { data } = await supabase
+                    .from('customers_extended')
+                    .select('id')
+                    .eq('codice_fiscale', customerData.codice_fiscale.trim().toUpperCase())
+                    .maybeSingle();
+                if (data) existingId = data.id;
+            }
+
+            // 2. Check by partita_iva (strongest identifier for azienda)
+            if (!existingId && customerData.partita_iva?.trim()) {
+                const { data } = await supabase
+                    .from('customers_extended')
+                    .select('id')
+                    .eq('partita_iva', customerData.partita_iva.trim())
+                    .maybeSingle();
+                if (data) existingId = data.id;
+            }
+
+            // 3. Check by email
+            if (!existingId && customerData.email?.trim()) {
+                const { data } = await supabase
+                    .from('customers_extended')
+                    .select('id')
+                    .ilike('email', customerData.email.trim())
+                    .maybeSingle();
+                if (data) existingId = data.id;
+            }
+
+            // 4. Check by telefono (normalized)
+            if (!existingId && customerData.telefono?.trim()) {
+                const { data } = await supabase
+                    .from('customers_extended')
+                    .select('id')
+                    .eq('telefono', customerData.telefono.trim())
+                    .maybeSingle();
+                if (data) existingId = data.id;
+            }
+
+            if (existingId) {
+                console.log('[save-customer] DEDUP: Found existing customer', existingId, '— switching to UPDATE mode');
+                // Redirect to UPDATE path instead of creating a duplicate
+                const { data, error } = await supabase
+                    .from('customers_extended')
+                    .update(customerData)
+                    .eq('id', existingId)
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('[save-customer] DEDUP update error:', error);
+                    throw error;
+                }
+
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: JSON.stringify({
+                        success: true,
+                        customer: data,
+                        deduplicated: true
+                    })
+                };
+            }
+        }
+
         let result;
 
         if (customerId) {
@@ -119,6 +191,60 @@ export const handler: Handler = async (event) => {
                 .single();
 
             if (error) {
+                // Handle unique constraint violation (23505) — fallback to find & update
+                if (error.code === '23505') {
+                    console.log('[save-customer] Unique constraint violation — finding existing customer to update');
+                    let fallbackId: string | null = null;
+
+                    if (customerData.email) {
+                        const { data: found } = await supabase
+                            .from('customers_extended')
+                            .select('id')
+                            .ilike('email', customerData.email.trim())
+                            .maybeSingle();
+                        if (found) fallbackId = found.id;
+                    }
+                    if (!fallbackId && customerData.telefono) {
+                        const { data: found } = await supabase
+                            .from('customers_extended')
+                            .select('id')
+                            .eq('telefono', customerData.telefono.trim())
+                            .maybeSingle();
+                        if (found) fallbackId = found.id;
+                    }
+                    if (!fallbackId && customerData.codice_fiscale) {
+                        const { data: found } = await supabase
+                            .from('customers_extended')
+                            .select('id')
+                            .eq('codice_fiscale', customerData.codice_fiscale.trim().toUpperCase())
+                            .maybeSingle();
+                        if (found) fallbackId = found.id;
+                    }
+
+                    if (fallbackId) {
+                        const { data: updated, error: updateErr } = await supabase
+                            .from('customers_extended')
+                            .update(customerData)
+                            .eq('id', fallbackId)
+                            .select()
+                            .single();
+
+                        if (updateErr) throw updateErr;
+                        result = updated;
+                        console.log('[save-customer] Unique violation resolved — updated existing:', fallbackId);
+
+                        return {
+                            statusCode: 200,
+                            headers,
+                            body: JSON.stringify({
+                                success: true,
+                                customer: result,
+                                deduplicated: true
+                            })
+                        };
+                    }
+                }
+
                 console.error('[save-customer] Insert error:', error);
                 throw error;
             }

@@ -555,8 +555,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         resultData = createResult.customer
         createdClientId = createResult.customer.id
+        const wasDeduplicated = createResult.deduplicated === true
 
-        // Also insert into basic 'customers' table for backward compatibility
+        if (wasDeduplicated) {
+          logger.log('[NewClientModal] DEDUP: Backend found existing customer, updated instead of creating. ID:', createdClientId)
+        }
+
+        // Also upsert into basic 'customers' table for backward compatibility
         try {
           const basicData = {
             id: createdClientId, // Use the same ID
@@ -567,20 +572,28 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             phone: customerData.telefono,
             driver_license_number: customerData.metadata?.patente?.numero || null,
             tipo_cliente: customerData.tipo_cliente,
-            created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }
 
-          const { error: basicError } = await supabase
-            .from('customers')
-            .insert([basicData])
-
-          if (basicError) logger.warn('Could not insert into basic customers table (non-fatal):', basicError)
+          if (wasDeduplicated) {
+            // Customer already exists - update
+            const { error: basicError } = await supabase
+              .from('customers')
+              .update(basicData)
+              .eq('id', createdClientId)
+            if (basicError) logger.warn('Could not update basic customers table (non-fatal):', basicError)
+          } else {
+            // New customer - insert
+            const { error: basicError } = await supabase
+              .from('customers')
+              .insert([{ ...basicData, created_at: new Date().toISOString() }])
+            if (basicError) logger.warn('Could not insert into basic customers table (non-fatal):', basicError)
+          }
         } catch (legacyError) {
           logger.warn('Silent error saving to legacy customers table:', legacyError)
         }
 
-        toast.success('Cliente creato con successo!')
+        toast.success(wasDeduplicated ? 'Cliente esistente aggiornato!' : 'Cliente creato con successo!')
       }
 
       // Upload documents if any were selected

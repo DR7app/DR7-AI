@@ -469,16 +469,77 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         result = updatedClient
         toast.success('Cliente aggiornato con successo!')
       } else {
-        // INSERT new customer
-        const { data: newClient, error } = await supabase
-          .from('customers_extended')
-          .insert([customerData])
-          .select()
-          .single()
+        // ===== DEDUP GUARD: Before INSERT, check if customer already exists =====
+        let existingCustomerId: string | null = null
 
-        if (error) throw error
-        result = newClient
-        toast.success('Cliente creato con successo!')
+        // 1. Check by codice_fiscale (persona_fisica)
+        if (!existingCustomerId && customerData.codice_fiscale?.trim()) {
+          const { data } = await supabase
+            .from('customers_extended')
+            .select('id')
+            .eq('codice_fiscale', customerData.codice_fiscale.trim().toUpperCase())
+            .maybeSingle()
+          if (data) existingCustomerId = data.id
+        }
+
+        // 2. Check by partita_iva (azienda)
+        if (!existingCustomerId && customerData.partita_iva?.trim()) {
+          const { data } = await supabase
+            .from('customers_extended')
+            .select('id')
+            .eq('partita_iva', customerData.partita_iva.trim())
+            .maybeSingle()
+          if (data) existingCustomerId = data.id
+        }
+
+        // 3. Check by email
+        if (!existingCustomerId && customerData.email?.trim()) {
+          const { data } = await supabase
+            .from('customers_extended')
+            .select('id')
+            .ilike('email', customerData.email.trim())
+            .maybeSingle()
+          if (data) existingCustomerId = data.id
+        }
+
+        // 4. Check by telefono
+        if (!existingCustomerId && customerData.telefono?.trim()) {
+          let normPhone = customerData.telefono.replace(/[\s\-+()]/g, '')
+          if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
+          if (normPhone.length === 10) normPhone = '39' + normPhone
+          const { data } = await supabase
+            .from('customers_extended')
+            .select('id')
+            .eq('telefono', normPhone)
+            .maybeSingle()
+          if (data) existingCustomerId = data.id
+        }
+
+        if (existingCustomerId) {
+          // Customer already exists — UPDATE instead of creating a duplicate
+          logger.log('[NewClientModal] DEDUP: Found existing customer', existingCustomerId, '— updating instead of creating')
+          const { data: updatedClient, error } = await supabase
+            .from('customers_extended')
+            .update(customerData)
+            .eq('id', existingCustomerId)
+            .select()
+            .single()
+
+          if (error) throw error
+          result = updatedClient
+          toast.success('Cliente esistente aggiornato!')
+        } else {
+          // INSERT new customer — no existing match found
+          const { data: newClient, error } = await supabase
+            .from('customers_extended')
+            .insert([customerData])
+            .select()
+            .single()
+
+          if (error) throw error
+          result = newClient
+          toast.success('Cliente creato con successo!')
+        }
       }
 
       if (onClientCreated && result) {
