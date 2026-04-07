@@ -59,6 +59,7 @@ interface Preventivo {
   booking_id: string | null
   whatsapp_sent_at: string | null
   whatsapp_message_id: string | null
+  source: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -703,7 +704,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                 {filtered.map(p => (
                   <tr key={p.id} className="border-b border-theme-border/50 hover:bg-theme-bg-hover/30">
                     <td className="py-2 px-3">
-                      <div className="font-medium text-theme-text-primary">{p.vehicle_name}</div>
+                      <div className="font-medium text-theme-text-primary">
+                        {p.vehicle_name}
+                        {p.source === 'website_no_cauzione' && (
+                          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-600 text-white uppercase">No Cauzione</span>
+                        )}
+                      </div>
+                      {p.customer_name && <div className="text-xs text-theme-text-muted">{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</div>}
                       {p.vehicle_plate && <div className="text-xs text-theme-text-muted">{p.vehicle_plate}</div>}
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
                         {formatWhatsAppMessage(p)}
