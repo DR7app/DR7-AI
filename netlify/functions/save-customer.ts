@@ -111,19 +111,60 @@ export const handler: Handler = async (event) => {
                 }
             }
         } else {
-            // Insert new customer
-            const { data, error } = await supabase
-                .from('customers_extended')
-                .insert([customerData])
-                .select()
-                .single();
+            // Check for existing customer before inserting (prevent duplicates)
+            let existingCustomer = null;
 
-            if (error) {
-                console.error('[save-customer] Insert error:', error);
-                throw error;
+            // 1. Check by codice_fiscale
+            if (!existingCustomer && customerData.codice_fiscale) {
+                const { data } = await supabase.from('customers_extended')
+                    .select('*').eq('codice_fiscale', customerData.codice_fiscale.toUpperCase()).maybeSingle();
+                if (data) existingCustomer = data;
             }
-            result = data;
-            console.log('[save-customer] Customer created:', result.id);
+            // 2. Check by partita_iva
+            if (!existingCustomer && customerData.partita_iva) {
+                const { data } = await supabase.from('customers_extended')
+                    .select('*').eq('partita_iva', customerData.partita_iva).maybeSingle();
+                if (data) existingCustomer = data;
+            }
+            // 3. Check by email
+            if (!existingCustomer && customerData.email) {
+                const { data } = await supabase.from('customers_extended')
+                    .select('*').ilike('email', customerData.email).maybeSingle();
+                if (data) existingCustomer = data;
+            }
+            // 4. Check by phone
+            if (!existingCustomer && customerData.telefono) {
+                const { data } = await supabase.from('customers_extended')
+                    .select('*').eq('telefono', customerData.telefono).maybeSingle();
+                if (data) existingCustomer = data;
+            }
+
+            if (existingCustomer) {
+                // Update existing customer instead of creating duplicate
+                console.log('[save-customer] Found existing customer, updating:', existingCustomer.id);
+                const { data, error } = await supabase
+                    .from('customers_extended')
+                    .update(customerData)
+                    .eq('id', existingCustomer.id)
+                    .select()
+                    .single();
+                if (error) { console.error('[save-customer] Update existing error:', error); throw error; }
+                result = data;
+            } else {
+                // Insert new customer
+                const { data, error } = await supabase
+                    .from('customers_extended')
+                    .insert([customerData])
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('[save-customer] Insert error:', error);
+                    throw error;
+                }
+                result = data;
+                console.log('[save-customer] Customer created:', result.id);
+            }
         }
 
         return {
