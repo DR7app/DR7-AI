@@ -646,7 +646,7 @@ export default function MessaggiSistemaTab() {
                 <div className="space-y-3">
                     {templates.map((template, idx) => (
                         <details key={template.id} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
-                            <summary className="p-3 cursor-pointer hover:bg-theme-bg-hover/30 flex items-center justify-between">
+                            <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30">
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={(e) => { e.preventDefault(); handleToggleEnabled(template) }}
@@ -654,33 +654,24 @@ export default function MessaggiSistemaTab() {
                                     >
                                         <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${template.is_enabled !== false ? 'left-5' : 'left-0.5'}`} />
                                     </button>
-                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600/20 text-blue-400">{idx + 1}</span>
-                                    <span className="font-medium text-theme-text-primary text-sm">{template.label}</span>
-                                    <button
-                                        onClick={(e) => { e.preventDefault(); handleToggleAutomatic(template) }}
-                                        className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                                            template.is_automatic
-                                                ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30'
-                                                : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
-                                        }`}
-                                    >
-                                        {template.is_automatic ? 'Automatico' : 'Manuale'}
-                                    </button>
-                                    <button
-                                        onClick={(e) => { e.preventDefault(); handleToggleHeader(template) }}
-                                        className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                                            template.include_header !== false
-                                                ? 'bg-amber-600/20 text-amber-400 hover:bg-amber-600/30'
-                                                : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
-                                        }`}
-                                    >
-                                        {template.include_header !== false ? 'Header ON' : 'Header OFF'}
-                                    </button>
-                                    {template.is_enabled === false && (
-                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400">OFF</span>
-                                    )}
+                                    <span className="font-semibold text-theme-text-primary text-sm min-w-0">{template.label}</span>
+                                    <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                                        <button
+                                            onClick={(e) => { e.preventDefault(); handleToggleAutomatic(template) }}
+                                            className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                                                template.is_automatic
+                                                    ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30'
+                                                    : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
+                                            }`}
+                                        >
+                                            {template.is_automatic ? 'Automatico' : 'Manuale'}
+                                        </button>
+                                        {template.is_enabled === false && (
+                                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400">OFF</span>
+                                        )}
+                                    </div>
                                 </div>
-                                <span className="text-xs text-theme-text-muted">{template.description}</span>
+                                <p className="text-xs text-theme-text-muted mt-1 ml-[52px]">{template.description}</p>
                             </summary>
 
                             <div className="p-4 border-t border-theme-border space-y-3">
