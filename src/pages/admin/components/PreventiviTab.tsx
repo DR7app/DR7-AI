@@ -7,6 +7,7 @@ import { buildConfigOverlay } from '../../../utils/configOverlay'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -59,10 +60,12 @@ interface Preventivo {
   booking_id: string | null
   whatsapp_sent_at: string | null
   whatsapp_message_id: string | null
+  source: string | null
   created_by: string | null
   created_at: string
   updated_at: string
   expires_at: string | null
+  customer_id: string | null
 }
 
 interface InsuranceOpt {
@@ -173,7 +176,12 @@ const STATUS_COLORS: Record<string, string> = {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+const VALERIO_EMAIL = 'valerio@dr7.app'
+const BOSS_PHONE = '393472817258'
+
 export default function PreventiviTab({ onConvertToBooking }: Props) {
+  const { adminEmail } = useAdminRole()
+  const isValerio = adminEmail?.toLowerCase() === VALERIO_EMAIL
   const [view, setView] = useState<'list' | 'form'>('list')
   const [preventivi, setPreventivi] = useState<Preventivo[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -612,6 +620,28 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── Convert to Booking ─────────────────────────────────────────────────
 
   async function handleConvertToBooking(preventivo: Preventivo) {
+    // No-cauzione requests require Valerio's approval
+    const isNoCauzione = preventivo.source === 'website_no_cauzione'
+    if (isNoCauzione && !isValerio) {
+      // Send approval request to Valerio via WhatsApp
+      const msg = `*RICHIESTA APPROVAZIONE NO CAUZIONE*\n\n`
+        + `*Admin:* ${adminEmail}\n`
+        + `*Cliente:* ${preventivo.customer_name || 'N/A'}\n`
+        + `*Telefono:* ${preventivo.customer_phone || 'N/A'}\n`
+        + `*Veicolo:* ${preventivo.vehicle_name}\n`
+        + `*Totale:* €${(preventivo.total_final || 0).toFixed(2)}\n\n`
+        + `Approva o rifiuta dal pannello admin > Preventivi.`
+
+      fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customPhone: BOSS_PHONE, customMessage: msg }),
+      }).catch(() => {})
+
+      toast.success('Richiesta approvazione inviata a Valerio')
+      return
+    }
+
     await supabase
       .from('preventivi')
       .update({ status: 'accettato' })
@@ -638,6 +668,37 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       })
     }
     toast.success('Preventivo accettato - compila la prenotazione')
+  }
+
+  async function handleRejectNoCauzione(preventivo: Preventivo) {
+    // Generate 5% discount code
+    const code = `DR7-5%-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+    const customerName = preventivo.customer_name || 'Cliente'
+    const firstName = customerName.split(' ')[0]
+
+    // Update status
+    await supabase.from('preventivi').update({ status: 'rifiutato' }).eq('id', preventivo.id)
+
+    // Send rejection WhatsApp to customer
+    if (preventivo.customer_phone) {
+      const msg = `Gentile ${firstName},\n\n`
+        + `la formula senza cauzione non risulta disponibile per questa prenotazione.\n\n`
+        + `Può comunque procedere subito con la conferma tramite formula standard:\n`
+        + `il preventivo è già nel suo account.\n\n`
+        + `Abbiamo attivato per lei uno sconto del 5% con codice:\n`
+        + `${code}\n\n`
+        + `Disponibilità limitata.`
+
+      fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customPhone: preventivo.customer_phone, customMessage: msg }),
+      }).catch(() => {})
+    }
+
+    appendPreventivoEvent(preventivo.id, 'no_cauzione_rifiutato', { detail: `discount_code: ${code}` })
+    toast.success(`Rifiutato — codice sconto ${code} inviato al cliente`)
+    loadPreventivi()
   }
 
   async function updateStatus(id: string, newStatus: string) {
@@ -703,7 +764,16 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                 {filtered.map(p => (
                   <tr key={p.id} className="border-b border-theme-border/50 hover:bg-theme-bg-hover/30">
                     <td className="py-2 px-3">
-                      <div className="font-medium text-theme-text-primary">{p.vehicle_name}</div>
+                      <div className="font-medium text-theme-text-primary">
+                        {p.vehicle_name}
+                        {p.source === 'website_no_cauzione' && (
+                          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-600 text-white uppercase">No Cauzione</span>
+                        )}
+                        {p.source === 'website' && (
+                          <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold rounded bg-blue-500/20 text-blue-400">SITO</span>
+                        )}
+                      </div>
+                      {p.customer_name && <div className="text-xs text-theme-text-muted">{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</div>}
                       {p.vehicle_plate && <div className="text-xs text-theme-text-muted">{p.vehicle_plate}</div>}
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
                         {formatWhatsAppMessage(p)}
@@ -738,10 +808,18 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                             onClick={() => handleConvertToBooking(p)}
                             className="px-2 py-1 text-xs bg-dr7-gold hover:bg-[#247a6f] text-white rounded"
                           >
-                            Converti
+                            {p.source === 'website_no_cauzione' && !isValerio ? 'Richiedi Approvazione' : 'Converti'}
                           </button>
                         )}
-                        {p.status === 'inviato' && (
+                        {p.source === 'website_no_cauzione' && (p.status === 'inviato' || p.status === 'bozza') && (
+                          <button
+                            onClick={() => handleRejectNoCauzione(p)}
+                            className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
+                          >
+                            Rifiuta + Sconto 5%
+                          </button>
+                        )}
+                        {p.status === 'inviato' && p.source !== 'website_no_cauzione' && (
                           <button
                             onClick={() => updateStatus(p.id, 'rifiutato')}
                             className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"

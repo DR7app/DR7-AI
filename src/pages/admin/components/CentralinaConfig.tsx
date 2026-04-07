@@ -444,19 +444,17 @@ function InsuranceTab({ config, updateConfig }: { config: RentalConfig; updateCo
                             />
                             <span className="text-xs text-theme-text-muted">/g</span>
                           </div>
-                          {opt.mandatory_deposit != null && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-amber-400">Cauz.€</span>
-                              <NumInput
-                                value={opt.mandatory_deposit}
-                                onChange={v => {
-                                  const newOpts = [...options]
-                                  newOpts[idx] = { ...opt, mandatory_deposit: v }
-                                  updateConfig(['insurance', cat, tier], newOpts)
-                                }}
-                              />
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-amber-400">Cauz.€</span>
+                            <NumInput
+                              value={opt.mandatory_deposit ?? 0}
+                              onChange={v => {
+                                const newOpts = [...options]
+                                newOpts[idx] = { ...opt, mandatory_deposit: v }
+                                updateConfig(['insurance', cat, tier], newOpts)
+                              }}
+                            />
+                          </div>
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-blue-400">Fran.€</span>
                             <NumInput
@@ -495,7 +493,7 @@ function InsuranceTab({ config, updateConfig }: { config: RentalConfig; updateCo
               <div className="space-y-2">
                 <p className="text-sm text-theme-text-muted">Stesse opzioni per tutte le fasce</p>
                 {allTiers.map((opt, idx) => (
-                  <div key={opt.id} className="flex items-center gap-2">
+                  <div key={opt.id} className="flex items-center gap-2 flex-wrap">
                     <InlineEdit
                       value={opt.name}
                       onChange={v => {
@@ -506,17 +504,30 @@ function InsuranceTab({ config, updateConfig }: { config: RentalConfig; updateCo
                       className="w-44"
                       placeholder="Nome opzione"
                     />
-                    <span className="text-xs text-theme-text-muted">€</span>
-                    <NumInput
-                      value={opt.daily_price}
-                      step="0.01"
-                      onChange={v => {
-                        const newOpts = [...allTiers]
-                        newOpts[idx] = { ...opt, daily_price: v }
-                        updateConfig(['insurance', cat, '_all_tiers'], newOpts)
-                      }}
-                    />
-                    <span className="text-xs text-theme-text-muted">/g</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-theme-text-muted">€</span>
+                      <NumInput
+                        value={opt.daily_price}
+                        step="0.01"
+                        onChange={v => {
+                          const newOpts = [...allTiers]
+                          newOpts[idx] = { ...opt, daily_price: v }
+                          updateConfig(['insurance', cat, '_all_tiers'], newOpts)
+                        }}
+                      />
+                      <span className="text-xs text-theme-text-muted">/g</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-amber-400">Cauz.€</span>
+                      <NumInput
+                        value={opt.mandatory_deposit ?? 0}
+                        onChange={v => {
+                          const newOpts = [...allTiers]
+                          newOpts[idx] = { ...opt, mandatory_deposit: v }
+                          updateConfig(['insurance', cat, '_all_tiers'], newOpts)
+                        }}
+                      />
+                    </div>
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-blue-400">Fran.€</span>
                       <NumInput

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 
 interface SystemMessage {
@@ -155,12 +156,15 @@ export default function MessaggiSistemaTab() {
         }
         setSaving(true)
         try {
-            const { error } = await supabase
-                .from('system_messages')
-                .update({ message_body: editBody, updated_at: new Date().toISOString() })
-                .eq('id', id)
+            // Use authFetch with service role to bypass RLS
+            const response = await authFetch('/.netlify/functions/update-system-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, message_body: editBody })
+            })
+            const result = await response.json()
+            if (!response.ok) throw new Error(result.error || 'Errore salvataggio')
 
-            if (error) throw error
             setTemplates(prev => prev.map(t => t.id === id ? { ...t, message_body: editBody, updated_at: new Date().toISOString() } : t))
             setEditingId(null)
             toast.success('Messaggio aggiornato')
@@ -655,6 +659,29 @@ export default function MessaggiSistemaTab() {
                                         {template.is_enabled === false && (
                                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400">OFF</span>
                                         )}
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                const newVal = !template.include_header
+                                                authFetch('/.netlify/functions/update-system-message', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ id: template.id, include_header: newVal })
+                                                }).then(res => {
+                                                    if (!res.ok) { toast.error('Errore aggiornamento'); return }
+                                                    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, include_header: newVal } : t))
+                                                    toast.success(newVal ? 'Header/Footer attivato' : 'Header/Footer disattivato')
+                                                }).catch(() => toast.error('Errore di rete'))
+                                            }}
+                                            className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                                                template.include_header
+                                                    ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
+                                                    : 'bg-gray-600/20 text-gray-500 hover:bg-gray-600/30'
+                                            }`}
+                                        >
+                                            {template.include_header ? 'H/F ✓' : 'H/F ✗'}
+                                        </button>
                                     </div>
                                 </div>
                                 <p className="text-xs text-theme-text-muted mt-1 ml-[52px]">{template.description}</p>

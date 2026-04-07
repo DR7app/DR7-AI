@@ -76,3 +76,16 @@ export async function getMessageTemplate(
 export function invalidateTemplateCache() {
   cache = null
 }
+
+/**
+ * Simple helper: load template body by key, substitute variables, return final text.
+ * Returns fallback if template not found or disabled.
+ */
+export async function renderTemplate(
+  key: string,
+  variables: Record<string, string>,
+  fallback: string
+): Promise<string> {
+  const result = await getMessageTemplate(key, variables, fallback)
+  return result || fallback
+}
