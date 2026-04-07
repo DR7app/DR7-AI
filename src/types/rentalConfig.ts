@@ -10,6 +10,8 @@ export interface InsuranceOption {
   daily_price: number
   mandatory_deposit?: number
   deductible?: string
+  deductible_fixed?: number
+  deductible_percent?: number
   coverage?: string
 }
 
