@@ -54,6 +54,7 @@ import {
 } from '../../../utils/vehicleAvailability'
 import Input from './Input'
 import Select from './Select'
+import AddressAutocomplete from './AddressAutocomplete'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
@@ -5173,10 +5174,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 {formData.pickup_location === 'domicilio' && (
                   <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
                     <p className="text-xs text-amber-400 font-semibold">Indirizzo di consegna</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input label="Via *" required value={formData.delivery_street}
-                        onChange={(e) => setFormData({ ...formData, delivery_street: e.target.value })} placeholder="Via Roma, 15" />
-                      <Input label="Città *" required value={formData.delivery_city}
+                    <AddressAutocomplete
+                      label="Indirizzo Consegna *"
+                      required
+                      value={formData.delivery_street}
+                      onChange={(val) => setFormData(prev => ({ ...prev, delivery_street: val }))}
+                      onSelectParts={(parts) => setFormData(prev => ({
+                        ...prev,
+                        delivery_street: parts.street || parts.full,
+                        delivery_city: parts.city,
+                        delivery_zip: parts.zip,
+                        delivery_province: parts.province,
+                      }))}
+                      placeholder="Via Roma 15, 09131 Cagliari"
+                    />
+                    <div className="grid grid-cols-3 gap-2 mt-1">
+                      <Input label="Città" value={formData.delivery_city}
                         onChange={(e) => setFormData({ ...formData, delivery_city: e.target.value })} placeholder="Cagliari" />
                       <Input label="CAP" value={formData.delivery_zip}
                         onChange={(e) => setFormData({ ...formData, delivery_zip: e.target.value })} placeholder="09131" maxLength={5} />
@@ -5232,10 +5245,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 {formData.dropoff_location === 'domicilio' && (
                   <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
                     <p className="text-xs text-amber-400 font-semibold">Indirizzo di ritiro veicolo</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input label="Via *" required value={formData.pickup_street}
-                        onChange={(e) => setFormData({ ...formData, pickup_street: e.target.value })} placeholder="Via Roma, 15" />
-                      <Input label="Città *" required value={formData.pickup_city}
+                    <AddressAutocomplete
+                      label="Indirizzo Ritiro *"
+                      required
+                      value={formData.pickup_street}
+                      onChange={(val) => setFormData(prev => ({ ...prev, pickup_street: val }))}
+                      onSelectParts={(parts) => setFormData(prev => ({
+                        ...prev,
+                        pickup_street: parts.street || parts.full,
+                        pickup_city: parts.city,
+                        pickup_zip: parts.zip,
+                        pickup_province: parts.province,
+                      }))}
+                      placeholder="Via Roma 15, 09131 Cagliari"
+                    />
+                    <div className="grid grid-cols-3 gap-2 mt-1">
+                      <Input label="Città" value={formData.pickup_city}
                         onChange={(e) => setFormData({ ...formData, pickup_city: e.target.value })} placeholder="Cagliari" />
                       <Input label="CAP" value={formData.pickup_zip}
                         onChange={(e) => setFormData({ ...formData, pickup_zip: e.target.value })} placeholder="09131" maxLength={5} />

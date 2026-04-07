@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
+import AddressAutocomplete from './AddressAutocomplete'
 import Select from './Select'
 import Button from './Button'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
@@ -802,16 +803,24 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
               <span className="text-sm font-medium text-theme-text-secondary">Consegna a domicilio</span>
             </label>
             {form.delivery_enabled && (
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                <Input label="Via *" required value={form.delivery_street} onChange={(e) => setForm(prev => ({ ...prev, delivery_street: e.target.value }))} />
-                <Input label="Città *" required value={form.delivery_city} onChange={(e) => setForm(prev => ({ ...prev, delivery_city: e.target.value }))} />
-                <Input label="CAP *" required value={form.delivery_zip} onChange={(e) => setForm(prev => ({ ...prev, delivery_zip: e.target.value }))} maxLength={5} />
-                <Input label="Provincia *" required value={form.delivery_province} onChange={(e) => setForm(prev => ({ ...prev, delivery_province: e.target.value.toUpperCase() }))} maxLength={2} />
-                <div className="col-span-2">
-                  <Input label="Note" value={form.delivery_notes} onChange={(e) => setForm(prev => ({ ...prev, delivery_notes: e.target.value }))} />
+              <div className="space-y-2 mt-2">
+                <AddressAutocomplete
+                  label="Indirizzo Consegna *"
+                  required
+                  value={form.delivery_street}
+                  onChange={(val) => setForm(prev => ({ ...prev, delivery_street: val }))}
+                  onSelectParts={(parts) => setForm(prev => ({ ...prev, delivery_street: parts.street || parts.full, delivery_city: parts.city, delivery_zip: parts.zip, delivery_province: parts.province }))}
+                  placeholder="Via Roma 15, 09131 Cagliari"
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <Input label="Città" value={form.delivery_city} onChange={(e) => setForm(prev => ({ ...prev, delivery_city: e.target.value }))} />
+                  <Input label="CAP" value={form.delivery_zip} onChange={(e) => setForm(prev => ({ ...prev, delivery_zip: e.target.value }))} maxLength={5} />
+                  <Input label="Provincia" value={form.delivery_province} onChange={(e) => setForm(prev => ({ ...prev, delivery_province: e.target.value.toUpperCase() }))} maxLength={2} />
                 </div>
-                <Input label="Costo consegna (€)" type="number" step="0.01" value={form.delivery_fee}
-                  onChange={(e) => setForm(prev => ({ ...prev, delivery_fee: e.target.value }))} />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input label="Note" value={form.delivery_notes} onChange={(e) => setForm(prev => ({ ...prev, delivery_notes: e.target.value }))} />
+                  <Input label="Costo consegna (€)" type="number" step="0.01" value={form.delivery_fee} onChange={(e) => setForm(prev => ({ ...prev, delivery_fee: e.target.value }))} />
+                </div>
               </div>
             )}
 
@@ -822,16 +831,24 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
               <span className="text-sm font-medium text-theme-text-secondary">Ritiro a domicilio</span>
             </label>
             {form.pickup_enabled && (
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                <Input label="Via *" required value={form.pickup_street} onChange={(e) => setForm(prev => ({ ...prev, pickup_street: e.target.value }))} />
-                <Input label="Città *" required value={form.pickup_city} onChange={(e) => setForm(prev => ({ ...prev, pickup_city: e.target.value }))} />
-                <Input label="CAP *" required value={form.pickup_zip} onChange={(e) => setForm(prev => ({ ...prev, pickup_zip: e.target.value }))} maxLength={5} />
-                <Input label="Provincia *" required value={form.pickup_province} onChange={(e) => setForm(prev => ({ ...prev, pickup_province: e.target.value.toUpperCase() }))} maxLength={2} />
-                <div className="col-span-2">
-                  <Input label="Note" value={form.pickup_notes} onChange={(e) => setForm(prev => ({ ...prev, pickup_notes: e.target.value }))} />
+              <div className="space-y-2 mt-2">
+                <AddressAutocomplete
+                  label="Indirizzo Ritiro *"
+                  required
+                  value={form.pickup_street}
+                  onChange={(val) => setForm(prev => ({ ...prev, pickup_street: val }))}
+                  onSelectParts={(parts) => setForm(prev => ({ ...prev, pickup_street: parts.street || parts.full, pickup_city: parts.city, pickup_zip: parts.zip, pickup_province: parts.province }))}
+                  placeholder="Via Roma 15, 09131 Cagliari"
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <Input label="Città" value={form.pickup_city} onChange={(e) => setForm(prev => ({ ...prev, pickup_city: e.target.value }))} />
+                  <Input label="CAP" value={form.pickup_zip} onChange={(e) => setForm(prev => ({ ...prev, pickup_zip: e.target.value }))} maxLength={5} />
+                  <Input label="Provincia" value={form.pickup_province} onChange={(e) => setForm(prev => ({ ...prev, pickup_province: e.target.value.toUpperCase() }))} maxLength={2} />
                 </div>
-                <Input label="Costo ritiro (€)" type="number" step="0.01" value={form.pickup_fee}
-                  onChange={(e) => setForm(prev => ({ ...prev, pickup_fee: e.target.value }))} />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input label="Note" value={form.pickup_notes} onChange={(e) => setForm(prev => ({ ...prev, pickup_notes: e.target.value }))} />
+                  <Input label="Costo ritiro (€)" type="number" step="0.01" value={form.pickup_fee} onChange={(e) => setForm(prev => ({ ...prev, pickup_fee: e.target.value }))} />
+                </div>
               </div>
             )}
           </div>
