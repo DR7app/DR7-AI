@@ -424,10 +424,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // Filter main services by vehicle category if classified
   const mainServices = filteredByTab.filter(s => {
     if (s.category === 'extra' || s.category === 'experience') return false
-    // If vehicle is classified, only show matching urban/maxi services (plus moto, tech)
+    // Moto mode: only show moto services
+    if (vehicleCategory === 'moto') return s.category === 'moto'
+    // If vehicle is classified (urban/maxi), only show matching services
     if (vehicleCategory && (s.category === 'urban' || s.category === 'maxi')) {
       return s.category === vehicleCategory
     }
+    // Hide moto from general view (must be explicitly selected)
+    if (s.category === 'moto') return false
     return true
   })
   const extraServices = filteredByTab.filter(s => s.category === 'extra' || s.category === 'experience')
@@ -1490,6 +1494,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Targa</label>
                 <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVehicleCategory(vehicleCategory === 'moto' ? null : 'moto')
+                      setTargaVehicleInfo(vehicleCategory === 'moto' ? null : { brand: 'Moto', model: '' })
+                    }}
+                    className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
+                      vehicleCategory === 'moto'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
+                    }`}
+                  >
+                    Moto
+                  </button>
                   <input
                     type="text"
                     value={vehiclePlate}
@@ -1548,19 +1566,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {/* Classification Result (auto from targa) */}
               {vehicleCategory && (
                 <div className={`p-4 rounded-lg border-2 ${
-                  vehicleCategory === 'urban'
+                  vehicleCategory === 'moto'
+                    ? 'bg-purple-500/10 border-purple-500/30'
+                    : vehicleCategory === 'urban'
                     ? 'bg-blue-500/10 border-blue-500/30'
                     : 'bg-orange-500/10 border-orange-500/30'
                 }`}>
                   <div className="flex items-center gap-3">
                     <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${
-                      vehicleCategory === 'urban'
+                      vehicleCategory === 'moto'
+                        ? 'bg-purple-600 text-white'
+                        : vehicleCategory === 'urban'
                         ? 'bg-blue-600 text-white'
                         : 'bg-orange-600 text-white'
                     }`}>
-                      {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                      {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                     </span>
-                    <span className="text-theme-text-primary font-medium">{vehicleMakeModel}</span>
+                    <span className="text-theme-text-primary font-medium">{vehicleCategory === 'moto' ? 'Moto / Scooter' : vehicleMakeModel}</span>
                   </div>
                 </div>
               )}

@@ -8,7 +8,7 @@
  *  4. Default → URBAN (small/medium car assumption)
  */
 
-export type VehicleCategory = 'urban' | 'maxi'
+export type VehicleCategory = 'urban' | 'maxi' | 'moto'
 
 interface ClassificationResult {
   category: VehicleCategory
