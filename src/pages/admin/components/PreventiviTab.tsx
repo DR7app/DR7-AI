@@ -65,7 +65,6 @@ interface Preventivo {
   created_at: string
   updated_at: string
   expires_at: string | null
-  source: string | null
   customer_id: string | null
 }
 
