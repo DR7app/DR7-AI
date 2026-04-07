@@ -256,7 +256,7 @@ export default function MessaggiSistemaTab() {
         }
     }
 
-    async function handleToggleHeader(template: SystemMessage) {
+    async function handleToggleHeader(_template: SystemMessage) {
         try {
             const newVal = !template.include_header
             const { error } = await supabase
@@ -644,7 +644,7 @@ export default function MessaggiSistemaTab() {
 
                 {/* Template Cards — Expandable style */}
                 <div className="space-y-3">
-                    {templates.map((template, idx) => (
+                    {templates.map((template) => (
                         <details key={template.id} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
                             <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30">
                                 <div className="flex items-center gap-3">
