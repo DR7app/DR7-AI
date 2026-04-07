@@ -439,7 +439,23 @@ export const handler: Handler = async (event) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Upsert all messages (update existing, insert new)
+    // Delete ALL old messages first — replace with real ones only
+    const validKeys = MESSAGES.map(m => m.message_key)
+    await supabase
+      .from('system_messages')
+      .delete()
+      .not('message_key', 'in', `(${validKeys.join(',')})`)
+
+    // Also delete any that aren't in our list (catches old junk)
+    const { data: existing } = await supabase.from('system_messages').select('message_key')
+    if (existing) {
+      const toDelete = existing.filter(e => !validKeys.includes(e.message_key))
+      for (const old of toDelete) {
+        await supabase.from('system_messages').delete().eq('message_key', old.message_key)
+      }
+    }
+
+    // Upsert all real messages
     for (const msg of MESSAGES) {
       const { error } = await supabase
         .from('system_messages')
