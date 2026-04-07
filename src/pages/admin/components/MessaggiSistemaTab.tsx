@@ -504,12 +504,31 @@ export default function MessaggiSistemaTab() {
                         <h3 className="text-lg font-bold text-theme-text-primary">Messaggi di Sistema</h3>
                         <p className="text-theme-text-muted text-sm">Template dei messaggi WhatsApp automatici e personalizzati</p>
                     </div>
-                    <button
-                        onClick={() => setShowNewForm(!showNewForm)}
-                        className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f]"
-                    >
-                        + Nuovo Messaggio
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const res = await fetch('/.netlify/functions/seed-system-messages', { method: 'POST' })
+                                    const data = await res.json()
+                                    if (res.ok) {
+                                        toast.success(`Sincronizzati ${data.count} messaggi reali`)
+                                        loadTemplates()
+                                    } else {
+                                        toast.error('Errore: ' + (data.error || 'sconosciuto'))
+                                    }
+                                } catch { toast.error('Errore sincronizzazione') }
+                            }}
+                            className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-blue-600 text-white hover:bg-blue-500"
+                        >
+                            Sincronizza Messaggi Reali
+                        </button>
+                        <button
+                            onClick={() => setShowNewForm(!showNewForm)}
+                            className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f]"
+                        >
+                            + Nuovo Messaggio
+                        </button>
+                    </div>
                 </div>
 
                 {/* New Template Form */}
