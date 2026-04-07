@@ -21,7 +21,7 @@ const handler: Handler = async (event) => {
   }
 
   const body = JSON.parse(event.body || '{}');
-  const { booking, type, customPhone } = body;
+  const { booking, type, customPhone, skipHeader } = body;
   // Accept both 'message' and 'customMessage' for flexibility
   const customMessage = body.customMessage || body.message;
 
@@ -299,7 +299,9 @@ const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         chatId: `${targetPhone}@c.us`,
-        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
+        message: skipHeader
+          ? message
+          : `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
       }),
     });
 

@@ -426,6 +426,7 @@ export default function MessaggiSistemaTab() {
                     body: JSON.stringify({
                         customMessage: personalizedMessage,
                         customPhone: phone,
+                        skipHeader: true,
                     }),
                 })
 
