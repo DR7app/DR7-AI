@@ -9,6 +9,7 @@ export interface AdminRole {
   loading: boolean
   adminName: string | null
   adminId: string | null
+  adminEmail: string | null
 }
 
 export function useAdminRole(): AdminRole {
@@ -16,6 +17,7 @@ export function useAdminRole(): AdminRole {
   const [canViewFinancials, setCanViewFinancials] = useState(false)
   const [adminName, setAdminName] = useState<string | null>(null)
   const [adminId, setAdminId] = useState<string | null>(null)
+  const [adminEmail, setAdminEmail] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -27,6 +29,7 @@ export function useAdminRole(): AdminRole {
           setLoading(false)
           return
         }
+        setAdminEmail(user.email || null)
 
         const { data, error } = await supabase
           .from('admins')
@@ -61,5 +64,5 @@ export function useAdminRole(): AdminRole {
   const canManageFleet = role === 'superadmin'
   const canManageAdmins = role === 'superadmin'
 
-  return { role, canViewFinancials, canManageFleet, canManageAdmins, loading, adminName, adminId }
+  return { role, canViewFinancials, canManageFleet, canManageAdmins, loading, adminName, adminId, adminEmail }
 }
