@@ -3381,7 +3381,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      let customerId = formData.customer_id || null
+      // CRITICAL FIX: If overrideCustomerId is provided (e.g. from NewClientModal callback),
+      // use it directly and SKIP the newCustomerMode creation path entirely.
+      // The customer was already created/found by the modal — no need to create again.
+      let customerId = overrideCustomerId || formData.customer_id || null
       let secondDriverId = formData.second_driver_id || null
 
       // If creating new second driver, create them in customers_extended table first
@@ -3466,7 +3469,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // If creating new customer, create them in customers_extended table
       // BUT FIRST check if an identical customer already exists (prevent duplicates)
-      if (newCustomerMode) {
+      // CRITICAL: Skip this block entirely if overrideCustomerId is set — the customer
+      // was already created/found by the NewClientModal; creating again = duplicate!
+      if (newCustomerMode && !overrideCustomerId) {
         try {
           // DEDUP CHECK: Look for existing customer by type-specific unique field, then email, then telefono (with phone normalization)
           let existingCustomer: { id: string } | null = null
@@ -4605,6 +4610,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // NEW: Resume booking creation flow if context is 'booking'
             if (validationContext === 'booking' && newClientId) {
               logger.log('[ReservationsTab] NewClientModal finished. Resuming booking with:', newClientId)
+              // CRITICAL FIX: Disable newCustomerMode BEFORE resuming submission
+              // Otherwise processBookingSubmission will try to create the customer AGAIN
+              setNewCustomerMode(false)
               setFormData(prev => ({ ...prev, customer_id: newClientId }))
               // Small delay to ensure state updates
               setTimeout(() => {
