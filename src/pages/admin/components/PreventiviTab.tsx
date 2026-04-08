@@ -1237,7 +1237,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
         {/* Sconto */}
         <div className="grid grid-cols-2 gap-3 pt-2">
-          <Input label="Prezzo Scontato (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder={formatEur(pricing.subtotal)} />
+          <Input label="Prezzo Scontato (€)" type="number" step="1" min="0" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="0" />
           <Input label="Nota sconto" value={form.sconto_note} onChange={(e) => setForm(prev => ({ ...prev, sconto_note: e.target.value }))} placeholder="valido solo 24h" />
         </div>
 
