@@ -70,7 +70,7 @@ export default function CentralinaConfig() {
         .single()
 
       if (!error && data?.config) {
-        setConfig({ ...DEFAULT_RENTAL_CONFIG, ...data.config } as RentalConfig)
+        setConfig(deepMergeConfig(DEFAULT_RENTAL_CONFIG, data.config))
         setLastSaved(data.updated_at)
         setSavedBy(data.updated_by)
       }
@@ -81,6 +81,18 @@ export default function CentralinaConfig() {
   }, [])
 
   useEffect(() => { loadConfig() }, [loadConfig])
+
+  // Auto-refresh when config changes in DB (realtime subscription)
+  useEffect(() => {
+    const channel = supabase
+      .channel('centralina-config-changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rental_extras_config' }, () => {
+        // Only reload if we're not currently saving (avoid loop)
+        if (!saving) loadConfig()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [loadConfig, saving])
 
   useEffect(() => {
     supabase
@@ -145,7 +157,7 @@ export default function CentralinaConfig() {
         .single()
 
       if (verify?.config) {
-        setConfig({ ...DEFAULT_RENTAL_CONFIG, ...verify.config } as RentalConfig)
+        setConfig(deepMergeConfig(DEFAULT_RENTAL_CONFIG, verify.config))
         setLastSaved(verify.updated_at)
         setSavedBy(verify.updated_by)
         toast.success('Configurazione salvata e verificata — il sito si aggiornera entro 30 secondi')
