@@ -67,13 +67,13 @@ const cancelHandler: Handler = async () => {
     try {
         console.log('[cancel-unpaid-nexi] Running...');
 
-        // Find unpaid pay-by-link bookings
+        // Find unpaid Nexi Pay by Link bookings older than 1 hour
         const now = new Date();
         const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
 
         const { data: unpaidBookings, error } = await supabase
             .from('bookings')
-            .select('id, customer_name, customer_phone, customer_email, vehicle_name, created_at, booking_details')
+            .select('id, customer_name, customer_phone, customer_email, vehicle_name, created_at, booking_details, payment_method')
             .eq('payment_method', 'Nexi Pay by Link')
             .eq('payment_status', 'pending')
             .in('status', ['pending', 'confirmed'])
