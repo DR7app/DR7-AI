@@ -7,6 +7,7 @@ import { buildConfigOverlay } from '../../../utils/configOverlay'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
+import CustomerAutocomplete from './CustomerAutocomplete'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -62,7 +63,6 @@ interface Preventivo {
   whatsapp_message_id: string | null
   source: string | null
   created_by: string | null
-  sent_by: string | null
   created_at: string
   updated_at: string
   expires_at: string | null
@@ -193,6 +193,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [whatsappPhone, setWhatsappPhone] = useState('')
   const [showPhoneModal, setShowPhoneModal] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [customers, setCustomers] = useState<any[]>([])
+  const [selectedCustomerId, setSelectedCustomerId] = useState('')
 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
@@ -311,14 +314,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }, [selectedVehicle])
 
   // ─── Pricing Calculation ────────────────────────────────────────────────
-  // Coefficients apply to the FULL PACKAGE (base + services), not just the base rate.
-  // We calculate the "list price" (no coefficients) and the "dynamic price" (with coefficients).
 
   const pricing = useMemo(() => {
-    // Base daily rate WITHOUT coefficients (always use vehicle rate as list price base)
-    const listDailyRate = selectedVehicle ? selectedVehicle.daily_rate / 100 : 0
+    const baseDailyRate = revenueData?.finalDailyRateEur
+      ?? (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
     const maggiorazione = parseFloat(form.maggiorazione_pct) || 0
-    const dailyAfterMarkup = Math.round(listDailyRate * (1 + maggiorazione / 100) * 100) / 100
+    const dailyAfterMarkup = Math.round(baseDailyRate * (1 + maggiorazione / 100) * 100) / 100
     const rentalTotal = Math.round(dailyAfterMarkup * rentalDays * 100) / 100
 
     const selectedIns = insuranceOptions.find(i => i.id === form.insurance_option)
@@ -348,25 +349,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
 
-    // LIST PRICE: full package WITHOUT dynamic coefficients
-    const listSubtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost) * 100) / 100
-
-    // DYNAMIC PRICE: apply combined coefficient to full package
-    const combinedCoeff = revenueData?.enabled
-      ? (revenueData.breakdown || []).reduce((acc, b) => acc * b.coeff, 1)
-      : 1
-    const dynamicSubtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
-    const hasDiscount = revenueData?.enabled && Math.abs(combinedCoeff - 1) > 0.001
-    const discountPct = hasDiscount ? Math.round((1 - combinedCoeff) * 100) : 0
-
-    // Use dynamic price as the actual subtotal
-    const subtotal = dynamicSubtotal
-    const scontatoInput = parseFloat(form.sconto) || 0
-    const sconto = scontatoInput > 0 ? Math.round((subtotal - scontatoInput) * 100) / 100 : 0
-    const totalFinal = scontatoInput > 0 ? Math.round(scontatoInput * 100) / 100 : subtotal
+    const subtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost) * 100) / 100
+    const sconto = parseFloat(form.sconto) || 0
+    const totalFinal = Math.round((subtotal - sconto) * 100) / 100
 
     return {
-      baseDailyRate: listDailyRate,
+      baseDailyRate,
       maggiorazione,
       dailyAfterMarkup,
       rentalTotal,
@@ -383,12 +371,6 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       dr7FlexTotal,
       deliveryFee,
       pickupFee,
-      // Prezzo barrato
-      listSubtotal,
-      combinedCoeff,
-      dynamicSubtotal,
-      hasDiscount,
-      discountPct,
       experienceCost,
       subtotal,
       sconto,
@@ -401,7 +383,34 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   useEffect(() => {
     loadPreventivi()
     loadVehicles()
+    loadCustomers()
   }, [])
+
+  async function loadCustomers() {
+    const all: any[] = []
+    let from = 0
+    const PAGE = 1000
+    while (true) {
+      const { data } = await supabase
+        .from('customers_extended')
+        .select('id, nome, cognome, email, telefono, tipo_cliente, denominazione, scadenza_patente')
+        .order('cognome')
+        .range(from, from + PAGE - 1)
+      if (!data || data.length === 0) break
+      all.push(...data.map((c: any) => ({
+        id: c.id,
+        full_name: c.tipo_cliente === 'azienda'
+          ? (c.denominazione || 'N/A')
+          : `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A',
+        email: c.email || null,
+        phone: c.telefono || null,
+        scadenza_patente: c.scadenza_patente || null,
+      })))
+      from += data.length
+      if (data.length < PAGE) break
+    }
+    setCustomers(all)
+  }
 
   async function loadPreventivi() {
     setLoading(true)
@@ -505,7 +514,6 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           experience_cost: pricing.experienceCost,
         },
         status: 'bozza',
-        created_by: adminEmail || null,
       }
 
       const { data, error } = await supabase
@@ -616,45 +624,31 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       const expiryHours = configOverlay.defaultExpiryHours || 24
       const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString()
 
+      const selectedCust = customers.find((c: any) => c.id === selectedCustomerId)
       await supabase
         .from('preventivi')
         .update({
           status: 'inviato',
           customer_phone: phone,
+          customer_name: selectedCust?.full_name || preventivo.customer_name || null,
+          customer_id: selectedCustomerId || preventivo.customer_id || null,
           whatsapp_sent_at: new Date().toISOString(),
           whatsapp_message_id: result.messageId || null,
           expires_at: expiresAt,
-          sent_by: adminEmail || null,
         })
         .eq('id', preventivo.id)
 
-      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: phone })
+      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: phone, customer: selectedCust?.full_name })
       toast.success('Preventivo inviato via WhatsApp!')
       setShowPhoneModal(false)
       setWhatsappPhone('')
+      setSelectedCustomerId('')
       loadPreventivi()
     } catch (error: unknown) {
       console.error('WhatsApp send error:', error)
       toast.error('Errore invio WhatsApp')
     } finally {
       setSendingWhatsapp(false)
-    }
-  }
-
-  // ─── Delete Preventivo ──────────────────────────────────────────────────
-
-  async function handleDeletePreventivo(preventivo: Preventivo) {
-    if (!confirm(`Eliminare il preventivo per ${preventivo.vehicle_name}?`)) return
-    try {
-      const { error } = await supabase
-        .from('preventivi')
-        .delete()
-        .eq('id', preventivo.id)
-      if (error) throw error
-      toast.success('Preventivo eliminato')
-      loadPreventivi()
-    } catch (err: unknown) {
-      toast.error('Errore eliminazione: ' + (err instanceof Error ? err.message : String(err)))
     }
   }
 
@@ -716,22 +710,6 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const code = `DR7-5%-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
     const customerName = preventivo.customer_name || 'Cliente'
     const firstName = customerName.split(' ')[0]
-
-    // Create discount code in DB so it validates at checkout
-    const validUntil = new Date()
-    validUntil.setDate(validUntil.getDate() + 30) // 30 days validity
-    await supabase.from('discount_codes').insert({
-      code,
-      code_type: 'codice_sconto',
-      scope: ['supercar', 'utilitarie', 'noleggio'],
-      value_type: 'percentage',
-      value_amount: 5,
-      valid_from: new Date().toISOString(),
-      valid_until: validUntil.toISOString(),
-      single_use: true,
-      message: `Sconto 5% per rifiuto formula no cauzione — Preventivo ${preventivo.id}`,
-      status: 'active',
-    })
 
     // Update status
     await supabase.from('preventivi').update({ status: 'rifiutato' }).eq('id', preventivo.id)
@@ -831,11 +809,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                         )}
                       </div>
                       {p.customer_name && <div className="text-xs text-theme-text-muted">{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</div>}
+                      {!p.customer_name && p.customer_phone && <div className="text-xs text-theme-text-muted">{p.customer_phone}</div>}
                       {p.vehicle_plate && <div className="text-xs text-theme-text-muted">{p.vehicle_plate}</div>}
-                      <div className="text-[10px] text-theme-text-muted/60 mt-1 space-y-0.5">
-                        {p.created_by && <div>Creato da: <span className="text-theme-text-muted">{p.created_by}</span> · {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>}
-                        {p.whatsapp_sent_at && <div>Inviato{p.sent_by ? ` da ${p.sent_by}` : ''} a: <span className="text-theme-text-muted">{p.customer_phone || 'N/A'}</span> · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>}
-                      </div>
+                      {p.whatsapp_sent_at && (
+                        <div className="text-xs text-green-400 mt-0.5">
+                          Inviato{p.customer_name ? ` a ${p.customer_name}` : p.customer_phone ? ` a ${p.customer_phone}` : ''} · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
                         {formatWhatsAppMessage(p)}
                       </div>
@@ -888,13 +868,6 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                             Rifiutato
                           </button>
                         )}
-                        <button
-                          onClick={() => handleDeletePreventivo(p)}
-                          className="px-2 py-1 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 rounded"
-                          title="Elimina preventivo"
-                        >
-                          ✕
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -910,6 +883,21 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <div className="bg-theme-bg-secondary rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
               <h3 className="text-lg font-bold text-theme-text-primary">Invia Preventivo via WhatsApp</h3>
               <p className="text-sm text-theme-text-muted">{selectedPreventivo.vehicle_name} - {formatEur(selectedPreventivo.total_final)}</p>
+
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Cerca Cliente</label>
+                <CustomerAutocomplete
+                  customers={customers}
+                  selectedCustomerId={selectedCustomerId}
+                  onSelectCustomer={(id) => {
+                    setSelectedCustomerId(id)
+                    const c = customers.find((c: any) => c.id === id)
+                    if (c?.phone) setWhatsappPhone(c.phone)
+                  }}
+                  placeholder="Nome, email o telefono..."
+                  required={false}
+                />
+              </div>
 
               <Input
                 label="Numero di Telefono"
@@ -986,9 +974,16 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       {/* Dates */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
-        <Input label="Ora Ritiro" type="time" value={form.pickup_time} onChange={(e) => setForm(prev => ({ ...prev, pickup_time: e.target.value }))} />
+        <Input label="Ora Ritiro" type="time" value={form.pickup_time} onChange={(e) => {
+          const newPickupTime = e.target.value
+          // Auto-calculate return time: pickup - 1h30
+          const [h, m] = newPickupTime.split(':').map(Number)
+          const d = new Date(); d.setHours(h, m, 0); d.setMinutes(d.getMinutes() - 90)
+          const autoReturn = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+          setForm(prev => ({ ...prev, pickup_time: newPickupTime, return_time: autoReturn }))
+        }} />
         <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
-        <Input label="Ora Riconsegna" type="time" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} />
+        <Input label="Ora Riconsegna (auto: ritiro -1h30)" type="time" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} />
       </div>
 
       {rentalDays > 0 && (
@@ -1249,42 +1244,14 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           </div>
         )}
 
-        {/* Prezzo Listino vs Prezzo Dinamico */}
-        <div className="border-t border-theme-border pt-2">
-          {pricing.hasDiscount ? (
-            <div className="space-y-1">
-              <div className="flex justify-between text-sm text-theme-text-muted">
-                <span>Prezzo listino</span>
-                <span className="line-through">{formatEur(pricing.listSubtotal)}</span>
-              </div>
-              <div className="flex justify-between text-theme-text-primary font-semibold">
-                <span className="flex items-center gap-2">
-                  Prezzo dinamico
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${pricing.discountPct > 0 ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
-                    {pricing.discountPct > 0 ? `-${pricing.discountPct}%` : `+${Math.abs(pricing.discountPct)}%`}
-                  </span>
-                </span>
-                <span>{formatEur(pricing.dynamicSubtotal)}</span>
-              </div>
-              {revenueData?.breakdown && (
-                <div className="text-xs text-theme-text-muted mt-1">
-                  {revenueData.breakdown.map((b, i) => (
-                    <span key={i} className="mr-3">{b.label}: x{b.coeff.toFixed(2)}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex justify-between text-theme-text-primary font-semibold">
-              <span>Subtotale</span>
-              <span>{formatEur(pricing.subtotal)}</span>
-            </div>
-          )}
+        <div className="border-t border-theme-border pt-2 flex justify-between text-theme-text-primary font-semibold">
+          <span>Subtotale</span>
+          <span>{formatEur(pricing.subtotal)}</span>
         </div>
 
         {/* Sconto */}
         <div className="grid grid-cols-2 gap-3 pt-2">
-          <Input label="Prezzo Scontato (€)" type="number" step="1" min="0" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="0" />
+          <Input label="Sconto (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="0" />
           <Input label="Nota sconto" value={form.sconto_note} onChange={(e) => setForm(prev => ({ ...prev, sconto_note: e.target.value }))} placeholder="valido solo 24h" />
         </div>
 
