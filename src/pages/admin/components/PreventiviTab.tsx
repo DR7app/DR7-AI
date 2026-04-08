@@ -62,6 +62,7 @@ interface Preventivo {
   whatsapp_message_id: string | null
   source: string | null
   created_by: string | null
+  sent_by: string | null
   created_at: string
   updated_at: string
   expires_at: string | null
@@ -504,6 +505,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           experience_cost: pricing.experienceCost,
         },
         status: 'bozza',
+        created_by: adminEmail || null,
       }
 
       const { data, error } = await supabase
@@ -622,6 +624,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           whatsapp_sent_at: new Date().toISOString(),
           whatsapp_message_id: result.messageId || null,
           expires_at: expiresAt,
+          sent_by: adminEmail || null,
         })
         .eq('id', preventivo.id)
 
@@ -796,6 +799,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                       </div>
                       {p.customer_name && <div className="text-xs text-theme-text-muted">{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</div>}
                       {p.vehicle_plate && <div className="text-xs text-theme-text-muted">{p.vehicle_plate}</div>}
+                      <div className="text-[10px] text-theme-text-muted/60 mt-1 space-y-0.5">
+                        {p.created_by && <div>Creato da: <span className="text-theme-text-muted">{p.created_by}</span> · {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>}
+                        {p.whatsapp_sent_at && <div>Inviato{p.sent_by ? ` da ${p.sent_by}` : ''} a: <span className="text-theme-text-muted">{p.customer_phone || 'N/A'}</span> · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>}
+                      </div>
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
                         {formatWhatsAppMessage(p)}
                       </div>
