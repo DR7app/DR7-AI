@@ -65,7 +65,6 @@ interface Preventivo {
   created_at: string
   updated_at: string
   expires_at: string | null
-  source: string | null
   customer_id: string | null
 }
 
@@ -676,6 +675,22 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const code = `DR7-5%-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
     const customerName = preventivo.customer_name || 'Cliente'
     const firstName = customerName.split(' ')[0]
+
+    // Create discount code in DB so it validates at checkout
+    const validUntil = new Date()
+    validUntil.setDate(validUntil.getDate() + 30) // 30 days validity
+    await supabase.from('discount_codes').insert({
+      code,
+      code_type: 'codice_sconto',
+      scope: ['supercar', 'utilitarie', 'noleggio'],
+      value_type: 'percentage',
+      value_amount: 5,
+      valid_from: new Date().toISOString(),
+      valid_until: validUntil.toISOString(),
+      single_use: true,
+      message: `Sconto 5% per rifiuto formula no cauzione — Preventivo ${preventivo.id}`,
+      status: 'active',
+    })
 
     // Update status
     await supabase.from('preventivi').update({ status: 'rifiutato' }).eq('id', preventivo.id)
