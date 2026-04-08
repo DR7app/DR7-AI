@@ -309,11 +309,7 @@ export default function MessaggiSistemaTab() {
     }
 
     async function handleDeleteTemplate(template: SystemMessage) {
-        if (SYSTEM_KEYS.includes(template.message_key)) {
-            toast.error('I messaggi di sistema non possono essere eliminati')
-            return
-        }
-        if (!confirm(`Eliminare il messaggio "${template.label}"?`)) return
+        if (!confirm(`Eliminare il messaggio "${template.label}"?\n\nAttenzione: il sistema userà il testo di fallback predefinito.`)) return
 
         try {
             const { error } = await supabase
