@@ -836,37 +836,57 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex gap-1 flex-wrap">
-                        {(p.status === 'bozza' || p.status === 'inviato') && (
-                          <button
-                            onClick={() => { setSelectedPreventivo(p); setWhatsappPhone(p.customer_phone || ''); setShowPhoneModal(true) }}
-                            className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
-                          >
-                            Invia
-                          </button>
-                        )}
-                        {(p.status === 'inviato' || p.status === 'bozza') && (
-                          <button
-                            onClick={() => handleConvertToBooking(p)}
-                            className="px-2 py-1 text-xs bg-dr7-gold hover:bg-[#247a6f] text-white rounded"
-                          >
-                            {p.source === 'website_no_cauzione' && !isValerio ? 'Richiedi Approvazione' : 'Converti'}
-                          </button>
-                        )}
-                        {p.source === 'website_no_cauzione' && (p.status === 'inviato' || p.status === 'bozza') && (
-                          <button
-                            onClick={() => handleRejectNoCauzione(p)}
-                            className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
-                          >
-                            Rifiuta + Sconto 5%
-                          </button>
-                        )}
-                        {p.status === 'inviato' && p.source !== 'website_no_cauzione' && (
-                          <button
-                            onClick={() => updateStatus(p.id, 'rifiutato')}
-                            className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
-                          >
-                            Rifiutato
-                          </button>
+                        {p.source?.startsWith('website') && (p.status === 'bozza' || p.status === 'inviato') ? (
+                          <>
+                            <button
+                              onClick={() => handleConvertToBooking(p)}
+                              className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded font-bold"
+                            >
+                              Accetta
+                            </button>
+                            {p.source === 'website_no_cauzione' ? (
+                              <button
+                                onClick={() => handleRejectNoCauzione(p)}
+                                className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
+                              >
+                                Rifiuta + Sconto 5%
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => updateStatus(p.id, 'rifiutato')}
+                                className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
+                              >
+                                Rifiuta
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {(p.status === 'bozza' || p.status === 'inviato') && (
+                              <button
+                                onClick={() => { setSelectedPreventivo(p); setWhatsappPhone(p.customer_phone || ''); setShowPhoneModal(true) }}
+                                className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
+                              >
+                                Invia
+                              </button>
+                            )}
+                            {(p.status === 'inviato' || p.status === 'bozza') && (
+                              <button
+                                onClick={() => handleConvertToBooking(p)}
+                                className="px-2 py-1 text-xs bg-dr7-gold hover:bg-[#247a6f] text-white rounded"
+                              >
+                                Converti
+                              </button>
+                            )}
+                            {p.status === 'inviato' && (
+                              <button
+                                onClick={() => updateStatus(p.id, 'rifiutato')}
+                                className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
+                              >
+                                Rifiutato
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
