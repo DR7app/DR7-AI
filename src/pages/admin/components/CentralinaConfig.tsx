@@ -43,6 +43,21 @@ const UNIT_LABELS: Record<string, string> = {
 }
 
 
+/** Deep merge saved config onto defaults — preserves new default fields missing from saved data */
+function deepMergeConfig(defaults: RentalConfig, saved: Record<string, unknown>): RentalConfig {
+  const result = JSON.parse(JSON.stringify(defaults))
+  for (const [key, val] of Object.entries(saved)) {
+    if (val !== null && val !== undefined) {
+      if (typeof val === 'object' && !Array.isArray(val) && result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])) {
+        result[key] = { ...result[key], ...val }
+      } else {
+        result[key] = val
+      }
+    }
+  }
+  return result as RentalConfig
+}
+
 /** Read categories dynamically from config */
 function getCategories(config: RentalConfig): string[] {
   return Object.keys(config.vehicle_categories || {})
@@ -71,7 +86,7 @@ export default function CentralinaConfig() {
         .single()
 
       if (!error && data?.config) {
-        setConfig({ ...DEFAULT_RENTAL_CONFIG, ...data.config } as RentalConfig)
+        setConfig(deepMergeConfig(DEFAULT_RENTAL_CONFIG, data.config))
         setLastSaved(data.updated_at)
         setSavedBy(data.updated_by)
       }
@@ -158,7 +173,7 @@ export default function CentralinaConfig() {
         .single()
 
       if (verify?.config) {
-        setConfig({ ...DEFAULT_RENTAL_CONFIG, ...verify.config } as RentalConfig)
+        setConfig(deepMergeConfig(DEFAULT_RENTAL_CONFIG, verify.config))
         setLastSaved(verify.updated_at)
         setSavedBy(verify.updated_by)
         toast.success('Configurazione salvata e verificata — il sito si aggiornera entro 30 secondi')
