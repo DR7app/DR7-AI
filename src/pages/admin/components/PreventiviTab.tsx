@@ -360,8 +360,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
     // Use dynamic price as the actual subtotal
     const subtotal = dynamicSubtotal
-    const sconto = parseFloat(form.sconto) || 0
-    const totalFinal = Math.round((subtotal - sconto) * 100) / 100
+    const scontatoInput = parseFloat(form.sconto) || 0
+    const sconto = scontatoInput > 0 ? Math.round((subtotal - scontatoInput) * 100) / 100 : 0
+    const totalFinal = scontatoInput > 0 ? Math.round(scontatoInput * 100) / 100 : subtotal
 
     return {
       baseDailyRate: listDailyRate,
@@ -1236,7 +1237,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
         {/* Sconto */}
         <div className="grid grid-cols-2 gap-3 pt-2">
-          <Input label="Sconto (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="0" />
+          <Input label="Prezzo Scontato (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder={formatEur(pricing.subtotal)} />
           <Input label="Nota sconto" value={form.sconto_note} onChange={(e) => setForm(prev => ({ ...prev, sconto_note: e.target.value }))} placeholder="valido solo 24h" />
         </div>
 
