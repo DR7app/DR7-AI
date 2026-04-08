@@ -515,8 +515,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           experience_cost: pricing.experienceCost,
         },
         status: 'bozza',
-        created_by: adminEmail || null,
+        created_by: adminEmail || (await supabase.auth.getUser()).data.user?.email || null,
       }
+
+      console.log('[PreventiviTab] Saving preventivo with created_by:', record.created_by)
 
       const { data, error } = await supabase
         .from('preventivi')
