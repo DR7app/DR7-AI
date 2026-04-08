@@ -76,7 +76,9 @@ const SYSTEM_KEYS = [
   // Cancellazione prenotazione (cancel-unpaid-nexi-bookings)
   'booking_cancelled_whatsapp', 'cancellation_admin_alert',
   // Pagamento ricevuto (nexi-payment-callback)
-  'payment_received_damages', 'payment_received_extension', 'wallet_bonus_credit',
+  'payment_received_damages', 'payment_received_damages_admin',
+  'payment_received_extension', 'payment_received_extension_admin',
+  'wallet_bonus_credit', 'wallet_bonus_credit_admin',
   // Carta prepagata (prepaid-card-guard)
   'prepaid_card_blocked_customer', 'prepaid_card_blocked_admin',
   // Fattura (generate-invoice/penalty)
@@ -85,6 +87,8 @@ const SYSTEM_KEYS = [
   'referral_otp_whatsapp',
   // Preventivo dal sito (create-website-preventivo)
   'admin_new_website_quote', 'admin_no_cauzione_request',
+  // Membership (send-membership-reminders)
+  'membership_renewal_reminder',
 ]
 
 
