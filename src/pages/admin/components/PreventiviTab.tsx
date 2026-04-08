@@ -61,6 +61,7 @@ interface Preventivo {
   booking_id: string | null
   whatsapp_sent_at: string | null
   whatsapp_message_id: string | null
+  sent_by: string | null
   source: string | null
   created_by: string | null
   created_at: string
@@ -514,6 +515,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           experience_cost: pricing.experienceCost,
         },
         status: 'bozza',
+        created_by: adminEmail || null,
       }
 
       const { data, error } = await supabase
@@ -632,6 +634,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           customer_phone: phone,
           customer_name: selectedCust?.full_name || preventivo.customer_name || null,
           customer_id: selectedCustomerId || preventivo.customer_id || null,
+          sent_by: adminEmail || null,
           whatsapp_sent_at: new Date().toISOString(),
           whatsapp_message_id: result.messageId || null,
           expires_at: expiresAt,

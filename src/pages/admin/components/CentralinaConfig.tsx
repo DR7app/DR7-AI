@@ -70,7 +70,7 @@ export default function CentralinaConfig() {
         .single()
 
       if (!error && data?.config) {
-        setConfig(deepMergeConfig(DEFAULT_RENTAL_CONFIG, data.config))
+        setConfig({ ...DEFAULT_RENTAL_CONFIG, ...data.config } as RentalConfig)
         setLastSaved(data.updated_at)
         setSavedBy(data.updated_by)
       }
@@ -157,7 +157,7 @@ export default function CentralinaConfig() {
         .single()
 
       if (verify?.config) {
-        setConfig(deepMergeConfig(DEFAULT_RENTAL_CONFIG, verify.config))
+        setConfig({ ...DEFAULT_RENTAL_CONFIG, ...verify.config } as RentalConfig)
         setLastSaved(verify.updated_at)
         setSavedBy(verify.updated_by)
         toast.success('Configurazione salvata e verificata — il sito si aggiornera entro 30 secondi')
