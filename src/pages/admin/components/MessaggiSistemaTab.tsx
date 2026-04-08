@@ -665,9 +665,9 @@ export default function MessaggiSistemaTab() {
                     </div>
                 )}
 
-                {/* Template Cards — Expandable style */}
+                {/* Template Cards — Only show templates that match active SYSTEM_KEYS */}
                 <div className="space-y-3">
-                    {templates.map((template) => (
+                    {templates.filter(t => SYSTEM_KEYS.includes(t.message_key)).map((template) => (
                         <details key={template.id} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
                             <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30">
                                 <div className="flex items-center gap-3">
@@ -862,7 +862,7 @@ export default function MessaggiSistemaTab() {
                             className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
                         >
                             <option value="">-- Scegli un messaggio --</option>
-                            {templates.map(t => (
+                            {templates.filter(t => SYSTEM_KEYS.includes(t.message_key)).map(t => (
                                 <option key={t.id} value={t.id}>{t.label}</option>
                             ))}
                         </select>
