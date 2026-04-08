@@ -34,7 +34,7 @@ const CONFIG_DATA = {
     },
     urban: { _all_tiers: [{ id: "KASKO_BASE", name: "Kasko Base", daily_price: 15 }, { id: "KASKO_DR7", name: "Kasko DR7", daily_price: 45 }] },
     utilitaire: { _all_tiers: [{ id: "KASKO_BASE", name: "Kasko Base", daily_price: 45 }, { id: "KASKO_DR7", name: "Kasko DR7", daily_price: 90 }] },
-    furgone: { _all_tiers: [{ id: "KASKO_BASE", name: "Kasko Base", daily_price: 45 }, { id: "KASKO_DR7", name: "Kasko DR7", daily_price: 90 }] },
+    furgone: { _all_tiers: [{ id: "RCA", name: "RCA Compresa (no Kasko)", daily_price: 0 }, { id: "KASKO_BASE", name: "Kasko Base", daily_price: 45 }] },
     eligibility: {
       RCA: { min_age: 18, min_license_years: 2 },
       KASKO_BASE: { min_age: 20, min_license_years: 2 },

@@ -231,7 +231,10 @@ function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: Ret
     name.includes('citroen') || name.includes('208') || name.includes('urban')) {
     return urban;
   }
-  if (name.includes('van') || name.includes('utilitaire') || name.includes('ducato') || name.includes('vito')) {
+  if (name.includes('ducato') || name.includes('vito') || name.includes('v class') || name.includes('v-class') || name.includes('classe v') || name.includes('furgone')) {
+    return furg;
+  }
+  if (name.includes('van') || name.includes('utilitaire')) {
     return util;
   }
 
