@@ -7,6 +7,7 @@ import { buildConfigOverlay } from '../../../utils/configOverlay'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
+import CustomerAutocomplete from './CustomerAutocomplete'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -192,6 +193,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [whatsappPhone, setWhatsappPhone] = useState('')
   const [showPhoneModal, setShowPhoneModal] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [customers, setCustomers] = useState<any[]>([])
+  const [selectedCustomerId, setSelectedCustomerId] = useState('')
 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
@@ -379,7 +383,34 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   useEffect(() => {
     loadPreventivi()
     loadVehicles()
+    loadCustomers()
   }, [])
+
+  async function loadCustomers() {
+    const all: any[] = []
+    let from = 0
+    const PAGE = 1000
+    while (true) {
+      const { data } = await supabase
+        .from('customers_extended')
+        .select('id, nome, cognome, email, telefono, tipo_cliente, denominazione, scadenza_patente')
+        .order('cognome')
+        .range(from, from + PAGE - 1)
+      if (!data || data.length === 0) break
+      all.push(...data.map((c: any) => ({
+        id: c.id,
+        full_name: c.tipo_cliente === 'azienda'
+          ? (c.denominazione || 'N/A')
+          : `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A',
+        email: c.email || null,
+        phone: c.telefono || null,
+        scadenza_patente: c.scadenza_patente || null,
+      })))
+      from += data.length
+      if (data.length < PAGE) break
+    }
+    setCustomers(all)
+  }
 
   async function loadPreventivi() {
     setLoading(true)
@@ -593,21 +624,25 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       const expiryHours = configOverlay.defaultExpiryHours || 24
       const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString()
 
+      const selectedCust = customers.find((c: any) => c.id === selectedCustomerId)
       await supabase
         .from('preventivi')
         .update({
           status: 'inviato',
           customer_phone: phone,
+          customer_name: selectedCust?.full_name || preventivo.customer_name || null,
+          customer_id: selectedCustomerId || preventivo.customer_id || null,
           whatsapp_sent_at: new Date().toISOString(),
           whatsapp_message_id: result.messageId || null,
           expires_at: expiresAt,
         })
         .eq('id', preventivo.id)
 
-      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: phone })
+      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: phone, customer: selectedCust?.full_name })
       toast.success('Preventivo inviato via WhatsApp!')
       setShowPhoneModal(false)
       setWhatsappPhone('')
+      setSelectedCustomerId('')
       loadPreventivi()
     } catch (error: unknown) {
       console.error('WhatsApp send error:', error)
@@ -774,7 +809,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                         )}
                       </div>
                       {p.customer_name && <div className="text-xs text-theme-text-muted">{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</div>}
+                      {!p.customer_name && p.customer_phone && <div className="text-xs text-theme-text-muted">{p.customer_phone}</div>}
                       {p.vehicle_plate && <div className="text-xs text-theme-text-muted">{p.vehicle_plate}</div>}
+                      {p.whatsapp_sent_at && (
+                        <div className="text-xs text-green-400 mt-0.5">
+                          Inviato{p.customer_name ? ` a ${p.customer_name}` : p.customer_phone ? ` a ${p.customer_phone}` : ''} · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
                         {formatWhatsAppMessage(p)}
                       </div>
@@ -842,6 +883,21 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <div className="bg-theme-bg-secondary rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
               <h3 className="text-lg font-bold text-theme-text-primary">Invia Preventivo via WhatsApp</h3>
               <p className="text-sm text-theme-text-muted">{selectedPreventivo.vehicle_name} - {formatEur(selectedPreventivo.total_final)}</p>
+
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Cerca Cliente</label>
+                <CustomerAutocomplete
+                  customers={customers}
+                  selectedCustomerId={selectedCustomerId}
+                  onSelectCustomer={(id) => {
+                    setSelectedCustomerId(id)
+                    const c = customers.find((c: any) => c.id === id)
+                    if (c?.phone) setWhatsappPhone(c.phone)
+                  }}
+                  placeholder="Nome, email o telefono..."
+                  required={false}
+                />
+              </div>
 
               <Input
                 label="Numero di Telefono"
@@ -918,9 +974,16 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       {/* Dates */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
-        <Input label="Ora Ritiro" type="time" value={form.pickup_time} onChange={(e) => setForm(prev => ({ ...prev, pickup_time: e.target.value }))} />
+        <Input label="Ora Ritiro" type="time" value={form.pickup_time} onChange={(e) => {
+          const newPickupTime = e.target.value
+          // Auto-calculate return time: pickup - 1h30
+          const [h, m] = newPickupTime.split(':').map(Number)
+          const d = new Date(); d.setHours(h, m, 0); d.setMinutes(d.getMinutes() - 90)
+          const autoReturn = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+          setForm(prev => ({ ...prev, pickup_time: newPickupTime, return_time: autoReturn }))
+        }} />
         <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
-        <Input label="Ora Riconsegna" type="time" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} />
+        <Input label="Ora Riconsegna (auto: ritiro -1h30)" type="time" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} />
       </div>
 
       {rentalDays > 0 && (
