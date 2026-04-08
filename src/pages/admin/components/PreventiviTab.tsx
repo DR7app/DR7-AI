@@ -791,9 +791,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                   <th className="py-2 px-3">Veicolo</th>
                   <th className="py-2 px-3">Date</th>
                   <th className="py-2 px-3">Giorni</th>
-                  <th className="py-2 px-3 text-right">Totale</th>
-                  <th className="py-2 px-3 text-right">Sconto</th>
-                  <th className="py-2 px-3 text-right">Finale</th>
+                  <th className="py-2 px-3 text-right">Subtotale</th>
+                  <th className="py-2 px-3 text-right">Prezzo Scontato</th>
                   <th className="py-2 px-3">Stato</th>
                   <th className="py-2 px-3">Azioni</th>
                 </tr>
@@ -835,9 +834,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                       {new Date(p.dropoff_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
                     </td>
                     <td className="py-2 px-3 text-theme-text-muted">{p.rental_days}gg</td>
-                    <td className="py-2 px-3 text-right text-theme-text-primary">{formatEur(p.subtotal)}</td>
-                    <td className="py-2 px-3 text-right text-red-400">{p.sconto > 0 ? `-${formatEur(p.sconto)}` : '-'}</td>
-                    <td className="py-2 px-3 text-right font-bold text-theme-text-primary">{formatEur(p.total_final)}</td>
+                    <td className="py-2 px-3 text-right text-theme-text-muted">{formatEur(p.subtotal)}</td>
+                    <td className="py-2 px-3 text-right font-bold text-theme-text-primary">{p.sconto > 0 ? formatEur(p.total_final) : '-'}</td>
                     <td className="py-2 px-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[p.status] || 'bg-gray-600'}`}>
                         {STATUS_LABELS[p.status] || p.status}
