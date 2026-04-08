@@ -64,19 +64,31 @@ const birthdayHandler: Handler = async (event) => {
   });
 
   try {
-    // Load custom message template from database (fallback to default)
+    // Load custom message template from system_messages (fallback to app_settings, then default)
     let birthdayMessage = DEFAULT_BIRTHDAY_MESSAGE;
-    const { data: settingData } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'birthday_message_template')
+    const { data: sysTemplate } = await supabase
+      .from('system_messages')
+      .select('message_body, is_enabled')
+      .eq('message_key', 'birthday_message')
+      .eq('is_enabled', true)
       .single();
 
-    if (settingData?.value) {
-      birthdayMessage = settingData.value;
-      console.log('[Birthday Auto] Using custom message template from database');
+    if (sysTemplate?.message_body) {
+      birthdayMessage = sysTemplate.message_body;
+      console.log('[Birthday Auto] Using template from system_messages');
     } else {
-      console.log('[Birthday Auto] Using default message template');
+      // Fallback to legacy app_settings
+      const { data: settingData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'birthday_message_template')
+        .single();
+      if (settingData?.value) {
+        birthdayMessage = settingData.value;
+        console.log('[Birthday Auto] Using legacy template from app_settings');
+      } else {
+        console.log('[Birthday Auto] Using default message template');
+      }
     }
 
     const currentYear = new Date().getFullYear();

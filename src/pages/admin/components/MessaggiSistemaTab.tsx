@@ -57,7 +57,14 @@ const CATEGORY_LABELS: Record<string, string> = {
     'furgone': 'Furgoni',
 }
 
-const SYSTEM_KEYS = ['booking_confirmation', 'booking_reminder', 'return_reminder', 'deposit_reminder']
+const SYSTEM_KEYS = [
+  'booking_confirmation', 'booking_reminder', 'return_reminder', 'deposit_reminder',
+  'carwash_new', 'carwash_modified', 'mechanical_new', 'mechanical_modified',
+  'rental_new', 'rental_modified',
+  'supercar_day_before', 'utilitaria_day_before', 'deposit_return_iban',
+  'checkin_reminder', 'checkout_reminder',
+  'birthday_message',
+]
 
 
 export default function MessaggiSistemaTab() {
