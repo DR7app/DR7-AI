@@ -638,7 +638,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         })
         .eq('id', preventivo.id)
 
-      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: phone, customer: selectedCust?.full_name })
+      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: `${phone}${selectedCust?.full_name ? ' — ' + selectedCust.full_name : ''}` })
       toast.success('Preventivo inviato via WhatsApp!')
       setShowPhoneModal(false)
       setWhatsappPhone('')
