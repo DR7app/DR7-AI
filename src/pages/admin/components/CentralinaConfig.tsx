@@ -42,6 +42,7 @@ const UNIT_LABELS: Record<string, string> = {
   flat: 'fisso',
 }
 
+
 /** Read categories dynamically from config */
 function getCategories(config: RentalConfig): string[] {
   return Object.keys(config.vehicle_categories || {})
