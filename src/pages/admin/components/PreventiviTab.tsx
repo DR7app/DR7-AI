@@ -811,11 +811,17 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                       {p.customer_name && <div className="text-xs text-theme-text-muted">{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</div>}
                       {!p.customer_name && p.customer_phone && <div className="text-xs text-theme-text-muted">{p.customer_phone}</div>}
                       {p.vehicle_plate && <div className="text-xs text-theme-text-muted">{p.vehicle_plate}</div>}
-                      {p.whatsapp_sent_at && (
-                        <div className="text-xs text-green-400 mt-0.5">
-                          Inviato{p.customer_name ? ` a ${p.customer_name}` : p.customer_phone ? ` a ${p.customer_phone}` : ''} · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      )}
+                      <div className="text-[10px] mt-1 space-y-0.5">
+                        {p.created_by && (
+                          <div className="text-theme-text-muted/60">Creato da: <span className="text-theme-text-muted">{p.created_by}</span> · {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
+                        )}
+                        {!p.created_by && (
+                          <div className="text-theme-text-muted/60">Creato il: {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
+                        )}
+                        {p.whatsapp_sent_at && (
+                          <div className="text-green-400/80">Inviato{p.sent_by ? ` da ${p.sent_by}` : ''} → {p.customer_name ? `${p.customer_name}${p.customer_phone ? ` (${p.customer_phone})` : ''}` : p.customer_phone || 'N/A'} · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
+                        )}
+                      </div>
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
                         {formatWhatsAppMessage(p)}
                       </div>
