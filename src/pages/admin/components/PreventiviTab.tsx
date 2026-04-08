@@ -351,8 +351,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
 
     const subtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost) * 100) / 100
-    const sconto = parseFloat(form.sconto) || 0
-    const totalFinal = Math.round((subtotal - sconto) * 100) / 100
+    const desiredFinal = parseFloat(form.sconto) || 0
+    const sconto = desiredFinal > 0 && desiredFinal < subtotal ? Math.round((subtotal - desiredFinal) * 100) / 100 : 0
+    const totalFinal = sconto > 0 ? desiredFinal : subtotal
 
     return {
       baseDailyRate,
@@ -1280,7 +1281,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
         {/* Sconto */}
         <div className="grid grid-cols-2 gap-3 pt-2">
-          <Input label="Sconto (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="0" />
+          <Input label="Prezzo Finale Desiderato (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="Lascia vuoto per nessuno sconto" />
           <Input label="Nota sconto" value={form.sconto_note} onChange={(e) => setForm(prev => ({ ...prev, sconto_note: e.target.value }))} placeholder="valido solo 24h" />
         </div>
 
