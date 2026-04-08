@@ -47,7 +47,13 @@ export default function CarWashCatalogTab() {
   const [editDuration, setEditDuration] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editFeatures, setEditFeatures] = useState('')
+  const [editImageUrl, setEditImageUrl] = useState('')
   const [saving, setSaving] = useState(false)
+  const [showNewForm, setShowNewForm] = useState(false)
+  const [newService, setNewService] = useState({
+    name: '', price: '', duration: '', description: '', features: '', image_url: '',
+    category: 'urban', main_tab: 'lavaggio' as 'lavaggio' | 'meccanica',
+  })
 
   useEffect(() => {
     loadServices()
@@ -74,6 +80,7 @@ export default function CarWashCatalogTab() {
     setEditDuration(service.duration || '')
     setEditDescription(service.description || '')
     setEditFeatures((service.features || []).join('\n'))
+    setEditImageUrl((service as any).image_url || '')
   }
 
   function cancelEditing() {
@@ -84,6 +91,7 @@ export default function CarWashCatalogTab() {
     setEditDuration('')
     setEditDescription('')
     setEditFeatures('')
+    setEditImageUrl('')
   }
 
   async function saveEditing(service: CarWashService) {
@@ -96,6 +104,7 @@ export default function CarWashCatalogTab() {
         duration: editDuration.trim() || service.duration,
         description: editDescription.trim() || service.description,
         features: editFeatures.split('\n').filter(f => f.trim()),
+        image_url: editImageUrl.trim() || null,
       }
 
       if (service.price_options && service.price_options.length > 0) {
@@ -113,6 +122,47 @@ export default function CarWashCatalogTab() {
       await loadServices()
     } catch (err: unknown) {
       alert('Errore nel salvataggio: ' + (err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function toggleActive(service: CarWashService) {
+    const newVal = !service.is_active
+    await supabase.from('car_wash_services').update({ is_active: newVal }).eq('id', service.id)
+    setServices(prev => prev.map(s => s.id === service.id ? { ...s, is_active: newVal } : s))
+  }
+
+  async function addNewService() {
+    if (!newService.name.trim()) return
+    setSaving(true)
+    try {
+      const id = newService.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')
+      const maxOrder = services.filter(s => s.main_tab === newService.main_tab && s.category === newService.category)
+        .reduce((max, s) => Math.max(max, s.display_order || 0), 0)
+
+      const { error } = await supabase.from('car_wash_services').insert({
+        id,
+        name: newService.name.trim(),
+        name_en: newService.name.trim(),
+        price: parseFloat(newService.price) || 0,
+        duration: newService.duration.trim() || '-',
+        description: newService.description.trim() || '',
+        description_en: '',
+        features: newService.features.split('\n').filter(f => f.trim()),
+        features_en: [],
+        category: newService.category,
+        main_tab: newService.main_tab,
+        image_url: newService.image_url.trim() || null,
+        display_order: maxOrder + 10,
+        is_active: true,
+      })
+      if (error) throw error
+      setShowNewForm(false)
+      setNewService({ name: '', price: '', duration: '', description: '', features: '', image_url: '', category: 'urban', main_tab: 'lavaggio' })
+      await loadServices()
+    } catch (err: unknown) {
+      alert('Errore: ' + (err as Error).message)
     } finally {
       setSaving(false)
     }
@@ -143,6 +193,13 @@ export default function CarWashCatalogTab() {
         <div className="flex gap-2">
           <button
             type="button"
+            onClick={() => { setShowNewForm(true); setNewService(prev => ({ ...prev, main_tab: selectedTab })) }}
+            className="px-4 py-2 rounded-full text-sm font-medium bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors"
+          >
+            + Nuovo Servizio
+          </button>
+          <button
+            type="button"
             onClick={() => setSelectedTab('lavaggio')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
               selectedTab === 'lavaggio'
@@ -165,6 +222,64 @@ export default function CarWashCatalogTab() {
           </button>
         </div>
       </div>
+
+      {/* New Service Form */}
+      {showNewForm && (
+        <div className="rounded-2xl border-2 border-dr7-gold p-5 bg-theme-bg-secondary space-y-3">
+          <h3 className="font-bold text-theme-text-primary">Nuovo Servizio</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-theme-text-muted mb-1">Nome *</label>
+              <input type="text" value={newService.name} onChange={e => setNewService(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" placeholder="Es. Interior Premium" />
+            </div>
+            <div>
+              <label className="block text-xs text-theme-text-muted mb-1">Prezzo (€)</label>
+              <input type="number" step="0.01" value={newService.price} onChange={e => setNewService(prev => ({ ...prev, price: e.target.value }))}
+                className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" placeholder="29.90" />
+            </div>
+            <div>
+              <label className="block text-xs text-theme-text-muted mb-1">Durata</label>
+              <input type="text" value={newService.duration} onChange={e => setNewService(prev => ({ ...prev, duration: e.target.value }))}
+                className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" placeholder="45 min" />
+            </div>
+            <div>
+              <label className="block text-xs text-theme-text-muted mb-1">Categoria</label>
+              <select value={newService.category} onChange={e => setNewService(prev => ({ ...prev, category: e.target.value }))}
+                className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold">
+                {(selectedTab === 'lavaggio' ? LAVAGGIO_ORDER : MECCANICA_ORDER).map(c => (
+                  <option key={c} value={c}>{CATEGORY_LABELS[c] || c}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-theme-text-muted mb-1">Descrizione</label>
+            <textarea value={newService.description} onChange={e => setNewService(prev => ({ ...prev, description: e.target.value }))} rows={2}
+              className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" />
+          </div>
+          <div>
+            <label className="block text-xs text-theme-text-muted mb-1">Immagine (URL)</label>
+            <input type="url" value={newService.image_url} onChange={e => setNewService(prev => ({ ...prev, image_url: e.target.value }))}
+              className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" placeholder="https://..." />
+          </div>
+          <div>
+            <label className="block text-xs text-theme-text-muted mb-1">Caratteristiche (una per riga)</label>
+            <textarea value={newService.features} onChange={e => setNewService(prev => ({ ...prev, features: e.target.value }))} rows={3}
+              className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm font-mono focus:outline-none focus:border-dr7-gold" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={addNewService} disabled={saving || !newService.name.trim()}
+              className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50">
+              {saving ? 'Salvataggio...' : 'Crea Servizio'}
+            </button>
+            <button onClick={() => setShowNewForm(false)}
+              className="px-4 py-1.5 bg-theme-bg-tertiary text-theme-text-secondary text-sm rounded-full hover:bg-theme-bg-hover transition-colors">
+              Annulla
+            </button>
+          </div>
+        </div>
+      )}
 
       {Object.keys(groupedServices).length === 0 && (
         <p className="text-theme-text-muted text-center py-10">Nessun servizio trovato.</p>
@@ -200,6 +315,9 @@ export default function CarWashCatalogTab() {
                   onEditDuration={setEditDuration}
                   onEditDescription={setEditDescription}
                   onEditFeatures={setEditFeatures}
+                  editImageUrl={editImageUrl}
+                  onEditImageUrl={setEditImageUrl}
+                  onToggleActive={() => toggleActive(service)}
                 />
               ))}
             </div>
@@ -229,6 +347,9 @@ interface ServiceCardProps {
   onEditDuration: (v: string) => void
   onEditDescription: (v: string) => void
   onEditFeatures: (v: string) => void
+  editImageUrl: string
+  onEditImageUrl: (v: string) => void
+  onToggleActive: () => void
 }
 
 function ServiceCard({
@@ -250,6 +371,9 @@ function ServiceCard({
   onEditDuration,
   onEditDescription,
   onEditFeatures,
+  editImageUrl,
+  onEditImageUrl,
+  onToggleActive,
 }: ServiceCardProps) {
   const inactive = !service.is_active
 
@@ -340,6 +464,18 @@ function ServiceCard({
           />
         </div>
 
+        {/* Image URL */}
+        <div className="mb-3">
+          <label className="block text-xs text-theme-text-muted mb-1">Immagine (URL)</label>
+          <input
+            type="url"
+            value={editImageUrl}
+            onChange={e => onEditImageUrl(e.target.value)}
+            className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+            placeholder="https://..."
+          />
+        </div>
+
         {/* Action buttons */}
         <div className="flex gap-2">
           <button
@@ -369,16 +505,30 @@ function ServiceCard({
           : 'border-theme-border bg-theme-bg-secondary'
       }`}
     >
-      {/* Edit button */}
-      <button
-        onClick={onStartEdit}
-        className="absolute top-3 right-3 p-1.5 rounded-full bg-theme-bg-tertiary/80 text-theme-text-muted hover:text-dr7-gold hover:bg-theme-bg-tertiary transition-colors opacity-0 group-hover:opacity-100"
-        title="Modifica"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-        </svg>
-      </button>
+      {/* Action buttons */}
+      <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={onToggleActive}
+          className={`p-1.5 rounded-full bg-theme-bg-tertiary/80 transition-colors ${inactive ? 'text-green-400 hover:bg-green-500/20' : 'text-red-400 hover:bg-red-500/20'}`}
+          title={inactive ? 'Attiva' : 'Disattiva'}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {inactive
+              ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+            }
+          </svg>
+        </button>
+        <button
+          onClick={onStartEdit}
+          className="p-1.5 rounded-full bg-theme-bg-tertiary/80 text-theme-text-muted hover:text-dr7-gold hover:bg-theme-bg-tertiary transition-colors"
+          title="Modifica"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+        </button>
+      </div>
 
       <div className="flex items-start justify-between gap-2 mb-2 pr-8">
         <div>
