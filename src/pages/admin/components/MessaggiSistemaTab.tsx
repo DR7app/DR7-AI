@@ -57,13 +57,34 @@ const CATEGORY_LABELS: Record<string, string> = {
     'furgone': 'Furgoni',
 }
 
+// These keys match REAL messages sent by active functions — do not add keys that don't exist
 const SYSTEM_KEYS = [
-  'booking_confirmation', 'booking_reminder', 'return_reminder', 'deposit_reminder',
-  'carwash_new', 'carwash_modified', 'mechanical_new', 'mechanical_modified',
-  'rental_new', 'rental_modified',
+  // Booking confirmations (send-whatsapp-notification)
+  'rental_new', 'carwash_new', 'mechanical_new',
+  // Day-before reminders (send-booking-reminders cron)
   'supercar_day_before', 'utilitaria_day_before', 'deposit_return_iban',
+  // Check-in/out (send-checkin-checkout-whatsapp)
   'checkin_reminder', 'checkout_reminder',
+  // Reviews (send-review-whatsapp cron)
+  'review_request_whatsapp',
+  // Birthday (send-birthday-messages cron)
   'birthday_message',
+  // Firma contratto (signature-init, signature-reminder, signature-send-otp, signature-complete)
+  'signature_request_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp', 'admin_contract_signed_alert',
+  // Firma documento (document-sign-init)
+  'document_signature_link',
+  // Cancellazione prenotazione (cancel-unpaid-nexi-bookings)
+  'booking_cancelled_whatsapp', 'cancellation_admin_alert',
+  // Pagamento ricevuto (nexi-payment-callback)
+  'payment_received_damages', 'payment_received_extension', 'wallet_bonus_credit',
+  // Carta prepagata (prepaid-card-guard)
+  'prepaid_card_blocked_customer', 'prepaid_card_blocked_admin',
+  // Fattura (generate-invoice/penalty)
+  'invoice_pdf_whatsapp', 'penalty_invoice_pdf_whatsapp',
+  // OTP Referral (referral-send-otp)
+  'referral_otp_whatsapp',
+  // Preventivo dal sito (create-website-preventivo)
+  'admin_new_website_quote', 'admin_no_cauzione_request',
 ]
 
 
