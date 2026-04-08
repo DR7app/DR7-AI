@@ -145,9 +145,6 @@ function getHardcodedDefaults(): ConfigOverlay {
     furgoneInsurance: [
       { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
       { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
-      { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 65 },
-      { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 80 },
-      { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
     ],
     sforoDefaults: [
       { match: (n: string) => n.includes('rs3') || n.includes('macan') || n.includes('test'), sforo: '0.89', label: 'RS3/Macan/Test' },

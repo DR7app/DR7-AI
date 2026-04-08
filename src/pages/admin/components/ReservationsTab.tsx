@@ -131,9 +131,6 @@ export const UTILITAIRE_INSURANCE_OPTIONS = [
 export const FURGONE_INSURANCE_OPTIONS = [
   { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
-  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 65 },
-  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 80 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
 // Deposit amounts by vehicle type
@@ -659,21 +656,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
               const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
                 + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
-              // No cauzione surcharge
               const noCauzioneSurcharge = prev.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * data.rentalDays : 0
-              // Unlimited KM surcharge (tier-based)
               let unlimitedKmSurcharge = 0
               if (prev.unlimited_km) {
                 unlimitedKmSurcharge = getUnlimitedKmPrice(selectedVehicle, activeTier) * data.rentalDays
               }
-              // Second driver surcharge (tier-based)
               const secondDriverFee = prev.has_second_driver
                 ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * data.rentalDays
                 : 0
-              // Experience services + DR7 Flex
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
-              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+              // List price: base rate (no coefficients) × days + all services
+              const listDailyRate = data.selectedBaseRateEur || (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
+              const listRentalTotal = listDailyRate * data.rentalDays
+              const listSubtotal = listRentalTotal + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+              // Combined coefficient from revenue engine
+              const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
+              // Dynamic price: coefficients applied to FULL package
+              const subtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               const updates: Record<string, string> = { total_amount: total.toFixed(2) }
@@ -718,7 +718,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         : 0
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
-      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+      // List price: base rate (no coefficients) × days + all services
+      const listDailyRate = revenueSuggestion.selectedBaseRateEur || (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
+      const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
+      const listSubtotal = listRentalTotal + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+      // Combined coefficient from revenue engine
+      const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
+      // Dynamic price: coefficients applied to FULL package
+      const subtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
       // Auto-calculate KM limit from rental days
@@ -6053,15 +6060,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const noCauzioneCost = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
                           const unlimitedKmCost = formData.unlimited_km
                             ? getUnlimitedKmPrice(sv, activeTier) * revenueSuggestion.rentalDays : 0
-                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost
-                          const grandTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
+                          const secondDriverCost = formData.has_second_driver
+                            ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays : 0
+                          const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
+                          const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
+                          // List price (no coefficients)
+                          const listDailyRate = revenueSuggestion.selectedBaseRateEur || (sv ? sv.daily_rate / 100 : 0)
+                          const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
+                          const listSubtotal = listRentalTotal + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost + secondDriverCost + experienceCost + flexCost
+                          // Combined coefficient
+                          const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
+                          const dynamicSubtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
+                          const grandTotal = formData.payment_method === 'Contanti' ? dynamicSubtotal * 1.20 : dynamicSubtotal
+                          const hasDiscount = Math.abs(combinedCoeff - 1) > 0.001
+                          const discountPct = hasDiscount ? Math.round((1 - combinedCoeff) * 100) : 0
+                          const listGrandTotal = formData.payment_method === 'Contanti' ? listSubtotal * 1.20 : listSubtotal
                           return (
                             <>
+                              {hasDiscount && (
+                                <span className="text-sm text-theme-text-muted line-through">
+                                  EUR {listGrandTotal.toFixed(2)}
+                                </span>
+                              )}
                               <span className={`text-lg font-bold ${
                                 revenueSuggestion.mode === 'auto_apply' ? 'text-green-400' : 'text-amber-400'
                               }`}>
                                 EUR {grandTotal.toFixed(2)}
                               </span>
+                              {hasDiscount && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${discountPct > 0 ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
+                                  {discountPct > 0 ? `-${discountPct}%` : `+${Math.abs(discountPct)}%`}
+                                </span>
+                              )}
                               {revenueSuggestion.mode !== 'auto_apply' && (
                                 <button
                                   type="button"

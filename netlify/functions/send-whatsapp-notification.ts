@@ -21,7 +21,7 @@ const handler: Handler = async (event) => {
   }
 
   const body = JSON.parse(event.body || '{}');
-  const { booking, type, customPhone } = body;
+  const { booking, type, customPhone, skipHeader } = body;
   // Accept both 'message' and 'customMessage' for flexibility
   const customMessage = body.customMessage || body.message;
 
@@ -288,6 +288,113 @@ const handler: Handler = async (event) => {
     };
   }
 
+  // ── Try to load edited template from DB ──
+  // Determine the message key based on booking type
+  let messageKey = '';
+  if (booking) {
+    const serviceType = booking.service_type;
+    const isEdit = booking.isEdit;
+    if (serviceType === 'car_wash') {
+      messageKey = isEdit ? 'carwash_modified' : 'carwash_new';
+    } else if (serviceType === 'mechanical') {
+      messageKey = isEdit ? 'mechanical_modified' : 'mechanical_new';
+    } else {
+      messageKey = isEdit ? 'rental_modified' : 'rental_new';
+    }
+  }
+
+  // If a template exists in DB, use it (admin may have edited it)
+  let finalMessage = message;
+  let useHeader = true;
+  if (messageKey) {
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const { data: tpl } = await supabase
+        .from('system_messages')
+        .select('message_body, include_header, is_enabled')
+        .eq('message_key', messageKey)
+        .single();
+
+      if (tpl && tpl.is_enabled !== false && tpl.message_body) {
+        // Use the DB template — it's the source of truth
+        finalMessage = tpl.message_body;
+        useHeader = tpl.include_header !== false;
+
+        // Substitute all known variables
+        const customerName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';
+        const vars: Record<string, string> = {
+          nome: customerName.split(' ')[0],
+          customer_name: customerName,
+          customer_email: booking.customer_email || booking.booking_details?.customer?.email || '',
+          customer_phone: booking.customer_phone || booking.booking_details?.customer?.phone || '',
+          booking_id: booking.id.substring(0, 8).toUpperCase(),
+          total: (booking.price_total / 100).toFixed(2),
+          vehicle_name: booking.vehicle_name || '',
+          plate: booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '',
+          pickup_location: booking.pickup_location || '',
+          insurance: booking.insurance_option || '',
+          payment_status: booking.payment_status || '',
+          service_name: booking.service_name || booking.booking_details?.serviceName || booking.booking_details?.service_name || '',
+          notes: booking.booking_details?.notes || '',
+        };
+
+        // Format dates if available
+        if (booking.pickup_date) {
+          const pd = new Date(booking.pickup_date);
+          vars.pickup_date = pd.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
+          vars.pickup_time = pd.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
+        }
+        if (booking.dropoff_date) {
+          const dd = new Date(booking.dropoff_date);
+          vars.dropoff_date = dd.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
+          vars.dropoff_time = dd.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
+        }
+        if (booking.appointment_date) {
+          const ad = new Date(booking.appointment_date);
+          vars.date = ad.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' });
+          vars.time = ad.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
+        }
+
+        // Cauzione (deposit) for template
+        const depAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0);
+        const depOption = booking.booking_details?.depositOption;
+        const depStatus = booking.booking_details?.deposit_status;
+        if (depOption === 'no_deposit') {
+          const surcharge = Number(booking.booking_details?.noDepositSurcharge ?? 0);
+          vars.deposit = `Senza cauzione (+30% = €${surcharge.toFixed(2)})`;
+        } else if (depAmount > 0) {
+          const statusLbl = depStatus === 'incassata' ? 'Pagata' : 'Da saldare';
+          vars.deposit = `€${depAmount.toFixed(2)} - ${statusLbl}`;
+        } else {
+          vars.deposit = '€0';
+        }
+
+        // KM info for template
+        const tplUnlimitedKm = booking.booking_details?.unlimited_km;
+        const tplKmLimit = booking.booking_details?.km_limit;
+        if (tplUnlimitedKm || tplKmLimit === 'Illimitati') {
+          vars.km_info = 'Illimitati';
+        } else if (tplKmLimit && tplKmLimit !== '0') {
+          vars.km_info = `${tplKmLimit} km`;
+        } else {
+          vars.km_info = 'Standard';
+        }
+
+        // Replace all {variable} placeholders
+        for (const [k, v] of Object.entries(vars)) {
+          finalMessage = finalMessage.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '');
+        }
+      }
+    } catch {
+      // Fallback to hardcoded message
+    }
+  }
+
+  // Build the final wrapped message
+  const HEADER = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n`;
+  const FOOTER = `\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+  const wrappedMessage = useHeader ? `${HEADER}${finalMessage}${FOOTER}` : finalMessage;
+
   try {
     // Send via Green API
     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
@@ -299,7 +406,7 @@ const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         chatId: `${targetPhone}@c.us`,
-        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
+        message: skipHeader ? finalMessage : wrappedMessage,
       }),
     });
 
@@ -314,7 +421,7 @@ const handler: Handler = async (event) => {
 
     // Log to sent_messages_log — fire and forget, never blocks the response
     if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-      const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${message}`;
+      const fullMessage = wrappedMessage;
       const customerName = booking?.customer_name || booking?.booking_details?.customer?.fullName || body.customerName || 'N/A';
       const templateLabel = body.type || (customMessage ? 'Messaggio Manuale' : booking?.service_type || 'Notifica');
       createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
