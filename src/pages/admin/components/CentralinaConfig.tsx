@@ -97,16 +97,37 @@ export default function CentralinaConfig() {
       const { data: user } = await supabase.auth.getUser()
       const email = user?.user?.email || 'admin'
 
-      const { error } = await supabase
+      // First get the row id to ensure we update the right row
+      const { data: existing } = await supabase
         .from('rental_extras_config')
-        .update({
-          config,
-          updated_at: new Date().toISOString(),
-          updated_by: email,
-        })
-        .not('id', 'is', null)
+        .select('id')
+        .limit(1)
+        .single()
 
-      if (error) throw error
+      if (!existing) {
+        // No row exists — insert instead
+        const { error: insertErr } = await supabase
+          .from('rental_extras_config')
+          .insert({
+            config,
+            updated_at: new Date().toISOString(),
+            updated_by: email,
+          })
+        if (insertErr) throw insertErr
+      } else {
+        const { error: updateErr, count } = await supabase
+          .from('rental_extras_config')
+          .update({
+            config,
+            updated_at: new Date().toISOString(),
+            updated_by: email,
+          })
+          .eq('id', existing.id)
+          .select('id')
+
+        if (updateErr) throw updateErr
+        if (!count && count !== undefined) throw new Error('Nessuna riga aggiornata — riprova')
+      }
 
       // Audit log
       await supabase.from('config_audit_log').insert({
@@ -116,9 +137,23 @@ export default function CentralinaConfig() {
         full_snapshot: config,
       })
 
-      setLastSaved(new Date().toISOString())
-      setSavedBy(email)
-      toast.success('Configurazione salvata — il sito si aggiornera entro 30 secondi')
+      // Verify save by reloading from DB
+      const { data: verify } = await supabase
+        .from('rental_extras_config')
+        .select('config, updated_at, updated_by')
+        .limit(1)
+        .single()
+
+      if (verify?.config) {
+        setConfig({ ...DEFAULT_RENTAL_CONFIG, ...verify.config } as RentalConfig)
+        setLastSaved(verify.updated_at)
+        setSavedBy(verify.updated_by)
+        toast.success('Configurazione salvata e verificata — il sito si aggiornera entro 30 secondi')
+      } else {
+        setLastSaved(new Date().toISOString())
+        setSavedBy(email)
+        toast.success('Configurazione salvata — il sito si aggiornera entro 30 secondi')
+      }
     } catch (err) {
       toast.error('Errore salvataggio: ' + (err instanceof Error ? err.message : 'Errore'))
     }
