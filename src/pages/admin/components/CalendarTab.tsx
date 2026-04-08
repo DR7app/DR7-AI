@@ -96,7 +96,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         const { data } = await supabase
           .from('bookings')
           .select('*')
-          .not('status', 'in', '("cancelled","annullata")')
+          .neq('status', 'cancelled')
+          .neq('status', 'annullata')
           .order('pickup_date', { ascending: true })
         allBookings = data
       }
@@ -211,10 +212,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     // Priority: 1) plate match (targa), 2) vehicle_id match (fallback)
     const bookingToVehicleId = new Map<string, string>()
     bookings.forEach(b => {
-      // Use centralized visibility rule: hide cancelled, expired, and expired pending_payment
+      // Hide cancelled, expired, and annullata bookings
       if (b.status === 'cancelled' || b.status === 'annullata' || b.status === 'expired') return
       if (b.status === 'pending_payment' && b.payment_status === 'expired') return
-      // Pending Nexi Pay by Link bookings are shown on calendar (slot blocked for 1h)
+      // Hide unpaid Nexi Pay by Link bookings older than 1 hour (link expired, cron will cancel)
+      if (b.payment_status === 'pending' && b.payment_method === 'Nexi Pay by Link') {
+        const expiresAt = b.booking_details?.payment_link_expires_at || b.booking_details?.payment_link_created_at
+        if (expiresAt && new Date() > new Date(expiresAt)) return
+      }
       const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
       const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
 
