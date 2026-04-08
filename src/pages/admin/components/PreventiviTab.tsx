@@ -310,12 +310,14 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }, [selectedVehicle])
 
   // ─── Pricing Calculation ────────────────────────────────────────────────
+  // Coefficients apply to the FULL PACKAGE (base + services), not just the base rate.
+  // We calculate the "list price" (no coefficients) and the "dynamic price" (with coefficients).
 
   const pricing = useMemo(() => {
-    const baseDailyRate = revenueData?.finalDailyRateEur
-      ?? (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
+    // Base daily rate WITHOUT coefficients (always use vehicle rate as list price base)
+    const listDailyRate = selectedVehicle ? selectedVehicle.daily_rate / 100 : 0
     const maggiorazione = parseFloat(form.maggiorazione_pct) || 0
-    const dailyAfterMarkup = Math.round(baseDailyRate * (1 + maggiorazione / 100) * 100) / 100
+    const dailyAfterMarkup = Math.round(listDailyRate * (1 + maggiorazione / 100) * 100) / 100
     const rentalTotal = Math.round(dailyAfterMarkup * rentalDays * 100) / 100
 
     const selectedIns = insuranceOptions.find(i => i.id === form.insurance_option)
@@ -345,12 +347,24 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
 
-    const subtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost) * 100) / 100
+    // LIST PRICE: full package WITHOUT dynamic coefficients
+    const listSubtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost) * 100) / 100
+
+    // DYNAMIC PRICE: apply combined coefficient to full package
+    const combinedCoeff = revenueData?.enabled
+      ? (revenueData.breakdown || []).reduce((acc, b) => acc * b.coeff, 1)
+      : 1
+    const dynamicSubtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
+    const hasDiscount = revenueData?.enabled && Math.abs(combinedCoeff - 1) > 0.001
+    const discountPct = hasDiscount ? Math.round((1 - combinedCoeff) * 100) : 0
+
+    // Use dynamic price as the actual subtotal
+    const subtotal = dynamicSubtotal
     const sconto = parseFloat(form.sconto) || 0
     const totalFinal = Math.round((subtotal - sconto) * 100) / 100
 
     return {
-      baseDailyRate,
+      baseDailyRate: listDailyRate,
       maggiorazione,
       dailyAfterMarkup,
       rentalTotal,
@@ -367,6 +381,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       dr7FlexTotal,
       deliveryFee,
       pickupFee,
+      // Prezzo barrato
+      listSubtotal,
+      combinedCoeff,
+      dynamicSubtotal,
+      hasDiscount,
+      discountPct,
       experienceCost,
       subtotal,
       sconto,
@@ -1181,9 +1201,37 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           </div>
         )}
 
-        <div className="border-t border-theme-border pt-2 flex justify-between text-theme-text-primary font-semibold">
-          <span>Subtotale</span>
-          <span>{formatEur(pricing.subtotal)}</span>
+        {/* Prezzo Listino vs Prezzo Dinamico */}
+        <div className="border-t border-theme-border pt-2">
+          {pricing.hasDiscount ? (
+            <div className="space-y-1">
+              <div className="flex justify-between text-sm text-theme-text-muted">
+                <span>Prezzo listino</span>
+                <span className="line-through">{formatEur(pricing.listSubtotal)}</span>
+              </div>
+              <div className="flex justify-between text-theme-text-primary font-semibold">
+                <span className="flex items-center gap-2">
+                  Prezzo dinamico
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${pricing.discountPct > 0 ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
+                    {pricing.discountPct > 0 ? `-${pricing.discountPct}%` : `+${Math.abs(pricing.discountPct)}%`}
+                  </span>
+                </span>
+                <span>{formatEur(pricing.dynamicSubtotal)}</span>
+              </div>
+              {revenueData?.breakdown && (
+                <div className="text-xs text-theme-text-muted mt-1">
+                  {revenueData.breakdown.map((b, i) => (
+                    <span key={i} className="mr-3">{b.label}: x{b.coeff.toFixed(2)}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex justify-between text-theme-text-primary font-semibold">
+              <span>Subtotale</span>
+              <span>{formatEur(pricing.subtotal)}</span>
+            </div>
+          )}
         </div>
 
         {/* Sconto */}
