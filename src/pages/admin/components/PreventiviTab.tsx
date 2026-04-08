@@ -641,6 +641,23 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     }
   }
 
+  // ─── Delete Preventivo ──────────────────────────────────────────────────
+
+  async function handleDeletePreventivo(preventivo: Preventivo) {
+    if (!confirm(`Eliminare il preventivo per ${preventivo.vehicle_name}?`)) return
+    try {
+      const { error } = await supabase
+        .from('preventivi')
+        .delete()
+        .eq('id', preventivo.id)
+      if (error) throw error
+      toast.success('Preventivo eliminato')
+      loadPreventivi()
+    } catch (err: unknown) {
+      toast.error('Errore eliminazione: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
+
   // ─── Convert to Booking ─────────────────────────────────────────────────
 
   async function handleConvertToBooking(preventivo: Preventivo) {
@@ -871,6 +888,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                             Rifiutato
                           </button>
                         )}
+                        <button
+                          onClick={() => handleDeletePreventivo(p)}
+                          className="px-2 py-1 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 rounded"
+                          title="Elimina preventivo"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </td>
                   </tr>
