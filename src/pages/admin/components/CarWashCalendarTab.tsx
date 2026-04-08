@@ -90,6 +90,13 @@ const isPaidBooking = (booking: CarWashBooking): boolean => {
     (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
 }
 
+const isPendingPaymentLink = (booking: CarWashBooking): boolean => {
+  return booking.payment_method === 'Nexi Pay by Link' &&
+    (booking.payment_status === 'unpaid' || booking.payment_status === 'pending') &&
+    (booking.status === 'pending' || booking.status === 'pending_payment') &&
+    !!booking.booking_details?.nexi_payment_link
+}
+
 const hasNotes = (booking: CarWashBooking): boolean => {
   return !!(booking.booking_details?.notes && booking.booking_details.notes.trim())
 }
@@ -597,12 +604,15 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           const hasClientOverlap = isRientro && startingBookings.some(b => !isRientroBooking(b.booking))
                           const topOffset = hasClientOverlap ? -(CELL_HEIGHT - 1) : 1
 
-                          // Color logic: rientro=blue, paid=green, unpaid=red
+                          // Color logic: rientro=blue, paid=green, pending pay-by-link=orange, unpaid=red
+                          const isPendingLink = !isRientro && isPendingPaymentLink(startEvt.booking)
                           const bgColor = isRientro
                             ? 'bg-blue-800 border-blue-600/30'
                             : isPaid
                               ? 'bg-emerald-600 border-emerald-400/30'
-                              : 'bg-red-800 border-red-700/30'
+                              : isPendingLink
+                                ? 'bg-amber-600 border-amber-400/30'
+                                : 'bg-red-800 border-red-700/30'
 
                           return (
                           <div
