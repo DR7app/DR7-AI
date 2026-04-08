@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { renderTemplate } from './utils/messageTemplates'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -243,14 +244,14 @@ export async function notifyPrepaidBlocked(params: {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 customPhone: params.customerPhone,
-                customMessage: `⚠️ *Pagamento rifiutato*\n\nGentile ${params.customerName || 'Cliente'},\n\nNon accettiamo carte prepagate. Utilizzare una carta di credito o debito.\n\n${params.bookingRef ? `La prenotazione #${params.bookingRef} è stata annullata e il pagamento verrà rimborsato.\n\n` : ''}Per assistenza contattaci.\n\nDR7`
+                customMessage: await renderTemplate('prepaid_card_blocked_customer', { customerName: params.customerName || 'Cliente', bookingRef: params.bookingRef || '' }, `⚠️ *Pagamento rifiutato*\n\nGentile ${params.customerName || 'Cliente'},\n\nNon accettiamo carte prepagate. Utilizzare una carta di credito o debito.\n\n${params.bookingRef ? `La prenotazione #${params.bookingRef} è stata annullata e il pagamento verrà rimborsato.\n\n` : ''}Per assistenza contattaci.\n\nDR7`)
             })
         })
     }
 
     // Notify admin
     if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-        const adminMessage = `🚫 *CARTA PREPAGATA BLOCCATA*\n\n*Cliente:* ${params.customerName || '-'}\n${params.amount ? `*Importo:* €${params.amount}\n` : ''}${params.bookingRef ? `*Prenotazione:* #${params.bookingRef}\n` : ''}\nOperazione rifiutata e rimborso avviato.`
+        const adminMessage = await renderTemplate('prepaid_card_blocked_admin', { customerName: params.customerName || '-', amount: params.amount || '0', bookingRef: params.bookingRef || '' }, `🚫 *CARTA PREPAGATA BLOCCATA*\n\n*Cliente:* ${params.customerName || '-'}\n${params.amount ? `*Importo:* €${params.amount}\n` : ''}${params.bookingRef ? `*Prenotazione:* #${params.bookingRef}\n` : ''}\nOperazione rifiutata e rimborso avviato.`)
         await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

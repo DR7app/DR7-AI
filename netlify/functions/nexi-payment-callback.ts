@@ -3,6 +3,7 @@ import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { detectCardType, logCardAttempt, voidNexiTransaction, cancelBooking, notifyPrepaidBlocked } from './prepaid-card-guard';
+import { renderTemplate } from './utils/messageTemplates';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -274,7 +275,7 @@ const handler: Handler = async (event) => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: custPhone,
-                            customMessage: `Gentile ${custName},\n\nConfermiamo la ricezione del pagamento di €${amountEur} per ${paymentPurpose === 'danni' ? 'danni' : paymentPurpose === 'penali' ? 'penali' : 'danni/penali'}.\n\nGrazie,\nDR7`
+                            customMessage: await renderTemplate('payment_received_damages', { custName, amountEur, paymentType: paymentPurpose === 'danni' ? 'danni' : paymentPurpose === 'penali' ? 'penali' : 'danni/penali' }, `Gentile ${custName},\n\nConfermiamo la ricezione del pagamento di €${amountEur} per ${paymentPurpose === 'danni' ? 'danni' : paymentPurpose === 'penali' ? 'penali' : 'danni/penali'}.\n\nGrazie,\nDR7`)
                         })
                     });
                 }
@@ -282,7 +283,7 @@ const handler: Handler = async (event) => {
                 // Admin notification
                 const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
                 if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                    const adminMsg = `💰 *PAGAMENTO ${paymentPurpose.toUpperCase()} RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Tipo:* ${paymentPurpose}\n\nFattura generata automaticamente.`;
+                    const adminMsg = await renderTemplate('payment_received_damages_admin', { customer_name: booking.customer_name, amountEur, paymentType: paymentPurpose }, `💰 *PAGAMENTO ${paymentPurpose.toUpperCase()} RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Tipo:* ${paymentPurpose}\n\nFattura generata automaticamente.`);
                     await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -370,7 +371,7 @@ const handler: Handler = async (event) => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: custPhone,
-                            customMessage: `Gentile ${custName},\n\nConfermiamo la ricezione del pagamento di €${amountEur} per l'estensione del noleggio.\n\nGrazie,\nDR7`
+                            customMessage: await renderTemplate('payment_received_extension', { custName, amountEur }, `Gentile ${custName},\n\nConfermiamo la ricezione del pagamento di €${amountEur} per l'estensione del noleggio.\n\nGrazie,\nDR7`)
                         })
                     });
                 }
@@ -378,7 +379,7 @@ const handler: Handler = async (event) => {
                 // Admin notification
                 const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
                 if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                    const adminMsg = `💰 *PAGAMENTO ESTENSIONE RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n\nFattura estensione generata automaticamente.`;
+                    const adminMsg = await renderTemplate('payment_received_extension_admin', { customer_name: booking.customer_name, amountEur, vehicle_name: booking.vehicle_name || 'N/A' }, `💰 *PAGAMENTO ESTENSIONE RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n\nFattura estensione generata automaticamente.`);
                     await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -843,7 +844,7 @@ const handler: Handler = async (event) => {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
                                         customPhone: custPhone,
-                                        customMessage: `Gentile ${custName},\n\nHa ricevuto *€${bonusEur}* di credito sul suo wallet DR7 grazie al pagamento con ${cardLabel} (${percentLabel}).\n\nSaldo attuale: *€${newBalance.toFixed(2)}*\n\nIl credito è spendibile direttamente sul sito per le prossime prenotazioni.\n\nGrazie per la collaborazione.\n\nDR7`
+                                        customMessage: await renderTemplate('wallet_bonus_credit', { custName, bonusEur, cardLabel, percentLabel, newBalance: newBalance.toFixed(2) }, `Gentile ${custName},\n\nHa ricevuto *€${bonusEur}* di credito sul suo wallet DR7 grazie al pagamento con ${cardLabel} (${percentLabel}).\n\nSaldo attuale: *€${newBalance.toFixed(2)}*\n\nIl credito è spendibile direttamente sul sito per le prossime prenotazioni.\n\nGrazie per la collaborazione.\n\nDR7`)
                                     })
                                 });
                             }
@@ -856,7 +857,7 @@ const handler: Handler = async (event) => {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
                                         chatId: `${NOTIFICATION_PHONE}@c.us`,
-                                        message: `*BONUS CARTA ACCREDITATO*\n\n*Cliente:* ${booking.customer_name || '-'}\n*Carta:* ${cardLabel}\n*Bonus:* €${bonusEur} (${percentLabel})\n*Nuovo saldo wallet:* €${newBalance.toFixed(2)}\n*Prenotazione:* #${booking.id.substring(0, 8).toUpperCase()}`
+                                        message: await renderTemplate('wallet_bonus_credit_admin', { customer_name: booking.customer_name || '-', cardLabel, bonusEur, percentLabel, newBalance: newBalance.toFixed(2), bookingRef: booking.id.substring(0, 8).toUpperCase() }, `*BONUS CARTA ACCREDITATO*\n\n*Cliente:* ${booking.customer_name || '-'}\n*Carta:* ${cardLabel}\n*Bonus:* €${bonusEur} (${percentLabel})\n*Nuovo saldo wallet:* €${newBalance.toFixed(2)}\n*Prenotazione:* #${booking.id.substring(0, 8).toUpperCase()}`)
                                     })
                                 });
                             }

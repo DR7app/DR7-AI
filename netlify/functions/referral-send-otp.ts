@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { renderTemplate } from './utils/messageTemplates';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -90,7 +91,8 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const message = `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP: *${code}*\n\nScade tra 5 minuti.\nNon condividere questo codice con nessuno.`;
+    const fallbackOtp = `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP: *${code}*\n\nScade tra 5 minuti.\nNon condividere questo codice con nessuno.`;
+    const message = await renderTemplate('referral_otp_whatsapp', { code }, fallbackOtp);
 
     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 

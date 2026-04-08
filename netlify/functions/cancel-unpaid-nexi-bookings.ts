@@ -1,5 +1,6 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { renderTemplate } from './utils/messageTemplates';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -140,7 +141,7 @@ const cancelHandler: Handler = async () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         customPhone: custPhone,
-                        customMessage: `*Prenotazione annullata*\n\nGentile ${custName},\n\nLa prenotazione #${bookingRef} è stata annullata perché il pagamento non è stato ricevuto entro 1 ora.\n\nIl link di pagamento è stato disattivato.\n\nSe desidera prenotare nuovamente, ci contatti.\n\nDR7`
+                        customMessage: await renderTemplate('booking_cancelled_whatsapp', { custName, bookingRef }, `*Prenotazione annullata*\n\nGentile ${custName},\n\nLa prenotazione #${bookingRef} è stata annullata perché il pagamento non è stato ricevuto entro 1 ora.\n\nIl link di pagamento è stato disattivato.\n\nSe desidera prenotare nuovamente, ci contatti.\n\nDR7`)
                     })
                 });
             }
@@ -148,7 +149,7 @@ const cancelHandler: Handler = async () => {
             // 4. Notify admin
             const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
             if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                const adminMessage = `*PRENOTAZIONE AUTO-ANNULLATA*\n\n*Cliente:* ${booking.customer_name}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n*ID:* #${booking.id.substring(0, 8).toUpperCase()}\n\nMotivo: Pagamento Nexi non ricevuto entro 1 ora.\nLink Nexi: ${linkDeactivated ? 'disattivato' : 'non trovato/già scaduto'}`;
+                const adminMessage = await renderTemplate('cancellation_admin_alert', { customer_name: booking.customer_name, vehicle_name: booking.vehicle_name || 'N/A', bookingRef: booking.id.substring(0, 8).toUpperCase() }, `*PRENOTAZIONE AUTO-ANNULLATA*\n\n*Cliente:* ${booking.customer_name}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n*ID:* #${booking.id.substring(0, 8).toUpperCase()}\n\nMotivo: Pagamento Nexi non ricevuto entro 1 ora.\nLink Nexi: ${linkDeactivated ? 'disattivato' : 'non trovato/già scaduto'}`);
                 await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
