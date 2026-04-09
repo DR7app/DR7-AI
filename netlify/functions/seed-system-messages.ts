@@ -37,6 +37,34 @@ const MESSAGES = [
     target_category: 'all',
   },
   {
+    message_key: 'rental_new_customer',
+    label: 'Conferma Prenotazione Noleggio (Cliente)',
+    description: 'Inviato al cliente per conferma prenotazione noleggio',
+    message_body: `Salve {nome},
+
+Confermiamo la sua prenotazione.
+
+*CONFERMA PRENOTAZIONE NOLEGGIO*
+
+*ID:* DR7-{booking_id}
+*Veicolo:* {vehicle_name}
+*Ritiro:* {pickup_date} alle {pickup_time}
+*Riconsegna:* {dropoff_date} alle {dropoff_time}
+*Luogo Ritiro:* {pickup_location}
+*Assicurazione:* {insurance}
+*Totale:* €{total}
+*KM:* {km_info}
+*Pagamento:* {payment_status}
+
+Cordiali Saluti,
+DR7`,
+    is_automatic: true,
+    is_enabled: true,
+    include_header: true,
+    trigger_event: 'on_booking',
+    target_category: 'all',
+  },
+  {
     message_key: 'rental_modified',
     label: 'Modifica Prenotazione Noleggio',
     description: 'Inviato all\'admin quando si modifica una prenotazione noleggio',
@@ -64,8 +92,31 @@ const MESSAGES = [
 
   // ── CAR WASH ──
   {
+    message_key: 'carwash_new_admin',
+    label: 'Nuova Prenotazione Autolavaggio (Admin)',
+    description: 'Inviato all\'admin quando si crea una nuova prenotazione autolavaggio',
+    message_body: `🚗 *NUOVA PRENOTAZIONE AUTOLAVAGGIO*
+
+*ID:* DR7-{booking_id}
+*Cliente:* {customer_name}
+*Email:* {customer_email}
+*Telefono:* {customer_phone}
+*Servizio:* {service_name}
+*Targa:* {plate}
+*Data e Ora:* {date} alle {time}
+*Servizio Aggiuntivo:* {extras}
+*Totale:* €{total}
+*Pagamento:* {payment_status}
+*Note:* {notes}`,
+    is_automatic: true,
+    is_enabled: true,
+    include_header: false,
+    trigger_event: 'on_booking',
+    target_category: 'all',
+  },
+  {
     message_key: 'carwash_new',
-    label: 'Nuova Prenotazione Autolavaggio',
+    label: 'Conferma Prenotazione Autolavaggio (Cliente)',
     description: 'Inviato al cliente per conferma appuntamento autolavaggio',
     message_body: `Salve {nome},
 
