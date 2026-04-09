@@ -2096,14 +2096,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {/* Payment + Notes */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Pagamento</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Stato Pagamento</label>
                   <select
                     value={formData.payment_status}
                     onChange={(e) => {
                       const newStatus = e.target.value
                       const total = getFinalPrice()
                       const newAmountPaid = newStatus === 'paid' ? total.toString() : '0'
-                      setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid, payment_method: newStatus === 'paid' ? formData.payment_method || '' : '' })
+                      setFormData({
+                        ...formData,
+                        payment_status: newStatus,
+                        amount_paid: newAmountPaid,
+                        status: newStatus === 'paid' ? 'confirmed' : (formData.payment_method === 'Nexi Pay by Link' ? 'pending' : 'confirmed'),
+                        payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
+                      })
                     }}
                     className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
@@ -2111,27 +2117,33 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <option value="paid">Pagato</option>
                     <option value="unpaid">Non Pagato</option>
                   </select>
-                  {/* Payment method selector — visible for Da Saldare and Pagato */}
-                  {(formData.payment_status === 'paid' || formData.payment_status === 'pending') && (
-                    <div className="mt-2">
-                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo di pagamento *</label>
+                </div>
+                <div>
+                  {formData.payment_status !== 'unpaid' && (
+                    <>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Metodo di Pagamento</label>
                       <select
                         value={formData.payment_method}
-                        onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                        className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                        onChange={(e) => {
+                          const method = e.target.value
+                          const updates: Record<string, string> = { payment_method: method }
+                          if (method === 'Nexi Pay by Link') {
+                            updates.payment_status = 'pending'
+                            updates.amount_paid = '0'
+                          }
+                          setFormData(prev => ({ ...prev, ...updates }))
+                        }}
+                        className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                       >
                         <option value="">-- Seleziona metodo --</option>
-                        {formData.payment_status === 'pending' && (
-                          <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
-                        )}
+                        <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
                         <option value="Contanti">Contanti</option>
-                        <option value="Carta di credito">Carta di credito</option>
-                        <option value="Carta di debito">Carta di debito</option>
+                        <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
                         <option value="Bonifico">Bonifico</option>
-                        <option value="Wallet">Wallet</option>
-                        <option value="Gift Card">Gift Card</option>
+                        <option value="Credit Wallet">Credit Wallet</option>
+                        <option value="Paypal">Paypal</option>
                       </select>
-                    </div>
+                    </>
                   )}
                 </div>
                 <div>
