@@ -409,6 +409,20 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   return false
 }
 
+function CustomerStatusBadge({ email, statusMap }: { email?: string | null; statusMap: Map<string, string> }) {
+  if (!email) return null
+  const status = statusMap.get(email.toLowerCase())
+  if (!status || status === 'standard') return null
+  const labels: Record<string, { text: string; cls: string }> = {
+    elite: { text: 'ELT', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/50' },
+    member: { text: 'MEM', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
+    blacklist: { text: 'BL', cls: 'bg-red-500/20 text-red-400 border-red-500/50' },
+  }
+  const badge = labels[status]
+  if (!badge) return null
+  return <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border ${badge.cls}`}>{badge.text}</span>
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
@@ -417,6 +431,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [customers, setCustomers] = useState<Customer[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [carWashBookings, setCarWashBookings] = useState<Booking[]>([]) // Car wash & mechanical bookings for availability checking
+  const [customerStatuses, setCustomerStatuses] = useState<Map<string, string>>(new Map()) // email → status_cliente
 
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -1443,6 +1458,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       setBookings(filteredBookings)
+
+      // Fetch customer statuses (member/elite/blacklist) for badge display
+      const { data: custStatuses } = await supabase
+        .from('customers_extended')
+        .select('email, status_cliente')
+        .in('status_cliente', ['member', 'elite', 'blacklist'])
+      if (custStatuses) {
+        const statusMap = new Map<string, string>()
+        custStatuses.forEach(c => { if (c.email) statusMap.set(c.email.toLowerCase(), c.status_cliente) })
+        setCustomerStatuses(statusMap)
+      }
 
       // Fetch customers from bookings table (same as CustomersTab)
       const { data: bookingsForCustomers, error: bookingsCustomerError } = await supabase
@@ -6488,8 +6514,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <div className="font-semibold text-theme-text-primary mb-1">
+                    <div className="font-semibold text-theme-text-primary mb-1 flex items-center">
                       {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
+                      <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
                     </div>
                     <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                   </div>
@@ -6657,8 +6684,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
                     <tr key={`booking-${booking.id}`} className="border-t border-theme-border hover:/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px] truncate" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
-                        {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
+                      <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
+                        <span className="flex items-center">
+                          <span className="truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
+                          <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
+                        </span>
                       </td>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
