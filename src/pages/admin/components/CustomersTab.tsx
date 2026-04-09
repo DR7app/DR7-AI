@@ -619,6 +619,31 @@ export default function CustomersTab() {
         }
       }
 
+      // [NEW] Fetch DR7 Club subscriptions
+      try {
+        const { data: clubSubs } = await supabase
+          .from('dr7_club_subscriptions')
+          .select('user_id, plan, status, expires_at')
+          .eq('status', 'active')
+
+        if (clubSubs && clubSubs.length > 0) {
+          // Map user_id → club subscription
+          const clubMap = new Map<string, { plan: string; expires_at: string }>()
+          clubSubs.forEach((s: { user_id: string; plan: string; expires_at: string }) => {
+            clubMap.set(s.user_id, { plan: s.plan, expires_at: s.expires_at })
+          })
+          // Match via customers_extended.user_id
+          customerMap.forEach((customer, key) => {
+            const userId = (customer as Record<string, unknown>).user_id as string | null
+            if (userId && clubMap.has(userId)) {
+              customerMap.set(key, { ...customer, dr7_club: clubMap.get(userId) })
+            }
+          })
+        }
+      } catch {
+        // dr7_club_subscriptions table may not exist — ignore
+      }
+
       // Initial cleanup of loading state
       const customersArray = Array.from(customerMap.values())
 
@@ -2316,6 +2341,13 @@ export default function CustomersTab() {
                         {(customer as any).active_membership.package_name}
                       </span>
                     )}
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {(customer as any).dr7_club && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-dr7-gold text-white">
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        DR7 Club {(customer as any).dr7_club.plan === 'annual' ? 'Annuale' : 'Mensile'}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2458,7 +2490,14 @@ export default function CustomersTab() {
                         </span>
                       </div>
                     ) : (
-                      <span className="text-theme-text-muted text-xs">Nessun pacchetto</span>
+                      <span className="text-theme-text-muted text-xs">-</span>
+                    )}
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {(customer as any).dr7_club && (
+                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-dr7-gold text-white inline-block w-fit mt-1">
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        DR7 Club {(customer as any).dr7_club.plan === 'annual' ? 'Annuale' : 'Mensile'}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">
