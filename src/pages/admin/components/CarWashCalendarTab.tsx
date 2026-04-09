@@ -252,19 +252,28 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           .from('bookings')
           .select('*')
           .eq('service_type', 'car_wash')
-          .not('status', 'in', '(cancelled,annullata,expired)')
+          .neq('status', 'cancelled')
+          .neq('status', 'annullata')
+          .neq('status', 'expired')
           .neq('customer_name', 'Lavaggio Rientro')
           .order('appointment_date', { ascending: true })
         if (bookingsError) throw bookingsError
         bookingsData = data
       }
 
-      // Client-side filter for current month
+      // Client-side filter: current month + hide expired Nexi Pay by Link
+      const now = new Date()
       const filteredBookings = (bookingsData || []).filter(b => {
         const dateToCheck = b.appointment_date || b.pickup_date
         if (!dateToCheck) return false
         const bookingDate = new Date(dateToCheck)
-        return bookingDate >= startDate && bookingDate <= endDate
+        if (bookingDate < startDate || bookingDate > endDate) return false
+        // Hide expired unpaid Nexi Pay by Link bookings
+        if (b.payment_status === 'pending' && b.payment_method === 'Nexi Pay by Link') {
+          const expiresAt = b.booking_details?.payment_link_expires_at || b.booking_details?.payment_link_created_at
+          if (expiresAt && now > new Date(expiresAt)) return false
+        }
+        return true
       }).map(b => ({
         ...b,
         appointment_date: b.appointment_date || b.pickup_date,
