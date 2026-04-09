@@ -2107,7 +2107,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         ...formData,
                         payment_status: newStatus,
                         amount_paid: newAmountPaid,
-                        status: newStatus === 'paid' ? 'confirmed' : (formData.payment_method === 'Nexi Pay by Link' ? 'pending' : 'confirmed'),
                         payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
                       })
                     }}
