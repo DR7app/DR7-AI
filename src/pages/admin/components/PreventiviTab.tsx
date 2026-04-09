@@ -202,6 +202,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [noCauzioneRequests, setNoCauzioneRequests] = useState<any[]>([])
   const [noCauzioneLoading, setNoCauzioneLoading] = useState(false)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<'created_at' | 'pickup_date' | 'total_final' | 'rental_days'>('created_at')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
@@ -849,9 +851,24 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     toast.success(`Stato aggiornato: ${STATUS_LABELS[newStatus]}`)
   }
 
-  const filtered = useMemo(
-    () => statusFilter === 'all' ? preventivi : preventivi.filter(p => p.status === statusFilter),
-    [preventivi, statusFilter]
+  const toggleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('desc') }
+  }
+  const sortArrow = (field: typeof sortField) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''
+
+  const filtered = useMemo(() => {
+    const list = (statusFilter === 'all' || statusFilter === '__no_cauzione__') ? preventivi : preventivi.filter(p => p.status === statusFilter)
+    return [...list].sort((a, b) => {
+      let va: any, vb: any
+      if (sortField === 'created_at' || sortField === 'pickup_date') {
+        va = new Date(a[sortField] || 0).getTime(); vb = new Date(b[sortField] || 0).getTime()
+      } else {
+        va = a[sortField] || 0; vb = b[sortField] || 0
+      }
+      return sortDir === 'asc' ? va - vb : vb - va
+    })
+  }, [preventivi, statusFilter, sortField, sortDir]
   )
 
   // ─── RENDER ─────────────────────────────────────────────────────────────
@@ -967,11 +984,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-border text-left text-theme-text-muted">
-                  <th className="py-2 px-3">Veicolo</th>
-                  <th className="py-2 px-3">Date</th>
-                  <th className="py-2 px-3">Giorni</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('created_at')}>Veicolo{sortArrow('created_at')}</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('pickup_date')}>Date{sortArrow('pickup_date')}</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('rental_days')}>Giorni{sortArrow('rental_days')}</th>
                   <th className="py-2 px-3 text-right">Subtotale</th>
-                  <th className="py-2 px-3 text-right">Prezzo Scontato</th>
+                  <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('total_final')}>Prezzo Scontato{sortArrow('total_final')}</th>
                   <th className="py-2 px-3">Stato</th>
                   <th className="py-2 px-3">Azioni</th>
                 </tr>
