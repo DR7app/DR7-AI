@@ -737,7 +737,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             daily_rate: formatEur(preventivo.daily_rate_after_markup || preventivo.base_daily_rate),
             insurance_option: insuranceOptions.find(i => i.id === preventivo.insurance_option)?.label || preventivo.insurance_option || '',
             insurance_total: formatEur(preventivo.insurance_total),
-            km_info: preventivo.unlimited_km ? 'Km illimitati' : `${preventivo.km_limit} km`,
+            km_info: preventivo.unlimited_km_total > 0 ? 'Km illimitati' : 'Km standard',
             subtotal: formatEur(preventivo.subtotal),
             total_final: formatEur(preventivo.total_final),
             sconto: preventivo.sconto > 0 ? formatEur(preventivo.sconto) : '',
