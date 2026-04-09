@@ -188,7 +188,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     appointment_date: todayStr,
     appointment_time: '',
     price_total: 0,
-    payment_status: 'nexi_pay_by_link',
+    payment_status: 'pending',
     payment_method: '' as string,
     amount_paid: '0',
     notes: ''
@@ -320,7 +320,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       appointment_date: todayStr,
       appointment_time: '',
       price_total: 0,
-      payment_status: 'nexi_pay_by_link',
+      payment_status: 'pending',
       payment_method: '',
       amount_paid: '0',
       notes: ''
@@ -1012,10 +1012,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       dropoff_location: 'DR7 Empire - Car Wash',
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
-      // Pay by Link: pending/pending status so cron auto-cancels after 1h
-      status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : 'confirmed',
-      payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : formData.payment_status,
-      payment_method: formData.payment_status === 'nexi_pay_by_link' ? 'Nexi Pay by Link' : (formData.payment_method || null),
+      // Pay by Link: pending status + Nexi method so cron auto-cancels after 1h
+      status: (formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link') ? 'pending' : (formData.payment_status === 'paid' ? 'confirmed' : 'confirmed'),
+      payment_status: (formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link') ? 'pending' : formData.payment_status,
+      payment_method: formData.payment_method || null,
       booking_details: bookingDetails
     }
 
@@ -1066,7 +1066,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     // Handle Nexi Pay by Link
-    const isNexiPayByLink = formData.payment_status === 'nexi_pay_by_link'
+    const isNexiPayByLink = formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link'
     if (isNexiPayByLink && data) {
       try {
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
@@ -2108,12 +2108,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="pending">Da Saldare</option>
-                    <option value="nexi_pay_by_link">Nexi - Pay by Link</option>
                     <option value="paid">Pagato</option>
                     <option value="unpaid">Non Pagato</option>
                   </select>
-                  {/* Payment method selector — visible only when Pagato */}
-                  {formData.payment_status === 'paid' && (
+                  {/* Payment method selector — visible for Da Saldare and Pagato */}
+                  {(formData.payment_status === 'paid' || formData.payment_status === 'pending') && (
                     <div className="mt-2">
                       <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo di pagamento *</label>
                       <select
@@ -2122,6 +2121,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                       >
                         <option value="">-- Seleziona metodo --</option>
+                        {formData.payment_status === 'pending' && (
+                          <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
+                        )}
                         <option value="Contanti">Contanti</option>
                         <option value="Carta di credito">Carta di credito</option>
                         <option value="Carta di debito">Carta di debito</option>
