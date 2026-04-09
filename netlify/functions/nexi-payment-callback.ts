@@ -124,7 +124,9 @@ const handler: Handler = async (event) => {
         if (isSuccess && expiresAtStr) {
             const expiresAt = new Date(expiresAtStr);
             const now = new Date();
-            if (now > expiresAt) {
+            // Grace period: 5 minutes after expiry to handle Nexi processing delays
+            const graceMs = 5 * 60 * 1000;
+            if (now.getTime() > expiresAt.getTime() + graceMs) {
                 console.warn(`[nexi-payment-callback] LATE PAYMENT REJECTED — order ${orderId} expired at ${expiresAtStr}, callback received at ${now.toISOString()} (${Math.round((now.getTime() - expiresAt.getTime()) / 1000)}s late)`);
                 // Update transaction as expired (don't mark completed)
                 await supabase.from('nexi_transactions').update({
@@ -445,9 +447,8 @@ const handler: Handler = async (event) => {
                 const { data: confirmedRows } = await supabase.from('bookings').update({
                     payment_status: 'paid',
                     status: 'confirmed',
-                    paid_at: paidAt,
                     amount_paid: transaction.amount_cents,
-                    expired_at: null,  // Clear expiry if it was set by the cron job
+                    updated_at: paidAt,
                     booking_details: {
                         ...booking.booking_details,
                         nexi_transaction_id: transactionId || operationId,
