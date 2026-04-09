@@ -141,7 +141,8 @@ const cancelHandler: Handler = async () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         customPhone: custPhone,
-                        customMessage: await renderTemplate('booking_cancelled_whatsapp', { custName, bookingRef }, `*Prenotazione annullata*\n\nGentile ${custName},\n\nLa prenotazione #${bookingRef} è stata annullata perché il pagamento non è stato ricevuto entro 1 ora.\n\nIl link di pagamento è stato disattivato.\n\nSe desidera prenotare nuovamente, ci contatti.\n\nDR7`)
+                        customMessage: await renderTemplate('booking_cancelled_whatsapp', { custName, bookingRef }, `*Prenotazione annullata*\n\nGentile ${custName},\n\nLa prenotazione #${bookingRef} è stata annullata perché il pagamento non è stato ricevuto entro 1 ora.\n\nIl link di pagamento è stato disattivato.\n\nSe desidera prenotare nuovamente, ci contatti.\n\nDR7`),
+                        skipHeader: true
                     })
                 });
             }
