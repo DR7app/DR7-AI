@@ -42,6 +42,22 @@ const UNIT_LABELS: Record<string, string> = {
   flat: 'fisso',
 }
 
+
+/** Deep merge saved config onto defaults — preserves new default fields missing from saved data */
+function deepMergeConfig(defaults: RentalConfig, saved: Record<string, unknown>): RentalConfig {
+  const result = JSON.parse(JSON.stringify(defaults))
+  for (const [key, val] of Object.entries(saved)) {
+    if (val !== null && val !== undefined) {
+      if (typeof val === 'object' && !Array.isArray(val) && result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])) {
+        result[key] = { ...result[key], ...val }
+      } else {
+        result[key] = val
+      }
+    }
+  }
+  return result as RentalConfig
+}
+
 /** Read categories dynamically from config */
 function getCategories(config: RentalConfig): string[] {
   return Object.keys(config.vehicle_categories || {})
@@ -70,7 +86,7 @@ export default function CentralinaConfig() {
         .single()
 
       if (!error && data?.config) {
-        setConfig({ ...DEFAULT_RENTAL_CONFIG, ...data.config } as RentalConfig)
+        setConfig(deepMergeConfig(DEFAULT_RENTAL_CONFIG, data.config))
         setLastSaved(data.updated_at)
         setSavedBy(data.updated_by)
       }
@@ -81,6 +97,18 @@ export default function CentralinaConfig() {
   }, [])
 
   useEffect(() => { loadConfig() }, [loadConfig])
+
+  // Auto-refresh when config changes in DB (realtime subscription)
+  useEffect(() => {
+    const channel = supabase
+      .channel('centralina-config-changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rental_extras_config' }, () => {
+        // Only reload if we're not currently saving (avoid loop)
+        if (!saving) loadConfig()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [loadConfig, saving])
 
   useEffect(() => {
     supabase
@@ -97,16 +125,37 @@ export default function CentralinaConfig() {
       const { data: user } = await supabase.auth.getUser()
       const email = user?.user?.email || 'admin'
 
-      const { error } = await supabase
+      // First get the row id to ensure we update the right row
+      const { data: existing } = await supabase
         .from('rental_extras_config')
-        .update({
-          config,
-          updated_at: new Date().toISOString(),
-          updated_by: email,
-        })
-        .not('id', 'is', null)
+        .select('id')
+        .limit(1)
+        .single()
 
-      if (error) throw error
+      if (!existing) {
+        // No row exists — insert instead
+        const { error: insertErr } = await supabase
+          .from('rental_extras_config')
+          .insert({
+            config,
+            updated_at: new Date().toISOString(),
+            updated_by: email,
+          })
+        if (insertErr) throw insertErr
+      } else {
+        const { error: updateErr, count } = await supabase
+          .from('rental_extras_config')
+          .update({
+            config,
+            updated_at: new Date().toISOString(),
+            updated_by: email,
+          })
+          .eq('id', existing.id)
+          .select('id')
+
+        if (updateErr) throw updateErr
+        if (!count && count !== undefined) throw new Error('Nessuna riga aggiornata — riprova')
+      }
 
       // Audit log
       await supabase.from('config_audit_log').insert({
@@ -116,9 +165,23 @@ export default function CentralinaConfig() {
         full_snapshot: config,
       })
 
-      setLastSaved(new Date().toISOString())
-      setSavedBy(email)
-      toast.success('Configurazione salvata — il sito si aggiornera entro 30 secondi')
+      // Verify save by reloading from DB
+      const { data: verify } = await supabase
+        .from('rental_extras_config')
+        .select('config, updated_at, updated_by')
+        .limit(1)
+        .single()
+
+      if (verify?.config) {
+        setConfig(deepMergeConfig(DEFAULT_RENTAL_CONFIG, verify.config))
+        setLastSaved(verify.updated_at)
+        setSavedBy(verify.updated_by)
+        toast.success('Configurazione salvata e verificata — il sito si aggiornera entro 30 secondi')
+      } else {
+        setLastSaved(new Date().toISOString())
+        setSavedBy(email)
+        toast.success('Configurazione salvata — il sito si aggiornera entro 30 secondi')
+      }
     } catch (err) {
       toast.error('Errore salvataggio: ' + (err instanceof Error ? err.message : 'Errore'))
     }

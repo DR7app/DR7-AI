@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import { renderTemplate } from './utils/messageTemplates'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -107,7 +108,7 @@ export const handler: Handler = async (event) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         chatId,
-                        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\nGentile *${signerName}*,\n\ndi seguito trova il documento "${docName}" da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore.\n\nCordiali Saluti,\nDR7\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+                        message: await renderTemplate('document_signature_link', { signerName, docName, signingUrl }, `Gentile *${signerName}*,\n\ndi seguito trova il documento "${docName}" da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore.\n\nCordiali Saluti,\nDR7`)
                     })
                 })
 

@@ -90,6 +90,12 @@ const isPaidBooking = (booking: CarWashBooking): boolean => {
     (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
 }
 
+const isPendingPaymentLink = (booking: CarWashBooking): boolean => {
+  return booking.payment_method === 'Nexi Pay by Link' &&
+    (booking.payment_status === 'unpaid' || booking.payment_status === 'pending') &&
+    (booking.status === 'pending' || booking.status === 'pending_payment')
+}
+
 const hasNotes = (booking: CarWashBooking): boolean => {
   return !!(booking.booking_details?.notes && booking.booking_details.notes.trim())
 }
@@ -245,19 +251,28 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           .from('bookings')
           .select('*')
           .eq('service_type', 'car_wash')
-          .not('status', 'in', '(cancelled,annullata,expired)')
+          .neq('status', 'cancelled')
+          .neq('status', 'annullata')
+          .neq('status', 'expired')
           .neq('customer_name', 'Lavaggio Rientro')
           .order('appointment_date', { ascending: true })
         if (bookingsError) throw bookingsError
         bookingsData = data
       }
 
-      // Client-side filter for current month
+      // Client-side filter: current month + hide expired Nexi Pay by Link
+      const now = new Date()
       const filteredBookings = (bookingsData || []).filter(b => {
         const dateToCheck = b.appointment_date || b.pickup_date
         if (!dateToCheck) return false
         const bookingDate = new Date(dateToCheck)
-        return bookingDate >= startDate && bookingDate <= endDate
+        if (bookingDate < startDate || bookingDate > endDate) return false
+        // Hide expired unpaid Nexi Pay by Link bookings
+        if (b.payment_status === 'pending' && b.payment_method === 'Nexi Pay by Link') {
+          const expiresAt = b.booking_details?.payment_link_expires_at || b.booking_details?.payment_link_created_at
+          if (expiresAt && now > new Date(expiresAt)) return false
+        }
+        return true
       }).map(b => ({
         ...b,
         appointment_date: b.appointment_date || b.pickup_date,
@@ -597,12 +612,15 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           const hasClientOverlap = isRientro && startingBookings.some(b => !isRientroBooking(b.booking))
                           const topOffset = hasClientOverlap ? -(CELL_HEIGHT - 1) : 1
 
-                          // Color logic: rientro=blue, paid=green, unpaid=red
+                          // Color logic: rientro=blue, paid=green, pending pay-by-link=orange, unpaid=red
+                          const isPendingLink = !isRientro && isPendingPaymentLink(startEvt.booking)
                           const bgColor = isRientro
                             ? 'bg-blue-800 border-blue-600/30'
                             : isPaid
                               ? 'bg-emerald-600 border-emerald-400/30'
-                              : 'bg-red-800 border-red-700/30'
+                              : isPendingLink
+                                ? 'bg-amber-600 border-amber-400/30'
+                                : 'bg-red-800 border-red-700/30'
 
                           return (
                           <div

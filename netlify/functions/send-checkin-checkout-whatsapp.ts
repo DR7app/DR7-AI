@@ -45,28 +45,36 @@ const handler: Handler = async (event) => {
     };
   }
 
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
   // Fetch cauzioni for all bookings
   let cauzioniMap = new Map<string, any>();
-  if (supabaseUrl && supabaseServiceKey) {
-    try {
-      const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
-      const bookingIds = bookings.map((b: any) => b.id);
-      const { data: cauzioni } = await supabase
-        .from("cauzioni")
-        .select("importo, metodo, stato, riferimento_contratto_id")
-        .in("riferimento_contratto_id", bookingIds);
+  try {
+    const bookingIds = bookings.map((b: any) => b.id);
+    const { data: cauzioni } = await supabase
+      .from("cauzioni")
+      .select("importo, metodo, stato, riferimento_contratto_id")
+      .in("riferimento_contratto_id", bookingIds);
 
-      if (cauzioni) {
-        cauzioni.forEach((c: any) => {
-          cauzioniMap.set(c.riferimento_contratto_id, c);
-        });
-      }
-    } catch (err) {
-      console.error("[checkin-checkout] Failed to fetch cauzioni:", err);
+    if (cauzioni) {
+      cauzioni.forEach((c: any) => {
+        cauzioniMap.set(c.riferimento_contratto_id, c);
+      });
     }
+  } catch (err) {
+    console.error("[checkin-checkout] Failed to fetch cauzioni:", err);
   }
+  const { data: sysTemplates } = await supabase
+    .from('system_messages')
+    .select('message_key, message_body, is_enabled')
+    .in('message_key', ['checkin_reminder', 'checkout_reminder'])
+    .eq('is_enabled', true);
+
+  const templateMap = new Map(
+    (sysTemplates || []).map((t: any) => [t.message_key, t.message_body])
+  );
 
   let successCount = 0;
   const errors: string[] = [];
@@ -120,20 +128,52 @@ const handler: Handler = async (event) => {
       }
     }
 
+    // Resolve dates/times for variable substitution
+    const pickupDate = new Date(booking.pickup_date);
+    const dropoffDate = new Date(booking.dropoff_date);
+    const pickupTime =
+      booking.booking_details?.pickupTime ||
+      pickupDate.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/Rome" });
+    const returnTime =
+      booking.booking_details?.returnTime ||
+      dropoffDate.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/Rome" });
+    const pickupLocation = booking.pickup_location || "Da definire";
+    const dropoffLocation = booking.dropoff_location || booking.pickup_location || "Da definire";
+    const pickupDateStr = pickupDate.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Rome" });
+    const dropoffDateStr = dropoffDate.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Rome" });
+    const totalPrice = booking.price_total ? (Number(booking.price_total) / 100).toFixed(2) : '0';
+
+    // Variable map for template substitution
+    const vars: Record<string, string> = {
+      '{nome}': firstName,
+      '{customer_name}': customerName,
+      '{vehicle_name}': vehicleName,
+      '{targa}': targa,
+      '{pickup_date}': pickupDateStr,
+      '{pickup_time}': pickupTime,
+      '{dropoff_date}': dropoffDateStr,
+      '{dropoff_time}': returnTime,
+      '{pickup_location}': pickupLocation,
+      '{dropoff_location}': dropoffLocation,
+      '{deposit}': cauzioneText || 'N/A',
+      '{total}': totalPrice,
+    };
+
+    const applyVars = (tpl: string) => {
+      let result = tpl;
+      for (const [key, val] of Object.entries(vars)) {
+        result = result.split(key).join(val);
+      }
+      return result;
+    };
+
     let message = "";
+    const templateKey = type === "checkin" ? "checkin_reminder" : "checkout_reminder";
+    const dbTemplate = templateMap.get(templateKey);
 
-    if (type === "checkin") {
-      const pickupDate = new Date(booking.pickup_date);
-      const pickupTime =
-        booking.booking_details?.pickupTime ||
-        pickupDate.toLocaleTimeString("it-IT", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-          timeZone: "Europe/Rome",
-        });
-      const pickupLocation = booking.pickup_location || "Da definire";
-
+    if (dbTemplate) {
+      message = applyVars(dbTemplate);
+    } else if (type === "checkin") {
       message = `Ciao ${firstName}!\n\n`;
       message += `Ti ricordiamo il ritiro del tuo veicolo previsto per *oggi*.\n\n`;
       message += `*Veicolo:* ${vehicleName}\n`;
@@ -144,18 +184,6 @@ const handler: Handler = async (event) => {
       message += `\nTi aspettiamo! Per qualsiasi necessita non esitare a contattarci.\n\n`;
       message += `_DR7 Empire_`;
     } else {
-      const dropoffDate = new Date(booking.dropoff_date);
-      const returnTime =
-        booking.booking_details?.returnTime ||
-        dropoffDate.toLocaleTimeString("it-IT", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-          timeZone: "Europe/Rome",
-        });
-      const dropoffLocation =
-        booking.dropoff_location || booking.pickup_location || "Da definire";
-
       message = `Ciao ${firstName}!\n\n`;
       message += `Ti ricordiamo la riconsegna del veicolo prevista per *oggi*.\n\n`;
       message += `*Veicolo:* ${vehicleName}\n`;

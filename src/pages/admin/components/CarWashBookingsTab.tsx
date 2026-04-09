@@ -1012,9 +1012,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       dropoff_location: 'DR7 Empire - Car Wash',
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
-      // Pay by Link: pending_payment/unpaid; all others: confirmed
+      // Pay by Link: pending/pending status so cron auto-cancels after 1h
       status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : 'confirmed',
-      payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'unpaid' : formData.payment_status,
+      payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : formData.payment_status,
       payment_method: formData.payment_status === 'nexi_pay_by_link' ? 'Nexi Pay by Link' : (formData.payment_method || null),
       booking_details: bookingDetails
     }
@@ -1083,6 +1083,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
         const linkData = await linkRes.json()
         if (linkRes.ok && linkData.paymentUrl) {
+          // Save payment link to booking_details so calendar shows orange
+          await supabase.from('bookings').update({
+            booking_details: {
+              ...data.booking_details,
+              nexi_payment_link: linkData.paymentUrl,
+              nexi_order_id: linkData.orderId || null,
+              payment_link_created_at: new Date().toISOString(),
+              payment_link_expires_at: linkData.expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            }
+          }).eq('id', data.id)
+
           if (customerPhone) {
             await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
