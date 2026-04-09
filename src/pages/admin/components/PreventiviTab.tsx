@@ -718,12 +718,51 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   async function handleSendWhatsApp(preventivo: Preventivo, phone: string) {
     setSendingWhatsapp(true)
     try {
-      const message = formatWhatsAppMessage(preventivo)
+      // Try to load template from system_messages (editable in Messaggi di Sistema)
+      let message = formatWhatsAppMessage(preventivo)
+      try {
+        const { data: tpl } = await supabase
+          .from('system_messages')
+          .select('message_body, is_enabled')
+          .eq('message_key', 'preventivo_whatsapp')
+          .single()
+        if (tpl?.is_enabled !== false && tpl?.message_body) {
+          // Substitute variables in template
+          const extras = preventivo.extras_detail as Record<string, unknown> | null
+          let body = tpl.message_body
+          const vars: Record<string, string> = {
+            vehicle_name: preventivo.vehicle_name || '',
+            vehicle_plate: preventivo.vehicle_plate || '',
+            rental_days: String(preventivo.rental_days),
+            daily_rate: formatEur(preventivo.daily_rate_after_markup || preventivo.base_daily_rate),
+            insurance_option: insuranceOptions.find(i => i.id === preventivo.insurance_option)?.label || preventivo.insurance_option || '',
+            insurance_total: formatEur(preventivo.insurance_total),
+            km_info: preventivo.unlimited_km ? 'Km illimitati' : `${preventivo.km_limit} km`,
+            subtotal: formatEur(preventivo.subtotal),
+            total_final: formatEur(preventivo.total_final),
+            sconto: preventivo.sconto > 0 ? formatEur(preventivo.sconto) : '',
+            sconto_note: preventivo.sconto_note || '',
+            pickup_date: new Date(preventivo.pickup_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            dropoff_date: new Date(preventivo.dropoff_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            customer_name: preventivo.customer_name || 'Cliente',
+            lavaggio_fee: formatEur(preventivo.lavaggio_fee),
+            no_cauzione_total: formatEur(preventivo.no_cauzione_total),
+            unlimited_km_total: formatEur(preventivo.unlimited_km_total),
+            second_driver_total: formatEur(preventivo.second_driver_total),
+            dr7_flex_total: extras?.dr7_flex_total ? formatEur(Number(extras.dr7_flex_total)) : '0,00',
+            breakdown: formatWhatsAppMessage(preventivo),
+          }
+          for (const [key, val] of Object.entries(vars)) {
+            body = body.replace(new RegExp(`\\{${key}\\}`, 'g'), val)
+          }
+          message = body
+        }
+      } catch { /* fallback to hardcoded */ }
 
       const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customPhone: phone, customMessage: message })
+        body: JSON.stringify({ customPhone: phone, customMessage: message, skipHeader: true })
       })
 
       const result = await response.json()

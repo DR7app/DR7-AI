@@ -85,6 +85,8 @@ const SYSTEM_KEYS = [
   'invoice_pdf_whatsapp', 'penalty_invoice_pdf_whatsapp',
   // OTP Referral (referral-send-otp)
   'referral_otp_whatsapp',
+  // Preventivo (PreventiviTab — invio al cliente)
+  'preventivo_whatsapp',
   // Preventivo dal sito (create-website-preventivo)
   'admin_new_website_quote', 'admin_no_cauzione_request',
   // Membership (send-membership-reminders)
