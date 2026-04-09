@@ -305,7 +305,23 @@ const handler: Handler = async (event) => {
 
   // If a template exists in DB, use it (admin may have edited it)
   let finalMessage = message;
-  let useHeader = true;
+  let useHeader = !skipHeader; // Default: use header unless skipHeader passed
+
+  // For custom messages (no template), check global header setting
+  if (!messageKey && customMessage) {
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const { data: globalSetting } = await supabase
+        .from('system_messages')
+        .select('include_header')
+        .eq('message_key', 'global_header_footer')
+        .single();
+      if (globalSetting) {
+        useHeader = globalSetting.include_header !== false && !skipHeader;
+      }
+    } catch { /* use default */ }
+  }
+
   if (messageKey) {
     try {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
