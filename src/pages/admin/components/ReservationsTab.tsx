@@ -6506,7 +6506,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       booking.payment_status === 'paid' ||
                       booking.payment_status === 'succeeded' ||
                       (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                      ? 'Pagato'
+                      ? <>Pagato{booking.payment_method && <span className="ml-1 opacity-70">· {booking.payment_method}</span>}</>
                       : booking.payment_status === 'partial'
                       ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
                       : 'Non Pagato'}
@@ -6943,7 +6943,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           selectedBooking.payment_status === 'paid' ||
                           selectedBooking.payment_status === 'succeeded' ||
                           (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
-                          ? 'Pagato'
+                          ? <>Pagato{selectedBooking.payment_method && <span className="ml-1 opacity-70">· {selectedBooking.payment_method}</span>}</>
                           : selectedBooking.payment_status === 'partial'
                             ? `Parziale €${((selectedBooking.amount_paid || 0) / 100).toFixed(0)}`
                           : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending')
