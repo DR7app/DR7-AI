@@ -2064,7 +2064,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {(() => {
                       const selectedDay = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00').getDay() : -1
                       const isSat = selectedDay === 6
-                      const slots = isSat ? CAR_WASH_TIME_SLOTS_SATURDAY : CAR_WASH_TIME_SLOTS
+                      const allSlots = isSat ? CAR_WASH_TIME_SLOTS_SATURDAY : CAR_WASH_TIME_SLOTS
+
+                      // Filter out past times if today
+                      const now = new Date()
+                      const todayStr = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+                      const isToday = formData.appointment_date === todayStr
+                      const currentMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0
+                      const slots = isToday
+                        ? allSlots.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m > currentMinutes; })
+                        : allSlots
+
                       const morningSlots = slots.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
                       const afternoonSlots = isSat
                         ? slots.filter(t => t.startsWith('13') || t.startsWith('14') || t.startsWith('15') || t.startsWith('16') || t.startsWith('17'))
