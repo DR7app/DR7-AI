@@ -984,8 +984,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-border text-left text-theme-text-muted">
-                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('created_at')}>Veicolo{sortArrow('created_at')}</th>
-                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('pickup_date')}>Date{sortArrow('pickup_date')}</th>
+                  <th className="py-2 px-3">Veicolo</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('created_at')}>Creato il{sortArrow('created_at')}</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('pickup_date')}>Date Noleggio{sortArrow('pickup_date')}</th>
                   <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('rental_days')}>Giorni{sortArrow('rental_days')}</th>
                   <th className="py-2 px-3 text-right">Subtotale</th>
                   <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('total_final')}>Prezzo Scontato{sortArrow('total_final')}</th>
@@ -1023,6 +1024,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
                         {formatWhatsAppMessage(p)}
                       </div>
+                    </td>
+                    <td className="py-2 px-3 text-theme-text-muted text-xs">
+                      {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}
                     </td>
                     <td className="py-2 px-3 text-theme-text-muted">
                       {new Date(p.pickup_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
