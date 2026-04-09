@@ -93,8 +93,7 @@ const isPaidBooking = (booking: CarWashBooking): boolean => {
 const isPendingPaymentLink = (booking: CarWashBooking): boolean => {
   return booking.payment_method === 'Nexi Pay by Link' &&
     (booking.payment_status === 'unpaid' || booking.payment_status === 'pending') &&
-    (booking.status === 'pending' || booking.status === 'pending_payment') &&
-    !!booking.booking_details?.nexi_payment_link
+    (booking.status === 'pending' || booking.status === 'pending_payment')
 }
 
 const hasNotes = (booking: CarWashBooking): boolean => {
