@@ -197,6 +197,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [customers, setCustomers] = useState<any[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
+  // No Cauzione requests (from bookings table)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [noCauzioneRequests, setNoCauzioneRequests] = useState<any[]>([])
+  const [noCauzioneLoading, setNoCauzioneLoading] = useState(false)
+  const [processingId, setProcessingId] = useState<string | null>(null)
 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
@@ -386,6 +391,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     loadPreventivi()
     loadVehicles()
     loadCustomers()
+    loadNoCauzioneRequests()
   }, [])
 
   async function loadCustomers() {
@@ -439,6 +445,101 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadNoCauzioneRequests() {
+    setNoCauzioneLoading(true)
+    try {
+      const { data } = await supabase
+        .from('bookings')
+        .select('*')
+        .contains('booking_details', { no_cauzione_request: true })
+        .order('created_at', { ascending: false })
+      setNoCauzioneRequests(data || [])
+    } catch (err) {
+      console.error('Failed to load no cauzione requests:', err)
+    } finally {
+      setNoCauzioneLoading(false)
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleApproveNoCauzione(booking: any) {
+    setProcessingId(booking.id)
+    try {
+      const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
+      const custEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
+      const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
+      const bookingRef = booking.id.substring(0, 8).toUpperCase()
+      const totalEur = booking.price_total / 100
+
+      const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id, amount: totalEur, customerEmail: custEmail, customerName: custName,
+          description: `Prenotazione #${bookingRef} - ${booking.vehicle_name || 'Veicolo'}`,
+          expirationHours: 24, paymentPurpose: 'booking',
+        })
+      })
+      const linkData = await linkRes.json()
+      if (!linkRes.ok || !linkData.paymentUrl) { toast.error('Errore generazione link: ' + (linkData.error || 'Riprova')); return }
+
+      await supabase.from('bookings').update({
+        booking_details: { ...booking.booking_details, no_cauzione_status: 'approved', nexi_payment_link: linkData.paymentUrl, nexi_order_id: linkData.orderId },
+        payment_status: 'pending',
+      }).eq('id', booking.id)
+
+      if (custPhone) {
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: custPhone,
+            customMessage: `Gentile ${custName.split(' ')[0]},\n\nla sua richiesta per la formula senza cauzione è stata approvata!\n\nPer completare la prenotazione #${bookingRef}, effettui il pagamento di €${totalEur.toFixed(2)} tramite il seguente link:\n${linkData.paymentUrl}\n\n⏳ Il link è valido per 24 ore.\n\nCordiali Saluti,\nDR7`,
+          })
+        })
+      }
+      toast.success('Approvata! Link di pagamento inviato.')
+      await loadNoCauzioneRequests()
+    } catch (err: any) { toast.error('Errore: ' + (err.message || 'Riprova')) }
+    finally { setProcessingId(null) }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleRejectNoCauzione(booking: any) {
+    setProcessingId(booking.id)
+    try {
+      const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
+      const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
+      const CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+      let code = 'DR7-5%-'
+      for (let i = 0; i < 4; i++) code += CHARSET[Math.floor(Math.random() * CHARSET.length)]
+
+      await supabase.from('discount_codes').insert({
+        code, scope: 'noleggio', value_type: 'percentage', value_amount: 5,
+        valid_from: new Date().toISOString(), valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        single_use: true, status: 'active',
+        notes: `Rifiuto no cauzione - ${custName} - Booking ${booking.id.substring(0, 8)}`,
+      })
+
+      await supabase.from('bookings').update({
+        status: 'cancelled',
+        booking_details: { ...booking.booking_details, no_cauzione_status: 'rejected', rejection_discount_code: code },
+      }).eq('id', booking.id)
+
+      if (custPhone) {
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: custPhone,
+            customMessage: `Gentile ${custName.split(' ')[0]},\n\nla formula senza cauzione non risulta disponibile per questa prenotazione.\n\nPuò comunque procedere subito con la conferma tramite formula standard:\nil preventivo è già nel suo account.\n\nAbbiamo attivato per lei uno sconto del 5% con codice:\n${code}\n\nDisponibilità limitata.\n\nCordiali Saluti,\nDR7`,
+          })
+        })
+      }
+      toast.success(`Rifiutata. Codice sconto ${code} inviato.`)
+      await loadNoCauzioneRequests()
+    } catch (err: any) { toast.error('Errore: ' + (err.message || 'Riprova')) }
+    finally { setProcessingId(null) }
   }
 
   async function loadVehicles() {
@@ -711,7 +812,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     toast.success('Preventivo accettato - compila la prenotazione')
   }
 
-  async function handleRejectNoCauzione(preventivo: Preventivo) {
+  async function handleRejectNoCauzionePreventivo(preventivo: Preventivo) {
     // Generate 5% discount code
     const code = `DR7-5%-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
     const customerName = preventivo.customer_name || 'Cliente'
@@ -764,6 +865,81 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           <Button onClick={() => { resetForm(); setView('form') }}>+ Nuovo Preventivo</Button>
         </div>
 
+        {/* Subtab Switch */}
+        {(() => {
+          const pendingCount = noCauzioneRequests.filter((b: any) => b.booking_details?.no_cauzione_status === 'pending').length
+          return (
+            <div className="flex gap-1 bg-theme-bg-tertiary rounded-lg p-1">
+              <button onClick={() => setStatusFilter('all')} className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${statusFilter !== '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
+                Preventivi ({preventivi.length})
+              </button>
+              <button onClick={() => setStatusFilter('__no_cauzione__')} className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors relative ${statusFilter === '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
+                Richieste No Cauzione
+                {pendingCount > 0 && <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-500 text-white font-bold">{pendingCount}</span>}
+              </button>
+            </div>
+          )
+        })()}
+
+        {/* ═══ NO CAUZIONE SUBTAB ═══ */}
+        {statusFilter === '__no_cauzione__' && (
+          <div className="space-y-3">
+            {noCauzioneLoading ? (
+              <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold"></div></div>
+            ) : noCauzioneRequests.length === 0 ? (
+              <p className="text-theme-text-muted text-center py-8">Nessuna richiesta No Cauzione</p>
+            ) : (
+              noCauzioneRequests.map((b: any) => {
+                const status = b.booking_details?.no_cauzione_status || 'pending'
+                const custName = b.customer_name || b.booking_details?.customer?.fullName || 'N/A'
+                const custPhone = b.customer_phone || b.booking_details?.customer?.phone || ''
+                const totalEur = (b.price_total / 100).toFixed(2)
+                const pickup = b.pickup_date ? new Date(b.pickup_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '-'
+                const dropoff = b.dropoff_date ? new Date(b.dropoff_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '-'
+                const createdAt = b.created_at ? new Date(b.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
+                return (
+                  <div key={b.id} className={`rounded-lg border p-4 ${status === 'pending' ? 'border-yellow-500/30 bg-yellow-900/10' : status === 'approved' ? 'border-green-500/30 bg-green-900/10' : 'border-red-500/30 bg-red-900/10'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' : status === 'approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {status === 'pending' ? 'In attesa' : status === 'approved' ? 'Approvata' : 'Rifiutata'}
+                          </span>
+                          <span className="font-semibold text-theme-text-primary">{custName}</span>
+                          {custPhone && <span className="text-sm text-theme-text-muted">{custPhone}</span>}
+                        </div>
+                        <div className="text-sm text-theme-text-muted mt-1">
+                          <span className="font-medium text-theme-text-primary">{b.vehicle_name}</span>
+                          <span className="mx-2">•</span>{pickup} → {dropoff}
+                          <span className="mx-2">•</span><span className="font-bold text-dr7-gold">€{totalEur}</span>
+                        </div>
+                        <div className="text-xs text-theme-text-muted mt-1">
+                          Richiesta: {createdAt}
+                          {b.booking_details?.rejection_discount_code && <span className="ml-2 text-red-400">Codice: {b.booking_details.rejection_discount_code}</span>}
+                        </div>
+                      </div>
+                      {status === 'pending' && (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleApproveNoCauzione(b)} disabled={processingId === b.id}
+                            className="px-4 py-2 text-sm rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium disabled:opacity-50 transition-colors">
+                            {processingId === b.id ? '...' : 'Approva'}
+                          </button>
+                          <button onClick={() => handleRejectNoCauzione(b)} disabled={processingId === b.id}
+                            className="px-4 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium disabled:opacity-50 transition-colors">
+                            {processingId === b.id ? '...' : 'Rifiuta'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )}
+
+        {/* ═══ PREVENTIVI LIST ═══ */}
+        {statusFilter !== '__no_cauzione__' && <>
         <div className="flex flex-wrap gap-2">
           {['all', 'bozza', 'inviato', 'accettato', 'rifiutato', 'scaduto'].map(s => (
             <button
@@ -856,7 +1032,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                             </button>
                             {p.source === 'website_no_cauzione' ? (
                               <button
-                                onClick={() => handleRejectNoCauzione(p)}
+                                onClick={() => handleRejectNoCauzionePreventivo(p)}
                                 className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
                               >
                                 Rifiuta + Sconto 5%
@@ -906,6 +1082,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             </table>
           </div>
         )}
+        </>}
 
         {/* Phone Modal */}
         {showPhoneModal && selectedPreventivo && (
