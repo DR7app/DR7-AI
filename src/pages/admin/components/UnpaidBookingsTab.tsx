@@ -1938,6 +1938,10 @@ export default function UnpaidBookingsTab() {
                   onClick={() => updatePaymentStatus(booking.id, 'paid')}
                   className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                 >Pagato</button>
+                <button
+                  onClick={() => sendPayByLink(booking, remainingCents / 100, `Prime Wash ${serviceName}`)}
+                  className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
+                >Invia Link</button>
                 {partialPayItemKey !== bkKey && (
                   <button
                     onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
