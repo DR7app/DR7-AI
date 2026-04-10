@@ -665,7 +665,7 @@ export default function MessaggiSistemaTab() {
 
                 {/* Template Cards — Only show templates that match active SYSTEM_KEYS */}
                 <div className="space-y-3">
-                    {templates.filter(t => SYSTEM_KEYS.includes(t.message_key)).map((template) => (
+                    {templates.map((template) => (
                         <details key={template.id} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
                             <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30">
                                 <div className="flex items-center gap-3">
