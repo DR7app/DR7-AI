@@ -188,7 +188,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     appointment_date: todayStr,
     appointment_time: '',
     price_total: 0,
-    payment_status: 'nexi_pay_by_link',
+    payment_status: 'pending',
     payment_method: '' as string,
     amount_paid: '0',
     notes: ''
@@ -320,7 +320,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       appointment_date: todayStr,
       appointment_time: '',
       price_total: 0,
-      payment_status: 'nexi_pay_by_link',
+      payment_status: 'pending',
       payment_method: '',
       amount_paid: '0',
       notes: ''
@@ -1012,10 +1012,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       dropoff_location: 'DR7 Empire - Car Wash',
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
-      // Pay by Link: pending_payment/unpaid; all others: confirmed
-      status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : 'confirmed',
-      payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'unpaid' : formData.payment_status,
-      payment_method: formData.payment_status === 'nexi_pay_by_link' ? 'Nexi Pay by Link' : (formData.payment_method || null),
+      // Pay by Link: pending status + Nexi method so cron auto-cancels after 1h
+      status: (formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link') ? 'pending' : (formData.payment_status === 'paid' ? 'confirmed' : 'confirmed'),
+      payment_status: (formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link') ? 'pending' : formData.payment_status,
+      payment_method: formData.payment_method || null,
       booking_details: bookingDetails
     }
 
@@ -1066,7 +1066,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     // Handle Nexi Pay by Link
-    const isNexiPayByLink = formData.payment_status === 'nexi_pay_by_link'
+    const isNexiPayByLink = formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link'
     if (isNexiPayByLink && data) {
       try {
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
@@ -1083,6 +1083,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
         const linkData = await linkRes.json()
         if (linkRes.ok && linkData.paymentUrl) {
+          // Save payment link to booking_details so calendar shows orange
+          await supabase.from('bookings').update({
+            booking_details: {
+              ...data.booking_details,
+              nexi_payment_link: linkData.paymentUrl,
+              nexi_order_id: linkData.orderId || null,
+              payment_link_created_at: new Date().toISOString(),
+              payment_link_expires_at: linkData.expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            }
+          }).eq('id', data.id)
+
           if (customerPhone) {
             await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
@@ -2053,7 +2064,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {(() => {
                       const selectedDay = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00').getDay() : -1
                       const isSat = selectedDay === 6
-                      const slots = isSat ? CAR_WASH_TIME_SLOTS_SATURDAY : CAR_WASH_TIME_SLOTS
+                      const allSlots = isSat ? CAR_WASH_TIME_SLOTS_SATURDAY : CAR_WASH_TIME_SLOTS
+
+                      // Filter out past times if today
+                      const now = new Date()
+                      const todayStr = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+                      const isToday = formData.appointment_date === todayStr
+                      const currentMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0
+                      const slots = isToday
+                        ? allSlots.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m > currentMinutes; })
+                        : allSlots
+
                       const morningSlots = slots.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
                       const afternoonSlots = isSat
                         ? slots.filter(t => t.startsWith('13') || t.startsWith('14') || t.startsWith('15') || t.startsWith('16') || t.startsWith('17'))
@@ -2085,40 +2106,53 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {/* Payment + Notes */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Pagamento</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Stato Pagamento</label>
                   <select
                     value={formData.payment_status}
                     onChange={(e) => {
                       const newStatus = e.target.value
                       const total = getFinalPrice()
                       const newAmountPaid = newStatus === 'paid' ? total.toString() : '0'
-                      setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid, payment_method: newStatus === 'paid' ? formData.payment_method || '' : '' })
+                      setFormData({
+                        ...formData,
+                        payment_status: newStatus,
+                        amount_paid: newAmountPaid,
+                        payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
+                      })
                     }}
                     className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="pending">Da Saldare</option>
-                    <option value="nexi_pay_by_link">Nexi - Pay by Link</option>
                     <option value="paid">Pagato</option>
                     <option value="unpaid">Non Pagato</option>
                   </select>
-                  {/* Payment method selector — visible only when Pagato */}
-                  {formData.payment_status === 'paid' && (
-                    <div className="mt-2">
-                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo di pagamento *</label>
+                </div>
+                <div>
+                  {formData.payment_status !== 'unpaid' && (
+                    <>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Metodo di Pagamento</label>
                       <select
                         value={formData.payment_method}
-                        onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                        className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                        onChange={(e) => {
+                          const method = e.target.value
+                          const updates: Record<string, string> = { payment_method: method }
+                          if (method === 'Nexi Pay by Link') {
+                            updates.payment_status = 'pending'
+                            updates.amount_paid = '0'
+                          }
+                          setFormData(prev => ({ ...prev, ...updates }))
+                        }}
+                        className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                       >
                         <option value="">-- Seleziona metodo --</option>
+                        <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
                         <option value="Contanti">Contanti</option>
-                        <option value="Carta di credito">Carta di credito</option>
-                        <option value="Carta di debito">Carta di debito</option>
+                        <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
                         <option value="Bonifico">Bonifico</option>
-                        <option value="Wallet">Wallet</option>
-                        <option value="Gift Card">Gift Card</option>
+                        <option value="Credit Wallet">Credit Wallet</option>
+                        <option value="Paypal">Paypal</option>
                       </select>
-                    </div>
+                    </>
                   )}
                 </div>
                 <div>

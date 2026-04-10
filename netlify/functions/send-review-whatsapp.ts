@@ -1,5 +1,6 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { renderTemplate } from './utils/messageTemplates';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -132,7 +133,8 @@ const reviewHandler: Handler = async (event) => {
         const firstName = (booking.customer_name || 'Cliente').split(' ')[0];
 
         // Personalize message
-        const personalizedMessage = reviewMessage.replace(/\{nome\}/g, firstName);
+        const fallbackMsg = reviewMessage.replace(/\{nome\}/g, firstName);
+        const personalizedMessage = await renderTemplate('review_request_whatsapp', { nome: firstName }, fallbackMsg);
 
         // Clean phone number — strip all non-digit chars, normalize Italian prefix
         let cleanPhone = booking.customer_phone.replace(/[^\d]/g, '');

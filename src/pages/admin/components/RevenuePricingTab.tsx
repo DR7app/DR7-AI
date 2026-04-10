@@ -81,12 +81,9 @@ const DEFAULT_EXTRAS_CONFIG: ExtrasConfig = {
     { id: 'kasko_black_urban', name: 'Kasko Black (Urban)', price: 25, price_unit: 'per_day', is_active: true, display_order: 12 },
     { id: 'kasko_signature_urban', name: 'Kasko Signature (Urban)', price: 35, price_unit: 'per_day', is_active: true, display_order: 13 },
     { id: 'kasko_dr7_urban', name: 'Kasko DR7 (Urban)', price: 45, price_unit: 'per_day', is_active: true, display_order: 14 },
-    // Furgone / NCC
+    // Furgone / NCC — solo RCA e Kasko Base
     { id: 'rca_furgone', name: 'RCA Compresa (Furgone/NCC)', price: 0, price_unit: 'included', is_active: true, display_order: 20 },
     { id: 'kasko_base_furgone', name: 'Kasko Base (Furgone/NCC)', price: 45, price_unit: 'per_day', is_active: true, display_order: 21 },
-    { id: 'kasko_black_furgone', name: 'Kasko Black (Furgone/NCC)', price: 65, price_unit: 'per_day', is_active: true, display_order: 22 },
-    { id: 'kasko_signature_furgone', name: 'Kasko Signature (Furgone/NCC)', price: 80, price_unit: 'per_day', is_active: true, display_order: 23 },
-    { id: 'kasko_dr7_furgone', name: 'Kasko DR7 (Furgone/NCC)', price: 90, price_unit: 'per_day', is_active: true, display_order: 24 },
   ],
   km_packages: [
     { id: 'supercar_50km', name: '50 km/giorno (Supercar)', price: 199, price_unit: 'per_day', is_active: true, display_order: 0, description: 'Pacchetto 50km al giorno per supercar' },

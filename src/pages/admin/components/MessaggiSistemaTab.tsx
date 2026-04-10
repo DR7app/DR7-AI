@@ -57,7 +57,41 @@ const CATEGORY_LABELS: Record<string, string> = {
     'furgone': 'Furgoni',
 }
 
-const SYSTEM_KEYS = ['booking_confirmation', 'booking_reminder', 'return_reminder', 'deposit_reminder']
+// These keys match REAL messages sent by active functions — do not add keys that don't exist
+const SYSTEM_KEYS = [
+  // Booking confirmations (send-whatsapp-notification)
+  'rental_new', 'carwash_new', 'mechanical_new',
+  // Day-before reminders (send-booking-reminders cron)
+  'supercar_day_before', 'utilitaria_day_before', 'deposit_return_iban',
+  // Check-in/out (send-checkin-checkout-whatsapp)
+  'checkin_reminder', 'checkout_reminder',
+  // Reviews (send-review-whatsapp cron)
+  'review_request_whatsapp',
+  // Birthday (send-birthday-messages cron)
+  'birthday_message',
+  // Firma contratto (signature-init, signature-reminder, signature-send-otp, signature-complete)
+  'signature_request_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp', 'admin_contract_signed_alert',
+  // Firma documento (document-sign-init)
+  'document_signature_link',
+  // Cancellazione prenotazione (cancel-unpaid-nexi-bookings)
+  'booking_cancelled_whatsapp', 'cancellation_admin_alert',
+  // Pagamento ricevuto (nexi-payment-callback)
+  'payment_received_damages', 'payment_received_damages_admin',
+  'payment_received_extension', 'payment_received_extension_admin',
+  'wallet_bonus_credit', 'wallet_bonus_credit_admin',
+  // Carta prepagata (prepaid-card-guard)
+  'prepaid_card_blocked_customer', 'prepaid_card_blocked_admin',
+  // Fattura (generate-invoice/penalty)
+  'invoice_pdf_whatsapp', 'penalty_invoice_pdf_whatsapp',
+  // OTP Referral (referral-send-otp)
+  'referral_otp_whatsapp',
+  // Preventivo (PreventiviTab — invio al cliente)
+  'preventivo_whatsapp',
+  // Preventivo dal sito (create-website-preventivo)
+  'admin_new_website_quote', 'admin_no_cauzione_request',
+  // Membership (send-membership-reminders)
+  'membership_renewal_reminder',
+]
 
 
 export default function MessaggiSistemaTab() {
@@ -277,11 +311,7 @@ export default function MessaggiSistemaTab() {
     }
 
     async function handleDeleteTemplate(template: SystemMessage) {
-        if (SYSTEM_KEYS.includes(template.message_key)) {
-            toast.error('I messaggi di sistema non possono essere eliminati')
-            return
-        }
-        if (!confirm(`Eliminare il messaggio "${template.label}"?`)) return
+        if (!confirm(`Eliminare il messaggio "${template.label}"?\n\nAttenzione: il sistema userà il testo di fallback predefinito.`)) return
 
         try {
             const { error } = await supabase
@@ -633,7 +663,7 @@ export default function MessaggiSistemaTab() {
                     </div>
                 )}
 
-                {/* Template Cards — Expandable style */}
+                {/* Template Cards — Only show templates that match active SYSTEM_KEYS */}
                 <div className="space-y-3">
                     {templates.map((template) => (
                         <details key={template.id} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
@@ -830,7 +860,7 @@ export default function MessaggiSistemaTab() {
                             className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
                         >
                             <option value="">-- Scegli un messaggio --</option>
-                            {templates.map(t => (
+                            {templates.filter(t => SYSTEM_KEYS.includes(t.message_key)).map(t => (
                                 <option key={t.id} value={t.id}>{t.label}</option>
                             ))}
                         </select>

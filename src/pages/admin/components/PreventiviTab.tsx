@@ -61,6 +61,7 @@ interface Preventivo {
   booking_id: string | null
   whatsapp_sent_at: string | null
   whatsapp_message_id: string | null
+  sent_by: string | null
   source: string | null
   created_by: string | null
   created_at: string
@@ -196,6 +197,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [customers, setCustomers] = useState<any[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
+  // No Cauzione requests (from bookings table)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [noCauzioneRequests, setNoCauzioneRequests] = useState<any[]>([])
+  const [noCauzioneLoading, setNoCauzioneLoading] = useState(false)
+  const [processingId, setProcessingId] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<'created_at' | 'pickup_date' | 'total_final' | 'rental_days'>('created_at')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
@@ -350,8 +358,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
 
     const subtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost) * 100) / 100
-    const sconto = parseFloat(form.sconto) || 0
-    const totalFinal = Math.round((subtotal - sconto) * 100) / 100
+    const desiredFinal = parseFloat(form.sconto) || 0
+    const sconto = desiredFinal > 0 && desiredFinal < subtotal ? Math.round((subtotal - desiredFinal) * 100) / 100 : 0
+    const totalFinal = sconto > 0 ? desiredFinal : subtotal
 
     return {
       baseDailyRate,
@@ -384,6 +393,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     loadPreventivi()
     loadVehicles()
     loadCustomers()
+    loadNoCauzioneRequests()
   }, [])
 
   async function loadCustomers() {
@@ -437,6 +447,101 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadNoCauzioneRequests() {
+    setNoCauzioneLoading(true)
+    try {
+      const { data } = await supabase
+        .from('bookings')
+        .select('*')
+        .contains('booking_details', { no_cauzione_request: true })
+        .order('created_at', { ascending: false })
+      setNoCauzioneRequests(data || [])
+    } catch (err) {
+      console.error('Failed to load no cauzione requests:', err)
+    } finally {
+      setNoCauzioneLoading(false)
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleApproveNoCauzione(booking: any) {
+    setProcessingId(booking.id)
+    try {
+      const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
+      const custEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
+      const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
+      const bookingRef = booking.id.substring(0, 8).toUpperCase()
+      const totalEur = booking.price_total / 100
+
+      const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id, amount: totalEur, customerEmail: custEmail, customerName: custName,
+          description: `Prenotazione #${bookingRef} - ${booking.vehicle_name || 'Veicolo'}`,
+          expirationHours: 24, paymentPurpose: 'booking',
+        })
+      })
+      const linkData = await linkRes.json()
+      if (!linkRes.ok || !linkData.paymentUrl) { toast.error('Errore generazione link: ' + (linkData.error || 'Riprova')); return }
+
+      await supabase.from('bookings').update({
+        booking_details: { ...booking.booking_details, no_cauzione_status: 'approved', nexi_payment_link: linkData.paymentUrl, nexi_order_id: linkData.orderId },
+        payment_status: 'pending',
+      }).eq('id', booking.id)
+
+      if (custPhone) {
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: custPhone,
+            customMessage: `Gentile ${custName.split(' ')[0]},\n\nla sua richiesta per la formula senza cauzione è stata approvata!\n\nPer completare la prenotazione #${bookingRef}, effettui il pagamento di €${totalEur.toFixed(2)} tramite il seguente link:\n${linkData.paymentUrl}\n\n⏳ Il link è valido per 24 ore.\n\nCordiali Saluti,\nDR7`,
+          })
+        })
+      }
+      toast.success('Approvata! Link di pagamento inviato.')
+      await loadNoCauzioneRequests()
+    } catch (err: any) { toast.error('Errore: ' + (err.message || 'Riprova')) }
+    finally { setProcessingId(null) }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleRejectNoCauzione(booking: any) {
+    setProcessingId(booking.id)
+    try {
+      const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
+      const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
+      const CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+      let code = 'DR7-5%-'
+      for (let i = 0; i < 4; i++) code += CHARSET[Math.floor(Math.random() * CHARSET.length)]
+
+      await supabase.from('discount_codes').insert({
+        code, scope: 'noleggio', value_type: 'percentage', value_amount: 5,
+        valid_from: new Date().toISOString(), valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        single_use: true, status: 'active',
+        notes: `Rifiuto no cauzione - ${custName} - Booking ${booking.id.substring(0, 8)}`,
+      })
+
+      await supabase.from('bookings').update({
+        status: 'cancelled',
+        booking_details: { ...booking.booking_details, no_cauzione_status: 'rejected', rejection_discount_code: code },
+      }).eq('id', booking.id)
+
+      if (custPhone) {
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: custPhone,
+            customMessage: `Gentile ${custName.split(' ')[0]},\n\nla formula senza cauzione non risulta disponibile per questa prenotazione.\n\nPuò comunque procedere subito con la conferma tramite formula standard:\nil preventivo è già nel suo account.\n\nAbbiamo attivato per lei uno sconto del 5% con codice:\n${code}\n\nDisponibilità limitata.\n\nCordiali Saluti,\nDR7`,
+          })
+        })
+      }
+      toast.success(`Rifiutata. Codice sconto ${code} inviato.`)
+      await loadNoCauzioneRequests()
+    } catch (err: any) { toast.error('Errore: ' + (err.message || 'Riprova')) }
+    finally { setProcessingId(null) }
   }
 
   async function loadVehicles() {
@@ -514,7 +619,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           experience_cost: pricing.experienceCost,
         },
         status: 'bozza',
+        created_by: adminEmail || (await supabase.auth.getUser()).data.user?.email || null,
       }
+
+      console.log('[PreventiviTab] Saving preventivo with created_by:', record.created_by)
 
       const { data, error } = await supabase
         .from('preventivi')
@@ -685,7 +793,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customPhone: phone, customMessage: message })
+        body: JSON.stringify({ customPhone: phone, customMessage: message, skipHeader: true })
       })
 
       const result = await response.json()
@@ -702,6 +810,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           customer_phone: phone,
           customer_name: selectedCust?.full_name || preventivo.customer_name || null,
           customer_id: selectedCustomerId || preventivo.customer_id || null,
+          sent_by: adminEmail || null,
           whatsapp_sent_at: new Date().toISOString(),
           whatsapp_message_id: result.messageId || null,
           expires_at: expiresAt,
@@ -775,7 +884,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     toast.success('Preventivo accettato - compila la prenotazione')
   }
 
-  async function handleRejectNoCauzione(preventivo: Preventivo) {
+  async function handleRejectNoCauzionePreventivo(preventivo: Preventivo) {
     // Generate 5% discount code
     const code = `DR7-5%-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
     const customerName = preventivo.customer_name || 'Cliente'
@@ -812,9 +921,24 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     toast.success(`Stato aggiornato: ${STATUS_LABELS[newStatus]}`)
   }
 
-  const filtered = useMemo(
-    () => statusFilter === 'all' ? preventivi : preventivi.filter(p => p.status === statusFilter),
-    [preventivi, statusFilter]
+  const toggleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('desc') }
+  }
+  const sortArrow = (field: typeof sortField) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''
+
+  const filtered = useMemo(() => {
+    const list = (statusFilter === 'all' || statusFilter === '__no_cauzione__') ? preventivi : preventivi.filter(p => p.status === statusFilter)
+    return [...list].sort((a, b) => {
+      let va: any, vb: any
+      if (sortField === 'created_at' || sortField === 'pickup_date') {
+        va = new Date(a[sortField] || 0).getTime(); vb = new Date(b[sortField] || 0).getTime()
+      } else {
+        va = a[sortField] || 0; vb = b[sortField] || 0
+      }
+      return sortDir === 'asc' ? va - vb : vb - va
+    })
+  }, [preventivi, statusFilter, sortField, sortDir]
   )
 
   // ─── RENDER ─────────────────────────────────────────────────────────────
@@ -828,6 +952,81 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           <Button onClick={() => { resetForm(); setView('form') }}>+ Nuovo Preventivo</Button>
         </div>
 
+        {/* Subtab Switch */}
+        {(() => {
+          const pendingCount = noCauzioneRequests.filter((b: any) => b.booking_details?.no_cauzione_status === 'pending').length
+          return (
+            <div className="flex gap-1 bg-theme-bg-tertiary rounded-lg p-1">
+              <button onClick={() => setStatusFilter('all')} className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${statusFilter !== '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
+                Preventivi ({preventivi.length})
+              </button>
+              <button onClick={() => setStatusFilter('__no_cauzione__')} className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors relative ${statusFilter === '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
+                Richieste No Cauzione
+                {pendingCount > 0 && <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-500 text-white font-bold">{pendingCount}</span>}
+              </button>
+            </div>
+          )
+        })()}
+
+        {/* ═══ NO CAUZIONE SUBTAB ═══ */}
+        {statusFilter === '__no_cauzione__' && (
+          <div className="space-y-3">
+            {noCauzioneLoading ? (
+              <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold"></div></div>
+            ) : noCauzioneRequests.length === 0 ? (
+              <p className="text-theme-text-muted text-center py-8">Nessuna richiesta No Cauzione</p>
+            ) : (
+              noCauzioneRequests.map((b: any) => {
+                const status = b.booking_details?.no_cauzione_status || 'pending'
+                const custName = b.customer_name || b.booking_details?.customer?.fullName || 'N/A'
+                const custPhone = b.customer_phone || b.booking_details?.customer?.phone || ''
+                const totalEur = (b.price_total / 100).toFixed(2)
+                const pickup = b.pickup_date ? new Date(b.pickup_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '-'
+                const dropoff = b.dropoff_date ? new Date(b.dropoff_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '-'
+                const createdAt = b.created_at ? new Date(b.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
+                return (
+                  <div key={b.id} className={`rounded-lg border p-4 ${status === 'pending' ? 'border-yellow-500/30 bg-yellow-900/10' : status === 'approved' ? 'border-green-500/30 bg-green-900/10' : 'border-red-500/30 bg-red-900/10'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' : status === 'approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {status === 'pending' ? 'In attesa' : status === 'approved' ? 'Approvata' : 'Rifiutata'}
+                          </span>
+                          <span className="font-semibold text-theme-text-primary">{custName}</span>
+                          {custPhone && <span className="text-sm text-theme-text-muted">{custPhone}</span>}
+                        </div>
+                        <div className="text-sm text-theme-text-muted mt-1">
+                          <span className="font-medium text-theme-text-primary">{b.vehicle_name}</span>
+                          <span className="mx-2">•</span>{pickup} → {dropoff}
+                          <span className="mx-2">•</span><span className="font-bold text-dr7-gold">€{totalEur}</span>
+                        </div>
+                        <div className="text-xs text-theme-text-muted mt-1">
+                          Richiesta: {createdAt}
+                          {b.booking_details?.rejection_discount_code && <span className="ml-2 text-red-400">Codice: {b.booking_details.rejection_discount_code}</span>}
+                        </div>
+                      </div>
+                      {status === 'pending' && (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleApproveNoCauzione(b)} disabled={processingId === b.id}
+                            className="px-4 py-2 text-sm rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium disabled:opacity-50 transition-colors">
+                            {processingId === b.id ? '...' : 'Approva'}
+                          </button>
+                          <button onClick={() => handleRejectNoCauzione(b)} disabled={processingId === b.id}
+                            className="px-4 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium disabled:opacity-50 transition-colors">
+                            {processingId === b.id ? '...' : 'Rifiuta'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )}
+
+        {/* ═══ PREVENTIVI LIST ═══ */}
+        {statusFilter !== '__no_cauzione__' && <>
         <div className="flex flex-wrap gap-2">
           {['all', 'bozza', 'inviato', 'accettato', 'rifiutato', 'scaduto'].map(s => (
             <button
@@ -856,11 +1055,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               <thead>
                 <tr className="border-b border-theme-border text-left text-theme-text-muted">
                   <th className="py-2 px-3">Veicolo</th>
-                  <th className="py-2 px-3">Date</th>
-                  <th className="py-2 px-3">Giorni</th>
-                  <th className="py-2 px-3 text-right">Totale</th>
-                  <th className="py-2 px-3 text-right">Sconto</th>
-                  <th className="py-2 px-3 text-right">Finale</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('created_at')}>Creato il{sortArrow('created_at')}</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('pickup_date')}>Date Noleggio{sortArrow('pickup_date')}</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('rental_days')}>Giorni{sortArrow('rental_days')}</th>
+                  <th className="py-2 px-3 text-right">Subtotale</th>
+                  <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('total_final')}>Prezzo Scontato{sortArrow('total_final')}</th>
                   <th className="py-2 px-3">Stato</th>
                   <th className="py-2 px-3">Azioni</th>
                 </tr>
@@ -881,14 +1080,23 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                       {p.customer_name && <div className="text-xs text-theme-text-muted">{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</div>}
                       {!p.customer_name && p.customer_phone && <div className="text-xs text-theme-text-muted">{p.customer_phone}</div>}
                       {p.vehicle_plate && <div className="text-xs text-theme-text-muted">{p.vehicle_plate}</div>}
-                      {p.whatsapp_sent_at && (
-                        <div className="text-xs text-green-400 mt-0.5">
-                          Inviato{p.customer_name ? ` a ${p.customer_name}` : p.customer_phone ? ` a ${p.customer_phone}` : ''} · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      )}
+                      <div className="text-[10px] mt-1 space-y-0.5">
+                        {p.created_by && (
+                          <div className="text-theme-text-muted/60">Creato da: <span className="text-theme-text-muted">{p.created_by}</span> · {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
+                        )}
+                        {!p.created_by && (
+                          <div className="text-theme-text-muted/60">Creato il: {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
+                        )}
+                        {p.whatsapp_sent_at && (
+                          <div className="text-green-400/80">Inviato{p.sent_by ? ` da ${p.sent_by}` : ''} → {p.customer_name ? `${p.customer_name}${p.customer_phone ? ` (${p.customer_phone})` : ''}` : p.customer_phone || 'N/A'} · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
+                        )}
+                      </div>
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
                         {buildDefaultPreventivoMessage(p)}
                       </div>
+                    </td>
+                    <td className="py-2 px-3 text-theme-text-muted text-xs">
+                      {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}
                     </td>
                     <td className="py-2 px-3 text-theme-text-muted">
                       {new Date(p.pickup_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
@@ -896,9 +1104,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                       {new Date(p.dropoff_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
                     </td>
                     <td className="py-2 px-3 text-theme-text-muted">{p.rental_days}gg</td>
-                    <td className="py-2 px-3 text-right text-theme-text-primary">{formatEur(p.subtotal)}</td>
-                    <td className="py-2 px-3 text-right text-red-400">{p.sconto > 0 ? `-${formatEur(p.sconto)}` : '-'}</td>
-                    <td className="py-2 px-3 text-right font-bold text-theme-text-primary">{formatEur(p.total_final)}</td>
+                    <td className="py-2 px-3 text-right text-theme-text-muted">{formatEur(p.subtotal)}</td>
+                    <td className="py-2 px-3 text-right font-bold text-theme-text-primary">{p.sconto > 0 ? formatEur(p.total_final) : '-'}</td>
                     <td className="py-2 px-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[p.status] || 'bg-gray-600'}`}>
                         {STATUS_LABELS[p.status] || p.status}
@@ -906,37 +1113,57 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex gap-1 flex-wrap">
-                        {(p.status === 'bozza' || p.status === 'inviato') && (
-                          <button
-                            onClick={() => { setSelectedPreventivo(p); setWhatsappPhone(p.customer_phone || ''); setShowPhoneModal(true) }}
-                            className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
-                          >
-                            Invia
-                          </button>
-                        )}
-                        {(p.status === 'inviato' || p.status === 'bozza') && (
-                          <button
-                            onClick={() => handleConvertToBooking(p)}
-                            className="px-2 py-1 text-xs bg-dr7-gold hover:bg-[#247a6f] text-white rounded"
-                          >
-                            {p.source === 'website_no_cauzione' && !isValerio ? 'Richiedi Approvazione' : 'Converti'}
-                          </button>
-                        )}
-                        {p.source === 'website_no_cauzione' && (p.status === 'inviato' || p.status === 'bozza') && (
-                          <button
-                            onClick={() => handleRejectNoCauzione(p)}
-                            className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
-                          >
-                            Rifiuta + Sconto 5%
-                          </button>
-                        )}
-                        {p.status === 'inviato' && p.source !== 'website_no_cauzione' && (
-                          <button
-                            onClick={() => updateStatus(p.id, 'rifiutato')}
-                            className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
-                          >
-                            Rifiutato
-                          </button>
+                        {p.source?.startsWith('website') && (p.status === 'bozza' || p.status === 'inviato') ? (
+                          <>
+                            <button
+                              onClick={() => handleConvertToBooking(p)}
+                              className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded font-bold"
+                            >
+                              Accetta
+                            </button>
+                            {p.source === 'website_no_cauzione' ? (
+                              <button
+                                onClick={() => handleRejectNoCauzionePreventivo(p)}
+                                className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
+                              >
+                                Rifiuta + Sconto 5%
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => updateStatus(p.id, 'rifiutato')}
+                                className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
+                              >
+                                Rifiuta
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {(p.status === 'bozza' || p.status === 'inviato') && (
+                              <button
+                                onClick={() => { setSelectedPreventivo(p); setWhatsappPhone(p.customer_phone || ''); setShowPhoneModal(true) }}
+                                className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
+                              >
+                                Invia
+                              </button>
+                            )}
+                            {(p.status === 'inviato' || p.status === 'bozza') && (
+                              <button
+                                onClick={() => handleConvertToBooking(p)}
+                                className="px-2 py-1 text-xs bg-dr7-gold hover:bg-[#247a6f] text-white rounded"
+                              >
+                                Converti
+                              </button>
+                            )}
+                            {p.status === 'inviato' && (
+                              <button
+                                onClick={() => updateStatus(p.id, 'rifiutato')}
+                                className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded"
+                              >
+                                Rifiutato
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
@@ -946,6 +1173,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             </table>
           </div>
         )}
+        </>}
 
         {/* Phone Modal */}
         {showPhoneModal && selectedPreventivo && (
@@ -1321,7 +1549,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
         {/* Sconto */}
         <div className="grid grid-cols-2 gap-3 pt-2">
-          <Input label="Sconto (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="0" />
+          <Input label="Prezzo Finale Desiderato (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="Lascia vuoto per nessuno sconto" />
           <Input label="Nota sconto" value={form.sconto_note} onChange={(e) => setForm(prev => ({ ...prev, sconto_note: e.target.value }))} placeholder="valido solo 24h" />
         </div>
 

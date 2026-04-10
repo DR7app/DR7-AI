@@ -131,9 +131,6 @@ export const UTILITAIRE_INSURANCE_OPTIONS = [
 export const FURGONE_INSURANCE_OPTIONS = [
   { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
   { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
-  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 65 },
-  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 80 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
 ];
 
 // Deposit amounts by vehicle type
@@ -234,7 +231,10 @@ function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: Ret
     name.includes('citroen') || name.includes('208') || name.includes('urban')) {
     return urban;
   }
-  if (name.includes('van') || name.includes('utilitaire') || name.includes('ducato') || name.includes('vito')) {
+  if (name.includes('ducato') || name.includes('vito') || name.includes('v class') || name.includes('v-class') || name.includes('classe v') || name.includes('furgone')) {
+    return furg;
+  }
+  if (name.includes('van') || name.includes('utilitaire')) {
     return util;
   }
 
@@ -409,6 +409,20 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   return false
 }
 
+function CustomerStatusBadge({ email, statusMap }: { email?: string | null; statusMap: Map<string, string> }) {
+  if (!email) return null
+  const status = statusMap.get(email.toLowerCase())
+  if (!status || status === 'standard') return null
+  const labels: Record<string, { text: string; cls: string }> = {
+    elite: { text: 'ELT', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/50' },
+    member: { text: 'MEM', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
+    blacklist: { text: 'BL', cls: 'bg-red-500/20 text-red-400 border-red-500/50' },
+  }
+  const badge = labels[status]
+  if (!badge) return null
+  return <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border ${badge.cls}`}>{badge.text}</span>
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
@@ -417,6 +431,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [customers, setCustomers] = useState<Customer[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [carWashBookings, setCarWashBookings] = useState<Booking[]>([]) // Car wash & mechanical bookings for availability checking
+  const [customerStatuses, setCustomerStatuses] = useState<Map<string, string>>(new Map()) // email → status_cliente
 
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -659,21 +674,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
               const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
                 + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
-              // No cauzione surcharge
               const noCauzioneSurcharge = prev.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * data.rentalDays : 0
-              // Unlimited KM surcharge (tier-based)
               let unlimitedKmSurcharge = 0
               if (prev.unlimited_km) {
                 unlimitedKmSurcharge = getUnlimitedKmPrice(selectedVehicle, activeTier) * data.rentalDays
               }
-              // Second driver surcharge (tier-based)
               const secondDriverFee = prev.has_second_driver
                 ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * data.rentalDays
                 : 0
-              // Experience services + DR7 Flex
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
-              const subtotal = data.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+              // List price: base rate (no coefficients) × days + all services
+              const listDailyRate = data.selectedBaseRateEur || (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
+              const listRentalTotal = listDailyRate * data.rentalDays
+              const listSubtotal = listRentalTotal + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+              // Combined coefficient from revenue engine
+              const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
+              // Dynamic price: coefficients applied to FULL package
+              const subtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               const updates: Record<string, string> = { total_amount: total.toFixed(2) }
@@ -718,7 +736,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         : 0
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
-      const subtotal = revenueSuggestion.finalTotalEur + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+      // List price: base rate (no coefficients) × days + all services
+      const listDailyRate = revenueSuggestion.selectedBaseRateEur || (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
+      const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
+      const listSubtotal = listRentalTotal + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+      // Combined coefficient from revenue engine
+      const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
+      // Dynamic price: coefficients applied to FULL package
+      const subtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
       // Auto-calculate KM limit from rental days
@@ -1433,6 +1458,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       setBookings(filteredBookings)
+
+      // Fetch customer statuses (member/elite/blacklist) for badge display
+      const { data: custStatuses } = await supabase
+        .from('customers_extended')
+        .select('email, status_cliente')
+        .in('status_cliente', ['member', 'elite', 'blacklist'])
+      if (custStatuses) {
+        const statusMap = new Map<string, string>()
+        custStatuses.forEach(c => { if (c.email) statusMap.set(c.email.toLowerCase(), c.status_cliente) })
+        setCustomerStatuses(statusMap)
+      }
 
       // Fetch customers from bookings table (same as CustomersTab)
       const { data: bookingsForCustomers, error: bookingsCustomerError } = await supabase
@@ -6053,15 +6089,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const noCauzioneCost = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
                           const unlimitedKmCost = formData.unlimited_km
                             ? getUnlimitedKmPrice(sv, activeTier) * revenueSuggestion.rentalDays : 0
-                          const subtotal = revenueSuggestion.finalTotalEur + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost
-                          const grandTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
+                          const secondDriverCost = formData.has_second_driver
+                            ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays : 0
+                          const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
+                          const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
+                          // List price (no coefficients)
+                          const listDailyRate = revenueSuggestion.selectedBaseRateEur || (sv ? sv.daily_rate / 100 : 0)
+                          const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
+                          const listSubtotal = listRentalTotal + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost + secondDriverCost + experienceCost + flexCost
+                          // Combined coefficient
+                          const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
+                          const dynamicSubtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
+                          const grandTotal = formData.payment_method === 'Contanti' ? dynamicSubtotal * 1.20 : dynamicSubtotal
+                          const hasDiscount = Math.abs(combinedCoeff - 1) > 0.001
+                          const discountPct = hasDiscount ? Math.round((1 - combinedCoeff) * 100) : 0
+                          const listGrandTotal = formData.payment_method === 'Contanti' ? listSubtotal * 1.20 : listSubtotal
                           return (
                             <>
+                              {hasDiscount && (
+                                <span className="text-sm text-theme-text-muted line-through">
+                                  EUR {listGrandTotal.toFixed(2)}
+                                </span>
+                              )}
                               <span className={`text-lg font-bold ${
                                 revenueSuggestion.mode === 'auto_apply' ? 'text-green-400' : 'text-amber-400'
                               }`}>
                                 EUR {grandTotal.toFixed(2)}
                               </span>
+                              {hasDiscount && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${discountPct > 0 ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
+                                  {discountPct > 0 ? `-${discountPct}%` : `+${Math.abs(discountPct)}%`}
+                                </span>
+                              )}
                               {revenueSuggestion.mode !== 'auto_apply' && (
                                 <button
                                   type="button"
@@ -6455,8 +6514,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <div className="font-semibold text-theme-text-primary mb-1">
+                    <div className="font-semibold text-theme-text-primary mb-1 flex items-center">
                       {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
+                      <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
                     </div>
                     <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                   </div>
@@ -6473,7 +6533,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       booking.payment_status === 'paid' ||
                       booking.payment_status === 'succeeded' ||
                       (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                      ? 'Pagato'
+                      ? <>Pagato{booking.payment_method && <span className="ml-1 opacity-70">· {booking.payment_method}</span>}</>
                       : booking.payment_status === 'partial'
                       ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
                       : 'Non Pagato'}
@@ -6624,8 +6684,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
                     <tr key={`booking-${booking.id}`} className="border-t border-theme-border hover:/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px] truncate" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
-                        {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
+                      <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
+                        <span className="flex items-center">
+                          <span className="truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
+                          <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
+                        </span>
                       </td>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
@@ -6910,7 +6973,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           selectedBooking.payment_status === 'paid' ||
                           selectedBooking.payment_status === 'succeeded' ||
                           (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
-                          ? 'Pagato'
+                          ? <>Pagato{selectedBooking.payment_method && <span className="ml-1 opacity-70">· {selectedBooking.payment_method}</span>}</>
                           : selectedBooking.payment_status === 'partial'
                             ? `Parziale €${((selectedBooking.amount_paid || 0) / 100).toFixed(0)}`
                           : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending')

@@ -1,5 +1,6 @@
 import { Handler, schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { renderTemplate } from './utils/messageTemplates'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -124,7 +125,8 @@ const reminderHandler: Handler = async () => {
             const signingUrl = `${SIGNING_BASE_URL}/firma/${req.token}`
             const signerName = req.signer_name || 'Cliente'
 
-            const message = `Gentile *${signerName}*,\n\nle ricordiamo che il contratto di noleggio n. *${contractNumber}* è ancora in attesa di firma.\n\n${signingUrl}\n\nIl link resterà valido per le prossime 6 ore.\nLa invitiamo a completare la firma quanto prima per confermare la prenotazione, altrimenti potrà decadere automaticamente allo scadere del termine, come da policy.\n\nSe ha già firmato il contratto o ricevuto questa comunicazione, può ignorare il presente messaggio.\n\nCordiali Saluti,\nDR7`
+            const fallbackReminder = `Gentile *${signerName}*,\n\nle ricordiamo che il contratto di noleggio n. *${contractNumber}* è ancora in attesa di firma.\n\n${signingUrl}\n\nIl link resterà valido per le prossime 6 ore.\nLa invitiamo a completare la firma quanto prima per confermare la prenotazione, altrimenti potrà decadere automaticamente allo scadere del termine, come da policy.\n\nSe ha già firmato il contratto o ricevuto questa comunicazione, può ignorare il presente messaggio.\n\nCordiali Saluti,\nDR7`
+            const message = await renderTemplate('signature_reminder_whatsapp', { signerName, contractNumber, signingUrl }, fallbackReminder)
 
             try {
                 const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`

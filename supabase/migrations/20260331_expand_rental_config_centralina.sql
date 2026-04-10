@@ -60,8 +60,8 @@ UPDATE rental_extras_config SET config = '{
     },
     "furgone": {
       "_all_tiers": [
-        { "id": "KASKO_BASE", "name": "Kasko Base", "daily_price": 45 },
-        { "id": "KASKO_DR7", "name": "Kasko DR7", "daily_price": 90 }
+        { "id": "RCA", "name": "RCA Compresa (no Kasko)", "daily_price": 0 },
+        { "id": "KASKO_BASE", "name": "Kasko Base", "daily_price": 45 }
       ]
     },
     "eligibility": {

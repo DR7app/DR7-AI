@@ -305,7 +305,23 @@ const handler: Handler = async (event) => {
 
   // If a template exists in DB, use it (admin may have edited it)
   let finalMessage = message;
-  let useHeader = true;
+  let useHeader = !skipHeader; // Default: use header unless skipHeader passed
+
+  // For custom messages (no template), check global header setting
+  if (!messageKey && customMessage) {
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const { data: globalSetting } = await supabase
+        .from('system_messages')
+        .select('include_header')
+        .eq('message_key', 'global_header_footer')
+        .single();
+      if (globalSetting) {
+        useHeader = globalSetting.include_header !== false && !skipHeader;
+      }
+    } catch { /* use default */ }
+  }
+
   if (messageKey) {
     try {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -353,6 +369,31 @@ const handler: Handler = async (event) => {
           const ad = new Date(booking.appointment_date);
           vars.date = ad.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' });
           vars.time = ad.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
+        }
+
+        // Cauzione (deposit) for template
+        const depAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0);
+        const depOption = booking.booking_details?.depositOption;
+        const depStatus = booking.booking_details?.deposit_status;
+        if (depOption === 'no_deposit') {
+          const surcharge = Number(booking.booking_details?.noDepositSurcharge ?? 0);
+          vars.deposit = `Senza cauzione (+30% = €${surcharge.toFixed(2)})`;
+        } else if (depAmount > 0) {
+          const statusLbl = depStatus === 'incassata' ? 'Pagata' : 'Da saldare';
+          vars.deposit = `€${depAmount.toFixed(2)} - ${statusLbl}`;
+        } else {
+          vars.deposit = '€0';
+        }
+
+        // KM info for template
+        const tplUnlimitedKm = booking.booking_details?.unlimited_km;
+        const tplKmLimit = booking.booking_details?.km_limit;
+        if (tplUnlimitedKm || tplKmLimit === 'Illimitati') {
+          vars.km_info = 'Illimitati';
+        } else if (tplKmLimit && tplKmLimit !== '0') {
+          vars.km_info = `${tplKmLimit} km`;
+        } else {
+          vars.km_info = 'Standard';
         }
 
         // Replace all {variable} placeholders

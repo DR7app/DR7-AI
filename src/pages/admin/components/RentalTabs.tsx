@@ -3,12 +3,24 @@ import ReservationsTab from './ReservationsTab'
 import PreventiviTab from './PreventiviTab'
 
 interface RentalTabsProps {
-    initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string } | null
+    initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, unknown> } | null
     onDataConsumed?: () => void
 }
 
-export default function RentalTabs({ initialData, onDataConsumed }: RentalTabsProps) {
+export default function RentalTabs({ initialData: externalInitialData, onDataConsumed }: RentalTabsProps) {
     const [activeSubTab, setActiveSubTab] = useState<'bookings' | 'preventivi'>('bookings')
+    const [preventivoData, setPreventivoData] = useState<{ vehicleId: string; pickupDate: Date; fromPreventivo: Record<string, unknown> } | null>(null)
+
+    const handleConvertToBooking = (data: { vehicleId: string; pickupDate: Date; fromPreventivo: Record<string, unknown> }) => {
+        setPreventivoData(data)
+        setActiveSubTab('bookings')
+    }
+
+    const initialData = preventivoData || externalInitialData
+    const handleDataConsumed = () => {
+        setPreventivoData(null)
+        onDataConsumed?.()
+    }
 
     return (
         <div className="space-y-4">
@@ -37,10 +49,12 @@ export default function RentalTabs({ initialData, onDataConsumed }: RentalTabsPr
                 {activeSubTab === 'bookings' && (
                     <ReservationsTab
                         initialData={initialData}
-                        onDataConsumed={onDataConsumed}
+                        onDataConsumed={handleDataConsumed}
                     />
                 )}
-                {activeSubTab === 'preventivi' && <PreventiviTab />}
+                {activeSubTab === 'preventivi' && (
+                    <PreventiviTab onConvertToBooking={handleConvertToBooking} />
+                )}
             </div>
         </div>
     )

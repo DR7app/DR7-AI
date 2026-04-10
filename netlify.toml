@@ -60,6 +60,11 @@
   to = "/.netlify/functions/whatsapp-ai-webhook"
   status = 200
 
+# ─── SCHEDULED FUNCTIONS ──────────────────────────────────────────────────────
+
+[functions."cancel-unpaid-nexi-bookings"]
+  schedule = "*/5 * * * *"
+
 # SPA catch-all: ONLY for non-asset routes
 # Netlify serves existing files first, then applies redirects.
 # When a fingerprinted chunk is missing (stale HTML after deploy),

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
 import { generateInvoicePDF } from './invoice-pdf-utils'
+import { renderTemplate } from './utils/messageTemplates'
 import { requireAuth } from './require-auth'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -658,7 +659,7 @@ export const handler: Handler = async (event) => {
                             chatId: `${cleanPhone}@c.us`,
                             urlFile: pdfUrl,
                             fileName: `Fattura_${invoice.numero_fattura}.pdf`,
-                            caption: `Fattura ${invoice.numero_fattura} - DR7 Empire`
+                            caption: await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura }, `Fattura ${invoice.numero_fattura} - DR7 Empire`)
                         })
                     })
 

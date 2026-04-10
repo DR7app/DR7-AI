@@ -40,6 +40,7 @@ export const handler: Handler = async (event) => {
                 .from('bookings')
                 .select('*')
                 .neq('status', 'cancelled')
+                .neq('status', 'annullata')
                 .order('pickup_date', { ascending: true })
                 .range(from, from + PAGE_SIZE - 1);
 
