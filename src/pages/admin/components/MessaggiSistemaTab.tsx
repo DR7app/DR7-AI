@@ -68,6 +68,7 @@ const MESSAGE_CATEGORIES: { label: string; keys: string[] }[] = [
   { label: 'Wallet & Crediti', keys: ['wallet_bonus_credit', 'wallet_bonus_credit_admin'] },
   { label: 'Preventivi', keys: ['preventivo_whatsapp', 'admin_new_website_quote', 'admin_no_cauzione_request'] },
   { label: 'Recensioni & Marketing', keys: ['review_request_whatsapp', 'birthday_message', 'referral_otp_whatsapp', 'membership_renewal_reminder'] },
+  { label: 'Wrapper Messaggio', keys: ['message_wrapper_header', 'message_wrapper_footer'] },
 ]
 
 

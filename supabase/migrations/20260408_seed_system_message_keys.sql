@@ -543,6 +543,17 @@ Rinnova subito per continuare a usufruire dei tuoi vantaggi esclusivi:
 Per qualsiasi domanda, rispondi a questo messaggio.
 
 DR7 Empire Team',
- true, true, 'before_pickup', 'all', 'confirmed')
+ true, true, 'before_pickup', 'all', 'confirmed'),
+
+-- ═══ Wrapper Header/Footer ═══
+
+('message_wrapper_header', 'Intestazione Messaggio', 'Intestazione aggiunta automaticamente a ogni messaggio WhatsApp',
+ '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*
+_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('message_wrapper_footer', 'Piè di Pagina Messaggio', 'Piè di pagina aggiunto automaticamente a ogni messaggio WhatsApp',
+ '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._',
+ true, true, 'on_booking', 'all', 'confirmed')
 
 ON CONFLICT (message_key) DO NOTHING;
