@@ -290,16 +290,18 @@ const handler: Handler = async (event) => {
 
   // ── Try to load edited template from DB ──
   // Determine the message key based on booking type
+  // When customPhone is set, this is a CUSTOMER message — use _customer variant if available
+  const isCustomerMessage = !!customPhone;
   let messageKey = '';
   if (booking) {
     const serviceType = booking.service_type;
     const isEdit = booking.isEdit;
     if (serviceType === 'car_wash') {
-      messageKey = isEdit ? 'carwash_modified' : 'carwash_new';
+      messageKey = isEdit ? 'carwash_modified' : (isCustomerMessage ? 'carwash_new_customer' : 'carwash_new');
     } else if (serviceType === 'mechanical') {
-      messageKey = isEdit ? 'mechanical_modified' : 'mechanical_new';
+      messageKey = isEdit ? 'mechanical_modified' : (isCustomerMessage ? 'mechanical_new_customer' : 'mechanical_new');
     } else {
-      messageKey = isEdit ? 'rental_modified' : 'rental_new';
+      messageKey = isEdit ? 'rental_modified' : (isCustomerMessage ? 'rental_new_customer' : 'rental_new');
     }
   }
 
@@ -325,11 +327,22 @@ const handler: Handler = async (event) => {
   if (messageKey) {
     try {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-      const { data: tpl } = await supabase
+      let { data: tpl } = await supabase
         .from('system_messages')
         .select('message_body, include_header, is_enabled')
         .eq('message_key', messageKey)
         .single();
+
+      // Fallback: if _customer variant not found, try base key
+      if (!tpl && isCustomerMessage && messageKey.endsWith('_customer')) {
+        const baseKey = messageKey.replace('_customer', '');
+        const { data: baseTpl } = await supabase
+          .from('system_messages')
+          .select('message_body, include_header, is_enabled')
+          .eq('message_key', baseKey)
+          .single();
+        tpl = baseTpl;
+      }
 
       if (tpl && tpl.is_enabled !== false && tpl.message_body) {
         // Use the DB template — it's the source of truth
