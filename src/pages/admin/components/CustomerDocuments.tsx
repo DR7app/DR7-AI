@@ -64,7 +64,7 @@ interface CustomerDetails {
 interface CustomerDocument {
   id: string
   customer_id: string
-  document_type: 'drivers_license' | 'identity_document'
+  document_type: 'drivers_license' | 'identity_document' | 'libretto_front' | 'libretto_back'
   file_name: string
   file_path: string
   file_size: number
@@ -83,7 +83,9 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
   const [uploading, setUploading] = useState<{ [key: string]: boolean }>({})
   const [selectedFiles, setSelectedFiles] = useState<{ [key: string]: File | null }>({
     drivers_license: null,
-    identity_document: null
+    identity_document: null,
+    libretto_front: null,
+    libretto_back: null
   })
   const [previewUrls, setPreviewUrls] = useState<{ [key: string]: string | null }>({})
 
@@ -167,7 +169,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
     }
   }
 
-  async function handleUpload(documentType: 'drivers_license' | 'identity_document') {
+  async function handleUpload(documentType: string) {
     const file = selectedFiles[documentType]
     if (!file) {
       toast.error('Seleziona un file da caricare')
@@ -188,7 +190,9 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
       const filePath = `${customerId}/${fileName}`
 
       // Select correct bucket based on document type
-      const bucket = documentType === 'drivers_license' ? DRIVERS_LICENSE_BUCKET : IDENTITY_DOCS_BUCKET
+      const bucket = documentType === 'drivers_license' ? DRIVERS_LICENSE_BUCKET
+        : (documentType === 'libretto_front' || documentType === 'libretto_back') ? IDENTITY_DOCS_BUCKET
+        : IDENTITY_DOCS_BUCKET
 
       // Upload to storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -294,12 +298,12 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
     return mimeType.startsWith('image/')
   }
 
-  const getDocument = (type: 'drivers_license' | 'identity_document') => {
+  const getDocument = (type: string) => {
     return documents.find(d => d.document_type === type)
   }
 
   const renderDocumentSection = (
-    type: 'drivers_license' | 'identity_document',
+    type: string,
     label: string,
     description: string
   ) => {
@@ -583,6 +587,20 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
             'identity_document',
             'Documento di Identità',
             'Carica carta d\'identità o passaporto del cliente'
+          )}
+
+          {/* Libretto Fronte */}
+          {renderDocumentSection(
+            'libretto_front',
+            'Libretto Fronte',
+            'Carica il fronte del libretto di circolazione'
+          )}
+
+          {/* Libretto Retro */}
+          {renderDocumentSection(
+            'libretto_back',
+            'Libretto Retro',
+            'Carica il retro del libretto di circolazione'
           )}
 
           {/* Storage Info */}
