@@ -316,6 +316,40 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
 
   // Selected vehicle
   const selectedVehicle = useMemo(() => vehicles.find(v => v.id === form.vehicle_id), [vehicles, form.vehicle_id])
+
+  // Revenue Management: fetch dynamic price with ALL coefficients
+  const [revenueSuggestion, setRevenueSuggestion] = useState<any>(null)
+  const [revenueLoading, setRevenueLoading] = useState(false)
+
+  useEffect(() => {
+    if (!form.vehicle_id || !form.pickup_date || !form.return_date) {
+      setRevenueSuggestion(null)
+      return
+    }
+    let cancelled = false
+    setRevenueLoading(true)
+    const pickup = `${form.pickup_date}T${form.pickup_time || '10:00'}`
+    const dropoff = `${form.return_date}T${form.return_time || '10:00'}`
+    fetch('/.netlify/functions/calculate-dynamic-price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vehicle_id: form.vehicle_id, pickup_date: pickup, dropoff_date: dropoff })
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.enabled && data.finalDailyRateEur) {
+          setRevenueSuggestion(data)
+          // Auto-apply the dynamic daily rate (includes all coefficients)
+          setForm(prev => ({ ...prev, daily_rate: data.finalDailyRateEur.toFixed(2) }))
+        } else {
+          setRevenueSuggestion(null)
+        }
+      })
+      .catch(() => { if (!cancelled) setRevenueSuggestion(null) })
+      .finally(() => { if (!cancelled) setRevenueLoading(false) })
+    return () => { cancelled = true }
+  }, [form.vehicle_id, form.pickup_date, form.return_date, form.pickup_time, form.return_time])
   const vehicleType = useMemo(() => getVehicleType(selectedVehicle), [selectedVehicle])
 
   // Insurance options based on vehicle type + fascia
@@ -516,11 +550,15 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
         pickup_notes: form.pickup_enabled ? form.pickup_notes : '',
         pickup_fee: form.pickup_enabled ? parseFloat(form.pickup_fee) : 0,
         daily_rate: parseFloat(form.daily_rate),
-        base_daily_rate: parseFloat(form.daily_rate),
+        base_daily_rate: revenueSuggestion?.baseDailyRateEur || parseFloat(form.daily_rate),
+        daily_rate_after_markup: parseFloat(form.daily_rate),
+        maggiorazione_pct: breakdown.maggiorazionePct,
         rental_days: rentalDays,
         total_amount: parseFloat(form.total_amount),
-        subtotal: parseFloat(form.total_amount),
-        total_final: parseFloat(form.total_amount),
+        subtotal: breakdown.subtotal,
+        total_final: breakdown.total,
+        pricing_trace: revenueSuggestion?.trace || null,
+        payment_method: form.payment_method,
         deposit_amount: parseFloat(form.deposit_amount),
         notes: form.notes,
         valid_until: form.valid_until,
@@ -646,6 +684,22 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 {' • '}Tariffa giornaliera: <span className="text-dr7-gold font-medium">€{form.daily_rate}</span>
               </div>
             )}
+            {/* Revenue Management coefficients */}
+            {revenueSuggestion && (
+              <div className="mt-3 p-3 rounded-lg border border-dr7-gold/30 bg-dr7-gold/5">
+                <p className="text-xs font-semibold text-dr7-gold mb-1">Revenue Management</p>
+                <p className="text-sm text-theme-text-primary">Tariffa giornaliera: <strong>€{revenueSuggestion.finalDailyRateEur?.toFixed(2)}</strong> /giorno</p>
+                {revenueSuggestion.trace && (
+                  <div className="text-xs text-theme-text-muted mt-1 space-y-0.5">
+                    {revenueSuggestion.trace.occupancy && <p>Occupazione flotta: x{revenueSuggestion.trace.occupancy.coefficient} ({revenueSuggestion.trace.occupancy.label})</p>}
+                    {revenueSuggestion.trace.leadTime && <p>Anticipo prenotazione: x{revenueSuggestion.trace.leadTime.coefficient} ({revenueSuggestion.trace.leadTime.label})</p>}
+                    {revenueSuggestion.trace.duration && <p>Durata noleggio: x{revenueSuggestion.trace.duration.coefficient} ({revenueSuggestion.trace.duration.label})</p>}
+                    {revenueSuggestion.trace.season && <p>Stagionalità: x{revenueSuggestion.trace.season.coefficient} ({revenueSuggestion.trace.season.label})</p>}
+                  </div>
+                )}
+              </div>
+            )}
+            {revenueLoading && <p className="text-xs text-theme-text-muted mt-2">Calcolo Revenue Management...</p>}
             <div className="mt-3">
               <Input label="Tariffa Giornaliera (€) — Modificabile" type="number" step="0.01"
                 value={form.daily_rate}
