@@ -419,10 +419,26 @@ const handler: Handler = async (event) => {
     }
   }
 
-  // Build the final wrapped message
-  const HEADER = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n`;
-  const FOOTER = `\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
-  const wrappedMessage = useHeader ? `${HEADER}${finalMessage}${FOOTER}` : finalMessage;
+  // Add wrapper from DB (or fallback)
+  let wrappedMessage = finalMessage;
+  if (useHeader) {
+    try {
+      const supabaseWrap = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const { data: wrappers } = await supabaseWrap
+        .from('system_messages')
+        .select('message_key, message_body')
+        .in('message_key', ['message_wrapper_header', 'message_wrapper_footer']);
+      const headerTpl = wrappers?.find((w: any) => w.message_key === 'message_wrapper_header');
+      const footerTpl = wrappers?.find((w: any) => w.message_key === 'message_wrapper_footer');
+      const header = headerTpl?.message_body || '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_';
+      const footer = footerTpl?.message_body || '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
+      wrappedMessage = header + '\n\n' + finalMessage + '\n\n' + footer;
+    } catch {
+      const defaultHeader = '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_';
+      const defaultFooter = '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
+      wrappedMessage = defaultHeader + '\n\n' + finalMessage + '\n\n' + defaultFooter;
+    }
+  }
 
   try {
     // Send via Green API
@@ -435,7 +451,7 @@ const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         chatId: `${targetPhone}@c.us`,
-        message: skipHeader ? finalMessage : wrappedMessage,
+        message: finalMessage,
       }),
     });
 
