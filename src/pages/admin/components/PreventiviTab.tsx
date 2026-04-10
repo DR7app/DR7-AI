@@ -721,7 +721,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       const { data: tpl } = await supabase
         .from('system_messages')
         .select('message_body, is_enabled')
-        .eq('message_key', 'preventivo_send')
+        .eq('message_key', 'preventivo_whatsapp')
         .single()
 
       if (tpl?.is_enabled && tpl.message_body) {

@@ -66,6 +66,108 @@ Cordiali Saluti,
 DR7',
  true, true, 'on_booking', 'all', 'confirmed'),
 
+-- ═══ Customer-specific confirmations ═══
+
+('carwash_new_customer', 'Conferma Car Wash (cliente)', 'Inviato al cliente per conferma appuntamento autolavaggio',
+ 'Salve {nome},
+
+Confermiamo il suo appuntamento.
+
+*NUOVA PRENOTAZIONE AUTOLAVAGGIO*
+
+*ID:* DR7-{booking_id}
+*Servizio:* {service_name}
+*Targa:* {plate}
+*Data e Ora:* {pickup_date} alle {pickup_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('mechanical_new_customer', 'Conferma Meccanica (cliente)', 'Inviato al cliente per conferma appuntamento meccanica',
+ 'Salve {nome},
+
+Confermiamo il suo appuntamento.
+
+*NUOVA PRENOTAZIONE MECCANICA*
+
+*ID:* DR7-{booking_id}
+*Servizio:* {service_name}
+*Data e Ora:* {pickup_date} alle {pickup_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('rental_new_customer', 'Conferma Noleggio (cliente)', 'Inviato al cliente per conferma prenotazione noleggio',
+ '*NUOVA PRENOTAZIONE NOLEGGIO*
+
+*ID:* DR7-{booking_id}
+*Cliente:* {customer_name}
+*Veicolo:* {vehicle_name}
+*Ritiro:* {pickup_date} alle {pickup_time}
+*Riconsegna:* {dropoff_date} alle {dropoff_time}
+*Luogo Ritiro:* {pickup_location}
+*Assicurazione:* {insurance}
+*Totale:* €{total}
+*Cauzione:* {deposit}
+*KM:* {km_info}
+*Pagamento:* {payment_info}',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+-- ═══ Modified bookings ═══
+
+('carwash_modified', 'Modifica Car Wash', 'Inviato quando un appuntamento autolavaggio viene modificato',
+ 'Salve {nome},
+
+La sua prenotazione è stata aggiornata.
+
+*MODIFICA PRENOTAZIONE AUTOLAVAGGIO*
+
+*ID:* DR7-{booking_id}
+*Servizio:* {service_name}
+*Targa:* {plate}
+*Data e Ora:* {pickup_date} alle {pickup_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('mechanical_modified', 'Modifica Meccanica', 'Inviato quando un appuntamento meccanica viene modificato',
+ 'Salve {nome},
+
+La sua prenotazione è stata aggiornata.
+
+*MODIFICA PRENOTAZIONE MECCANICA*
+
+*ID:* DR7-{booking_id}
+*Servizio:* {service_name}
+*Data e Ora:* {pickup_date} alle {pickup_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('rental_modified', 'Modifica Noleggio', 'Inviato quando una prenotazione noleggio viene modificata',
+ '*MODIFICA PRENOTAZIONE NOLEGGIO*
+
+*ID:* DR7-{booking_id}
+*Cliente:* {customer_name}
+*Veicolo:* {vehicle_name}
+*Ritiro:* {pickup_date} alle {pickup_time}
+*Riconsegna:* {dropoff_date} alle {dropoff_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
 -- ═══ Day-before Reminders (send-booking-reminders cron) ═══
 
 ('supercar_day_before', 'Promemoria Supercar (giorno prima)', 'Offerta estensione per supercar il giorno prima del ritiro',
@@ -387,6 +489,17 @@ Il tuo codice OTP: *{code}*
 Scade tra 5 minuti.
 Non condividere questo codice con nessuno.',
  true, true, 'on_booking', 'all', 'confirmed'),
+
+-- ═══ Preventivo WhatsApp (PreventiviTab Invia) ═══
+
+('preventivo_whatsapp', 'Preventivo WhatsApp', 'Messaggio inviato al cliente con il preventivo via WhatsApp',
+ 'Preventivo {vehicle_specs}
+
+{pricing_lines}
+
+Totale = {subtotal}
+{sconto}',
+ true, true, 'on_preventivo', 'all', 'confirmed'),
 
 -- ═══ Preventivo dal Sito (create-website-preventivo) ═══
 
