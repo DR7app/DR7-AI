@@ -6436,8 +6436,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             )}
 
             <div className="flex flex-wrap gap-3 mt-4">
-              <Button type="submit" className="flex-1 sm:flex-none">
-                Salva
+              <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
+                {isSubmitting ? 'Salvataggio...' : 'Salva'}
               </Button>
               <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); resetForm() }}>
                 Annulla
