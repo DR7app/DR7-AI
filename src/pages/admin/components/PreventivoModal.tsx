@@ -51,7 +51,7 @@ interface PreventivoData {
   no_cauzione_daily: string
   cauzione_type: CauzioneType
   residente_sardegna: boolean
-  payment_method: 'Carta' | 'Contanti'
+  payment_method: string
   delivery_enabled: boolean
   delivery_street: string
   delivery_city: string
@@ -427,10 +427,18 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
     const unlimitedKmTotal = unlimitedKmDaily * days
     const noCauzioneTotal = noCauzioneDaily * days
     const subtotal = rentalBase + insuranceTotal + secondDriverTotal + unlimitedKmTotal + noCauzioneTotal + deliveryFee + pickupFee
-    // Contanti: +20% coefficient on the full total
-    const isContanti = form.payment_method === 'Contanti'
-    const contantiSurcharge = isContanti ? subtotal * 0.20 : 0
-    const total = subtotal + contantiSurcharge
+
+    // Payment surcharge from Centralina payment_modes
+    const paymentModes = rentalConfig?.payment_modes || []
+    const selectedMode = paymentModes.find((m: any) => m.label === form.payment_method)
+    const surchargePercent = selectedMode?.surcharge_percent ?? (form.payment_method === 'Contanti' ? 20 : 0)
+    const paymentSurcharge = surchargePercent > 0 ? subtotal * (surchargePercent / 100) : 0
+
+    // Preventivi maggiorazione from Centralina
+    const maggiorazionePct = rentalConfig?.preventivi?.maggiorazione_pct ?? 0
+    const maggiorazione = maggiorazionePct > 0 ? subtotal * (maggiorazionePct / 100) : 0
+
+    const total = subtotal + paymentSurcharge + maggiorazione
 
     return {
       days,
@@ -446,8 +454,10 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       deliveryFee,
       pickupFee,
       subtotal,
-      contantiSurcharge,
-      isContanti,
+      paymentSurcharge,
+      surchargePercent,
+      maggiorazione,
+      maggiorazionePct,
       total,
     }
   }, [form, rentalDays])
@@ -806,20 +816,23 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
             </div>
           </div>
 
-          {/* Metodo Pagamento */}
+          {/* Metodo Pagamento — from Centralina */}
           <div className="p-4 rounded-lg border border-theme-border">
             <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 uppercase tracking-wider">Metodo di Pagamento</h4>
-            <div className="flex gap-3">
-              {(['Carta', 'Contanti'] as const).map(method => (
-                <button key={method} type="button"
-                  onClick={() => setForm(prev => ({ ...prev, payment_method: method }))}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    form.payment_method === method
+            <div className="flex gap-2 flex-wrap">
+              {(rentalConfig?.payment_modes && rentalConfig.payment_modes.length > 0
+                ? rentalConfig.payment_modes
+                : [{ id: 'carta', label: 'Carta', surcharge_percent: 0 }, { id: 'contanti', label: 'Contanti', surcharge_percent: 20 }]
+              ).map((mode: any) => (
+                <button key={mode.id} type="button"
+                  onClick={() => setForm(prev => ({ ...prev, payment_method: mode.label }))}
+                  className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    form.payment_method === mode.label
                       ? 'bg-dr7-gold text-white'
                       : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
                   }`}
                 >
-                  {method}{method === 'Contanti' ? ' (+20%)' : ''}
+                  {mode.label}{mode.surcharge_percent > 0 ? ` (+${mode.surcharge_percent}%)` : ''}
                 </button>
               ))}
             </div>
@@ -937,10 +950,16 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                   <span className="font-mono text-theme-text-primary">€{breakdown.pickupFee.toFixed(2)}</span>
                 </div>
               )}
-              {breakdown.isContanti && (
+              {breakdown.paymentSurcharge > 0 && (
                 <div className="flex justify-between text-amber-400">
-                  <span>Maggiorazione Contanti (+20%)</span>
-                  <span className="font-mono font-semibold">€{breakdown.contantiSurcharge.toFixed(2)}</span>
+                  <span>Maggiorazione {form.payment_method} (+{breakdown.surchargePercent}%)</span>
+                  <span className="font-mono font-semibold">€{breakdown.paymentSurcharge.toFixed(2)}</span>
+                </div>
+              )}
+              {breakdown.maggiorazione > 0 && (
+                <div className="flex justify-between text-purple-400">
+                  <span>Maggiorazione Preventivo (+{breakdown.maggiorazionePct}%)</span>
+                  <span className="font-mono font-semibold">€{breakdown.maggiorazione.toFixed(2)}</span>
                 </div>
               )}
               <div className="border-t border-dr7-gold/30 pt-2 mt-2">
