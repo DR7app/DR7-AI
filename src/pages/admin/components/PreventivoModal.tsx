@@ -571,7 +571,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
         total_amount: parseFloat(form.total_amount),
         subtotal: breakdown.subtotal,
         total_final: breakdown.total,
-        pricing_trace: revenueSuggestion?.trace || null,
+        pricing_trace: revenueSuggestion ? { breakdown: revenueSuggestion.breakdown, combinedCoeff: breakdown.combinedCoeff, finalDailyRateEur: revenueSuggestion.finalDailyRateEur } : null,
         payment_method: form.payment_method,
         deposit_amount: parseFloat(form.deposit_amount),
         notes: form.notes,
@@ -702,13 +702,15 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
             {revenueSuggestion && (
               <div className="mt-3 p-3 rounded-lg border border-dr7-gold/30 bg-dr7-gold/5">
                 <p className="text-xs font-semibold text-dr7-gold mb-1">Revenue Management</p>
-                <p className="text-sm text-theme-text-primary">Tariffa giornaliera: <strong>€{revenueSuggestion.finalDailyRateEur?.toFixed(2)}</strong> /giorno</p>
-                {revenueSuggestion.trace && (
+                <p className="text-sm text-theme-text-primary">
+                  Base: €{revenueSuggestion.selectedBaseRateEur?.toFixed(2)}/g
+                  {' → '}Coefficiente combinato: <strong>x{breakdown.combinedCoeff.toFixed(2)}</strong>
+                </p>
+                {revenueSuggestion.breakdown && revenueSuggestion.breakdown.length > 0 && (
                   <div className="text-xs text-theme-text-muted mt-1 space-y-0.5">
-                    {revenueSuggestion.trace.occupancy && <p>Occupazione flotta: x{revenueSuggestion.trace.occupancy.coefficient} ({revenueSuggestion.trace.occupancy.label})</p>}
-                    {revenueSuggestion.trace.leadTime && <p>Anticipo prenotazione: x{revenueSuggestion.trace.leadTime.coefficient} ({revenueSuggestion.trace.leadTime.label})</p>}
-                    {revenueSuggestion.trace.duration && <p>Durata noleggio: x{revenueSuggestion.trace.duration.coefficient} ({revenueSuggestion.trace.duration.label})</p>}
-                    {revenueSuggestion.trace.season && <p>Stagionalità: x{revenueSuggestion.trace.season.coefficient} ({revenueSuggestion.trace.season.label})</p>}
+                    {revenueSuggestion.breakdown.map((b: { label: string; coeff: number; description: string }, i: number) => (
+                      <p key={i}>{b.label}: x{b.coeff.toFixed(2)} ({b.description})</p>
+                    ))}
                   </div>
                 )}
               </div>
