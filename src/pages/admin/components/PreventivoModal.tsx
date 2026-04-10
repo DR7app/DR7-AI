@@ -106,12 +106,31 @@ const LOCATIONS = [
 ]
 
 // --- Time Options ---
-const TIME_OPTIONS = Array.from({ length: 96 }).map((_, i) => {
-  const hour = Math.floor(i / 4).toString().padStart(2, '0')
-  const minute = ((i % 4) * 15).toString().padStart(2, '0')
-  const time = `${hour}:${minute}`
-  return { value: time, label: time }
-})
+// Pickup times: Mon-Fri 10:30-12:30 + 16:30-18:30, Sat 10:30-12:30 + 15:30-17:30
+// Return times: Mon-Fri 9:00-11:00 + 15:00-17:00, Sat 9:00-11:00 + 14:00-16:00
+// 30-min intervals, same as regular bookings
+function generateTimeSlots(ranges: [number, number][]): { value: string; label: string }[] {
+  const slots: { value: string; label: string }[] = []
+  for (const [startMin, endMin] of ranges) {
+    for (let m = startMin; m <= endMin; m += 30) {
+      const h = Math.floor(m / 60).toString().padStart(2, '0')
+      const min = (m % 60).toString().padStart(2, '0')
+      const time = `${h}:${min}`
+      slots.push({ value: time, label: time })
+    }
+  }
+  return slots
+}
+
+const PICKUP_TIME_OPTIONS = generateTimeSlots([
+  [10 * 60 + 30, 12 * 60 + 30], // 10:30 - 12:30
+  [15 * 60 + 30, 18 * 60 + 30], // 15:30 - 18:30 (covers both weekday + Saturday)
+])
+
+const RETURN_TIME_OPTIONS = generateTimeSlots([
+  [9 * 60, 12 * 60 + 30],       // 09:00 - 12:30
+  [14 * 60, 17 * 60 + 30],      // 14:00 - 17:30 (covers both weekday + Saturday)
+])
 
 function isFurgone(vehicle?: Vehicle): boolean {
   if (!vehicle) return false
@@ -210,7 +229,7 @@ const initialFormData: PreventivoData = {
   vehicle_category: '',
   fascia: 'A',
   pickup_date: '',
-  pickup_time: getNext15MinuteTime(),
+  pickup_time: '10:30',
   return_date: '',
   return_time: '10:00',
   pickup_location: 'dr7_office',
@@ -653,7 +672,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                     const pt = e.target.value
                     setForm(prev => ({ ...prev, pickup_time: pt, return_time: calculateReturnTime(pt) }))
                   }}
-                  options={TIME_OPTIONS} />
+                  options={PICKUP_TIME_OPTIONS} />
               </div>
               <Select label="Luogo Ritiro" required value={form.pickup_location}
                 onChange={(e) => setForm(prev => ({ ...prev, pickup_location: e.target.value }))}
@@ -664,7 +683,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                   onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
                 <Select label="Ora Riconsegna" required value={form.return_time}
                   onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))}
-                  options={TIME_OPTIONS} />
+                  options={RETURN_TIME_OPTIONS} />
               </div>
               <Select label="Luogo Riconsegna" required value={form.dropoff_location}
                 onChange={(e) => setForm(prev => ({ ...prev, dropoff_location: e.target.value }))}
