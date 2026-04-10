@@ -2287,6 +2287,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               ? 'In Attesa'
                               : 'Non Pagato'}
                         </span>
+                        {booking.payment_method && (
+                          <div className="text-[10px] text-theme-text-muted mt-1">
+                            {booking.payment_method === 'credit_wallet' ? 'Credit Wallet'
+                              : booking.payment_method === 'Nexi Pay by Link' ? 'Nexi'
+                              : booking.payment_method === 'online' ? 'Online'
+                              : booking.payment_method}
+                            {booking.booking_source === 'website' || !booking.booking_source ? '' : ` · ${booking.booking_source}`}
+                          </div>
+                        )}
+                        {!booking.payment_method && booking.booking_details?.payment_method && (
+                          <div className="text-[10px] text-theme-text-muted mt-1">{booking.booking_details.payment_method}</div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
