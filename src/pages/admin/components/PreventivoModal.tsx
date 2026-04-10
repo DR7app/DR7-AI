@@ -51,6 +51,7 @@ interface PreventivoData {
   no_cauzione_daily: string
   cauzione_type: CauzioneType
   residente_sardegna: boolean
+  payment_method: 'Carta' | 'Contanti'
   delivery_enabled: boolean
   delivery_street: string
   delivery_city: string
@@ -226,6 +227,7 @@ const initialFormData: PreventivoData = {
   no_cauzione_daily: '0',
   cauzione_type: 'carta_debito_credito',
   residente_sardegna: true,
+  payment_method: 'Carta',
   delivery_enabled: false,
   delivery_street: '',
   delivery_city: '',
@@ -424,7 +426,11 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
     const secondDriverTotal = secondDriverDaily * days
     const unlimitedKmTotal = unlimitedKmDaily * days
     const noCauzioneTotal = noCauzioneDaily * days
-    const total = rentalBase + insuranceTotal + secondDriverTotal + unlimitedKmTotal + noCauzioneTotal + deliveryFee + pickupFee
+    const subtotal = rentalBase + insuranceTotal + secondDriverTotal + unlimitedKmTotal + noCauzioneTotal + deliveryFee + pickupFee
+    // Contanti: +20% coefficient on the full total
+    const isContanti = form.payment_method === 'Contanti'
+    const contantiSurcharge = isContanti ? subtotal * 0.20 : 0
+    const total = subtotal + contantiSurcharge
 
     return {
       days,
@@ -439,6 +445,9 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       noCauzioneDaily,
       deliveryFee,
       pickupFee,
+      subtotal,
+      contantiSurcharge,
+      isContanti,
       total,
     }
   }, [form, rentalDays])
@@ -797,6 +806,25 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
             </div>
           </div>
 
+          {/* Metodo Pagamento */}
+          <div className="p-4 rounded-lg border border-theme-border">
+            <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 uppercase tracking-wider">Metodo di Pagamento</h4>
+            <div className="flex gap-3">
+              {(['Carta', 'Contanti'] as const).map(method => (
+                <button key={method} type="button"
+                  onClick={() => setForm(prev => ({ ...prev, payment_method: method }))}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    form.payment_method === method
+                      ? 'bg-dr7-gold text-white'
+                      : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
+                  }`}
+                >
+                  {method}{method === 'Contanti' ? ' (+20%)' : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Delivery */}
           <div className="p-4 rounded-lg border border-theme-border">
             <label className="flex items-center gap-2 cursor-pointer mb-3">
@@ -907,6 +935,12 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 <div className="flex justify-between">
                   <span className="text-theme-text-muted">Ritiro a domicilio</span>
                   <span className="font-mono text-theme-text-primary">€{breakdown.pickupFee.toFixed(2)}</span>
+                </div>
+              )}
+              {breakdown.isContanti && (
+                <div className="flex justify-between text-amber-400">
+                  <span>Maggiorazione Contanti (+20%)</span>
+                  <span className="font-mono font-semibold">€{breakdown.contantiSurcharge.toFixed(2)}</span>
                 </div>
               )}
               <div className="border-t border-dr7-gold/30 pt-2 mt-2">
