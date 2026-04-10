@@ -2293,7 +2293,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               : booking.payment_method === 'Nexi Pay by Link' ? 'Nexi'
                               : booking.payment_method === 'online' ? 'Online'
                               : booking.payment_method}
-                            {booking.booking_source === 'website' || !booking.booking_source ? '' : ` · ${booking.booking_source}`}
+                            {(booking as any).booking_source === 'website' || !(booking as any).booking_source ? '' : ` · ${(booking as any).booking_source}`}
                           </div>
                         )}
                         {!booking.payment_method && booking.booking_details?.payment_method && (
