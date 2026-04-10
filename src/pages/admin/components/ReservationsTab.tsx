@@ -1472,26 +1472,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         setCustomerStatuses(statusMap)
       }
 
-      // Fetch DR7 Club active subscriptions (match by user_id AND email)
+      // Fetch DR7 Club active subscriptions via Netlify function (bypasses RLS)
       try {
-        const { data: clubSubs } = await supabase
-          .from('dr7_club_subscriptions')
-          .select('user_id')
-          .eq('status', 'active')
-        if (clubSubs && clubSubs.length > 0) {
-          const userIds = clubSubs.map((s: { user_id: string }) => s.user_id)
-          setClubMembers(new Set(userIds))
-          // Also fetch emails for these user_ids from customers_extended
-          const { data: custEmails } = await supabase
-            .from('customers_extended')
-            .select('email')
-            .in('user_id', userIds)
-          if (custEmails) {
-            setClubEmails(new Set(custEmails.map((c: { email: string }) => c.email?.toLowerCase()).filter(Boolean)))
+        const clubRes = await authFetch('/.netlify/functions/list-club-members')
+        if (clubRes.ok) {
+          const clubData = await clubRes.json()
+          if (clubData.members && clubData.members.length > 0) {
+            const userIds = clubData.members.map((s: { user_id: string }) => s.user_id)
+            setClubMembers(new Set(userIds))
+            const emails = clubData.members.map((s: { email?: string }) => s.email?.toLowerCase()).filter(Boolean)
+            setClubEmails(new Set(emails))
           }
         }
       } catch {
-        // Table may not exist
+        // Club members fetch failed
       }
 
       // Fetch customers from bookings table (same as CustomersTab)
