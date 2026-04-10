@@ -1805,6 +1805,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!customer.emessa_da && !customer.metadata?.patente?.ente) missing.push('emessa_da')
       if (!customer.data_rilascio_patente && !customer.metadata?.patente?.rilascio) missing.push('data_rilascio_patente')
       if (!customer.scadenza_patente && !customer.metadata?.patente?.scadenza) missing.push('scadenza_patente')
+      // Check patente scaduta (expired license)
+      const scadenzaPatente = customer.scadenza_patente || customer.data_scadenza_patente || customer.metadata?.patente?.scadenza
+      if (scadenzaPatente) {
+        const expDate = new Date(scadenzaPatente)
+        if (expDate < new Date() && !hasOverride('license_expired')) {
+          requestOverride('license_expired', `Patente scaduta il ${expDate.toLocaleDateString('it-IT')}. Il cliente non può noleggiare con patente scaduta.`)
+          return ['__limitation_override_requested__']
+        }
+      }
+
       // Check patente is at least 3 years old
       const patenteDate = customer.data_rilascio_patente || customer.metadata?.patente?.rilascio
       if (patenteDate) {
