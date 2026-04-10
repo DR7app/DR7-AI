@@ -6016,7 +6016,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   { value: 'paid', label: 'Pagato' }
                 ]}
               />
-              {formData.payment_status !== 'unpaid' && (
+              {(
                 <Select
                   label="Metodo di Pagamento"
                   required
