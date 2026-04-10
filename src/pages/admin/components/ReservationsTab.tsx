@@ -432,6 +432,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [carWashBookings, setCarWashBookings] = useState<Booking[]>([]) // Car wash & mechanical bookings for availability checking
   const [customerStatuses, setCustomerStatuses] = useState<Map<string, string>>(new Map()) // email → status_cliente
+  const [clubMembers, setClubMembers] = useState<Set<string>>(new Set()) // user_ids with active DR7 Club
 
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -1468,6 +1469,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const statusMap = new Map<string, string>()
         custStatuses.forEach(c => { if (c.email) statusMap.set(c.email.toLowerCase(), c.status_cliente) })
         setCustomerStatuses(statusMap)
+      }
+
+      // Fetch DR7 Club active subscriptions
+      try {
+        const { data: clubSubs } = await supabase
+          .from('dr7_club_subscriptions')
+          .select('user_id')
+          .eq('status', 'active')
+        if (clubSubs && clubSubs.length > 0) {
+          setClubMembers(new Set(clubSubs.map((s: { user_id: string }) => s.user_id)))
+        }
+      } catch {
+        // Table may not exist
       }
 
       // Fetch customers from bookings table (same as CustomersTab)
@@ -6527,6 +6541,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     <div className="font-semibold text-theme-text-primary mb-1 flex items-center">
                       {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
                       <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
+                      {booking.user_id && clubMembers.has(booking.user_id) && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50">DR7 Club</span>
+                      )}
                     </div>
                     <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                   </div>
@@ -6698,6 +6715,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <span className="flex items-center">
                           <span className="truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
                           <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
+                      {booking.user_id && clubMembers.has(booking.user_id) && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50">DR7 Club</span>
+                      )}
                         </span>
                       </td>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
