@@ -4165,9 +4165,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid' && insertedBooking) {
         try {
           // Use cents-based addition to avoid float drift, then convert to EUR
-          const totalCents = eurToCents(formData.total_amount || '0')
+          // Subtract already paid amount for partial payments
+          const fullTotalCents = eurToCents(formData.total_amount || '0')
             + (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0)
             + (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+          const alreadyPaidCents = formData.payment_status === 'partial' ? eurToCents(formData.amount_paid || '0') : 0
+          const totalCents = Math.max(0, fullTotalCents - alreadyPaidCents)
           const totalEur = totalCents / 100
 
           const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
@@ -4303,10 +4306,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Send WhatsApp notification for car rental (new and edited bookings)
+      // Send WhatsApp notification for car rental
+      // Only send confirmation when paid — "Da saldare" bookings get notified when payment is received
+      const paymentStatus = formData.payment_status || 'pending'
+      const isPaid = paymentStatus === 'paid' || paymentStatus === 'succeeded' || paymentStatus === 'completed'
+      if (isPaid || editingId) {
       try {
-        const paymentStatus = formData.payment_status || 'pending'
-
         // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
         // These are already formatted as "2026-02-07T09:30:00+01:00" (or +02:00 in summer)
         // Send admin notification (detailed internal format)
@@ -4363,54 +4368,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         logger.log('✅ WhatsApp admin notification sent')
 
-        // Send customer confirmation message
+        // Send customer confirmation message via DB template (rental_new_customer)
         const custPhone = customerInfo?.phone
         if (custPhone) {
-          const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
-          const pickupDt = new Date(pickupDateTime)
-          const dropoffDt = new Date(returnDateTime)
-          const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
-          const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
-          const depositCents = eurToCents(formData.deposit || '0')
-          const depositLabel = depositCents > 0 ? `€${centsToEurStr(depositCents)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
-          let kmLabel = '-'
-          if (formData.unlimited_km) {
-            kmLabel = 'Illimitati'
-          } else if (formData.km_limit === '50/giorno') {
-            const pickup = new Date(formData.pickup_date + 'T' + formData.pickup_time)
-            const dropoff = new Date(formData.return_date + 'T' + formData.return_time)
-            const days = Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24))
-            kmLabel = `${50 * days} Km (50/g x ${days}gg)`
-          } else if (formData.km_limit) {
-            kmLabel = `${formData.km_limit} km`
-          }
-          const insuranceLabel = formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
-            : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
-            : formData.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
-            : formData.insurance_option === 'DR7' ? 'Kasko DR7'
-            : formData.insurance_option || '-'
-          const paymentLabel = formData.payment_status === 'paid' ? `Pagato (${formData.payment_method || '-'})` : formData.payment_status === 'partial' ? `Parziale (${formData.payment_method || '-'})` : 'Da saldare'
-          const bookingNotes = formData.notes || insertedBooking?.booking_details?.notes || ''
-
-          const totalEur = insertedBooking?.price_total ? centsToEurStr(Math.round(insertedBooking.price_total)) : centsToEurStr(eurToCents(formData.total_amount))
-
-          let custMsg = editingId
-            ? `Salve ${custFirstName},\n\nLa informiamo che la Sua prenotazione è stata modificata.\n\n`
-            : `Salve ${custFirstName},\n\nConfermiamo la sua prenotazione.\n\n`
-          custMsg += `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`
-          custMsg += `*ID:* DR7-${(insertedBooking?.id || '').substring(0, 8).toUpperCase()}\n`
-          custMsg += `*Veicolo:* ${vehicle?.display_name || 'N/A'}\n`
-          custMsg += `*Ritiro:* ${fmtDate(pickupDt)} alle ${fmtTime(pickupDt)}\n`
-          custMsg += `*Riconsegna:* ${fmtDate(dropoffDt)} alle ${fmtTime(dropoffDt)}\n`
-          custMsg += `*Luogo ritiro:* ${pickupLocationLabel}\n`
-          custMsg += `*Assicurazione:* ${insuranceLabel}\n`
-          custMsg += `*Totale:* €${totalEur}\n`
-          custMsg += `*Cauzione:* ${depositLabel}\n`
-          custMsg += `*KM:* ${kmLabel}\n`
-          custMsg += `*Pagamento:* ${paymentLabel}\n`
-          if (bookingNotes) custMsg += `*Note:* ${bookingNotes}\n`
-          custMsg += `\nCordiali Saluti,\nDR7`
-
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -4422,7 +4382,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 isEdit: !!editingId,
                 customer_name: customerInfo?.full_name || '',
                 customer_email: customerInfo?.email || '',
-                customer_phone: customerInfo?.phone || '',
+                customer_phone: custPhone,
                 vehicle_name: vehicle?.display_name || '',
                 vehicle_plate: vehicle?.plate || '',
                 pickup_date: pickupDateTime,
@@ -4433,33 +4393,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 payment_status: paymentStatus,
                 payment_method: formData.payment_method || '',
                 deposit_amount: parseFloat(formData.deposit) || 0,
-                km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
                 booking_details: {
-                  amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || eurToCents(formData.total_amount)) : 0,
                   insuranceOption: formData.insurance_option || 'KASKO_BASE',
                   deposit: parseFloat(formData.deposit) || 0,
                   deposit_status: formData.deposit_status,
                   km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
                   unlimited_km: formData.unlimited_km,
-                  delivery_enabled: formData.delivery_enabled,
-                  delivery_address: formData.delivery_enabled ? {
-                    street: formData.delivery_street,
-                    city: formData.delivery_city,
-                    zip: formData.delivery_zip,
-                    province: formData.delivery_province
-                  } : null,
-                  delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
-                  pickup_enabled: formData.pickup_enabled,
-                  pickup_address: formData.pickup_enabled ? {
-                    street: formData.pickup_street,
-                    city: formData.pickup_city,
-                    zip: formData.pickup_zip,
-                    province: formData.pickup_province
-                  } : null,
-                  pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
                   notes: formData.notes || null,
-                  depositOption: insertedBooking?.booking_details?.depositOption,
-                  noDepositSurcharge: insertedBooking?.booking_details?.noDepositSurcharge
                 }
               }
             })
@@ -4470,6 +4410,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
         // Don't fail the whole booking if WhatsApp fails
       }
+      } // end isPaid || editingId
 
       // Sync cauzione (security deposit) record
       try {
