@@ -14,7 +14,7 @@ VALUES
 -- These are used by BOTH admin and website repos
 
 ('rental_new', 'Conferma Noleggio', 'Inviato quando viene creata una prenotazione noleggio',
- '🚘 *NUOVA PRENOTAZIONE NOLEGGIO*
+ '*NUOVA PRENOTAZIONE NOLEGGIO*
 
 *ID:* DR7-{booking_id}
 *Cliente:* {customer_name}
@@ -25,36 +25,45 @@ VALUES
 *Riconsegna:* {dropoff_date} alle {dropoff_time}
 *Luogo Ritiro:* {pickup_location}
 *Assicurazione:* {insurance}
+*Totale:* €{total}
 *Cauzione:* {deposit}
 *KM:* {km_info}
-*Totale:* €{total}
-*Stato Pagamento:* {payment_status}',
+*Pagamento:* {payment_info}',
  true, true, 'on_booking', 'all', 'confirmed'),
 
-('carwash_new', 'Conferma Car Wash', 'Inviato quando viene creata una prenotazione car wash',
- '🚗 *NUOVA PRENOTAZIONE AUTOLAVAGGIO*
+('carwash_new', 'Conferma Car Wash', 'Inviato al cliente per conferma appuntamento autolavaggio',
+ 'Salve {nome},
+
+Confermiamo il suo appuntamento.
+
+*NUOVA PRENOTAZIONE AUTOLAVAGGIO*
 
 *ID:* DR7-{booking_id}
-*Cliente:* {customer_name}
-*Email:* {customer_email}
-*Telefono:* {customer_phone}
+*Servizio:* {service_name}
+*Targa:* {plate}
+*Data e Ora:* {pickup_date} alle {pickup_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('mechanical_new', 'Conferma Meccanica', 'Inviato al cliente per conferma appuntamento meccanica',
+ 'Salve {nome},
+
+Confermiamo il suo appuntamento.
+
+*NUOVA PRENOTAZIONE MECCANICA*
+
+*ID:* DR7-{booking_id}
 *Servizio:* {service_name}
 *Data e Ora:* {pickup_date} alle {pickup_time}
 *Totale:* €{total}
-*Stato Pagamento:* {payment_status}',
- true, true, 'on_booking', 'all', 'confirmed'),
+*Pagamento:* {payment_info}
 
-('mechanical_new', 'Conferma Meccanica', 'Inviato quando viene creata una prenotazione meccanica',
- '🔧 *NUOVA PRENOTAZIONE MECCANICA*
-
-*ID:* DR7-{booking_id}
-*Cliente:* {customer_name}
-*Email:* {customer_email}
-*Telefono:* {customer_phone}
-*Servizio:* {service_name}
-*Data e Ora:* {pickup_date} alle {pickup_time}
-*Totale:* €{total}
-*Stato Pagamento:* {payment_status}',
+Cordiali Saluti,
+DR7',
  true, true, 'on_booking', 'all', 'confirmed'),
 
 -- ═══ Day-before Reminders (send-booking-reminders cron) ═══
