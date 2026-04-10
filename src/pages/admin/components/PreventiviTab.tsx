@@ -568,7 +568,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
-  function formatWhatsAppMessage(p: Preventivo): string {
+  function buildDefaultPreventivoMessage(p: Preventivo): string {
     const specs = [
       p.vehicle_name,
       p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
@@ -607,10 +607,80 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     return msg.trim()
   }
 
+  async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
+    // Try to load template from system_messages
+    try {
+      const { data: tpl } = await supabase
+        .from('system_messages')
+        .select('message_body, is_enabled')
+        .eq('message_key', 'preventivo_send')
+        .single()
+
+      if (tpl?.is_enabled && tpl.message_body) {
+        // Build variables for substitution
+        const specs = [
+          p.vehicle_name,
+          p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
+          p.vehicle_cv ? `${p.vehicle_cv}cv` : '',
+          p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
+        ].filter(Boolean).join(' ')
+
+        // Build pricing lines
+        let pricingLines = `${p.rental_days}gg x ${formatEur(p.daily_rate_after_markup || p.base_daily_rate)}/g = ${formatEur((p.daily_rate_after_markup || p.base_daily_rate) * p.rental_days)}`
+        if (p.insurance_total > 0) {
+          const insLabel = insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko'
+          pricingLines += `\n${insLabel} = ${formatEur(p.insurance_total)}`
+        }
+        if (p.lavaggio_fee > 0) pricingLines += `\nLavaggio = ${formatEur(p.lavaggio_fee)}`
+        if (p.no_cauzione_total > 0) pricingLines += `\nNo cauzione = ${formatEur(p.no_cauzione_total)}`
+        if (p.unlimited_km_total > 0) pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+        if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
+        const extras = p.extras_detail as Record<string, unknown> | null
+        if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) pricingLines += `\nDR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}`
+        if (extras?.delivery_fee && Number(extras.delivery_fee) > 0) pricingLines += `\nConsegna = ${formatEur(Number(extras.delivery_fee))}`
+        if (extras?.pickup_fee && Number(extras.pickup_fee) > 0) pricingLines += `\nRitiro = ${formatEur(Number(extras.pickup_fee))}`
+        if (extras?.experience_cost && Number(extras.experience_cost) > 0) pricingLines += `\nServizi experience = ${formatEur(Number(extras.experience_cost))}`
+
+        let discountLine = ''
+        if (p.sconto > 0) discountLine = `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}`
+
+        const vars: Record<string, string> = {
+          vehicle_specs: specs,
+          vehicle_name: p.vehicle_name || '',
+          rental_days: String(p.rental_days),
+          daily_rate: formatEur(p.daily_rate_after_markup || p.base_daily_rate),
+          rental_total: formatEur((p.daily_rate_after_markup || p.base_daily_rate) * p.rental_days),
+          insurance_line: p.insurance_total > 0 ? `${insuranceOptions.find(i => i.id === p.insurance_option)?.label || 'Kasko'} = ${formatEur(p.insurance_total)}` : '',
+          pricing_lines: pricingLines,
+          subtotal: formatEur(p.subtotal),
+          total: formatEur(p.total_final || p.subtotal),
+          sconto: discountLine,
+          customer_name: p.customer_name || '',
+        }
+
+        let msg = tpl.message_body
+        for (const [k, v] of Object.entries(vars)) {
+          msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '')
+        }
+        // Clean up empty lines from unused variables
+        msg = msg.replace(/\n{3,}/g, '\n\n').trim()
+
+        const footer = rentalConfig?.preventivi?.whatsapp_footer
+        if (footer) msg += `\n\n${footer}`
+
+        return msg
+      }
+    } catch {
+      // Fallback to hardcoded
+    }
+
+    return buildDefaultPreventivoMessage(p)
+  }
+
   async function handleSendWhatsApp(preventivo: Preventivo, phone: string) {
     setSendingWhatsapp(true)
     try {
-      const message = formatWhatsAppMessage(preventivo)
+      const message = await formatWhatsAppMessage(preventivo)
 
       const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
@@ -638,7 +708,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         })
         .eq('id', preventivo.id)
 
-      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: phone, customer: selectedCust?.full_name })
+      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: `${phone} - ${selectedCust?.full_name || ''}` })
       toast.success('Preventivo inviato via WhatsApp!')
       setShowPhoneModal(false)
       setWhatsappPhone('')
@@ -817,7 +887,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                         </div>
                       )}
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
-                        {formatWhatsAppMessage(p)}
+                        {buildDefaultPreventivoMessage(p)}
                       </div>
                     </td>
                     <td className="py-2 px-3 text-theme-text-muted">
@@ -908,7 +978,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               />
 
               <div className="bg-theme-bg-primary rounded p-3 text-xs text-theme-text-muted whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
-                {formatWhatsAppMessage(selectedPreventivo)}
+                {buildDefaultPreventivoMessage(selectedPreventivo)}
               </div>
 
               <div className="flex gap-2 justify-end">
