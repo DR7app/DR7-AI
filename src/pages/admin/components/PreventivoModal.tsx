@@ -338,10 +338,13 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       .then(r => r.json())
       .then(data => {
         if (cancelled) return
-        if (data.enabled && data.finalDailyRateEur) {
+        if (data.enabled) {
           setRevenueSuggestion(data)
-          // Auto-apply the dynamic daily rate (includes all coefficients)
-          setForm(prev => ({ ...prev, daily_rate: data.finalDailyRateEur.toFixed(2) }))
+          // Set base daily rate (without coefficients — coefficients applied to full total in breakdown)
+          const baseRate = data.selectedBaseRateEur || data.baseDailyRateEur
+          if (baseRate) {
+            setForm(prev => ({ ...prev, daily_rate: baseRate.toFixed(2) }))
+          }
         } else {
           setRevenueSuggestion(null)
         }
@@ -460,7 +463,15 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
     const secondDriverTotal = secondDriverDaily * days
     const unlimitedKmTotal = unlimitedKmDaily * days
     const noCauzioneTotal = noCauzioneDaily * days
-    const subtotal = rentalBase + insuranceTotal + secondDriverTotal + unlimitedKmTotal + noCauzioneTotal + deliveryFee + pickupFee
+    const listSubtotal = rentalBase + insuranceTotal + secondDriverTotal + unlimitedKmTotal + noCauzioneTotal + deliveryFee + pickupFee
+
+    // Revenue Management: apply ALL coefficients to FULL subtotal (not just base rate)
+    const revenueBreakdown = revenueSuggestion?.breakdown || []
+    const combinedCoeff = revenueBreakdown.length > 0
+      ? revenueBreakdown.reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
+      : 1
+    const subtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
+    const revenueAdjustment = subtotal - listSubtotal
 
     // Payment surcharge from Centralina payment_modes
     const paymentModes = rentalConfig?.payment_modes || []
@@ -487,6 +498,9 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       noCauzioneDaily,
       deliveryFee,
       pickupFee,
+      listSubtotal,
+      combinedCoeff,
+      revenueAdjustment,
       subtotal,
       paymentSurcharge,
       surchargePercent,
@@ -494,7 +508,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       maggiorazionePct,
       total,
     }
-  }, [form, rentalDays])
+  }, [form, rentalDays, revenueSuggestion])
 
   // Sync total_amount with calculated total
   useEffect(() => {
@@ -1002,6 +1016,12 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 <div className="flex justify-between">
                   <span className="text-theme-text-muted">Ritiro a domicilio</span>
                   <span className="font-mono text-theme-text-primary">€{breakdown.pickupFee.toFixed(2)}</span>
+                </div>
+              )}
+              {breakdown.combinedCoeff !== 1 && (
+                <div className="flex justify-between text-dr7-gold">
+                  <span>Coefficienti Revenue (x{breakdown.combinedCoeff.toFixed(2)})</span>
+                  <span className="font-mono font-semibold">{breakdown.revenueAdjustment >= 0 ? '+' : ''}€{breakdown.revenueAdjustment.toFixed(2)}</span>
                 </div>
               )}
               {breakdown.paymentSurcharge > 0 && (
