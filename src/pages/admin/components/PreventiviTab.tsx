@@ -327,37 +327,50 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const baseDailyRate = revenueData?.finalDailyRateEur
       ?? (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
     const maggiorazione = parseFloat(form.maggiorazione_pct) || 0
-    const dailyAfterMarkup = Math.round(baseDailyRate * (1 + maggiorazione / 100) * 100) / 100
-    const rentalTotal = Math.round(dailyAfterMarkup * rentalDays * 100) / 100
+
+    // Base prices (before maggiorazione)
+    const baseRentalTotal = Math.round(baseDailyRate * rentalDays * 100) / 100
 
     const selectedIns = insuranceOptions.find(i => i.id === form.insurance_option)
     const insuranceDailyPrice = selectedIns?.pricePerDay ?? 0
-    const insuranceTotal = Math.round(insuranceDailyPrice * rentalDays * 100) / 100
+    const baseInsuranceTotal = Math.round(insuranceDailyPrice * rentalDays * 100) / 100
 
     const lavaggioFee = form.include_lavaggio ? configOverlay.lavaggioFee : 0
 
     const noCauzioneDaily = form.include_no_cauzione ? configOverlay.noCauzionePerDay : 0
-    const noCauzioneTotal = Math.round(noCauzioneDaily * rentalDays * 100) / 100
+    const baseNoCauzioneTotal = Math.round(noCauzioneDaily * rentalDays * 100) / 100
 
     const unlimitedKmDaily = form.include_unlimited_km
       ? getUnlimitedKmPrice(selectedVehicle, form.driver_tier, configOverlay)
       : 0
-    const unlimitedKmTotal = Math.round(unlimitedKmDaily * rentalDays * 100) / 100
+    const baseUnlimitedKmTotal = Math.round(unlimitedKmDaily * rentalDays * 100) / 100
 
     const secondDriverDaily = form.include_second_driver
       ? (form.driver_tier === 'TIER_2' ? configOverlay.secondDriverTier2 : configOverlay.secondDriverTier1)
       : 0
-    const secondDriverTotal = Math.round(secondDriverDaily * rentalDays * 100) / 100
+    const baseSecondDriverTotal = Math.round(secondDriverDaily * rentalDays * 100) / 100
 
     const dr7FlexDaily = form.include_dr7_flex ? configOverlay.dr7FlexPerDay : 0
-    const dr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
+    const baseDr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
 
     const deliveryFee = parseFloat(form.delivery_fee) || 0
     const pickupFee = parseFloat(form.pickup_fee) || 0
 
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
 
-    const subtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost) * 100) / 100
+    // Apply maggiorazione to the ENTIRE total, not just the base rate
+    const baseTotal = baseRentalTotal + baseInsuranceTotal + lavaggioFee + baseNoCauzioneTotal + baseUnlimitedKmTotal + baseSecondDriverTotal + baseDr7FlexTotal + deliveryFee + pickupFee + experienceCost
+    const markupMultiplier = 1 + maggiorazione / 100
+    const subtotal = Math.round(baseTotal * markupMultiplier * 100) / 100
+
+    // Derive marked-up values for display
+    const dailyAfterMarkup = Math.round(baseDailyRate * markupMultiplier * 100) / 100
+    const rentalTotal = Math.round(dailyAfterMarkup * rentalDays * 100) / 100
+    const insuranceTotal = Math.round(baseInsuranceTotal * markupMultiplier * 100) / 100
+    const noCauzioneTotal = Math.round(baseNoCauzioneTotal * markupMultiplier * 100) / 100
+    const unlimitedKmTotal = Math.round(baseUnlimitedKmTotal * markupMultiplier * 100) / 100
+    const secondDriverTotal = Math.round(baseSecondDriverTotal * markupMultiplier * 100) / 100
+    const dr7FlexTotal = Math.round(baseDr7FlexTotal * markupMultiplier * 100) / 100
     const desiredFinal = parseFloat(form.sconto) || 0
     const sconto = desiredFinal > 0 && desiredFinal < subtotal ? Math.round((subtotal - desiredFinal) * 100) / 100 : 0
     const totalFinal = sconto > 0 ? desiredFinal : subtotal
