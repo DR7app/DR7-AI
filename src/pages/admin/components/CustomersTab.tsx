@@ -621,7 +621,7 @@ export default function CustomersTab() {
 
       // [NEW] Fetch DR7 Club subscriptions via Netlify function (bypasses RLS)
       try {
-        const clubRes = await authFetch('/.netlify/functions/list-club-members')
+        const clubRes = await fetch('/.netlify/functions/list-club-members')
         if (clubRes.ok) {
           const clubData = await clubRes.json()
           if (clubData.members && clubData.members.length > 0) {
