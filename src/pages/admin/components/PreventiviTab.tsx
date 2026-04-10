@@ -859,6 +859,22 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const customerName = preventivo.customer_name || 'Cliente'
     const firstName = customerName.split(' ')[0]
 
+    // Create the discount code in the database so it actually works at checkout
+    const validUntil = new Date()
+    validUntil.setDate(validUntil.getDate() + 7) // valid for 7 days
+    await supabase.from('discount_codes').insert({
+      code,
+      code_type: 'codice_sconto',
+      scope: ['tutti'],
+      value_type: 'percentage',
+      value_amount: 5,
+      valid_from: new Date().toISOString(),
+      valid_until: validUntil.toISOString(),
+      single_use: true,
+      message: `Sconto 5% per rifiuto no cauzione — ${customerName}`,
+      status: 'active',
+    })
+
     // Update status
     await supabase.from('preventivi').update({ status: 'rifiutato' }).eq('id', preventivo.id)
 
