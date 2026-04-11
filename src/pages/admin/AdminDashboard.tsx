@@ -209,7 +209,7 @@ export default function AdminDashboard() {
     'fattura': 'Fattura',
     'operatori': 'Operatori',
     'dashboard-kpi': 'Dashboard',
-    'revenue-pricing': 'Revenue Management',
+    'revenue-pricing': 'Centralina',
   }
 
   return (
@@ -291,7 +291,7 @@ export default function AdminDashboard() {
             <button onClick={() => { setActiveTab('operatori'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'operatori')}>Operatori</button>
           )}
           <button onClick={() => { setActiveTab('dashboard-kpi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
-          <button onClick={() => { setActiveTab('revenue-pricing'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'revenue-pricing')}>Revenue Management</button>
+          <button onClick={() => { setActiveTab('revenue-pricing'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'revenue-pricing')}>Centralina</button>
 
           <div className={sidebarSectionClass}>Comunicazione</div>
           <button onClick={() => { setActiveTab('com-email'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-email')}>E-mail</button>
