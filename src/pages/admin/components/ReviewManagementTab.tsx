@@ -370,6 +370,99 @@ export default function ReviewManagementTab() {
     await Promise.all([fetchCandidates(), fetchStats()])
   }
 
+  // Direct Supabase re-evaluation: move ELIGIBLE candidates with penalties/damages/open deposits to TO_REVIEW
+  async function handleFixEligibility() {
+    if (!confirm('Ri-classificare candidati con penali/danni/cauzione aperta da Idonei a Da Verificare?')) return
+    setEvaluating(true)
+    const toastId = toast.loading('Ri-classificazione in corso...')
+
+    try {
+      // Get all ELIGIBLE candidates
+      const { data: eligible, error: eErr } = await supabase
+        .from('review_candidates')
+        .select('id, source_record_id, service_type')
+        .eq('eligibility_status', 'ELIGIBLE')
+
+      if (eErr) throw eErr
+      if (!eligible || eligible.length === 0) {
+        toast.dismiss(toastId)
+        toast.success('Nessun candidato idoneo da verificare')
+        setEvaluating(false)
+        return
+      }
+
+      let moved = 0
+
+      for (const candidate of eligible) {
+        // Check booking for penalties/damages
+        const { data: booking } = await supabase
+          .from('bookings')
+          .select('booking_details')
+          .eq('id', candidate.source_record_id)
+          .single()
+
+        const details = booking?.booking_details || {}
+        const hasPenalty = Array.isArray(details.penalties) && details.penalties.length > 0
+        const hasDamage = Array.isArray(details.danni) && details.danni.length > 0
+
+        // Check penalty/damage invoices
+        const { data: penaltyInvoices } = await supabase
+          .from('fatture')
+          .select('id')
+          .eq('booking_id', candidate.source_record_id)
+          .in('tipo_fattura', ['penale', 'danno'])
+          .limit(1)
+        const hasInvoice = (penaltyInvoices && penaltyInvoices.length > 0)
+
+        // Check open deposit
+        let hasOpenDeposit = false
+        if (candidate.service_type === 'RENTAL') {
+          const { data: openCauzioni } = await supabase
+            .from('cauzioni')
+            .select('id, stato')
+            .eq('riferimento_contratto_id', candidate.source_record_id)
+          hasOpenDeposit = (openCauzioni || []).some((c: any) => c.stato !== 'Restituita' && c.stato !== 'Sbloccata')
+        }
+
+        if (hasPenalty || hasDamage || hasInvoice || hasOpenDeposit) {
+          const reason = hasPenalty ? 'Presenza di penale registrata'
+            : hasDamage ? 'Danno registrato sul veicolo'
+            : hasInvoice ? 'Fattura penale/danno presente'
+            : 'Cauzione ancora aperta o in attesa'
+          const code = hasPenalty ? 'HAS_PENALTY'
+            : hasDamage ? 'HAS_DAMAGE'
+            : hasInvoice ? 'HAS_PENALTY'
+            : 'OPEN_DEPOSIT'
+
+          await supabase
+            .from('review_candidates')
+            .update({
+              eligibility_status: 'TO_REVIEW',
+              review_risk: 'RED',
+              send_status: 'BLOCKED',
+              exclusion_reason_code: code,
+              exclusion_reason_text: reason,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', candidate.id)
+
+          moved++
+        }
+
+        toast.loading(`Verifica: ${eligible.indexOf(candidate) + 1}/${eligible.length}`, { id: toastId })
+      }
+
+      toast.dismiss(toastId)
+      toast.success(`${moved} candidati spostati da Idonei a Da Verificare`)
+      await Promise.all([fetchCandidates(), fetchStats()])
+    } catch (err: unknown) {
+      toast.dismiss(toastId)
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setEvaluating(false)
+    }
+  }
+
   async function handleBulkEvaluate(forceReEvaluate = true) {
     if (!confirm('Valutare / ri-valutare tutte le prenotazioni e lavaggi degli ultimi 30 giorni?')) return
     setEvaluating(true)
@@ -570,11 +663,18 @@ export default function ReviewManagementTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Recensioni</h2>
         <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={() => handleBulkEvaluate(true)}
+            onClick={handleFixEligibility}
             disabled={evaluating}
             className="px-4 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
           >
-            {evaluating ? 'Valutazione...' : 'Valuta / Ri-valuta Tutti'}
+            {evaluating ? 'Verifica...' : 'Verifica Idonei (penali/danni/cauzioni)'}
+          </button>
+          <button
+            onClick={() => handleBulkEvaluate(true)}
+            disabled={evaluating}
+            className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            {evaluating ? 'Valutazione...' : 'Scansiona Nuove Prenotazioni'}
           </button>
           <button
             onClick={() => { setShowTemplates(!showTemplates); setShowSettings(false) }}
