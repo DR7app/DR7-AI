@@ -4,11 +4,26 @@ import { supabase } from '../../../supabaseClient'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
+import { getKmIncluded } from '../../../utils/configLookup'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+
+// ─── Time slots (office hours, 30-min intervals) ────────────────────────────
+function genSlots(ranges: [number, number][]): { value: string; label: string }[] {
+  const s: { value: string; label: string }[] = []
+  for (const [a, b] of ranges) {
+    for (let m = a; m <= b; m += 30) {
+      const t = `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`
+      s.push({ value: t, label: t })
+    }
+  }
+  return s
+}
+const PICKUP_SLOTS = genSlots([[10*60+30, 12*60+30], [15*60+30, 18*60+30]])
+const RETURN_SLOTS = genSlots([[9*60, 12*60+30], [14*60, 17*60+30]])
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -397,8 +412,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       subtotal,
       sconto,
       totalFinal,
+      kmIncluded: rentalConfig ? getKmIncluded(rentalConfig, rentalDays, selectedVehicle?.category || 'exotic') : 0,
+      sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 1.80,
     }
-  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay])
+  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig])
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
 
@@ -707,7 +724,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
     if (p.lavaggio_fee > 0) msg += `Lavaggio = ${formatEur(p.lavaggio_fee)}\n`
     if (p.no_cauzione_total > 0) msg += `No cauzione = ${formatEur(p.no_cauzione_total)}\n`
-    if (p.unlimited_km_total > 0) msg += `Km illimitati = ${formatEur(p.unlimited_km_total)}\n`
+    if (p.unlimited_km_total > 0) {
+      msg += `Km illimitati = ${formatEur(p.unlimited_km_total)}\n`
+    } else if (rentalConfig) {
+      const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+      msg += `Km inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}\n`
+    }
     if (p.second_driver_total > 0) msg += `Secondo guidatore = ${formatEur(p.second_driver_total)}\n`
 
     const extras = p.extras_detail as Record<string, unknown> | null
@@ -754,7 +776,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         }
         if (p.lavaggio_fee > 0) pricingLines += `\nLavaggio = ${formatEur(p.lavaggio_fee)}`
         if (p.no_cauzione_total > 0) pricingLines += `\nNo cauzione = ${formatEur(p.no_cauzione_total)}`
-        if (p.unlimited_km_total > 0) pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+        if (p.unlimited_km_total > 0) {
+          pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+        } else if (rentalConfig) {
+          const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+          pricingLines += `\nKm inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}`
+        }
         if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
         const extras = p.extras_detail as Record<string, unknown> | null
         if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) pricingLines += `\nDR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}`
@@ -777,6 +804,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           total: formatEur(p.total_final || p.subtotal),
           sconto: discountLine,
           customer_name: p.customer_name || '',
+          km_info: p.unlimited_km_total > 0 ? 'Illimitati' : (() => {
+            if (!rentalConfig) return ''
+            const km = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+            return km === 'unlimited' ? 'Illimitati' : `${km} Km`
+          })(),
         }
 
         let msg = tpl.message_body
@@ -1301,16 +1333,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       {/* Dates */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
-        <Input label="Ora Ritiro" type="time" value={form.pickup_time} onChange={(e) => {
+        <Select label="Ora Ritiro" value={form.pickup_time} onChange={(e) => {
           const newPickupTime = e.target.value
-          // Auto-calculate return time: pickup - 1h30
           const [h, m] = newPickupTime.split(':').map(Number)
           const d = new Date(); d.setHours(h, m, 0); d.setMinutes(d.getMinutes() - 90)
           const autoReturn = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
           setForm(prev => ({ ...prev, pickup_time: newPickupTime, return_time: autoReturn }))
-        }} />
+        }} options={PICKUP_SLOTS} />
         <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
-        <Input label="Ora Riconsegna (auto: ritiro -1h30)" type="time" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} />
+        <Select label="Ora Riconsegna (auto: ritiro -1h30)" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} options={RETURN_SLOTS} />
       </div>
 
       {rentalDays > 0 && (
@@ -1588,6 +1619,16 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <span>-{formatEur(pricing.sconto)}</span>
           </div>
         )}
+
+        {/* KM inclusi */}
+        <div className="flex justify-between text-sm text-theme-text-muted">
+          <span>KM Inclusi</span>
+          <span>{pricing.kmIncluded === 'unlimited' ? 'Illimitati' : `${pricing.kmIncluded} Km`}</span>
+        </div>
+        <div className="flex justify-between text-sm text-theme-text-muted">
+          <span>Sforo KM</span>
+          <span>{formatEur(pricing.sforo)}/km</span>
+        </div>
 
         <div className="border-t border-dr7-gold/50 pt-2 flex justify-between text-xl font-bold text-dr7-gold">
           <span>TOTALE FINALE</span>

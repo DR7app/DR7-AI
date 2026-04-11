@@ -239,6 +239,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           return
         }
       }
+      // No name-based fallback — with multiple same-model cars, plate match is the only reliable method
     })
 
     vehicles.forEach(vehicle => {
