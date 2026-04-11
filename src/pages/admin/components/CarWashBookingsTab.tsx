@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
 // Conflict utilities are now handled inline
@@ -178,6 +180,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [classificationSource, setClassificationSource] = useState<'local' | 'api' | 'manual' | null>(null)
   const [lookingUpTarga, setLookingUpTarga] = useState(false)
   const [targaVehicleInfo, setTargaVehicleInfo] = useState<{ brand?: string; model?: string; year?: string; fuel?: string; powerCV?: string } | null>(null)
+  const [targaNotFound, setTargaNotFound] = useState(false)
+  // OTP override for manual category selection
+  const override = useLimitationOverride()
 
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -385,9 +390,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       })
       if (!response.ok) {
         const err = await response.json().catch(() => ({}))
-        toast.error(err.error || 'Targa non trovata')
+        toast.error((err.error || 'Targa non trovata') + ' — richiedi autorizzazione per procedere')
+        setTargaNotFound(true)
+        setLookingUpTarga(false)
         return
       }
+      setTargaNotFound(false)
       const data = await response.json()
       setTargaVehicleInfo({
         brand: data.brand,
@@ -1571,6 +1579,32 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <div><span className="text-theme-text-muted">Potenza:</span> <span className="text-theme-text-primary">{targaVehicleInfo.powerCV} CV</span></div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Manual category selection when targa not found — requires OTP */}
+              {!vehicleCategory && targaNotFound && !lookingUpTarga && (
+                <div className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10">
+                  <p className="text-sm text-amber-300 mb-2 font-medium">Targa non trovata — richiedi autorizzazione per selezionare manualmente:</p>
+                  {override.hasOverride('manual_category_carwash') ? (
+                    <div>
+                      <p className="text-sm text-green-400 mb-2">Autorizzazione concessa. Seleziona la categoria:</p>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => { setVehicleCategory('urban'); setClassificationSource('manual') }}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors">Urban</button>
+                        <button type="button" onClick={() => { setVehicleCategory('maxi'); setClassificationSource('manual') }}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 transition-colors">Maxi</button>
+                        <button type="button" onClick={() => { setVehicleCategory('moto'); setClassificationSource('manual') }}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 transition-colors">Moto</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button"
+                      onClick={() => override.requestOverride('manual_category_carwash', `Targa ${vehiclePlate} non trovata nel database. Autorizzazione necessaria per selezionare la categoria manualmente.`)}
+                      className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors">
+                      Richiedi autorizzazione
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -2894,6 +2928,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
 
 
+      {/* OTP Modal for manual category */}
+      <LimitationOverrideModal
+        isOpen={override.limitationState.isOpen}
+        limitationCode={override.limitationState.limitationCode}
+        limitationMessage={override.limitationState.limitationMessage}
+        actionContext={override.limitationState.actionContext}
+        draftSessionId={override.draftSessionId}
+        flowType={override.flowType}
+        onClose={override.closeLimitation}
+        onCancel={override.cancelLimitation}
+        onOverrideApproved={override.handleOverrideApproved}
+      />
     </div >
   )
 }
