@@ -370,11 +370,8 @@ export default function ReviewManagementTab() {
     await Promise.all([fetchCandidates(), fetchStats()])
   }
 
-  async function handleBulkEvaluate(forceReEvaluate = false) {
-    if (!confirm(forceReEvaluate
-      ? 'Ri-valutare TUTTI i candidati esistenti con la nuova logica?'
-      : 'Valutare tutte le prenotazioni e lavaggi completati negli ultimi 30 giorni?'
-    )) return
+  async function handleBulkEvaluate(forceReEvaluate = true) {
+    if (!confirm('Valutare / ri-valutare tutte le prenotazioni e lavaggi degli ultimi 30 giorni?')) return
     setEvaluating(true)
     const toastId = toast.loading('Valutazione prenotazioni e lavaggi recenti...')
 
@@ -573,18 +570,11 @@ export default function ReviewManagementTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Recensioni</h2>
         <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={handleBulkEvaluate}
-            disabled={evaluating}
-            className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            {evaluating ? 'Valutazione...' : 'Valuta Prenotazioni Recenti'}
-          </button>
-          <button
             onClick={() => handleBulkEvaluate(true)}
             disabled={evaluating}
-            className="px-4 py-2 bg-amber-600 text-white font-semibold rounded-full hover:bg-amber-700 transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
           >
-            {evaluating ? 'Ri-valutazione...' : 'Ri-valuta Tutti'}
+            {evaluating ? 'Valutazione...' : 'Valuta / Ri-valuta Tutti'}
           </button>
           <button
             onClick={() => { setShowTemplates(!showTemplates); setShowSettings(false) }}
