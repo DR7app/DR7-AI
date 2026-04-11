@@ -89,7 +89,10 @@ export default function LimitationOverrideModal({
       }
       setStep('verified')
       toast.success('Autorizzazione concessa solo per questo evento.')
-      onOverrideApproved(overrideId!)
+      // Auto-close after 1.5s so the user sees the confirmation
+      setTimeout(() => {
+        onOverrideApproved(overrideId!)
+      }, 1500)
     } catch {
       setError('Verifica non riuscita, riprova')
     } finally {
