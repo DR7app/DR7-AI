@@ -5027,6 +5027,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               // Keep customer selected — override modal will show
                             }
 
+                            // Check expired license immediately
+                            const scadenzaP = cust?.scadenza_patente || cust?.data_scadenza_patente || cust?.metadata?.patente?.scadenza
+                            if (scadenzaP) {
+                              const expDate = new Date(scadenzaP)
+                              if (expDate < new Date() && !hasOverride('license_expired')) {
+                                requestOverride('license_expired', `Patente scaduta il ${expDate.toLocaleDateString('it-IT')}. Il cliente non può noleggiare con patente scaduta.`)
+                              }
+                            }
+
                             // Reset incompatible options when tier changes
                             setFormData(prev => {
                               const updates: Record<string, unknown> = {}
