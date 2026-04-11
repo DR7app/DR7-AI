@@ -194,13 +194,27 @@ async function evaluateEligibility(
   }
 
   // Determine eligibility
-  const hasHardExclusion = hasPenalty || hasDamage || hasOpenDeposit || !isPaymentRegular || !isServiceConcluded;
+  // Hard exclusions: unpaid or not concluded → EXCLUDED
+  const hasHardExclusion = !isPaymentRegular || !isServiceConcluded;
 
   if (hasHardExclusion) {
     return {
       eligibility_status: 'EXCLUDED',
       review_risk: 'RED',
       send_status: 'EXCLUDED',
+      exclusion_reasons: reasons,
+      is_internal_record: false,
+    };
+  }
+
+  // Penalty, damage, or open deposit → TO_REVIEW (da verificare), not EXCLUDED
+  const needsReview = hasPenalty || hasDamage || hasOpenDeposit;
+
+  if (needsReview) {
+    return {
+      eligibility_status: 'TO_REVIEW',
+      review_risk: 'RED',
+      send_status: 'BLOCKED',
       exclusion_reasons: reasons,
       is_internal_record: false,
     };
@@ -311,7 +325,7 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    const { sourceRecordId, serviceType } = JSON.parse(event.body || '{}');
+    const { sourceRecordId, serviceType, forceReEvaluate } = JSON.parse(event.body || '{}');
 
     if (!sourceRecordId || !serviceType) {
       return {
@@ -331,12 +345,16 @@ const handler: Handler = async (event) => {
 
     // 1. Check for duplicate
     const existing = await checkDuplicate(sourceRecordId, serviceType);
-    if (existing) {
+    if (existing && !forceReEvaluate) {
       return {
         statusCode: 200,
         headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ candidate: existing, duplicate: true }),
       };
+    }
+    // If forceReEvaluate and existing, delete old record first
+    if (existing && forceReEvaluate) {
+      await supabase.from('review_candidates').delete().eq('id', existing.id);
     }
 
     // 2. Load source record
