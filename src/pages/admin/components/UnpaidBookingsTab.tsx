@@ -2473,6 +2473,16 @@ export default function UnpaidBookingsTab() {
                       >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
                     )}
                     <button
+                      onClick={() => {
+                        const totalEur = group.totalRemaining / 100
+                        if (totalEur <= 0) return
+                        const firstBooking = group.noleggioBookings[0] || group.primeWashBookings[0] || group.penaliItems[0]?.booking || group.danniItems[0]?.booking
+                        if (!firstBooking) return
+                        sendPayByLink(firstBooking, totalEur, `Saldo completo — ${group.customerName}`)
+                      }}
+                      className="w-full mt-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                    >Pay by Link — €{(group.totalRemaining / 100).toFixed(2)}</button>
+                    <button
                       onClick={() => openAddebitoNexi(group)}
                       className="w-full mt-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"
                     >Addebito</button>
