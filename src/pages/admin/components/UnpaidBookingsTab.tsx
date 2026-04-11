@@ -107,6 +107,10 @@ export default function UnpaidBookingsTab() {
   const [addebitoItemLabel, setAddebitoItemLabel] = useState<string | null>(null)
   const [addebitoCarryForward, setAddebitoCarryForward] = useState<number>(0) // cents carry-forward from other unpaid items
 
+  // Partial link state
+  const [partialLinkKey, setPartialLinkKey] = useState<string | null>(null)
+  const [partialLinkValue, setPartialLinkValue] = useState('')
+
   useEffect(() => {
     loadUnpaidBookings()
 
@@ -1861,6 +1865,29 @@ export default function UnpaidBookingsTab() {
                     className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
                   >Invia Link</button>
                 )}
+                {isPending && partialLinkKey !== bkKey && (
+                  <button
+                    onClick={() => { setPartialLinkKey(bkKey); setPartialLinkValue('') }}
+                    className="px-2 py-1 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs font-semibold"
+                  >Link Parziale</button>
+                )}
+                {partialLinkKey === bkKey && (
+                  <div className="flex items-center gap-1 w-full mt-1">
+                    <input type="number" step="0.01" min="1" max={remainingCents / 100}
+                      value={partialLinkValue} onChange={e => setPartialLinkValue(e.target.value)}
+                      placeholder={`Max €${(remainingCents / 100).toFixed(2)}`}
+                      className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
+                      autoFocus
+                    />
+                    <button onClick={() => {
+                      const amt = parseFloat(partialLinkValue)
+                      if (!amt || amt <= 0) return
+                      sendPayByLink(booking, Math.min(amt, remainingCents / 100), `Noleggio ${booking.vehicle_name || ''} (parziale)`)
+                      setPartialLinkKey(null)
+                    }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
+                    <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
+                  </div>
+                )}
                 {isPending && partialPayItemKey !== bkKey && (
                   <button
                     onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
@@ -1938,6 +1965,33 @@ export default function UnpaidBookingsTab() {
                   onClick={() => updatePaymentStatus(booking.id, 'paid')}
                   className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                 >Pagato</button>
+                <button
+                  onClick={() => sendPayByLink(booking, remainingCents / 100, `Prime Wash ${serviceName}`)}
+                  className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
+                >Invia Link</button>
+                {partialLinkKey !== bkKey && (
+                  <button
+                    onClick={() => { setPartialLinkKey(bkKey); setPartialLinkValue('') }}
+                    className="px-2 py-1 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs font-semibold"
+                  >Link Parziale</button>
+                )}
+                {partialLinkKey === bkKey && (
+                  <div className="flex items-center gap-1 w-full mt-1">
+                    <input type="number" step="0.01" min="1" max={remainingCents / 100}
+                      value={partialLinkValue} onChange={e => setPartialLinkValue(e.target.value)}
+                      placeholder={`Max €${(remainingCents / 100).toFixed(2)}`}
+                      className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
+                      autoFocus
+                    />
+                    <button onClick={() => {
+                      const amt = parseFloat(partialLinkValue)
+                      if (!amt || amt <= 0) return
+                      sendPayByLink(booking, Math.min(amt, remainingCents / 100), `Prime Wash ${serviceName} (parziale)`)
+                      setPartialLinkKey(null)
+                    }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
+                    <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
+                  </div>
+                )}
                 {partialPayItemKey !== bkKey && (
                   <button
                     onClick={() => { setPartialPayItemKey(bkKey); setPartialPayValue('') }}
@@ -2035,6 +2089,33 @@ export default function UnpaidBookingsTab() {
                       disabled={!!processingKey}
                       className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-50"
                     >Pagato</button>
+                    <button
+                      onClick={() => sendPayByLink(item.booking, item.remaining, `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label}`)}
+                      className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
+                    >Invia Link</button>
+                    {partialLinkKey !== itemKey && partialPayItemKey !== partialKey && (
+                      <button
+                        onClick={() => { setPartialLinkKey(itemKey); setPartialLinkValue('') }}
+                        className="px-2 py-1 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs font-semibold"
+                      >Link Parziale</button>
+                    )}
+                    {partialLinkKey === itemKey && (
+                      <div className="flex items-center gap-1 w-full mt-1">
+                        <input type="number" step="0.01" min="1" max={item.remaining}
+                          value={partialLinkValue} onChange={e => setPartialLinkValue(e.target.value)}
+                          placeholder={`Max €${item.remaining.toFixed(2)}`}
+                          className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
+                          autoFocus
+                        />
+                        <button onClick={() => {
+                          const amt = parseFloat(partialLinkValue)
+                          if (!amt || amt <= 0) return
+                          sendPayByLink(item.booking, Math.min(amt, item.remaining), `${type === 'penalties' ? 'Penale' : 'Danno'} — ${item.label} (parziale)`)
+                          setPartialLinkKey(null)
+                        }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
+                        <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
+                      </div>
+                    )}
                     {partialPayItemKey !== partialKey && (
                       <button
                         onClick={() => { setPartialPayItemKey(partialKey); setPartialPayValue('') }}
@@ -2286,6 +2367,18 @@ export default function UnpaidBookingsTab() {
                     >{processingKey ? 'Elaborazione...' : 'Salda Tutto — Fattura Unica'}</button>
                   )}
 
+                  {/* Pay by Link Tutto */}
+                  <button
+                    onClick={() => {
+                      const totalEur = group.totalRemaining / 100
+                      if (totalEur <= 0) return
+                      const firstBooking = group.noleggioBookings[0] || group.primeWashBookings[0] || group.penaliItems[0]?.booking || group.danniItems[0]?.booking
+                      if (!firstBooking) return
+                      sendPayByLink(firstBooking, totalEur, `Saldo completo — ${group.customerName}`)
+                    }}
+                    className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                  >Pay by Link Tutto — €{(group.totalRemaining / 100).toFixed(2)}</button>
+
                   {/* Addebito button */}
                   <button
                     onClick={() => openAddebitoNexi(group)}
@@ -2379,6 +2472,16 @@ export default function UnpaidBookingsTab() {
                         className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
                     )}
+                    <button
+                      onClick={() => {
+                        const totalEur = group.totalRemaining / 100
+                        if (totalEur <= 0) return
+                        const firstBooking = group.noleggioBookings[0] || group.primeWashBookings[0] || group.penaliItems[0]?.booking || group.danniItems[0]?.booking
+                        if (!firstBooking) return
+                        sendPayByLink(firstBooking, totalEur, `Saldo completo — ${group.customerName}`)
+                      }}
+                      className="w-full mt-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                    >Pay by Link — €{(group.totalRemaining / 100).toFixed(2)}</button>
                     <button
                       onClick={() => openAddebitoNexi(group)}
                       className="w-full mt-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"

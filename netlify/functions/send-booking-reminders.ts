@@ -24,6 +24,22 @@ function cleanPhone(phone: string): string | null {
 /**
  * Send WhatsApp message via Green API
  */
+async function loadWrapper(): Promise<{ header: string; footer: string }> {
+  const defaultH = '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._';
+  const defaultF = '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
+  try {
+    const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!sbUrl || !sbKey) return { header: defaultH, footer: defaultF };
+    const sb = createClient(sbUrl, sbKey);
+    const { data } = await sb.from('system_messages').select('message_key, message_body').in('message_key', ['message_wrapper_header', 'message_wrapper_footer']);
+    return {
+      header: data?.find((w: any) => w.message_key === 'message_wrapper_header')?.message_body || defaultH,
+      footer: data?.find((w: any) => w.message_key === 'message_wrapper_footer')?.message_body || defaultF,
+    };
+  } catch { return { header: defaultH, footer: defaultF }; }
+}
+
 async function sendWhatsApp(instanceId: string, token: string, phone: string, message: string): Promise<boolean> {
   const cleanNum = cleanPhone(phone);
   if (!cleanNum) {
@@ -32,13 +48,15 @@ async function sendWhatsApp(instanceId: string, token: string, phone: string, me
   }
 
   try {
+    const { header, footer } = await loadWrapper();
+    const wrappedMessage = header + '\n\n' + message + '\n\n' + footer;
     const url = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${token}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chatId: `${cleanNum}@c.us`,
-        message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
+        message: wrappedMessage,
       }),
     });
 
@@ -270,7 +288,7 @@ export const reminderHandler: Handler = async () => {
 
             // Log to sent_messages_log
             try {
-              const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+              const fullMessage = message;
               await supabase.from('sent_messages_log').insert({
                 customer_name: firstName,
                 customer_phone: phone,
@@ -367,7 +385,7 @@ export const reminderHandler: Handler = async () => {
 
             // Log to sent_messages_log
             try {
-              const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+              const fullMessage = message;
               await supabase.from('sent_messages_log').insert({
                 customer_name: firstName,
                 customer_phone: phone,
@@ -465,7 +483,7 @@ export const reminderHandler: Handler = async () => {
 
             // Log to sent_messages_log
             try {
-              const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+              const fullMessage = message;
               await supabase.from('sent_messages_log').insert({
                 customer_name: firstName,
                 customer_phone: phone,

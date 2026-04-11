@@ -16,8 +16,8 @@ interface MessageTemplate {
   include_header: boolean
 }
 
-const HEADER = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n`
-const FOOTER = `\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+const DEFAULT_HEADER = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n`
+const DEFAULT_FOOTER = `\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
 
 // Cache templates for 60 seconds to avoid hammering DB
 let cache: { templates: MessageTemplate[]; loadedAt: number } | null = null
@@ -61,10 +61,14 @@ export async function getMessageTemplate(
     body = body.replace(new RegExp(`\\{${k}\\}`, 'g'), v)
   }
 
-  // Add header/footer if configured
+  // Add header/footer if configured — read from DB if available
   const includeHeader = tpl?.include_header ?? true
   if (includeHeader) {
-    body = HEADER + body + FOOTER
+    const headerTpl = templates.find(t => t.message_key === 'message_wrapper_header')
+    const footerTpl = templates.find(t => t.message_key === 'message_wrapper_footer')
+    const header = headerTpl?.message_body ? headerTpl.message_body + '\n\n' : DEFAULT_HEADER
+    const footer = footerTpl?.message_body ? '\n\n' + footerTpl.message_body : DEFAULT_FOOTER
+    body = header + body + footer
   }
 
   return body

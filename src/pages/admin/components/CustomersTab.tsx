@@ -619,29 +619,26 @@ export default function CustomersTab() {
         }
       }
 
-      // [NEW] Fetch DR7 Club subscriptions
+      // [NEW] Fetch DR7 Club subscriptions via Netlify function (bypasses RLS)
       try {
-        const { data: clubSubs } = await supabase
-          .from('dr7_club_subscriptions')
-          .select('user_id, plan, status, expires_at')
-          .eq('status', 'active')
-
-        if (clubSubs && clubSubs.length > 0) {
-          // Map user_id → club subscription
-          const clubMap = new Map<string, { plan: string; expires_at: string }>()
-          clubSubs.forEach((s: { user_id: string; plan: string; expires_at: string }) => {
-            clubMap.set(s.user_id, { plan: s.plan, expires_at: s.expires_at })
-          })
-          // Match via customers_extended.user_id
-          customerMap.forEach((customer, key) => {
-            const userId = (customer as any).user_id as string | null
-            if (userId && clubMap.has(userId)) {
-              customerMap.set(key, { ...customer, dr7_club: clubMap.get(userId) } as any)
-            }
-          })
+        const clubRes = await fetch('/.netlify/functions/list-club-members')
+        if (clubRes.ok) {
+          const clubData = await clubRes.json()
+          if (clubData.members && clubData.members.length > 0) {
+            const clubMap = new Map<string, { plan: string; expires_at: string }>()
+            clubData.members.forEach((s: { user_id: string; plan: string; expires_at: string }) => {
+              clubMap.set(s.user_id, { plan: s.plan, expires_at: s.expires_at })
+            })
+            customerMap.forEach((customer, key) => {
+              const userId = (customer as any).user_id as string | null
+              if (userId && clubMap.has(userId)) {
+                customerMap.set(key, { ...customer, dr7_club: clubMap.get(userId) } as any)
+              }
+            })
+          }
         }
       } catch {
-        // dr7_club_subscriptions table may not exist — ignore
+        // Club members fetch failed — ignore
       }
 
       // Initial cleanup of loading state

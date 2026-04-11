@@ -203,12 +203,24 @@ const handler: Handler = async (event) => {
     try {
       const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
+      // Add wrapper from DB
+      let wrappedMsg = message;
+      try {
+        const { data: wrappers } = await supabase
+          .from('system_messages')
+          .select('message_key, message_body')
+          .in('message_key', ['message_wrapper_header', 'message_wrapper_footer']);
+        const hdr = wrappers?.find((w: any) => w.message_key === 'message_wrapper_header')?.message_body || '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._';
+        const ftr = wrappers?.find((w: any) => w.message_key === 'message_wrapper_footer')?.message_body || '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
+        wrappedMsg = hdr + '\n\n' + message + '\n\n' + ftr;
+      } catch { /* fallback: send without wrapper */ }
+
       const response = await fetch(greenApiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chatId: `${cleanPhone}@c.us`,
-          message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`,
+          message: wrappedMsg,
         }),
       });
 
@@ -225,7 +237,7 @@ const handler: Handler = async (event) => {
 
       // Log to sent_messages_log
       try {
-        const fullMsg = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${message}`;
+        const fullMsg = message;
         await supabase.from('sent_messages_log').insert({
           customer_name: booking.customer_name || 'N/A',
           customer_phone: cleanPhone,
