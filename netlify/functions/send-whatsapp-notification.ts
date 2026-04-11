@@ -398,15 +398,16 @@ const handler: Handler = async (event) => {
           vars.deposit = '€0';
         }
 
-        // KM info for template
+        // KM info for template — same logic as contract
         const tplUnlimitedKm = booking.booking_details?.unlimited_km;
         const tplKmLimit = booking.booking_details?.km_limit;
-        if (tplUnlimitedKm || tplKmLimit === 'Illimitati') {
+        if (tplUnlimitedKm === true || tplKmLimit === 'Illimitati') {
           vars.km_info = 'Illimitati';
         } else if (tplKmLimit && tplKmLimit !== '0') {
-          vars.km_info = `${tplKmLimit} km`;
+          const isNum = !isNaN(Number(tplKmLimit)) && !String(tplKmLimit).toLowerCase().includes('km');
+          vars.km_info = isNum ? `${tplKmLimit} Km` : String(tplKmLimit);
         } else {
-          vars.km_info = 'Standard';
+          vars.km_info = booking.booking_details?.total_km ? `${booking.booking_details.total_km} Km` : 'Illimitati';
         }
 
         // Replace all {variable} placeholders
