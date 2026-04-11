@@ -107,11 +107,6 @@ const handler: Handler = async (event) => {
                 captureType: 'IMPLICIT',
                 amount: amountCents.toString(),
                 language: 'ita',
-                recurrence: {
-                    action: 'CONTRACT_CREATION',
-                    contractId: orderId,
-                    contractType: 'MIT_UNSCHEDULED'
-                },
                 expirationDate: nexiExpirationStr,
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-cancelled?order=${orderId}`,
