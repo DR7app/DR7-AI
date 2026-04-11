@@ -305,6 +305,32 @@ export default function ReviewManagementTab() {
     }
   }
 
+  // Sblocca: reset a candidate back to ELIGIBLE + TO_SEND so they can receive review request again
+  async function handleSblocca(candidateId: string) {
+    if (!confirm('Sbloccare questo cliente per ricevere nuovamente la richiesta di recensione?')) return
+    setSendingId(candidateId)
+    try {
+      const { error } = await supabase
+        .from('review_candidates')
+        .update({
+          eligibility_status: 'ELIGIBLE',
+          send_status: 'TO_SEND',
+          review_risk: 'GREEN',
+          exclusion_reason_code: null,
+          exclusion_reason_text: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', candidateId)
+      if (error) throw error
+      toast.success('Recensione sbloccata — pronta per invio')
+      await Promise.all([fetchCandidates(), fetchStats()])
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSendingId(null)
+    }
+  }
+
   async function handleExclude(candidateId: string) {
     const reason = prompt('Motivo esclusione (opzionale):')
     if (reason === null) return
@@ -716,13 +742,6 @@ export default function ReviewManagementTab() {
       <div className="mb-6 flex justify-between items-center flex-wrap gap-3">
         <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Recensioni</h2>
         <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={handleDedup}
-            disabled={evaluating}
-            className="px-4 py-2 bg-red-600 text-white font-semibold rounded-full hover:bg-red-700 transition-colors disabled:opacity-50"
-          >
-            {evaluating ? 'Pulizia...' : 'Rimuovi Duplicati'}
-          </button>
           <button
             onClick={handleFixEligibility}
             disabled={evaluating}
@@ -1169,9 +1188,24 @@ export default function ReviewManagementTab() {
                         )}
 
                         {activeTab === 'EXCLUDED' && (
-                          <span className="text-red-400 text-lg" title="Invio bloccato">
-                            &#128683;
-                          </span>
+                          <button
+                            onClick={() => handleSblocca(candidate.id)}
+                            disabled={sendingId === candidate.id}
+                            className="px-3 py-1 bg-amber-600 text-white text-xs font-semibold rounded-full hover:bg-amber-700 transition-colors disabled:opacity-50"
+                          >
+                            Sblocca
+                          </button>
+                        )}
+
+                        {/* Sblocca for already-sent candidates (ELIGIBLE tab) */}
+                        {activeTab === 'ELIGIBLE' && candidate.send_status === 'SENT' && (
+                          <button
+                            onClick={() => handleSblocca(candidate.id)}
+                            disabled={sendingId === candidate.id}
+                            className="px-3 py-1 bg-amber-600 text-white text-xs font-semibold rounded-full hover:bg-amber-700 transition-colors disabled:opacity-50"
+                          >
+                            Sblocca Recensione
+                          </button>
                         )}
                       </div>
                     </td>
