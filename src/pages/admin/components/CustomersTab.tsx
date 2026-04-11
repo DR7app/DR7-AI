@@ -625,14 +625,18 @@ export default function CustomersTab() {
         if (clubRes.ok) {
           const clubData = await clubRes.json()
           if (clubData.members && clubData.members.length > 0) {
-            const clubMap = new Map<string, { plan: string; expires_at: string }>()
-            clubData.members.forEach((s: { user_id: string; plan: string; expires_at: string }) => {
-              clubMap.set(s.user_id, { plan: s.plan, expires_at: s.expires_at })
+            const clubByUserId = new Map<string, { plan: string; expires_at: string }>()
+            const clubByEmail = new Map<string, { plan: string; expires_at: string }>()
+            clubData.members.forEach((s: { user_id: string; email?: string; plan: string; expires_at: string }) => {
+              clubByUserId.set(s.user_id, { plan: s.plan, expires_at: s.expires_at })
+              if (s.email) clubByEmail.set(s.email.toLowerCase(), { plan: s.plan, expires_at: s.expires_at })
             })
             customerMap.forEach((customer, key) => {
               const userId = (customer as any).user_id as string | null
-              if (userId && clubMap.has(userId)) {
-                customerMap.set(key, { ...customer, dr7_club: clubMap.get(userId) } as any)
+              const email = (customer.email || '').toLowerCase()
+              const match = (userId && clubByUserId.get(userId)) || (email && clubByEmail.get(email))
+              if (match) {
+                customerMap.set(key, { ...customer, dr7_club: match } as any)
               }
             })
           }
