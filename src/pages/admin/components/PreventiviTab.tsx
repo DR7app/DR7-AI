@@ -413,7 +413,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       sconto,
       totalFinal,
       kmIncluded: rentalConfig ? getKmIncluded(rentalConfig, rentalDays, selectedVehicle?.category || 'exotic') : 0,
-      sforo: configOverlay.sforoKm || 1.80,
+      sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 1.80,
     }
   }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig])
 
