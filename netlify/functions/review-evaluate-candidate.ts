@@ -325,7 +325,7 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    const { sourceRecordId, serviceType } = JSON.parse(event.body || '{}');
+    const { sourceRecordId, serviceType, forceReEvaluate } = JSON.parse(event.body || '{}');
 
     if (!sourceRecordId || !serviceType) {
       return {
@@ -345,12 +345,16 @@ const handler: Handler = async (event) => {
 
     // 1. Check for duplicate
     const existing = await checkDuplicate(sourceRecordId, serviceType);
-    if (existing) {
+    if (existing && !forceReEvaluate) {
       return {
         statusCode: 200,
         headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ candidate: existing, duplicate: true }),
       };
+    }
+    // If forceReEvaluate and existing, delete old record first
+    if (existing && forceReEvaluate) {
+      await supabase.from('review_candidates').delete().eq('id', existing.id);
     }
 
     // 2. Load source record
