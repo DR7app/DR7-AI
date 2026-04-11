@@ -776,7 +776,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         }
         if (p.lavaggio_fee > 0) pricingLines += `\nLavaggio = ${formatEur(p.lavaggio_fee)}`
         if (p.no_cauzione_total > 0) pricingLines += `\nNo cauzione = ${formatEur(p.no_cauzione_total)}`
-        if (p.unlimited_km_total > 0) pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+        if (p.unlimited_km_total > 0) {
+          pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+        } else if (rentalConfig) {
+          const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+          pricingLines += `\nKm inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}`
+        }
         if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
         const extras = p.extras_detail as Record<string, unknown> | null
         if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) pricingLines += `\nDR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}`
@@ -799,6 +804,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           total: formatEur(p.total_final || p.subtotal),
           sconto: discountLine,
           customer_name: p.customer_name || '',
+          km_info: p.unlimited_km_total > 0 ? 'Illimitati' : (() => {
+            if (!rentalConfig) return ''
+            const km = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+            return km === 'unlimited' ? 'Illimitati' : `${km} Km`
+          })(),
         }
 
         let msg = tpl.message_body
