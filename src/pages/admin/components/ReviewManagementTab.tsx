@@ -396,60 +396,6 @@ export default function ReviewManagementTab() {
     await Promise.all([fetchCandidates(), fetchStats()])
   }
 
-  // Deduplicate: keep only the most recent candidate per customer (by phone or name)
-  async function handleDedup() {
-    if (!confirm('Rimuovere candidati duplicati? Mantiene solo il più recente per ogni cliente.')) return
-    setEvaluating(true)
-    const toastId = toast.loading('Deduplicazione in corso...')
-
-    try {
-      const { data: all, error } = await supabase
-        .from('review_candidates')
-        .select('id, customer_name, customer_phone, customer_email, created_at, send_status')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      if (!all || all.length === 0) { toast.dismiss(toastId); toast.success('Nessun candidato'); setEvaluating(false); return }
-
-      const seen = new Map<string, string>() // key -> kept id
-      const toDelete: string[] = []
-
-      for (const c of all) {
-        // Build unique key: prefer phone (last 8 digits), fallback to lowercase name
-        const phone = (c.customer_phone || '').replace(/[\s\-\+\(\)]/g, '')
-        const key = phone.length >= 6
-          ? `phone:${phone.slice(-8)}`
-          : `name:${(c.customer_name || '').toLowerCase().trim()}`
-
-        if (!key || key === 'name:' || key === 'phone:') continue
-
-        if (seen.has(key)) {
-          // This is a duplicate — delete it (we keep the first one = most recent, since sorted desc)
-          toDelete.push(c.id)
-        } else {
-          seen.set(key, c.id)
-        }
-      }
-
-      if (toDelete.length > 0) {
-        // Delete in batches of 50
-        for (let i = 0; i < toDelete.length; i += 50) {
-          const batch = toDelete.slice(i, i + 50)
-          await supabase.from('review_candidates').delete().in('id', batch)
-        }
-      }
-
-      toast.dismiss(toastId)
-      toast.success(`${toDelete.length} duplicati rimossi (${seen.size} clienti unici mantenuti)`)
-      await Promise.all([fetchCandidates(), fetchStats()])
-    } catch (err: unknown) {
-      toast.dismiss(toastId)
-      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
-    } finally {
-      setEvaluating(false)
-    }
-  }
-
   // Direct Supabase re-evaluation: move ELIGIBLE candidates with penalties/damages/open deposits to TO_REVIEW
   async function handleFixEligibility() {
     if (!confirm('Ri-classificare candidati con penali/danni/cauzione aperta da Idonei a Da Verificare?')) return
