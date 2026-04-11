@@ -194,13 +194,27 @@ async function evaluateEligibility(
   }
 
   // Determine eligibility
-  const hasHardExclusion = hasPenalty || hasDamage || hasOpenDeposit || !isPaymentRegular || !isServiceConcluded;
+  // Hard exclusions: unpaid or not concluded → EXCLUDED
+  const hasHardExclusion = !isPaymentRegular || !isServiceConcluded;
 
   if (hasHardExclusion) {
     return {
       eligibility_status: 'EXCLUDED',
       review_risk: 'RED',
       send_status: 'EXCLUDED',
+      exclusion_reasons: reasons,
+      is_internal_record: false,
+    };
+  }
+
+  // Penalty, damage, or open deposit → TO_REVIEW (da verificare), not EXCLUDED
+  const needsReview = hasPenalty || hasDamage || hasOpenDeposit;
+
+  if (needsReview) {
+    return {
+      eligibility_status: 'TO_REVIEW',
+      review_risk: 'RED',
+      send_status: 'BLOCKED',
       exclusion_reasons: reasons,
       is_internal_record: false,
     };
