@@ -573,7 +573,7 @@ export default function ReviewManagementTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Recensioni</h2>
         <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={handleBulkEvaluate}
+            onClick={() => handleBulkEvaluate()}
             disabled={evaluating}
             className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
