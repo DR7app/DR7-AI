@@ -75,6 +75,32 @@ async function checkDuplicate(sourceRecordId: string, serviceType: ServiceType) 
   return data;
 }
 
+// Check if this customer already has ANY review candidate (by phone or email)
+async function checkCustomerAlreadyExists(record: any): Promise<boolean> {
+  const phone = record.customer_phone?.replace(/[\s\-\+\(\)]/g, '');
+  const email = record.customer_email?.trim().toLowerCase();
+
+  if (phone && phone.length >= 6) {
+    const { data } = await supabase
+      .from('review_candidates')
+      .select('id')
+      .ilike('customer_phone', `%${phone.slice(-8)}%`)
+      .limit(1);
+    if (data && data.length > 0) return true;
+  }
+
+  if (email) {
+    const { data } = await supabase
+      .from('review_candidates')
+      .select('id')
+      .eq('customer_email', email)
+      .limit(1);
+    if (data && data.length > 0) return true;
+  }
+
+  return false;
+}
+
 function checkInternalOrBasicExclusions(
   record: any,
   serviceType: ServiceType
@@ -359,6 +385,18 @@ const handler: Handler = async (event) => {
 
     // 2. Load source record
     const record = await loadSourceRecord(sourceRecordId, serviceType);
+
+    // 2b. Check if this customer already has a review candidate (one per customer lifetime)
+    if (!forceReEvaluate) {
+      const customerExists = await checkCustomerAlreadyExists(record);
+      if (customerExists) {
+        return {
+          statusCode: 200,
+          headers: getHeaders(event.headers.origin),
+          body: JSON.stringify({ skipped: true, reason: 'Customer already has a review candidate' }),
+        };
+      }
+    }
 
     // 3. Check internal / basic exclusions
     const basicCheck = checkInternalOrBasicExclusions(record, serviceType);
