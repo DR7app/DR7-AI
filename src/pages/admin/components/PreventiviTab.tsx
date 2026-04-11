@@ -11,6 +11,20 @@ import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 
+// ─── Time slots (office hours, 30-min intervals) ────────────────────────────
+function genSlots(ranges: [number, number][]): { value: string; label: string }[] {
+  const s: { value: string; label: string }[] = []
+  for (const [a, b] of ranges) {
+    for (let m = a; m <= b; m += 30) {
+      const t = `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`
+      s.push({ value: t, label: t })
+    }
+  }
+  return s
+}
+const PICKUP_SLOTS = genSlots([[10*60+30, 12*60+30], [15*60+30, 18*60+30]])
+const RETURN_SLOTS = genSlots([[9*60, 12*60+30], [14*60, 17*60+30]])
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface Vehicle {
@@ -1309,16 +1323,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       {/* Dates */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
-        <Input label="Ora Ritiro" type="time" value={form.pickup_time} onChange={(e) => {
+        <Select label="Ora Ritiro" value={form.pickup_time} onChange={(e) => {
           const newPickupTime = e.target.value
-          // Auto-calculate return time: pickup - 1h30
           const [h, m] = newPickupTime.split(':').map(Number)
           const d = new Date(); d.setHours(h, m, 0); d.setMinutes(d.getMinutes() - 90)
           const autoReturn = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
           setForm(prev => ({ ...prev, pickup_time: newPickupTime, return_time: autoReturn }))
-        }} />
+        }} options={PICKUP_SLOTS} />
         <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
-        <Input label="Ora Riconsegna (auto: ritiro -1h30)" type="time" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} />
+        <Select label="Ora Riconsegna (auto: ritiro -1h30)" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} options={RETURN_SLOTS} />
       </div>
 
       {rentalDays > 0 && (
