@@ -239,6 +239,15 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           return
         }
       }
+      // Fallback: vehicle_name match
+      const bName = (b.vehicle_name || '').toLowerCase().trim()
+      if (bName) {
+        const nameMatch = vehicles.find(v => v.display_name?.toLowerCase().trim() === bName)
+        if (nameMatch) {
+          bookingToVehicleId.set(b.id, nameMatch.id)
+          return
+        }
+      }
     })
 
     vehicles.forEach(vehicle => {
