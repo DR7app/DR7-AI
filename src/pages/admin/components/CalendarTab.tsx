@@ -239,10 +239,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           return
         }
       }
-      // Fallback: vehicle_name match
+      // Fallback: vehicle_name match (exact then partial)
       const bName = (b.vehicle_name || '').toLowerCase().trim()
       if (bName) {
         const nameMatch = vehicles.find(v => v.display_name?.toLowerCase().trim() === bName)
+          || vehicles.find(v => bName.includes(v.display_name?.toLowerCase().trim()) || v.display_name?.toLowerCase().trim().includes(bName))
         if (nameMatch) {
           bookingToVehicleId.set(b.id, nameMatch.id)
           return
