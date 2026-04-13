@@ -5049,9 +5049,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             const tier = classifyDriverTier(age, licYears)
                             setCustomerTier(tier)
 
+                            // IMMEDIATE checks — OTP required before proceeding
                             if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
                               requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason} (Età: ${age} anni — Patente: ${licYears} anni)`)
-                              // Keep customer selected — override modal will show
+                            }
+                            if (licYears < 3 && !hasOverride('license_too_recent')) {
+                              requestOverride('license_too_recent', `Patente rilasciata da meno di 3 anni (${licYears} anni). Il cliente non può noleggiare.`)
                             }
 
                             // Check expired license immediately
@@ -5081,10 +5084,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           } else if (patenteDate) {
                             // Only license date available — still check minimum
                             const licYears = calculateLicenseYears(patenteDate)
-                            if (licYears < 3) {
-                              alert('⚠️ PATENTE TROPPO RECENTE\n\nLa patente di questo cliente è stata rilasciata da meno di 3 anni.\n\nNon è possibile procedere con il noleggio.')
-                              setFormData(prev => ({ ...prev, customer_id: '' }))
-                              return
+                            if (licYears < 3 && !hasOverride('license_too_recent')) {
+                              requestOverride('license_too_recent', `Patente rilasciata da meno di 3 anni (${licYears} anni). Il cliente non può noleggiare.`)
                             }
                           }
                         } catch (e) {
