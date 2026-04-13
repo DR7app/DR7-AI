@@ -339,61 +339,65 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── Pricing Calculation ────────────────────────────────────────────────
 
   const pricing = useMemo(() => {
-    const baseDailyRate = revenueData?.finalDailyRateEur
-      ?? (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
+    // Use the vehicle's base daily rate (NOT the revenue-adjusted one)
+    const listDailyRate = selectedVehicle ? selectedVehicle.daily_rate / 100 : 0
     const maggiorazione = parseFloat(form.maggiorazione_pct) || 0
 
-    // Base prices (before maggiorazione)
-    const baseRentalTotal = Math.round(baseDailyRate * rentalDays * 100) / 100
+    // Base prices at list rate
+    const listRentalTotal = Math.round(listDailyRate * rentalDays * 100) / 100
 
     const selectedIns = insuranceOptions.find(i => i.id === form.insurance_option)
     const insuranceDailyPrice = selectedIns?.pricePerDay ?? 0
-    const baseInsuranceTotal = Math.round(insuranceDailyPrice * rentalDays * 100) / 100
+    const insuranceTotal = Math.round(insuranceDailyPrice * rentalDays * 100) / 100
 
     const lavaggioFee = form.include_lavaggio ? configOverlay.lavaggioFee : 0
 
     const noCauzioneDaily = form.include_no_cauzione ? configOverlay.noCauzionePerDay : 0
-    const baseNoCauzioneTotal = Math.round(noCauzioneDaily * rentalDays * 100) / 100
+    const noCauzioneTotal = Math.round(noCauzioneDaily * rentalDays * 100) / 100
 
     const unlimitedKmDaily = form.include_unlimited_km
       ? getUnlimitedKmPrice(selectedVehicle, form.driver_tier, configOverlay)
       : 0
-    const baseUnlimitedKmTotal = Math.round(unlimitedKmDaily * rentalDays * 100) / 100
+    const unlimitedKmTotal = Math.round(unlimitedKmDaily * rentalDays * 100) / 100
 
     const secondDriverDaily = form.include_second_driver
       ? (form.driver_tier === 'TIER_2' ? configOverlay.secondDriverTier2 : configOverlay.secondDriverTier1)
       : 0
-    const baseSecondDriverTotal = Math.round(secondDriverDaily * rentalDays * 100) / 100
+    const secondDriverTotal = Math.round(secondDriverDaily * rentalDays * 100) / 100
 
     const dr7FlexDaily = form.include_dr7_flex ? configOverlay.dr7FlexPerDay : 0
-    const baseDr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
+    const dr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
 
     const deliveryFee = parseFloat(form.delivery_fee) || 0
     const pickupFee = parseFloat(form.pickup_fee) || 0
 
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
 
-    // Apply maggiorazione to the ENTIRE total, not just the base rate
-    const baseTotal = baseRentalTotal + baseInsuranceTotal + lavaggioFee + baseNoCauzioneTotal + baseUnlimitedKmTotal + baseSecondDriverTotal + baseDr7FlexTotal + deliveryFee + pickupFee + experienceCost
-    const markupMultiplier = 1 + maggiorazione / 100
-    const subtotal = Math.round(baseTotal * markupMultiplier * 100) / 100
+    // List subtotal (before revenue coefficients and maggiorazione)
+    const listSubtotal = listRentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost
 
-    // Derive marked-up values for display
-    const dailyAfterMarkup = Math.round(baseDailyRate * markupMultiplier * 100) / 100
-    const rentalTotal = Math.round(dailyAfterMarkup * rentalDays * 100) / 100
-    const insuranceTotal = Math.round(baseInsuranceTotal * markupMultiplier * 100) / 100
-    const noCauzioneTotal = Math.round(baseNoCauzioneTotal * markupMultiplier * 100) / 100
-    const unlimitedKmTotal = Math.round(baseUnlimitedKmTotal * markupMultiplier * 100) / 100
-    const secondDriverTotal = Math.round(baseSecondDriverTotal * markupMultiplier * 100) / 100
-    const dr7FlexTotal = Math.round(baseDr7FlexTotal * markupMultiplier * 100) / 100
+    // Apply revenue coefficients to the TOTAL
+    const revenueCoeff = revenueData?.enabled
+      ? (revenueData.breakdown || []).reduce((acc, b) => acc * b.coeff, 1)
+      : 1
+    const afterRevenue = Math.round(listSubtotal * revenueCoeff * 100) / 100
+
+    // Apply maggiorazione on top
+    const markupMultiplier = 1 + maggiorazione / 100
+    const subtotal = Math.round(afterRevenue * markupMultiplier * 100) / 100
+
+    // Daily rate after coefficients (for display)
+    const dailyAfterCoeff = Math.round(listDailyRate * revenueCoeff * markupMultiplier * 100) / 100
+    const rentalTotal = Math.round(dailyAfterCoeff * rentalDays * 100) / 100
+
     const desiredFinal = parseFloat(form.sconto) || 0
     const sconto = desiredFinal > 0 && desiredFinal < subtotal ? Math.round((subtotal - desiredFinal) * 100) / 100 : 0
     const totalFinal = sconto > 0 ? desiredFinal : subtotal
 
     return {
-      baseDailyRate,
+      baseDailyRate: listDailyRate,
       maggiorazione,
-      dailyAfterMarkup,
+      dailyAfterMarkup: dailyAfterCoeff,
       rentalTotal,
       insuranceDailyPrice,
       insuranceTotal,
@@ -409,6 +413,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       deliveryFee,
       pickupFee,
       experienceCost,
+      listSubtotal,
+      revenueCoeff,
+      revenueBreakdown: revenueData?.breakdown || [],
       subtotal,
       sconto,
       totalFinal,
@@ -1600,6 +1607,25 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <span>Servizi Experience</span>
             <span>{formatEur(pricing.experienceCost)}</span>
           </div>
+        )}
+
+        {/* Revenue coefficients applied to total */}
+        {pricing.revenueBreakdown.length > 0 && pricing.revenueCoeff !== 1 && (
+          <>
+            <div className="border-t border-theme-border pt-2 flex justify-between text-sm text-theme-text-muted">
+              <span>Subtotale Listino</span>
+              <span>{formatEur(pricing.listSubtotal)}</span>
+            </div>
+            {pricing.revenueBreakdown.map((b, i) => (
+              <div key={i} className="flex justify-between text-xs text-theme-text-muted pl-2">
+                <span>{b.label}: x{b.coeff.toFixed(2)} ({b.description})</span>
+              </div>
+            ))}
+            <div className="flex justify-between text-xs text-dr7-gold pl-2">
+              <span>Coefficiente combinato: x{pricing.revenueCoeff.toFixed(4)}</span>
+              <span>{pricing.revenueCoeff < 1 ? `-${formatEur(pricing.listSubtotal - pricing.listSubtotal * pricing.revenueCoeff)}` : `+${formatEur(pricing.listSubtotal * pricing.revenueCoeff - pricing.listSubtotal)}`}</span>
+            </div>
+          </>
         )}
 
         <div className="border-t border-theme-border pt-2 flex justify-between text-theme-text-primary font-semibold">
