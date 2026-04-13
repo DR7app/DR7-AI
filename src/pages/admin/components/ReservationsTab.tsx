@@ -4472,10 +4472,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Validate customer data first — if incomplete, open the missing data popup
         try {
           const bookingForValidation = { ...insertedBooking, user_id: customerId, customer_email: customerInfo?.email, customer_phone: customerInfo?.phone } as unknown as Booking
-          const invoiceMissing = await validateCustomerData(bookingForValidation)
-          if (invoiceMissing.includes('__limitation_override_requested__')) {
-            // OTP requested — fattura will be generated after override
-          } else if (invoiceMissing.length > 0) {
+          const invoiceMissing = (await validateCustomerData(bookingForValidation)).filter(f => f !== '__limitation_override_requested__')
+          if (invoiceMissing.length > 0) {
             logger.warn('[Auto-Gen] ⚠️ Customer data incomplete for fattura:', invoiceMissing)
             // Open the missing data popup so user can fill in the fields
             const custId = customerId || insertedBooking.user_id || insertedBooking.booking_details?.customer?.customerId
