@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import DynamicCustomerForm from './DynamicCustomerForm'
 import CustomerDocuments from './CustomerDocuments'
+import ReportClienteModal from './ReportClienteModal'
 import Button from './Button'
 import toast from 'react-hot-toast'
 
@@ -41,6 +42,7 @@ export default function ClientiTab() {
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState<'all' | 'azienda' | 'persona_fisica' | 'pubblica_amministrazione'>('all')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [reportCustomerId, setReportCustomerId] = useState<string | null>(null)
 
   useEffect(() => {
     loadCustomers()
@@ -281,12 +283,20 @@ export default function ClientiTab() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <button
-                        onClick={() => setSelectedCustomer(customer)}
-                        className="px-3 py-1.5 bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full text-xs font-medium transition-colors"
-                      >
-                        Documenti
-                      </button>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => setReportCustomerId(customer.id)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-medium transition-colors"
+                        >
+                          Report
+                        </button>
+                        <button
+                          onClick={() => setSelectedCustomer(customer)}
+                          className="px-3 py-1.5 bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full text-xs font-medium transition-colors"
+                        >
+                          Documenti
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -294,6 +304,14 @@ export default function ClientiTab() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* Report Cliente Modal */}
+      {reportCustomerId && (
+        <ReportClienteModal
+          customerId={reportCustomerId}
+          onClose={() => setReportCustomerId(null)}
+        />
       )}
 
       {/* Customer Documents Modal */}
