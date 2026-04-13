@@ -751,8 +751,12 @@ const handler: Handler = async (event) => {
                     const isDebito = cardCheck.cardType === 'debit'
 
                 if (isPrepagata) {
-                    // PREPAGATA: don't confirm, keep booking pending — no cancel, no void
-                    console.log(`[nexi-payment-callback] PREPAGATA DETECTED — not confirming booking ${booking.id}`)
+                    // PREPAGATA: void payment + mark as failed
+                    console.log(`[nexi-payment-callback] PREPAGATA — voiding payment, refusing booking ${booking.id}`)
+
+                    // Void the payment immediately
+                    const refundOpId = operationId || transactionId
+                    if (refundOpId) await voidNexiTransaction(refundOpId)
 
                     await supabase.from('bookings').update({
                         payment_status: 'failed',
@@ -763,7 +767,7 @@ const handler: Handler = async (event) => {
                         }
                     }).eq('id', booking.id)
 
-                    // Don't continue with bonus — payment not accepted
+                    // Don't continue with bonus — payment refused
                 } else if ((isCredito || isDebito) && isInitialBooking && isEligibleService) {
                     // CREDIT WALLET BONUS: credito 6%, debito 3%
                     // Only for initial car rental + lavaggio bookings
