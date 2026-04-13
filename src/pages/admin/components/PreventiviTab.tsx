@@ -386,9 +386,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const markupMultiplier = 1 + maggiorazione / 100
     const subtotal = Math.round(afterRevenue * markupMultiplier * 100) / 100
 
-    // Daily rate after coefficients (for display)
+    // Daily rate at list price (for display in riepilogo first line)
     const dailyAfterCoeff = Math.round(listDailyRate * revenueCoeff * markupMultiplier * 100) / 100
-    const rentalTotal = Math.round(dailyAfterCoeff * rentalDays * 100) / 100
+    const rentalTotal = Math.round(listDailyRate * rentalDays * 100) / 100
+    const maggiorazioneAmount = Math.round(afterRevenue * (maggiorazione / 100) * 100) / 100
 
     const desiredFinal = parseFloat(form.sconto) || 0
     const sconto = desiredFinal > 0 && desiredFinal < subtotal ? Math.round((subtotal - desiredFinal) * 100) / 100 : 0
@@ -416,6 +417,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       listSubtotal,
       revenueCoeff,
       revenueBreakdown: revenueData?.breakdown || [],
+      afterRevenue,
+      maggiorazioneAmount,
       subtotal,
       sconto,
       totalFinal,
@@ -1615,16 +1618,17 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           </>
         )}
 
-        {pricing.maggiorazione > 0 && (
-          <div className="flex justify-between text-sm text-theme-text-muted">
-            <span>Maggiorazione preventivo (+{pricing.maggiorazione}%)</span>
-          </div>
-        )}
-
         <div className="border-t border-theme-border pt-2 flex justify-between text-theme-text-primary font-semibold">
           <span>Subtotale</span>
-          <span>{formatEur(pricing.subtotal)}</span>
+          <span>{formatEur(pricing.afterRevenue)}</span>
         </div>
+
+        {pricing.maggiorazione > 0 && (
+          <div className="flex justify-between text-sm text-dr7-gold">
+            <span>Maggiorazione preventivo (+{pricing.maggiorazione}%)</span>
+            <span>+{formatEur(pricing.maggiorazioneAmount)}</span>
+          </div>
+        )}
 
         {/* Sconto */}
         <div className="grid grid-cols-2 gap-3 pt-2">
