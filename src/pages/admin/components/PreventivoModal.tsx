@@ -51,6 +51,7 @@ interface PreventivoData {
   no_cauzione_daily: string
   cauzione_type: CauzioneType
   residente_sardegna: boolean
+  payment_method: string
   delivery_enabled: boolean
   delivery_street: string
   delivery_city: string
@@ -105,12 +106,31 @@ const LOCATIONS = [
 ]
 
 // --- Time Options ---
-const TIME_OPTIONS = Array.from({ length: 96 }).map((_, i) => {
-  const hour = Math.floor(i / 4).toString().padStart(2, '0')
-  const minute = ((i % 4) * 15).toString().padStart(2, '0')
-  const time = `${hour}:${minute}`
-  return { value: time, label: time }
-})
+// Pickup times: Mon-Fri 10:30-12:30 + 16:30-18:30, Sat 10:30-12:30 + 15:30-17:30
+// Return times: Mon-Fri 9:00-11:00 + 15:00-17:00, Sat 9:00-11:00 + 14:00-16:00
+// 30-min intervals, same as regular bookings
+function generateTimeSlots(ranges: [number, number][]): { value: string; label: string }[] {
+  const slots: { value: string; label: string }[] = []
+  for (const [startMin, endMin] of ranges) {
+    for (let m = startMin; m <= endMin; m += 30) {
+      const h = Math.floor(m / 60).toString().padStart(2, '0')
+      const min = (m % 60).toString().padStart(2, '0')
+      const time = `${h}:${min}`
+      slots.push({ value: time, label: time })
+    }
+  }
+  return slots
+}
+
+const PICKUP_TIME_OPTIONS = generateTimeSlots([
+  [10 * 60 + 30, 12 * 60 + 30], // 10:30 - 12:30
+  [15 * 60 + 30, 18 * 60 + 30], // 15:30 - 18:30 (covers both weekday + Saturday)
+])
+
+const RETURN_TIME_OPTIONS = generateTimeSlots([
+  [9 * 60, 12 * 60 + 30],       // 09:00 - 12:30
+  [14 * 60, 17 * 60 + 30],      // 14:00 - 17:30 (covers both weekday + Saturday)
+])
 
 function isFurgone(vehicle?: Vehicle): boolean {
   if (!vehicle) return false
@@ -209,7 +229,7 @@ const initialFormData: PreventivoData = {
   vehicle_category: '',
   fascia: 'A',
   pickup_date: '',
-  pickup_time: getNext15MinuteTime(),
+  pickup_time: '10:30',
   return_date: '',
   return_time: '10:00',
   pickup_location: 'dr7_office',
@@ -226,6 +246,7 @@ const initialFormData: PreventivoData = {
   no_cauzione_daily: '0',
   cauzione_type: 'carta_debito_credito',
   residente_sardegna: true,
+  payment_method: 'Carta',
   delivery_enabled: false,
   delivery_street: '',
   delivery_city: '',
@@ -314,6 +335,43 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
 
   // Selected vehicle
   const selectedVehicle = useMemo(() => vehicles.find(v => v.id === form.vehicle_id), [vehicles, form.vehicle_id])
+
+  // Revenue Management: fetch dynamic price with ALL coefficients
+  const [revenueSuggestion, setRevenueSuggestion] = useState<any>(null)
+  const [revenueLoading, setRevenueLoading] = useState(false)
+
+  useEffect(() => {
+    if (!form.vehicle_id || !form.pickup_date || !form.return_date) {
+      setRevenueSuggestion(null)
+      return
+    }
+    let cancelled = false
+    setRevenueLoading(true)
+    const pickup = `${form.pickup_date}T${form.pickup_time || '10:00'}`
+    const dropoff = `${form.return_date}T${form.return_time || '10:00'}`
+    fetch('/.netlify/functions/calculate-dynamic-price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vehicle_id: form.vehicle_id, pickup_date: pickup, dropoff_date: dropoff })
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.enabled) {
+          setRevenueSuggestion(data)
+          // Set base daily rate (without coefficients — coefficients applied to full total in breakdown)
+          const baseRate = data.selectedBaseRateEur || data.baseDailyRateEur
+          if (baseRate) {
+            setForm(prev => ({ ...prev, daily_rate: baseRate.toFixed(2) }))
+          }
+        } else {
+          setRevenueSuggestion(null)
+        }
+      })
+      .catch(() => { if (!cancelled) setRevenueSuggestion(null) })
+      .finally(() => { if (!cancelled) setRevenueLoading(false) })
+    return () => { cancelled = true }
+  }, [form.vehicle_id, form.pickup_date, form.return_date, form.pickup_time, form.return_time])
   const vehicleType = useMemo(() => getVehicleType(selectedVehicle), [selectedVehicle])
 
   // Insurance options based on vehicle type + fascia
@@ -424,7 +482,27 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
     const secondDriverTotal = secondDriverDaily * days
     const unlimitedKmTotal = unlimitedKmDaily * days
     const noCauzioneTotal = noCauzioneDaily * days
-    const total = rentalBase + insuranceTotal + secondDriverTotal + unlimitedKmTotal + noCauzioneTotal + deliveryFee + pickupFee
+    const listSubtotal = rentalBase + insuranceTotal + secondDriverTotal + unlimitedKmTotal + noCauzioneTotal + deliveryFee + pickupFee
+
+    // Revenue Management: apply ALL coefficients to FULL subtotal (not just base rate)
+    const revenueBreakdown = revenueSuggestion?.breakdown || []
+    const combinedCoeff = revenueBreakdown.length > 0
+      ? revenueBreakdown.reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
+      : 1
+    const subtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
+    const revenueAdjustment = subtotal - listSubtotal
+
+    // Payment surcharge from Centralina payment_modes
+    const paymentModes = rentalConfig?.payment_modes || []
+    const selectedMode = paymentModes.find((m: any) => m.label === form.payment_method)
+    const surchargePercent = selectedMode?.surcharge_percent ?? (form.payment_method === 'Contanti' ? 20 : 0)
+    const paymentSurcharge = surchargePercent > 0 ? subtotal * (surchargePercent / 100) : 0
+
+    // Preventivi maggiorazione from Centralina
+    const maggiorazionePct = rentalConfig?.preventivi?.maggiorazione_pct ?? 0
+    const maggiorazione = maggiorazionePct > 0 ? subtotal * (maggiorazionePct / 100) : 0
+
+    const total = subtotal + paymentSurcharge + maggiorazione
 
     return {
       days,
@@ -439,9 +517,17 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       noCauzioneDaily,
       deliveryFee,
       pickupFee,
+      listSubtotal,
+      combinedCoeff,
+      revenueAdjustment,
+      subtotal,
+      paymentSurcharge,
+      surchargePercent,
+      maggiorazione,
+      maggiorazionePct,
       total,
     }
-  }, [form, rentalDays])
+  }, [form, rentalDays, revenueSuggestion])
 
   // Sync total_amount with calculated total
   useEffect(() => {
@@ -497,11 +583,15 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
         pickup_notes: form.pickup_enabled ? form.pickup_notes : '',
         pickup_fee: form.pickup_enabled ? parseFloat(form.pickup_fee) : 0,
         daily_rate: parseFloat(form.daily_rate),
-        base_daily_rate: parseFloat(form.daily_rate),
+        base_daily_rate: revenueSuggestion?.baseDailyRateEur || parseFloat(form.daily_rate),
+        daily_rate_after_markup: parseFloat(form.daily_rate),
+        maggiorazione_pct: breakdown.maggiorazionePct,
         rental_days: rentalDays,
         total_amount: parseFloat(form.total_amount),
-        subtotal: parseFloat(form.total_amount),
-        total_final: parseFloat(form.total_amount),
+        subtotal: breakdown.subtotal,
+        total_final: breakdown.total,
+        pricing_trace: revenueSuggestion ? { breakdown: revenueSuggestion.breakdown, combinedCoeff: breakdown.combinedCoeff, finalDailyRateEur: revenueSuggestion.finalDailyRateEur } : null,
+        payment_method: form.payment_method,
         deposit_amount: parseFloat(form.deposit_amount),
         notes: form.notes,
         valid_until: form.valid_until,
@@ -582,7 +672,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                     const pt = e.target.value
                     setForm(prev => ({ ...prev, pickup_time: pt, return_time: calculateReturnTime(pt) }))
                   }}
-                  options={TIME_OPTIONS} />
+                  options={PICKUP_TIME_OPTIONS} />
               </div>
               <Select label="Luogo Ritiro" required value={form.pickup_location}
                 onChange={(e) => setForm(prev => ({ ...prev, pickup_location: e.target.value }))}
@@ -593,7 +683,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                   onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
                 <Select label="Ora Riconsegna" required value={form.return_time}
                   onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))}
-                  options={TIME_OPTIONS} />
+                  options={RETURN_TIME_OPTIONS} />
               </div>
               <Select label="Luogo Riconsegna" required value={form.dropoff_location}
                 onChange={(e) => setForm(prev => ({ ...prev, dropoff_location: e.target.value }))}
@@ -627,6 +717,24 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 {' • '}Tariffa giornaliera: <span className="text-dr7-gold font-medium">€{form.daily_rate}</span>
               </div>
             )}
+            {/* Revenue Management coefficients */}
+            {revenueSuggestion && (
+              <div className="mt-3 p-3 rounded-lg border border-dr7-gold/30 bg-dr7-gold/5">
+                <p className="text-xs font-semibold text-dr7-gold mb-1">Revenue Management</p>
+                <p className="text-sm text-theme-text-primary">
+                  Base: €{revenueSuggestion.selectedBaseRateEur?.toFixed(2)}/g
+                  {' → '}Coefficiente combinato: <strong>x{breakdown.combinedCoeff.toFixed(2)}</strong>
+                </p>
+                {revenueSuggestion.breakdown && revenueSuggestion.breakdown.length > 0 && (
+                  <div className="text-xs text-theme-text-muted mt-1 space-y-0.5">
+                    {revenueSuggestion.breakdown.map((b: { label: string; coeff: number; description: string }, i: number) => (
+                      <p key={i}>{b.label}: x{b.coeff.toFixed(2)} ({b.description})</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {revenueLoading && <p className="text-xs text-theme-text-muted mt-2">Calcolo Revenue Management...</p>}
             <div className="mt-3">
               <Input label="Tariffa Giornaliera (€) — Modificabile" type="number" step="0.01"
                 value={form.daily_rate}
@@ -797,6 +905,28 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
             </div>
           </div>
 
+          {/* Metodo Pagamento — from Centralina */}
+          <div className="p-4 rounded-lg border border-theme-border">
+            <h4 className="text-sm font-semibold text-theme-text-secondary mb-3 uppercase tracking-wider">Metodo di Pagamento</h4>
+            <div className="flex gap-2 flex-wrap">
+              {(rentalConfig?.payment_modes && rentalConfig.payment_modes.length > 0
+                ? rentalConfig.payment_modes
+                : [{ id: 'carta', label: 'Carta', surcharge_percent: 0 }, { id: 'contanti', label: 'Contanti', surcharge_percent: 20 }]
+              ).map((mode: any) => (
+                <button key={mode.id} type="button"
+                  onClick={() => setForm(prev => ({ ...prev, payment_method: mode.label }))}
+                  className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    form.payment_method === mode.label
+                      ? 'bg-dr7-gold text-white'
+                      : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
+                  }`}
+                >
+                  {mode.label}{mode.surcharge_percent > 0 ? ` (+${mode.surcharge_percent}%)` : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Delivery */}
           <div className="p-4 rounded-lg border border-theme-border">
             <label className="flex items-center gap-2 cursor-pointer mb-3">
@@ -907,6 +1037,24 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 <div className="flex justify-between">
                   <span className="text-theme-text-muted">Ritiro a domicilio</span>
                   <span className="font-mono text-theme-text-primary">€{breakdown.pickupFee.toFixed(2)}</span>
+                </div>
+              )}
+              {breakdown.combinedCoeff !== 1 && (
+                <div className="flex justify-between text-dr7-gold">
+                  <span>Coefficienti Revenue (x{breakdown.combinedCoeff.toFixed(2)})</span>
+                  <span className="font-mono font-semibold">{breakdown.revenueAdjustment >= 0 ? '+' : ''}€{breakdown.revenueAdjustment.toFixed(2)}</span>
+                </div>
+              )}
+              {breakdown.paymentSurcharge > 0 && (
+                <div className="flex justify-between text-amber-400">
+                  <span>Maggiorazione {form.payment_method} (+{breakdown.surchargePercent}%)</span>
+                  <span className="font-mono font-semibold">€{breakdown.paymentSurcharge.toFixed(2)}</span>
+                </div>
+              )}
+              {breakdown.maggiorazione > 0 && (
+                <div className="flex justify-between text-purple-400">
+                  <span>Maggiorazione Preventivo (+{breakdown.maggiorazionePct}%)</span>
+                  <span className="font-mono font-semibold">€{breakdown.maggiorazione.toFixed(2)}</span>
                 </div>
               )}
               <div className="border-t border-dr7-gold/30 pt-2 mt-2">

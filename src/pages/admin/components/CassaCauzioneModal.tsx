@@ -136,7 +136,8 @@ export default function CassaCauzioneModal({ cauzione, onClose, onSuccess }: Pro
 
       onSuccess()
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : String(error)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const errMsg = error instanceof Error ? error.message : (error as any)?.message || JSON.stringify(error)
       console.error('Error in cassa cauzione:', error)
       toast.error(`Errore: ${errMsg}`, { id: toastId })
       setProcessing(false)

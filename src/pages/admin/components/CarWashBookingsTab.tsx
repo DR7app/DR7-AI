@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
 // Conflict utilities are now handled inline
@@ -178,6 +180,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [classificationSource, setClassificationSource] = useState<'local' | 'api' | 'manual' | null>(null)
   const [lookingUpTarga, setLookingUpTarga] = useState(false)
   const [targaVehicleInfo, setTargaVehicleInfo] = useState<{ brand?: string; model?: string; year?: string; fuel?: string; powerCV?: string } | null>(null)
+  const [targaNotFound, setTargaNotFound] = useState(false)
+  // OTP override for manual category selection
+  const override = useLimitationOverride()
 
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -191,7 +196,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     appointment_date: todayStr,
     appointment_time: '',
     price_total: 0,
-    payment_status: 'nexi_pay_by_link',
+    payment_status: 'pending',
     payment_method: '' as string,
     amount_paid: '0',
     notes: ''
@@ -326,7 +331,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       appointment_date: todayStr,
       appointment_time: '',
       price_total: 0,
-      payment_status: 'nexi_pay_by_link',
+      payment_status: 'pending',
       payment_method: '',
       amount_paid: '0',
       notes: ''
@@ -391,9 +396,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       })
       if (!response.ok) {
         const err = await response.json().catch(() => ({}))
-        toast.error(err.error || 'Targa non trovata')
+        toast.error((err.error || 'Targa non trovata') + ' — richiedi autorizzazione per procedere')
+        setTargaNotFound(true)
+        setLookingUpTarga(false)
         return
       }
+      setTargaNotFound(false)
       const data = await response.json()
       setTargaVehicleInfo({
         brand: data.brand,
@@ -1020,10 +1028,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       dropoff_location: 'DR7 Empire - Car Wash',
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
-      // Pay by Link: pending/pending status so cron auto-cancels after 1h
-      status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : 'confirmed',
-      payment_status: formData.payment_status === 'nexi_pay_by_link' ? 'pending' : formData.payment_status,
-      payment_method: formData.payment_status === 'nexi_pay_by_link' ? 'Nexi Pay by Link' : (formData.payment_method || null),
+      // Pay by Link: pending status + Nexi method so cron auto-cancels after 1h
+      status: (formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link') ? 'pending' : (formData.payment_status === 'paid' ? 'confirmed' : 'confirmed'),
+      payment_status: (formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link') ? 'pending' : formData.payment_status,
+      payment_method: formData.payment_method || null,
       booking_details: bookingDetails
     }
 
@@ -1074,7 +1082,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     // Handle Nexi Pay by Link
-    const isNexiPayByLink = formData.payment_status === 'nexi_pay_by_link'
+    const isNexiPayByLink = formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link'
     if (isNexiPayByLink && data) {
       try {
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
@@ -1579,6 +1587,32 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <div><span className="text-theme-text-muted">Potenza:</span> <span className="text-theme-text-primary">{targaVehicleInfo.powerCV} CV</span></div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Manual category selection when targa not found — requires OTP */}
+              {!vehicleCategory && targaNotFound && !lookingUpTarga && (
+                <div className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10">
+                  <p className="text-sm text-amber-300 mb-2 font-medium">Targa non trovata — richiedi autorizzazione per selezionare manualmente:</p>
+                  {override.hasOverride('manual_category_carwash') ? (
+                    <div>
+                      <p className="text-sm text-green-400 mb-2">Autorizzazione concessa. Seleziona la categoria:</p>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => { setVehicleCategory('urban'); setClassificationSource('manual') }}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors">Urban</button>
+                        <button type="button" onClick={() => { setVehicleCategory('maxi'); setClassificationSource('manual') }}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 transition-colors">Maxi</button>
+                        <button type="button" onClick={() => { setVehicleCategory('moto'); setClassificationSource('manual') }}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 transition-colors">Moto</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button"
+                      onClick={() => override.requestOverride('manual_category_carwash', `Targa ${vehiclePlate} non trovata nel database. Autorizzazione necessaria per selezionare la categoria manualmente.`)}
+                      className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors">
+                      Richiedi autorizzazione
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -2095,7 +2129,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {(() => {
                       const selectedDay = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00').getDay() : -1
                       const isSat = selectedDay === 6
-                      const slots = isSat ? CAR_WASH_TIME_SLOTS_SATURDAY : CAR_WASH_TIME_SLOTS
+                      const allSlots = isSat ? CAR_WASH_TIME_SLOTS_SATURDAY : CAR_WASH_TIME_SLOTS
+
+                      // Filter out past times if today
+                      const now = new Date()
+                      const todayStr = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+                      const isToday = formData.appointment_date === todayStr
+                      const currentMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0
+                      const slots = isToday
+                        ? allSlots.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m > currentMinutes; })
+                        : allSlots
+
                       const morningSlots = slots.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
                       const afternoonSlots = isSat
                         ? slots.filter(t => t.startsWith('13') || t.startsWith('14') || t.startsWith('15') || t.startsWith('16') || t.startsWith('17'))
@@ -2127,40 +2171,53 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {/* Payment + Notes */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Pagamento</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Stato Pagamento</label>
                   <select
                     value={formData.payment_status}
                     onChange={(e) => {
                       const newStatus = e.target.value
                       const total = getFinalPrice()
                       const newAmountPaid = newStatus === 'paid' ? total.toString() : '0'
-                      setFormData({ ...formData, payment_status: newStatus, amount_paid: newAmountPaid, payment_method: newStatus === 'paid' ? formData.payment_method || '' : '' })
+                      setFormData({
+                        ...formData,
+                        payment_status: newStatus,
+                        amount_paid: newAmountPaid,
+                        payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
+                      })
                     }}
                     className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="pending">Da Saldare</option>
-                    <option value="nexi_pay_by_link">Nexi - Pay by Link</option>
                     <option value="paid">Pagato</option>
                     <option value="unpaid">Non Pagato</option>
                   </select>
-                  {/* Payment method selector — visible only when Pagato */}
-                  {formData.payment_status === 'paid' && (
-                    <div className="mt-2">
-                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo di pagamento *</label>
+                </div>
+                <div>
+                  {formData.payment_status !== 'unpaid' && (
+                    <>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Metodo di Pagamento</label>
                       <select
                         value={formData.payment_method}
-                        onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                        className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
+                        onChange={(e) => {
+                          const method = e.target.value
+                          const updates: Record<string, string> = { payment_method: method }
+                          if (method === 'Nexi Pay by Link') {
+                            updates.payment_status = 'pending'
+                            updates.amount_paid = '0'
+                          }
+                          setFormData(prev => ({ ...prev, ...updates }))
+                        }}
+                        className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                       >
                         <option value="">-- Seleziona metodo --</option>
+                        <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
                         <option value="Contanti">Contanti</option>
-                        <option value="Carta di credito">Carta di credito</option>
-                        <option value="Carta di debito">Carta di debito</option>
+                        <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
                         <option value="Bonifico">Bonifico</option>
-                        <option value="Wallet">Wallet</option>
-                        <option value="Gift Card">Gift Card</option>
+                        <option value="Credit Wallet">Credit Wallet</option>
+                        <option value="Paypal">Paypal</option>
                       </select>
-                    </div>
+                    </>
                   )}
                 </div>
                 <div>
@@ -2295,6 +2352,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               ? 'In Attesa'
                               : 'Non Pagato'}
                         </span>
+                        {booking.payment_method && (
+                          <div className="text-[10px] text-theme-text-muted mt-1">
+                            {booking.payment_method === 'credit_wallet' ? 'Credit Wallet'
+                              : booking.payment_method === 'Nexi Pay by Link' ? 'Nexi'
+                              : booking.payment_method === 'online' ? 'Online'
+                              : booking.payment_method}
+                            {(booking as any).booking_source === 'website' || !(booking as any).booking_source ? '' : ` · ${(booking as any).booking_source}`}
+                          </div>
+                        )}
+                        {!booking.payment_method && booking.booking_details?.payment_method && (
+                          <div className="text-[10px] text-theme-text-muted mt-1">{booking.booking_details.payment_method}</div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
@@ -2890,6 +2959,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
 
 
+      {/* OTP Modal for manual category */}
+      <LimitationOverrideModal
+        isOpen={override.limitationState.isOpen}
+        limitationCode={override.limitationState.limitationCode}
+        limitationMessage={override.limitationState.limitationMessage}
+        actionContext={override.limitationState.actionContext}
+        draftSessionId={override.draftSessionId}
+        flowType={override.flowType}
+        onClose={override.closeLimitation}
+        onCancel={override.cancelLimitation}
+        onOverrideApproved={override.handleOverrideApproved}
+      />
     </div >
   )
 }

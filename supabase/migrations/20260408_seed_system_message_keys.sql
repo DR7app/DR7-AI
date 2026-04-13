@@ -14,7 +14,7 @@ VALUES
 -- These are used by BOTH admin and website repos
 
 ('rental_new', 'Conferma Noleggio', 'Inviato quando viene creata una prenotazione noleggio',
- '🚘 *NUOVA PRENOTAZIONE NOLEGGIO*
+ '*NUOVA PRENOTAZIONE NOLEGGIO*
 
 *ID:* DR7-{booking_id}
 *Cliente:* {customer_name}
@@ -25,36 +25,147 @@ VALUES
 *Riconsegna:* {dropoff_date} alle {dropoff_time}
 *Luogo Ritiro:* {pickup_location}
 *Assicurazione:* {insurance}
+*Totale:* €{total}
 *Cauzione:* {deposit}
 *KM:* {km_info}
-*Totale:* €{total}
-*Stato Pagamento:* {payment_status}',
+*Pagamento:* {payment_info}',
  true, true, 'on_booking', 'all', 'confirmed'),
 
-('carwash_new', 'Conferma Car Wash', 'Inviato quando viene creata una prenotazione car wash',
- '🚗 *NUOVA PRENOTAZIONE AUTOLAVAGGIO*
+('carwash_new', 'Conferma Car Wash', 'Inviato al cliente per conferma appuntamento autolavaggio',
+ 'Salve {nome},
+
+Confermiamo il suo appuntamento.
+
+*NUOVA PRENOTAZIONE AUTOLAVAGGIO*
 
 *ID:* DR7-{booking_id}
-*Cliente:* {customer_name}
-*Email:* {customer_email}
-*Telefono:* {customer_phone}
+*Servizio:* {service_name}
+*Targa:* {plate}
+*Data e Ora:* {pickup_date} alle {pickup_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('mechanical_new', 'Conferma Meccanica', 'Inviato al cliente per conferma appuntamento meccanica',
+ 'Salve {nome},
+
+Confermiamo il suo appuntamento.
+
+*NUOVA PRENOTAZIONE MECCANICA*
+
+*ID:* DR7-{booking_id}
 *Servizio:* {service_name}
 *Data e Ora:* {pickup_date} alle {pickup_time}
 *Totale:* €{total}
-*Stato Pagamento:* {payment_status}',
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
  true, true, 'on_booking', 'all', 'confirmed'),
 
-('mechanical_new', 'Conferma Meccanica', 'Inviato quando viene creata una prenotazione meccanica',
- '🔧 *NUOVA PRENOTAZIONE MECCANICA*
+-- ═══ Customer-specific confirmations ═══
+
+('carwash_new_customer', 'Conferma Car Wash (cliente)', 'Inviato al cliente per conferma appuntamento autolavaggio',
+ 'Salve {nome},
+
+Confermiamo il suo appuntamento.
+
+*NUOVA PRENOTAZIONE AUTOLAVAGGIO*
 
 *ID:* DR7-{booking_id}
-*Cliente:* {customer_name}
-*Email:* {customer_email}
-*Telefono:* {customer_phone}
+*Servizio:* {service_name}
+*Targa:* {plate}
+*Data e Ora:* {pickup_date} alle {pickup_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('mechanical_new_customer', 'Conferma Meccanica (cliente)', 'Inviato al cliente per conferma appuntamento meccanica',
+ 'Salve {nome},
+
+Confermiamo il suo appuntamento.
+
+*NUOVA PRENOTAZIONE MECCANICA*
+
+*ID:* DR7-{booking_id}
 *Servizio:* {service_name}
 *Data e Ora:* {pickup_date} alle {pickup_time}
 *Totale:* €{total}
-*Stato Pagamento:* {payment_status}',
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('rental_new_customer', 'Conferma Noleggio (cliente)', 'Inviato al cliente per conferma prenotazione noleggio',
+ '*NUOVA PRENOTAZIONE NOLEGGIO*
+
+*ID:* DR7-{booking_id}
+*Cliente:* {customer_name}
+*Veicolo:* {vehicle_name}
+*Ritiro:* {pickup_date} alle {pickup_time}
+*Riconsegna:* {dropoff_date} alle {dropoff_time}
+*Luogo Ritiro:* {pickup_location}
+*Assicurazione:* {insurance}
+*Totale:* €{total}
+*Cauzione:* {deposit}
+*KM:* {km_info}
+*Pagamento:* {payment_info}',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+-- ═══ Modified bookings ═══
+
+('carwash_modified', 'Modifica Car Wash', 'Inviato quando un appuntamento autolavaggio viene modificato',
+ 'Salve {nome},
+
+La sua prenotazione è stata aggiornata.
+
+*MODIFICA PRENOTAZIONE AUTOLAVAGGIO*
+
+*ID:* DR7-{booking_id}
+*Servizio:* {service_name}
+*Targa:* {plate}
+*Data e Ora:* {pickup_date} alle {pickup_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('mechanical_modified', 'Modifica Meccanica', 'Inviato quando un appuntamento meccanica viene modificato',
+ 'Salve {nome},
+
+La sua prenotazione è stata aggiornata.
+
+*MODIFICA PRENOTAZIONE MECCANICA*
+
+*ID:* DR7-{booking_id}
+*Servizio:* {service_name}
+*Data e Ora:* {pickup_date} alle {pickup_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}
+
+Cordiali Saluti,
+DR7',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('rental_modified', 'Modifica Noleggio', 'Inviato quando una prenotazione noleggio viene modificata',
+ '*MODIFICA PRENOTAZIONE NOLEGGIO*
+
+*ID:* DR7-{booking_id}
+*Cliente:* {customer_name}
+*Veicolo:* {vehicle_name}
+*Ritiro:* {pickup_date} alle {pickup_time}
+*Riconsegna:* {dropoff_date} alle {dropoff_time}
+*Totale:* €{total}
+*Pagamento:* {payment_info}',
  true, true, 'on_booking', 'all', 'confirmed'),
 
 -- ═══ Day-before Reminders (send-booking-reminders cron) ═══
@@ -379,6 +490,17 @@ Scade tra 5 minuti.
 Non condividere questo codice con nessuno.',
  true, true, 'on_booking', 'all', 'confirmed'),
 
+-- ═══ Preventivo WhatsApp (PreventiviTab Invia) ═══
+
+('preventivo_whatsapp', 'Preventivo WhatsApp', 'Messaggio inviato al cliente con il preventivo via WhatsApp',
+ 'Preventivo {vehicle_specs}
+
+{pricing_lines}
+
+Totale = {subtotal}
+{sconto}',
+ true, true, 'on_preventivo', 'all', 'confirmed'),
+
 -- ═══ Preventivo dal Sito (create-website-preventivo) ═══
 
 ('admin_new_website_quote', 'Notifica Admin: Nuovo Preventivo', 'Inviato all''admin quando un cliente crea un preventivo dal sito',
@@ -421,6 +543,17 @@ Rinnova subito per continuare a usufruire dei tuoi vantaggi esclusivi:
 Per qualsiasi domanda, rispondi a questo messaggio.
 
 DR7 Empire Team',
- true, true, 'before_pickup', 'all', 'confirmed')
+ true, true, 'before_pickup', 'all', 'confirmed'),
+
+-- ═══ Wrapper Header/Footer ═══
+
+('message_wrapper_header', 'Intestazione Messaggio', 'Intestazione aggiunta automaticamente a ogni messaggio WhatsApp',
+ '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*
+_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_',
+ true, true, 'on_booking', 'all', 'confirmed'),
+
+('message_wrapper_footer', 'Piè di Pagina Messaggio', 'Piè di pagina aggiunto automaticamente a ogni messaggio WhatsApp',
+ '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._',
+ true, true, 'on_booking', 'all', 'confirmed')
 
 ON CONFLICT (message_key) DO NOTHING;

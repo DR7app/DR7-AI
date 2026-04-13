@@ -4,11 +4,26 @@ import { supabase } from '../../../supabaseClient'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
+import { getKmIncluded } from '../../../utils/configLookup'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+
+// ─── Time slots (office hours, 30-min intervals) ────────────────────────────
+function genSlots(ranges: [number, number][]): { value: string; label: string }[] {
+  const s: { value: string; label: string }[] = []
+  for (const [a, b] of ranges) {
+    for (let m = a; m <= b; m += 30) {
+      const t = `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`
+      s.push({ value: t, label: t })
+    }
+  }
+  return s
+}
+const PICKUP_SLOTS = genSlots([[10*60+30, 12*60+30], [15*60+30, 18*60+30]])
+const RETURN_SLOTS = genSlots([[9*60, 12*60+30], [14*60, 17*60+30]])
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -202,6 +217,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [noCauzioneRequests, setNoCauzioneRequests] = useState<any[]>([])
   const [noCauzioneLoading, setNoCauzioneLoading] = useState(false)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<'created_at' | 'pickup_date' | 'total_final' | 'rental_days'>('created_at')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
@@ -322,11 +339,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── Pricing Calculation ────────────────────────────────────────────────
 
   const pricing = useMemo(() => {
-    const baseDailyRate = revenueData?.finalDailyRateEur
-      ?? (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
+    // Always use vehicle list price (not dynamic Revenue price)
+    const listDailyRate = selectedVehicle ? selectedVehicle.daily_rate : 0
     const maggiorazione = parseFloat(form.maggiorazione_pct) || 0
-    const dailyAfterMarkup = Math.round(baseDailyRate * (1 + maggiorazione / 100) * 100) / 100
-    const rentalTotal = Math.round(dailyAfterMarkup * rentalDays * 100) / 100
+
+    // Base prices at list rate
+    const listRentalTotal = Math.round(listDailyRate * rentalDays * 100) / 100
 
     const selectedIns = insuranceOptions.find(i => i.id === form.insurance_option)
     const insuranceDailyPrice = selectedIns?.pricePerDay ?? 0
@@ -355,15 +373,32 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
 
-    const subtotal = Math.round((rentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost) * 100) / 100
+    // List subtotal (before revenue coefficients and maggiorazione)
+    const listSubtotal = listRentalTotal + insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost
+
+    // Apply revenue coefficients to the TOTAL
+    const revenueCoeff = revenueData?.enabled
+      ? (revenueData.breakdown || []).reduce((acc, b) => acc * b.coeff, 1)
+      : 1
+    const afterRevenue = Math.round(listSubtotal * revenueCoeff * 100) / 100
+
+    // Apply maggiorazione on top
+    const markupMultiplier = 1 + maggiorazione / 100
+    const subtotal = Math.round(afterRevenue * markupMultiplier * 100) / 100
+
+    // Daily rate at list price (for display in riepilogo first line)
+    const dailyAfterCoeff = Math.round(listDailyRate * revenueCoeff * markupMultiplier * 100) / 100
+    const rentalTotal = Math.round(listDailyRate * rentalDays * 100) / 100
+    const maggiorazioneAmount = Math.round(afterRevenue * (maggiorazione / 100) * 100) / 100
+
     const desiredFinal = parseFloat(form.sconto) || 0
     const sconto = desiredFinal > 0 && desiredFinal < subtotal ? Math.round((subtotal - desiredFinal) * 100) / 100 : 0
     const totalFinal = sconto > 0 ? desiredFinal : subtotal
 
     return {
-      baseDailyRate,
+      baseDailyRate: listDailyRate,
       maggiorazione,
-      dailyAfterMarkup,
+      dailyAfterMarkup: dailyAfterCoeff,
       rentalTotal,
       insuranceDailyPrice,
       insuranceTotal,
@@ -379,11 +414,18 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       deliveryFee,
       pickupFee,
       experienceCost,
+      listSubtotal,
+      revenueCoeff,
+      revenueBreakdown: revenueData?.breakdown || [],
+      afterRevenue,
+      maggiorazioneAmount,
       subtotal,
       sconto,
       totalFinal,
+      kmIncluded: rentalConfig ? getKmIncluded(rentalConfig, rentalDays, selectedVehicle?.category || 'exotic') : 0,
+      sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 1.80,
     }
-  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay])
+  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig])
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
 
@@ -674,7 +716,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
-  function formatWhatsAppMessage(p: Preventivo): string {
+  function buildDefaultPreventivoMessage(p: Preventivo): string {
     const specs = [
       p.vehicle_name,
       p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
@@ -683,7 +725,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     ].filter(Boolean).join(' ')
 
     let msg = `Preventivo ${specs}\n\n`
-    msg += `${p.rental_days}gg x ${formatEur(p.daily_rate_after_markup || p.base_daily_rate)}/g = ${formatEur((p.daily_rate_after_markup || p.base_daily_rate) * p.rental_days)}\n`
+    msg += `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur(p.base_daily_rate * p.rental_days)}\n`
 
     if (p.insurance_total > 0) {
       const insLabel = insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko'
@@ -692,7 +734,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
     if (p.lavaggio_fee > 0) msg += `Lavaggio = ${formatEur(p.lavaggio_fee)}\n`
     if (p.no_cauzione_total > 0) msg += `No cauzione = ${formatEur(p.no_cauzione_total)}\n`
-    if (p.unlimited_km_total > 0) msg += `Km illimitati = ${formatEur(p.unlimited_km_total)}\n`
+    if (p.unlimited_km_total > 0) {
+      msg += `Km illimitati = ${formatEur(p.unlimited_km_total)}\n`
+    } else if (rentalConfig) {
+      const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+      msg += `Km inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}\n`
+    }
     if (p.second_driver_total > 0) msg += `Secondo guidatore = ${formatEur(p.second_driver_total)}\n`
 
     const extras = p.extras_detail as Record<string, unknown> | null
@@ -713,15 +760,95 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     return msg.trim()
   }
 
+  async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
+    // Try to load template from system_messages
+    try {
+      const { data: tpl } = await supabase
+        .from('system_messages')
+        .select('message_body, is_enabled')
+        .eq('message_key', 'preventivo_whatsapp')
+        .single()
+
+      if (tpl?.is_enabled && tpl.message_body) {
+        // Build variables for substitution
+        const specs = [
+          p.vehicle_name,
+          p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
+          p.vehicle_cv ? `${p.vehicle_cv}cv` : '',
+          p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
+        ].filter(Boolean).join(' ')
+
+        // Build pricing lines
+        let pricingLines = `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur((p.base_daily_rate) * p.rental_days)}`
+        if (p.insurance_total > 0) {
+          const insLabel = insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko'
+          pricingLines += `\n${insLabel} = ${formatEur(p.insurance_total)}`
+        }
+        if (p.lavaggio_fee > 0) pricingLines += `\nLavaggio = ${formatEur(p.lavaggio_fee)}`
+        if (p.no_cauzione_total > 0) pricingLines += `\nNo cauzione = ${formatEur(p.no_cauzione_total)}`
+        if (p.unlimited_km_total > 0) {
+          pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+        } else if (rentalConfig) {
+          const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+          pricingLines += `\nKm inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}`
+        }
+        if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
+        const extras = p.extras_detail as Record<string, unknown> | null
+        if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) pricingLines += `\nDR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}`
+        if (extras?.delivery_fee && Number(extras.delivery_fee) > 0) pricingLines += `\nConsegna = ${formatEur(Number(extras.delivery_fee))}`
+        if (extras?.pickup_fee && Number(extras.pickup_fee) > 0) pricingLines += `\nRitiro = ${formatEur(Number(extras.pickup_fee))}`
+        if (extras?.experience_cost && Number(extras.experience_cost) > 0) pricingLines += `\nServizi experience = ${formatEur(Number(extras.experience_cost))}`
+
+        let discountLine = ''
+        if (p.sconto > 0) discountLine = `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}`
+
+        const vars: Record<string, string> = {
+          vehicle_specs: specs,
+          vehicle_name: p.vehicle_name || '',
+          rental_days: String(p.rental_days),
+          daily_rate: formatEur(p.base_daily_rate),
+          rental_total: formatEur((p.base_daily_rate) * p.rental_days),
+          insurance_line: p.insurance_total > 0 ? `${insuranceOptions.find(i => i.id === p.insurance_option)?.label || 'Kasko'} = ${formatEur(p.insurance_total)}` : '',
+          pricing_lines: pricingLines,
+          subtotal: formatEur(p.subtotal),
+          total: formatEur(p.total_final || p.subtotal),
+          sconto: discountLine,
+          customer_name: p.customer_name || '',
+          km_info: p.unlimited_km_total > 0 ? 'Illimitati' : (() => {
+            if (!rentalConfig) return ''
+            const km = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+            return km === 'unlimited' ? 'Illimitati' : `${km} Km`
+          })(),
+        }
+
+        let msg = tpl.message_body
+        for (const [k, v] of Object.entries(vars)) {
+          msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '')
+        }
+        // Clean up empty lines from unused variables
+        msg = msg.replace(/\n{3,}/g, '\n\n').trim()
+
+        const footer = rentalConfig?.preventivi?.whatsapp_footer
+        if (footer) msg += `\n\n${footer}`
+
+        return msg
+      }
+    } catch {
+      // Fallback to hardcoded
+    }
+
+    return buildDefaultPreventivoMessage(p)
+  }
+
   async function handleSendWhatsApp(preventivo: Preventivo, phone: string) {
     setSendingWhatsapp(true)
     try {
-      const message = formatWhatsAppMessage(preventivo)
+      const message = await formatWhatsAppMessage(preventivo)
 
       const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customPhone: phone, customMessage: message })
+        body: JSON.stringify({ customPhone: phone, customMessage: message, skipHeader: true })
       })
 
       const result = await response.json()
@@ -745,7 +872,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         })
         .eq('id', preventivo.id)
 
-      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: `${phone}${selectedCust?.full_name ? ' — ' + selectedCust.full_name : ''}` })
+      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: `${phone} - ${selectedCust?.full_name || ''}` })
       toast.success('Preventivo inviato via WhatsApp!')
       setShowPhoneModal(false)
       setWhatsappPhone('')
@@ -818,6 +945,22 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const customerName = preventivo.customer_name || 'Cliente'
     const firstName = customerName.split(' ')[0]
 
+    // Create the discount code in the database so it actually works at checkout
+    const validUntil = new Date()
+    validUntil.setDate(validUntil.getDate() + 7) // valid for 7 days
+    await supabase.from('discount_codes').insert({
+      code,
+      code_type: 'codice_sconto',
+      scope: ['tutti'],
+      value_type: 'percentage',
+      value_amount: 5,
+      valid_from: new Date().toISOString(),
+      valid_until: validUntil.toISOString(),
+      single_use: true,
+      message: `Sconto 5% per rifiuto no cauzione — ${customerName}`,
+      status: 'active',
+    })
+
     // Update status
     await supabase.from('preventivi').update({ status: 'rifiutato' }).eq('id', preventivo.id)
 
@@ -849,9 +992,24 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     toast.success(`Stato aggiornato: ${STATUS_LABELS[newStatus]}`)
   }
 
-  const filtered = useMemo(
-    () => statusFilter === 'all' ? preventivi : preventivi.filter(p => p.status === statusFilter),
-    [preventivi, statusFilter]
+  const toggleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('desc') }
+  }
+  const sortArrow = (field: typeof sortField) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''
+
+  const filtered = useMemo(() => {
+    const list = (statusFilter === 'all' || statusFilter === '__no_cauzione__') ? preventivi : preventivi.filter(p => p.status === statusFilter)
+    return [...list].sort((a, b) => {
+      let va: any, vb: any
+      if (sortField === 'created_at' || sortField === 'pickup_date') {
+        va = new Date(a[sortField] || 0).getTime(); vb = new Date(b[sortField] || 0).getTime()
+      } else {
+        va = a[sortField] || 0; vb = b[sortField] || 0
+      }
+      return sortDir === 'asc' ? va - vb : vb - va
+    })
+  }, [preventivi, statusFilter, sortField, sortDir]
   )
 
   // ─── RENDER ─────────────────────────────────────────────────────────────
@@ -968,10 +1126,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               <thead>
                 <tr className="border-b border-theme-border text-left text-theme-text-muted">
                   <th className="py-2 px-3">Veicolo</th>
-                  <th className="py-2 px-3">Date</th>
-                  <th className="py-2 px-3">Giorni</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('created_at')}>Creato il{sortArrow('created_at')}</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('pickup_date')}>Date Noleggio{sortArrow('pickup_date')}</th>
+                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('rental_days')}>Giorni{sortArrow('rental_days')}</th>
                   <th className="py-2 px-3 text-right">Subtotale</th>
-                  <th className="py-2 px-3 text-right">Prezzo Scontato</th>
+                  <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('total_final')}>Prezzo Scontato{sortArrow('total_final')}</th>
                   <th className="py-2 px-3">Stato</th>
                   <th className="py-2 px-3">Azioni</th>
                 </tr>
@@ -1004,8 +1163,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                         )}
                       </div>
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
-                        {formatWhatsAppMessage(p)}
+                        {buildDefaultPreventivoMessage(p)}
                       </div>
+                    </td>
+                    <td className="py-2 px-3 text-theme-text-muted text-xs">
+                      {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}
                     </td>
                     <td className="py-2 px-3 text-theme-text-muted">
                       {new Date(p.pickup_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
@@ -1115,7 +1277,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               />
 
               <div className="bg-theme-bg-primary rounded p-3 text-xs text-theme-text-muted whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
-                {formatWhatsAppMessage(selectedPreventivo)}
+                {buildDefaultPreventivoMessage(selectedPreventivo)}
               </div>
 
               <div className="flex gap-2 justify-end">
@@ -1181,16 +1343,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       {/* Dates */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
-        <Input label="Ora Ritiro" type="time" value={form.pickup_time} onChange={(e) => {
+        <Select label="Ora Ritiro" value={form.pickup_time} onChange={(e) => {
           const newPickupTime = e.target.value
-          // Auto-calculate return time: pickup - 1h30
           const [h, m] = newPickupTime.split(':').map(Number)
           const d = new Date(); d.setHours(h, m, 0); d.setMinutes(d.getMinutes() - 90)
           const autoReturn = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
           setForm(prev => ({ ...prev, pickup_time: newPickupTime, return_time: autoReturn }))
-        }} />
+        }} options={PICKUP_SLOTS} />
         <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
-        <Input label="Ora Riconsegna (auto: ritiro -1h30)" type="time" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} />
+        <Select label="Ora Riconsegna (auto: ritiro -1h30)" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} options={RETURN_SLOTS} />
       </div>
 
       {rentalDays > 0 && (
@@ -1251,36 +1412,16 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       {revenueLoading && (
         <p className="text-sm text-theme-text-muted animate-pulse">Calcolo prezzo revenue management...</p>
       )}
-      {revenueData && (
-        <div className="p-3 bg-theme-bg-tertiary/50 border border-dr7-gold/30 rounded-lg text-sm space-y-1">
-          <p className="font-semibold text-dr7-gold">Revenue Management</p>
-          <p className="text-theme-text-primary">
-            Tariffa giornaliera: <strong>{formatEur(revenueData.finalDailyRateEur)}</strong> /giorno
-          </p>
-          {revenueData.breakdown?.map((b, i) => (
-            <p key={i} className="text-theme-text-muted text-xs">
-              {b.label}: x{b.coeff.toFixed(2)} ({b.description})
-            </p>
-          ))}
-        </div>
-      )}
 
       {/* Maggiorazione */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input
-          label="Maggiorazione Preventivo (%)"
-          type="number"
-          step="0.1"
-          value={form.maggiorazione_pct}
-          onChange={(e) => setForm(prev => ({ ...prev, maggiorazione_pct: e.target.value }))}
-          placeholder="0"
-        />
-        <div className="flex items-end">
-          <p className="text-sm text-theme-text-muted pb-2">
-            Tariffa dopo maggiorazione: <strong className="text-theme-text-primary">{formatEur(pricing.dailyAfterMarkup)}</strong> /giorno
-          </p>
-        </div>
-      </div>
+      <Input
+        label="Maggiorazione Preventivo (%)"
+        type="number"
+        step="0.1"
+        value={form.maggiorazione_pct}
+        onChange={(e) => setForm(prev => ({ ...prev, maggiorazione_pct: e.target.value }))}
+        placeholder="0"
+      />
 
       {/* Insurance */}
       {insuranceOptions.length > 0 && (
@@ -1392,8 +1533,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         <p className="font-bold text-theme-text-primary text-lg">Riepilogo Preventivo</p>
 
         <div className="flex justify-between text-sm text-theme-text-primary">
-          <span>{rentalDays}gg x {formatEur(pricing.dailyAfterMarkup)}/giorno</span>
-          <span>{formatEur(pricing.rentalTotal)}</span>
+          <span>{rentalDays}gg x {formatEur(pricing.baseDailyRate)}/giorno</span>
+          <span>{formatEur(Math.round(pricing.baseDailyRate * rentalDays * 100) / 100)}</span>
         </div>
 
         {pricing.insuranceTotal > 0 && (
@@ -1451,10 +1592,36 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           </div>
         )}
 
+        {/* Revenue coefficients applied to total */}
+        {pricing.revenueBreakdown.length > 0 && pricing.revenueCoeff !== 1 && (
+          <>
+            <div className="border-t border-theme-border pt-2 flex justify-between text-sm text-theme-text-muted">
+              <span>Subtotale Listino</span>
+              <span>{formatEur(pricing.listSubtotal)}</span>
+            </div>
+            {pricing.revenueBreakdown.map((b, i) => (
+              <div key={i} className="flex justify-between text-xs text-theme-text-muted pl-2">
+                <span>{b.label}: x{b.coeff.toFixed(2)} ({b.description})</span>
+              </div>
+            ))}
+            <div className="flex justify-between text-xs text-dr7-gold pl-2">
+              <span>Coefficiente combinato: x{pricing.revenueCoeff.toFixed(4)}</span>
+              <span>{pricing.revenueCoeff < 1 ? `-${formatEur(pricing.listSubtotal - pricing.listSubtotal * pricing.revenueCoeff)}` : `+${formatEur(pricing.listSubtotal * pricing.revenueCoeff - pricing.listSubtotal)}`}</span>
+            </div>
+          </>
+        )}
+
         <div className="border-t border-theme-border pt-2 flex justify-between text-theme-text-primary font-semibold">
           <span>Subtotale</span>
-          <span>{formatEur(pricing.subtotal)}</span>
+          <span>{formatEur(pricing.afterRevenue)}</span>
         </div>
+
+        {pricing.maggiorazione > 0 && (
+          <div className="flex justify-between text-sm text-dr7-gold">
+            <span>Maggiorazione preventivo (+{pricing.maggiorazione}%)</span>
+            <span>+{formatEur(pricing.maggiorazioneAmount)}</span>
+          </div>
+        )}
 
         {/* Sconto */}
         <div className="grid grid-cols-2 gap-3 pt-2">
@@ -1468,6 +1635,16 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <span>-{formatEur(pricing.sconto)}</span>
           </div>
         )}
+
+        {/* KM inclusi */}
+        <div className="flex justify-between text-sm text-theme-text-muted">
+          <span>KM Inclusi</span>
+          <span>{pricing.kmIncluded === 'unlimited' ? 'Illimitati' : `${pricing.kmIncluded} Km`}</span>
+        </div>
+        <div className="flex justify-between text-sm text-theme-text-muted">
+          <span>Sforo KM</span>
+          <span>{formatEur(pricing.sforo)}/km</span>
+        </div>
 
         <div className="border-t border-dr7-gold/50 pt-2 flex justify-between text-xl font-bold text-dr7-gold">
           <span>TOTALE FINALE</span>

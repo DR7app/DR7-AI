@@ -304,7 +304,9 @@ export default function DocumentsVerificationTab() {
       codiceFiscaleFront: 'CF Fronte',
       codiceFiscaleBack: 'CF Retro',
       patenteFront: 'Patente Fronte',
-      patenteBack: 'Patente Retro'
+      patenteBack: 'Patente Retro',
+      libretto_front: 'Libretto Fronte',
+      libretto_back: 'Libretto Retro'
     }
     return labels[docType] || docType
   }

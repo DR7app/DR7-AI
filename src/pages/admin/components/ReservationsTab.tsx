@@ -409,6 +409,20 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   return false
 }
 
+function CustomerStatusBadge({ email, statusMap }: { email?: string | null; statusMap: Map<string, string> }) {
+  if (!email) return null
+  const status = statusMap.get(email.toLowerCase())
+  if (!status || status === 'standard') return null
+  const labels: Record<string, { text: string; cls: string }> = {
+    elite: { text: 'ELT', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/50' },
+    member: { text: 'MEM', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
+    blacklist: { text: 'BL', cls: 'bg-red-500/20 text-red-400 border-red-500/50' },
+  }
+  const badge = labels[status]
+  if (!badge) return null
+  return <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border ${badge.cls}`}>{badge.text}</span>
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
@@ -417,6 +431,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [customers, setCustomers] = useState<Customer[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [carWashBookings, setCarWashBookings] = useState<Booking[]>([]) // Car wash & mechanical bookings for availability checking
+  const [customerStatuses, setCustomerStatuses] = useState<Map<string, string>>(new Map()) // email → status_cliente
+  const [clubMembers, setClubMembers] = useState<Set<string>>(new Set()) // user_ids with active DR7 Club
+  const [clubEmails, setClubEmails] = useState<Set<string>>(new Set()) // emails with active DR7 Club
 
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -1444,6 +1461,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       setBookings(filteredBookings)
 
+      // Fetch customer statuses (member/elite/blacklist) for badge display
+      const { data: custStatuses } = await supabase
+        .from('customers_extended')
+        .select('email, status_cliente')
+        .in('status_cliente', ['member', 'elite', 'blacklist'])
+      if (custStatuses) {
+        const statusMap = new Map<string, string>()
+        custStatuses.forEach(c => { if (c.email) statusMap.set(c.email.toLowerCase(), c.status_cliente) })
+        setCustomerStatuses(statusMap)
+      }
+
+      // Fetch DR7 Club active subscriptions via Netlify function (bypasses RLS)
+      try {
+        const clubRes = await fetch('/.netlify/functions/list-club-members')
+        if (clubRes.ok) {
+          const clubData = await clubRes.json()
+          if (clubData.members && clubData.members.length > 0) {
+            const userIds = clubData.members.map((s: { user_id: string }) => s.user_id)
+            setClubMembers(new Set(userIds))
+            const emails = clubData.members.map((s: { email?: string }) => s.email?.toLowerCase()).filter(Boolean)
+            setClubEmails(new Set(emails))
+          }
+        }
+      } catch {
+        // Club members fetch failed
+      }
+
       // Fetch customers from bookings table (same as CustomersTab)
       const { data: bookingsForCustomers, error: bookingsCustomerError } = await supabase
         .from('bookings')
@@ -1779,6 +1823,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!customer.emessa_da && !customer.metadata?.patente?.ente) missing.push('emessa_da')
       if (!customer.data_rilascio_patente && !customer.metadata?.patente?.rilascio) missing.push('data_rilascio_patente')
       if (!customer.scadenza_patente && !customer.metadata?.patente?.scadenza) missing.push('scadenza_patente')
+      // Check patente scaduta (expired license)
+      const scadenzaPatente = customer.scadenza_patente || customer.data_scadenza_patente || customer.metadata?.patente?.scadenza
+      if (scadenzaPatente) {
+        const expDate = new Date(scadenzaPatente)
+        if (expDate < new Date() && !hasOverride('license_expired')) {
+          requestOverride('license_expired', `Patente scaduta il ${expDate.toLocaleDateString('it-IT')}. Il cliente non può noleggiare con patente scaduta.`)
+          return ['__limitation_override_requested__']
+        }
+      }
+
       // Check patente is at least 3 years old
       const patenteDate = customer.data_rilascio_patente || customer.metadata?.patente?.rilascio
       if (patenteDate) {
@@ -4111,9 +4165,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid' && insertedBooking) {
         try {
           // Use cents-based addition to avoid float drift, then convert to EUR
-          const totalCents = eurToCents(formData.total_amount || '0')
+          // Subtract already paid amount for partial payments
+          const fullTotalCents = eurToCents(formData.total_amount || '0')
             + (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0)
             + (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+          const alreadyPaidCents = formData.payment_status === 'partial' ? eurToCents(formData.amount_paid || '0') : 0
+          const totalCents = Math.max(0, fullTotalCents - alreadyPaidCents)
           const totalEur = totalCents / 100
 
           const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
@@ -4249,10 +4306,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Send WhatsApp notification for car rental (new and edited bookings)
+      // Send WhatsApp notification for car rental
+      // Only send confirmation when paid — "Da saldare" bookings get notified when payment is received
+      const paymentStatus = formData.payment_status || 'pending'
+      const isPaid = paymentStatus === 'paid' || paymentStatus === 'succeeded' || paymentStatus === 'completed'
+      if (isPaid || editingId) {
       try {
-        const paymentStatus = formData.payment_status || 'pending'
-
         // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
         // These are already formatted as "2026-02-07T09:30:00+01:00" (or +02:00 in summer)
         // Send admin notification (detailed internal format)
@@ -4309,54 +4368,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         logger.log('✅ WhatsApp admin notification sent')
 
-        // Send customer confirmation message
+        // Send customer confirmation message via DB template (rental_new_customer)
         const custPhone = customerInfo?.phone
         if (custPhone) {
-          const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
-          const pickupDt = new Date(pickupDateTime)
-          const dropoffDt = new Date(returnDateTime)
-          const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
-          const fmtTime = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
-          const depositCents = eurToCents(formData.deposit || '0')
-          const depositLabel = depositCents > 0 ? `€${centsToEurStr(depositCents)} (${formData.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare'})` : '€0'
-          let kmLabel = '-'
-          if (formData.unlimited_km) {
-            kmLabel = 'Illimitati'
-          } else if (formData.km_limit === '50/giorno') {
-            const pickup = new Date(formData.pickup_date + 'T' + formData.pickup_time)
-            const dropoff = new Date(formData.return_date + 'T' + formData.return_time)
-            const days = Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24))
-            kmLabel = `${50 * days} Km (50/g x ${days}gg)`
-          } else if (formData.km_limit) {
-            kmLabel = `${formData.km_limit} km`
-          }
-          const insuranceLabel = formData.insurance_option === 'KASKO_BASE' ? 'Kasko Base'
-            : formData.insurance_option === 'KASKO_BLACK' ? 'Kasko Black'
-            : formData.insurance_option === 'KASKO_SIGNATURE' ? 'Kasko Signature'
-            : formData.insurance_option === 'DR7' ? 'Kasko DR7'
-            : formData.insurance_option || '-'
-          const paymentLabel = formData.payment_status === 'paid' ? `Pagato (${formData.payment_method || '-'})` : formData.payment_status === 'partial' ? `Parziale (${formData.payment_method || '-'})` : 'Da saldare'
-          const bookingNotes = formData.notes || insertedBooking?.booking_details?.notes || ''
-
-          const totalEur = insertedBooking?.price_total ? centsToEurStr(Math.round(insertedBooking.price_total)) : centsToEurStr(eurToCents(formData.total_amount))
-
-          let custMsg = editingId
-            ? `Salve ${custFirstName},\n\nLa informiamo che la Sua prenotazione è stata modificata.\n\n`
-            : `Salve ${custFirstName},\n\nConfermiamo la sua prenotazione.\n\n`
-          custMsg += `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`
-          custMsg += `*ID:* DR7-${(insertedBooking?.id || '').substring(0, 8).toUpperCase()}\n`
-          custMsg += `*Veicolo:* ${vehicle?.display_name || 'N/A'}\n`
-          custMsg += `*Ritiro:* ${fmtDate(pickupDt)} alle ${fmtTime(pickupDt)}\n`
-          custMsg += `*Riconsegna:* ${fmtDate(dropoffDt)} alle ${fmtTime(dropoffDt)}\n`
-          custMsg += `*Luogo ritiro:* ${pickupLocationLabel}\n`
-          custMsg += `*Assicurazione:* ${insuranceLabel}\n`
-          custMsg += `*Totale:* €${totalEur}\n`
-          custMsg += `*Cauzione:* ${depositLabel}\n`
-          custMsg += `*KM:* ${kmLabel}\n`
-          custMsg += `*Pagamento:* ${paymentLabel}\n`
-          if (bookingNotes) custMsg += `*Note:* ${bookingNotes}\n`
-          custMsg += `\nCordiali Saluti,\nDR7`
-
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -4368,7 +4382,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 isEdit: !!editingId,
                 customer_name: customerInfo?.full_name || '',
                 customer_email: customerInfo?.email || '',
-                customer_phone: customerInfo?.phone || '',
+                customer_phone: custPhone,
                 vehicle_name: vehicle?.display_name || '',
                 vehicle_plate: vehicle?.plate || '',
                 pickup_date: pickupDateTime,
@@ -4379,33 +4393,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 payment_status: paymentStatus,
                 payment_method: formData.payment_method || '',
                 deposit_amount: parseFloat(formData.deposit) || 0,
-                km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
                 booking_details: {
-                  amountPaid: paymentStatus === 'paid' ? (insertedBooking?.price_total || eurToCents(formData.total_amount)) : 0,
                   insuranceOption: formData.insurance_option || 'KASKO_BASE',
                   deposit: parseFloat(formData.deposit) || 0,
                   deposit_status: formData.deposit_status,
                   km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
                   unlimited_km: formData.unlimited_km,
-                  delivery_enabled: formData.delivery_enabled,
-                  delivery_address: formData.delivery_enabled ? {
-                    street: formData.delivery_street,
-                    city: formData.delivery_city,
-                    zip: formData.delivery_zip,
-                    province: formData.delivery_province
-                  } : null,
-                  delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
-                  pickup_enabled: formData.pickup_enabled,
-                  pickup_address: formData.pickup_enabled ? {
-                    street: formData.pickup_street,
-                    city: formData.pickup_city,
-                    zip: formData.pickup_zip,
-                    province: formData.pickup_province
-                  } : null,
-                  pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
                   notes: formData.notes || null,
-                  depositOption: insertedBooking?.booking_details?.depositOption,
-                  noDepositSurcharge: insertedBooking?.booking_details?.noDepositSurcharge
                 }
               }
             })
@@ -4416,6 +4410,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
         // Don't fail the whole booking if WhatsApp fails
       }
+      } // end isPaid || editingId
 
       // Sync cauzione (security deposit) record
       try {
@@ -4474,20 +4469,45 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Auto-generate fattura and send to SDI when payment status is "paid"
       if (formData.payment_status === 'paid' && insertedBooking?.id) {
+        // Validate customer data first — if incomplete, open the missing data popup
         try {
-          logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
-          const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
-          })
-          if (invoiceRes.ok) {
-            logger.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
+          const bookingForValidation = { ...insertedBooking, user_id: customerId, customer_email: customerInfo?.email, customer_phone: customerInfo?.phone } as unknown as Booking
+          const invoiceMissing = (await validateCustomerData(bookingForValidation)).filter(f => f !== '__limitation_override_requested__')
+          if (invoiceMissing.length > 0) {
+            logger.warn('[Auto-Gen] ⚠️ Customer data incomplete for fattura:', invoiceMissing)
+            // Open the missing data popup so user can fill in the fields
+            const custId = customerId || insertedBooking.user_id || insertedBooking.booking_details?.customer?.customerId
+            let custData = {}
+            if (custId) {
+              try {
+                const resp = await authFetch(`/.netlify/functions/get-customer?id=${custId}`)
+                if (resp.ok) {
+                  const result = await resp.json()
+                  custData = result.customer || { id: custId }
+                }
+              } catch { custData = { id: custId } }
+            }
+            setMissingFields(invoiceMissing)
+            setTempCustomerData(custData)
+            setCurrentValidationBooking(bookingForValidation)
+            setValidationContext('invoice')
+            setShowMissingDataModal(true)
+            toast.error('Dati cliente incompleti — completa per generare la fattura', { duration: 5000 })
           } else {
-            const errData = await invoiceRes.json()
-            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
-            logger.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
-            toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+            logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
+            const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
+            })
+            if (invoiceRes.ok) {
+              logger.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
+            } else {
+              const errData = await invoiceRes.json()
+              const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+              logger.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
+              toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+            }
           }
         } catch (invoiceError) {
           console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
@@ -5027,9 +5047,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             const tier = classifyDriverTier(age, licYears)
                             setCustomerTier(tier)
 
+                            // IMMEDIATE checks — OTP required before proceeding
                             if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
                               requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason} (Età: ${age} anni — Patente: ${licYears} anni)`)
-                              // Keep customer selected — override modal will show
+                            }
+                            if (licYears < 3 && !hasOverride('license_too_recent')) {
+                              requestOverride('license_too_recent', `Patente rilasciata da meno di 3 anni (${licYears} anni). Il cliente non può noleggiare.`)
+                            }
+
+                            // Check expired license immediately
+                            const scadenzaP = cust?.scadenza_patente || cust?.data_scadenza_patente || cust?.metadata?.patente?.scadenza
+                            if (scadenzaP) {
+                              const expDate = new Date(scadenzaP)
+                              if (expDate < new Date() && !hasOverride('license_expired')) {
+                                requestOverride('license_expired', `Patente scaduta il ${expDate.toLocaleDateString('it-IT')}. Il cliente non può noleggiare con patente scaduta.`)
+                              }
                             }
 
                             // Reset incompatible options when tier changes
@@ -5050,10 +5082,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           } else if (patenteDate) {
                             // Only license date available — still check minimum
                             const licYears = calculateLicenseYears(patenteDate)
-                            if (licYears < 3) {
-                              alert('⚠️ PATENTE TROPPO RECENTE\n\nLa patente di questo cliente è stata rilasciata da meno di 3 anni.\n\nNon è possibile procedere con il noleggio.')
-                              setFormData(prev => ({ ...prev, customer_id: '' }))
-                              return
+                            if (licYears < 3 && !hasOverride('license_too_recent')) {
+                              requestOverride('license_too_recent', `Patente rilasciata da meno di 3 anni (${licYears} anni). Il cliente non può noleggiare.`)
                             }
                           }
                         } catch (e) {
@@ -5990,7 +6020,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   { value: 'paid', label: 'Pagato' }
                 ]}
               />
-              {formData.payment_status !== 'unpaid' && (
+              {(
                 <Select
                   label="Metodo di Pagamento"
                   required
@@ -6441,8 +6471,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             )}
 
             <div className="flex flex-wrap gap-3 mt-4">
-              <Button type="submit" className="flex-1 sm:flex-none">
-                Salva
+              <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
+                {isSubmitting ? 'Salvataggio...' : 'Salva'}
               </Button>
               <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); resetForm() }}>
                 Annulla
@@ -6488,8 +6518,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <div className="font-semibold text-theme-text-primary mb-1">
+                    <div className="font-semibold text-theme-text-primary mb-1 flex items-center">
                       {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
+                      <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
+                      {((booking.user_id && clubMembers.has(booking.user_id)) || (booking.customer_email && clubEmails.has(booking.customer_email.toLowerCase()))) && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50">DR7 Club</span>
+                      )}
                     </div>
                     <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                   </div>
@@ -6506,7 +6540,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       booking.payment_status === 'paid' ||
                       booking.payment_status === 'succeeded' ||
                       (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                      ? 'Pagato'
+                      ? <>Pagato{booking.payment_method && <span className="ml-1 opacity-70">· {booking.payment_method}</span>}</>
                       : booking.payment_status === 'partial'
                       ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
                       : 'Non Pagato'}
@@ -6657,8 +6691,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
                     <tr key={`booking-${booking.id}`} className="border-t border-theme-border hover:/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px] truncate" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
-                        {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
+                      <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
+                        <span className="flex items-center">
+                          <span className="truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
+                          <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
+                      {((booking.user_id && clubMembers.has(booking.user_id)) || (booking.customer_email && clubEmails.has(booking.customer_email.toLowerCase()))) && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50">DR7 Club</span>
+                      )}
+                        </span>
                       </td>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
@@ -6943,7 +6983,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           selectedBooking.payment_status === 'paid' ||
                           selectedBooking.payment_status === 'succeeded' ||
                           (selectedBooking.booking_details?.amountPaid && selectedBooking.booking_details.amountPaid >= selectedBooking.price_total)
-                          ? 'Pagato'
+                          ? <>Pagato{selectedBooking.payment_method && <span className="ml-1 opacity-70">· {selectedBooking.payment_method}</span>}</>
                           : selectedBooking.payment_status === 'partial'
                             ? `Parziale €${((selectedBooking.amount_paid || 0) / 100).toFixed(0)}`
                           : (selectedBooking.payment_status === 'pending' || selectedBooking.payment_status === 'unpaid' || selectedBooking.status === 'pending')

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 
 interface PriceOption {
   label: string
@@ -54,6 +55,34 @@ export default function CarWashCatalogTab() {
     name: '', price: '', duration: '', description: '', features: '', image_url: '',
     category: 'urban', main_tab: 'lavaggio' as 'lavaggio' | 'meccanica',
   })
+
+  const newImageRef = useRef<HTMLInputElement>(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
+
+  async function uploadImage(file: File, target: 'new' | 'edit') {
+    if (!file.type.startsWith('image/')) { toast.error('Solo file immagine (PNG, JPG)'); return }
+    setUploadingImage(true)
+    try {
+      const ext = file.name.split('.').pop() || 'png'
+      const fileName = `wash-service-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('booking-photos')
+        .upload(`wash-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true })
+      if (upErr) throw upErr
+      const { data: urlData } = supabase.storage.from('booking-photos').getPublicUrl(`wash-catalog/${fileName}`)
+      const url = urlData?.publicUrl || ''
+      if (target === 'new') {
+        setNewService(prev => ({ ...prev, image_url: url }))
+      } else {
+        setEditImageUrl(url)
+      }
+      toast.success('Immagine caricata')
+    } catch (err: unknown) {
+      toast.error('Errore upload: ' + (err as Error).message)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
 
   useEffect(() => {
     loadServices()
@@ -259,9 +288,21 @@ export default function CarWashCatalogTab() {
               className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" />
           </div>
           <div>
-            <label className="block text-xs text-theme-text-muted mb-1">Immagine (URL)</label>
-            <input type="url" value={newService.image_url} onChange={e => setNewService(prev => ({ ...prev, image_url: e.target.value }))}
-              className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" placeholder="https://..." />
+            <label className="block text-xs text-theme-text-muted mb-1">Immagine</label>
+            <div className="flex items-center gap-2">
+              <input ref={newImageRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                onChange={e => { if (e.target.files?.[0]) uploadImage(e.target.files[0], 'new') }} />
+              <button type="button" onClick={() => newImageRef.current?.click()} disabled={uploadingImage}
+                className="px-4 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm hover:border-dr7-gold transition-colors disabled:opacity-50">
+                {uploadingImage ? 'Caricamento...' : 'Carica PNG'}
+              </button>
+              {newService.image_url && (
+                <div className="flex items-center gap-2">
+                  <img src={newService.image_url} alt="" className="w-10 h-10 object-cover rounded" />
+                  <button type="button" onClick={() => setNewService(prev => ({ ...prev, image_url: '' }))} className="text-red-400 text-xs">X</button>
+                </div>
+              )}
+            </div>
           </div>
           <div>
             <label className="block text-xs text-theme-text-muted mb-1">Caratteristiche (una per riga)</label>
@@ -375,6 +416,29 @@ function ServiceCard({
   onEditImageUrl,
   onToggleActive,
 }: ServiceCardProps) {
+  const editImgRef = useRef<HTMLInputElement>(null)
+  const [imgUploading, setImgUploading] = useState(false)
+
+  async function handleEditImageUpload(file: File) {
+    if (!file.type.startsWith('image/')) { toast.error('Solo file immagine'); return }
+    setImgUploading(true)
+    try {
+      const ext = file.name.split('.').pop() || 'png'
+      const fileName = `wash-service-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('booking-photos')
+        .upload(`wash-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true })
+      if (upErr) throw upErr
+      const { data: urlData } = supabase.storage.from('booking-photos').getPublicUrl(`wash-catalog/${fileName}`)
+      onEditImageUrl(urlData?.publicUrl || '')
+      toast.success('Immagine caricata')
+    } catch (err: unknown) {
+      toast.error('Errore upload: ' + (err as Error).message)
+    } finally {
+      setImgUploading(false)
+    }
+  }
+
   const inactive = !service.is_active
 
   if (isEditing) {
@@ -464,16 +528,23 @@ function ServiceCard({
           />
         </div>
 
-        {/* Image URL */}
+        {/* Image Upload */}
         <div className="mb-3">
-          <label className="block text-xs text-theme-text-muted mb-1">Immagine (URL)</label>
-          <input
-            type="url"
-            value={editImageUrl}
-            onChange={e => onEditImageUrl(e.target.value)}
-            className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-            placeholder="https://..."
-          />
+          <label className="block text-xs text-theme-text-muted mb-1">Immagine</label>
+          <div className="flex items-center gap-2">
+            <input ref={editImgRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+              onChange={e => { if (e.target.files?.[0]) handleEditImageUpload(e.target.files[0]) }} />
+            <button type="button" onClick={() => editImgRef.current?.click()} disabled={imgUploading}
+              className="px-4 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm hover:border-dr7-gold transition-colors disabled:opacity-50">
+              {imgUploading ? 'Caricamento...' : 'Carica PNG'}
+            </button>
+            {editImageUrl && (
+              <div className="flex items-center gap-2">
+                <img src={editImageUrl} alt="" className="w-10 h-10 object-cover rounded" />
+                <button type="button" onClick={() => onEditImageUrl('')} className="text-red-400 text-xs">X</button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Action buttons */}

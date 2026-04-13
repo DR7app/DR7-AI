@@ -290,30 +290,59 @@ const handler: Handler = async (event) => {
 
   // ── Try to load edited template from DB ──
   // Determine the message key based on booking type
+  // When customPhone is set, this is a CUSTOMER message — use _customer variant if available
+  const isCustomerMessage = !!customPhone;
   let messageKey = '';
   if (booking) {
     const serviceType = booking.service_type;
     const isEdit = booking.isEdit;
     if (serviceType === 'car_wash') {
-      messageKey = isEdit ? 'carwash_modified' : 'carwash_new';
+      messageKey = isEdit ? 'carwash_modified' : (isCustomerMessage ? 'carwash_new_customer' : 'carwash_new');
     } else if (serviceType === 'mechanical') {
-      messageKey = isEdit ? 'mechanical_modified' : 'mechanical_new';
+      messageKey = isEdit ? 'mechanical_modified' : (isCustomerMessage ? 'mechanical_new_customer' : 'mechanical_new');
     } else {
-      messageKey = isEdit ? 'rental_modified' : 'rental_new';
+      messageKey = isEdit ? 'rental_modified' : (isCustomerMessage ? 'rental_new_customer' : 'rental_new');
     }
   }
 
   // If a template exists in DB, use it (admin may have edited it)
   let finalMessage = message;
-  let useHeader = true;
+  let useHeader = !skipHeader; // Default: use header unless skipHeader passed
+
+  // For custom messages (no template), check global header setting
+  if (!messageKey && customMessage) {
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const { data: globalSetting } = await supabase
+        .from('system_messages')
+        .select('include_header')
+        .eq('message_key', 'global_header_footer')
+        .single();
+      if (globalSetting) {
+        useHeader = globalSetting.include_header !== false && !skipHeader;
+      }
+    } catch { /* use default */ }
+  }
+
   if (messageKey) {
     try {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-      const { data: tpl } = await supabase
+      let { data: tpl } = await supabase
         .from('system_messages')
         .select('message_body, include_header, is_enabled')
         .eq('message_key', messageKey)
         .single();
+
+      // Fallback: if _customer variant not found, try base key
+      if (!tpl && isCustomerMessage && messageKey.endsWith('_customer')) {
+        const baseKey = messageKey.replace('_customer', '');
+        const { data: baseTpl } = await supabase
+          .from('system_messages')
+          .select('message_body, include_header, is_enabled')
+          .eq('message_key', baseKey)
+          .single();
+        tpl = baseTpl;
+      }
 
       if (tpl && tpl.is_enabled !== false && tpl.message_body) {
         // Use the DB template — it's the source of truth
@@ -369,15 +398,16 @@ const handler: Handler = async (event) => {
           vars.deposit = '€0';
         }
 
-        // KM info for template
+        // KM info for template — same logic as contract
         const tplUnlimitedKm = booking.booking_details?.unlimited_km;
         const tplKmLimit = booking.booking_details?.km_limit;
-        if (tplUnlimitedKm || tplKmLimit === 'Illimitati') {
+        if (tplUnlimitedKm === true || tplKmLimit === 'Illimitati') {
           vars.km_info = 'Illimitati';
         } else if (tplKmLimit && tplKmLimit !== '0') {
-          vars.km_info = `${tplKmLimit} km`;
+          const isNum = !isNaN(Number(tplKmLimit)) && !String(tplKmLimit).toLowerCase().includes('km');
+          vars.km_info = isNum ? `${tplKmLimit} Km` : String(tplKmLimit);
         } else {
-          vars.km_info = 'Standard';
+          vars.km_info = booking.booking_details?.total_km ? `${booking.booking_details.total_km} Km` : 'Illimitati';
         }
 
         // Replace all {variable} placeholders
@@ -390,10 +420,26 @@ const handler: Handler = async (event) => {
     }
   }
 
-  // Build the final wrapped message
-  const HEADER = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n`;
-  const FOOTER = `\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
-  const wrappedMessage = useHeader ? `${HEADER}${finalMessage}${FOOTER}` : finalMessage;
+  // Add wrapper from DB (or fallback)
+  let wrappedMessage = finalMessage;
+  if (useHeader) {
+    try {
+      const supabaseWrap = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const { data: wrappers } = await supabaseWrap
+        .from('system_messages')
+        .select('message_key, message_body')
+        .in('message_key', ['message_wrapper_header', 'message_wrapper_footer']);
+      const headerTpl = wrappers?.find((w: any) => w.message_key === 'message_wrapper_header');
+      const footerTpl = wrappers?.find((w: any) => w.message_key === 'message_wrapper_footer');
+      const header = headerTpl?.message_body || '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_';
+      const footer = footerTpl?.message_body || '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
+      wrappedMessage = header + '\n\n' + finalMessage + '\n\n' + footer;
+    } catch {
+      const defaultHeader = '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_';
+      const defaultFooter = '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
+      wrappedMessage = defaultHeader + '\n\n' + finalMessage + '\n\n' + defaultFooter;
+    }
+  }
 
   try {
     // Send via Green API
@@ -406,7 +452,7 @@ const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         chatId: `${targetPhone}@c.us`,
-        message: skipHeader ? finalMessage : wrappedMessage,
+        message: finalMessage,
       }),
     });
 

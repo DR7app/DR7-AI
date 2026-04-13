@@ -162,7 +162,7 @@ export default function AdminDashboard() {
 
   // Reusable style helpers for nav
   const sidebarItemClass = (isActive: boolean) =>
-    `w-full text-left px-3 py-2 min-h-[44px] flex items-center rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044]'}`
+    `w-full text-left px-3 py-2 min-h-[44px] flex items-center rounded-lg text-sm font-medium transition-colors select-none touch-manipulation ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044] active:bg-[#243044]'}`
   const sidebarSectionClass = 'px-3 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider'
 
   // Mobile tab labels
@@ -209,18 +209,18 @@ export default function AdminDashboard() {
     'fattura': 'Fattura',
     'operatori': 'Operatori',
     'dashboard-kpi': 'Dashboard',
-    'revenue-pricing': 'Revenue Management',
+    'revenue-pricing': 'Centralina',
   }
 
   return (
-    <div className="min-h-screen flex bg-theme-bg-secondary">
+    <div className="min-h-screen min-h-[100dvh] flex bg-theme-bg-secondary overflow-x-hidden">
       {/* Sidebar Overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-[60] lg:block" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[70] w-full sm:w-64 bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Sidebar — max-w-[280px] on mobile to leave space for closing */}
+      <aside className={`fixed inset-y-0 left-0 z-[70] w-[85vw] max-w-[280px] bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo + Close */}
         <div className="px-5 py-4 bg-white flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -291,7 +291,7 @@ export default function AdminDashboard() {
             <button onClick={() => { setActiveTab('operatori'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'operatori')}>Operatori</button>
           )}
           <button onClick={() => { setActiveTab('dashboard-kpi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
-          <button onClick={() => { setActiveTab('revenue-pricing'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'revenue-pricing')}>Revenue Management</button>
+          <button onClick={() => { setActiveTab('revenue-pricing'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'revenue-pricing')}>Centralina</button>
 
           <div className={sidebarSectionClass}>Comunicazione</div>
           <button onClick={() => { setActiveTab('com-email'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-email')}>E-mail</button>
@@ -348,7 +348,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-h-screen min-h-[100dvh] w-full max-w-full overflow-x-hidden">
         {/* Top Bar */}
         <header className="bg-theme-bg-primary border-b border-theme-border px-4 sm:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -384,7 +384,7 @@ export default function AdminDashboard() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-theme-bg-secondary">
           <Suspense fallback={<TabLoader />}>
           <div>
           {activeTab === 'reservations' && (

@@ -58,37 +58,17 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 // These keys match REAL messages sent by active functions — do not add keys that don't exist
-const SYSTEM_KEYS = [
-  // Booking confirmations (send-whatsapp-notification)
-  'rental_new', 'carwash_new', 'mechanical_new',
-  // Day-before reminders (send-booking-reminders cron)
-  'supercar_day_before', 'utilitaria_day_before', 'deposit_return_iban',
-  // Check-in/out (send-checkin-checkout-whatsapp)
-  'checkin_reminder', 'checkout_reminder',
-  // Reviews (send-review-whatsapp cron)
-  'review_request_whatsapp',
-  // Birthday (send-birthday-messages cron)
-  'birthday_message',
-  // Firma contratto (signature-init, signature-reminder, signature-send-otp, signature-complete)
-  'signature_request_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp', 'admin_contract_signed_alert',
-  // Firma documento (document-sign-init)
-  'document_signature_link',
-  // Cancellazione prenotazione (cancel-unpaid-nexi-bookings)
-  'booking_cancelled_whatsapp', 'cancellation_admin_alert',
-  // Pagamento ricevuto (nexi-payment-callback)
-  'payment_received_damages', 'payment_received_damages_admin',
-  'payment_received_extension', 'payment_received_extension_admin',
-  'wallet_bonus_credit', 'wallet_bonus_credit_admin',
-  // Carta prepagata (prepaid-card-guard)
-  'prepaid_card_blocked_customer', 'prepaid_card_blocked_admin',
-  // Fattura (generate-invoice/penalty)
-  'invoice_pdf_whatsapp', 'penalty_invoice_pdf_whatsapp',
-  // OTP Referral (referral-send-otp)
-  'referral_otp_whatsapp',
-  // Preventivo dal sito (create-website-preventivo)
-  'admin_new_website_quote', 'admin_no_cauzione_request',
-  // Membership (send-membership-reminders)
-  'membership_renewal_reminder',
+const MESSAGE_CATEGORIES: { label: string; keys: string[] }[] = [
+  { label: 'Noleggio', keys: ['rental_new', 'rental_new_customer', 'rental_new_admin', 'rental_modified', 'supercar_day_before', 'utilitaria_day_before', 'checkin_reminder', 'checkout_reminder', 'deposit_return_iban'] },
+  { label: 'Lavaggio', keys: ['carwash_new', 'carwash_new_customer', 'carwash_new_admin', 'carwash_modified'] },
+  { label: 'Meccanica', keys: ['mechanical_new', 'mechanical_new_customer', 'mechanical_new_admin', 'mechanical_modified'] },
+  { label: 'Firma & Contratto', keys: ['signature_request_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp', 'admin_contract_signed_alert', 'document_signature_link'] },
+  { label: 'Pagamenti', keys: ['payment_link_customer', 'booking_cancelled_whatsapp', 'cancellation_admin_alert', 'payment_received_damages', 'payment_received_damages_admin', 'payment_received_extension', 'payment_received_extension_admin', 'prepaid_card_blocked_customer', 'prepaid_card_blocked_admin'] },
+  { label: 'Fatture', keys: ['invoice_pdf_whatsapp', 'penalty_invoice_pdf_whatsapp'] },
+  { label: 'Wallet & Crediti', keys: ['wallet_bonus_credit', 'wallet_bonus_credit_admin'] },
+  { label: 'Preventivi', keys: ['preventivo_whatsapp', 'admin_new_website_quote', 'admin_no_cauzione_request'] },
+  { label: 'Recensioni & Marketing', keys: ['review_request_whatsapp', 'birthday_message', 'referral_otp_whatsapp', 'membership_renewal_reminder'] },
+  { label: 'Wrapper Messaggio', keys: ['message_wrapper_header', 'message_wrapper_footer'] },
 ]
 
 
@@ -661,9 +641,16 @@ export default function MessaggiSistemaTab() {
                     </div>
                 )}
 
-                {/* Template Cards — Only show templates that match active SYSTEM_KEYS */}
-                <div className="space-y-3">
-                    {templates.filter(t => SYSTEM_KEYS.includes(t.message_key)).map((template) => (
+                {/* Template Cards — Grouped by category */}
+                <div className="space-y-6">
+                    {MESSAGE_CATEGORIES.map(cat => {
+                        const catTemplates = templates.filter(t => cat.keys.includes(t.message_key))
+                        if (catTemplates.length === 0) return null
+                        return (
+                            <div key={cat.label}>
+                                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2 px-1">{cat.label} ({catTemplates.length})</h4>
+                                <div className="space-y-2">
+                                    {catTemplates.map((template) => (
                         <details key={template.id} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
                             <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30">
                                 <div className="flex items-center gap-3">
@@ -803,7 +790,32 @@ export default function MessaggiSistemaTab() {
                                 </div>
                             </div>
                         </details>
-                    ))}
+                                    ))}
+                                </div>
+                            </div>
+                        )
+                    })}
+
+                    {/* Uncategorized messages */}
+                    {(() => {
+                        const allCatKeys = MESSAGE_CATEGORIES.flatMap(c => c.keys)
+                        const uncategorized = templates.filter(t => !allCatKeys.includes(t.message_key))
+                        if (uncategorized.length === 0) return null
+                        return (
+                            <div>
+                                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2 px-1">Altro ({uncategorized.length})</h4>
+                                <div className="space-y-2">
+                                    {uncategorized.map((template) => (
+                                        <details key={`other-${template.id}`} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
+                                            <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30">
+                                                <span className="font-semibold text-theme-text-primary text-sm">{template.label || template.message_key}</span>
+                                            </summary>
+                                        </details>
+                                    ))}
+                                </div>
+                            </div>
+                        )
+                    })()}
 
                     {templates.length === 0 && (
                         <div className="text-center py-8 text-theme-text-muted border border-theme-border rounded-lg">
@@ -858,7 +870,7 @@ export default function MessaggiSistemaTab() {
                             className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
                         >
                             <option value="">-- Scegli un messaggio --</option>
-                            {templates.filter(t => SYSTEM_KEYS.includes(t.message_key)).map(t => (
+                            {templates.map(t => (
                                 <option key={t.id} value={t.id}>{t.label}</option>
                             ))}
                         </select>

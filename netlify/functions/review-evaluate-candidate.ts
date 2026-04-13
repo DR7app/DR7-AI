@@ -75,6 +75,32 @@ async function checkDuplicate(sourceRecordId: string, serviceType: ServiceType) 
   return data;
 }
 
+// Check if this customer already has ANY review candidate (by phone or email)
+async function checkCustomerAlreadyExists(record: any): Promise<boolean> {
+  const phone = record.customer_phone?.replace(/[\s\-\+\(\)]/g, '');
+  const email = record.customer_email?.trim().toLowerCase();
+
+  if (phone && phone.length >= 6) {
+    const { data } = await supabase
+      .from('review_candidates')
+      .select('id')
+      .ilike('customer_phone', `%${phone.slice(-8)}%`)
+      .limit(1);
+    if (data && data.length > 0) return true;
+  }
+
+  if (email) {
+    const { data } = await supabase
+      .from('review_candidates')
+      .select('id')
+      .eq('customer_email', email)
+      .limit(1);
+    if (data && data.length > 0) return true;
+  }
+
+  return false;
+}
+
 function checkInternalOrBasicExclusions(
   record: any,
   serviceType: ServiceType
@@ -194,13 +220,27 @@ async function evaluateEligibility(
   }
 
   // Determine eligibility
-  const hasHardExclusion = hasPenalty || hasDamage || hasOpenDeposit || !isPaymentRegular || !isServiceConcluded;
+  // Hard exclusions: unpaid or not concluded → EXCLUDED
+  const hasHardExclusion = !isPaymentRegular || !isServiceConcluded;
 
   if (hasHardExclusion) {
     return {
       eligibility_status: 'EXCLUDED',
       review_risk: 'RED',
       send_status: 'EXCLUDED',
+      exclusion_reasons: reasons,
+      is_internal_record: false,
+    };
+  }
+
+  // Penalty, damage, or open deposit → TO_REVIEW (da verificare), not EXCLUDED
+  const needsReview = hasPenalty || hasDamage || hasOpenDeposit;
+
+  if (needsReview) {
+    return {
+      eligibility_status: 'TO_REVIEW',
+      review_risk: 'RED',
+      send_status: 'BLOCKED',
       exclusion_reasons: reasons,
       is_internal_record: false,
     };
@@ -311,7 +351,7 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    const { sourceRecordId, serviceType } = JSON.parse(event.body || '{}');
+    const { sourceRecordId, serviceType, forceReEvaluate } = JSON.parse(event.body || '{}');
 
     if (!sourceRecordId || !serviceType) {
       return {
@@ -331,16 +371,32 @@ const handler: Handler = async (event) => {
 
     // 1. Check for duplicate
     const existing = await checkDuplicate(sourceRecordId, serviceType);
-    if (existing) {
+    if (existing && !forceReEvaluate) {
       return {
         statusCode: 200,
         headers: getHeaders(event.headers.origin),
         body: JSON.stringify({ candidate: existing, duplicate: true }),
       };
     }
+    // If forceReEvaluate and existing, delete old record first
+    if (existing && forceReEvaluate) {
+      await supabase.from('review_candidates').delete().eq('id', existing.id);
+    }
 
     // 2. Load source record
     const record = await loadSourceRecord(sourceRecordId, serviceType);
+
+    // 2b. Check if this customer already has a review candidate (one per customer lifetime)
+    if (!forceReEvaluate) {
+      const customerExists = await checkCustomerAlreadyExists(record);
+      if (customerExists) {
+        return {
+          statusCode: 200,
+          headers: getHeaders(event.headers.origin),
+          body: JSON.stringify({ skipped: true, reason: 'Customer already has a review candidate' }),
+        };
+      }
+    }
 
     // 3. Check internal / basic exclusions
     const basicCheck = checkInternalOrBasicExclusions(record, serviceType);
