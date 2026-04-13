@@ -634,9 +634,11 @@ export default function CustomersTab() {
           })
           // Match via customers_extended.user_id
           customerMap.forEach((customer, key) => {
-            const userId = (customer as Record<string, unknown>).user_id as string | null
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const userId = (customer as any).user_id as string | null
             if (userId && clubMap.has(userId)) {
-              customerMap.set(key, { ...customer, dr7_club: clubMap.get(userId) })
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              customerMap.set(key, { ...customer, dr7_club: clubMap.get(userId) } as any)
             }
           })
         }

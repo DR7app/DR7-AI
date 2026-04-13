@@ -182,6 +182,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
+  const [primeFlex, setPrimeFlex] = useState(false)
+  const PRIME_FLEX_PRICE = 4.90
+
   const [formData, setFormData] = useState({
     customer_id: '',
     service_name: '',
@@ -222,6 +225,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const qty = extraQuantities[extra.id] || 1
       total += (ep?.price ?? extra.price) * qty
     }
+    if (primeFlex) total += PRIME_FLEX_PRICE
     return total
   }
 
@@ -260,6 +264,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (qty > 1) name += ` x${qty}`
       parts.push(name)
     }
+    if (primeFlex) parts.push('Prime Flex')
     return parts.join(' + ')
   }
 
@@ -308,6 +313,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setExtraQuantities({})
     setManualPrice(null)
     setCustomPrice('')
+    setPrimeFlex(false)
     setVehiclePlate('')
     setVehicleMakeModel('')
     setVehicleCategory(null)
@@ -987,6 +993,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       cartItems: cartItems,
       totalDuration: getTotalDuration(),
       customer: { customerId: formData.customer_id },
+      prime_flex: primeFlex,
+      prime_flex_price: primeFlex ? PRIME_FLEX_PRICE : 0,
       ...(vehicleCategory && { vehicleCategory }),
       ...(vehicleMakeModel && { vehicleMakeModel }),
       ...(classificationSource && { classificationSource }),
@@ -1891,6 +1899,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               )}
 
+              {/* Prime Flex */}
+              <div className="border border-theme-border rounded-lg p-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={primeFlex}
+                    onChange={(e) => setPrimeFlex(e.target.checked)}
+                    className="w-5 h-5 rounded border-theme-border accent-dr7-gold"
+                  />
+                  <div>
+                    <span className="text-sm font-semibold text-theme-text-primary">PRIME FLEX</span>
+                    <span className="text-xs text-dr7-gold ml-2">+EUR {PRIME_FLEX_PRICE.toFixed(2)}</span>
+                    <p className="text-xs text-theme-text-muted">Cancellazione gratuita — rimborso del 90% come credito DR7 Wallet</p>
+                  </div>
+                </label>
+              </div>
+
               {/* Running total */}
               <div className="p-3 bg-theme-bg-tertiary/50 rounded-lg flex justify-between items-center">
                 <span className="text-sm text-theme-text-muted">Durata: ~{getTotalDuration()} min</span>
@@ -1972,6 +1997,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       </div>
                     )
                   })}
+                  {primeFlex && (
+                    <div className="flex justify-between text-theme-text-muted">
+                      <span>+ Prime Flex</span>
+                      <span>EUR {PRIME_FLEX_PRICE.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="pt-2 mt-2 border-t border-theme-border flex justify-between items-center">
                     <span className="text-theme-text-muted">Durata: ~{getTotalDuration()} min</span>
                     <span className="text-dr7-gold font-bold text-base">EUR {getTotal().toFixed(2)}</span>
