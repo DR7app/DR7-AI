@@ -5,6 +5,7 @@ import Button from './Button'
 import NewClientModal from './NewClientModal'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import ReportClienteModal from './ReportClienteModal'
 
 interface Customer {
   id: string
@@ -113,6 +114,7 @@ export default function CustomersTab() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [viewingCustomerDetails, setViewingCustomerDetails] = useState<Customer | null>(null)
+  const [reportCustomerId, setReportCustomerId] = useState<string | null>(null)
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
@@ -2387,6 +2389,9 @@ export default function CustomersTab() {
             </div>
 
             <div className="flex gap-2 flex-wrap">
+              <Button onClick={() => setReportCustomerId(customer.id)} variant="secondary" className="text-xs py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white flex-1">
+                Report
+              </Button>
               <Button onClick={() => handleViewCustomerDetails(customer)} variant="secondary" className="text-xs py-1 px-2 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold flex-1">
                 Dettagli
               </Button>
@@ -2522,6 +2527,13 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.phone || '-'}</td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 flex-wrap">
+                      <Button
+                        onClick={() => setReportCustomerId(customer.id)}
+                        variant="secondary"
+                        className="text-xs py-1 px-3 bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        Report
+                      </Button>
                       <Button
                         onClick={() => handleViewCustomerDetails(customer)}
                         variant="secondary"
@@ -2662,6 +2674,13 @@ export default function CustomersTab() {
         initialData={selectedCustomer}
       />
 
+      {/* Report Cliente Modal */}
+      {reportCustomerId && (
+        <ReportClienteModal
+          customerId={reportCustomerId}
+          onClose={() => setReportCustomerId(null)}
+        />
+      )}
     </div>
   )
 }
