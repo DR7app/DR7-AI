@@ -21,7 +21,7 @@ const handler: Handler = async (event) => {
   }
 
   const body = JSON.parse(event.body || '{}');
-  const { booking, type, customPhone, skipHeader } = body;
+  const { booking, type, customPhone, skipHeader, templateKey, templateVars } = body;
   // Accept both 'message' and 'customMessage' for flexibility
   const customMessage = body.customMessage || body.message;
 
@@ -36,6 +36,35 @@ const handler: Handler = async (event) => {
 
   let message = '';
   let targetPhone = customPhone || NOTIFICATION_PHONE;
+
+  // Template key support: load template from system_messages and apply variables
+  if (templateKey && !customMessage) {
+    try {
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+      const { data: tpl } = await sb
+        .from('system_messages')
+        .select('message_body, include_header')
+        .eq('message_key', templateKey)
+        .eq('is_enabled', true)
+        .single();
+      if (tpl?.message_body) {
+        let rendered = tpl.message_body;
+        if (templateVars && typeof templateVars === 'object') {
+          for (const [key, val] of Object.entries(templateVars)) {
+            rendered = rendered.split(key).join(String(val));
+          }
+        }
+        if (tpl.include_header && !skipHeader) {
+          const HEADER = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n`;
+          const FOOTER = `\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+          rendered = HEADER + rendered + FOOTER;
+        }
+        message = rendered;
+      }
+    } catch (e) {
+      console.warn('[send-whatsapp] Template key lookup failed:', e);
+    }
+  }
 
   // Clean phone number - Green API format: 393457905205 (no + or spaces)
   targetPhone = targetPhone.replace(/[\s\-\+\(\)]/g, '');

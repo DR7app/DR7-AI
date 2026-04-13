@@ -1938,7 +1938,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: custPhone,
-          customMessage: `Gentile ${custName},\n\nLe ricordiamo che il pagamento per la prenotazione #${bookingRef} è ancora in sospeso.\n\nPer completare il pagamento di €${totalEur}, clicchi sul seguente link sicuro:\n${newPaymentLink}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nGrazie per la collaborazione.`
+          templateKey: 'payment_link_customer',
+          templateVars: { '{customer_name}': custName, '{booking_id}': bookingRef, '{total}': totalEur, '{payment_link}': newPaymentLink, '{expiry}': '1 ora' }
         })
       })
       toast.success('Nuovo link di pagamento generato e inviato via WhatsApp!')
@@ -2903,7 +2904,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: customerPhone,
-                  customMessage: `Gentile ${custName},\n\nLa sua prenotazione #${bookingRef} è stata estesa.\n\nPer completare il pagamento dell'estensione di €${additionalAmount.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità di ${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nGrazie per la collaborazione.`
+                  templateKey: 'payment_link_customer',
+                  templateVars: { '{customer_name}': custName, '{booking_id}': bookingRef, '{total}': additionalAmount.toFixed(2), '{payment_link}': linkData.paymentUrl, '{expiry}': `${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}` }
                 })
               })
             }
@@ -4211,7 +4213,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: custPhone,
-                  customMessage: `Gentile ${customerInfo?.full_name},\n\nLe ricordiamo che il pagamento per la prenotazione #${insertedBooking.id.substring(0, 8).toUpperCase()} è ancora in sospeso.\n\nPer completare il pagamento di €${totalEur.toFixed(2)}, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\nIl link ha validità limitata. In assenza di pagamento, la prenotazione verrà automaticamente annullata senza ulteriori comunicazioni.\n\nGrazie per la collaborazione.`
+                  templateKey: 'payment_link_customer',
+                  templateVars: { '{customer_name}': customerInfo?.full_name || 'Cliente', '{booking_id}': insertedBooking.id.substring(0, 8).toUpperCase(), '{total}': totalEur.toFixed(2), '{payment_link}': linkData.paymentUrl, '{expiry}': '1 ora' }
                 })
               })
             }
