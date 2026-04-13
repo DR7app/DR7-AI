@@ -340,7 +340,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
   const pricing = useMemo(() => {
     // Use the vehicle's base daily rate (NOT the revenue-adjusted one)
-    const listDailyRate = selectedVehicle ? selectedVehicle.daily_rate / 100 : 0
+    const listDailyRate = selectedVehicle ? selectedVehicle.daily_rate : 0
     const maggiorazione = parseFloat(form.maggiorazione_pct) || 0
 
     // Base prices at list rate
@@ -1410,35 +1410,22 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         <p className="text-sm text-theme-text-muted animate-pulse">Calcolo prezzo revenue management...</p>
       )}
       {revenueData && (
-        <div className="p-3 bg-theme-bg-tertiary/50 border border-dr7-gold/30 rounded-lg text-sm space-y-1">
-          <p className="font-semibold text-dr7-gold">Revenue Management</p>
+        <div className="p-3 bg-theme-bg-tertiary/50 border border-dr7-gold/30 rounded-lg text-sm">
           <p className="text-theme-text-primary">
-            Tariffa giornaliera: <strong>{formatEur(revenueData.finalDailyRateEur)}</strong> /giorno
+            <span className="font-semibold text-dr7-gold">Tariffa giornaliera:</span> <strong>{formatEur(revenueData.finalDailyRateEur)}</strong> /giorno
           </p>
-          {revenueData.breakdown?.map((b, i) => (
-            <p key={i} className="text-theme-text-muted text-xs">
-              {b.label}: x{b.coeff.toFixed(2)} ({b.description})
-            </p>
-          ))}
         </div>
       )}
 
       {/* Maggiorazione */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input
-          label="Maggiorazione Preventivo (%)"
-          type="number"
-          step="0.1"
-          value={form.maggiorazione_pct}
-          onChange={(e) => setForm(prev => ({ ...prev, maggiorazione_pct: e.target.value }))}
-          placeholder="0"
-        />
-        <div className="flex items-end">
-          <p className="text-sm text-theme-text-muted pb-2">
-            Tariffa dopo maggiorazione: <strong className="text-theme-text-primary">{formatEur(pricing.dailyAfterMarkup)}</strong> /giorno
-          </p>
-        </div>
-      </div>
+      <Input
+        label="Maggiorazione Preventivo (%)"
+        type="number"
+        step="0.1"
+        value={form.maggiorazione_pct}
+        onChange={(e) => setForm(prev => ({ ...prev, maggiorazione_pct: e.target.value }))}
+        placeholder="0"
+      />
 
       {/* Insurance */}
       {insuranceOptions.length > 0 && (
