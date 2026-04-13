@@ -235,7 +235,7 @@ const handler: Handler = async (event) => {
 
                     const invoiceRes = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-penalty-invoice`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
                         body: JSON.stringify({
                             bookingId: booking.id,
                             customerId: custId,
@@ -356,7 +356,7 @@ const handler: Handler = async (event) => {
                     const extensionAmountEur = transaction.amount_cents / 100;
                     await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
                         body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: extensionAmountEur })
                     });
                     console.log(`[nexi-payment-callback] Extension fattura generated — €${amountEur}`);
@@ -709,12 +709,21 @@ const handler: Handler = async (event) => {
 
                 // Auto-generate fattura for paid booking
                 try {
-                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-invoice-from-booking`, {
+                    const adminToken = process.env.ADMIN_API_TOKEN || '';
+                    const invRes = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${adminToken}`,
+                        },
                         body: JSON.stringify({ bookingId: booking.id, includeIVA: true })
                     });
-                    console.log('[nexi-payment-callback] Fattura generated for booking:', booking.id);
+                    if (invRes.ok) {
+                        console.log('[nexi-payment-callback] ✅ Fattura generated for booking:', booking.id);
+                    } else {
+                        const errData = await invRes.json().catch(() => ({}));
+                        console.error('[nexi-payment-callback] ❌ Fattura failed:', invRes.status, errData.error || errData.message);
+                    }
                 } catch (invErr) {
                     console.error('[nexi-payment-callback] Fattura generation failed:', invErr);
                 }
