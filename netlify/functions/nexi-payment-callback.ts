@@ -475,13 +475,7 @@ const handler: Handler = async (event) => {
 
                 console.log(`[nexi-payment-callback] PREPAID CHECK: isPrepaid=${isPrepaidCard}, maskedPan=${guardMaskedPan}`)
 
-                // If prepaid: add 20% surcharge to the booking total
-                let prepaidSurchargeCents = 0
-                if (isPrepaidCard) {
-                    prepaidSurchargeCents = Math.round(transaction.amount_cents * 0.20)
-                    const newTotal = transaction.amount_cents + prepaidSurchargeCents
-                    console.log(`[nexi-payment-callback] PREPAID SURCHARGE: +20% = +€${(prepaidSurchargeCents / 100).toFixed(2)} → new total €${(newTotal / 100).toFixed(2)}`)
-                }
+                // Prepaid info logged — no surcharge, popup warning handled on frontend
                 // ── END PREPAID CHECK ─────────────────────────────────────
 
                 // Confirm the booking — CONDITIONAL UPDATE for safety
@@ -489,7 +483,6 @@ const handler: Handler = async (event) => {
                     payment_status: 'paid',
                     status: 'confirmed',
                     amount_paid: transaction.amount_cents,
-                    ...(isPrepaidCard ? { price_total: (booking.price_total || transaction.amount_cents) + prepaidSurchargeCents } : {}),
                     updated_at: paidAt,
                     booking_details: {
                         ...booking.booking_details,
@@ -497,13 +490,6 @@ const handler: Handler = async (event) => {
                         nexi_contract_id: contractId,
                         nexi_paid_at: paidAt,
                         paymentStatus: 'paid',
-                        ...(isPrepaidCard ? {
-                            prepaid_card_detected: true,
-                            prepaid_surcharge_cents: prepaidSurchargeCents,
-                            prepaid_surcharge_pct: 20,
-                            prepaid_original_total_cents: booking.price_total || transaction.amount_cents,
-                            prepaid_masked_pan: guardMaskedPan,
-                        } : {})
                     }
                 })
                 .eq('id', booking.id)
