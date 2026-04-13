@@ -1819,6 +1819,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!customer.data_nascita) missing.push('data_nascita')
       if (!customer.luogo_nascita) missing.push('luogo_nascita')
       if (!customer.sesso && !customer.metadata?.sesso) missing.push('sesso')
+      if (!customer.documento_numero && !customer.numero_documento && !customer.metadata?.documento?.numero) missing.push('documento_numero')
+      if (!customer.documento_tipo && !customer.tipo_documento && !customer.metadata?.documento?.tipo) missing.push('documento_tipo')
       if (!customer.patente && !customer.numero_patente && !customer.metadata?.patente?.numero) missing.push('numero_patente')
       if (!customer.emessa_da && !customer.metadata?.patente?.ente) missing.push('emessa_da')
       if (!customer.data_rilascio_patente && !customer.metadata?.patente?.rilascio) missing.push('data_rilascio_patente')
