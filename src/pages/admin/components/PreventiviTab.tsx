@@ -339,8 +339,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── Pricing Calculation ────────────────────────────────────────────────
 
   const pricing = useMemo(() => {
-    // Use the vehicle's base daily rate (NOT the revenue-adjusted one)
-    const listDailyRate = selectedVehicle ? selectedVehicle.daily_rate : 0
+    // Use dynamic price from Revenue Management if available, otherwise vehicle list rate
+    const listDailyRate = revenueData?.finalDailyRateEur ?? (selectedVehicle ? selectedVehicle.daily_rate : 0)
     const maggiorazione = parseFloat(form.maggiorazione_pct) || 0
 
     // Base prices at list rate
@@ -1613,6 +1613,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               <span>{pricing.revenueCoeff < 1 ? `-${formatEur(pricing.listSubtotal - pricing.listSubtotal * pricing.revenueCoeff)}` : `+${formatEur(pricing.listSubtotal * pricing.revenueCoeff - pricing.listSubtotal)}`}</span>
             </div>
           </>
+        )}
+
+        {pricing.maggiorazione > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>Maggiorazione preventivo (+{pricing.maggiorazione}%)</span>
+          </div>
         )}
 
         <div className="border-t border-theme-border pt-2 flex justify-between text-theme-text-primary font-semibold">
