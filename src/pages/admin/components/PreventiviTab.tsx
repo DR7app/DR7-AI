@@ -1550,8 +1550,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         <p className="font-bold text-theme-text-primary text-lg">Riepilogo Preventivo</p>
 
         <div className="flex justify-between text-sm text-theme-text-primary">
-          <span>{rentalDays}gg x {formatEur(pricing.dailyAfterMarkup)}/giorno</span>
-          <span>{formatEur(pricing.rentalTotal)}</span>
+          <span>{rentalDays}gg x {formatEur(pricing.baseDailyRate)}/giorno</span>
+          <span>{formatEur(Math.round(pricing.baseDailyRate * rentalDays * 100) / 100)}</span>
         </div>
 
         {pricing.insuranceTotal > 0 && (
