@@ -79,7 +79,9 @@ const handler: Handler = async (event) => {
   }
 
   // Handle custom message (from admin lottery ticket sales, birthdays, etc.)
-  if (customMessage) {
+  if (message) {
+    // Already set from templateKey — skip other branches
+  } else if (customMessage) {
     message = customMessage;
   }
   // Handle booking notifications
