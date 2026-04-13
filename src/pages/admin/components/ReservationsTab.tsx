@@ -4469,20 +4469,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Auto-generate fattura and send to SDI when payment status is "paid"
       if (formData.payment_status === 'paid' && insertedBooking?.id) {
+        // Validate customer data first — if incomplete, show popup
         try {
-          logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
-          const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
-          })
-          if (invoiceRes.ok) {
-            logger.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
+          const invoiceMissing = await validateCustomerData(insertedBooking as unknown as Booking)
+          if (invoiceMissing.includes('__limitation_override_requested__')) {
+            // OTP requested — fattura will be generated after override
+          } else if (invoiceMissing.length > 0) {
+            logger.warn('[Auto-Gen] ⚠️ Customer data incomplete for fattura:', invoiceMissing)
+            toast.error(`Fattura non generata: dati cliente incompleti (${invoiceMissing.join(', ')}). Completa i dati e genera manualmente.`, { duration: 10000 })
           } else {
-            const errData = await invoiceRes.json()
-            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
-            logger.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
-            toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+            logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
+            const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
+            })
+            if (invoiceRes.ok) {
+              logger.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
+            } else {
+              const errData = await invoiceRes.json()
+              const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+              logger.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
+              toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+            }
           }
         } catch (invoiceError) {
           console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
