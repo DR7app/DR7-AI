@@ -2,11 +2,40 @@
 @import "tailwindcss/preflight" layer(base);
 @import "tailwindcss/utilities" layer(utilities);
 
-/* Apply Inter font globally */
+/* Apply Inter font globally + mobile app feel */
 * {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html, body, #root {
+  background-color: #171717;
+  color: #ffffff;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent white flash on overscroll (iOS) */
+body {
+  overscroll-behavior: none;
+}
+
+/* Mobile: make tables scrollable horizontally */
+@media (max-width: 768px) {
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  table thead, table tbody, table tr {
+    display: table;
+    width: 100%;
+    table-layout: auto;
+  }
 }
 
 
