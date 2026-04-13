@@ -2389,9 +2389,9 @@ export default function CustomersTab() {
             </div>
 
             <div className="flex gap-2 flex-wrap">
-              <Button onClick={() => setReportCustomerId(customer.id)} variant="secondary" className="text-xs py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white flex-1">
+              <button onClick={() => setReportCustomerId(customer.id)} className="text-xs py-1 px-2 bg-black hover:bg-gray-800 text-white rounded-full font-medium transition-colors flex-1">
                 Report
-              </Button>
+              </button>
               <Button onClick={() => handleViewCustomerDetails(customer)} variant="secondary" className="text-xs py-1 px-2 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold flex-1">
                 Dettagli
               </Button>
@@ -2527,13 +2527,12 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.phone || '-'}</td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 flex-wrap">
-                      <Button
+                      <button
                         onClick={() => setReportCustomerId(customer.id)}
-                        variant="secondary"
-                        className="text-xs py-1 px-3 bg-blue-600 hover:bg-blue-700 text-white"
+                        className="text-xs py-1 px-3 bg-black hover:bg-gray-800 text-white rounded-full font-medium transition-colors"
                       >
                         Report
-                      </Button>
+                      </button>
                       <Button
                         onClick={() => handleViewCustomerDetails(customer)}
                         variant="secondary"
