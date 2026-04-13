@@ -440,8 +440,80 @@ const handler: Handler = async (event) => {
                 // Validate payment amount matches booking price (tolerance: 1 cent for rounding)
                 if (booking.price_total && Math.abs(transaction.amount_cents - booking.price_total) > 1) {
                     console.error(`[nexi-payment-callback] AMOUNT MISMATCH: paid ${transaction.amount_cents} cents but booking expects ${booking.price_total} cents — booking ${booking.id}`);
-                    // Still confirm (payment was authorized) but log the discrepancy for manual review
                 }
+
+                // ── PREPAID CARD CHECK (BEFORE confirmation) ──────────────
+                // Get card info from Nexi operation details, then BIN lookup
+                let isPrepaidCard = false
+                let guardMaskedPan = ''
+                const guardOpId = operationId || transactionId || orderId
+                try {
+                    // 1. Fetch operation details for maskedPan
+                    if (guardOpId) {
+                        const opRes = await fetch(`https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1/operations/${guardOpId}`, {
+                            headers: { 'X-Api-Key': process.env.NEXI_API_KEY!, 'Correlation-Id': `guard-${Date.now()}` },
+                        })
+                        if (opRes.ok) {
+                            const opData = await opRes.json()
+                            const op = opData.operation || opData
+                            const ad = op.additionalData || {}
+                            guardMaskedPan = ad.maskedPan || op.paymentInstrumentInfo || ''
+                            // Check Nexi prepagata flag
+                            const prepFlag = ad.prepagata || ad.prepaid
+                            if (prepFlag === 'S' || prepFlag === true || prepFlag === 'true' || prepFlag === 'Y') isPrepaidCard = true
+                            const tipo = (ad.tipoProdotto || ad.productType || '').toLowerCase()
+                            if (tipo.includes('prepag') || tipo.includes('prepaid') || tipo.includes('ricaricabil')) isPrepaidCard = true
+                        }
+                    }
+
+                    // 2. BIN lookup — most reliable (we know this works from logs)
+                    if (!isPrepaidCard && guardMaskedPan) {
+                        const binMatch = guardMaskedPan.match(/^(\d{6,8})/)
+                        if (binMatch) {
+                            const binRes = await fetch(`https://lookup.binlist.net/${binMatch[1]}`, {
+                                headers: { 'Accept-Version': '3' },
+                            })
+                            if (binRes.ok) {
+                                const binData = await binRes.json()
+                                console.log(`[nexi-payment-callback] PREPAID CHECK BIN: type=${binData.type}, prepaid=${binData.prepaid}`)
+                                if (binData.type === 'prepaid' || binData.prepaid === true) isPrepaidCard = true
+                            }
+                        }
+                    }
+
+                    // 3. Keyword fallback in callback data
+                    if (!isPrepaidCard) {
+                        const raw = JSON.stringify(callbackData).toLowerCase()
+                        if (raw.includes('prepagat') || raw.includes('"prepaid":true')) isPrepaidCard = true
+                    }
+                } catch (e) {
+                    console.warn('[nexi-payment-callback] Prepaid check error:', e)
+                }
+
+                console.log(`[nexi-payment-callback] PREPAID CHECK: isPrepaid=${isPrepaidCard}, maskedPan=${guardMaskedPan}`)
+
+                if (isPrepaidCard) {
+                    console.log(`[nexi-payment-callback] PREPAID BLOCKED — voiding payment for booking ${booking.id}`)
+
+                    // Void the payment
+                    try { await voidNexiTransaction(guardOpId!) } catch (e) { console.error('Void error:', e) }
+
+                    // Mark booking as failed
+                    await supabase.from('bookings').update({
+                        payment_status: 'failed',
+                        booking_details: { ...booking.booking_details, prepaid_card_rejected: true, prepaid_rejected_at: new Date().toISOString() }
+                    }).eq('id', booking.id)
+
+                    // Log
+                    await logCardAttempt({
+                        bookingId: booking.id, customerName: booking.customer_name,
+                        cardCheck: { isPrepaid: true, cardType: 'prepaid', cardCircuit: '', maskedPan: guardMaskedPan, detectionMethod: 'pre_confirm_check', rawData: {} },
+                        operationType: 'pay_by_link', nexiOrderId: orderId, nexiOperationId: guardOpId,
+                    })
+
+                    return { statusCode: 200, headers, body: JSON.stringify({ success: false, reason: 'PREPAID_CARD_REFUSED' }) }
+                }
+                // ── END PREPAID CHECK ─────────────────────────────────────
 
                 // Confirm the booking — CONDITIONAL UPDATE for safety
                 const { data: confirmedRows } = await supabase.from('bookings').update({
