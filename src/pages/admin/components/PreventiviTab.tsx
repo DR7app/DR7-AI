@@ -725,7 +725,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     ].filter(Boolean).join(' ')
 
     let msg = `Preventivo ${specs}\n\n`
-    msg += `${p.rental_days}gg x ${formatEur(p.daily_rate_after_markup || p.base_daily_rate)}/g = ${formatEur((p.daily_rate_after_markup || p.base_daily_rate) * p.rental_days)}\n`
+    msg += `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur(p.base_daily_rate * p.rental_days)}\n`
 
     if (p.insurance_total > 0) {
       const insLabel = insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko'
@@ -779,7 +779,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         ].filter(Boolean).join(' ')
 
         // Build pricing lines
-        let pricingLines = `${p.rental_days}gg x ${formatEur(p.daily_rate_after_markup || p.base_daily_rate)}/g = ${formatEur((p.daily_rate_after_markup || p.base_daily_rate) * p.rental_days)}`
+        let pricingLines = `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur((p.base_daily_rate) * p.rental_days)}`
         if (p.insurance_total > 0) {
           const insLabel = insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko'
           pricingLines += `\n${insLabel} = ${formatEur(p.insurance_total)}`
@@ -806,8 +806,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           vehicle_specs: specs,
           vehicle_name: p.vehicle_name || '',
           rental_days: String(p.rental_days),
-          daily_rate: formatEur(p.daily_rate_after_markup || p.base_daily_rate),
-          rental_total: formatEur((p.daily_rate_after_markup || p.base_daily_rate) * p.rental_days),
+          daily_rate: formatEur(p.base_daily_rate),
+          rental_total: formatEur((p.base_daily_rate) * p.rental_days),
           insurance_line: p.insurance_total > 0 ? `${insuranceOptions.find(i => i.id === p.insurance_option)?.label || 'Kasko'} = ${formatEur(p.insurance_total)}` : '',
           pricing_lines: pricingLines,
           subtotal: formatEur(p.subtotal),
