@@ -75,8 +75,9 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // 2. Generate fattura
-    if (booking.payment_status === 'paid' || booking.payment_status === 'succeeded' || booking.payment_status === 'completed') {
+    // 2. Generate fattura (skip for credit wallet — fattura already generated at wallet purchase)
+    const isCreditPayment = booking.payment_method === 'credit' || booking.payment_method === 'Credit Wallet'
+    if (!isCreditPayment && (booking.payment_status === 'paid' || booking.payment_status === 'succeeded' || booking.payment_status === 'completed')) {
       try {
         const res = await fetch(`${baseUrl}/.netlify/functions/generate-invoice-from-booking`, {
           method: 'POST', headers: authHeader,
