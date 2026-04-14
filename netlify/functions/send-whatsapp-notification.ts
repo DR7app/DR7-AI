@@ -432,7 +432,7 @@ const handler: Handler = async (event) => {
         // KM info for template — same logic as contract
         const tplUnlimitedKm = booking.booking_details?.unlimited_km;
         const tplKmLimit = booking.booking_details?.km_limit;
-        if (tplUnlimitedKm === true || tplKmLimit === 'Illimitati') {
+        if (tplUnlimitedKm === true || tplKmLimit === 'Illimitati' || Number(tplKmLimit) >= 9999) {
           vars.km_info = 'Illimitati';
         } else if (tplKmLimit && tplKmLimit !== '0') {
           const isNum = !isNaN(Number(tplKmLimit)) && !String(tplKmLimit).toLowerCase().includes('km');

@@ -61,6 +61,7 @@ interface Customer {
   indirizzo_pa?: string
   citta?: string
   // Common fields
+  user_id?: string
   nazione?: string
   telefono?: string
   residency_zone?: string
@@ -137,6 +138,12 @@ export default function CustomersTab() {
 
   const [allCustomers, setAllCustomers] = useState<Customer[]>([])
 
+  // Sorting
+  type SortField = 'name' | 'email' | 'phone' | 'date' | 'wallet' | 'tipo'
+  const [sortField, setSortField] = useState<SortField>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [walletBalances, setWalletBalances] = useState<Map<string, number>>(new Map())
+
   useEffect(() => {
     loadCustomers()
   }, [])
@@ -160,11 +167,18 @@ export default function CustomersTab() {
 
     let result = [...allCustomers]
 
-    // 1. Sort alphabetically by full_name (A-Z)
+    // 1. Sort by selected field
     result.sort((a, b) => {
-      const nameA = a.full_name.toLowerCase()
-      const nameB = b.full_name.toLowerCase()
-      return nameA.localeCompare(nameB, 'it')
+      let cmp = 0
+      switch (sortField) {
+        case 'name': cmp = (a.full_name || '').localeCompare(b.full_name || '', 'it'); break
+        case 'email': cmp = (a.email || '').localeCompare(b.email || ''); break
+        case 'phone': cmp = (a.phone || '').localeCompare(b.phone || ''); break
+        case 'date': cmp = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(); break
+        case 'wallet': cmp = (walletBalances.get(a.id) || 0) - (walletBalances.get(b.id) || 0); break
+        case 'tipo': cmp = (a.tipo_cliente || '').localeCompare(b.tipo_cliente || ''); break
+      }
+      return sortDir === 'asc' ? cmp : -cmp
     })
 
     // 2. Apply search filter (split query into words so "Mario Rossi" matches "Mario Giuseppe Rossi")
@@ -206,7 +220,7 @@ export default function CustomersTab() {
       })
     }
 
-  }, [allCustomers, searchQuery, currentPage])
+  }, [allCustomers, searchQuery, currentPage, sortField, sortDir, walletBalances])
 
   async function exportCustomersCSV() {
     setExporting(true)
@@ -653,6 +667,22 @@ export default function CustomersTab() {
 
       // Store all customers
       setAllCustomers(customersArray)
+
+      // Load wallet balances (non-blocking)
+      const userIds = customersArray.map(c => c.user_id).filter(Boolean)
+      if (userIds.length > 0) {
+        supabase.from('user_credit_balance').select('user_id, balance').in('user_id', userIds)
+          .then(({ data }) => {
+            if (data) {
+              const map = new Map<string, number>()
+              data.forEach(row => {
+                const cust = customersArray.find(c => c.user_id === row.user_id)
+                if (cust) map.set(cust.id, parseFloat(row.balance) || 0)
+              })
+              setWalletBalances(map)
+            }
+          })
+      }
 
     } catch (error) {
       console.error('[CustomersTab] ❌ Failed to load customers:', error)
@@ -2433,11 +2463,20 @@ export default function CustomersTab() {
                     className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-dr7-gold focus:ring-dr7-gold"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Pacchetto</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tipo Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Email</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Telefono</th>
+                {[
+                  { field: 'name' as SortField, label: 'Nome' },
+                  { field: 'tipo' as SortField, label: 'Tipo Cliente' },
+                  { field: 'email' as SortField, label: 'Email' },
+                  { field: 'phone' as SortField, label: 'Telefono' },
+                  { field: 'wallet' as SortField, label: 'Wallet' },
+                ].map(col => (
+                  <th key={col.field}
+                    className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary cursor-pointer select-none hover:text-dr7-gold transition-colors"
+                    onClick={() => { if (sortField === col.field) { setSortDir(d => d === 'asc' ? 'desc' : 'asc') } else { setSortField(col.field); setSortDir('asc') }; setCurrentPage(1) }}
+                  >
+                    {col.label} {sortField === col.field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                  </th>
+                ))}
                 <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">Status</th>
               </tr>
@@ -2477,37 +2516,6 @@ export default function CustomersTab() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {(customer as any).active_membership ? (
-                      <div className="flex flex-col">
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold inline-block w-fit mb-1 ${(customer as any).active_membership.package_name === 'Argento' ? 'bg-theme-bg-hover text-black' :
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          (customer as any).active_membership.package_name === 'Oro' ? 'bg-yellow-500 text-black' :
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            (customer as any).active_membership.package_name === 'Platino' ? 'bg-purple-500 text-theme-text-primary' :
-                              'bg-blue-600 text-theme-text-primary'
-                          }`}>
-                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                          {(customer as any).active_membership.package_name}
-                        </span>
-                        <span className="text-[10px] text-theme-text-muted capitalize">
-                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                          {(customer as any).active_membership.status === 'active' ? 'Attivo' : (customer as any).active_membership.status}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-theme-text-muted text-xs">-</span>
-                    )}
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {(customer as any).dr7_club && (
-                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-dr7-gold text-white inline-block w-fit mt-1">
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        DR7 Club {(customer as any).dr7_club.plan === 'annual' ? 'Annuale' : 'Mensile'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
                     {customer.tipo_cliente ? (
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${customer.tipo_cliente === 'persona_fisica'
                         ? 'bg-blue-500/20 text-blue-400'
@@ -2525,6 +2533,7 @@ export default function CustomersTab() {
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.email || '-'}</td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.phone || '-'}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-dr7-gold">{walletBalances.has(customer.id) ? `€${walletBalances.get(customer.id)!.toFixed(2)}` : '-'}</td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 flex-wrap">
                       <button
