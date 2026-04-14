@@ -72,6 +72,12 @@ export default function CustomerWalletTab() {
   const [description, setDescription] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
+  // Recurring
+  const [recurringEnabled, setRecurringEnabled] = useState(false)
+  const [recurringDay, setRecurringDay] = useState(1)
+  const [recurringAmount, setRecurringAmount] = useState('')
+  const [recurringSettings, setRecurringSettings] = useState<Map<string, { day: number; amount: number; active: boolean }>>(new Map())
+
   // OTP
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', ''])
   const [sentOtp, setSentOtp] = useState('')
@@ -185,10 +191,43 @@ export default function CustomerWalletTab() {
       })
 
       setAllWalletCustomers(mapped)
+
+      // Load recurring settings from customers_extended metadata
+      const { data: custExtended } = await supabase
+        .from('customers_extended')
+        .select('id, metadata')
+        .not('metadata->wallet_recurring', 'is', 'null')
+      if (custExtended) {
+        const rMap = new Map<string, { day: number; amount: number; active: boolean }>()
+        for (const c of custExtended) {
+          const r = c.metadata?.wallet_recurring
+          if (r && r.active) rMap.set(c.id, r)
+        }
+        setRecurringSettings(rMap)
+      }
     } catch (err) {
       console.error('Error loading customers:', err)
     } finally {
       setLoadingAll(false)
+    }
+  }
+
+  async function saveRecurring(customerId: string, settings: { day: number; amount: number; active: boolean } | null) {
+    try {
+      const { data: cust } = await supabase.from('customers_extended').select('metadata').eq('id', customerId).single()
+      const meta = cust?.metadata || {}
+      const { error } = await supabase.from('customers_extended').update({
+        metadata: { ...meta, wallet_recurring: settings }
+      }).eq('id', customerId)
+      if (error) throw error
+      if (settings?.active) {
+        setRecurringSettings(prev => new Map(prev).set(customerId, settings))
+      } else {
+        setRecurringSettings(prev => { const m = new Map(prev); m.delete(customerId); return m })
+      }
+      toast.success(settings?.active ? 'Ricarica automatica attivata' : 'Ricarica automatica disattivata')
+    } catch (err) {
+      toast.error('Errore salvataggio: ' + (err instanceof Error ? err.message : 'Errore'))
     }
   }
 
@@ -243,6 +282,11 @@ export default function CustomerWalletTab() {
     setSentOtp('')
     setOtpSent(false)
     setOtpVerified(false)
+    // Load existing recurring settings
+    const existing = recurringSettings.get(customer.id)
+    setRecurringEnabled(!!existing?.active)
+    setRecurringDay(existing?.day || 1)
+    setRecurringAmount(existing ? String(existing.amount) : '')
     setDetailLoading(true)
     setWallet(null)
     setTransactions([])
@@ -364,6 +408,12 @@ export default function CustomerWalletTab() {
 
       if (data.success) {
         toast.success(`${modalAction === 'credit' ? 'Credito' : 'Addebito'} di €${parsedAmount.toFixed(2)} applicato`)
+        // Save recurring settings if changed
+        if (modalAction === 'credit' && recurringEnabled && recurringAmount) {
+          await saveRecurring(modalCustomer.id, { day: recurringDay, amount: parseFloat(recurringAmount), active: true })
+        } else if (modalAction === 'credit' && !recurringEnabled && recurringSettings.has(modalCustomer.id)) {
+          await saveRecurring(modalCustomer.id, null)
+        }
         setAllWalletCustomers(prev => prev.map(c =>
           c.id === modalCustomer.id ? { ...c, balance_cents: data.new_balance_cents } : c
         ))
@@ -515,6 +565,30 @@ export default function CustomerWalletTab() {
                   </button>
                 </div>
 
+                {/* Recurring badge */}
+                {recurringSettings.has(customer.id) && (() => {
+                  const r = recurringSettings.get(customer.id)!
+                  return (
+                    <div className="col-span-full mt-2 bg-green-500/5 border border-green-500/20 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <div>
+                            <p className="text-sm font-semibold text-green-400">Ricarica automatica attiva</p>
+                            <p className="text-xs text-theme-text-muted">{formatEur(r.amount * 100)} ogni {r.day} del mese</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => openModal(customer, 'credit')} className="px-3 py-1 text-xs font-medium border border-theme-border rounded-lg text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors">Modifica</button>
+                          <button onClick={() => saveRecurring(customer.id, null)} className="px-3 py-1 text-xs font-medium border border-red-500/30 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors">Disattiva</button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
+
                 {/* Expanded transactions */}
                 {expandedCustomerId === customer.id && (
                   <div className="col-span-6 mt-2 bg-theme-bg-primary/50 rounded-lg border border-theme-border/50 p-3">
@@ -634,6 +708,46 @@ export default function CustomerWalletTab() {
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a] focus:ring-1 focus:ring-[#3a6a6a] transition-all"
                 />
               </div>
+
+              {/* Caricamento automatico mensile */}
+              {modalAction === 'credit' && (
+                <div className={`border rounded-xl p-4 transition-colors ${recurringEnabled ? 'border-green-400 bg-green-50' : 'border-gray-200'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Caricamento automatico mensile</p>
+                      <p className="text-xs text-gray-500">Attiva per programmare un accredito ricorrente.</p>
+                    </div>
+                    <button
+                      onClick={() => setRecurringEnabled(!recurringEnabled)}
+                      className={`w-11 h-6 rounded-full relative transition-colors ${recurringEnabled ? 'bg-green-500' : 'bg-gray-300'}`}
+                    >
+                      <div className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all shadow ${recurringEnabled ? 'left-[22px]' : 'left-0.5'}`} />
+                    </button>
+                  </div>
+                  {recurringEnabled && (
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Giorno del mese</label>
+                        <select value={recurringDay} onChange={e => setRecurringDay(parseInt(e.target.value))}
+                          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a]">
+                          {Array.from({ length: 28 }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>{i + 1}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Importo ricorrente</label>
+                        <div className="relative">
+                          <input type="number" value={recurringAmount} onChange={e => setRecurringAmount(e.target.value)}
+                            placeholder="0" min="1" step="1"
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a]" />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">&euro;</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* OTP Section */}
               <div>
