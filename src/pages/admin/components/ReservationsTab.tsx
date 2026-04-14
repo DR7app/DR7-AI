@@ -1885,7 +1885,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.loading('Generazione nuovo link di pagamento...')
 
       // Always regenerate a fresh link (old one may be expired)
-      const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+      const linkRes = await authFetch('/.netlify/functions/nexi-create-build-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2872,7 +2872,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
 
           const expirationHours = parseInt(extendData.link_expiration_hours) || 1
-          const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+          const linkRes = await authFetch('/.netlify/functions/nexi-create-build-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -4175,7 +4175,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const totalCents = Math.max(0, fullTotalCents - alreadyPaidCents)
           const totalEur = totalCents / 100
 
-          const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+          const linkRes = await authFetch('/.netlify/functions/nexi-create-build-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
