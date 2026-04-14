@@ -4471,7 +4471,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         && editingOriginalPaymentStatus !== 'succeeded'
 
       // Auto-generate fattura and send to SDI when payment status is "paid"
-      if (formData.payment_status === 'paid' && insertedBooking?.id) {
+      // SKIP fattura for Credit Wallet payments — wallet credits are not invoiceable
+      if (formData.payment_status === 'paid' && insertedBooking?.id && formData.payment_method !== 'Credit Wallet') {
         // Validate customer data first — if incomplete, open the missing data popup
         try {
           const bookingForValidation = { ...insertedBooking, user_id: customerId, customer_email: customerInfo?.email, customer_phone: customerInfo?.phone } as unknown as Booking
