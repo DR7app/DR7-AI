@@ -2838,6 +2838,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         totalDuration: updatedDuration,
                       }
 
+                      // If payment method changed away from Nexi Pay by Link, confirm the booking
+                      // so the auto-cancel cron doesn't cancel it
+                      const finalStatus = editingBooking.payment_method !== 'Nexi Pay by Link' && editingBooking.status === 'pending'
+                        ? 'confirmed'
+                        : editingBooking.status
+
                       const { error } = await supabase
                         .from('bookings')
                         .update({
@@ -2848,7 +2854,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           appointment_date: editingBooking.appointment_date,
                           appointment_time: editingBooking.appointment_time,
                           price_total: updatedPrice,
-                          status: editingBooking.status,
+                          status: finalStatus,
                           payment_status: editingBooking.payment_status,
                           payment_method: editingBooking.payment_method || null,
                           booking_details: updatedDetails,
