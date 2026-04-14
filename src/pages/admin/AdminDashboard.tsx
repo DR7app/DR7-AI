@@ -213,7 +213,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen min-h-[100dvh] flex bg-theme-bg-secondary overflow-x-hidden">
+    <div className="min-h-screen flex bg-theme-bg-secondary">
       {/* Sidebar Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setSidebarOpen(false)} />
@@ -348,7 +348,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen min-h-[100dvh] w-full max-w-full overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-h-screen w-full max-w-full">
         {/* Top Bar */}
         <header className="bg-theme-bg-primary border-b border-theme-border px-4 sm:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -384,7 +384,7 @@ export default function AdminDashboard() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-theme-bg-secondary">
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 bg-theme-bg-secondary">
           <Suspense fallback={<TabLoader />}>
           <div>
           {activeTab === 'reservations' && (
