@@ -17,6 +17,14 @@ export default function SiteUsersTab() {
   const [users, setUsers] = useState<SiteUser[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [sortField, setSortField] = useState<'nome' | 'email' | 'created_at' | 'last_sign_in_at' | 'balance'>('created_at')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const toggleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('desc') }
+  }
+  const arrow = (field: typeof sortField) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''
 
   useEffect(() => {
     loadUsers()
@@ -39,7 +47,7 @@ export default function SiteUsersTab() {
     }
   }
 
-  const filtered = searchQuery.trim()
+  const filtered = (searchQuery.trim()
     ? users.filter(u => {
         const q = searchQuery.toLowerCase()
         return (
@@ -50,6 +58,23 @@ export default function SiteUsersTab() {
         )
       })
     : users
+  ).sort((a, b) => {
+    let va: any, vb: any
+    if (sortField === 'nome') {
+      va = `${a.nome} ${a.cognome}`.toLowerCase(); vb = `${b.nome} ${b.cognome}`.toLowerCase()
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    }
+    if (sortField === 'email') {
+      va = (a.email || '').toLowerCase(); vb = (b.email || '').toLowerCase()
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    }
+    if (sortField === 'balance') {
+      va = a.balance || 0; vb = b.balance || 0
+    } else {
+      va = new Date(a[sortField] || 0).getTime(); vb = new Date(b[sortField] || 0).getTime()
+    }
+    return sortDir === 'asc' ? va - vb : vb - va
+  })
 
   const fmtDate = (d: string) =>
     new Date(d).toLocaleString('it-IT', {
@@ -69,7 +94,11 @@ export default function SiteUsersTab() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-2xl font-bold text-theme-text-primary">Iscritti al Sito</h2>
-        <span className="text-3xl font-bold text-dr7-gold">{users.length}</span>
+        <div className="text-right">
+          <span className="text-3xl font-bold text-dr7-gold">{users.length}</span>
+          <span className="text-sm text-theme-text-muted ml-2">totale</span>
+          {searchQuery && <span className="text-sm text-theme-text-muted ml-2">({filtered.length} risultati)</span>}
+        </div>
       </div>
 
       <input
@@ -84,13 +113,13 @@ export default function SiteUsersTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-theme-border text-left text-theme-text-muted">
-              <th className="py-2 px-3">Nome</th>
-              <th className="py-2 px-3">Email</th>
+              <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('nome')}>Nome{arrow('nome')}</th>
+              <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('email')}>Email{arrow('email')}</th>
               <th className="py-2 px-3">Telefono</th>
-              <th className="py-2 px-3">Registrato il</th>
-              <th className="py-2 px-3">Ultimo accesso</th>
-              <th className="py-2 px-3">Email</th>
-              <th className="py-2 px-3 text-right">Credito</th>
+              <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('created_at')}>Registrato il{arrow('created_at')}</th>
+              <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('last_sign_in_at')}>Ultimo accesso{arrow('last_sign_in_at')}</th>
+              <th className="py-2 px-3">Verifica</th>
+              <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('balance')}>Credito{arrow('balance')}</th>
             </tr>
           </thead>
           <tbody>
