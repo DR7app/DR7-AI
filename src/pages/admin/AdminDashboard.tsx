@@ -12,6 +12,7 @@ import lazyWithRetry from '../../utils/lazyWithRetry'
 // Lazy-load all tabs with automatic retry on chunk load failure (post-deploy resilience)
 const CustomersTab = lazyWithRetry(() => import('./components/CustomersTab'))
 const CustomerWalletTab = lazyWithRetry(() => import('./components/CustomerWalletTab'))
+const SiteUsersTab = lazyWithRetry(() => import('./components/SiteUsersTab'))
 const VehiclesTab = lazyWithRetry(() => import('./components/VehiclesTab'))
 const CalendarTab = lazyWithRetry(() => import('./components/CalendarTab'))
 const CarWashBookingsTab = lazyWithRetry(() => import('./components/CarWashBookingsTab'))
@@ -51,7 +52,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users'
 
 export default function AdminDashboard() {
   const [activeTab, _setActiveTab] = useState<TabType>('reservations')
@@ -197,6 +198,7 @@ export default function AdminDashboard() {
     'report-clienti': 'Report Clienti',
     'report-penali-danni': 'Report Penali & Danni',
     'customer-wallet': 'Credit Wallet',
+    'site-users': 'Iscritti al Sito',
     'reports': 'Report',
     'com-email': 'E-mail',
     'com-pec': 'PEC',
@@ -263,6 +265,7 @@ export default function AdminDashboard() {
           <button onClick={() => { setActiveTab('customers'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customers')}>Lead</button>
           <button onClick={() => { setActiveTab('unpaid'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
           <button onClick={() => { setActiveTab('customer-wallet'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customer-wallet')}>Credit Wallet</button>
+          <button onClick={() => { setActiveTab('site-users'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'site-users')}>Iscritti al Sito</button>
 
           <div className={sidebarSectionClass}>Marketing</div>
           <button onClick={() => { setActiveTab('birthdays'); setSidebarOpen(false); }} className={`${sidebarItemClass(activeTab === 'birthdays')} flex items-center justify-between`}>
@@ -397,6 +400,7 @@ export default function AdminDashboard() {
           {activeTab === 'unpaid' && (isTabRestricted('unpaid') ? <PlaceholderTab title="Accesso non autorizzato" /> : <UnpaidBookingsTab />)}
           {activeTab === 'customers' && <CustomersTab />}
           {activeTab === 'customer-wallet' && <CustomerWalletTab />}
+          {activeTab === 'site-users' && <SiteUsersTab />}
           {activeTab === 'vehicles' && <VehiclesTab />}
           {activeTab === 'calendar' && (
             <CalendarTab
