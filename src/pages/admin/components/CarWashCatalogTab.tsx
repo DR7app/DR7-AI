@@ -66,10 +66,10 @@ export default function CarWashCatalogTab() {
       const ext = file.name.split('.').pop() || 'png'
       const fileName = `wash-service-${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage
-        .from('booking-photos')
+        .from('catalog-images')
         .upload(`wash-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true })
       if (upErr) throw upErr
-      const { data: urlData } = supabase.storage.from('booking-photos').getPublicUrl(`wash-catalog/${fileName}`)
+      const { data: urlData } = supabase.storage.from('catalog-images').getPublicUrl(`wash-catalog/${fileName}`)
       const url = urlData?.publicUrl || ''
       if (target === 'new') {
         setNewService(prev => ({ ...prev, image_url: url }))
@@ -426,10 +426,10 @@ function ServiceCard({
       const ext = file.name.split('.').pop() || 'png'
       const fileName = `wash-service-${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage
-        .from('booking-photos')
+        .from('catalog-images')
         .upload(`wash-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true })
       if (upErr) throw upErr
-      const { data: urlData } = supabase.storage.from('booking-photos').getPublicUrl(`wash-catalog/${fileName}`)
+      const { data: urlData } = supabase.storage.from('catalog-images').getPublicUrl(`wash-catalog/${fileName}`)
       onEditImageUrl(urlData?.publicUrl || '')
       toast.success('Immagine caricata')
     } catch (err: unknown) {
