@@ -53,6 +53,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [documents, setDocuments] = useState<DocRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabId>('stato')
+  const [isDR7Club, setIsDR7Club] = useState(false)
 
   useEffect(() => {
     loadAll()
@@ -86,13 +87,37 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       }
       setBookings(allBookings)
 
-      // Wallet
-      if (userId) {
-        const { data: bal } = await supabase.from('user_credit_balance').select('balance').eq('user_id', userId).single()
+      // Wallet — check by user_id first, fallback to email lookup
+      let walletUserId = userId
+      if (!walletUserId && email) {
+        // Try to find auth user by email to get their wallet
+        const { data: authUser } = await supabase.from('user_credit_balance').select('user_id, balance').limit(100)
+        if (authUser) {
+          // Check auth.users via customers_extended user_id
+          const { data: custWithUser } = await supabase.from('customers_extended').select('user_id').eq('email', email).not('user_id', 'is', null).maybeSingle()
+          if (custWithUser?.user_id) walletUserId = custWithUser.user_id
+        }
+      }
+      if (walletUserId) {
+        const { data: bal } = await supabase.from('user_credit_balance').select('balance').eq('user_id', walletUserId).single()
         setWalletBalance(bal?.balance || 0)
-        const { data: txs } = await supabase.from('credit_transactions').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50)
+        const { data: txs } = await supabase.from('credit_transactions').select('*').eq('user_id', walletUserId).order('created_at', { ascending: false }).limit(50)
         setWalletTxs(txs || [])
       }
+
+      // DR7 Club membership check
+      try {
+        const clubRes = await fetch('/.netlify/functions/list-club-members')
+        if (clubRes.ok) {
+          const clubData = await clubRes.json()
+          const members = clubData.members || []
+          const isClub = members.some((m: { user_id?: string; email?: string }) =>
+            (walletUserId && m.user_id === walletUserId) ||
+            (email && m.email?.toLowerCase() === email.toLowerCase())
+          )
+          setIsDR7Club(isClub)
+        }
+      } catch { /* club check failed */ }
 
       // Documents
       const { data: docs } = await supabase.from('customer_documents').select('*').eq('customer_id', customerId)
@@ -244,6 +269,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold text-theme-text-primary">{customerName}</h2>
                 {statusBadge(customer.status_cliente)}
+                {isDR7Club && <span className="px-2 py-1 rounded-full text-xs font-bold bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/50">DR7 Club</span>}
               </div>
               {customer.tipo_cliente === 'azienda' && customer.denominazione && (
                 <div className="text-sm text-theme-text-muted">{customer.denominazione}</div>
