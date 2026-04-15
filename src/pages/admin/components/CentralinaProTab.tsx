@@ -357,10 +357,22 @@ export default function CentralinaProTab() {
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km, deposits, servizi },
-        { categories: savedCategories, fasce: savedFasce, insurance: savedInsurance, km: savedKm, deposits: savedDeposits, servizi: savedServizi }
+        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi },
+        {
+          categories: savedCategories,
+          fasce: savedFasce,
+          insurance: savedInsurance,
+          km: savedKm,
+          deposits: savedDeposits,
+          servizi: savedServizi,
+          prezzoDinamico: savedPrezzoDinamico,
+          preventivi: savedPreventivi,
+        }
       ),
-    [categories, fasce, insurance, km, deposits, servizi, savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi]
+    [
+      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi,
+      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi,
+    ]
   )
 
   function handleSave() {
@@ -370,6 +382,8 @@ export default function CentralinaProTab() {
     setSavedKm(km)
     setSavedDeposits(deposits)
     setSavedServizi(servizi)
+    setSavedPrezzoDinamico(prezzoDinamico)
+    setSavedPreventivi(preventivi)
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
   }
@@ -381,6 +395,8 @@ export default function CentralinaProTab() {
     setKm(savedKm)
     setDeposits(savedDeposits)
     setServizi(savedServizi)
+    setPrezzoDinamico(savedPrezzoDinamico)
+    setPreventivi(savedPreventivi)
   }
 
   const hasChanges = changes.length > 0
@@ -455,7 +471,13 @@ export default function CentralinaProTab() {
             {section === 'p3' && <KmSforoSection km={km} setKm={setKm} />}
             {section === 'p4' && <CauzioniSection deposits={deposits} setDeposits={setDeposits} />}
             {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} />}
-            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && section !== 'p5' && (
+            {section === 'p6' && (
+              <PrezzoDinamicoSection config={prezzoDinamico} setConfig={setPrezzoDinamico} />
+            )}
+            {section === 'p7' && (
+              <PreventiviSection preventivi={preventivi} setPreventivi={setPreventivi} />
+            )}
+            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && section !== 'p5' && section !== 'p6' && section !== 'p7' && (
               <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-12 text-center">
                 <p className="text-[15px] text-[#6e6e73] dark:text-white/60">
                   Sezione in arrivo — da definire
@@ -581,6 +603,8 @@ type Snapshot = {
   km: KmConfig[]
   deposits: DepositsConfig
   servizi: ServiziConfig
+  prezzoDinamico: PrezzoDinamicoConfig
+  preventivi: PreventiviConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -668,6 +692,51 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     if (saved.servizi.delivery.price_per_km !== current.servizi.delivery.price_per_km) out.push(`Consegna a domicilio: €${saved.servizi.delivery.price_per_km} → €${current.servizi.delivery.price_per_km}/km`)
     if (saved.servizi.second_driver.fasciaA !== current.servizi.second_driver.fasciaA) out.push(`Secondo Guidatore Fascia A: €${saved.servizi.second_driver.fasciaA} → €${current.servizi.second_driver.fasciaA}/g`)
     if (saved.servizi.second_driver.fasciaB !== current.servizi.second_driver.fasciaB) out.push(`Secondo Guidatore Fascia B: €${saved.servizi.second_driver.fasciaB} → €${current.servizi.second_driver.fasciaB}/g`)
+  }
+
+  // Prezzo Dinamico — Tariffe
+  current.prezzoDinamico.tariffe.forEach((t) => {
+    const p = saved.prezzoDinamico.tariffe.find((x) => x.id === t.id)
+    if (!p) return
+    if (p.mode !== t.mode) out.push(`Tariffe / ${t.label}: modalita ${p.mode} → ${t.mode}`)
+    if (p.extraPerDay !== t.extraPerDay) out.push(`Tariffe / ${t.label}: extra/giorno ${p.extraPerDay} → ${t.extraPerDay}`)
+    const days = new Set([...t.days, ...p.days])
+    days.forEach((d) => {
+      if (p.unica[d] !== t.unica[d]) out.push(`Tariffe / ${t.label} (unica) ${d}g: ${p.unica[d] || 0} → ${t.unica[d] || 0}`)
+      if (p.residente[d] !== t.residente[d]) out.push(`Tariffe / ${t.label} (residente) ${d}g: ${p.residente[d] || 0} → ${t.residente[d] || 0}`)
+      if (p.non_residente[d] !== t.non_residente[d]) out.push(`Tariffe / ${t.label} (non residente) ${d}g: ${p.non_residente[d] || 0} → ${t.non_residente[d] || 0}`)
+    })
+  })
+
+  // Prezzo Dinamico — Engine
+  {
+    const cd = current.prezzoDinamico.dynamic
+    const pd = saved.prezzoDinamico.dynamic
+    if (pd.enabled !== cd.enabled) out.push(`Revenue Engine: ${cd.enabled ? 'attivato' : 'disattivato'}`)
+    if (pd.mode !== cd.mode) out.push(`Revenue Engine: modalita ${pd.mode} → ${cd.mode}`)
+    const priceKeys = new Set([...Object.keys(cd.base_prices), ...Object.keys(pd.base_prices)])
+    priceKeys.forEach((k) => {
+      if (pd.base_prices[k] !== cd.base_prices[k]) out.push(`Prezzo base / ${k}: ${pd.base_prices[k] || 0} → ${cd.base_prices[k] || 0}`)
+      if (pd.min_prices[k] !== cd.min_prices[k]) out.push(`Prezzo min / ${k}: ${pd.min_prices[k] || 0} → ${cd.min_prices[k] || 0}`)
+      if (pd.max_prices[k] !== cd.max_prices[k]) out.push(`Prezzo max / ${k}: ${pd.max_prices[k] || 0} → ${cd.max_prices[k] || 0}`)
+    })
+    diffCoeffRows('Occupazione', cd.occupation_coefficients, pd.occupation_coefficients, out)
+    diffCoeffRows('Anticipo', cd.advance_coefficients, pd.advance_coefficients, out)
+    diffCoeffRows('Durata', cd.duration_coefficients, pd.duration_coefficients, out)
+  }
+
+  // Preventivi
+  {
+    const cp = current.preventivi
+    const pp = saved.preventivi
+    if (pp.maggiorazione_pct !== cp.maggiorazione_pct) out.push(`Preventivi: maggiorazione ${pp.maggiorazione_pct}% → ${cp.maggiorazione_pct}%`)
+    if (pp.scadenza_default_ore !== cp.scadenza_default_ore) out.push(`Preventivi: scadenza ${pp.scadenza_default_ore}h → ${cp.scadenza_default_ore}h`)
+    cp.messaggi.forEach((m) => {
+      const prev = pp.messaggi.find((x) => x.key === m.key)
+      if (!prev) return
+      if (prev.body !== m.body) out.push(`Preventivi / ${m.label}: testo modificato`)
+      if (prev.is_enabled !== m.is_enabled) out.push(`Preventivi / ${m.label}: ${m.is_enabled ? 'attivato' : 'disattivato'}`)
+    })
   }
 
   // Cauzioni
@@ -1843,6 +1912,564 @@ function ServiziSection({
           </div>
         </section>
       </div>
+    </div>
+  )
+}
+
+function diffCoeffRows(label: string, cur: CoefficientRow[], prev: CoefficientRow[], out: string[]) {
+  const prevIds = new Set(prev.map((r) => r.id))
+  const curIds = new Set(cur.map((r) => r.id))
+  cur.forEach((r) => {
+    if (!prevIds.has(r.id)) out.push(`Coefficienti ${label}: aggiunta "${r.label || 'Nuova riga'}"`)
+  })
+  prev.forEach((r) => {
+    if (!curIds.has(r.id)) out.push(`Coefficienti ${label}: rimossa "${r.label}"`)
+  })
+  cur.forEach((r) => {
+    const p = prev.find((x) => x.id === r.id)
+    if (!p) return
+    if (p.min !== r.min || p.max !== r.max) out.push(`Coefficienti ${label} / ${r.label}: range ${p.min}-${p.max} → ${r.min}-${r.max}`)
+    if (p.coeff !== r.coeff) out.push(`Coefficienti ${label} / ${r.label}: coefficiente ${p.coeff} → ${r.coeff}`)
+    if (p.label !== r.label) out.push(`Coefficienti ${label}: "${p.label}" rinominata in "${r.label}"`)
+  })
+}
+
+// ========== PREZZO DINAMICO (Punto 6) ==========
+
+function PrezzoDinamicoSection({
+  config,
+  setConfig,
+}: {
+  config: PrezzoDinamicoConfig
+  setConfig: (next: PrezzoDinamicoConfig) => void
+}) {
+  function patchTariffa(id: string, p: Partial<TariffaGiornaliera>) {
+    setConfig({ ...config, tariffe: config.tariffe.map((t) => (t.id === id ? { ...t, ...p } : t)) })
+  }
+  function patchTariffaDay(id: string, scope: 'unica' | 'residente' | 'non_residente', day: string, value: number | '') {
+    setConfig({
+      ...config,
+      tariffe: config.tariffe.map((t) =>
+        t.id === id ? { ...t, [scope]: { ...t[scope], [day]: value } } : t
+      ),
+    })
+  }
+  function addDay(id: string) {
+    const t = config.tariffe.find((x) => x.id === id)
+    if (!t) return
+    const nextDay = String(Math.max(...t.days.map(Number), 0) + 1)
+    patchTariffa(id, { days: [...t.days, nextDay] })
+  }
+
+  function patchDyn(p: Partial<DynamicPricingConfig>) {
+    setConfig({ ...config, dynamic: { ...config.dynamic, ...p } })
+  }
+  function patchPrice(scope: 'base_prices' | 'min_prices' | 'max_prices', key: string, value: number | '') {
+    patchDyn({ [scope]: { ...config.dynamic[scope], [key]: value } } as Partial<DynamicPricingConfig>)
+  }
+
+  const catIds = ['supercars', 'urban', 'aziendali'] as const
+  const catLabels: Record<string, string> = { supercars: 'Supercars', urban: 'Urban', aziendali: 'Aziendali' }
+
+  return (
+    <div className="space-y-8">
+      {/* ─── TARIFFA BASE ─── */}
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+          Tariffe Giornaliere per Categoria
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1 mb-5">
+          Tariffa base di partenza, prima dei coefficienti dinamici
+        </p>
+
+        <div className="space-y-4">
+          {config.tariffe.map((t) => (
+            <section
+              key={t.id}
+              className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden"
+            >
+              <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-4 flex-wrap">
+                <h3 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+                  {t.label}
+                </h3>
+                <label className="flex items-center gap-2 text-[13px] text-[#6e6e73] dark:text-white/60">
+                  <span>Tipo tariffa</span>
+                  <select
+                    value={t.mode}
+                    onChange={(e) => patchTariffa(t.id, { mode: e.target.value as TariffaMode })}
+                    className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  >
+                    <option value="unica">Unica</option>
+                    <option value="per_residenza">Residente + Non Residente</option>
+                  </select>
+                </label>
+              </header>
+
+              <div className="px-5 pb-5 border-t border-black/[0.06] dark:border-white/[0.06] pt-4 space-y-4">
+                {t.mode === 'unica' ? (
+                  <DayRow
+                    label="Tariffa unica"
+                    days={t.days}
+                    values={t.unica}
+                    onChange={(d, v) => patchTariffaDay(t.id, 'unica', d, v)}
+                    onAddDay={() => addDay(t.id)}
+                  />
+                ) : (
+                  <>
+                    <DayRow
+                      label="Residente Sardegna"
+                      days={t.days}
+                      values={t.residente}
+                      onChange={(d, v) => patchTariffaDay(t.id, 'residente', d, v)}
+                      onAddDay={() => addDay(t.id)}
+                    />
+                    <DayRow
+                      label="Non Residente"
+                      days={t.days}
+                      values={t.non_residente}
+                      onChange={(d, v) => patchTariffaDay(t.id, 'non_residente', d, v)}
+                      onAddDay={() => addDay(t.id)}
+                    />
+                  </>
+                )}
+                <div className="flex items-center gap-3 pt-2 border-t border-black/[0.06] dark:border-white/[0.06]">
+                  <span className="text-[13px] text-[#6e6e73] dark:text-white/60 w-40">
+                    Giorno aggiuntivo
+                  </span>
+                  <div className="relative w-32">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={t.extraPerDay}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        patchTariffa(t.id, { extraPerDay: v === '' ? '' : Number(v) })
+                      }}
+                      className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── REVENUE ENGINE ─── */}
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+          Revenue Engine — Pricing Dinamico
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1 mb-5">
+          Prezzi dinamici, coefficienti e limiti min/max
+        </p>
+
+        {/* Enabled + Mode */}
+        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5 mb-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={config.dynamic.enabled}
+                onChange={(e) => patchDyn({ enabled: e.target.checked })}
+                className="w-5 h-5 accent-[#007aff]"
+              />
+              <span className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white">
+                Revenue Management attivo
+              </span>
+            </label>
+            <div className="flex-1" />
+            <label className="flex items-center gap-2 text-[13px] text-[#6e6e73] dark:text-white/60">
+              <span>Modalita</span>
+              <select
+                value={config.dynamic.mode}
+                onChange={(e) => patchDyn({ mode: e.target.value as DynamicMode })}
+                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              >
+                <option value="disabled">Disabilitato</option>
+                <option value="suggestion">Suggerimento</option>
+                <option value="auto_apply">Applicazione automatica</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        {/* Prezzi Base + Limiti Min/Max */}
+        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden mb-4">
+          <header className="px-5 pt-5 pb-3">
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+              Prezzi Base + Limiti per Categoria
+            </h3>
+            <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">
+              Override del prezzo base e vincoli min/max applicati dopo i coefficienti
+            </p>
+          </header>
+          <div className="px-5 pb-5 space-y-3">
+            <div className="grid grid-cols-[1fr_repeat(3,minmax(0,1fr))] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
+              <span>Categoria</span>
+              <span className="text-right">Prezzo Base €/g</span>
+              <span className="text-right">Min €/g</span>
+              <span className="text-right">Max €/g</span>
+            </div>
+            {catIds.map((cat) => (
+              <div key={cat} className="grid grid-cols-[1fr_repeat(3,minmax(0,1fr))] gap-2 items-center">
+                <span className="text-[14px] text-[#1d1d1f] dark:text-white font-medium">
+                  {catLabels[cat]}
+                </span>
+                <PriceBox
+                  value={config.dynamic.base_prices[cat] ?? ''}
+                  onChange={(v) => patchPrice('base_prices', cat, v)}
+                  placeholder="—"
+                />
+                <PriceBox
+                  value={config.dynamic.min_prices[cat] ?? ''}
+                  onChange={(v) => patchPrice('min_prices', cat, v)}
+                />
+                <PriceBox
+                  value={config.dynamic.max_prices[cat] ?? ''}
+                  onChange={(v) => patchPrice('max_prices', cat, v)}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Coefficienti */}
+        <div className="space-y-4">
+          <CoefficientTable
+            title="Coefficienti Occupazione"
+            subtitle="Moltiplicatore basato sulla % di occupazione della flotta"
+            unit="%"
+            rows={config.dynamic.occupation_coefficients}
+            onChange={(rows) => patchDyn({ occupation_coefficients: rows })}
+          />
+          <CoefficientTable
+            title="Coefficienti Anticipo"
+            subtitle="Moltiplicatore basato sui giorni di anticipo della prenotazione"
+            unit="giorni"
+            rows={config.dynamic.advance_coefficients}
+            onChange={(rows) => patchDyn({ advance_coefficients: rows })}
+          />
+          <CoefficientTable
+            title="Coefficienti Durata"
+            subtitle="Moltiplicatore basato sulla durata del noleggio"
+            unit="giorni"
+            rows={config.dynamic.duration_coefficients}
+            onChange={(rows) => patchDyn({ duration_coefficients: rows })}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DayRow({
+  label,
+  days,
+  values,
+  onChange,
+  onAddDay,
+}: {
+  label: string
+  days: string[]
+  values: Record<string, number | ''>
+  onChange: (day: string, value: number | '') => void
+  onAddDay: () => void
+}) {
+  return (
+    <div>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">{label}</p>
+      <div className="flex items-end gap-2 flex-wrap">
+        {days.map((d) => (
+          <div key={d} className="flex flex-col">
+            <span className="text-[11px] text-[#a1a1a6] mb-1 text-center">{d}g</span>
+            <div className="relative">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6] pointer-events-none">€</span>
+              <input
+                type="number"
+                min={0}
+                value={values[d] ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  onChange(d, v === '' ? '' : Number(v))
+                }}
+                className="w-20 bg-[#f5f5f7] dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg pl-5 pr-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+            </div>
+          </div>
+        ))}
+        <button
+          onClick={onAddDay}
+          className="inline-flex items-center gap-1 h-[30px] px-3 rounded-lg text-[12px] font-medium text-[#007aff] hover:bg-[#007aff]/10 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          </svg>
+          giorno
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PriceBox({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: number | ''
+  onChange: (v: number | '') => void
+  placeholder?: string
+}) {
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+      <input
+        type="number"
+        min={0}
+        step={0.01}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value
+          onChange(v === '' ? '' : Number(v))
+        }}
+        className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+      />
+    </div>
+  )
+}
+
+function CoefficientTable({
+  title,
+  subtitle,
+  unit,
+  rows,
+  onChange,
+}: {
+  title: string
+  subtitle: string
+  unit: string
+  rows: CoefficientRow[]
+  onChange: (next: CoefficientRow[]) => void
+}) {
+  function patch(id: string, p: Partial<CoefficientRow>) {
+    onChange(rows.map((r) => (r.id === id ? { ...r, ...p } : r)))
+  }
+  function remove(id: string) {
+    onChange(rows.filter((r) => r.id !== id))
+  }
+  function add() {
+    onChange([...rows, { id: uid(), min: 0, max: 0, coeff: 1, label: '' }])
+  }
+
+  return (
+    <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+      <header className="px-5 pt-5 pb-3">
+        <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+          {title}
+        </h3>
+        <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">{subtitle}</p>
+      </header>
+
+      <div className="px-5 pb-4">
+        <div className="grid grid-cols-[80px_80px_80px_1fr_32px] gap-2 items-center px-1 mb-2">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Min {unit}</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Max {unit}</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Coeff.</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Etichetta</span>
+          <span />
+        </div>
+
+        <div className="space-y-1.5">
+          {rows.map((r) => (
+            <div key={r.id} className="grid grid-cols-[80px_80px_80px_1fr_32px] gap-2 items-center group">
+              <input
+                type="number"
+                value={r.min}
+                onChange={(e) => {
+                  const v = e.target.value
+                  patch(r.id, { min: v === '' ? '' : Number(v) })
+                }}
+                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+              <input
+                type="number"
+                value={r.max}
+                onChange={(e) => {
+                  const v = e.target.value
+                  patch(r.id, { max: v === '' ? '' : Number(v) })
+                }}
+                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+              <input
+                type="number"
+                step={0.01}
+                value={r.coeff}
+                onChange={(e) => {
+                  const v = e.target.value
+                  patch(r.id, { coeff: v === '' ? '' : Number(v) })
+                }}
+                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+              <input
+                type="text"
+                value={r.label}
+                onChange={(e) => patch(r.id, { label: e.target.value })}
+                placeholder="Descrizione"
+                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+              <button
+                onClick={() => remove(r.id)}
+                className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                aria-label="Rimuovi"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+                </svg>
+              </button>
+            </div>
+          ))}
+          {rows.length === 0 && (
+            <p className="text-center text-[13px] text-[#6e6e73] dark:text-white/50 py-4">
+              Nessuna riga
+            </p>
+          )}
+        </div>
+
+        <button
+          onClick={add}
+          className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          </svg>
+          Aggiungi riga
+        </button>
+      </div>
+    </section>
+  )
+}
+
+// ========== PREVENTIVI (Punto 7) ==========
+
+function PreventiviSection({
+  preventivi,
+  setPreventivi,
+}: {
+  preventivi: PreventiviConfig
+  setPreventivi: (next: PreventiviConfig) => void
+}) {
+  function patchMsg(key: string, p: Partial<PreventivoMessage>) {
+    setPreventivi({
+      ...preventivi,
+      messaggi: preventivi.messaggi.map((m) => (m.key === key ? { ...m, ...p } : m)),
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+          Impostazioni Preventivi
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1">
+          Maggiorazione, scadenza e messaggi di sistema
+        </p>
+      </div>
+
+      {/* Maggiorazione + Scadenza */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-1">
+            Maggiorazione
+          </h3>
+          <p className="text-[12px] text-[#6e6e73] dark:text-white/60 mb-3">
+            Applicata sul totale del preventivo
+          </p>
+          <div className="relative w-28">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={preventivi.maggiorazione_pct}
+              onChange={(e) => {
+                const v = e.target.value
+                setPreventivi({ ...preventivi, maggiorazione_pct: v === '' ? '' : Number(v) })
+              }}
+              className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">%</span>
+          </div>
+        </section>
+
+        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-1">
+            Scadenza Default
+          </h3>
+          <p className="text-[12px] text-[#6e6e73] dark:text-white/60 mb-3">
+            Validita del preventivo dopo l'invio
+          </p>
+          <div className="relative w-28">
+            <input
+              type="number"
+              min={0}
+              value={preventivi.scadenza_default_ore}
+              onChange={(e) => {
+                const v = e.target.value
+                setPreventivi({ ...preventivi, scadenza_default_ore: v === '' ? '' : Number(v) })
+              }}
+              className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-3 pr-12 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">ore</span>
+          </div>
+        </section>
+      </div>
+
+      {/* Messaggi di Sistema Preventivo */}
+      <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3">
+          <h3 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+            Messaggi di Sistema — Preventivi
+          </h3>
+          <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">
+            Template usati dal sistema per i preventivi
+          </p>
+        </header>
+
+        <ul className="divide-y divide-black/5 dark:divide-white/[0.08]">
+          {preventivi.messaggi.map((m) => (
+            <li key={m.key} className="p-5">
+              <div className="flex items-start gap-3 mb-3">
+                <label className="inline-flex items-center cursor-pointer pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={m.is_enabled}
+                    onChange={(e) => patchMsg(m.key, { is_enabled: e.target.checked })}
+                    className="w-4 h-4 accent-[#007aff]"
+                  />
+                </label>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white">
+                    {m.label}
+                  </h4>
+                  <p className="text-[12px] text-[#6e6e73] dark:text-white/60 mt-0.5">
+                    {m.description}
+                  </p>
+                  <p className="text-[11px] text-[#a1a1a6] mt-0.5 font-mono">{m.key}</p>
+                </div>
+              </div>
+              <textarea
+                value={m.body}
+                onChange={(e) => patchMsg(m.key, { body: e.target.value })}
+                rows={5}
+                className="w-full bg-[#f5f5f7] dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 resize-y font-mono leading-relaxed"
+              />
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   )
 }
