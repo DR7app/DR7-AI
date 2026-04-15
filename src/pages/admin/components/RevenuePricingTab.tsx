@@ -210,23 +210,20 @@ export default function RevenuePricingTab() {
   async function saveExtrasConfig() {
     setExtrasSaving(true)
     try {
-      const dbPayload = {
-        config: extrasConfig,
-        updated_at: new Date().toISOString(),
-      }
-
-      const { data: existing } = await supabase.from('rental_extras_config').select('id').limit(1).single()
+      const { data: existing } = await supabase.from('rental_extras_config').select('id, config').limit(1).single()
 
       if (existing) {
+        // MERGE extras into existing config — don't overwrite Centralina data
+        const mergedConfig = { ...(existing.config || {}), ...extrasConfig }
         const { error } = await supabase
           .from('rental_extras_config')
-          .update(dbPayload)
+          .update({ config: mergedConfig, updated_at: new Date().toISOString() })
           .eq('id', existing.id)
         if (error) throw error
       } else {
         const { error } = await supabase
           .from('rental_extras_config')
-          .insert(dbPayload)
+          .insert({ config: extrasConfig, updated_at: new Date().toISOString() })
         if (error) throw error
       }
 
