@@ -48,13 +48,14 @@ const handler: Handler = async (event) => {
       if (error) throw error
     }
 
-    // Audit log
-    await supabase.from('config_audit_log').insert({
-      changed_by: email || 'admin',
-      section: section || 'centralina',
-      changes: config,
-      created_at: new Date().toISOString(),
-    }).catch(() => {})
+    // Audit log (non-blocking)
+    try {
+      await supabase.from('config_audit_log').insert({
+        changed_by: email || 'admin',
+        section: section || 'centralina',
+        created_at: new Date().toISOString(),
+      })
+    } catch { /* ignore */ }
 
     return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }
   } catch (err: any) {
