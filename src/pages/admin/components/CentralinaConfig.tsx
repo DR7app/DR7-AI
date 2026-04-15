@@ -143,7 +143,7 @@ export default function CentralinaConfig() {
           })
         if (insertErr) throw insertErr
       } else {
-        const { error: updateErr, count } = await supabase
+        const { error: updateErr, data: updated } = await supabase
           .from('rental_extras_config')
           .update({
             config,
@@ -154,7 +154,7 @@ export default function CentralinaConfig() {
           .select('id')
 
         if (updateErr) throw updateErr
-        if (!count && count !== undefined) throw new Error('Nessuna riga aggiornata — riprova')
+        if (!updated || updated.length === 0) throw new Error('Nessuna riga aggiornata — riprova')
       }
 
       // Audit log
