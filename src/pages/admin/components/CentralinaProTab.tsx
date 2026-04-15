@@ -16,7 +16,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'categorie-fascia', title: 'Categorie & Fascia' },
   { id: 'p2', title: 'Assicurazioni' },
   { id: 'p3', title: 'Km & Sforo' },
-  { id: 'p4', title: 'Punto 4' },
+  { id: 'p4', title: 'Cauzioni' },
   { id: 'p5', title: 'Punto 5' },
   { id: 'p6', title: 'Punto 6' },
   { id: 'p7', title: 'Punto 7' },
@@ -27,6 +27,46 @@ const INITIAL_CATEGORIES: Category[] = [
   { id: 'urban', label: 'Urban' },
   { id: 'aziendali', label: 'Aziendali' },
 ]
+
+type DepositOption = {
+  id: string
+  label: string
+  amount: number | ''
+  surcharge_per_day: number | ''
+}
+
+type DepositGroupId = 'fasciaB_residente' | 'fasciaA_residente' | 'fasciaB_non_residente' | 'fasciaA_non_residente'
+
+type DepositsConfig = Record<DepositGroupId, DepositOption[]>
+
+const DEPOSIT_GROUP_LABELS: Record<DepositGroupId, string> = {
+  fasciaB_residente: 'Fascia B — Residente',
+  fasciaA_residente: 'Fascia A — Residente',
+  fasciaB_non_residente: 'Fascia B — Non Residente',
+  fasciaA_non_residente: 'Fascia A — Non Residente',
+}
+
+const INITIAL_DEPOSITS: DepositsConfig = {
+  fasciaB_residente: [
+    { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+    { id: 'credit_card', label: 'Carta di credito', amount: 2000, surcharge_per_day: 0 },
+    { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
+  ],
+  fasciaA_residente: [
+    { id: 'no_deposit', label: 'Nessuna cauzione', amount: 0, surcharge_per_day: 49 },
+    { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+    { id: 'credit_card', label: 'Carta di credito', amount: 1000, surcharge_per_day: 0 },
+    { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
+  ],
+  fasciaB_non_residente: [
+    { id: 'credit_card', label: 'Carta di credito', amount: 5000, surcharge_per_day: 0 },
+    { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+  ],
+  fasciaA_non_residente: [
+    { id: 'credit_card', label: 'Carta di credito', amount: 3500, surcharge_per_day: 0 },
+    { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+  ],
+}
 
 type KmConfig = {
   id: string
@@ -95,22 +135,24 @@ export default function CentralinaProTab() {
   const [fasce, setFasce] = useState<Fascia[]>(INITIAL_FASCE)
   const [insurance, setInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
   const [km, setKm] = useState<KmConfig[]>(INITIAL_KM)
+  const [deposits, setDeposits] = useState<DepositsConfig>(INITIAL_DEPOSITS)
 
   // Saved (committed) snapshot — what the server has
   const [savedCategories, setSavedCategories] = useState<Category[]>(INITIAL_CATEGORIES)
   const [savedFasce, setSavedFasce] = useState<Fascia[]>(INITIAL_FASCE)
   const [savedInsurance, setSavedInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
   const [savedKm, setSavedKm] = useState<KmConfig[]>(INITIAL_KM)
+  const [savedDeposits, setSavedDeposits] = useState<DepositsConfig>(INITIAL_DEPOSITS)
 
   const [justSaved, setJustSaved] = useState(false)
 
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km },
-        { categories: savedCategories, fasce: savedFasce, insurance: savedInsurance, km: savedKm }
+        { categories, fasce, insurance, km, deposits },
+        { categories: savedCategories, fasce: savedFasce, insurance: savedInsurance, km: savedKm, deposits: savedDeposits }
       ),
-    [categories, fasce, insurance, km, savedCategories, savedFasce, savedInsurance, savedKm]
+    [categories, fasce, insurance, km, deposits, savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits]
   )
 
   function handleSave() {
@@ -118,6 +160,7 @@ export default function CentralinaProTab() {
     setSavedFasce(fasce)
     setSavedInsurance(insurance)
     setSavedKm(km)
+    setSavedDeposits(deposits)
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
   }
@@ -127,6 +170,7 @@ export default function CentralinaProTab() {
     setFasce(savedFasce)
     setInsurance(savedInsurance)
     setKm(savedKm)
+    setDeposits(savedDeposits)
   }
 
   const hasChanges = changes.length > 0
@@ -199,7 +243,8 @@ export default function CentralinaProTab() {
               <AssicurazioniSection insurance={insurance} setInsurance={setInsurance} />
             )}
             {section === 'p3' && <KmSforoSection km={km} setKm={setKm} />}
-            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && (
+            {section === 'p4' && <CauzioniSection deposits={deposits} setDeposits={setDeposits} />}
+            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && (
               <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-12 text-center">
                 <p className="text-[15px] text-[#6e6e73] dark:text-white/60">
                   Sezione in arrivo — da definire
@@ -323,6 +368,7 @@ type Snapshot = {
   fasce: Fascia[]
   insurance: InsuranceCategoryConfig[]
   km: KmConfig[]
+  deposits: DepositsConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -374,6 +420,28 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     if (prev.extraPerDay !== k.extraPerDay) out.push(`Km & Sforo / ${k.label}: extra/giorno ${prev.extraPerDay} → ${k.extraPerDay} km`)
     if (prev.sforo !== k.sforo) out.push(`Km & Sforo / ${k.label}: sforo €${prev.sforo} → €${k.sforo}/km`)
     if (prev.unlimitedPerDay !== k.unlimitedPerDay) out.push(`Km & Sforo / ${k.label}: km illimitati €${prev.unlimitedPerDay} → €${k.unlimitedPerDay}/giorno`)
+  })
+
+  // Cauzioni
+  ;(Object.keys(current.deposits) as DepositGroupId[]).forEach((gid) => {
+    const cur = current.deposits[gid]
+    const prev = saved.deposits[gid]
+    const prefix = `Cauzioni / ${DEPOSIT_GROUP_LABELS[gid]}`
+    const savedIds = new Set(prev.map((o) => o.id))
+    const curIds = new Set(cur.map((o) => o.id))
+    cur.forEach((o) => {
+      if (!savedIds.has(o.id)) out.push(`${prefix}: aggiunta "${o.label || 'Nuova opzione'}"`)
+    })
+    prev.forEach((o) => {
+      if (!curIds.has(o.id)) out.push(`${prefix}: rimossa "${o.label}"`)
+    })
+    cur.forEach((o) => {
+      const p = prev.find((x) => x.id === o.id)
+      if (!p) return
+      if (p.label !== o.label) out.push(`${prefix}: "${p.label}" rinominata in "${o.label}"`)
+      if (p.amount !== o.amount) out.push(`${prefix} / ${o.label}: importo €${p.amount} → €${o.amount}`)
+      if (p.surcharge_per_day !== o.surcharge_per_day) out.push(`${prefix} / ${o.label}: sovrapprezzo €${p.surcharge_per_day}/g → €${o.surcharge_per_day}/g`)
+    })
   })
 
   // Insurance
@@ -1057,6 +1125,157 @@ function KmSforoSection({
                 </div>
               </label>
             </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ========== CAUZIONI (Punto 4) ==========
+
+function CauzioniSection({
+  deposits,
+  setDeposits,
+}: {
+  deposits: DepositsConfig
+  setDeposits: (next: DepositsConfig) => void
+}) {
+  function patchOption(gid: DepositGroupId, optId: string, p: Partial<DepositOption>) {
+    setDeposits({
+      ...deposits,
+      [gid]: deposits[gid].map((o) => (o.id === optId ? { ...o, ...p } : o)),
+    })
+  }
+  function removeOption(gid: DepositGroupId, optId: string) {
+    setDeposits({ ...deposits, [gid]: deposits[gid].filter((o) => o.id !== optId) })
+  }
+  function addOption(gid: DepositGroupId) {
+    setDeposits({
+      ...deposits,
+      [gid]: [
+        ...deposits[gid],
+        { id: uid(), label: 'Nuova opzione', amount: 0, surcharge_per_day: 0 },
+      ],
+    })
+  }
+
+  const groupOrder: DepositGroupId[] = [
+    'fasciaB_residente',
+    'fasciaA_residente',
+    'fasciaB_non_residente',
+    'fasciaA_non_residente',
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+          Opzioni Cauzione per Fascia
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1">
+          Opzioni cauzione per fascia conducente e residenza
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {groupOrder.map((gid) => (
+          <section
+            key={gid}
+            className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden"
+          >
+            <header className="px-5 pt-5 pb-3">
+              <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+                {DEPOSIT_GROUP_LABELS[gid]}
+              </h3>
+            </header>
+
+            <ul className="divide-y divide-black/5 dark:divide-white/[0.08]">
+              {deposits[gid].map((opt) => (
+                <li key={opt.id} className="px-5 py-3 group">
+                  <div className="flex items-center gap-3 mb-2">
+                    <input
+                      value={opt.label}
+                      onChange={(e) => patchOption(gid, opt.id, { label: e.target.value })}
+                      placeholder="Nome opzione"
+                      className="flex-1 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] dark:focus:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                    />
+                    <button
+                      onClick={() => removeOption(gid, opt.id)}
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-7 h-7 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                      aria-label="Rimuovi"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+                        Importo
+                      </span>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                          €
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={opt.amount}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            patchOption(gid, opt.id, { amount: v === '' ? '' : Number(v) })
+                          }}
+                          className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                        />
+                      </div>
+                    </label>
+                    <label className="block">
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+                        Sovrapprezzo / giorno
+                      </span>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                          €
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={opt.surcharge_per_day}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            patchOption(gid, opt.id, { surcharge_per_day: v === '' ? '' : Number(v) })
+                          }}
+                          className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6] pointer-events-none">
+                          /g
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </li>
+              ))}
+              {deposits[gid].length === 0 && (
+                <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73] dark:text-white/50">
+                  Nessuna opzione
+                </li>
+              )}
+            </ul>
+
+            <footer className="px-5 py-3 border-t border-black/5 dark:border-white/[0.08] bg-[#fafafa] dark:bg-white/[0.02]">
+              <button
+                onClick={() => addOption(gid)}
+                className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                </svg>
+                Aggiungi opzione
+              </button>
+            </footer>
           </section>
         ))}
       </div>
