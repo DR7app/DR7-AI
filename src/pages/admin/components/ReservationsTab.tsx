@@ -4518,8 +4518,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Auto-send contract for signature via WhatsApp (new paid bookings OR when manually marked paid)
-      if (((!editingId && formData.payment_status === 'paid') || justMarkedPaid) && insertedBooking?.id) {
+      // Auto-send contract for signature via WhatsApp
+      // Send when: new paid booking, OR payment just marked paid, OR editing an already-paid booking (contract regenerated with new data)
+      const shouldSendSigningLink = insertedBooking?.id && formData.payment_status === 'paid' && (
+        !editingId ||          // New booking
+        justMarkedPaid ||      // Payment just changed to paid
+        editingId              // Editing existing paid booking (contract was regenerated above)
+      )
+      if (shouldSendSigningLink) {
         try {
           // Fetch the contract that was just generated for this booking
           const { data: contractForSig } = await supabase
