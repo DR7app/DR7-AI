@@ -17,7 +17,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p2', title: 'Assicurazioni' },
   { id: 'p3', title: 'Km & Sforo' },
   { id: 'p4', title: 'Cauzioni' },
-  { id: 'p5', title: 'Punto 5' },
+  { id: 'p5', title: 'Servizi' },
   { id: 'p6', title: 'Punto 6' },
   { id: 'p7', title: 'Punto 7' },
 ]
@@ -27,6 +27,126 @@ const INITIAL_CATEGORIES: Category[] = [
   { id: 'urban', label: 'Urban' },
   { id: 'aziendali', label: 'Aziendali' },
 ]
+
+type ServiceUnit = 'per_day' | 'per_hour' | 'per_item' | 'flat'
+type TierRestriction = '' | 'TIER_1' | 'TIER_2'
+
+type ExperienceService = {
+  id: string
+  name: string
+  price: number | ''
+  unit: ServiceUnit
+  is_active: boolean
+  tier_only: TierRestriction
+}
+
+type ServiziConfig = {
+  experience: ExperienceService[]
+  dr7_flex: {
+    daily_price: number | ''
+    refund_percent: number | ''
+    tier_restriction: TierRestriction
+    description: string
+  }
+  lavaggio: { fee: number | ''; mandatory: boolean }
+  delivery: { price_per_km: number | '' }
+  second_driver: { fasciaA: number | ''; fasciaB: number | '' }
+  no_cauzione: {
+    per_day: number | ''
+    tier_restriction: TierRestriction
+    requires_kasko: boolean
+  }
+}
+
+const UNIT_LABELS: Record<ServiceUnit, string> = {
+  per_day: 'al giorno',
+  per_hour: 'all\u2019ora',
+  per_item: 'cad.',
+  flat: 'una tantum',
+}
+
+const INITIAL_SERVIZI: ServiziConfig = {
+  experience: [
+    { id: 'bouquet', name: 'Bouquet di rose', price: 7.9, unit: 'per_item', is_active: true, tier_only: '' },
+    { id: 'wedding', name: 'Allestimento matrimonio interno/esterno', price: 150, unit: 'flat', is_active: true, tier_only: '' },
+    { id: 'personal_driver', name: 'Autista personale', price: 150, unit: 'per_hour', is_active: true, tier_only: '' },
+    { id: 'restaurant', name: 'Prenotazione ristorante', price: 10, unit: 'flat', is_active: true, tier_only: '' },
+    { id: 'video_drone', name: 'Video Maker + Drone shooting', price: 200, unit: 'per_hour', is_active: true, tier_only: '' },
+    { id: 'premium_24h', name: 'Assistenza premium 24h dedicata', price: 19.9, unit: 'per_day', is_active: true, tier_only: '' },
+    { id: 'vehicle_replacement', name: 'Sostituzione immediata veicolo', price: 19.9, unit: 'per_day', is_active: true, tier_only: 'TIER_2' },
+    { id: 'chauffeur_vip', name: 'Noleggio con autista + itinerario VIP', price: 189, unit: 'per_hour', is_active: true, tier_only: '' },
+  ],
+  dr7_flex: {
+    daily_price: 19.9,
+    refund_percent: 90,
+    tier_restriction: '',
+    description: 'Cancellazione gratuita fino a 24h prima, rimborso fino al 90%.',
+  },
+  lavaggio: { fee: 9.9, mandatory: true },
+  delivery: { price_per_km: 3 },
+  second_driver: { fasciaA: 10, fasciaB: 20 },
+  no_cauzione: { per_day: 49, tier_restriction: 'TIER_2', requires_kasko: true },
+}
+
+type ServiceUnit = 'per_day' | 'per_hour' | 'per_item' | 'flat'
+type TierRestriction = '' | 'TIER_1' | 'TIER_2'
+
+const UNIT_LABELS: Record<ServiceUnit, string> = {
+  per_day: 'al giorno',
+  per_hour: 'all\u2019ora',
+  per_item: 'cad.',
+  flat: 'una tantum',
+}
+
+const TIER_LABELS: Record<TierRestriction, string> = {
+  '': 'Tutte le fasce',
+  TIER_2: 'Solo Fascia A',
+  TIER_1: 'Solo Fascia B',
+}
+
+type ExperienceService = {
+  id: string
+  name: string
+  price: number | ''
+  unit: ServiceUnit
+  is_active: boolean
+  tier_only: TierRestriction
+}
+
+type ServiziConfig = {
+  experience: ExperienceService[]
+  dr7_flex: {
+    daily_price: number | ''
+    refund_percent: number | ''
+    tier_restriction: TierRestriction
+    description: string
+  }
+  lavaggio: { fee: number | ''; mandatory: boolean }
+  delivery: { price_per_km: number | '' }
+  second_driver: { fasciaA: number | ''; fasciaB: number | '' }
+}
+
+const INITIAL_SERVIZI: ServiziConfig = {
+  experience: [
+    { id: 'bouquet', name: 'Bouquet di rose', price: 7.9, unit: 'per_item', is_active: true, tier_only: '' },
+    { id: 'wedding', name: 'Allestimento matrimonio interno/esterno', price: 150, unit: 'flat', is_active: true, tier_only: '' },
+    { id: 'personal_driver', name: 'Autista personale', price: 150, unit: 'per_hour', is_active: true, tier_only: '' },
+    { id: 'restaurant', name: 'Prenotazione ristorante', price: 10, unit: 'flat', is_active: true, tier_only: '' },
+    { id: 'video_drone', name: 'Video Maker + Drone shooting', price: 200, unit: 'per_hour', is_active: true, tier_only: '' },
+    { id: 'premium_24h', name: 'Assistenza premium 24h dedicata', price: 19.9, unit: 'per_day', is_active: true, tier_only: '' },
+    { id: 'vehicle_replacement', name: 'Sostituzione immediata veicolo', price: 19.9, unit: 'per_day', is_active: true, tier_only: 'TIER_2' },
+    { id: 'chauffeur_vip', name: 'Noleggio con autista + itinerario VIP', price: 189, unit: 'per_hour', is_active: true, tier_only: '' },
+  ],
+  dr7_flex: {
+    daily_price: 19.9,
+    refund_percent: 90,
+    tier_restriction: 'TIER_2',
+    description: 'Cancella fino al giorno del noleggio',
+  },
+  lavaggio: { fee: 9.9, mandatory: true },
+  delivery: { price_per_km: 3 },
+  second_driver: { fasciaA: 10, fasciaB: 20 },
+}
 
 type DepositOption = {
   id: string
@@ -136,6 +256,7 @@ export default function CentralinaProTab() {
   const [insurance, setInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
   const [km, setKm] = useState<KmConfig[]>(INITIAL_KM)
   const [deposits, setDeposits] = useState<DepositsConfig>(INITIAL_DEPOSITS)
+  const [servizi, setServizi] = useState<ServiziConfig>(INITIAL_SERVIZI)
 
   // Saved (committed) snapshot — what the server has
   const [savedCategories, setSavedCategories] = useState<Category[]>(INITIAL_CATEGORIES)
@@ -143,16 +264,17 @@ export default function CentralinaProTab() {
   const [savedInsurance, setSavedInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
   const [savedKm, setSavedKm] = useState<KmConfig[]>(INITIAL_KM)
   const [savedDeposits, setSavedDeposits] = useState<DepositsConfig>(INITIAL_DEPOSITS)
+  const [savedServizi, setSavedServizi] = useState<ServiziConfig>(INITIAL_SERVIZI)
 
   const [justSaved, setJustSaved] = useState(false)
 
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km, deposits },
-        { categories: savedCategories, fasce: savedFasce, insurance: savedInsurance, km: savedKm, deposits: savedDeposits }
+        { categories, fasce, insurance, km, deposits, servizi },
+        { categories: savedCategories, fasce: savedFasce, insurance: savedInsurance, km: savedKm, deposits: savedDeposits, servizi: savedServizi }
       ),
-    [categories, fasce, insurance, km, deposits, savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits]
+    [categories, fasce, insurance, km, deposits, servizi, savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi]
   )
 
   function handleSave() {
@@ -161,6 +283,7 @@ export default function CentralinaProTab() {
     setSavedInsurance(insurance)
     setSavedKm(km)
     setSavedDeposits(deposits)
+    setSavedServizi(servizi)
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
   }
@@ -171,6 +294,7 @@ export default function CentralinaProTab() {
     setInsurance(savedInsurance)
     setKm(savedKm)
     setDeposits(savedDeposits)
+    setServizi(savedServizi)
   }
 
   const hasChanges = changes.length > 0
@@ -244,7 +368,8 @@ export default function CentralinaProTab() {
             )}
             {section === 'p3' && <KmSforoSection km={km} setKm={setKm} />}
             {section === 'p4' && <CauzioniSection deposits={deposits} setDeposits={setDeposits} />}
-            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && (
+            {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} />}
+            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && section !== 'p5' && (
               <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-12 text-center">
                 <p className="text-[15px] text-[#6e6e73] dark:text-white/60">
                   Sezione in arrivo — da definire
@@ -369,6 +494,7 @@ type Snapshot = {
   insurance: InsuranceCategoryConfig[]
   km: KmConfig[]
   deposits: DepositsConfig
+  servizi: ServiziConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -421,6 +547,42 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     if (prev.sforo !== k.sforo) out.push(`Km & Sforo / ${k.label}: sforo €${prev.sforo} → €${k.sforo}/km`)
     if (prev.unlimitedPerDay !== k.unlimitedPerDay) out.push(`Km & Sforo / ${k.label}: km illimitati €${prev.unlimitedPerDay} → €${k.unlimitedPerDay}/giorno`)
   })
+
+  // Servizi
+  {
+    const ce = current.servizi.experience
+    const pe = saved.servizi.experience
+    const ceIds = new Set(ce.map((s) => s.id))
+    const peIds = new Set(pe.map((s) => s.id))
+    ce.forEach((s) => {
+      if (!peIds.has(s.id)) out.push(`Servizi: aggiunto "${s.name || 'Nuovo servizio'}"`)
+    })
+    pe.forEach((s) => {
+      if (!ceIds.has(s.id)) out.push(`Servizi: rimosso "${s.name}"`)
+    })
+    ce.forEach((s) => {
+      const p = pe.find((x) => x.id === s.id)
+      if (!p) return
+      if (p.name !== s.name) out.push(`Servizi: "${p.name}" rinominato in "${s.name}"`)
+      if (p.price !== s.price) out.push(`Servizi / ${s.name}: prezzo €${p.price} → €${s.price}`)
+      if (p.unit !== s.unit) out.push(`Servizi / ${s.name}: unita ${UNIT_LABELS[p.unit]} → ${UNIT_LABELS[s.unit]}`)
+      if (p.tier_only !== s.tier_only) out.push(`Servizi / ${s.name}: fascia ${TIER_LABELS[p.tier_only]} → ${TIER_LABELS[s.tier_only]}`)
+      if (p.is_active !== s.is_active) out.push(`Servizi / ${s.name}: ${s.is_active ? 'attivato' : 'disattivato'}`)
+    })
+
+    const cf = current.servizi.dr7_flex
+    const pf = saved.servizi.dr7_flex
+    if (pf.daily_price !== cf.daily_price) out.push(`DR7 Flex: prezzo €${pf.daily_price} → €${cf.daily_price}/g`)
+    if (pf.refund_percent !== cf.refund_percent) out.push(`DR7 Flex: rimborso ${pf.refund_percent}% → ${cf.refund_percent}%`)
+    if (pf.tier_restriction !== cf.tier_restriction) out.push(`DR7 Flex: disponibile per ${TIER_LABELS[pf.tier_restriction]} → ${TIER_LABELS[cf.tier_restriction]}`)
+    if (pf.description !== cf.description) out.push(`DR7 Flex: descrizione modificata`)
+
+    if (saved.servizi.lavaggio.fee !== current.servizi.lavaggio.fee) out.push(`Pulizia Finale: €${saved.servizi.lavaggio.fee} → €${current.servizi.lavaggio.fee}`)
+    if (saved.servizi.lavaggio.mandatory !== current.servizi.lavaggio.mandatory) out.push(`Pulizia Finale: ${current.servizi.lavaggio.mandatory ? 'obbligatoria' : 'facoltativa'}`)
+    if (saved.servizi.delivery.price_per_km !== current.servizi.delivery.price_per_km) out.push(`Consegna a domicilio: €${saved.servizi.delivery.price_per_km} → €${current.servizi.delivery.price_per_km}/km`)
+    if (saved.servizi.second_driver.fasciaA !== current.servizi.second_driver.fasciaA) out.push(`Secondo Guidatore Fascia A: €${saved.servizi.second_driver.fasciaA} → €${current.servizi.second_driver.fasciaA}/g`)
+    if (saved.servizi.second_driver.fasciaB !== current.servizi.second_driver.fasciaB) out.push(`Secondo Guidatore Fascia B: €${saved.servizi.second_driver.fasciaB} → €${current.servizi.second_driver.fasciaB}/g`)
+  }
 
   // Cauzioni
   ;(Object.keys(current.deposits) as DepositGroupId[]).forEach((gid) => {
@@ -1278,6 +1440,322 @@ function CauzioniSection({
             </footer>
           </section>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ========== SERVIZI (Punto 5) ==========
+
+function ServiziSection({
+  servizi,
+  setServizi,
+}: {
+  servizi: ServiziConfig
+  setServizi: (next: ServiziConfig) => void
+}) {
+  function patchExp(id: string, p: Partial<ExperienceService>) {
+    setServizi({ ...servizi, experience: servizi.experience.map((s) => (s.id === id ? { ...s, ...p } : s)) })
+  }
+  function removeExp(id: string) {
+    setServizi({ ...servizi, experience: servizi.experience.filter((s) => s.id !== id) })
+  }
+  function addExp() {
+    setServizi({
+      ...servizi,
+      experience: [
+        ...servizi.experience,
+        { id: uid(), name: 'Nuovo servizio', price: 0, unit: 'per_day', is_active: true, tier_only: '' },
+      ],
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Servizi Experience */}
+      <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+              Servizi Experience
+            </h2>
+            <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">
+              Servizi extra opzionali
+            </p>
+          </div>
+          <button
+            onClick={addExp}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+            Aggiungi servizio
+          </button>
+        </header>
+
+        <ul className="divide-y divide-black/5 dark:divide-white/[0.08]">
+          {servizi.experience.map((s) => (
+            <li key={s.id} className="px-5 py-3 group">
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={s.is_active}
+                    onChange={(e) => patchExp(s.id, { is_active: e.target.checked })}
+                    className="w-4 h-4 accent-[#007aff]"
+                  />
+                </label>
+                <input
+                  value={s.name}
+                  onChange={(e) => patchExp(s.id, { name: e.target.value })}
+                  placeholder="Nome servizio"
+                  className="flex-1 min-w-[200px] bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] dark:focus:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                    €
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={s.price}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      patchExp(s.id, { price: v === '' ? '' : Number(v) })
+                    }}
+                    className="w-24 bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-2 py-1.5 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  />
+                </div>
+                <select
+                  value={s.unit}
+                  onChange={(e) => patchExp(s.id, { unit: e.target.value as ServiceUnit })}
+                  className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                >
+                  {(Object.keys(UNIT_LABELS) as ServiceUnit[]).map((u) => (
+                    <option key={u} value={u}>
+                      {UNIT_LABELS[u]}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={s.tier_only}
+                  onChange={(e) => patchExp(s.id, { tier_only: e.target.value as TierRestriction })}
+                  className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                >
+                  <option value="">Tutte le fasce</option>
+                  <option value="TIER_2">Solo Fascia A</option>
+                  <option value="TIER_1">Solo Fascia B</option>
+                </select>
+                <button
+                  onClick={() => removeExp(s.id)}
+                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                  aria-label="Rimuovi"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+                  </svg>
+                </button>
+              </div>
+            </li>
+          ))}
+          {servizi.experience.length === 0 && (
+            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73] dark:text-white/50">
+              Nessun servizio
+            </li>
+          )}
+        </ul>
+      </section>
+
+      {/* DR7 Flex */}
+      <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3">
+          <h2 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+            DR7 Flex — Cancellazione Premium
+          </h2>
+        </header>
+
+        <div className="px-5 pb-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+                Prezzo / giorno
+              </span>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                  €
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={servizi.dr7_flex.daily_price}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, daily_price: v === '' ? '' : Number(v) } })
+                  }}
+                  className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                />
+              </div>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+                Rimborso
+              </span>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={servizi.dr7_flex.refund_percent}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, refund_percent: v === '' ? '' : Number(v) } })
+                  }}
+                  className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                  %
+                </span>
+              </div>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+                Disponibile per
+              </span>
+              <select
+                value={servizi.dr7_flex.tier_restriction}
+                onChange={(e) =>
+                  setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, tier_restriction: e.target.value as TierRestriction } })
+                }
+                className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              >
+                <option value="">Tutte le fasce</option>
+                <option value="TIER_2">Solo Fascia A</option>
+                <option value="TIER_1">Solo Fascia B</option>
+              </select>
+            </label>
+          </div>
+          <label className="block">
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+              Descrizione
+            </span>
+            <input
+              value={servizi.dr7_flex.description}
+              onChange={(e) => setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, description: e.target.value } })}
+              className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+          </label>
+        </div>
+      </section>
+
+      {/* Simple services: 3-column grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Pulizia Finale */}
+        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-3">
+            Pulizia Finale
+          </h3>
+          <label className="block mb-3">
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+              Tariffa
+            </span>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                €
+              </span>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={servizi.lavaggio.fee}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setServizi({ ...servizi, lavaggio: { ...servizi.lavaggio, fee: v === '' ? '' : Number(v) } })
+                }}
+                className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+            </div>
+          </label>
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={servizi.lavaggio.mandatory}
+              onChange={(e) => setServizi({ ...servizi, lavaggio: { ...servizi.lavaggio, mandatory: e.target.checked } })}
+              className="w-4 h-4 accent-[#007aff]"
+            />
+            <span className="text-[13px] text-[#1d1d1f] dark:text-white">Obbligatoria</span>
+          </label>
+        </section>
+
+        {/* Consegna a Domicilio */}
+        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-3">
+            Consegna a Domicilio
+          </h3>
+          <label className="block">
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+              Prezzo per km
+            </span>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                €
+              </span>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={servizi.delivery.price_per_km}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setServizi({ ...servizi, delivery: { price_per_km: v === '' ? '' : Number(v) } })
+                }}
+                className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-12 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+                /km
+              </span>
+            </div>
+          </label>
+        </section>
+
+        {/* Secondo Guidatore */}
+        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-3">
+            Secondo Guidatore
+          </h3>
+          <div className="space-y-2">
+            {(['fasciaA', 'fasciaB'] as const).map((k) => (
+              <div key={k} className="flex items-center gap-3">
+                <span className="w-16 text-[13px] text-[#6e6e73] dark:text-white/60">
+                  {k === 'fasciaA' ? 'Fascia A' : 'Fascia B'}
+                </span>
+                <div className="flex-1 relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                    €
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={servizi.second_driver[k]}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setServizi({
+                        ...servizi,
+                        second_driver: { ...servizi.second_driver, [k]: v === '' ? '' : Number(v) },
+                      })
+                    }}
+                    className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+                    /g
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   )
