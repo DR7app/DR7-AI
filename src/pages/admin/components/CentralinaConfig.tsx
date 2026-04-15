@@ -143,7 +143,7 @@ export default function CentralinaConfig() {
           })
         if (insertErr) throw insertErr
       } else {
-        const { error: updateErr, data: updated } = await supabase
+        const { error: updateErr } = await supabase
           .from('rental_extras_config')
           .update({
             config,
@@ -151,10 +151,8 @@ export default function CentralinaConfig() {
             updated_by: email,
           })
           .eq('id', existing.id)
-          .select('id')
 
         if (updateErr) throw updateErr
-        if (!updated || updated.length === 0) throw new Error('Nessuna riga aggiornata — riprova')
       }
 
       // Audit log
