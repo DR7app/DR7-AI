@@ -139,12 +139,13 @@ export default function CentralinaConfig() {
       }
 
       // Audit log (fire-and-forget, also done server-side)
-      await supabase.from('config_audit_log').insert({
-        changed_by: email,
-        section: activeTab,
-        changes: { tab: activeTab },
-        full_snapshot: config,
-      })
+      try {
+        await supabase.from('config_audit_log').insert({
+          changed_by: email,
+          section: activeTab,
+          changes: { tab: activeTab },
+        })
+      } catch { /* ignore audit log errors */ }
 
       // Verify save by reloading from DB
       const { data: verify } = await supabase
