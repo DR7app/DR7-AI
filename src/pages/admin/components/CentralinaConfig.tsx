@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { authFetch } from '../../../utils/authFetch'
 import type { RentalConfig, InsuranceOption, ExperienceService, DepositOption } from '../../../types/rentalConfig'
 import { DEFAULT_RENTAL_CONFIG } from '../../../hooks/rentalConfigDefaults'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -125,37 +126,19 @@ export default function CentralinaConfig() {
       const { data: user } = await supabase.auth.getUser()
       const email = user?.user?.email || 'admin'
 
-      // First get the row id to ensure we update the right row
-      const { data: existing } = await supabase
-        .from('rental_extras_config')
-        .select('id')
-        .limit(1)
-        .single()
+      // Use Netlify function with service role to bypass RLS
+      const response = await authFetch('/.netlify/functions/save-rental-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config, email, section: activeTab }),
+      })
 
-      if (!existing) {
-        // No row exists — insert instead
-        const { error: insertErr } = await supabase
-          .from('rental_extras_config')
-          .insert({
-            config,
-            updated_at: new Date().toISOString(),
-            updated_by: email,
-          })
-        if (insertErr) throw insertErr
-      } else {
-        const { error: updateErr } = await supabase
-          .from('rental_extras_config')
-          .update({
-            config,
-            updated_at: new Date().toISOString(),
-            updated_by: email,
-          })
-          .eq('id', existing.id)
-
-        if (updateErr) throw updateErr
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'Errore salvataggio')
       }
 
-      // Audit log
+      // Audit log (fire-and-forget, also done server-side)
       await supabase.from('config_audit_log').insert({
         changed_by: email,
         section: activeTab,
