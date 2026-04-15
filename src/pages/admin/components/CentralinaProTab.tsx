@@ -501,14 +501,14 @@ function InsuranceCategoryCard({
       </header>
 
       {category.mode === 'per_fascia' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-black/5 dark:divide-white/[0.08] border-t border-black/5 dark:border-white/[0.08]">
+        <div className="divide-y divide-black/5 dark:divide-white/[0.08] border-t border-black/5 dark:border-white/[0.08]">
           <InsuranceList
-            heading="Fascia B (giovane)"
+            heading="Fascia B — giovane"
             items={category.fasciaB}
             onChange={(next) => onChange({ fasciaB: next })}
           />
           <InsuranceList
-            heading="Fascia A (esperto)"
+            heading="Fascia A — esperto"
             items={category.fasciaA}
             onChange={(next) => onChange({ fasciaA: next })}
           />
@@ -550,24 +550,21 @@ function InsuranceList({
 
   return (
     <div className="p-5">
-      <p className="text-[13px] font-medium text-[#6e6e73] dark:text-white/60 mb-3">{heading}</p>
+      <p className="text-[13px] font-medium text-[#6e6e73] dark:text-white/60 mb-4">{heading}</p>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {items.map((opt) => (
           <div
             key={opt.id}
-            className="grid grid-cols-[1fr_auto] gap-2 items-center group"
+            className="rounded-xl border border-black/[0.06] dark:border-white/[0.06] bg-[#fafafa] dark:bg-white/[0.02] p-4 group"
           >
-            <input
-              value={opt.name}
-              onChange={(e) => patch(opt.id, { name: e.target.value })}
-              className="bg-[#f5f5f7] dark:bg-white/5 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] dark:text-white outline-none focus:ring-2 focus:ring-[#007aff]/40"
-            />
-            <div className="flex items-center gap-2 flex-wrap">
-              <InlineNum label="€/g" value={opt.daily_price} onChange={(v) => patch(opt.id, { daily_price: v })} />
-              <InlineNum label="dep" value={opt.mandatory_deposit} onChange={(v) => patch(opt.id, { mandatory_deposit: v })} />
-              <InlineNum label="fran" value={opt.deductible_fixed} onChange={(v) => patch(opt.id, { deductible_fixed: v })} />
-              <InlineNum label="%" value={opt.deductible_percent} onChange={(v) => patch(opt.id, { deductible_percent: v })} />
+            <div className="flex items-center gap-3 mb-3">
+              <input
+                value={opt.name}
+                onChange={(e) => patch(opt.id, { name: e.target.value })}
+                placeholder="Nome opzione"
+                className="flex-1 bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:bg-white dark:focus:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
+              />
               <button
                 onClick={() => remove(opt.id)}
                 className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
@@ -577,6 +574,13 @@ function InsuranceList({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
                 </svg>
               </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <FieldBox label="€ / giorno" value={opt.daily_price} onChange={(v) => patch(opt.id, { daily_price: v })} />
+              <FieldBox label="Deposito €" value={opt.mandatory_deposit} onChange={(v) => patch(opt.id, { mandatory_deposit: v })} />
+              <FieldBox label="Franchigia €" value={opt.deductible_fixed} onChange={(v) => patch(opt.id, { deductible_fixed: v })} />
+              <FieldBox label="Franchigia %" value={opt.deductible_percent} onChange={(v) => patch(opt.id, { deductible_percent: v })} />
             </div>
           </div>
         ))}
@@ -589,7 +593,7 @@ function InsuranceList({
 
       <button
         onClick={add}
-        className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+        className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -600,7 +604,7 @@ function InsuranceList({
   )
 }
 
-function InlineNum({
+function FieldBox({
   label,
   value,
   onChange,
@@ -610,8 +614,10 @@ function InlineNum({
   onChange: (v: number | '') => void
 }) {
   return (
-    <label className="inline-flex items-center gap-1">
-      <span className="text-[11px] uppercase tracking-wide text-[#a1a1a6] font-medium">{label}</span>
+    <label className="block">
+      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+        {label}
+      </span>
       <input
         type="number"
         min={0}
@@ -620,7 +626,7 @@ function InlineNum({
           const v = e.target.value
           onChange(v === '' ? '' : Number(v))
         }}
-        className="w-16 bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-md px-2 py-1 text-[13px] text-right text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+        className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
       />
     </label>
   )
