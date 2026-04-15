@@ -18,8 +18,8 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p3', title: 'Km & Sforo' },
   { id: 'p4', title: 'Cauzioni' },
   { id: 'p5', title: 'Servizi' },
-  { id: 'p6', title: 'Punto 6' },
-  { id: 'p7', title: 'Punto 7' },
+  { id: 'p6', title: 'Prezzo Dinamico' },
+  { id: 'p7', title: 'Preventivi' },
 ]
 
 const INITIAL_CATEGORIES: Category[] = [
@@ -27,66 +27,6 @@ const INITIAL_CATEGORIES: Category[] = [
   { id: 'urban', label: 'Urban' },
   { id: 'aziendali', label: 'Aziendali' },
 ]
-
-type ServiceUnit = 'per_day' | 'per_hour' | 'per_item' | 'flat'
-type TierRestriction = '' | 'TIER_1' | 'TIER_2'
-
-type ExperienceService = {
-  id: string
-  name: string
-  price: number | ''
-  unit: ServiceUnit
-  is_active: boolean
-  tier_only: TierRestriction
-}
-
-type ServiziConfig = {
-  experience: ExperienceService[]
-  dr7_flex: {
-    daily_price: number | ''
-    refund_percent: number | ''
-    tier_restriction: TierRestriction
-    description: string
-  }
-  lavaggio: { fee: number | ''; mandatory: boolean }
-  delivery: { price_per_km: number | '' }
-  second_driver: { fasciaA: number | ''; fasciaB: number | '' }
-  no_cauzione: {
-    per_day: number | ''
-    tier_restriction: TierRestriction
-    requires_kasko: boolean
-  }
-}
-
-const UNIT_LABELS: Record<ServiceUnit, string> = {
-  per_day: 'al giorno',
-  per_hour: 'all\u2019ora',
-  per_item: 'cad.',
-  flat: 'una tantum',
-}
-
-const INITIAL_SERVIZI: ServiziConfig = {
-  experience: [
-    { id: 'bouquet', name: 'Bouquet di rose', price: 7.9, unit: 'per_item', is_active: true, tier_only: '' },
-    { id: 'wedding', name: 'Allestimento matrimonio interno/esterno', price: 150, unit: 'flat', is_active: true, tier_only: '' },
-    { id: 'personal_driver', name: 'Autista personale', price: 150, unit: 'per_hour', is_active: true, tier_only: '' },
-    { id: 'restaurant', name: 'Prenotazione ristorante', price: 10, unit: 'flat', is_active: true, tier_only: '' },
-    { id: 'video_drone', name: 'Video Maker + Drone shooting', price: 200, unit: 'per_hour', is_active: true, tier_only: '' },
-    { id: 'premium_24h', name: 'Assistenza premium 24h dedicata', price: 19.9, unit: 'per_day', is_active: true, tier_only: '' },
-    { id: 'vehicle_replacement', name: 'Sostituzione immediata veicolo', price: 19.9, unit: 'per_day', is_active: true, tier_only: 'TIER_2' },
-    { id: 'chauffeur_vip', name: 'Noleggio con autista + itinerario VIP', price: 189, unit: 'per_hour', is_active: true, tier_only: '' },
-  ],
-  dr7_flex: {
-    daily_price: 19.9,
-    refund_percent: 90,
-    tier_restriction: '',
-    description: 'Cancellazione gratuita fino a 24h prima, rimborso fino al 90%.',
-  },
-  lavaggio: { fee: 9.9, mandatory: true },
-  delivery: { price_per_km: 3 },
-  second_driver: { fasciaA: 10, fasciaB: 20 },
-  no_cauzione: { per_day: 49, tier_restriction: 'TIER_2', requires_kasko: true },
-}
 
 type ServiceUnit = 'per_day' | 'per_hour' | 'per_item' | 'flat'
 type TierRestriction = '' | 'TIER_1' | 'TIER_2'
@@ -146,6 +86,148 @@ const INITIAL_SERVIZI: ServiziConfig = {
   lavaggio: { fee: 9.9, mandatory: true },
   delivery: { price_per_km: 3 },
   second_driver: { fasciaA: 10, fasciaB: 20 },
+}
+
+// ========== PREZZO DINAMICO (Punto 6) types ==========
+
+type TariffaMode = 'unica' | 'per_residenza'
+
+type TariffaGiornaliera = {
+  id: string
+  label: string
+  mode: TariffaMode
+  days: string[]
+  unica: Record<string, number | ''>
+  residente: Record<string, number | ''>
+  non_residente: Record<string, number | ''>
+  extraPerDay: number | ''
+}
+
+type CoefficientRow = {
+  id: string
+  min: number | ''
+  max: number | ''
+  coeff: number | ''
+  label: string
+}
+
+type DynamicMode = 'disabled' | 'suggestion' | 'auto_apply'
+
+type DynamicPricingConfig = {
+  enabled: boolean
+  mode: DynamicMode
+  base_prices: Record<string, number | ''>
+  min_prices: Record<string, number | ''>
+  max_prices: Record<string, number | ''>
+  occupation_coefficients: CoefficientRow[]
+  advance_coefficients: CoefficientRow[]
+  duration_coefficients: CoefficientRow[]
+}
+
+type PrezzoDinamicoConfig = {
+  tariffe: TariffaGiornaliera[]
+  dynamic: DynamicPricingConfig
+}
+
+const INITIAL_TARIFFE: TariffaGiornaliera[] = [
+  {
+    id: 'supercars',
+    label: 'Supercars',
+    mode: 'per_residenza',
+    days: ['1', '2', '3', '4', '5', '6', '7'],
+    unica: {},
+    residente: { '1': 349, '2': 698, '3': 980, '4': 1290, '5': 1590, '6': 1890, '7': 2290 },
+    non_residente: { '1': 449, '2': 898, '3': 1280, '4': 1690, '5': 2100, '6': 2590, '7': 2890 },
+    extraPerDay: 289,
+  },
+  {
+    id: 'urban',
+    label: 'Urban',
+    mode: 'unica',
+    days: ['1', '2', '3', '4', '5', '6', '7'],
+    unica: { '1': 39, '2': 78, '3': 109, '4': 129, '5': 149, '6': 179, '7': 199 },
+    residente: {},
+    non_residente: {},
+    extraPerDay: 29,
+  },
+  {
+    id: 'aziendali',
+    label: 'Aziendali',
+    mode: 'unica',
+    days: ['1', '2', '3', '4', '5', '6', '7'],
+    unica: { '1': 139, '2': 278, '3': 389, '4': 490, '5': 590, '6': 649, '7': 689 },
+    residente: {},
+    non_residente: {},
+    extraPerDay: 99,
+  },
+]
+
+const INITIAL_PREZZO_DINAMICO: PrezzoDinamicoConfig = {
+  tariffe: INITIAL_TARIFFE,
+  dynamic: {
+    enabled: true,
+    mode: 'suggestion',
+    base_prices: { supercars: '', urban: '', aziendali: '' },
+    min_prices: { supercars: 289, urban: 29, aziendali: 99 },
+    max_prices: { supercars: 699, urban: 249, aziendali: 799 },
+    occupation_coefficients: [
+      { id: uid(), min: 0, max: 50, coeff: 0.95, label: 'Bassa occupazione' },
+      { id: uid(), min: 50, max: 80, coeff: 1.0, label: 'Normale' },
+      { id: uid(), min: 80, max: 101, coeff: 1.15, label: 'Alta occupazione' },
+    ],
+    advance_coefficients: [
+      { id: uid(), min: 0, max: 2, coeff: 1.15, label: 'Last minute' },
+      { id: uid(), min: 2, max: 14, coeff: 1.0, label: 'Normale' },
+      { id: uid(), min: 14, max: 999, coeff: 0.9, label: 'Early bird' },
+    ],
+    duration_coefficients: [
+      { id: uid(), min: 1, max: 3, coeff: 1.0, label: 'Breve (1-2g)' },
+      { id: uid(), min: 3, max: 7, coeff: 0.95, label: 'Media (3-6g)' },
+      { id: uid(), min: 7, max: 999, coeff: 0.85, label: 'Lunga (7+g)' },
+    ],
+  },
+}
+
+type PreventivoMessage = {
+  key: string
+  label: string
+  description: string
+  body: string
+  is_enabled: boolean
+}
+
+type PreventiviConfig = {
+  maggiorazione_pct: number | ''
+  scadenza_default_ore: number | ''
+  messaggi: PreventivoMessage[]
+}
+
+const INITIAL_PREVENTIVI: PreventiviConfig = {
+  maggiorazione_pct: 10,
+  scadenza_default_ore: 24,
+  messaggi: [
+    {
+      key: 'preventivo_whatsapp',
+      label: 'Invio preventivo (WhatsApp cliente)',
+      description: 'Messaggio inviato al cliente con il preventivo',
+      body: 'Ciao {{nome}}, ecco il tuo preventivo per {{veicolo}}:\n\nPeriodo: {{pickup}} → {{dropoff}}\nTotale: €{{totale}}\n\nValido {{scadenza_ore}} ore. Link: {{link}}',
+      is_enabled: true,
+    },
+    {
+      key: 'admin_new_website_quote',
+      label: 'Nuovo preventivo dal sito (admin)',
+      description: 'Notifica admin quando arriva un preventivo dal sito',
+      body: 'Nuovo preventivo da {{cliente}}\nVeicolo: {{veicolo}}\nPeriodo: {{pickup}} → {{dropoff}}\nTotale: €{{totale}}',
+      is_enabled: true,
+    },
+    {
+      key: 'admin_no_cauzione_request',
+      label: 'Richiesta No Cauzione (admin)',
+      description: 'Notifica admin per richiesta "nessuna cauzione"',
+      body: 'Richiesta No Cauzione da {{cliente}}\nTelefono: {{telefono}}\nVeicolo: {{veicolo}}',
+      is_enabled: true,
+    },
+  ],
 }
 
 type DepositOption = {
@@ -257,6 +339,8 @@ export default function CentralinaProTab() {
   const [km, setKm] = useState<KmConfig[]>(INITIAL_KM)
   const [deposits, setDeposits] = useState<DepositsConfig>(INITIAL_DEPOSITS)
   const [servizi, setServizi] = useState<ServiziConfig>(INITIAL_SERVIZI)
+  const [prezzoDinamico, setPrezzoDinamico] = useState<PrezzoDinamicoConfig>(INITIAL_PREZZO_DINAMICO)
+  const [preventivi, setPreventivi] = useState<PreventiviConfig>(INITIAL_PREVENTIVI)
 
   // Saved (committed) snapshot — what the server has
   const [savedCategories, setSavedCategories] = useState<Category[]>(INITIAL_CATEGORIES)
@@ -265,6 +349,8 @@ export default function CentralinaProTab() {
   const [savedKm, setSavedKm] = useState<KmConfig[]>(INITIAL_KM)
   const [savedDeposits, setSavedDeposits] = useState<DepositsConfig>(INITIAL_DEPOSITS)
   const [savedServizi, setSavedServizi] = useState<ServiziConfig>(INITIAL_SERVIZI)
+  const [savedPrezzoDinamico, setSavedPrezzoDinamico] = useState<PrezzoDinamicoConfig>(INITIAL_PREZZO_DINAMICO)
+  const [savedPreventivi, setSavedPreventivi] = useState<PreventiviConfig>(INITIAL_PREVENTIVI)
 
   const [justSaved, setJustSaved] = useState(false)
 
