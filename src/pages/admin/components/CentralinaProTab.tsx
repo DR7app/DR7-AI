@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7'
 
@@ -54,8 +54,41 @@ function uid() {
 export default function CentralinaProTab() {
   const [section, setSection] = useState<SectionId>('categorie-fascia')
 
+  // Current (working) state
+  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES)
+  const [fasce, setFasce] = useState<Fascia[]>(INITIAL_FASCE)
+  const [insurance, setInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
+
+  // Saved (committed) snapshot — what the server has
+  const [savedCategories, setSavedCategories] = useState<Category[]>(INITIAL_CATEGORIES)
+  const [savedFasce, setSavedFasce] = useState<Fascia[]>(INITIAL_FASCE)
+  const [savedInsurance, setSavedInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
+
+  const [justSaved, setJustSaved] = useState(false)
+
+  const changes = useMemo(
+    () => computeChanges({ categories, fasce, insurance }, { categories: savedCategories, fasce: savedFasce, insurance: savedInsurance }),
+    [categories, fasce, insurance, savedCategories, savedFasce, savedInsurance]
+  )
+
+  function handleSave() {
+    setSavedCategories(categories)
+    setSavedFasce(fasce)
+    setSavedInsurance(insurance)
+    setJustSaved(true)
+    setTimeout(() => setJustSaved(false), 2000)
+  }
+
+  function handleDiscard() {
+    setCategories(savedCategories)
+    setFasce(savedFasce)
+    setInsurance(savedInsurance)
+  }
+
+  const hasChanges = changes.length > 0
+
   return (
-    <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#0b0b0d]">
+    <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#0b0b0d] pb-32">
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-8">
         <div className="flex items-start justify-between flex-wrap gap-4 mb-8">
           <div>
@@ -110,8 +143,17 @@ export default function CentralinaProTab() {
           </aside>
 
           <main className="min-w-0">
-            {section === 'categorie-fascia' && <CategorieFasciaSection />}
-            {section === 'p2' && <AssicurazioniSection />}
+            {section === 'categorie-fascia' && (
+              <CategorieFasciaSection
+                categories={categories}
+                setCategories={setCategories}
+                fasce={fasce}
+                setFasce={setFasce}
+              />
+            )}
+            {section === 'p2' && (
+              <AssicurazioniSection insurance={insurance} setInsurance={setInsurance} />
+            )}
             {section !== 'categorie-fascia' && section !== 'p2' && (
               <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-12 text-center">
                 <p className="text-[15px] text-[#6e6e73] dark:text-white/60">
@@ -122,14 +164,30 @@ export default function CentralinaProTab() {
           </main>
         </div>
       </div>
+
+      {(hasChanges || justSaved) && (
+        <SaveBar
+          changes={changes}
+          justSaved={justSaved}
+          onSave={handleSave}
+          onDiscard={handleDiscard}
+        />
+      )}
     </div>
   )
 }
 
-function CategorieFasciaSection() {
-  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES)
-  const [fasce, setFasce] = useState<Fascia[]>(INITIAL_FASCE)
-
+function CategorieFasciaSection({
+  categories,
+  setCategories,
+  fasce,
+  setFasce,
+}: {
+  categories: Category[]
+  setCategories: (next: Category[]) => void
+  fasce: Fascia[]
+  setFasce: (next: Fascia[]) => void
+}) {
   return (
     <div className="space-y-6">
       <EditableList
@@ -143,6 +201,160 @@ function CategorieFasciaSection() {
       <FasciaList items={fasce} onChange={setFasce} />
     </div>
   )
+}
+
+// ========== SAVE BAR & CHANGE DETECTION ==========
+
+function SaveBar({
+  changes,
+  justSaved,
+  onSave,
+  onDiscard,
+}: {
+  changes: string[]
+  justSaved: boolean
+  onSave: () => void
+  onDiscard: () => void
+}) {
+  return (
+    <div className="fixed bottom-0 inset-x-0 z-50 px-4 pb-4 pointer-events-none">
+      <div className="max-w-6xl mx-auto pointer-events-auto">
+        <div
+          className={`rounded-2xl shadow-2xl border backdrop-blur-xl px-5 py-4 flex items-center gap-4 flex-wrap transition-all ${
+            justSaved
+              ? 'bg-[#34c759]/95 border-[#34c759] text-white'
+              : 'bg-white/95 dark:bg-[#1c1c1e]/95 border-black/10 dark:border-white/10'
+          }`}
+        >
+          {justSaved ? (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-[14px] font-medium">Modifiche salvate</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white mb-1">
+                  {changes.length} modifica{changes.length > 1 ? 'e' : ''} da salvare
+                </p>
+                <ul className="text-[12px] text-[#6e6e73] dark:text-white/60 space-y-0.5 max-h-24 overflow-y-auto">
+                  {changes.map((c, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <span className="text-[#007aff] mt-0.5">·</span>
+                      <span className="truncate">{c}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={onDiscard}
+                  className="px-4 py-2 rounded-lg text-[14px] font-medium text-[#1d1d1f] dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={onSave}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg text-[14px] font-semibold bg-[#007aff] text-white hover:bg-[#0066d6] transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                  Salva
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type Snapshot = {
+  categories: Category[]
+  fasce: Fascia[]
+  insurance: InsuranceCategoryConfig[]
+}
+
+function computeChanges(current: Snapshot, saved: Snapshot): string[] {
+  const out: string[] = []
+
+  // Categories
+  const catSavedIds = new Set(saved.categories.map((c) => c.id))
+  const catCurIds = new Set(current.categories.map((c) => c.id))
+  current.categories.forEach((c) => {
+    if (!catSavedIds.has(c.id)) out.push(`Categoria aggiunta: "${c.label || '(senza nome)'}"`)
+  })
+  saved.categories.forEach((c) => {
+    if (!catCurIds.has(c.id)) out.push(`Categoria rimossa: "${c.label}"`)
+  })
+  current.categories.forEach((c) => {
+    const prev = saved.categories.find((x) => x.id === c.id)
+    if (prev && prev.label !== c.label) out.push(`Categoria rinominata: "${prev.label}" → "${c.label}"`)
+  })
+
+  // Fascia
+  const fSavedIds = new Set(saved.fasce.map((f) => f.id))
+  const fCurIds = new Set(current.fasce.map((f) => f.id))
+  current.fasce.forEach((f) => {
+    if (!fSavedIds.has(f.id)) out.push(`Fascia aggiunta: "${f.label || '(senza nome)'}"`)
+  })
+  saved.fasce.forEach((f) => {
+    if (!fCurIds.has(f.id)) out.push(`Fascia rimossa: "${f.label}"`)
+  })
+  current.fasce.forEach((f) => {
+    const prev = saved.fasce.find((x) => x.id === f.id)
+    if (!prev) return
+    if (prev.label !== f.label) out.push(`Fascia rinominata: "${prev.label}" → "${f.label}"`)
+    if (prev.description !== f.description) out.push(`${f.label}: descrizione modificata`)
+    if (prev.min_age !== f.min_age) out.push(`${f.label}: eta minima ${prev.min_age} → ${f.min_age}`)
+    if (prev.max_age !== f.max_age) out.push(`${f.label}: eta massima ${prev.max_age} → ${f.max_age}`)
+    if (prev.min_license_years !== f.min_license_years) out.push(`${f.label}: patente min ${prev.min_license_years} → ${f.min_license_years} anni`)
+  })
+
+  // Insurance
+  current.insurance.forEach((cat) => {
+    const prevCat = saved.insurance.find((c) => c.id === cat.id)
+    if (!prevCat) return
+    if (prevCat.mode !== cat.mode) {
+      out.push(`${cat.label}: modalita cambiata (${prevCat.mode === 'per_fascia' ? 'per fascia' : 'tutte le fasce'} → ${cat.mode === 'per_fascia' ? 'per fascia' : 'tutte le fasce'})`)
+    }
+    diffInsuranceList(cat.label, 'Fascia A', cat.fasciaA, prevCat.fasciaA, out)
+    diffInsuranceList(cat.label, 'Fascia B', cat.fasciaB, prevCat.fasciaB, out)
+    diffInsuranceList(cat.label, '', cat.all, prevCat.all, out)
+  })
+
+  return out
+}
+
+function diffInsuranceList(
+  categoryLabel: string,
+  scope: string,
+  current: InsuranceOption[],
+  saved: InsuranceOption[],
+  out: string[]
+) {
+  const prefix = scope ? `${categoryLabel} / ${scope}` : categoryLabel
+  const savedIds = new Set(saved.map((o) => o.id))
+  const curIds = new Set(current.map((o) => o.id))
+  current.forEach((o) => {
+    if (!savedIds.has(o.id)) out.push(`${prefix}: aggiunta "${o.name || 'Nuova opzione'}"`)
+  })
+  saved.forEach((o) => {
+    if (!curIds.has(o.id)) out.push(`${prefix}: rimossa "${o.name}"`)
+  })
+  current.forEach((o) => {
+    const prev = saved.find((x) => x.id === o.id)
+    if (!prev) return
+    if (prev.name !== o.name) out.push(`${prefix}: "${prev.name}" rinominata in "${o.name}"`)
+    if (prev.daily_price !== o.daily_price) out.push(`${prefix} / ${o.name}: €/giorno ${prev.daily_price} → ${o.daily_price}`)
+    if (prev.mandatory_deposit !== o.mandatory_deposit) out.push(`${prefix} / ${o.name}: deposito ${prev.mandatory_deposit} → ${o.mandatory_deposit}`)
+    if (prev.deductible_fixed !== o.deductible_fixed) out.push(`${prefix} / ${o.name}: franchigia ${prev.deductible_fixed} → ${o.deductible_fixed}`)
+    if (prev.deductible_percent !== o.deductible_percent) out.push(`${prefix} / ${o.name}: franchigia % ${prev.deductible_percent} → ${o.deductible_percent}`)
+  })
 }
 
 type ListItem = { id: string; label: string }
@@ -445,11 +657,17 @@ const INITIAL_INSURANCE: InsuranceCategoryConfig[] = [
   },
 ]
 
-function AssicurazioniSection() {
-  const [config, setConfig] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
+function AssicurazioniSection({
+  insurance,
+  setInsurance,
+}: {
+  insurance: InsuranceCategoryConfig[]
+  setInsurance: (next: InsuranceCategoryConfig[]) => void
+}) {
+  const config = insurance
 
   function updateCategory(id: string, patch: Partial<InsuranceCategoryConfig>) {
-    setConfig((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+    setInsurance(config.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   }
 
   return (
