@@ -15,7 +15,7 @@ type Fascia = {
 const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'categorie-fascia', title: 'Categorie & Fascia' },
   { id: 'p2', title: 'Assicurazioni' },
-  { id: 'p3', title: 'Punto 3' },
+  { id: 'p3', title: 'Km & Sforo' },
   { id: 'p4', title: 'Punto 4' },
   { id: 'p5', title: 'Punto 5' },
   { id: 'p6', title: 'Punto 6' },
@@ -26,6 +26,42 @@ const INITIAL_CATEGORIES: Category[] = [
   { id: 'supercars', label: 'Supercars' },
   { id: 'urban', label: 'Urban' },
   { id: 'aziendali', label: 'Aziendali' },
+]
+
+type KmConfig = {
+  id: string
+  label: string
+  table: Record<string, number | ''>
+  extraPerDay: number | ''
+  sforo: number | ''
+  unlimitedPerDay: number | ''
+}
+
+const INITIAL_KM: KmConfig[] = [
+  {
+    id: 'supercars',
+    label: 'Supercars',
+    table: { '1': 100, '2': 180, '3': 240, '4': 280, '5': 300 },
+    extraPerDay: 60,
+    sforo: 0.89,
+    unlimitedPerDay: 189,
+  },
+  {
+    id: 'urban',
+    label: 'Urban',
+    table: { '1': '', '2': '', '3': '', '4': '', '5': '' },
+    extraPerDay: 0,
+    sforo: 0.30,
+    unlimitedPerDay: 0,
+  },
+  {
+    id: 'aziendali',
+    label: 'Aziendali',
+    table: { '1': 200, '2': 350, '3': 500, '4': 600, '5': 700 },
+    extraPerDay: 100,
+    sforo: 0.49,
+    unlimitedPerDay: 0,
+  },
 ]
 
 const INITIAL_FASCE: Fascia[] = [
@@ -58,23 +94,30 @@ export default function CentralinaProTab() {
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES)
   const [fasce, setFasce] = useState<Fascia[]>(INITIAL_FASCE)
   const [insurance, setInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
+  const [km, setKm] = useState<KmConfig[]>(INITIAL_KM)
 
   // Saved (committed) snapshot — what the server has
   const [savedCategories, setSavedCategories] = useState<Category[]>(INITIAL_CATEGORIES)
   const [savedFasce, setSavedFasce] = useState<Fascia[]>(INITIAL_FASCE)
   const [savedInsurance, setSavedInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
+  const [savedKm, setSavedKm] = useState<KmConfig[]>(INITIAL_KM)
 
   const [justSaved, setJustSaved] = useState(false)
 
   const changes = useMemo(
-    () => computeChanges({ categories, fasce, insurance }, { categories: savedCategories, fasce: savedFasce, insurance: savedInsurance }),
-    [categories, fasce, insurance, savedCategories, savedFasce, savedInsurance]
+    () =>
+      computeChanges(
+        { categories, fasce, insurance, km },
+        { categories: savedCategories, fasce: savedFasce, insurance: savedInsurance, km: savedKm }
+      ),
+    [categories, fasce, insurance, km, savedCategories, savedFasce, savedInsurance, savedKm]
   )
 
   function handleSave() {
     setSavedCategories(categories)
     setSavedFasce(fasce)
     setSavedInsurance(insurance)
+    setSavedKm(km)
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
   }
@@ -83,6 +126,7 @@ export default function CentralinaProTab() {
     setCategories(savedCategories)
     setFasce(savedFasce)
     setInsurance(savedInsurance)
+    setKm(savedKm)
   }
 
   const hasChanges = changes.length > 0
@@ -154,7 +198,8 @@ export default function CentralinaProTab() {
             {section === 'p2' && (
               <AssicurazioniSection insurance={insurance} setInsurance={setInsurance} />
             )}
-            {section !== 'categorie-fascia' && section !== 'p2' && (
+            {section === 'p3' && <KmSforoSection km={km} setKm={setKm} />}
+            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && (
               <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-12 text-center">
                 <p className="text-[15px] text-[#6e6e73] dark:text-white/60">
                   Sezione in arrivo — da definire
@@ -277,6 +322,7 @@ type Snapshot = {
   categories: Category[]
   fasce: Fascia[]
   insurance: InsuranceCategoryConfig[]
+  km: KmConfig[]
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -313,6 +359,21 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     if (prev.min_age !== f.min_age) out.push(`${f.label}: eta minima ${prev.min_age} → ${f.min_age}`)
     if (prev.max_age !== f.max_age) out.push(`${f.label}: eta massima ${prev.max_age} → ${f.max_age}`)
     if (prev.min_license_years !== f.min_license_years) out.push(`${f.label}: patente min ${prev.min_license_years} → ${f.min_license_years} anni`)
+  })
+
+  // Km & Sforo
+  current.km.forEach((k) => {
+    const prev = saved.km.find((x) => x.id === k.id)
+    if (!prev) return
+    const days = new Set([...Object.keys(k.table), ...Object.keys(prev.table)])
+    days.forEach((d) => {
+      if (prev.table[d] !== k.table[d]) {
+        out.push(`Km & Sforo / ${k.label}: ${d}g ${prev.table[d] || 0} → ${k.table[d] || 0} km`)
+      }
+    })
+    if (prev.extraPerDay !== k.extraPerDay) out.push(`Km & Sforo / ${k.label}: extra/giorno ${prev.extraPerDay} → ${k.extraPerDay} km`)
+    if (prev.sforo !== k.sforo) out.push(`Km & Sforo / ${k.label}: sforo €${prev.sforo} → €${k.sforo}/km`)
+    if (prev.unlimitedPerDay !== k.unlimitedPerDay) out.push(`Km & Sforo / ${k.label}: km illimitati €${prev.unlimitedPerDay} → €${k.unlimitedPerDay}/giorno`)
   })
 
   // Insurance
@@ -847,5 +908,158 @@ function FieldBox({
         className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
       />
     </label>
+  )
+}
+
+// ========== KM & SFORO (Punto 3) ==========
+
+function KmSforoSection({
+  km,
+  setKm,
+}: {
+  km: KmConfig[]
+  setKm: (next: KmConfig[]) => void
+}) {
+  function patch(id: string, p: Partial<KmConfig>) {
+    setKm(km.map((k) => (k.id === id ? { ...k, ...p } : k)))
+  }
+  function patchDay(id: string, day: string, value: number | '') {
+    const target = km.find((k) => k.id === id)
+    if (!target) return
+    setKm(km.map((k) => (k.id === id ? { ...k, table: { ...k.table, [day]: value } } : k)))
+  }
+
+  const dayKeys = ['1', '2', '3', '4', '5']
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+          Km & Sforo
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1">
+          Km inclusi per giorno, sforo e prezzo km illimitati per categoria
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {km.map((cat) => (
+          <section
+            key={cat.id}
+            className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden flex flex-col"
+          >
+            <header className="px-5 pt-5 pb-3">
+              <h3 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+                {cat.label}
+              </h3>
+            </header>
+
+            <div className="px-5 pb-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">
+                Km inclusi per giorno
+              </p>
+              <div className="space-y-2">
+                {dayKeys.map((d) => (
+                  <div key={d} className="flex items-center gap-3">
+                    <span className="w-14 text-[13px] text-[#6e6e73] dark:text-white/60">
+                      {d} {d === '1' ? 'giorno' : 'giorni'}
+                    </span>
+                    <div className="flex-1 relative">
+                      <input
+                        type="number"
+                        min={0}
+                        value={cat.table[d] ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          patchDay(cat.id, d, v === '' ? '' : Number(v))
+                        }}
+                        className="w-full bg-[#f5f5f7] dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+                        km
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center gap-3 pt-2 border-t border-black/[0.06] dark:border-white/[0.06] mt-2">
+                  <span className="w-14 text-[13px] text-[#6e6e73] dark:text-white/60">
+                    + giorno
+                  </span>
+                  <div className="flex-1 relative">
+                    <input
+                      type="number"
+                      min={0}
+                      value={cat.extraPerDay}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        patch(cat.id, { extraPerDay: v === '' ? '' : Number(v) })
+                      }}
+                      className="w-full bg-[#f5f5f7] dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+                      km
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-black/[0.06] dark:border-white/[0.06] bg-[#fafafa] dark:bg-white/[0.02]">
+              <label className="block">
+                <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">
+                  Sforo (€ per km oltre il limite)
+                </span>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[#a1a1a6] pointer-events-none">
+                    €
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={cat.sforo}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      patch(cat.id, { sforo: v === '' ? '' : Number(v) })
+                    }}
+                    className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-14 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+                    /km
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            <div className="px-5 py-4 border-t border-black/[0.06] dark:border-white/[0.06] mt-auto">
+              <label className="block">
+                <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">
+                  Km illimitati — prezzo al giorno
+                </span>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[#a1a1a6] pointer-events-none">
+                    €
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={cat.unlimitedPerDay}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      patch(cat.id, { unlimitedPerDay: v === '' ? '' : Number(v) })
+                    }}
+                    className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+                    /giorno
+                  </span>
+                </div>
+              </label>
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
   )
 }
