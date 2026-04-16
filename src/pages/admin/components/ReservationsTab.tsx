@@ -4462,11 +4462,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         .catch(err => console.error('⚠️ Failed to sync cauzione:', err))
 
-      // Generate Contract PDF automatically — fire and forget
+      // Generate Contract PDF — AWAIT so signing link below finds the contract
       logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)')
-      handleGenerateContract(insertedBooking, false)
-        .then(() => logger.log('[Auto-Gen] ✅ Contract generated successfully'))
-        .catch(err => console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err))
+      try {
+        await handleGenerateContract(insertedBooking, false)
+        logger.log('[Auto-Gen] ✅ Contract generated successfully')
+      } catch (err) {
+        console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
+      }
 
       // Detect if payment status just changed from unpaid → paid (on edit)
       const justMarkedPaid = editingId
