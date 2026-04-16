@@ -1874,72 +1874,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return missing
   }
 
-  async function handleConfermaBooking(booking: Booking, skipConfirm = false) {
-    if (!skipConfirm && !confirm(`Confermare la prenotazione di ${booking.customer_name || 'cliente'}?\n\nLa prenotazione non scadrà dopo 1 ora e il cliente riceverà il messaggio "Prenotazione Confermata - Da Saldare".`)) return
-
-    try {
-      toast.loading('Conferma in corso...')
-
-      // 1. Update booking with manually_confirmed flag
-      const { error: updErr } = await supabase
-        .from('bookings')
-        .update({
-          status: 'confirmed',
-          booking_details: {
-            ...(booking.booking_details || {}),
-            manually_confirmed: true,
-            manually_confirmed_at: new Date().toISOString(),
-          }
-        })
-        .eq('id', booking.id)
-
-      if (updErr) throw updErr
-
-      // 2. Send WhatsApp to customer using Messaggi di Sistema template
-      const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
-      if (custPhone) {
-        // Use the existing "Conferma Noleggio (cliente)" template (rental_new_customer)
-        // Force payment_status to 'pending' and strip Nexi Pay by Link so payment shows "Da saldare"
-        const pmForConferma = (booking.payment_method || '').includes('Nexi Pay by Link') ? 'Bonifico' : (booking.payment_method || '')
-        fetch('/.netlify/functions/send-whatsapp-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customPhone: custPhone,
-            booking: {
-              id: booking.id,
-              service_type: 'car_rental',
-              customer_name: booking.customer_name || 'Cliente',
-              customer_email: booking.customer_email || '',
-              customer_phone: custPhone,
-              vehicle_name: booking.vehicle_name || '',
-              vehicle_plate: booking.vehicle_plate || '',
-              pickup_date: booking.pickup_date,
-              dropoff_date: booking.dropoff_date,
-              pickup_location: booking.pickup_location || '',
-              insurance_option: booking.booking_details?.insuranceOption || '',
-              price_total: booking.price_total || 0,
-              payment_status: 'pending',
-              payment_method: pmForConferma,
-              deposit_amount: booking.deposit_amount || 0,
-              booking_details: booking.booking_details || {}
-            }
-          })
-        })
-          .then(() => logger.log('✅ Conferma WhatsApp sent (rental_new_customer)'))
-          .catch(err => console.error('⚠️ Conferma WhatsApp failed:', err))
-      }
-
-      toast.dismiss()
-      toast.success('Prenotazione confermata!')
-      loadData()
-    } catch (err: any) {
-      toast.dismiss()
-      toast.error('Errore conferma: ' + (err?.message || 'sconosciuto'))
-      console.error('[handleConfermaBooking]', err)
-    }
-  }
-
   async function handleResendPaymentLink(booking: Booking) {
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
     const custName = booking.booking_details?.customer?.fullName || booking.customer_name || 'Cliente'
@@ -2638,6 +2572,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     setEditingId(booking.id)
     newSession('booking_edit')
     setEditingOriginalPaymentStatus(booking.payment_status || 'pending')
+    setConfirmBooking(booking.booking_details?.manually_confirmed === true)
     setShowForm(true)
   }
 
@@ -3005,7 +2940,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [confirmAfterSave, setConfirmAfterSave] = useState(false)
+  const [confirmBooking, setConfirmBooking] = useState(false)
 
   async function processBookingSubmission(skipValidation = false, overrideCustomerId?: string) {
     logger.log('[processBookingSubmission] 🚀 STARTING SUBMISSION PROCESS', { skipValidation, overrideCustomerId })
@@ -4169,6 +4104,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } : null,
           pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
           notes: formData.notes || null,
+          // Manually confirmed flag: prevents auto-cancel + shows red in calendar with customer name
+          ...(confirmBooking ? {
+            manually_confirmed: true,
+            manually_confirmed_at: new Date().toISOString(),
+          } : {}),
           // Revenue Management tracking
           ...(revenueSuggestion ? {
             revenue_suggested_price: revenueSuggestion.finalTotalEur,
@@ -4370,10 +4310,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Send WhatsApp notification for car rental
-      // Note: "Da Saldare" confirmation message is sent only via the "Conferma" button in booking list
+      // Always send on new booking (paid OR pending) + on any edit
       const paymentStatus = formData.payment_status || 'pending'
-      const isPaid = paymentStatus === 'paid' || paymentStatus === 'succeeded' || paymentStatus === 'completed'
-      if (isPaid || editingId) {
+      {
       try {
         // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
         // Fire and forget — don't block UI on WhatsApp sending
@@ -4430,49 +4369,68 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }).then(() => logger.log('✅ WhatsApp admin notification sent'))
           .catch(err => console.error('⚠️ WhatsApp admin notification failed:', err))
 
-        // Send customer confirmation message via DB template (rental_new_customer) — fire and forget
+        // Send customer confirmation — template varies by payment state
         const custPhone = customerInfo?.phone
         if (custPhone) {
+          const isPending = paymentStatus === 'pending' || paymentStatus === 'unpaid'
+          const isNexi = (formData.payment_method || '').includes('Nexi Pay by Link')
+
+          // Build template vars
+          const pickupD = new Date(pickupDateTime)
+          const dropoffD = new Date(returnDateTime)
+          const templateVars = {
+            '{customer_name}': customerInfo?.full_name || 'Cliente',
+            '{nome}': (customerInfo?.full_name || 'Cliente').split(' ')[0],
+            '{booking_id}': 'DR7-' + (insertedBooking?.id?.substring(0, 8).toUpperCase() || ''),
+            '{vehicle_name}': vehicle?.display_name || '',
+            '{plate}': vehicle?.plate || '',
+            '{pickup_date}': pickupD.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            '{pickup_time}': pickupD.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }),
+            '{dropoff_date}': dropoffD.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            '{dropoff_time}': dropoffD.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }),
+            '{pickup_location}': pickupLocationLabel || '',
+            '{insurance}': formData.insurance_option || 'KASKO_BASE',
+            '{deposit}': parseFloat(formData.deposit) > 0 ? `€${parseFloat(formData.deposit).toFixed(2)}` : '€0',
+            '{km_info}': formData.unlimited_km ? 'Illimitati' : `${formData.km_limit || 0} km`,
+            '{total}': ((insertedBooking?.price_total || eurToCents(formData.total_amount)) / 100).toFixed(2),
+            '{payment_method}': formData.payment_method || '',
+            '{payment_status}': isPending ? 'Da saldare' : 'Pagato',
+          }
+
+          // Pick the right template:
+          // - Conferma Prenotazione checkbox ON → rental_new_customer (full confirmation, no expiry)
+          // - Pending + Nexi Pay by Link → payment_link_customer (already sent by nexi-pay-by-link flow)
+          // - Pending + NOT Nexi (no conferma) → rental_da_saldare_customer (pay within 1h)
+          // - Paid or edit → rental_new_customer (normal confirmation)
+          let templateKey: string
+          if (confirmBooking) {
+            // Manually confirmed booking — always send full confirmation, regardless of payment status
+            templateKey = 'rental_new_customer'
+          } else if (isPending && !isNexi) {
+            templateKey = 'rental_da_saldare_customer'
+          } else if (isPending && isNexi) {
+            // Nexi link message is handled elsewhere — skip here
+            return
+          } else {
+            templateKey = 'rental_new_customer'
+          }
+
           fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               customPhone: custPhone,
-              booking: {
-                id: insertedBooking?.id || '',
-                service_type: 'car_rental',
-                isEdit: !!editingId,
-                customer_name: customerInfo?.full_name || '',
-                customer_email: customerInfo?.email || '',
-                customer_phone: custPhone,
-                vehicle_name: vehicle?.display_name || '',
-                vehicle_plate: vehicle?.plate || '',
-                pickup_date: pickupDateTime,
-                dropoff_date: returnDateTime,
-                pickup_location: pickupLocationLabel,
-                insurance_option: formData.insurance_option || 'KASKO_BASE',
-                price_total: insertedBooking?.price_total || eurToCents(formData.total_amount),
-                payment_status: paymentStatus,
-                payment_method: formData.payment_method || '',
-                deposit_amount: parseFloat(formData.deposit) || 0,
-                booking_details: {
-                  insuranceOption: formData.insurance_option || 'KASKO_BASE',
-                  deposit: parseFloat(formData.deposit) || 0,
-                  deposit_status: formData.deposit_status,
-                  km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
-                  unlimited_km: formData.unlimited_km,
-                  notes: formData.notes || null,
-                }
-              }
+              templateKey,
+              templateVars,
             })
-          }).then(() => logger.log('✅ WhatsApp customer confirmation sent to', custPhone))
-            .catch(err => console.error('⚠️ WhatsApp customer notification failed:', err))
+          }).then(() => logger.log(`✅ Customer WhatsApp sent (${templateKey}) to`, custPhone))
+            .catch(err => console.error('⚠️ Customer WhatsApp failed:', err))
         }
       } catch (whatsappError) {
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
         // Don't fail the whole booking if WhatsApp fails
       }
-      } // end isPaid || editingId
+      } // end WhatsApp block
 
       // Sync cauzione (security deposit) record — fire and forget
       const depositAmount = parseFloat(formData.deposit) || 0
@@ -4504,11 +4462,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         .catch(err => console.error('⚠️ Failed to sync cauzione:', err))
 
-      // Generate Contract PDF automatically — fire and forget
+      // Generate Contract PDF — AWAIT so signing link below finds the contract
       logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)')
-      handleGenerateContract(insertedBooking, false)
-        .then(() => logger.log('[Auto-Gen] ✅ Contract generated successfully'))
-        .catch(err => console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err))
+      try {
+        await handleGenerateContract(insertedBooking, false)
+        logger.log('[Auto-Gen] ✅ Contract generated successfully')
+      } catch (err) {
+        console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
+      }
 
       // Detect if payment status just changed from unpaid → paid (on edit)
       const justMarkedPaid = editingId
@@ -4614,21 +4575,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       setShowForm(false)
       setEditingId(null)
       setNewCustomerMode(false)
+      setConfirmBooking(false)
       resetForm()
       await loadData()
 
       await consumeAllOverrides(insertedBooking?.id)
       toast.success(editingId ? 'Prenotazione aggiornata!' : 'Prenotazione creata!')
-
-      // If "Salva & Conferma" was clicked, immediately trigger Conferma on the new booking
-      if (confirmAfterSave && insertedBooking) {
-        setConfirmAfterSave(false)
-        await handleConfermaBooking(insertedBooking as Booking, true)
-      }
     } catch (error) {
       console.error('Failed to save reservation:', error)
       alert('Failed to save reservation: ' + (error as Error).message)
-      setConfirmAfterSave(false)
     } finally {
       setIsSubmitting(false)
     }
@@ -6468,19 +6423,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 </label>
               </div>
 
-              {/* Conferma Prenotazione checkbox: saves + confirms + sends Da Saldare message */}
+              {/* Conferma Prenotazione — non scade dopo 1h, visibile in rosso con nome cliente */}
               {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
-                <div className={`flex items-start gap-2 p-3 rounded-lg border ${confirmAfterSave ? 'border-green-500 bg-green-900/10' : 'border-theme-border'}`}>
+                <div className={`flex items-start gap-2 p-3 rounded-lg border ${confirmBooking ? 'border-red-500 bg-red-900/10' : 'border-theme-border'}`}>
                   <input
                     type="checkbox"
-                    id="conferma_prenotazione"
-                    checked={confirmAfterSave}
-                    onChange={(e) => setConfirmAfterSave(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 text-green-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-green-500"
+                    id="confirm_booking"
+                    checked={confirmBooking}
+                    onChange={(e) => setConfirmBooking(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 text-red-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-red-500"
                   />
-                  <label htmlFor="conferma_prenotazione" className="text-sm text-theme-text-secondary cursor-pointer">
-                    <span className="font-semibold text-green-400">Conferma Prenotazione</span>
-                    <span className="block text-xs text-theme-text-muted mt-0.5">La prenotazione non scadrà dopo 1 ora e il cliente riceverà il messaggio "Conferma Noleggio" con stato "Da saldare"</span>
+                  <label htmlFor="confirm_booking" className="text-sm text-theme-text-secondary cursor-pointer">
+                    <span className="font-semibold text-red-400">Conferma Prenotazione</span>
+                    <span className="block text-xs text-theme-text-muted mt-0.5">La prenotazione NON scadrà dopo 1h. In calendario apparirà in rosso con il nome del cliente invece di "Da Saldare".</span>
                   </label>
                 </div>
               )}
@@ -6558,9 +6513,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             <div className="flex flex-wrap gap-3 mt-4">
               <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
-                {isSubmitting ? (confirmAfterSave ? 'Conferma...' : 'Salvataggio...') : (confirmAfterSave ? 'Salva & Conferma' : 'Salva')}
+                {isSubmitting ? 'Salvataggio...' : 'Salva'}
               </Button>
-              <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); resetForm(); setConfirmAfterSave(false) }}>
+              <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); setConfirmBooking(false); resetForm() }}>
                 Annulla
               </Button>
             </div>
@@ -6724,22 +6679,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       >
                         {booking.booking_details?.nexi_payment_link ? 'Rinvia Link' : 'Genera Link'}
                       </button>
-                    )}
-
-                    {/* Conferma Prenotazione button: only for unpaid bookings not yet manually confirmed */}
-                    {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && !booking.booking_details?.manually_confirmed && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleConfermaBooking(booking) }}
-                        className="px-3 py-1 min-h-[44px] bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
-                        title="Conferma prenotazione — non scade dopo 1h e invia messaggio Da Saldare al cliente"
-                      >
-                        Conferma
-                      </button>
-                    )}
-                    {booking.booking_details?.manually_confirmed && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
-                      <span className="px-3 py-1 min-h-[44px] bg-green-700/40 rounded-full text-green-300 text-sm flex items-center gap-1 whitespace-nowrap" title="Prenotazione confermata manualmente">
-                        ✓ Confermata
-                      </span>
                     )}
 
                     <button

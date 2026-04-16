@@ -445,6 +445,94 @@ export const handler: Handler = async (event) => {
                 console.error('[signature-complete] WhatsApp send failed:', waErr.message)
             }
 
+            // Send "booking confirmed" message to customer using rental_new_customer template
+            // Render template directly from Messaggi Sistema and send via Green API
+            if (contract?.booking_id) {
+                try {
+                    const { data: fullBooking } = await supabase
+                        .from('bookings')
+                        .select('*')
+                        .eq('id', contract.booking_id)
+                        .single()
+
+                    const customerPhone = fullBooking?.customer_phone || fullBooking?.booking_details?.customer?.phone || ''
+                    console.log('[signature-complete] Booking confirmation check: phone=', customerPhone, 'booking=', !!fullBooking)
+
+                    if (customerPhone && fullBooking) {
+                        const customerName = fullBooking.customer_name || fullBooking.booking_details?.customer?.fullName || 'Cliente'
+                        const bookingIdShort = String(fullBooking.id).substring(0, 8).toUpperCase()
+                        const totalPrice = ((fullBooking.price_total || 0) / 100).toFixed(2)
+                        const vehicleName = fullBooking.vehicle_name || ''
+                        const plate = fullBooking.vehicle_plate || fullBooking.booking_details?.vehicle?.plate || ''
+                        const pickupDate = fullBooking.pickup_date ? new Date(fullBooking.pickup_date) : null
+                        const dropoffDate = fullBooking.dropoff_date ? new Date(fullBooking.dropoff_date) : null
+                        const insuranceOption = fullBooking.insurance_option || fullBooking.booking_details?.insuranceOption || ''
+                        const pickupLocation = fullBooking.pickup_location || ''
+
+                        // Deposit
+                        const depAmount = Number(fullBooking.deposit_amount ?? fullBooking.booking_details?.deposit ?? 0)
+                        const depOption = fullBooking.booking_details?.depositOption
+                        let depositLabel = '€0'
+                        if (depOption === 'no_deposit') {
+                            const surcharge = Number(fullBooking.booking_details?.noDepositSurcharge ?? 0)
+                            depositLabel = `Senza cauzione (+30% = €${surcharge.toFixed(2)})`
+                        } else if (depAmount > 0) {
+                            depositLabel = `€${depAmount.toFixed(2)}`
+                        }
+
+                        // KM info
+                        const unlimitedKm = fullBooking.booking_details?.unlimited_km
+                        const kmLimit = fullBooking.booking_details?.km_limit
+                        const kmInfo = (unlimitedKm || kmLimit === 'Illimitati') ? 'Illimitati' : (kmLimit ? `${kmLimit} km` : 'Standard')
+
+                        const vars = {
+                            nome: customerName.split(' ')[0],
+                            customer_name: customerName,
+                            customer_email: fullBooking.customer_email || '',
+                            customer_phone: customerPhone,
+                            booking_id: bookingIdShort,
+                            total: totalPrice,
+                            vehicle_name: vehicleName,
+                            plate,
+                            pickup_date: pickupDate ? pickupDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '',
+                            pickup_time: pickupDate ? pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '',
+                            dropoff_date: dropoffDate ? dropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '',
+                            dropoff_time: dropoffDate ? dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '',
+                            pickup_location: pickupLocation,
+                            insurance: insuranceOption,
+                            deposit: depositLabel,
+                            km_info: kmInfo,
+                            payment_status: 'Pagato',
+                            payment_method: fullBooking.payment_method || '',
+                        }
+
+                        const confBody = await renderTemplate('rental_new_customer', vars)
+                        if (confBody) {
+                            let cleanConfPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                            if (cleanConfPhone.startsWith('00')) cleanConfPhone = cleanConfPhone.substring(2)
+                            if (cleanConfPhone.length === 10) cleanConfPhone = '39' + cleanConfPhone
+
+                            const confUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+                            const confRes = await fetch(confUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ chatId: `${cleanConfPhone}@c.us`, message: confBody })
+                            })
+                            const confResult = await confRes.json()
+                            if (confRes.ok && !confResult.error) {
+                                console.log('[signature-complete] ✅ Booking confirmation sent to', cleanConfPhone, 'idMessage:', confResult.idMessage)
+                            } else {
+                                console.error('[signature-complete] Booking confirmation send failed:', confResult)
+                            }
+                        } else {
+                            console.log('[signature-complete] rental_new_customer template missing/disabled — skipping confirmation')
+                        }
+                    }
+                } catch (confErr: any) {
+                    console.error('[signature-complete] Booking confirmation send failed:', confErr.message)
+                }
+            }
+
             // Send signed contract notification to admin via CallMeBot
             // (Green API can't send to its own number, so we use CallMeBot for text notification)
             try {

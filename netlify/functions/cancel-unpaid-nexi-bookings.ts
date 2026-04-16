@@ -135,46 +135,52 @@ const cancelHandler: Handler = async () => {
             cancelled++;
             console.log(`[cancel-unpaid-nexi] Cancelled booking ${booking.id} (${booking.customer_name}), link deactivated: ${linkDeactivated}`);
 
-            // 3. Notify customer via WhatsApp
+            // 3. Notify customer via WhatsApp — template-only
             const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
             if (custPhone) {
                 const custName = booking.customer_name || 'Cliente';
                 const bookingRef = booking.id.substring(0, 8).toUpperCase();
-                await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        customPhone: custPhone,
-                        customMessage: await renderTemplate('booking_cancelled_whatsapp', { custName, bookingRef }, `*Prenotazione annullata*\n\nGentile ${custName},\n\nLa prenotazione #${bookingRef} è stata annullata perché il pagamento non è stato ricevuto entro 1 ora.\n\nIl link di pagamento è stato disattivato.\n\nSe desidera prenotare nuovamente, ci contatti.\n\nDR7`),
-                        skipHeader: true
-                    })
-                });
+                const custBody = await renderTemplate('booking_cancelled_whatsapp', { custName, bookingRef });
+                if (custBody) {
+                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ customPhone: custPhone, customMessage: custBody, skipHeader: true })
+                    });
+                } else {
+                    console.log('[cancel-unpaid-nexi] booking_cancelled_whatsapp template missing/disabled — skipping customer WhatsApp');
+                }
             }
 
-            // 4. Notify admin
+            // 4. Notify admin — template-only
             const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
             if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                const adminMessage = await renderTemplate('cancellation_admin_alert', { customer_name: booking.customer_name, vehicle_name: booking.vehicle_name || 'N/A', bookingRef: booking.id.substring(0, 8).toUpperCase() }, `*PRENOTAZIONE AUTO-ANNULLATA*\n\n*Cliente:* ${booking.customer_name}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n*ID:* #${booking.id.substring(0, 8).toUpperCase()}\n\nMotivo: Pagamento Nexi non ricevuto entro 1 ora.\nLink Nexi: ${linkDeactivated ? 'disattivato' : 'non trovato/già scaduto'}`);
-                await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chatId: `${NOTIFICATION_PHONE}@c.us`,
-                        message: adminMessage
-                    })
+                const adminMessage = await renderTemplate('cancellation_admin_alert', {
+                    customer_name: booking.customer_name,
+                    vehicle_name: booking.vehicle_name || 'N/A',
+                    bookingRef: booking.id.substring(0, 8).toUpperCase(),
+                    link_status: linkDeactivated ? 'disattivato' : 'non trovato/già scaduto',
                 });
-
-                // Log to sent_messages_log
-                try {
-                    await supabase.from('sent_messages_log').insert({
-                        customer_name: booking.customer_name || 'N/A',
-                        customer_phone: NOTIFICATION_PHONE,
-                        message_text: adminMessage,
-                        template_label: 'Cancellation Notification (Admin)',
-                        status: 'sent',
+                if (adminMessage) {
+                    await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chatId: `${NOTIFICATION_PHONE}@c.us`, message: adminMessage })
                     });
-                } catch (logErr) {
-                    console.error('Failed to log message:', logErr);
+
+                    try {
+                        await supabase.from('sent_messages_log').insert({
+                            customer_name: booking.customer_name || 'N/A',
+                            customer_phone: NOTIFICATION_PHONE,
+                            message_text: adminMessage,
+                            template_label: 'Cancellation Notification (Admin)',
+                            status: 'sent',
+                        });
+                    } catch (logErr) {
+                        console.error('Failed to log message:', logErr);
+                    }
+                } else {
+                    console.log('[cancel-unpaid-nexi] cancellation_admin_alert template missing/disabled — skipping admin WhatsApp');
                 }
             }
         }

@@ -361,16 +361,20 @@ export default function UnpaidBookingsTab() {
       logAdminAction('mark_paid', 'booking', bookingId, { method: newStatus })
 
       if (newStatus === 'paid') {
-        // Get service_type to know if we need the contract
+        // Get service_type to check if it's a car rental
         const { data: bookingData } = await supabase
           .from('bookings')
           .select('service_type')
           .eq('id', bookingId)
           .maybeSingle()
-        const isCarRental = !bookingData?.service_type || bookingData.service_type === 'rental'
+        // Car rental = NOT car_wash and NOT mechanical
+        const st = bookingData?.service_type
+        const isCarRental = !st || st === 'rental' || st === 'car_rental' ||
+          (st !== 'car_wash' && st !== 'mechanical' && st !== 'mechanical_service')
+        logger.log('[updatePaymentStatus] service_type:', st, 'isCarRental:', isCarRental)
 
+        // 1. Generate fattura
         try {
-          // Check if fattura already exists for this booking
           const { data: existingFattura } = await supabase
             .from('fatture')
             .select('id, numero_fattura')
@@ -394,17 +398,15 @@ export default function UnpaidBookingsTab() {
           logger.warn('Auto-invoice generation failed:', invoiceErr)
         }
 
-        // Generate contract + send signing link (ONLY for car rentals)
+        // 2. Generate contract + send signing link (ONLY for car rentals)
         if (isCarRental) {
           try {
-            // 1. Regenerate contract with latest data
             await authFetch('/.netlify/functions/generate-contract', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ bookingId, silent: true })
             })
 
-            // 2. Find contract and send signing link
             const { data: contractForSig } = await supabase
               .from('contracts')
               .select('id, pdf_url')
@@ -421,10 +423,45 @@ export default function UnpaidBookingsTab() {
               })
               toast.success('Contratto e link firma inviati al cliente')
             } else {
-              console.warn('No contract found for booking, skipping signing link')
+              logger.warn('No contract found for booking — skipping signing link')
             }
           } catch (sigErr) {
-            console.error('Failed to send contract/signing link:', sigErr)
+            logger.warn('Contract/signing link generation failed:', sigErr)
+          }
+
+          // 3. Send "Conferma Noleggio (cliente)" confirmation via rental_new_customer template
+          try {
+            const { data: fullBooking } = await supabase
+              .from('bookings')
+              .select('*')
+              .eq('id', bookingId)
+              .single()
+            const custPhone = fullBooking?.customer_phone || fullBooking?.booking_details?.customer?.phone
+            if (custPhone && fullBooking) {
+              // Pass booking with service_type='car_rental' + isEdit=false to force rental_new_customer template
+              const confRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customPhone: custPhone,
+                  booking: {
+                    ...fullBooking,
+                    service_type: 'car_rental',
+                    payment_status: 'paid',
+                    isEdit: false,
+                  }
+                })
+              })
+              const confResult = await confRes.json()
+              logger.log('[Segna Pagato] Confirmation WhatsApp result:', confResult)
+              if (confResult.skipped) {
+                toast(`Template ${confResult.reason}: messaggio conferma NON inviato`, { icon: '⚠️' })
+              } else if (confRes.ok) {
+                toast.success('Messaggio conferma prenotazione inviato')
+              }
+            }
+          } catch (confErr) {
+            console.error('[Segna Pagato] Confirmation message failed:', confErr)
           }
         }
       }
@@ -1123,41 +1160,6 @@ export default function UnpaidBookingsTab() {
       toast.success('Tutto segnato come pagato!')
       logAdminAction('mark_booking_extensions_paid', 'booking', booking.id)
 
-      // Generate contract + send signing link via WhatsApp (ONLY for car rentals, not carwash/mechanical)
-      const isCarRental = booking.service_type === 'rental' || !booking.service_type
-      if (isCarRental) {
-        try {
-          // 1. Regenerate contract with latest booking data
-          await authFetch('/.netlify/functions/generate-contract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId: booking.id, silent: true })
-          }).catch(err => console.error('Contract generation failed:', err))
-
-          // 2. Find the contract and send signing link
-          const { data: contractForSig } = await supabase
-            .from('contracts')
-            .select('id, pdf_url')
-            .eq('booking_id', booking.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-
-          if (contractForSig?.id && contractForSig?.pdf_url) {
-            await fetch('/.netlify/functions/signature-init', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contractId: contractForSig.id, bookingId: booking.id })
-            }).catch(err => console.error('Signature init failed:', err))
-            toast.success('Contratto e link firma inviati al cliente')
-          } else {
-            console.warn('No contract found for booking, skipping signing link')
-          }
-        } catch (sigErr) {
-          console.error('Failed to send contract/signing link:', sigErr)
-        }
-      }
-
       loadUnpaidBookings()
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
@@ -1301,34 +1303,6 @@ export default function UnpaidBookingsTab() {
           payment_status: 'paid', status: 'confirmed',
           booking_details: { ...booking.booking_details, extension_history: extensions }
         }).eq('id', bookingId)
-
-        // Generate contract + send signing link (only for car rentals)
-        const isCarRental = booking.service_type === 'rental' || !booking.service_type
-        if (isCarRental) {
-          try {
-            await authFetch('/.netlify/functions/generate-contract', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ bookingId, silent: true })
-            })
-            const { data: contractForSig } = await supabase
-              .from('contracts')
-              .select('id, pdf_url')
-              .eq('booking_id', bookingId)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle()
-            if (contractForSig?.id && contractForSig?.pdf_url) {
-              fetch('/.netlify/functions/signature-init', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contractId: contractForSig.id, bookingId })
-              }).catch(() => {})
-            }
-          } catch (sigErr) {
-            console.error('Contract/signing failed for', bookingId, sigErr)
-          }
-        }
       }
 
       for (const pwId of primeWashBookingIds) {
@@ -2464,12 +2438,20 @@ export default function UnpaidBookingsTab() {
                   </div>
 
                   {/* Salda Tutto button */}
-                  {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
+                  {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 ? (
                     <button
                       onClick={() => markAllCustomerPaid(group)}
                       disabled={!!processingKey}
                       className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >{processingKey ? 'Elaborazione...' : 'Salda Tutto — Fattura Unica'}</button>
+                  ) : (
+                    /* Single booking: Segna Pagato (car rental triggers fattura + contract + signing link) */
+                    group.noleggioBookings[0] && (
+                      <button
+                        onClick={() => updatePaymentStatus(group.noleggioBookings[0].id, 'paid')}
+                        className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                      >Segna Pagato</button>
+                    )
                   )}
 
                   {/* Pay by Link Tutto */}
@@ -2570,12 +2552,20 @@ export default function UnpaidBookingsTab() {
                     {group.chargedViaMit > 0 && (
                       <div className="text-xs text-orange-400 mt-0.5">Da incassare: €{(group.totalRemaining / 100).toFixed(2)}</div>
                     )}
-                    {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
+                    {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 ? (
                       <button
                         onClick={() => markAllCustomerPaid(group)}
                         disabled={!!processingKey}
                         className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
+                    ) : (
+                      /* Single booking: show direct "Segna Pagato" button */
+                      group.noleggioBookings[0] && (
+                        <button
+                          onClick={() => updatePaymentStatus(group.noleggioBookings[0].id, 'paid')}
+                          className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                        >Segna Pagato</button>
+                      )
                     )}
                     <button
                       onClick={() => {

@@ -10,6 +10,7 @@ import Select from './Select'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 
 // ─── Time slots (office hours, 30-min intervals) ────────────────────────────
 function genSlots(ranges: [number, number][]): { value: string; label: string }[] {
@@ -213,6 +214,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [customers, setCustomers] = useState<any[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
+  const [tierReason, setTierReason] = useState<string>('')
   // No Cauzione requests (from bookings table)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [noCauzioneRequests, setNoCauzioneRequests] = useState<any[]>([])
@@ -438,29 +440,37 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }, [])
 
   async function loadCustomers() {
-    const all: any[] = []
-    let from = 0
-    const PAGE = 1000
-    while (true) {
-      const { data } = await supabase
-        .from('customers_extended')
-        .select('id, nome, cognome, email, telefono, tipo_cliente, denominazione, scadenza_patente')
-        .order('cognome')
-        .range(from, from + PAGE - 1)
-      if (!data || data.length === 0) break
-      all.push(...data.map((c: any) => ({
-        id: c.id,
-        full_name: c.tipo_cliente === 'azienda'
-          ? (c.denominazione || 'N/A')
-          : `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A',
-        email: c.email || null,
-        phone: c.telefono || null,
-        scadenza_patente: c.scadenza_patente || null,
-      })))
-      from += data.length
-      if (data.length < PAGE) break
+    try {
+      // Use Netlify function (service role, bypasses RLS)
+      const res = await fetch('/.netlify/functions/list-customers')
+      if (!res.ok) {
+        console.error('[PreventiviTab] list-customers failed:', res.status)
+        return
+      }
+      const json = await res.json()
+      const raw = json.customers || json.data || json || []
+      const mapped = raw.map((c: any) => {
+        let fullName = ''
+        if (c.tipo_cliente === 'azienda') {
+          fullName = c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || c.email || 'Azienda'
+        } else {
+          fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || c.denominazione || c.email || c.telefono || 'Cliente senza nome'
+        }
+        return {
+          id: c.id,
+          full_name: fullName,
+          email: c.email || null,
+          phone: c.telefono || null,
+          scadenza_patente: c.scadenza_patente || null,
+          data_nascita: c.data_nascita || null,
+          data_rilascio_patente: c.data_rilascio_patente || c.metadata?.patente?.rilascio || c.patente_data_rilascio || null,
+        }
+      })
+      console.log(`[PreventiviTab] Loaded ${mapped.length} customers`)
+      setCustomers(mapped)
+    } catch (e) {
+      console.error('[PreventiviTab] loadCustomers error:', e)
     }
-    setCustomers(all)
   }
 
   async function loadPreventivi() {
@@ -1379,7 +1389,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Torna alla Lista</Button>
       </div>
 
-      {/* Vehicle Selection — ALL vehicles, no availability check */}
+      {/* Vehicle + Fascia/Customer combined dropdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select
           label="Veicolo *"
@@ -1390,15 +1400,53 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}${v.status === 'maintenance' ? ' [Manutenzione]' : ''}` }))
           ]}
         />
-        <Select
-          label="Fascia Cliente"
-          value={form.driver_tier}
-          onChange={(e) => setForm(prev => ({ ...prev, driver_tier: e.target.value as DriverTier, insurance_option: '' }))}
-          options={[
-            { value: 'TIER_2', label: 'Fascia A (26-69, patente 5+ anni)' },
-            { value: 'TIER_1', label: 'Fascia B (21-25 o patente 3-4 anni)' },
-          ]}
-        />
+        <div>
+          <label className="block text-sm font-medium text-theme-text-secondary mb-2">Fascia Cliente</label>
+          <Select
+            value={form.driver_tier}
+            onChange={(e) => setForm(prev => ({ ...prev, driver_tier: e.target.value as DriverTier, insurance_option: '' }))}
+            options={[
+              { value: 'TIER_2', label: 'Fascia A (26-69, patente 5+ anni)' },
+              { value: 'TIER_1', label: 'Fascia B (21-25 o patente 3-4 anni)' },
+            ]}
+          />
+          <div className="mt-2">
+            <CustomerAutocomplete
+              customers={customers}
+              selectedCustomerId={selectedCustomerId}
+              onSelectCustomer={(id) => {
+                setSelectedCustomerId(id)
+                if (!id) { setTierReason(''); return }
+                const c = customers.find((x: any) => x.id === id)
+                if (!c?.data_nascita || !c?.data_rilascio_patente) {
+                  setTierReason('Dati mancanti — imposta fascia manualmente')
+                  return
+                }
+                try {
+                  const age = calculateAge(c.data_nascita)
+                  const licYears = calculateLicenseYears(c.data_rilascio_patente)
+                  const tier = classifyDriverTier(age, licYears)
+                  if (tier.tier === 'BLOCKED') {
+                    setTierReason(`⚠️ Cliente non idoneo: ${tier.reason}`)
+                    return
+                  }
+                  setForm(prev => ({ ...prev, driver_tier: tier.tier as DriverTier, insurance_option: '' }))
+                  const fasciaLabel = tier.tier === 'TIER_2' ? 'A' : 'B'
+                  setTierReason(`✓ Fascia ${fasciaLabel} auto (età ${age}, patente ${licYears} anni)`)
+                } catch {
+                  setTierReason('')
+                }
+              }}
+              placeholder="Cerca cliente per auto-impostare Fascia..."
+              required={false}
+            />
+            {tierReason && (
+              <div className={`mt-1 text-xs ${tierReason.startsWith('⚠️') ? 'text-red-400' : tierReason.includes('mancanti') ? 'text-amber-400' : 'text-green-400'}`}>
+                {tierReason}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Vehicle Specs */}
