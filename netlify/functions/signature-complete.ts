@@ -458,7 +458,7 @@ export const handler: Handler = async (event) => {
                     customerPhone = fullBooking?.customer_phone || fullBooking?.booking_details?.customer?.phone || ''
 
                     if (customerPhone && fullBooking) {
-                        const baseUrl = process.env.ADMIN_URL || 'https://admin.dr7empire.com'
+                        const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
                         await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
