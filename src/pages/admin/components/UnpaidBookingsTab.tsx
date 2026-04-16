@@ -1301,6 +1301,34 @@ export default function UnpaidBookingsTab() {
           payment_status: 'paid', status: 'confirmed',
           booking_details: { ...booking.booking_details, extension_history: extensions }
         }).eq('id', bookingId)
+
+        // Generate contract + send signing link (only for car rentals)
+        const isCarRental = booking.service_type === 'rental' || !booking.service_type
+        if (isCarRental) {
+          try {
+            await authFetch('/.netlify/functions/generate-contract', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId, silent: true })
+            })
+            const { data: contractForSig } = await supabase
+              .from('contracts')
+              .select('id, pdf_url')
+              .eq('booking_id', bookingId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            if (contractForSig?.id && contractForSig?.pdf_url) {
+              fetch('/.netlify/functions/signature-init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId: contractForSig.id, bookingId })
+              }).catch(() => {})
+            }
+          } catch (sigErr) {
+            console.error('Contract/signing failed for', bookingId, sigErr)
+          }
+        }
       }
 
       for (const pwId of primeWashBookingIds) {
