@@ -66,7 +66,7 @@ const MESSAGE_CATEGORIES: { label: string; keys: string[] }[] = [
   { label: 'Pagamenti', keys: ['payment_link_customer', 'booking_cancelled_whatsapp', 'cancellation_admin_alert', 'payment_received_damages', 'payment_received_damages_admin', 'payment_received_extension', 'payment_received_extension_admin', 'prepaid_card_blocked_customer', 'prepaid_card_blocked_admin'] },
   { label: 'Fatture', keys: ['invoice_pdf_whatsapp', 'penalty_invoice_pdf_whatsapp'] },
   { label: 'Wallet & Crediti', keys: ['wallet_bonus_credit', 'wallet_bonus_credit_admin'] },
-  { label: 'Preventivi', keys: ['preventivo_whatsapp', 'admin_new_website_quote', 'admin_no_cauzione_request'] },
+  { label: 'Preventivi', keys: ['preventivo_whatsapp', 'preventivo_whatsapp_no_sconto', 'admin_new_website_quote', 'admin_no_cauzione_request'] },
   { label: 'Recensioni & Marketing', keys: ['review_request_whatsapp', 'birthday_message', 'referral_otp_whatsapp', 'membership_renewal_reminder'] },
   { label: 'Wrapper Messaggio', keys: ['message_wrapper_header', 'message_wrapper_footer'] },
 ]

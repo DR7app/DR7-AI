@@ -607,7 +607,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
   // ─── Save Preventivo ───────────────────────────────────────────────────────
 
-  async function handleSave() {
+  async function handleSave(sendAfterSave: boolean = false) {
     if (!form.vehicle_id || !form.pickup_date || !form.return_date) {
       toast.error('Seleziona veicolo e date')
       return
@@ -615,6 +615,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     if (rentalDays < 1) {
       toast.error('Date non valide')
       return
+    }
+    if (sendAfterSave) {
+      const cust = customers.find((c: any) => c.id === selectedCustomerId)
+      if (!cust?.phone) {
+        toast.error('Seleziona un cliente con numero di telefono')
+        return
+      }
     }
 
     setSaving(true)
@@ -705,9 +712,17 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       } else {
         setPreventivi(prev => [data, ...prev])
       }
+      const wasEditing = !!editingId
       setView('list')
       setEditingId(null)
       resetForm()
+
+      if (sendAfterSave && !wasEditing && data) {
+        const cust = customers.find((c: any) => c.id === selectedCustomerId)
+        if (cust?.phone) {
+          await handleSendWhatsApp(data, cust.phone)
+        }
+      }
     } catch (error: unknown) {
       console.error('Failed to save preventivo:', error)
       toast.error('Errore salvataggio preventivo')
@@ -836,13 +851,26 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }
 
   async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Try to load template from system_messages
+    // Pick template based on whether a discount was applied
+    const templateKey = p.sconto > 0 ? 'preventivo_whatsapp' : 'preventivo_whatsapp_no_sconto'
+
+    // Try to load template from system_messages (with fallback to the default key)
     try {
-      const { data: tpl } = await supabase
+      let { data: tpl } = await supabase
         .from('system_messages')
         .select('message_body, is_enabled')
-        .eq('message_key', 'preventivo_whatsapp')
-        .single()
+        .eq('message_key', templateKey)
+        .maybeSingle()
+
+      // If the no-sconto variant doesn't exist or is disabled, fall back to the main template
+      if ((!tpl || !tpl.is_enabled || !tpl.message_body) && templateKey !== 'preventivo_whatsapp') {
+        const fallback = await supabase
+          .from('system_messages')
+          .select('message_body, is_enabled')
+          .eq('message_key', 'preventivo_whatsapp')
+          .maybeSingle()
+        tpl = fallback.data
+      }
 
       if (tpl?.is_enabled && tpl.message_body) {
         // Build variables for substitution
@@ -1776,9 +1804,31 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       {/* Actions */}
       <div className="flex gap-3 justify-end">
         <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Annulla</Button>
-        <Button disabled={saving || !form.vehicle_id || rentalDays < 1} onClick={handleSave}>
+        <Button disabled={saving || !form.vehicle_id || rentalDays < 1} onClick={() => handleSave(false)}>
           {saving ? 'Salvataggio...' : (editingId ? 'Aggiorna Preventivo' : 'Salva Preventivo')}
         </Button>
+        {!editingId && (
+          <Button
+            disabled={
+              saving ||
+              sendingWhatsapp ||
+              !form.vehicle_id ||
+              rentalDays < 1 ||
+              !selectedCustomerId ||
+              !customers.find((c: any) => c.id === selectedCustomerId)?.phone
+            }
+            onClick={() => handleSave(true)}
+            title={
+              !selectedCustomerId
+                ? 'Seleziona un cliente sopra (campo Fascia)'
+                : !customers.find((c: any) => c.id === selectedCustomerId)?.phone
+                  ? 'Il cliente selezionato non ha un numero di telefono'
+                  : ''
+            }
+          >
+            {saving || sendingWhatsapp ? 'Invio...' : 'Salva e invia'}
+          </Button>
+        )}
       </div>
     </div>
   )
