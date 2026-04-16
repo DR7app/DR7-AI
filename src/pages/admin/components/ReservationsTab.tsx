@@ -1906,6 +1906,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const dropoffTimeStr = dropoff.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
 
         // Use the existing "Conferma Noleggio (cliente)" template (rental_new_customer)
+        // Force payment_status to 'pending' and strip Nexi Pay by Link so payment shows "Da saldare"
+        const pmForConferma = (booking.payment_method || '').includes('Nexi Pay by Link') ? 'Bonifico' : (booking.payment_method || '')
         fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1925,7 +1927,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               insurance_option: booking.insurance_option || booking.booking_details?.insuranceOption || '',
               price_total: booking.price_total || 0,
               payment_status: 'pending',
-              payment_method: booking.payment_method || '',
+              payment_method: pmForConferma,
               deposit_amount: booking.deposit_amount || 0,
               booking_details: booking.booking_details || {}
             }
