@@ -2223,31 +2223,87 @@ function PrezzoDinamicoSection({
                 Nessun veicolo nella flotta
               </p>
             )}
-            <div className="max-h-[480px] overflow-y-auto -mx-1 px-1 space-y-2">
-              {vehicles.map((v) => (
-                <div key={v.id} className="grid grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-2 items-center">
-                  <div className="min-w-0">
-                    <div className="text-[14px] text-[#1d1d1f] font-medium truncate">{v.display_name}</div>
-                    <div className="text-[11px] text-[#a1a1a6]">
-                      {v.category ?? '—'}
-                      {v.daily_rate != null && <> · listino €{v.daily_rate}/g</>}
+            <div className="max-h-[600px] overflow-y-auto -mx-1 px-1 space-y-6">
+              {(
+                [
+                  { key: 'exotic', label: 'Exotic Supercars' },
+                  { key: 'urban', label: 'Urban' },
+                  { key: 'aziendali', label: 'Aziendali' },
+                ] as const
+              ).map((group) => {
+                const vs = vehicles.filter((v) => (v.category ?? 'exotic') === group.key)
+                if (vs.length === 0) return null
+                return (
+                  <div key={group.key}>
+                    <h4 className="text-[12px] font-semibold uppercase tracking-wider text-[#6e6e73] mb-2 px-1 sticky top-0 bg-white py-1 z-10">
+                      {group.label} <span className="text-[#a1a1a6] font-normal">· {vs.length}</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {vs.map((v) => (
+                        <div key={v.id} className="grid grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-2 items-center">
+                          <div className="min-w-0">
+                            <div className="text-[14px] text-[#1d1d1f] font-medium truncate">{v.display_name}</div>
+                            {v.daily_rate != null && (
+                              <div className="text-[11px] text-[#a1a1a6]">listino €{v.daily_rate}/g</div>
+                            )}
+                          </div>
+                          <PriceBox
+                            value={config.dynamic.base_prices[v.id] ?? ''}
+                            onChange={(val) => patchPrice('base_prices', v.id, val)}
+                            placeholder="—"
+                          />
+                          <PriceBox
+                            value={config.dynamic.min_prices[v.id] ?? ''}
+                            onChange={(val) => patchPrice('min_prices', v.id, val)}
+                          />
+                          <PriceBox
+                            value={config.dynamic.max_prices[v.id] ?? ''}
+                            onChange={(val) => patchPrice('max_prices', v.id, val)}
+                          />
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <PriceBox
-                    value={config.dynamic.base_prices[v.id] ?? ''}
-                    onChange={(val) => patchPrice('base_prices', v.id, val)}
-                    placeholder="—"
-                  />
-                  <PriceBox
-                    value={config.dynamic.min_prices[v.id] ?? ''}
-                    onChange={(val) => patchPrice('min_prices', v.id, val)}
-                  />
-                  <PriceBox
-                    value={config.dynamic.max_prices[v.id] ?? ''}
-                    onChange={(val) => patchPrice('max_prices', v.id, val)}
-                  />
-                </div>
-              ))}
+                )
+              })}
+              {(() => {
+                const known = new Set(['exotic', 'urban', 'aziendali'])
+                const others = vehicles.filter((v) => !known.has(v.category ?? 'exotic'))
+                if (others.length === 0) return null
+                return (
+                  <div>
+                    <h4 className="text-[12px] font-semibold uppercase tracking-wider text-[#6e6e73] mb-2 px-1 sticky top-0 bg-white py-1 z-10">
+                      Altre categorie <span className="text-[#a1a1a6] font-normal">· {others.length}</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {others.map((v) => (
+                        <div key={v.id} className="grid grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-2 items-center">
+                          <div className="min-w-0">
+                            <div className="text-[14px] text-[#1d1d1f] font-medium truncate">{v.display_name}</div>
+                            <div className="text-[11px] text-[#a1a1a6]">
+                              {v.category ?? '—'}
+                              {v.daily_rate != null && <> · listino €{v.daily_rate}/g</>}
+                            </div>
+                          </div>
+                          <PriceBox
+                            value={config.dynamic.base_prices[v.id] ?? ''}
+                            onChange={(val) => patchPrice('base_prices', v.id, val)}
+                            placeholder="—"
+                          />
+                          <PriceBox
+                            value={config.dynamic.min_prices[v.id] ?? ''}
+                            onChange={(val) => patchPrice('min_prices', v.id, val)}
+                          />
+                          <PriceBox
+                            value={config.dynamic.max_prices[v.id] ?? ''}
+                            onChange={(val) => patchPrice('max_prices', v.id, val)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </section>
