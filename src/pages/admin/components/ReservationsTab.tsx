@@ -4473,48 +4473,52 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Auto-generate fattura and send to SDI when payment status is "paid"
       // SKIP fattura for Credit Wallet payments — wallet credits are not invoiceable
       if (formData.payment_status === 'paid' && insertedBooking?.id && formData.payment_method !== 'Credit Wallet') {
-        // Validate customer data first — if incomplete, open the missing data popup
+        // Always try to generate fattura — backend has fallbacks for missing data
         try {
-          const bookingForValidation = { ...insertedBooking, user_id: customerId, customer_email: customerInfo?.email, customer_phone: customerInfo?.phone } as unknown as Booking
-          const invoiceMissing = (await validateCustomerData(bookingForValidation)).filter(f => f !== '__limitation_override_requested__')
-          if (invoiceMissing.length > 0) {
-            logger.warn('[Auto-Gen] ⚠️ Customer data incomplete for fattura:', invoiceMissing)
-            // Open the missing data popup so user can fill in the fields
-            const custId = customerId || insertedBooking.user_id || insertedBooking.booking_details?.customer?.customerId
-            let custData = {}
-            if (custId) {
-              try {
-                const resp = await authFetch(`/.netlify/functions/get-customer?id=${custId}`)
-                if (resp.ok) {
-                  const result = await resp.json()
-                  custData = result.customer || { id: custId }
-                }
-              } catch { custData = { id: custId } }
-            }
-            setMissingFields(invoiceMissing)
-            setTempCustomerData(custData)
-            setCurrentValidationBooking(bookingForValidation)
-            setValidationContext('invoice')
-            setShowMissingDataModal(true)
-            toast.error('Dati cliente incompleti — completa per generare la fattura', { duration: 5000 })
+          logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id, 'payment:', formData.payment_method)
+          const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
+          })
+          if (invoiceRes.ok) {
+            logger.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
+            toast.success('Fattura generata', { duration: 3000 })
           } else {
-            logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id)
-            const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
-            })
-            if (invoiceRes.ok) {
-              logger.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
-            } else {
-              const errData = await invoiceRes.json()
-              const errMsg = errData.message || errData.error || 'Errore sconosciuto'
-              logger.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
-              toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
+            const errData = await invoiceRes.json()
+            const errMsg = errData.message || errData.error || 'Errore sconosciuto'
+            logger.warn('[Auto-Gen] ⚠️ Fattura generation failed:', errMsg)
+
+            // If failed due to missing customer data, show popup
+            if (errMsg.toLowerCase().includes('dati') || errMsg.toLowerCase().includes('mancant') || errMsg.toLowerCase().includes('missing') || errMsg.toLowerCase().includes('required')) {
+              try {
+                const bookingForValidation = { ...insertedBooking, user_id: customerId, customer_email: customerInfo?.email, customer_phone: customerInfo?.phone } as unknown as Booking
+                const invoiceMissing = (await validateCustomerData(bookingForValidation)).filter(f => f !== '__limitation_override_requested__')
+                if (invoiceMissing.length > 0) {
+                  const custId = customerId || insertedBooking.user_id || insertedBooking.booking_details?.customer?.customerId
+                  let custData = {}
+                  if (custId) {
+                    try {
+                      const resp = await authFetch(`/.netlify/functions/get-customer?id=${custId}`)
+                      if (resp.ok) {
+                        const result = await resp.json()
+                        custData = result.customer || { id: custId }
+                      }
+                    } catch { custData = { id: custId } }
+                  }
+                  setMissingFields(invoiceMissing)
+                  setTempCustomerData(custData)
+                  setCurrentValidationBooking(bookingForValidation)
+                  setValidationContext('invoice')
+                  setShowMissingDataModal(true)
+                }
+              } catch { /* ignore validation errors */ }
             }
+            toast.error(`Fattura non generata: ${errMsg}`, { duration: 8000 })
           }
         } catch (invoiceError) {
           console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
+          toast.error('Errore generazione fattura: ' + (invoiceError instanceof Error ? invoiceError.message : 'sconosciuto'), { duration: 8000 })
         }
       }
 
