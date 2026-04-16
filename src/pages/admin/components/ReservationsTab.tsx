@@ -6467,6 +6467,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   })()}
                 </label>
               </div>
+
+              {/* Conferma Prenotazione checkbox: saves + confirms + sends Da Saldare message */}
+              {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
+                <div className={`flex items-start gap-2 p-3 rounded-lg border ${confirmAfterSave ? 'border-green-500 bg-green-900/10' : 'border-theme-border'}`}>
+                  <input
+                    type="checkbox"
+                    id="conferma_prenotazione"
+                    checked={confirmAfterSave}
+                    onChange={(e) => setConfirmAfterSave(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 text-green-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-green-500"
+                  />
+                  <label htmlFor="conferma_prenotazione" className="text-sm text-theme-text-secondary cursor-pointer">
+                    <span className="font-semibold text-green-400">Conferma Prenotazione</span>
+                    <span className="block text-xs text-theme-text-muted mt-0.5">La prenotazione non scadrà dopo 1 ora e il cliente riceverà il messaggio "Conferma Noleggio" con stato "Da saldare"</span>
+                  </label>
+                </div>
+              )}
+
               <Input
                 label="Importo Pagato (€)"
                 type="number"
@@ -6540,27 +6558,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             <div className="flex flex-wrap gap-3 mt-4">
               <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
-                {isSubmitting ? 'Salvataggio...' : 'Salva'}
+                {isSubmitting ? (confirmAfterSave ? 'Conferma...' : 'Salvataggio...') : (confirmAfterSave ? 'Salva & Conferma' : 'Salva')}
               </Button>
-              {/* Salva & Conferma: saves then marks manually_confirmed + sends Da Saldare WhatsApp */}
-              {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
-                <Button
-                  type="button"
-                  disabled={isSubmitting || confirmAfterSave}
-                  className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700"
-                  onClick={() => {
-                    setConfirmAfterSave(true)
-                    // Trigger form submit programmatically
-                    setTimeout(() => {
-                      const form = document.querySelector('form') as HTMLFormElement | null
-                      form?.requestSubmit()
-                    }, 0)
-                  }}
-                  title="Salva la prenotazione, conferma (non scade dopo 1h) e invia il messaggio Da Saldare al cliente"
-                >
-                  {isSubmitting && confirmAfterSave ? 'Conferma...' : 'Conferma'}
-                </Button>
-              )}
               <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); resetForm(); setConfirmAfterSave(false) }}>
                 Annulla
               </Button>
