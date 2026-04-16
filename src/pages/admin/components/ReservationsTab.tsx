@@ -1874,8 +1874,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return missing
   }
 
-  async function handleConfermaBooking(booking: Booking) {
-    if (!confirm(`Confermare la prenotazione di ${booking.customer_name || 'cliente'}?\n\nLa prenotazione non scadrà dopo 1 ora e il cliente riceverà il messaggio "Prenotazione Confermata - Da Saldare".`)) return
+  async function handleConfermaBooking(booking: Booking, skipConfirm = false) {
+    if (!skipConfirm && !confirm(`Confermare la prenotazione di ${booking.customer_name || 'cliente'}?\n\nLa prenotazione non scadrà dopo 1 ora e il cliente riceverà il messaggio "Prenotazione Confermata - Da Saldare".`)) return
 
     try {
       toast.loading('Conferma in corso...')
@@ -3005,6 +3005,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [confirmAfterSave, setConfirmAfterSave] = useState(false)
 
   async function processBookingSubmission(skipValidation = false, overrideCustomerId?: string) {
     logger.log('[processBookingSubmission] 🚀 STARTING SUBMISSION PROCESS', { skipValidation, overrideCustomerId })
@@ -4618,9 +4619,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       await consumeAllOverrides(insertedBooking?.id)
       toast.success(editingId ? 'Prenotazione aggiornata!' : 'Prenotazione creata!')
+
+      // If "Salva & Conferma" was clicked, immediately trigger Conferma on the new booking
+      if (confirmAfterSave && insertedBooking) {
+        setConfirmAfterSave(false)
+        await handleConfermaBooking(insertedBooking as Booking, true)
+      }
     } catch (error) {
       console.error('Failed to save reservation:', error)
       alert('Failed to save reservation: ' + (error as Error).message)
+      setConfirmAfterSave(false)
     } finally {
       setIsSubmitting(false)
     }
@@ -6534,7 +6542,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
                 {isSubmitting ? 'Salvataggio...' : 'Salva'}
               </Button>
-              <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); resetForm() }}>
+              {/* Salva & Conferma: saves then marks manually_confirmed + sends Da Saldare WhatsApp */}
+              {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
+                <Button
+                  type="button"
+                  disabled={isSubmitting || confirmAfterSave}
+                  className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700"
+                  onClick={() => {
+                    setConfirmAfterSave(true)
+                    // Trigger form submit programmatically
+                    setTimeout(() => {
+                      const form = document.querySelector('form') as HTMLFormElement | null
+                      form?.requestSubmit()
+                    }, 0)
+                  }}
+                  title="Salva la prenotazione, conferma (non scade dopo 1h) e invia il messaggio Da Saldare al cliente"
+                >
+                  {isSubmitting && confirmAfterSave ? 'Conferma...' : 'Salva & Conferma'}
+                </Button>
+              )}
+              <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); resetForm(); setConfirmAfterSave(false) }}>
                 Annulla
               </Button>
             </div>
