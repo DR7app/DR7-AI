@@ -370,25 +370,37 @@ function pick<T>(persisted: PersistedSnapshot | null, key: keyof PersistedSnapsh
 export default function CentralinaProTab() {
   const [section, setSection] = useState<SectionId>('categorie-fascia')
 
-  // Current (working) state
-  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES)
-  const [fasce, setFasce] = useState<Fascia[]>(INITIAL_FASCE)
-  const [insurance, setInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
-  const [km, setKm] = useState<KmConfig[]>(INITIAL_KM)
-  const [deposits, setDeposits] = useState<DepositsConfig>(INITIAL_DEPOSITS)
-  const [servizi, setServizi] = useState<ServiziConfig>(INITIAL_SERVIZI)
-  const [prezzoDinamico, setPrezzoDinamico] = useState<PrezzoDinamicoConfig>(INITIAL_PREZZO_DINAMICO)
-  const [preventivi, setPreventivi] = useState<PreventiviConfig>(INITIAL_PREVENTIVI)
+  // Hydrate from localStorage (sync, before first render of children)
+  const persisted = useMemo(() => loadPersisted(), [])
 
-  // Saved (committed) snapshot — what the server has
-  const [savedCategories, setSavedCategories] = useState<Category[]>(INITIAL_CATEGORIES)
-  const [savedFasce, setSavedFasce] = useState<Fascia[]>(INITIAL_FASCE)
-  const [savedInsurance, setSavedInsurance] = useState<InsuranceCategoryConfig[]>(INITIAL_INSURANCE)
-  const [savedKm, setSavedKm] = useState<KmConfig[]>(INITIAL_KM)
-  const [savedDeposits, setSavedDeposits] = useState<DepositsConfig>(INITIAL_DEPOSITS)
-  const [savedServizi, setSavedServizi] = useState<ServiziConfig>(INITIAL_SERVIZI)
-  const [savedPrezzoDinamico, setSavedPrezzoDinamico] = useState<PrezzoDinamicoConfig>(INITIAL_PREZZO_DINAMICO)
-  const [savedPreventivi, setSavedPreventivi] = useState<PreventiviConfig>(INITIAL_PREVENTIVI)
+  const initialCategories = pick(persisted, 'categories', INITIAL_CATEGORIES)
+  const initialFasce = pick(persisted, 'fasce', INITIAL_FASCE)
+  const initialInsurance = pick(persisted, 'insurance', INITIAL_INSURANCE)
+  const initialKm = pick(persisted, 'km', INITIAL_KM)
+  const initialDeposits = pick(persisted, 'deposits', INITIAL_DEPOSITS)
+  const initialServizi = pick(persisted, 'servizi', INITIAL_SERVIZI)
+  const initialPrezzoDinamico = pick(persisted, 'prezzoDinamico', INITIAL_PREZZO_DINAMICO)
+  const initialPreventivi = pick(persisted, 'preventivi', INITIAL_PREVENTIVI)
+
+  // Current (working) state
+  const [categories, setCategories] = useState<Category[]>(initialCategories)
+  const [fasce, setFasce] = useState<Fascia[]>(initialFasce)
+  const [insurance, setInsurance] = useState<InsuranceCategoryConfig[]>(initialInsurance)
+  const [km, setKm] = useState<KmConfig[]>(initialKm)
+  const [deposits, setDeposits] = useState<DepositsConfig>(initialDeposits)
+  const [servizi, setServizi] = useState<ServiziConfig>(initialServizi)
+  const [prezzoDinamico, setPrezzoDinamico] = useState<PrezzoDinamicoConfig>(initialPrezzoDinamico)
+  const [preventivi, setPreventivi] = useState<PreventiviConfig>(initialPreventivi)
+
+  // Saved (committed) snapshot — what was last persisted
+  const [savedCategories, setSavedCategories] = useState<Category[]>(initialCategories)
+  const [savedFasce, setSavedFasce] = useState<Fascia[]>(initialFasce)
+  const [savedInsurance, setSavedInsurance] = useState<InsuranceCategoryConfig[]>(initialInsurance)
+  const [savedKm, setSavedKm] = useState<KmConfig[]>(initialKm)
+  const [savedDeposits, setSavedDeposits] = useState<DepositsConfig>(initialDeposits)
+  const [savedServizi, setSavedServizi] = useState<ServiziConfig>(initialServizi)
+  const [savedPrezzoDinamico, setSavedPrezzoDinamico] = useState<PrezzoDinamicoConfig>(initialPrezzoDinamico)
+  const [savedPreventivi, setSavedPreventivi] = useState<PreventiviConfig>(initialPreventivi)
 
   const [justSaved, setJustSaved] = useState(false)
 
@@ -422,6 +434,7 @@ export default function CentralinaProTab() {
     setSavedServizi(servizi)
     setSavedPrezzoDinamico(prezzoDinamico)
     setSavedPreventivi(preventivi)
+    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi })
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
   }
