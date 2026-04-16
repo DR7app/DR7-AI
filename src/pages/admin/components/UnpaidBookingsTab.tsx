@@ -438,7 +438,8 @@ export default function UnpaidBookingsTab() {
               .single()
             const custPhone = fullBooking?.customer_phone || fullBooking?.booking_details?.customer?.phone
             if (custPhone && fullBooking) {
-              fetch('/.netlify/functions/send-whatsapp-notification', {
+              // Pass booking with service_type='car_rental' + isEdit=false to force rental_new_customer template
+              const confRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -447,13 +448,20 @@ export default function UnpaidBookingsTab() {
                     ...fullBooking,
                     service_type: 'car_rental',
                     payment_status: 'paid',
+                    isEdit: false,
                   }
                 })
-              }).then(() => logger.log('✅ Booking confirmation (rental_new_customer) sent to', custPhone))
-                .catch(err => logger.warn('⚠️ Confirmation WhatsApp failed:', err))
+              })
+              const confResult = await confRes.json()
+              logger.log('[Segna Pagato] Confirmation WhatsApp result:', confResult)
+              if (confResult.skipped) {
+                toast(`Template ${confResult.reason}: messaggio conferma NON inviato`, { icon: '⚠️' })
+              } else if (confRes.ok) {
+                toast.success('Messaggio conferma prenotazione inviato')
+              }
             }
           } catch (confErr) {
-            logger.warn('Confirmation message send failed:', confErr)
+            console.error('[Segna Pagato] Confirmation message failed:', confErr)
           }
         }
       }
