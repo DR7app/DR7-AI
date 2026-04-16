@@ -4303,9 +4303,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Send WhatsApp notification for car rental
-      // Only send confirmation when paid — "Da saldare" bookings get notified when payment is received
       const paymentStatus = formData.payment_status || 'pending'
       const isPaid = paymentStatus === 'paid' || paymentStatus === 'succeeded' || paymentStatus === 'completed'
+      const isPending = paymentStatus === 'pending' || paymentStatus === 'unpaid'
+
+      // NEW BOOKING + Da Saldare: send "confirmed but pending payment" message to customer
+      if (!editingId && isPending && customerInfo?.phone) {
+        fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: customerInfo.phone,
+            templateKey: 'rental_confirmed_unpaid',
+            templateVars: {
+              '{customer_name}': customerInfo?.full_name || 'Cliente',
+              '{booking_id}': insertedBooking?.id?.substring(0, 8).toUpperCase() || '',
+              '{vehicle_name}': vehicle?.display_name || '',
+              '{pickup_date}': formData.pickup_date,
+              '{pickup_time}': formData.pickup_time,
+              '{dropoff_date}': formData.return_date,
+              '{dropoff_time}': formData.return_time,
+              '{total}': formData.total_amount || '0',
+              '{payment_method}': formData.payment_method || '',
+            },
+            fallback: `Gentile ${customerInfo?.full_name || 'Cliente'},\n\nLa sua prenotazione #${insertedBooking?.id?.substring(0, 8).toUpperCase()} è stata *confermata*.\n\n*Veicolo:* ${vehicle?.display_name || ''}\n*Ritiro:* ${formData.pickup_date} alle ${formData.pickup_time}\n*Riconsegna:* ${formData.return_date} alle ${formData.return_time}\n*Totale:* €${formData.total_amount}\n\n*Stato Pagamento:* Da saldare\n\nLa ringraziamo e attendiamo il pagamento per completare la prenotazione.\n\nDR7`
+          })
+        })
+          .then(() => logger.log('✅ Confirmed-unpaid WhatsApp sent'))
+          .catch(err => console.error('⚠️ Confirmed-unpaid WhatsApp failed:', err))
+      }
+
       if (isPaid || editingId) {
       try {
         // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
