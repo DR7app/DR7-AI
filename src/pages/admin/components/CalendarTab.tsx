@@ -538,16 +538,17 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         || evt.booking.payment_status === 'unpaid'
                         || evt.booking.status === 'pending_payment'
 
-                      // Da saldare Contanti = RED (stays on calendar, no auto-cancel)
-                      const isDaSaldareContanti = isPendingPayment
-                        && (evt.booking.payment_method === 'Contanti' || evt.booking.payment_method === 'Contanti presso tesoreria')
+                      // Da saldare MANUALMENTE CONFERMATA = RED (stays on calendar, no auto-cancel)
+                      const isManuallyConfirmed = evt.booking.booking_details?.manually_confirmed === true
+                      const isDaSaldareConfirmed = isPendingPayment && isManuallyConfirmed
 
-                      if (isDaSaldareContanti) {
+                      if (isDaSaldareConfirmed) {
                         bgClass = "bg-red-600/80"
                         borderClass = "border-red-500/60 border-dashed"
                       } else if (isPendingPayment) {
-                        bgClass = "bg-orange-500/80"
-                        borderClass = "border-orange-400/50 border-dashed"
+                        // Yellow/orange = Da saldare NOT confirmed (expires 1h)
+                        bgClass = "bg-yellow-500/80"
+                        borderClass = "border-yellow-400/50 border-dashed"
                       } else if (isUnavailability) {
                         bgClass = "bg-orange-500/80"
                         borderClass = "border-orange-400/30"
@@ -586,7 +587,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         >
                           <div className="px-2 flex flex-col justify-center h-full">
                             <span className="font-bold text-[10px] truncate leading-tight">
-                              {(isPendingPayment && !isDaSaldareContanti) ? '⏳ IN ATTESA — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
+                              {(isPendingPayment && !isDaSaldareConfirmed) ? '⏳ IN ATTESA — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
                                 // Calculate drop-off day: if end time is exactly 00:00, use previous day
                                 const endHours = evt.endLocal.getHours()
                                 const endMinutes = evt.endLocal.getMinutes()

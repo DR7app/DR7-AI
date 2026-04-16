@@ -74,9 +74,8 @@ const cancelHandler: Handler = async () => {
         const { data: unpaidBookings, error } = await supabase
             .from('bookings')
             .select('id, customer_name, customer_phone, customer_email, vehicle_name, created_at, booking_details, payment_method')
-            .eq('payment_method', 'Nexi Pay by Link')
             .in('payment_status', ['pending', 'unpaid'])
-            .in('status', ['pending', 'confirmed'])
+            .eq('status', 'pending') // only pending (not manually confirmed)
             .lt('created_at', oneHourAgo); // Pre-filter: only bookings older than 1h
 
         if (error) {
