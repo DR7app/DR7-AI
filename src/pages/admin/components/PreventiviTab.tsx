@@ -200,6 +200,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const { adminEmail } = useAdminRole()
   const isValerio = adminEmail?.toLowerCase() === VALERIO_EMAIL
   const [view, setView] = useState<'list' | 'form'>('list')
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [preventivi, setPreventivi] = useState<Preventivo[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(true)
@@ -662,18 +663,40 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         created_by: adminEmail || (await supabase.auth.getUser()).data.user?.email || null,
       }
 
-      console.log('[PreventiviTab] Saving preventivo with created_by:', record.created_by)
+      console.log('[PreventiviTab] Saving preventivo with created_by:', record.created_by, 'editing:', editingId)
 
-      const { data, error } = await supabase
-        .from('preventivi')
-        .insert([record])
-        .select()
-        .single()
+      let data, error
+      if (editingId) {
+        // Update existing preventivo (don't overwrite created_by/status)
+        const { created_by: _cb, status: _st, ...updateRecord } = record
+        const result = await supabase
+          .from('preventivi')
+          .update({ ...updateRecord, updated_at: new Date().toISOString() })
+          .eq('id', editingId)
+          .select()
+          .single()
+        data = result.data
+        error = result.error
+      } else {
+        // Insert new preventivo
+        const result = await supabase
+          .from('preventivi')
+          .insert([record])
+          .select()
+          .single()
+        data = result.data
+        error = result.error
+      }
 
       if (error) throw error
-      toast.success('Preventivo salvato!')
-      setPreventivi(prev => [data, ...prev])
+      toast.success(editingId ? 'Preventivo aggiornato!' : 'Preventivo salvato!')
+      if (editingId) {
+        setPreventivi(prev => prev.map(p => p.id === editingId ? data : p))
+      } else {
+        setPreventivi(prev => [data, ...prev])
+      }
       setView('list')
+      setEditingId(null)
       resetForm()
     } catch (error: unknown) {
       console.error('Failed to save preventivo:', error)
@@ -681,6 +704,48 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleEdit(p: Preventivo) {
+    // Extract time from ISO dates (in Europe/Rome)
+    const pickupDate = new Date(p.pickup_date)
+    const dropoffDate = new Date(p.dropoff_date)
+    const pickupDateStr = pickupDate.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+    const pickupTimeStr = pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+    const returnDateStr = dropoffDate.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+    const returnTimeStr = dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+
+    const extras = (p.extras_detail || {}) as Record<string, any>
+
+    setForm({
+      vehicle_id: p.vehicle_id || '',
+      pickup_date: pickupDateStr,
+      pickup_time: pickupTimeStr,
+      return_date: returnDateStr,
+      return_time: returnTimeStr,
+      driver_tier: (p.driver_tier as DriverTier) || 'TIER_2',
+      maggiorazione_pct: String(p.maggiorazione_pct || 0),
+      insurance_option: p.insurance_option || '',
+      include_lavaggio: !!extras.include_lavaggio || p.lavaggio_fee > 0,
+      include_no_cauzione: !!extras.include_no_cauzione || p.no_cauzione_total > 0,
+      include_unlimited_km: !!extras.include_unlimited_km || p.unlimited_km_total > 0,
+      include_second_driver: !!extras.include_second_driver || p.second_driver_total > 0,
+      include_dr7_flex: !!extras.include_dr7_flex,
+      pickup_location: extras.pickup_location || 'dr7_office',
+      dropoff_location: extras.dropoff_location || 'dr7_office',
+      delivery_fee: String(extras.delivery_fee || 0),
+      pickup_fee: String(extras.pickup_fee || 0),
+      delivery_address: extras.delivery_address || '',
+      pickup_address: extras.pickup_address || '',
+      experience_services: extras.experience_services || {},
+      sconto: p.sconto > 0 ? String(p.total_final) : '',
+      sconto_note: p.sconto_note || 'valido solo 24h',
+      model_year: p.vehicle_model_year ? String(p.vehicle_model_year) : '',
+      cv: p.vehicle_cv ? String(p.vehicle_cv) : '',
+      acceleration_0_100: p.vehicle_0_100 ? String(p.vehicle_0_100) : '',
+    })
+    setEditingId(p.id)
+    setView('form')
   }
 
   function resetForm() {
@@ -1020,7 +1085,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-2xl font-bold text-theme-text-primary">Preventivi</h2>
-          <Button onClick={() => { resetForm(); setView('form') }}>+ Nuovo Preventivo</Button>
+          <Button onClick={() => { resetForm(); setEditingId(null); setView('form') }}>+ Nuovo Preventivo</Button>
         </div>
 
         {/* Subtab Switch */}
@@ -1212,6 +1277,14 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                           <>
                             {(p.status === 'bozza' || p.status === 'inviato') && (
                               <button
+                                onClick={() => handleEdit(p)}
+                                className="px-2 py-1 text-xs bg-blue-700 hover:bg-blue-600 text-white rounded"
+                              >
+                                Modifica
+                              </button>
+                            )}
+                            {(p.status === 'bozza' || p.status === 'inviato') && (
+                              <button
                                 onClick={() => { setSelectedPreventivo(p); setWhatsappPhone(p.customer_phone || ''); setShowPhoneModal(true) }}
                                 className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
                               >
@@ -1298,12 +1371,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     )
   }
 
-  // ═══ FORM VIEW (Nuovo Preventivo) ═══
+  // ═══ FORM VIEW (Nuovo / Modifica Preventivo) ═══
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-theme-text-primary">Nuovo Preventivo</h2>
-        <Button variant="secondary" onClick={() => setView('list')}>Torna alla Lista</Button>
+        <h2 className="text-2xl font-bold text-theme-text-primary">{editingId ? 'Modifica Preventivo' : 'Nuovo Preventivo'}</h2>
+        <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Torna alla Lista</Button>
       </div>
 
       {/* Vehicle Selection — ALL vehicles, no availability check */}
@@ -1654,9 +1727,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
       {/* Actions */}
       <div className="flex gap-3 justify-end">
-        <Button variant="secondary" onClick={() => setView('list')}>Annulla</Button>
+        <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Annulla</Button>
         <Button disabled={saving || !form.vehicle_id || rentalDays < 1} onClick={handleSave}>
-          {saving ? 'Salvataggio...' : 'Salva Preventivo'}
+          {saving ? 'Salvataggio...' : (editingId ? 'Aggiorna Preventivo' : 'Salva Preventivo')}
         </Button>
       </div>
     </div>
