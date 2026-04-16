@@ -445,6 +445,39 @@ export const handler: Handler = async (event) => {
                 console.error('[signature-complete] WhatsApp send failed:', waErr.message)
             }
 
+            // Send "booking confirmed" message to customer (rental_new_customer template from Messaggi Sistema)
+            // Only for contracts linked to a booking (not standalone documents)
+            if (contract?.booking_id) {
+                try {
+                    let customerPhone = ''
+                    const { data: fullBooking } = await supabase
+                        .from('bookings')
+                        .select('*')
+                        .eq('id', contract.booking_id)
+                        .single()
+                    customerPhone = fullBooking?.customer_phone || fullBooking?.booking_details?.customer?.phone || ''
+
+                    if (customerPhone && fullBooking) {
+                        const baseUrl = process.env.ADMIN_URL || 'https://admin.dr7empire.com'
+                        await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                customPhone: customerPhone,
+                                booking: {
+                                    ...fullBooking,
+                                    service_type: 'car_rental',
+                                    payment_status: 'paid', // contract signed = booking confirmed
+                                }
+                            })
+                        })
+                        console.log('[signature-complete] Booking confirmation WhatsApp sent to', customerPhone)
+                    }
+                } catch (confErr: any) {
+                    console.error('[signature-complete] Booking confirmation send failed:', confErr.message)
+                }
+            }
+
             // Send signed contract notification to admin via CallMeBot
             // (Green API can't send to its own number, so we use CallMeBot for text notification)
             try {
