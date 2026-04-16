@@ -1081,6 +1081,41 @@ export default function UnpaidBookingsTab() {
       toast.success('Tutto segnato come pagato!')
       logAdminAction('mark_booking_extensions_paid', 'booking', booking.id)
 
+      // Generate contract + send signing link via WhatsApp (ONLY for car rentals, not carwash/mechanical)
+      const isCarRental = booking.service_type === 'rental' || !booking.service_type
+      if (isCarRental) {
+        try {
+          // 1. Regenerate contract with latest booking data
+          await authFetch('/.netlify/functions/generate-contract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: booking.id, silent: true })
+          }).catch(err => console.error('Contract generation failed:', err))
+
+          // 2. Find the contract and send signing link
+          const { data: contractForSig } = await supabase
+            .from('contracts')
+            .select('id, pdf_url')
+            .eq('booking_id', booking.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (contractForSig?.id && contractForSig?.pdf_url) {
+            await fetch('/.netlify/functions/signature-init', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contractId: contractForSig.id, bookingId: booking.id })
+            }).catch(err => console.error('Signature init failed:', err))
+            toast.success('Contratto e link firma inviati al cliente')
+          } else {
+            console.warn('No contract found for booking, skipping signing link')
+          }
+        } catch (sigErr) {
+          console.error('Failed to send contract/signing link:', sigErr)
+        }
+      }
+
       loadUnpaidBookings()
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
