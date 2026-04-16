@@ -453,25 +453,25 @@ export default function CentralinaProTab() {
   const hasChanges = changes.length > 0
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#0b0b0d] pb-32">
+    <div className="min-h-screen bg-[#f5f5f7] pb-32">
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-8">
         <div className="flex items-start justify-between flex-wrap gap-4 mb-8">
           <div>
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-[#1d1d1f]">
               Centralina Pro
             </h1>
-            <p className="mt-2 text-[15px] text-[#6e6e73] dark:text-white/60">
+            <p className="mt-2 text-[15px] text-[#6e6e73]">
               Anteprima design · non ancora collegata ai dati
             </p>
           </div>
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-medium bg-[#fff7e6] text-[#b25e09] border border-[#f5d08a] dark:bg-yellow-500/10 dark:text-yellow-400 dark:border-yellow-500/30">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-medium bg-[#fff7e6] text-[#b25e09] border border-[#f5d08a]">
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
             Preview
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6">
-          <aside className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden h-fit">
+          <aside className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden h-fit">
             <nav className="py-2">
               {SECTIONS.map((s, idx) => {
                 const active = section === s.id
@@ -481,22 +481,22 @@ export default function CentralinaProTab() {
                     onClick={() => setSection(s.id)}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
                       active
-                        ? 'bg-[#007aff]/10 dark:bg-[#0a84ff]/15'
-                        : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'
+                        ? 'bg-[#007aff]/10'
+                        : 'hover:bg-black/[0.03]:bg-white/[0.04]'
                     }`}
                   >
                     <span
                       className={`flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-semibold ${
                         active
-                          ? 'bg-[#007aff] text-white dark:bg-[#0a84ff]'
-                          : 'bg-[#e5e5ea] text-[#1d1d1f] dark:bg-white/10 dark:text-white/80'
+                          ? 'bg-[#007aff] text-white'
+                          : 'bg-[#e5e5ea] text-[#1d1d1f]'
                       }`}
                     >
                       {idx + 1}
                     </span>
                     <span
                       className={`flex-1 min-w-0 text-[14px] font-medium truncate ${
-                        active ? 'text-[#007aff] dark:text-[#0a84ff]' : 'text-[#1d1d1f] dark:text-white'
+                        active ? 'text-[#007aff]' : 'text-[#1d1d1f]'
                       }`}
                     >
                       {s.title}
@@ -529,8 +529,8 @@ export default function CentralinaProTab() {
               <PreventiviSection preventivi={preventivi} setPreventivi={setPreventivi} />
             )}
             {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && section !== 'p5' && section !== 'p6' && section !== 'p7' && (
-              <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-12 text-center">
-                <p className="text-[15px] text-[#6e6e73] dark:text-white/60">
+              <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-12 text-center">
+                <p className="text-[15px] text-[#6e6e73]">
                   Sezione in arrivo — da definire
                 </p>
               </div>
@@ -597,7 +597,7 @@ function SaveBar({
           className={`rounded-2xl shadow-2xl border backdrop-blur-xl px-5 py-4 flex items-center gap-4 flex-wrap transition-all ${
             justSaved
               ? 'bg-[#34c759]/95 border-[#34c759] text-white'
-              : 'bg-white/95 dark:bg-[#1c1c1e]/95 border-black/10 dark:border-white/10'
+              : 'bg-white/95 border-black/10'
           }`}
         >
           {justSaved ? (
@@ -610,10 +610,10 @@ function SaveBar({
           ) : (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white mb-1">
+                <p className="text-[13px] font-semibold text-[#1d1d1f] mb-1">
                   {changes.length} modifica{changes.length > 1 ? 'e' : ''} da salvare
                 </p>
-                <ul className="text-[12px] text-[#6e6e73] dark:text-white/60 space-y-0.5 max-h-24 overflow-y-auto">
+                <ul className="text-[12px] text-[#6e6e73] space-y-0.5 max-h-24 overflow-y-auto">
                   {changes.map((c, i) => (
                     <li key={i} className="flex items-start gap-1.5">
                       <span className="text-[#007aff] mt-0.5">·</span>
@@ -625,7 +625,7 @@ function SaveBar({
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={onDiscard}
-                  className="px-4 py-2 rounded-lg text-[14px] font-medium text-[#1d1d1f] dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                  className="px-4 py-2 rounded-lg text-[14px] font-medium text-[#1d1d1f] hover:bg-black/5:bg-white/10 transition-colors"
                 >
                   Annulla
                 </button>
@@ -887,21 +887,21 @@ function EditableList<T extends ListItem>({
   }
 
   return (
-    <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
       <header className="px-5 pt-5 pb-3">
-        <h2 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+        <h2 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
           {title}
         </h2>
-        <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">{subtitle}</p>
+        <p className="text-[13px] text-[#6e6e73] mt-0.5">{subtitle}</p>
       </header>
 
-      <ul className="divide-y divide-black/5 dark:divide-white/[0.08]">
+      <ul className="divide-y divide-black/5">
         {items.map((item) => (
           <li key={item.id} className="flex items-center gap-3 px-5 py-3 group">
             <input
               value={item.label}
               onChange={(e) => update(item.id, e.target.value)}
-              className="flex-1 bg-transparent outline-none text-[15px] text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] dark:focus:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+              className="flex-1 bg-transparent outline-none text-[15px] text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
             />
             <button
               onClick={() => remove(item.id)}
@@ -915,13 +915,13 @@ function EditableList<T extends ListItem>({
           </li>
         ))}
         {items.length === 0 && (
-          <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73] dark:text-white/50">
+          <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
             Nessun elemento — aggiungine uno qui sotto
           </li>
         )}
       </ul>
 
-      <footer className="px-5 py-3 border-t border-black/5 dark:border-white/[0.08] bg-[#fafafa] dark:bg-white/[0.02] flex items-center gap-2">
+      <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa] flex items-center gap-2">
         <input
           value={newLabel}
           onChange={(e) => setNewLabel(e.target.value)}
@@ -929,7 +929,7 @@ function EditableList<T extends ListItem>({
             if (e.key === 'Enter') add()
           }}
           placeholder={placeholderNew}
-          className="flex-1 bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+          className="flex-1 bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
         />
         <button
           onClick={add}
@@ -968,24 +968,24 @@ function FasciaList({ items, onChange }: { items: Fascia[]; onChange: (next: Fas
   }
 
   return (
-    <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
       <header className="px-5 pt-5 pb-3">
-        <h2 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+        <h2 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
           Fascia
         </h2>
-        <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">
+        <p className="text-[13px] text-[#6e6e73] mt-0.5">
           Fasce conducente — eta e anni di patente
         </p>
       </header>
 
-      <ul className="divide-y divide-black/5 dark:divide-white/[0.08]">
+      <ul className="divide-y divide-black/5">
         {items.map((f) => (
           <li key={f.id} className="p-5 group">
             <div className="flex items-start gap-3 mb-4">
               <input
                 value={f.label}
                 onChange={(e) => patch(f.id, { label: e.target.value })}
-                className="flex-1 bg-transparent outline-none text-[17px] font-semibold text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] dark:focus:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                className="flex-1 bg-transparent outline-none text-[17px] font-semibold text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
                 placeholder="Nome fascia"
               />
               <button
@@ -1003,7 +1003,7 @@ function FasciaList({ items, onChange }: { items: Fascia[]; onChange: (next: Fas
               value={f.description}
               onChange={(e) => patch(f.id, { description: e.target.value })}
               placeholder="Descrizione (es. Conducente esperto)"
-              className="w-full bg-transparent outline-none text-[14px] text-[#6e6e73] dark:text-white/60 placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] dark:focus:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 mb-4 transition-colors"
+              className="w-full bg-transparent outline-none text-[14px] text-[#6e6e73] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 mb-4 transition-colors"
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1029,13 +1029,13 @@ function FasciaList({ items, onChange }: { items: Fascia[]; onChange: (next: Fas
           </li>
         ))}
         {items.length === 0 && (
-          <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73] dark:text-white/50">
+          <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
             Nessuna fascia configurata
           </li>
         )}
       </ul>
 
-      <footer className="px-5 py-3 border-t border-black/5 dark:border-white/[0.08] bg-[#fafafa] dark:bg-white/[0.02]">
+      <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa]">
         <button
           onClick={add}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[14px] font-medium bg-[#007aff] text-white hover:bg-[#0066d6] transition-colors"
@@ -1063,7 +1063,7 @@ function NumberField({
 }) {
   return (
     <label className="block">
-      <span className="block text-[12px] font-medium text-[#6e6e73] dark:text-white/50 mb-1">
+      <span className="block text-[12px] font-medium text-[#6e6e73] mb-1">
         {label}
       </span>
       <div className="relative">
@@ -1075,7 +1075,7 @@ function NumberField({
             const v = e.target.value
             onChange(v === '' ? '' : Number(v))
           }}
-          className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 pr-14 text-[14px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+          className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 pr-14 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
         />
         {suffix && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
@@ -1170,10 +1170,10 @@ function AssicurazioniSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
           Prezzi Assicurazioni
         </h2>
-        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1">
+        <p className="text-[14px] text-[#6e6e73] mt-1">
           Per categoria e fascia conducente
         </p>
       </div>
@@ -1197,17 +1197,17 @@ function InsuranceCategoryCard({
   onChange: (patch: Partial<InsuranceCategoryConfig>) => void
 }) {
   return (
-    <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
       <header className="px-5 pt-5 pb-4 flex items-center justify-between gap-4 flex-wrap">
-        <h3 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+        <h3 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
           {category.label}
         </h3>
-        <label className="flex items-center gap-2 text-[13px] text-[#6e6e73] dark:text-white/60">
+        <label className="flex items-center gap-2 text-[13px] text-[#6e6e73]">
           <span>Modalita</span>
           <select
             value={category.mode}
             onChange={(e) => onChange({ mode: e.target.value as Mode })}
-            className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
           >
             <option value="per_fascia">Per fascia (A/B separate)</option>
             <option value="all_tiers">Uguale per tutte le fasce</option>
@@ -1216,7 +1216,7 @@ function InsuranceCategoryCard({
       </header>
 
       {category.mode === 'per_fascia' ? (
-        <div className="divide-y divide-black/5 dark:divide-white/[0.08] border-t border-black/5 dark:border-white/[0.08]">
+        <div className="divide-y divide-black/5 border-t border-black/5">
           <InsuranceList
             heading="Fascia B — giovane"
             items={category.fasciaB}
@@ -1229,7 +1229,7 @@ function InsuranceCategoryCard({
           />
         </div>
       ) : (
-        <div className="border-t border-black/5 dark:border-white/[0.08]">
+        <div className="border-t border-black/5">
           <InsuranceList
             heading="Stesse opzioni per tutte le fasce"
             items={category.all}
@@ -1265,20 +1265,20 @@ function InsuranceList({
 
   return (
     <div className="p-5">
-      <p className="text-[13px] font-medium text-[#6e6e73] dark:text-white/60 mb-4">{heading}</p>
+      <p className="text-[13px] font-medium text-[#6e6e73] mb-4">{heading}</p>
 
       <div className="space-y-3">
         {items.map((opt) => (
           <div
             key={opt.id}
-            className="rounded-xl border border-black/[0.06] dark:border-white/[0.06] bg-[#fafafa] dark:bg-white/[0.02] p-4 group"
+            className="rounded-xl border border-black/[0.06] bg-[#fafafa] p-4 group"
           >
             <div className="flex items-center gap-3 mb-3">
               <input
                 value={opt.name}
                 onChange={(e) => patch(opt.id, { name: e.target.value })}
                 placeholder="Nome opzione"
-                className="flex-1 bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:bg-white dark:focus:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                className="flex-1 bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-white:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
               />
               <button
                 onClick={() => remove(opt.id)}
@@ -1300,7 +1300,7 @@ function InsuranceList({
           </div>
         ))}
         {items.length === 0 && (
-          <p className="text-center text-[13px] text-[#6e6e73] dark:text-white/50 py-4">
+          <p className="text-center text-[13px] text-[#6e6e73] py-4">
             Nessuna opzione
           </p>
         )}
@@ -1341,7 +1341,7 @@ function FieldBox({
           const v = e.target.value
           onChange(v === '' ? '' : Number(v))
         }}
-        className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+        className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
       />
     </label>
   )
@@ -1370,10 +1370,10 @@ function KmSforoSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
           Km & Sforo
         </h2>
-        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1">
+        <p className="text-[14px] text-[#6e6e73] mt-1">
           Km inclusi per giorno, sforo e prezzo km illimitati per categoria
         </p>
       </div>
@@ -1382,10 +1382,10 @@ function KmSforoSection({
         {km.map((cat) => (
           <section
             key={cat.id}
-            className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden flex flex-col"
+            className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden flex flex-col"
           >
             <header className="px-5 pt-5 pb-3">
-              <h3 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+              <h3 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
                 {cat.label}
               </h3>
             </header>
@@ -1397,7 +1397,7 @@ function KmSforoSection({
               <div className="space-y-2">
                 {dayKeys.map((d) => (
                   <div key={d} className="flex items-center gap-3">
-                    <span className="w-14 text-[13px] text-[#6e6e73] dark:text-white/60">
+                    <span className="w-14 text-[13px] text-[#6e6e73]">
                       {d} {d === '1' ? 'giorno' : 'giorni'}
                     </span>
                     <div className="flex-1 relative">
@@ -1409,7 +1409,7 @@ function KmSforoSection({
                           const v = e.target.value
                           patchDay(cat.id, d, v === '' ? '' : Number(v))
                         }}
-                        className="w-full bg-[#f5f5f7] dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                        className="w-full bg-[#f5f5f7] border border-black/5 rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
                         km
@@ -1417,8 +1417,8 @@ function KmSforoSection({
                     </div>
                   </div>
                 ))}
-                <div className="flex items-center gap-3 pt-2 border-t border-black/[0.06] dark:border-white/[0.06] mt-2">
-                  <span className="w-14 text-[13px] text-[#6e6e73] dark:text-white/60">
+                <div className="flex items-center gap-3 pt-2 border-t border-black/[0.06] mt-2">
+                  <span className="w-14 text-[13px] text-[#6e6e73]">
                     + giorno
                   </span>
                   <div className="flex-1 relative">
@@ -1430,7 +1430,7 @@ function KmSforoSection({
                         const v = e.target.value
                         patch(cat.id, { extraPerDay: v === '' ? '' : Number(v) })
                       }}
-                      className="w-full bg-[#f5f5f7] dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      className="w-full bg-[#f5f5f7] border border-black/5 rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
                       km
@@ -1440,7 +1440,7 @@ function KmSforoSection({
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] dark:border-white/[0.06] bg-[#fafafa] dark:bg-white/[0.02]">
+            <div className="px-5 py-4 border-t border-black/[0.06] bg-[#fafafa]">
               <label className="block">
                 <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">
                   Sforo (€ per km oltre il limite)
@@ -1458,7 +1458,7 @@ function KmSforoSection({
                       const v = e.target.value
                       patch(cat.id, { sforo: v === '' ? '' : Number(v) })
                     }}
-                    className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-14 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-14 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
                     /km
@@ -1467,7 +1467,7 @@ function KmSforoSection({
               </label>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] dark:border-white/[0.06] mt-auto">
+            <div className="px-5 py-4 border-t border-black/[0.06] mt-auto">
               <label className="block">
                 <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">
                   Km illimitati — prezzo al giorno
@@ -1485,7 +1485,7 @@ function KmSforoSection({
                       const v = e.target.value
                       patch(cat.id, { unlimitedPerDay: v === '' ? '' : Number(v) })
                     }}
-                    className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
                     /giorno
@@ -1538,10 +1538,10 @@ function CauzioniSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
           Opzioni Cauzione per Fascia
         </h2>
-        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1">
+        <p className="text-[14px] text-[#6e6e73] mt-1">
           Opzioni cauzione per fascia conducente e residenza
         </p>
       </div>
@@ -1550,15 +1550,15 @@ function CauzioniSection({
         {groupOrder.map((gid) => (
           <section
             key={gid}
-            className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden"
+            className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden"
           >
             <header className="px-5 pt-5 pb-3">
-              <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+              <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
                 {DEPOSIT_GROUP_LABELS[gid]}
               </h3>
             </header>
 
-            <ul className="divide-y divide-black/5 dark:divide-white/[0.08]">
+            <ul className="divide-y divide-black/5">
               {deposits[gid].map((opt) => (
                 <li key={opt.id} className="px-5 py-3 group">
                   <div className="flex items-center gap-3 mb-2">
@@ -1566,7 +1566,7 @@ function CauzioniSection({
                       value={opt.label}
                       onChange={(e) => patchOption(gid, opt.id, { label: e.target.value })}
                       placeholder="Nome opzione"
-                      className="flex-1 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] dark:focus:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                      className="flex-1 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
                     />
                     <button
                       onClick={() => removeOption(gid, opt.id)}
@@ -1596,7 +1596,7 @@ function CauzioniSection({
                             const v = e.target.value
                             patchOption(gid, opt.id, { amount: v === '' ? '' : Number(v) })
                           }}
-                          className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                          className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                         />
                       </div>
                     </label>
@@ -1616,7 +1616,7 @@ function CauzioniSection({
                             const v = e.target.value
                             patchOption(gid, opt.id, { surcharge_per_day: v === '' ? '' : Number(v) })
                           }}
-                          className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                          className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6] pointer-events-none">
                           /g
@@ -1627,13 +1627,13 @@ function CauzioniSection({
                 </li>
               ))}
               {deposits[gid].length === 0 && (
-                <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73] dark:text-white/50">
+                <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
                   Nessuna opzione
                 </li>
               )}
             </ul>
 
-            <footer className="px-5 py-3 border-t border-black/5 dark:border-white/[0.08] bg-[#fafafa] dark:bg-white/[0.02]">
+            <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa]">
               <button
                 onClick={() => addOption(gid)}
                 className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
@@ -1679,13 +1679,13 @@ function ServiziSection({
   return (
     <div className="space-y-6">
       {/* Servizi Experience */}
-      <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 flex items-center justify-between">
           <div>
-            <h2 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+            <h2 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
               Servizi Experience
             </h2>
-            <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">
+            <p className="text-[13px] text-[#6e6e73] mt-0.5">
               Servizi extra opzionali
             </p>
           </div>
@@ -1700,7 +1700,7 @@ function ServiziSection({
           </button>
         </header>
 
-        <ul className="divide-y divide-black/5 dark:divide-white/[0.08]">
+        <ul className="divide-y divide-black/5">
           {servizi.experience.map((s) => (
             <li key={s.id} className="px-5 py-3 group">
               <div className="flex items-center gap-3 flex-wrap">
@@ -1716,7 +1716,7 @@ function ServiziSection({
                   value={s.name}
                   onChange={(e) => patchExp(s.id, { name: e.target.value })}
                   placeholder="Nome servizio"
-                  className="flex-1 min-w-[200px] bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] dark:focus:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+                  className="flex-1 min-w-[200px] bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
                 />
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
@@ -1731,13 +1731,13 @@ function ServiziSection({
                       const v = e.target.value
                       patchExp(s.id, { price: v === '' ? '' : Number(v) })
                     }}
-                    className="w-24 bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-2 py-1.5 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-24 bg-white border border-black/10 rounded-lg pl-7 pr-2 py-1.5 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
                 </div>
                 <select
                   value={s.unit}
                   onChange={(e) => patchExp(s.id, { unit: e.target.value as ServiceUnit })}
-                  className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 >
                   {(Object.keys(UNIT_LABELS) as ServiceUnit[]).map((u) => (
                     <option key={u} value={u}>
@@ -1748,7 +1748,7 @@ function ServiziSection({
                 <select
                   value={s.tier_only}
                   onChange={(e) => patchExp(s.id, { tier_only: e.target.value as TierRestriction })}
-                  className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 >
                   <option value="">Tutte le fasce</option>
                   <option value="TIER_2">Solo Fascia A</option>
@@ -1767,7 +1767,7 @@ function ServiziSection({
             </li>
           ))}
           {servizi.experience.length === 0 && (
-            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73] dark:text-white/50">
+            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
               Nessun servizio
             </li>
           )}
@@ -1775,9 +1775,9 @@ function ServiziSection({
       </section>
 
       {/* DR7 Flex */}
-      <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3">
-          <h2 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+          <h2 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
             DR7 Flex — Cancellazione Premium
           </h2>
         </header>
@@ -1801,7 +1801,7 @@ function ServiziSection({
                     const v = e.target.value
                     setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, daily_price: v === '' ? '' : Number(v) } })
                   }}
-                  className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 />
               </div>
             </label>
@@ -1819,7 +1819,7 @@ function ServiziSection({
                     const v = e.target.value
                     setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, refund_percent: v === '' ? '' : Number(v) } })
                   }}
-                  className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
                   %
@@ -1835,7 +1835,7 @@ function ServiziSection({
                 onChange={(e) =>
                   setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, tier_restriction: e.target.value as TierRestriction } })
                 }
-                className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">Tutte le fasce</option>
                 <option value="TIER_2">Solo Fascia A</option>
@@ -1850,7 +1850,7 @@ function ServiziSection({
             <input
               value={servizi.dr7_flex.description}
               onChange={(e) => setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, description: e.target.value } })}
-              className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
           </label>
         </div>
@@ -1859,8 +1859,8 @@ function ServiziSection({
       {/* Simple services: 3-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Pulizia Finale */}
-        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-3">
+        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-3">
             Pulizia Finale
           </h3>
           <label className="block mb-3">
@@ -1880,7 +1880,7 @@ function ServiziSection({
                   const v = e.target.value
                   setServizi({ ...servizi, lavaggio: { ...servizi.lavaggio, fee: v === '' ? '' : Number(v) } })
                 }}
-                className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
             </div>
           </label>
@@ -1891,13 +1891,13 @@ function ServiziSection({
               onChange={(e) => setServizi({ ...servizi, lavaggio: { ...servizi.lavaggio, mandatory: e.target.checked } })}
               className="w-4 h-4 accent-[#007aff]"
             />
-            <span className="text-[13px] text-[#1d1d1f] dark:text-white">Obbligatoria</span>
+            <span className="text-[13px] text-[#1d1d1f]">Obbligatoria</span>
           </label>
         </section>
 
         {/* Consegna a Domicilio */}
-        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-3">
+        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-3">
             Consegna a Domicilio
           </h3>
           <label className="block">
@@ -1917,7 +1917,7 @@ function ServiziSection({
                   const v = e.target.value
                   setServizi({ ...servizi, delivery: { price_per_km: v === '' ? '' : Number(v) } })
                 }}
-                className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-12 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-12 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
                 /km
@@ -1927,14 +1927,14 @@ function ServiziSection({
         </section>
 
         {/* Secondo Guidatore */}
-        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-3">
+        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-3">
             Secondo Guidatore
           </h3>
           <div className="space-y-2">
             {(['fasciaA', 'fasciaB'] as const).map((k) => (
               <div key={k} className="flex items-center gap-3">
-                <span className="w-16 text-[13px] text-[#6e6e73] dark:text-white/60">
+                <span className="w-16 text-[13px] text-[#6e6e73]">
                   {k === 'fasciaA' ? 'Fascia A' : 'Fascia B'}
                 </span>
                 <div className="flex-1 relative">
@@ -1952,7 +1952,7 @@ function ServiziSection({
                         second_driver: { ...servizi.second_driver, [k]: v === '' ? '' : Number(v) },
                       })
                     }}
-                    className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
                     /g
@@ -2026,10 +2026,10 @@ function PrezzoDinamicoSection({
     <div className="space-y-8">
       {/* ─── TARIFFA BASE ─── */}
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
           Tariffe Giornaliere per Categoria
         </h2>
-        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1 mb-5">
+        <p className="text-[14px] text-[#6e6e73] mt-1 mb-5">
           Tariffa base di partenza, prima dei coefficienti dinamici
         </p>
 
@@ -2037,18 +2037,18 @@ function PrezzoDinamicoSection({
           {config.tariffe.map((t) => (
             <section
               key={t.id}
-              className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden"
+              className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden"
             >
               <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-4 flex-wrap">
-                <h3 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+                <h3 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
                   {t.label}
                 </h3>
-                <label className="flex items-center gap-2 text-[13px] text-[#6e6e73] dark:text-white/60">
+                <label className="flex items-center gap-2 text-[13px] text-[#6e6e73]">
                   <span>Tipo tariffa</span>
                   <select
                     value={t.mode}
                     onChange={(e) => patchTariffa(t.id, { mode: e.target.value as TariffaMode })}
-                    className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   >
                     <option value="unica">Unica</option>
                     <option value="per_residenza">Residente + Non Residente</option>
@@ -2056,7 +2056,7 @@ function PrezzoDinamicoSection({
                 </label>
               </header>
 
-              <div className="px-5 pb-5 border-t border-black/[0.06] dark:border-white/[0.06] pt-4 space-y-4">
+              <div className="px-5 pb-5 border-t border-black/[0.06] pt-4 space-y-4">
                 {t.mode === 'unica' ? (
                   <DayRow
                     label="Tariffa unica"
@@ -2083,8 +2083,8 @@ function PrezzoDinamicoSection({
                     />
                   </>
                 )}
-                <div className="flex items-center gap-3 pt-2 border-t border-black/[0.06] dark:border-white/[0.06]">
-                  <span className="text-[13px] text-[#6e6e73] dark:text-white/60 w-40">
+                <div className="flex items-center gap-3 pt-2 border-t border-black/[0.06]">
+                  <span className="text-[13px] text-[#6e6e73] w-40">
                     Giorno aggiuntivo
                   </span>
                   <div className="relative w-32">
@@ -2097,7 +2097,7 @@ function PrezzoDinamicoSection({
                         const v = e.target.value
                         patchTariffa(t.id, { extraPerDay: v === '' ? '' : Number(v) })
                       }}
-                      className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                     />
                   </div>
                 </div>
@@ -2109,15 +2109,15 @@ function PrezzoDinamicoSection({
 
       {/* ─── REVENUE ENGINE ─── */}
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
           Revenue Engine — Pricing Dinamico
         </h2>
-        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1 mb-5">
+        <p className="text-[14px] text-[#6e6e73] mt-1 mb-5">
           Prezzi dinamici, coefficienti e limiti min/max
         </p>
 
         {/* Enabled + Mode */}
-        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5 mb-4">
+        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5 mb-4">
           <div className="flex items-center gap-4 flex-wrap">
             <label className="inline-flex items-center gap-2 cursor-pointer">
               <input
@@ -2126,17 +2126,17 @@ function PrezzoDinamicoSection({
                 onChange={(e) => patchDyn({ enabled: e.target.checked })}
                 className="w-5 h-5 accent-[#007aff]"
               />
-              <span className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white">
+              <span className="text-[15px] font-semibold text-[#1d1d1f]">
                 Revenue Management attivo
               </span>
             </label>
             <div className="flex-1" />
-            <label className="flex items-center gap-2 text-[13px] text-[#6e6e73] dark:text-white/60">
+            <label className="flex items-center gap-2 text-[13px] text-[#6e6e73]">
               <span>Modalita</span>
               <select
                 value={config.dynamic.mode}
                 onChange={(e) => patchDyn({ mode: e.target.value as DynamicMode })}
-                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="disabled">Disabilitato</option>
                 <option value="suggestion">Suggerimento</option>
@@ -2147,12 +2147,12 @@ function PrezzoDinamicoSection({
         </section>
 
         {/* Prezzi Base + Limiti Min/Max */}
-        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden mb-4">
+        <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden mb-4">
           <header className="px-5 pt-5 pb-3">
-            <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
               Prezzi Base + Limiti per Categoria
             </h3>
-            <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">
+            <p className="text-[13px] text-[#6e6e73] mt-0.5">
               Override del prezzo base e vincoli min/max applicati dopo i coefficienti
             </p>
           </header>
@@ -2165,7 +2165,7 @@ function PrezzoDinamicoSection({
             </div>
             {catIds.map((cat) => (
               <div key={cat} className="grid grid-cols-[1fr_repeat(3,minmax(0,1fr))] gap-2 items-center">
-                <span className="text-[14px] text-[#1d1d1f] dark:text-white font-medium">
+                <span className="text-[14px] text-[#1d1d1f] font-medium">
                   {catLabels[cat]}
                 </span>
                 <PriceBox
@@ -2245,7 +2245,7 @@ function DayRow({
                   const v = e.target.value
                   onChange(d, v === '' ? '' : Number(v))
                 }}
-                className="w-20 bg-[#f5f5f7] dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg pl-5 pr-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-20 bg-[#f5f5f7] border border-black/5 rounded-lg pl-5 pr-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
             </div>
           </div>
@@ -2286,7 +2286,7 @@ function PriceBox({
           const v = e.target.value
           onChange(v === '' ? '' : Number(v))
         }}
-        className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+        className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
       />
     </div>
   )
@@ -2316,12 +2316,12 @@ function CoefficientTable({
   }
 
   return (
-    <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
       <header className="px-5 pt-5 pb-3">
-        <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+        <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
           {title}
         </h3>
-        <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">{subtitle}</p>
+        <p className="text-[13px] text-[#6e6e73] mt-0.5">{subtitle}</p>
       </header>
 
       <div className="px-5 pb-4">
@@ -2343,7 +2343,7 @@ function CoefficientTable({
                   const v = e.target.value
                   patch(r.id, { min: v === '' ? '' : Number(v) })
                 }}
-                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
               <input
                 type="number"
@@ -2352,7 +2352,7 @@ function CoefficientTable({
                   const v = e.target.value
                   patch(r.id, { max: v === '' ? '' : Number(v) })
                 }}
-                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
               <input
                 type="number"
@@ -2362,14 +2362,14 @@ function CoefficientTable({
                   const v = e.target.value
                   patch(r.id, { coeff: v === '' ? '' : Number(v) })
                 }}
-                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
               <input
                 type="text"
                 value={r.label}
                 onChange={(e) => patch(r.id, { label: e.target.value })}
                 placeholder="Descrizione"
-                className="bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
               <button
                 onClick={() => remove(r.id)}
@@ -2383,7 +2383,7 @@ function CoefficientTable({
             </div>
           ))}
           {rows.length === 0 && (
-            <p className="text-center text-[13px] text-[#6e6e73] dark:text-white/50 py-4">
+            <p className="text-center text-[13px] text-[#6e6e73] py-4">
               Nessuna riga
             </p>
           )}
@@ -2422,21 +2422,21 @@ function PreventiviSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f] dark:text-white">
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
           Impostazioni Preventivi
         </h2>
-        <p className="text-[14px] text-[#6e6e73] dark:text-white/60 mt-1">
+        <p className="text-[14px] text-[#6e6e73] mt-1">
           Maggiorazione, scadenza e messaggi di sistema
         </p>
       </div>
 
       {/* Maggiorazione + Scadenza */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-1">
+        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1">
             Maggiorazione
           </h3>
-          <p className="text-[12px] text-[#6e6e73] dark:text-white/60 mb-3">
+          <p className="text-[12px] text-[#6e6e73] mb-3">
             Applicata sul totale del preventivo
           </p>
           <div className="relative w-28">
@@ -2449,17 +2449,17 @@ function PreventiviSection({
                 const v = e.target.value
                 setPreventivi({ ...preventivi, maggiorazione_pct: v === '' ? '' : Number(v) })
               }}
-              className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">%</span>
           </div>
         </section>
 
-        <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white mb-1">
+        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1">
             Scadenza Default
           </h3>
-          <p className="text-[12px] text-[#6e6e73] dark:text-white/60 mb-3">
+          <p className="text-[12px] text-[#6e6e73] mb-3">
             Validita del preventivo dopo l'invio
           </p>
           <div className="relative w-28">
@@ -2471,7 +2471,7 @@ function PreventiviSection({
                 const v = e.target.value
                 setPreventivi({ ...preventivi, scadenza_default_ore: v === '' ? '' : Number(v) })
               }}
-              className="w-full bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/10 rounded-lg pl-3 pr-12 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-12 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">ore</span>
           </div>
@@ -2479,17 +2479,17 @@ function PreventiviSection({
       </div>
 
       {/* Messaggi di Sistema Preventivo */}
-      <section className="bg-white dark:bg-[#1c1c1e] rounded-2xl border border-black/5 dark:border-white/10 shadow-sm overflow-hidden">
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3">
-          <h3 className="text-[17px] font-semibold text-[#1d1d1f] dark:text-white tracking-tight">
+          <h3 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
             Messaggi di Sistema — Preventivi
           </h3>
-          <p className="text-[13px] text-[#6e6e73] dark:text-white/60 mt-0.5">
+          <p className="text-[13px] text-[#6e6e73] mt-0.5">
             Template usati dal sistema per i preventivi
           </p>
         </header>
 
-        <ul className="divide-y divide-black/5 dark:divide-white/[0.08]">
+        <ul className="divide-y divide-black/5">
           {preventivi.messaggi.map((m) => (
             <li key={m.key} className="p-5">
               <div className="flex items-start gap-3 mb-3">
@@ -2502,10 +2502,10 @@ function PreventiviSection({
                   />
                 </label>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white">
+                  <h4 className="text-[14px] font-semibold text-[#1d1d1f]">
                     {m.label}
                   </h4>
-                  <p className="text-[12px] text-[#6e6e73] dark:text-white/60 mt-0.5">
+                  <p className="text-[12px] text-[#6e6e73] mt-0.5">
                     {m.description}
                   </p>
                   <p className="text-[11px] text-[#a1a1a6] mt-0.5 font-mono">{m.key}</p>
@@ -2515,7 +2515,7 @@ function PreventiviSection({
                 value={m.body}
                 onChange={(e) => patchMsg(m.key, { body: e.target.value })}
                 rows={5}
-                className="w-full bg-[#f5f5f7] dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] dark:text-white placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 resize-y font-mono leading-relaxed"
+                className="w-full bg-[#f5f5f7] border border-black/5 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 resize-y font-mono leading-relaxed"
               />
             </li>
           ))}
