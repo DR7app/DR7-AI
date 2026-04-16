@@ -4362,43 +4362,58 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }).then(() => logger.log('✅ WhatsApp admin notification sent'))
           .catch(err => console.error('⚠️ WhatsApp admin notification failed:', err))
 
-        // Send customer confirmation message via DB template (rental_new_customer) — fire and forget
+        // Send customer confirmation — template varies by payment state
         const custPhone = customerInfo?.phone
         if (custPhone) {
+          const isPending = paymentStatus === 'pending' || paymentStatus === 'unpaid'
+          const isNexi = (formData.payment_method || '').includes('Nexi Pay by Link')
+
+          // Build template vars
+          const pickupD = new Date(pickupDateTime)
+          const dropoffD = new Date(returnDateTime)
+          const templateVars = {
+            '{customer_name}': customerInfo?.full_name || 'Cliente',
+            '{nome}': (customerInfo?.full_name || 'Cliente').split(' ')[0],
+            '{booking_id}': 'DR7-' + (insertedBooking?.id?.substring(0, 8).toUpperCase() || ''),
+            '{vehicle_name}': vehicle?.display_name || '',
+            '{plate}': vehicle?.plate || '',
+            '{pickup_date}': pickupD.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            '{pickup_time}': pickupD.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }),
+            '{dropoff_date}': dropoffD.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            '{dropoff_time}': dropoffD.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }),
+            '{pickup_location}': pickupLocationLabel || '',
+            '{insurance}': formData.insurance_option || 'KASKO_BASE',
+            '{deposit}': parseFloat(formData.deposit) > 0 ? `€${parseFloat(formData.deposit).toFixed(2)}` : '€0',
+            '{km_info}': formData.unlimited_km ? 'Illimitati' : `${formData.km_limit || 0} km`,
+            '{total}': ((insertedBooking?.price_total || eurToCents(formData.total_amount)) / 100).toFixed(2),
+            '{payment_method}': formData.payment_method || '',
+            '{payment_status}': isPending ? 'Da saldare' : 'Pagato',
+          }
+
+          // Pick the right template:
+          // - Pending + Nexi Pay by Link → payment_link_customer (already sent by nexi-pay-by-link flow if link generated)
+          // - Pending + NOT Nexi → rental_da_saldare_customer (Contanti, Bonifico, etc.)
+          // - Paid or edit → rental_new_customer (normal confirmation)
+          let templateKey: string
+          if (isPending && !isNexi) {
+            templateKey = 'rental_da_saldare_customer'
+          } else if (isPending && isNexi) {
+            // Nexi link message is handled elsewhere — skip here
+            return
+          } else {
+            templateKey = 'rental_new_customer'
+          }
+
           fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               customPhone: custPhone,
-              booking: {
-                id: insertedBooking?.id || '',
-                service_type: 'car_rental',
-                isEdit: !!editingId,
-                customer_name: customerInfo?.full_name || '',
-                customer_email: customerInfo?.email || '',
-                customer_phone: custPhone,
-                vehicle_name: vehicle?.display_name || '',
-                vehicle_plate: vehicle?.plate || '',
-                pickup_date: pickupDateTime,
-                dropoff_date: returnDateTime,
-                pickup_location: pickupLocationLabel,
-                insurance_option: formData.insurance_option || 'KASKO_BASE',
-                price_total: insertedBooking?.price_total || eurToCents(formData.total_amount),
-                payment_status: paymentStatus,
-                payment_method: formData.payment_method || '',
-                deposit_amount: parseFloat(formData.deposit) || 0,
-                booking_details: {
-                  insuranceOption: formData.insurance_option || 'KASKO_BASE',
-                  deposit: parseFloat(formData.deposit) || 0,
-                  deposit_status: formData.deposit_status,
-                  km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
-                  unlimited_km: formData.unlimited_km,
-                  notes: formData.notes || null,
-                }
-              }
+              templateKey,
+              templateVars,
             })
-          }).then(() => logger.log('✅ WhatsApp customer confirmation sent to', custPhone))
-            .catch(err => console.error('⚠️ WhatsApp customer notification failed:', err))
+          }).then(() => logger.log(`✅ Customer WhatsApp sent (${templateKey}) to`, custPhone))
+            .catch(err => console.error('⚠️ Customer WhatsApp failed:', err))
         }
       } catch (whatsappError) {
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)

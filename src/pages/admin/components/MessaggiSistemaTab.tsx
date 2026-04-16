@@ -59,7 +59,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 // These keys match REAL messages sent by active functions — do not add keys that don't exist
 const MESSAGE_CATEGORIES: { label: string; keys: string[] }[] = [
-  { label: 'Noleggio', keys: ['rental_new', 'rental_new_customer', 'rental_new_admin', 'rental_modified', 'supercar_day_before', 'utilitaria_day_before', 'checkin_reminder', 'checkout_reminder', 'deposit_return_iban'] },
+  { label: 'Noleggio', keys: ['rental_new', 'rental_new_customer', 'rental_new_admin', 'rental_da_saldare_customer', 'rental_modified', 'supercar_day_before', 'utilitaria_day_before', 'checkin_reminder', 'checkout_reminder', 'deposit_return_iban'] },
   { label: 'Lavaggio', keys: ['carwash_new', 'carwash_new_customer', 'carwash_new_admin', 'carwash_modified'] },
   { label: 'Meccanica', keys: ['mechanical_new', 'mechanical_new_customer', 'mechanical_new_admin', 'mechanical_modified'] },
   { label: 'Firma & Contratto', keys: ['signature_request_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp', 'admin_contract_signed_alert', 'document_signature_link'] },
