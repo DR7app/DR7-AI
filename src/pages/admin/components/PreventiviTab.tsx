@@ -440,22 +440,16 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }, [])
 
   async function loadCustomers() {
-    const all: any[] = []
-    let from = 0
-    const PAGE = 1000
-    while (true) {
-      const { data, error } = await supabase
-        .from('customers_extended')
-        .select('id, nome, cognome, email, telefono, tipo_cliente, denominazione, scadenza_patente, data_nascita, patente_data_rilascio')
-        .order('updated_at', { ascending: false })
-        .range(from, from + PAGE - 1)
-      if (error) {
-        console.error('[PreventiviTab] loadCustomers error:', error)
-        break
+    try {
+      // Use Netlify function (service role, bypasses RLS)
+      const res = await fetch('/.netlify/functions/list-customers')
+      if (!res.ok) {
+        console.error('[PreventiviTab] list-customers failed:', res.status)
+        return
       }
-      if (!data || data.length === 0) break
-      all.push(...data.map((c: any) => {
-        // Compute full_name — try multiple fallbacks so customers always appear
+      const json = await res.json()
+      const raw = json.customers || json.data || json || []
+      const mapped = raw.map((c: any) => {
         let fullName = ''
         if (c.tipo_cliente === 'azienda') {
           fullName = c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || c.email || 'Azienda'
@@ -471,12 +465,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           data_nascita: c.data_nascita || null,
           patente_data_rilascio: c.patente_data_rilascio || null,
         }
-      }))
-      from += data.length
-      if (data.length < PAGE) break
+      })
+      console.log(`[PreventiviTab] Loaded ${mapped.length} customers`)
+      setCustomers(mapped)
+    } catch (e) {
+      console.error('[PreventiviTab] loadCustomers error:', e)
     }
-    console.log(`[PreventiviTab] Loaded ${all.length} customers`)
-    setCustomers(all)
   }
 
   async function loadPreventivi() {
