@@ -59,7 +59,7 @@ async function sendWhatsAppSigningLink(
             // Log to sent_messages_log
             try {
                 const sb = createClient(supabaseUrl, supabaseServiceKey)
-                const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\nGentile *${signerName}*,\n\ndi seguito trova il contratto di noleggio n. *${contractNumber}* da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore: trascorso questo termine, la prenotazione potrà decadere automaticamente come da policy.\n\nLa invitiamo quindi a completare la firma ora per confermare il noleggio.\n\nCordiali Saluti,\nDR7\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+                const fullMessage = `Gentile *${signerName}*,\n\ndi seguito trova il contratto di noleggio n. *${contractNumber}* da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore: trascorso questo termine, la prenotazione potrà decadere automaticamente come da policy.\n\nLa invitiamo quindi a completare la firma ora per confermare il noleggio.\n\nCordiali Saluti,\nDR7`
                 await sb.from('sent_messages_log').insert({
                     customer_name: signerName,
                     customer_phone: phone,

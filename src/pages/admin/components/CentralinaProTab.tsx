@@ -329,6 +329,44 @@ function uid() {
   return Math.random().toString(36).slice(2, 10)
 }
 
+const STORAGE_KEY = 'centralina_pro_v1'
+
+type PersistedSnapshot = {
+  categories: Category[]
+  fasce: Fascia[]
+  insurance: InsuranceCategoryConfig[]
+  km: KmConfig[]
+  deposits: DepositsConfig
+  servizi: ServiziConfig
+  prezzoDinamico: PrezzoDinamicoConfig
+  preventivi: PreventiviConfig
+}
+
+function loadPersisted(): PersistedSnapshot | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as PersistedSnapshot
+  } catch {
+    return null
+  }
+}
+
+function savePersisted(snap: PersistedSnapshot) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snap))
+  } catch {
+    // ignore quota / private mode errors
+  }
+}
+
+function pick<T>(persisted: PersistedSnapshot | null, key: keyof PersistedSnapshot, fallback: T): T {
+  if (persisted && persisted[key] !== undefined && persisted[key] !== null) {
+    return persisted[key] as unknown as T
+  }
+  return fallback
+}
+
 export default function CentralinaProTab() {
   const [section, setSection] = useState<SectionId>('categorie-fascia')
 

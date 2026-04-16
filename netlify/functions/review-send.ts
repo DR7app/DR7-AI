@@ -283,7 +283,7 @@ const handler: Handler = async (event) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chatId: `${targetPhone}@c.us`,
-            message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio \u00e8 stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${whatsappMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha gi\u00e0 ricevuto in precedenza, pu\u00f2 semplicemente ignorarlo._`,
+            message: whatsappMessage,
           }),
         });
 
@@ -299,7 +299,7 @@ const handler: Handler = async (event) => {
 
         // Log to sent_messages_log
         try {
-          const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${whatsappMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+          const fullMessage = whatsappMessage;
           await supabase.from('sent_messages_log').insert({
             customer_name: candidate.customer_name || 'N/A',
             customer_phone: candidate.customer_phone,

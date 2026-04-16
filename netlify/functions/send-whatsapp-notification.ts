@@ -43,10 +43,24 @@ const handler: Handler = async (event) => {
       const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
       const { data: tpl } = await sb
         .from('system_messages')
-        .select('message_body, include_header')
+        .select('message_body, include_header, is_enabled')
         .eq('message_key', templateKey)
-        .eq('is_enabled', true)
-        .single();
+        .maybeSingle();
+
+      // If template explicitly disabled → don't send
+      if (tpl && tpl.is_enabled === false) {
+        console.log(`[send-whatsapp] Template "${templateKey}" is disabled — skipping send`);
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: `Template "${templateKey}" is disabled — notification skipped`,
+            success: true,
+            skipped: true,
+            reason: 'template_disabled'
+          }),
+        };
+      }
+
       if (tpl?.message_body) {
         let rendered = tpl.message_body;
         if (templateVars && typeof templateVars === 'object') {
@@ -87,6 +101,7 @@ const handler: Handler = async (event) => {
   // Handle booking notifications
   else if (booking) {
     const serviceType = booking.service_type;
+    const isCustomerMessage = !!customPhone;
     const customerName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';
     const customerEmail = booking.customer_email || booking.booking_details?.customer?.email;
     const customerPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
@@ -362,7 +377,7 @@ const handler: Handler = async (event) => {
         .from('system_messages')
         .select('message_body, include_header, is_enabled')
         .eq('message_key', messageKey)
-        .single();
+        .maybeSingle();
 
       // Fallback: if _customer variant not found, try base key
       if (!tpl && isCustomerMessage && messageKey.endsWith('_customer')) {
@@ -371,11 +386,25 @@ const handler: Handler = async (event) => {
           .from('system_messages')
           .select('message_body, include_header, is_enabled')
           .eq('message_key', baseKey)
-          .single();
+          .maybeSingle();
         tpl = baseTpl;
       }
 
-      if (tpl && tpl.is_enabled !== false && tpl.message_body) {
+      // If template exists and is explicitly disabled → DO NOT SEND
+      if (tpl && tpl.is_enabled === false) {
+        console.log(`[send-whatsapp] Template "${messageKey}" is disabled in Messaggi di Sistema — skipping send`);
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: `Template "${messageKey}" is disabled — notification skipped`,
+            success: true,
+            skipped: true,
+            reason: 'template_disabled'
+          }),
+        };
+      }
+
+      if (tpl && tpl.message_body) {
         // Use the DB template — it's the source of truth
         finalMessage = tpl.message_body;
         useHeader = tpl.include_header !== false;

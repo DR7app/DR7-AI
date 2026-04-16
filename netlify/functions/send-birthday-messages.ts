@@ -223,7 +223,7 @@ const birthdayHandler: Handler = async (event) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chatId: `${cleanPhone}@c.us`,
-            message: `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${personalizedMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+            message: personalizedMessage
           })
         });
 
@@ -249,7 +249,7 @@ const birthdayHandler: Handler = async (event) => {
 
         // Log to sent_messages_log
         try {
-          const fullMessage = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._\n\n${personalizedMessage}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
+          const fullMessage = personalizedMessage;
           await supabase.from('sent_messages_log').insert({
             customer_name: fullName,
             customer_phone: customer.telefono,
