@@ -4231,82 +4231,75 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Create Google Calendar event
-      try {
-        await fetch('/.netlify/functions/create-calendar-event', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            vehicleName: vehicle?.display_name || '',
-            customerName: customerInfo?.full_name || '',
-            customerEmail: customerInfo?.email || '',
-            customerPhone: customerInfo?.phone || '',
-            pickupDate: formData.pickup_date,
-            pickupTime: formData.pickup_time,
-            returnDate: formData.return_date,
-            returnTime: formData.return_time,
-            pickupLocation: pickupLocationLabel,
-            returnLocation: dropoffLocationLabel,
-            totalPrice: eurToCents(formData.total_amount) / 100,
-            bookingId: insertedBooking?.id?.substring(0, 8)
-          })
+      // Create Google Calendar event — fire and forget (no await, runs in background)
+      fetch('/.netlify/functions/create-calendar-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicleName: vehicle?.display_name || '',
+          customerName: customerInfo?.full_name || '',
+          customerEmail: customerInfo?.email || '',
+          customerPhone: customerInfo?.phone || '',
+          pickupDate: formData.pickup_date,
+          pickupTime: formData.pickup_time,
+          returnDate: formData.return_date,
+          returnTime: formData.return_time,
+          pickupLocation: pickupLocationLabel,
+          returnLocation: dropoffLocationLabel,
+          totalPrice: eurToCents(formData.total_amount) / 100,
+          bookingId: insertedBooking?.id?.substring(0, 8)
         })
-        logger.log('✅ Calendar event created successfully')
-      } catch (calendarError) {
-        console.error('⚠️ Failed to create calendar event:', calendarError)
-        // Don't fail the whole booking if calendar fails
-      }
+      })
+        .then(() => logger.log('✅ Calendar event created successfully'))
+        .catch(err => console.error('⚠️ Failed to create calendar event:', err))
 
       // Generate PDF invoice for car rental
       if (!editingId) { // Only for new bookings
-        try {
-          await authFetch('/.netlify/functions/generate-invoice-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: insertedBooking?.id || '',
-              bookingType: 'car_rental',
-              customerName: customerInfo?.full_name || '',
-              customerEmail: customerInfo?.email || '',
-              customerPhone: customerInfo?.phone || '',
-              items: [
-                {
-                  description: `Noleggio ${vehicle?.display_name || 'Veicolo'}`,
-                  quantity: 1,
-                  unitPrice: eurToCents(formData.total_amount),
-                  total: eurToCents(formData.total_amount)
-                },
-                ...(formData.delivery_enabled ? [{
-                  description: 'Consegna a domicilio',
-                  quantity: 1,
-                  unitPrice: eurToCents(formData.delivery_fee),
-                  total: eurToCents(formData.delivery_fee)
-                }] : []),
-                ...(formData.pickup_enabled ? [{
-                  description: 'Ritiro a domicilio',
-                  quantity: 1,
-                  unitPrice: eurToCents(formData.pickup_fee),
-                  total: eurToCents(formData.pickup_fee)
-                }] : [])
-              ],
-              subtotal: eurToCents(formData.total_amount)
-                + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
-                + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
-              tax: 0,
-              total: eurToCents(formData.total_amount)
-                + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
-                + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
-              paymentStatus: formData.payment_status || 'pending',
-              bookingDate: new Date().toISOString(),
-              serviceDate: `${formData.pickup_date}T${formData.pickup_time}:00`,
-              notes: `Ritiro: ${pickupLocationLabel}\nRiconsegna: ${dropoffLocationLabel}`
-            })
+        // Generate PDF invoice — fire and forget (runs in background)
+        authFetch('/.netlify/functions/generate-invoice-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: insertedBooking?.id || '',
+            bookingType: 'car_rental',
+            customerName: customerInfo?.full_name || '',
+            customerEmail: customerInfo?.email || '',
+            customerPhone: customerInfo?.phone || '',
+            items: [
+              {
+                description: `Noleggio ${vehicle?.display_name || 'Veicolo'}`,
+                quantity: 1,
+                unitPrice: eurToCents(formData.total_amount),
+                total: eurToCents(formData.total_amount)
+              },
+              ...(formData.delivery_enabled ? [{
+                description: 'Consegna a domicilio',
+                quantity: 1,
+                unitPrice: eurToCents(formData.delivery_fee),
+                total: eurToCents(formData.delivery_fee)
+              }] : []),
+              ...(formData.pickup_enabled ? [{
+                description: 'Ritiro a domicilio',
+                quantity: 1,
+                unitPrice: eurToCents(formData.pickup_fee),
+                total: eurToCents(formData.pickup_fee)
+              }] : [])
+            ],
+            subtotal: eurToCents(formData.total_amount)
+              + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
+              + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
+            tax: 0,
+            total: eurToCents(formData.total_amount)
+              + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
+              + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
+            paymentStatus: formData.payment_status || 'pending',
+            bookingDate: new Date().toISOString(),
+            serviceDate: `${formData.pickup_date}T${formData.pickup_time}:00`,
+            notes: `Ritiro: ${pickupLocationLabel}\nRiconsegna: ${dropoffLocationLabel}`
           })
-          logger.log('✅ Invoice generated successfully')
-        } catch (invoiceError) {
-          console.error('⚠️ Failed to generate invoice:', invoiceError)
-          // Don't fail the whole booking if invoice generation fails
-        }
+        })
+          .then(() => logger.log('✅ Invoice generated successfully'))
+          .catch(err => console.error('⚠️ Failed to generate invoice:', err))
       }
 
       // Send WhatsApp notification for car rental
@@ -4316,9 +4309,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (isPaid || editingId) {
       try {
         // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
-        // These are already formatted as "2026-02-07T09:30:00+01:00" (or +02:00 in summer)
-        // Send admin notification (detailed internal format)
-        await fetch('/.netlify/functions/send-whatsapp-notification', {
+        // Fire and forget — don't block UI on WhatsApp sending
+        fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4368,13 +4360,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               }
             }
           })
-        })
-        logger.log('✅ WhatsApp admin notification sent')
+        }).then(() => logger.log('✅ WhatsApp admin notification sent'))
+          .catch(err => console.error('⚠️ WhatsApp admin notification failed:', err))
 
-        // Send customer confirmation message via DB template (rental_new_customer)
+        // Send customer confirmation message via DB template (rental_new_customer) — fire and forget
         const custPhone = customerInfo?.phone
         if (custPhone) {
-          await fetch('/.netlify/functions/send-whatsapp-notification', {
+          fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -4406,8 +4398,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 }
               }
             })
-          })
-          logger.log('✅ WhatsApp customer confirmation sent to', custPhone)
+          }).then(() => logger.log('✅ WhatsApp customer confirmation sent to', custPhone))
+            .catch(err => console.error('⚠️ WhatsApp customer notification failed:', err))
         }
       } catch (whatsappError) {
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
@@ -4415,53 +4407,41 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
       } // end isPaid || editingId
 
-      // Sync cauzione (security deposit) record
-      try {
-        logger.log('🔄 Syncing cauzione for booking:', insertedBooking.id)
-
-        const depositAmount = parseFloat(formData.deposit) || 0
-        const depositPaid = formData.deposit_status === 'incassata'
-
-        await fetch('/.netlify/functions/sync-booking-cauzione', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: insertedBooking.id,
-            customerId: insertedBooking.user_id || formData.customer_id,
-            vehicleId: insertedBooking.vehicle_id || formData.vehicle_id,
-            returnDate: insertedBooking.dropoff_date || formData.return_date,
-            depositAmount: depositAmount,
-            paymentMethod: formData.payment_method || 'carta',
-            depositPaid: depositPaid,
-            depositStatus: formData.deposit_status
-          })
+      // Sync cauzione (security deposit) record — fire and forget
+      const depositAmount = parseFloat(formData.deposit) || 0
+      const depositPaid = formData.deposit_status === 'incassata'
+      fetch('/.netlify/functions/sync-booking-cauzione', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: insertedBooking.id,
+          customerId: insertedBooking.user_id || formData.customer_id,
+          vehicleId: insertedBooking.vehicle_id || formData.vehicle_id,
+          returnDate: insertedBooking.dropoff_date || formData.return_date,
+          depositAmount: depositAmount,
+          paymentMethod: formData.payment_method || 'carta',
+          depositPaid: depositPaid,
+          depositStatus: formData.deposit_status
         })
+      })
+        .then(async () => {
+          // data_incasso update needs to run AFTER sync completes to avoid race condition
+          if (editingId) {
+            const dataIncasso = formData.deposit_status === 'incassata' ? new Date().toISOString() : null
+            await supabase
+              .from('cauzioni')
+              .update({ data_incasso: dataIncasso, updated_at: new Date().toISOString() })
+              .eq('riferimento_contratto_id', insertedBooking.id)
+          }
+          logger.log('✅ Cauzione synced successfully')
+        })
+        .catch(err => console.error('⚠️ Failed to sync cauzione:', err))
 
-        // Directly update data_incasso on existing cauzione to ensure status sync
-        // (DB triggers may interfere with the sync function's null value)
-        if (editingId) {
-          const dataIncasso = formData.deposit_status === 'incassata' ? new Date().toISOString() : null
-          await supabase
-            .from('cauzioni')
-            .update({ data_incasso: dataIncasso, updated_at: new Date().toISOString() })
-            .eq('riferimento_contratto_id', insertedBooking.id)
-          logger.log('✅ Cauzione data_incasso updated directly:', formData.deposit_status)
-        }
-        logger.log('✅ Cauzione synced successfully')
-      } catch (cauzioneError) {
-        console.error('⚠️ Failed to sync cauzione:', cauzioneError)
-        // Don't fail the whole booking if cauzione sync fails
-      }
-
-      // Generate Contract PDF automatically (for new bookings and edits)
-      try {
-        logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)', new Date().toISOString())
-        await handleGenerateContract(insertedBooking, false)
-        logger.log('[Auto-Gen] ✅ Contract generated successfully')
-      } catch (contractError) {
-        console.error('[Auto-Gen] ⚠️ Failed to generate contract:', contractError)
-        // Don't alert here to avoid confusion, just log it
-      }
+      // Generate Contract PDF automatically — fire and forget
+      logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)')
+      handleGenerateContract(insertedBooking, false)
+        .then(() => logger.log('[Auto-Gen] ✅ Contract generated successfully'))
+        .catch(err => console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err))
 
       // Detect if payment status just changed from unpaid → paid (on edit)
       const justMarkedPaid = editingId
