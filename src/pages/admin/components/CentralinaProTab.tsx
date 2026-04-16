@@ -461,19 +461,15 @@ export default function CentralinaProTab() {
   const [justSaved, setJustSaved] = useState(false)
 
   // ─── SYNC EFFECTS ───
-  // When categories change, ensure dependent configs (insurance, km, tariffe, base/min/max) have entries
+  // When categories change, ensure dependent configs (insurance, km, tariffe) have entries.
+  // NOTE: base_prices/min_prices/max_prices are NOT synced here — they're keyed by vehicle.id (from Supabase),
+  // not category.id. Syncing them with category ids would wipe all per-vehicle prices on every mount.
   useEffect(() => {
     setInsurance((prev) => syncByCategory(prev, categories, blankInsurance))
     setKm((prev) => syncByCategory(prev, categories, blankKm))
     setPrezzoDinamico((pd) => ({
       ...pd,
       tariffe: syncByCategory(pd.tariffe, categories, blankTariffa),
-      dynamic: {
-        ...pd.dynamic,
-        base_prices: syncRecord(pd.dynamic.base_prices, categories.map((c) => c.id), ''),
-        min_prices: syncRecord(pd.dynamic.min_prices, categories.map((c) => c.id), 0),
-        max_prices: syncRecord(pd.dynamic.max_prices, categories.map((c) => c.id), 0),
-      },
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories])
