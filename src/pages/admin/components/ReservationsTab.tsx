@@ -1905,26 +1905,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const dropoffDateStr = dropoff.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
         const dropoffTimeStr = dropoff.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
 
+        // Use the existing "Conferma Noleggio (cliente)" template (rental_new_customer)
         fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: custPhone,
-            templateKey: 'rental_confirmed_unpaid',
-            templateVars: {
-              '{customer_name}': booking.customer_name || 'Cliente',
-              '{booking_id}': booking.id.substring(0, 8).toUpperCase(),
-              '{vehicle_name}': booking.vehicle_name || '',
-              '{pickup_date}': pickupDateStr,
-              '{pickup_time}': pickupTimeStr,
-              '{dropoff_date}': dropoffDateStr,
-              '{dropoff_time}': dropoffTimeStr,
-              '{total}': ((booking.price_total || 0) / 100).toFixed(2),
-              '{payment_method}': booking.payment_method || '',
+            booking: {
+              id: booking.id,
+              service_type: 'car_rental',
+              customer_name: booking.customer_name || 'Cliente',
+              customer_email: booking.customer_email || '',
+              customer_phone: custPhone,
+              vehicle_name: booking.vehicle_name || '',
+              vehicle_plate: booking.vehicle_plate || '',
+              pickup_date: booking.pickup_date,
+              dropoff_date: booking.dropoff_date,
+              pickup_location: booking.pickup_location || '',
+              insurance_option: booking.insurance_option || booking.booking_details?.insuranceOption || '',
+              price_total: booking.price_total || 0,
+              payment_status: 'pending',
+              payment_method: booking.payment_method || '',
+              deposit_amount: booking.deposit_amount || 0,
+              booking_details: booking.booking_details || {}
             }
           })
         })
-          .then(() => logger.log('✅ Conferma WhatsApp sent'))
+          .then(() => logger.log('✅ Conferma WhatsApp sent (rental_new_customer)'))
           .catch(err => console.error('⚠️ Conferma WhatsApp failed:', err))
       }
 
