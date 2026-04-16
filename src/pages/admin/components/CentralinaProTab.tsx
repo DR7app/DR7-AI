@@ -2226,12 +2226,14 @@ function PrezzoDinamicoSection({
             <div className="max-h-[600px] overflow-y-auto -mx-1 px-1 space-y-6">
               {(
                 [
-                  { key: 'exotic', label: 'Exotic Supercars' },
-                  { key: 'urban', label: 'Urban' },
-                  { key: 'aziendali', label: 'Aziendali' },
+                  { key: 'exotic', label: 'Supercars', match: ['exotic', 'supercars'] },
+                  { key: 'urban', label: 'Urban', match: ['urban'] },
+                  { key: 'aziendali', label: 'Aziendali', match: ['aziendali', 'furgone', 'ncc'] },
                 ] as const
               ).map((group) => {
-                const vs = vehicles.filter((v) => (v.category ?? 'exotic') === group.key)
+                const vs = vehicles.filter((v) =>
+                  (group.match as readonly string[]).includes((v.category ?? 'exotic').toLowerCase())
+                )
                 if (vs.length === 0) return null
                 return (
                   <div key={group.key}>
@@ -2267,8 +2269,8 @@ function PrezzoDinamicoSection({
                 )
               })}
               {(() => {
-                const known = new Set(['exotic', 'urban', 'aziendali'])
-                const others = vehicles.filter((v) => !known.has(v.category ?? 'exotic'))
+                const known = new Set(['exotic', 'supercars', 'urban', 'aziendali', 'furgone', 'ncc'])
+                const others = vehicles.filter((v) => !known.has((v.category ?? 'exotic').toLowerCase()))
                 if (others.length === 0) return null
                 return (
                   <div>
