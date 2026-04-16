@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '../../../supabaseClient'
+
+type FleetVehicle = {
+  id: string
+  display_name: string
+  daily_rate: number | null
+  category: string | null
+}
 
 type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7'
 
@@ -2119,23 +2127,26 @@ function PrezzoDinamicoSection({
   config: PrezzoDinamicoConfig
   setConfig: (next: PrezzoDinamicoConfig) => void
 }) {
-  function patchTariffa(id: string, p: Partial<TariffaGiornaliera>) {
-    setConfig({ ...config, tariffe: config.tariffe.map((t) => (t.id === id ? { ...t, ...p } : t)) })
-  }
-  function patchTariffaDay(id: string, scope: 'unica' | 'residente' | 'non_residente', day: string, value: number | '') {
-    setConfig({
-      ...config,
-      tariffe: config.tariffe.map((t) =>
-        t.id === id ? { ...t, [scope]: { ...t[scope], [day]: value } } : t
-      ),
-    })
-  }
-  function addDay(id: string) {
-    const t = config.tariffe.find((x) => x.id === id)
-    if (!t) return
-    const nextDay = String(Math.max(...t.days.map(Number), 0) + 1)
-    patchTariffa(id, { days: [...t.days, nextDay] })
-  }
+  const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
+  const [vehiclesLoading, setVehiclesLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('vehicles')
+        .select('id, display_name, daily_rate, category')
+        .neq('status', 'retired')
+        .order('display_name')
+      if (!cancelled) {
+        setVehicles((data as FleetVehicle[]) || [])
+        setVehiclesLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function patchDyn(p: Partial<DynamicPricingConfig>) {
     setConfig({ ...config, dynamic: { ...config.dynamic, ...p } })
@@ -2144,94 +2155,8 @@ function PrezzoDinamicoSection({
     patchDyn({ [scope]: { ...config.dynamic[scope], [key]: value } } as Partial<DynamicPricingConfig>)
   }
 
-  const catIds = ['supercars', 'urban', 'aziendali'] as const
-  const catLabels: Record<string, string> = { supercars: 'Supercars', urban: 'Urban', aziendali: 'Aziendali' }
-
   return (
     <div className="space-y-8">
-      {/* ─── TARIFFA BASE ─── */}
-      <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
-          Tariffe Giornaliere per Categoria
-        </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1 mb-5">
-          Tariffa base di partenza, prima dei coefficienti dinamici
-        </p>
-
-        <div className="space-y-4">
-          {config.tariffe.map((t) => (
-            <section
-              key={t.id}
-              className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden"
-            >
-              <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-4 flex-wrap">
-                <h3 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
-                  {t.label}
-                </h3>
-                <label className="flex items-center gap-2 text-[13px] text-[#6e6e73]">
-                  <span>Tipo tariffa</span>
-                  <select
-                    value={t.mode}
-                    onChange={(e) => patchTariffa(t.id, { mode: e.target.value as TariffaMode })}
-                    className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-                  >
-                    <option value="unica">Unica</option>
-                    <option value="per_residenza">Residente + Non Residente</option>
-                  </select>
-                </label>
-              </header>
-
-              <div className="px-5 pb-5 border-t border-black/[0.06] pt-4 space-y-4">
-                {t.mode === 'unica' ? (
-                  <DayRow
-                    label="Tariffa unica"
-                    days={t.days}
-                    values={t.unica}
-                    onChange={(d, v) => patchTariffaDay(t.id, 'unica', d, v)}
-                    onAddDay={() => addDay(t.id)}
-                  />
-                ) : (
-                  <>
-                    <DayRow
-                      label="Residente Sardegna"
-                      days={t.days}
-                      values={t.residente}
-                      onChange={(d, v) => patchTariffaDay(t.id, 'residente', d, v)}
-                      onAddDay={() => addDay(t.id)}
-                    />
-                    <DayRow
-                      label="Non Residente"
-                      days={t.days}
-                      values={t.non_residente}
-                      onChange={(d, v) => patchTariffaDay(t.id, 'non_residente', d, v)}
-                      onAddDay={() => addDay(t.id)}
-                    />
-                  </>
-                )}
-                <div className="flex items-center gap-3 pt-2 border-t border-black/[0.06]">
-                  <span className="text-[13px] text-[#6e6e73] w-40">
-                    Giorno aggiuntivo
-                  </span>
-                  <div className="relative w-32">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={t.extraPerDay}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        patchTariffa(t.id, { extraPerDay: v === '' ? '' : Number(v) })
-                      }}
-                      className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-          ))}
-        </div>
-      </div>
-
       {/* ─── REVENUE ENGINE ─── */}
       <div>
         <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
@@ -2271,43 +2196,59 @@ function PrezzoDinamicoSection({
           </div>
         </section>
 
-        {/* Prezzi Base + Limiti Min/Max */}
+        {/* Prezzi Base + Limiti Min/Max — per veicolo */}
         <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden mb-4">
           <header className="px-5 pt-5 pb-3">
             <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
-              Prezzi Base + Limiti per Categoria
+              Prezzi Base + Limiti per Veicolo
             </h3>
             <p className="text-[13px] text-[#6e6e73] mt-0.5">
-              Override del prezzo base e vincoli min/max applicati dopo i coefficienti
+              Override del prezzo base e vincoli min/max applicati dopo i coefficienti — per ogni veicolo della flotta
             </p>
           </header>
           <div className="px-5 pb-5 space-y-3">
-            <div className="grid grid-cols-[1fr_repeat(3,minmax(0,1fr))] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
-              <span>Categoria</span>
+            <div className="grid grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
+              <span>Veicolo</span>
               <span className="text-right">Prezzo Base €/g</span>
               <span className="text-right">Min €/g</span>
               <span className="text-right">Max €/g</span>
             </div>
-            {catIds.map((cat) => (
-              <div key={cat} className="grid grid-cols-[1fr_repeat(3,minmax(0,1fr))] gap-2 items-center">
-                <span className="text-[14px] text-[#1d1d1f] font-medium">
-                  {catLabels[cat]}
-                </span>
-                <PriceBox
-                  value={config.dynamic.base_prices[cat] ?? ''}
-                  onChange={(v) => patchPrice('base_prices', cat, v)}
-                  placeholder="—"
-                />
-                <PriceBox
-                  value={config.dynamic.min_prices[cat] ?? ''}
-                  onChange={(v) => patchPrice('min_prices', cat, v)}
-                />
-                <PriceBox
-                  value={config.dynamic.max_prices[cat] ?? ''}
-                  onChange={(v) => patchPrice('max_prices', cat, v)}
-                />
-              </div>
-            ))}
+            {vehiclesLoading && (
+              <p className="text-center text-[13px] text-[#6e6e73] py-4">
+                Caricamento flotta…
+              </p>
+            )}
+            {!vehiclesLoading && vehicles.length === 0 && (
+              <p className="text-center text-[13px] text-[#6e6e73] py-4">
+                Nessun veicolo nella flotta
+              </p>
+            )}
+            <div className="max-h-[480px] overflow-y-auto -mx-1 px-1 space-y-2">
+              {vehicles.map((v) => (
+                <div key={v.id} className="grid grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-2 items-center">
+                  <div className="min-w-0">
+                    <div className="text-[14px] text-[#1d1d1f] font-medium truncate">{v.display_name}</div>
+                    <div className="text-[11px] text-[#a1a1a6]">
+                      {v.category ?? '—'}
+                      {v.daily_rate != null && <> · listino €{v.daily_rate}/g</>}
+                    </div>
+                  </div>
+                  <PriceBox
+                    value={config.dynamic.base_prices[v.id] ?? ''}
+                    onChange={(val) => patchPrice('base_prices', v.id, val)}
+                    placeholder="—"
+                  />
+                  <PriceBox
+                    value={config.dynamic.min_prices[v.id] ?? ''}
+                    onChange={(val) => patchPrice('min_prices', v.id, val)}
+                  />
+                  <PriceBox
+                    value={config.dynamic.max_prices[v.id] ?? ''}
+                    onChange={(val) => patchPrice('max_prices', v.id, val)}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -2335,55 +2276,6 @@ function PrezzoDinamicoSection({
             onChange={(rows) => patchDyn({ duration_coefficients: rows })}
           />
         </div>
-      </div>
-    </div>
-  )
-}
-
-function DayRow({
-  label,
-  days,
-  values,
-  onChange,
-  onAddDay,
-}: {
-  label: string
-  days: string[]
-  values: Record<string, number | ''>
-  onChange: (day: string, value: number | '') => void
-  onAddDay: () => void
-}) {
-  return (
-    <div>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">{label}</p>
-      <div className="flex items-end gap-2 flex-wrap">
-        {days.map((d) => (
-          <div key={d} className="flex flex-col">
-            <span className="text-[11px] text-[#a1a1a6] mb-1 text-center">{d}g</span>
-            <div className="relative">
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6] pointer-events-none">€</span>
-              <input
-                type="number"
-                min={0}
-                value={values[d] ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value
-                  onChange(d, v === '' ? '' : Number(v))
-                }}
-                className="w-20 bg-[#f5f5f7] border border-black/5 rounded-lg pl-5 pr-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-              />
-            </div>
-          </div>
-        ))}
-        <button
-          onClick={onAddDay}
-          className="inline-flex items-center gap-1 h-[30px] px-3 rounded-lg text-[12px] font-medium text-[#007aff] hover:bg-[#007aff]/10 transition-colors"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-          </svg>
-          giorno
-        </button>
       </div>
     </div>
   )
