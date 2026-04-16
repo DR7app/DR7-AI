@@ -538,7 +538,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         || evt.booking.payment_status === 'unpaid'
                         || evt.booking.status === 'pending_payment'
 
-                      if (isPendingPayment) {
+                      // Da saldare Contanti = RED (stays on calendar, no auto-cancel)
+                      const isDaSaldareContanti = isPendingPayment
+                        && (evt.booking.payment_method === 'Contanti' || evt.booking.payment_method === 'Contanti presso tesoreria')
+
+                      if (isDaSaldareContanti) {
+                        bgClass = "bg-red-600/80"
+                        borderClass = "border-red-500/60 border-dashed"
+                      } else if (isPendingPayment) {
                         bgClass = "bg-orange-500/80"
                         borderClass = "border-orange-400/50 border-dashed"
                       } else if (isUnavailability) {
