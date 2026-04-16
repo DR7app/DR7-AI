@@ -273,7 +273,7 @@ const initialFormData: PreventivoData = {
 interface Props {
   isOpen: boolean
   onClose: () => void
-  onSaved: () => void
+  onSaved: (savedInfo?: { preventivoId: string; customerPhone: string | null; customerId: string | null; isNew: boolean }) => void
   editData?: any // For editing existing preventivo
 }
 
@@ -595,6 +595,42 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
     if (!form.pickup_date || !form.return_date) { toast.error('Seleziona le date'); return }
     if (rentalDays <= 0) { toast.error('La data di riconsegna deve essere dopo il ritiro'); return }
 
+    async function buildPreventivoMessage(preventivoId: string): Promise<string | null> {
+      // Load template from Messaggi di Sistema — if not found/disabled, skip auto-send
+      const { data: p } = await supabase.from('preventivi').select('*').eq('id', preventivoId).single()
+      const { data: tpl } = await supabase.from('system_messages').select('message_body, is_enabled').eq('message_key', 'preventivo_whatsapp').maybeSingle()
+      if (!tpl?.is_enabled || !tpl.message_body) return null
+      if (!p) return null
+
+      const formatEur = (v: number) => `€${(v || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+      let pricingLines = `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur(p.base_daily_rate * p.rental_days)}`
+      if (p.insurance_total > 0) pricingLines += `\nAssicurazione = ${formatEur(p.insurance_total)}`
+      if (p.lavaggio_fee > 0) pricingLines += `\nLavaggio = ${formatEur(p.lavaggio_fee)}`
+      if (p.no_cauzione_total > 0) pricingLines += `\nNo cauzione = ${formatEur(p.no_cauzione_total)}`
+      if (p.unlimited_km_total > 0) pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+      if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
+
+      const specs = [p.vehicle_name, p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '', p.vehicle_cv ? `${p.vehicle_cv}cv` : ''].filter(Boolean).join(' ')
+      const vars: Record<string, string> = {
+        vehicle_specs: specs,
+        vehicle_name: p.vehicle_name || '',
+        rental_days: String(p.rental_days),
+        daily_rate: formatEur(p.base_daily_rate),
+        rental_total: formatEur(p.base_daily_rate * p.rental_days),
+        pricing_lines: pricingLines,
+        subtotal: formatEur(p.subtotal),
+        total: formatEur(p.total_final || p.subtotal),
+        sconto: p.sconto > 0 ? `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}` : '',
+        customer_name: p.customer_name || '',
+        km_info: p.unlimited_km_total > 0 ? 'Illimitati' : `${p.km_limit || 0} Km`,
+        insurance_line: p.insurance_total > 0 ? `Assicurazione = ${formatEur(p.insurance_total)}` : '',
+      }
+      let msg = tpl.message_body
+      for (const [k, v] of Object.entries(vars)) msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '')
+      return msg.replace(/\n{3,}/g, '\n\n').trim()
+    }
+
     setSaving(true)
     try {
       // Build ISO dates with correct Rome timezone offset
@@ -660,19 +696,61 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
         updated_at: new Date().toISOString(),
       }
 
+      let savedId: string | null = null
+      let isNew = false
       if (editData?.id) {
         const { error } = await supabase.from('preventivi').update(record).eq('id', editData.id)
         if (error) throw error
+        savedId = editData.id
         appendPreventivoEvent(editData.id, 'preventivo_aggiornato', { value: record.total_amount })
       } else {
         record.created_at = new Date().toISOString()
         const { data: inserted, error } = await supabase.from('preventivi').insert(record).select('id').single()
         if (error) throw error
+        savedId = inserted?.id || null
+        isNew = true
         if (inserted?.id) appendPreventivoEvent(inserted.id, 'preventivo_creato', { value: record.total_amount })
       }
 
-      toast.success('Preventivo salvato!')
-      onSaved()
+      // Auto-send WhatsApp if new preventivo and customer has phone
+      if (isNew && savedId && selectedCust?.phone) {
+        try {
+          const autoMsg = await buildPreventivoMessage(savedId)
+          if (!autoMsg) {
+            toast.success('Preventivo salvato! (Template "preventivo_whatsapp" non configurato in Messaggi di Sistema)')
+          } else {
+            const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ customPhone: selectedCust.phone, customMessage: autoMsg, skipHeader: true })
+            })
+            if (waResp.ok) {
+              const expiryHours = 24
+              const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString()
+              await supabase.from('preventivi').update({
+                status: 'inviato',
+                whatsapp_sent_at: new Date().toISOString(),
+                expires_at: expiresAt,
+              }).eq('id', savedId)
+              appendPreventivoEvent(savedId, 'preventivo_inviato', { detail: `${selectedCust.phone} - ${selectedCust.full_name || ''} (auto)` })
+              toast.success('Preventivo salvato e inviato via WhatsApp!')
+            } else {
+              toast.success('Preventivo salvato (invio WhatsApp fallito)')
+            }
+          }
+        } catch (waErr) {
+          console.error('Auto WhatsApp send failed:', waErr)
+          toast.success('Preventivo salvato (invio WhatsApp fallito)')
+        }
+      } else {
+        toast.success('Preventivo salvato!')
+      }
+      onSaved(savedId ? {
+        preventivoId: savedId,
+        customerPhone: selectedCust?.phone || null,
+        customerId: selectedCustomerId || null,
+        isNew,
+      } : undefined)
       onClose()
     } catch (err: any) {
       console.error('Error saving preventivo:', err)
