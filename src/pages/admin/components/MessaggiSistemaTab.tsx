@@ -289,19 +289,22 @@ export default function MessaggiSistemaTab() {
     }
 
     async function handleDeleteTemplate(template: SystemMessage) {
-        if (!confirm(`Eliminare il messaggio "${template.label}"?\n\nAttenzione: il sistema userà il testo di fallback predefinito.`)) return
+        if (!confirm(`Eliminare definitivamente il messaggio "${template.label}"?\n\nQuesta operazione non è reversibile. Il sistema userà il testo di fallback predefinito (se esiste).`)) return
 
         try {
-            const { error } = await supabase
-                .from('system_messages')
-                .delete()
-                .eq('id', template.id)
-
-            if (error) throw error
+            const res = await authFetch('/.netlify/functions/delete-system-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: template.id }),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok || json?.error) {
+                throw new Error(json?.error || `HTTP ${res.status}`)
+            }
             setTemplates(prev => prev.filter(t => t.id !== template.id))
             toast.success('Messaggio eliminato')
         } catch (err: unknown) {
-          const _errMsg = err instanceof Error ? err.message : String(err)
+            const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error deleting template:', err)
             toast.error('Errore eliminazione: ' + _errMsg)
         }
@@ -698,6 +701,20 @@ export default function MessaggiSistemaTab() {
                                         >
                                             {template.include_header ? 'H/F ✓' : 'H/F ✗'}
                                         </button>
+                                        <button
+                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteTemplate(template) }}
+                                            title="Elimina definitivamente"
+                                            aria-label="Elimina"
+                                            className="p-1.5 rounded-full bg-red-600/20 text-red-400 hover:bg-red-600/40 hover:text-red-300 transition-colors"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="3 6 5 6 21 6" />
+                                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                                <path d="M10 11v6" />
+                                                <path d="M14 11v6" />
+                                                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                                            </svg>
+                                        </button>
                                     </div>
                                 </div>
                                 <p className="text-xs text-theme-text-muted mt-1 ml-[52px]">{template.description}</p>
@@ -807,8 +824,25 @@ export default function MessaggiSistemaTab() {
                                 <div className="space-y-2">
                                     {uncategorized.map((template) => (
                                         <details key={`other-${template.id}`} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
-                                            <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30">
-                                                <span className="font-semibold text-theme-text-primary text-sm">{template.label || template.message_key}</span>
+                                            <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30 flex items-center gap-3">
+                                                <span className="font-semibold text-theme-text-primary text-sm min-w-0 flex-1 truncate">{template.label || template.message_key}</span>
+                                                {template.is_enabled === false && (
+                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400 shrink-0">OFF</span>
+                                                )}
+                                                <button
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteTemplate(template) }}
+                                                    title="Elimina definitivamente"
+                                                    aria-label="Elimina"
+                                                    className="p-1.5 rounded-full bg-red-600/20 text-red-400 hover:bg-red-600/40 hover:text-red-300 transition-colors shrink-0"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="3 6 5 6 21 6" />
+                                                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                                        <path d="M10 11v6" />
+                                                        <path d="M14 11v6" />
+                                                        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                                                    </svg>
+                                                </button>
                                             </summary>
                                         </details>
                                     ))}
