@@ -1874,6 +1874,70 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return missing
   }
 
+  async function handleConfermaBooking(booking: Booking) {
+    if (!confirm(`Confermare la prenotazione di ${booking.customer_name || 'cliente'}?\n\nLa prenotazione non scadrà dopo 1 ora e il cliente riceverà il messaggio "Prenotazione Confermata - Da Saldare".`)) return
+
+    try {
+      toast.loading('Conferma in corso...')
+
+      // 1. Update booking with manually_confirmed flag
+      const { error: updErr } = await supabase
+        .from('bookings')
+        .update({
+          status: 'confirmed',
+          booking_details: {
+            ...(booking.booking_details || {}),
+            manually_confirmed: true,
+            manually_confirmed_at: new Date().toISOString(),
+          }
+        })
+        .eq('id', booking.id)
+
+      if (updErr) throw updErr
+
+      // 2. Send WhatsApp to customer using Messaggi di Sistema template
+      const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+      if (custPhone) {
+        const pickup = new Date(booking.pickup_date)
+        const dropoff = new Date(booking.dropoff_date)
+        const pickupDateStr = pickup.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
+        const pickupTimeStr = pickup.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
+        const dropoffDateStr = dropoff.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
+        const dropoffTimeStr = dropoff.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
+
+        fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: custPhone,
+            templateKey: 'rental_confirmed_unpaid',
+            templateVars: {
+              '{customer_name}': booking.customer_name || 'Cliente',
+              '{booking_id}': booking.id.substring(0, 8).toUpperCase(),
+              '{vehicle_name}': booking.vehicle_name || '',
+              '{pickup_date}': pickupDateStr,
+              '{pickup_time}': pickupTimeStr,
+              '{dropoff_date}': dropoffDateStr,
+              '{dropoff_time}': dropoffTimeStr,
+              '{total}': ((booking.price_total || 0) / 100).toFixed(2),
+              '{payment_method}': booking.payment_method || '',
+            }
+          })
+        })
+          .then(() => logger.log('✅ Conferma WhatsApp sent'))
+          .catch(err => console.error('⚠️ Conferma WhatsApp failed:', err))
+      }
+
+      toast.dismiss()
+      toast.success('Prenotazione confermata!')
+      loadData()
+    } catch (err: any) {
+      toast.dismiss()
+      toast.error('Errore conferma: ' + (err?.message || 'sconosciuto'))
+      console.error('[handleConfermaBooking]', err)
+    }
+  }
+
   async function handleResendPaymentLink(booking: Booking) {
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
     const custName = booking.booking_details?.customer?.fullName || booking.customer_name || 'Cliente'
@@ -4303,35 +4367,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Send WhatsApp notification for car rental
+      // Note: "Da Saldare" confirmation message is sent only via the "Conferma" button in booking list
       const paymentStatus = formData.payment_status || 'pending'
       const isPaid = paymentStatus === 'paid' || paymentStatus === 'succeeded' || paymentStatus === 'completed'
-      const isPending = paymentStatus === 'pending' || paymentStatus === 'unpaid'
-
-      // NEW BOOKING + Da Saldare: send "confirmed but pending payment" message to customer
-      if (!editingId && isPending && customerInfo?.phone) {
-        fetch('/.netlify/functions/send-whatsapp-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customPhone: customerInfo.phone,
-            templateKey: 'rental_confirmed_unpaid',
-            templateVars: {
-              '{customer_name}': customerInfo?.full_name || 'Cliente',
-              '{booking_id}': insertedBooking?.id?.substring(0, 8).toUpperCase() || '',
-              '{vehicle_name}': vehicle?.display_name || '',
-              '{pickup_date}': formData.pickup_date,
-              '{pickup_time}': formData.pickup_time,
-              '{dropoff_date}': formData.return_date,
-              '{dropoff_time}': formData.return_time,
-              '{total}': formData.total_amount || '0',
-              '{payment_method}': formData.payment_method || '',
-            }
-          })
-        })
-          .then(() => logger.log('✅ Confirmed-unpaid WhatsApp sent'))
-          .catch(err => console.error('⚠️ Confirmed-unpaid WhatsApp failed:', err))
-      }
-
       if (isPaid || editingId) {
       try {
         // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
@@ -6658,6 +6696,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       >
                         {booking.booking_details?.nexi_payment_link ? 'Rinvia Link' : 'Genera Link'}
                       </button>
+                    )}
+
+                    {/* Conferma Prenotazione button: only for unpaid bookings not yet manually confirmed */}
+                    {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && !booking.booking_details?.manually_confirmed && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleConfermaBooking(booking) }}
+                        className="px-3 py-1 min-h-[44px] bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
+                        title="Conferma prenotazione — non scade dopo 1h e invia messaggio Da Saldare al cliente"
+                      >
+                        Conferma
+                      </button>
+                    )}
+                    {booking.booking_details?.manually_confirmed && booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
+                      <span className="px-3 py-1 min-h-[44px] bg-green-700/40 rounded-full text-green-300 text-sm flex items-center gap-1 whitespace-nowrap" title="Prenotazione confermata manualmente">
+                        ✓ Confermata
+                      </span>
                     )}
 
                     <button

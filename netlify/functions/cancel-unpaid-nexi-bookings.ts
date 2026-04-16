@@ -85,7 +85,12 @@ const cancelHandler: Handler = async () => {
         }
 
         // Filter using exact payment_link_expires_at when available
+        // SKIP bookings manually confirmed by admin (manually_confirmed flag)
         const expiredBookings = (unpaidBookings || []).filter(booking => {
+            // Admin manually confirmed this booking → never auto-cancel
+            if (booking.booking_details?.manually_confirmed === true) {
+                return false;
+            }
             const expiresAt = booking.booking_details?.payment_link_expires_at;
             if (expiresAt) {
                 // Use exact expiration timestamp from when link was sent
