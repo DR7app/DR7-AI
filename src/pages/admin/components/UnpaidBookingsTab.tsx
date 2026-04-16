@@ -2399,12 +2399,20 @@ export default function UnpaidBookingsTab() {
                   </div>
 
                   {/* Salda Tutto button */}
-                  {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
+                  {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 ? (
                     <button
                       onClick={() => markAllCustomerPaid(group)}
                       disabled={!!processingKey}
                       className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >{processingKey ? 'Elaborazione...' : 'Salda Tutto — Fattura Unica'}</button>
+                  ) : (
+                    /* Single booking: Segna Pagato (car rental triggers fattura + contract + signing link) */
+                    group.noleggioBookings[0] && (
+                      <button
+                        onClick={() => updatePaymentStatus(group.noleggioBookings[0].id, 'paid')}
+                        className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                      >Segna Pagato</button>
+                    )
                   )}
 
                   {/* Pay by Link Tutto */}
