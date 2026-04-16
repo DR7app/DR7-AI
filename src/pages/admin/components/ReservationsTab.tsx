@@ -6558,7 +6558,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   }}
                   title="Salva la prenotazione, conferma (non scade dopo 1h) e invia il messaggio Da Saldare al cliente"
                 >
-                  {isSubmitting && confirmAfterSave ? 'Conferma...' : 'Salva & Conferma'}
+                  {isSubmitting && confirmAfterSave ? 'Conferma...' : 'Conferma'}
                 </Button>
               )}
               <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); resetForm(); setConfirmAfterSave(false) }}>
