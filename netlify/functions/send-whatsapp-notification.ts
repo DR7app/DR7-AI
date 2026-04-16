@@ -422,7 +422,12 @@ const handler: Handler = async (event) => {
           plate: booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '',
           pickup_location: booking.pickup_location || '',
           insurance: booking.insurance_option || '',
-          payment_status: booking.payment_status || '',
+          payment_status: (() => {
+            const ps = booking.payment_status;
+            if (ps === 'paid' || ps === 'succeeded' || ps === 'completed') return 'Pagato';
+            if (ps === 'pending' || ps === 'unpaid') return 'Da saldare';
+            return ps || 'Da saldare';
+          })(),
           service_name: booking.service_name || booking.booking_details?.serviceName || booking.booking_details?.service_name || '',
           notes: booking.booking_details?.notes || '',
         };

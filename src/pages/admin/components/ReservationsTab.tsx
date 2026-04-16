@@ -4303,10 +4303,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Send WhatsApp notification for car rental
-      // Only send confirmation when paid — "Da saldare" bookings get notified when payment is received
+      // Always send on new booking (paid OR pending) + on any edit
       const paymentStatus = formData.payment_status || 'pending'
-      const isPaid = paymentStatus === 'paid' || paymentStatus === 'succeeded' || paymentStatus === 'completed'
-      if (isPaid || editingId) {
+      {
       try {
         // Use pickupDateTime/returnDateTime which have correct Italy timezone offset
         // Fire and forget — don't block UI on WhatsApp sending
@@ -4405,7 +4404,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
         // Don't fail the whole booking if WhatsApp fails
       }
-      } // end isPaid || editingId
+      } // end WhatsApp block
 
       // Sync cauzione (security deposit) record — fire and forget
       const depositAmount = parseFloat(formData.deposit) || 0
