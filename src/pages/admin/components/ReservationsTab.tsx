@@ -2572,6 +2572,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     setEditingId(booking.id)
     newSession('booking_edit')
     setEditingOriginalPaymentStatus(booking.payment_status || 'pending')
+    setConfirmBooking(booking.booking_details?.manually_confirmed === true)
     setShowForm(true)
   }
 
@@ -2939,6 +2940,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [confirmBooking, setConfirmBooking] = useState(false)
 
   async function processBookingSubmission(skipValidation = false, overrideCustomerId?: string) {
     logger.log('[processBookingSubmission] 🚀 STARTING SUBMISSION PROCESS', { skipValidation, overrideCustomerId })
@@ -4102,6 +4104,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } : null,
           pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
           notes: formData.notes || null,
+          // Manually confirmed flag: prevents auto-cancel + shows red in calendar with customer name
+          ...(confirmBooking ? {
+            manually_confirmed: true,
+            manually_confirmed_at: new Date().toISOString(),
+          } : {}),
           // Revenue Management tracking
           ...(revenueSuggestion ? {
             revenue_suggested_price: revenueSuggestion.finalTotalEur,
@@ -4561,6 +4568,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       setShowForm(false)
       setEditingId(null)
       setNewCustomerMode(false)
+      setConfirmBooking(false)
       resetForm()
       await loadData()
 
@@ -6407,6 +6415,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   })()}
                 </label>
               </div>
+
+              {/* Conferma Prenotazione — non scade dopo 1h, visibile in rosso con nome cliente */}
+              {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
+                <div className={`flex items-start gap-2 p-3 rounded-lg border ${confirmBooking ? 'border-red-500 bg-red-900/10' : 'border-theme-border'}`}>
+                  <input
+                    type="checkbox"
+                    id="confirm_booking"
+                    checked={confirmBooking}
+                    onChange={(e) => setConfirmBooking(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 text-red-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-red-500"
+                  />
+                  <label htmlFor="confirm_booking" className="text-sm text-theme-text-secondary cursor-pointer">
+                    <span className="font-semibold text-red-400">Conferma Prenotazione</span>
+                    <span className="block text-xs text-theme-text-muted mt-0.5">La prenotazione NON scadrà dopo 1h. In calendario apparirà in rosso con il nome del cliente invece di "Da Saldare".</span>
+                  </label>
+                </div>
+              )}
+
               <Input
                 label="Importo Pagato (€)"
                 type="number"
@@ -6482,7 +6508,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
                 {isSubmitting ? 'Salvataggio...' : 'Salva'}
               </Button>
-              <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); resetForm() }}>
+              <Button type="button" variant="secondary" className="flex-1 sm:flex-none" onClick={() => { setShowForm(false); setEditingId(null); setNewCustomerMode(false); setConfirmBooking(false); resetForm() }}>
                 Annulla
               </Button>
             </div>
