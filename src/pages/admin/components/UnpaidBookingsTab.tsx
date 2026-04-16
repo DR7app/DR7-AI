@@ -367,7 +367,11 @@ export default function UnpaidBookingsTab() {
           .select('service_type')
           .eq('id', bookingId)
           .maybeSingle()
-        const isCarRental = !bookingData?.service_type || bookingData.service_type === 'rental'
+        // Car rental = NOT car_wash and NOT mechanical
+        const st = bookingData?.service_type
+        const isCarRental = !st || st === 'rental' || st === 'car_rental' ||
+          (st !== 'car_wash' && st !== 'mechanical' && st !== 'mechanical_service')
+        logger.log('[updatePaymentStatus] service_type:', st, 'isCarRental:', isCarRental)
 
         // 1. Generate fattura
         try {
