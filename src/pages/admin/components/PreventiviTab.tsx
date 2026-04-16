@@ -463,7 +463,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           phone: c.telefono || null,
           scadenza_patente: c.scadenza_patente || null,
           data_nascita: c.data_nascita || null,
-          patente_data_rilascio: c.patente_data_rilascio || null,
+          data_rilascio_patente: c.data_rilascio_patente || c.metadata?.patente?.rilascio || c.patente_data_rilascio || null,
         }
       })
       console.log(`[PreventiviTab] Loaded ${mapped.length} customers`)
@@ -1418,13 +1418,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                 setSelectedCustomerId(id)
                 if (!id) { setTierReason(''); return }
                 const c = customers.find((x: any) => x.id === id)
-                if (!c?.data_nascita || !c?.patente_data_rilascio) {
+                if (!c?.data_nascita || !c?.data_rilascio_patente) {
                   setTierReason('Dati mancanti — imposta fascia manualmente')
                   return
                 }
                 try {
                   const age = calculateAge(c.data_nascita)
-                  const licYears = calculateLicenseYears(c.patente_data_rilascio)
+                  const licYears = calculateLicenseYears(c.data_rilascio_patente)
                   const tier = classifyDriverTier(age, licYears)
                   if (tier.tier === 'BLOCKED') {
                     setTierReason(`⚠️ Cliente non idoneo: ${tier.reason}`)
