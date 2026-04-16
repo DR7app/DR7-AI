@@ -444,26 +444,38 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     let from = 0
     const PAGE = 1000
     while (true) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('customers_extended')
         .select('id, nome, cognome, email, telefono, tipo_cliente, denominazione, scadenza_patente, data_nascita, patente_data_rilascio')
-        .order('cognome')
+        .order('updated_at', { ascending: false })
         .range(from, from + PAGE - 1)
+      if (error) {
+        console.error('[PreventiviTab] loadCustomers error:', error)
+        break
+      }
       if (!data || data.length === 0) break
-      all.push(...data.map((c: any) => ({
-        id: c.id,
-        full_name: c.tipo_cliente === 'azienda'
-          ? (c.denominazione || 'N/A')
-          : `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A',
-        email: c.email || null,
-        phone: c.telefono || null,
-        scadenza_patente: c.scadenza_patente || null,
-        data_nascita: c.data_nascita || null,
-        patente_data_rilascio: c.patente_data_rilascio || null,
-      })))
+      all.push(...data.map((c: any) => {
+        // Compute full_name — try multiple fallbacks so customers always appear
+        let fullName = ''
+        if (c.tipo_cliente === 'azienda') {
+          fullName = c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || c.email || 'Azienda'
+        } else {
+          fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || c.denominazione || c.email || c.telefono || 'Cliente senza nome'
+        }
+        return {
+          id: c.id,
+          full_name: fullName,
+          email: c.email || null,
+          phone: c.telefono || null,
+          scadenza_patente: c.scadenza_patente || null,
+          data_nascita: c.data_nascita || null,
+          patente_data_rilascio: c.patente_data_rilascio || null,
+        }
+      }))
       from += data.length
       if (data.length < PAGE) break
     }
+    console.log(`[PreventiviTab] Loaded ${all.length} customers`)
     setCustomers(all)
   }
 
