@@ -586,7 +586,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         >
                           <div className="px-2 flex flex-col justify-center h-full">
                             <span className="font-bold text-[10px] truncate leading-tight">
-                              {isPendingPayment ? '⏳ IN ATTESA — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
+                              {(isPendingPayment && !isDaSaldareContanti) ? '⏳ IN ATTESA — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
                                 // Calculate drop-off day: if end time is exactly 00:00, use previous day
                                 const endHours = evt.endLocal.getHours()
                                 const endMinutes = evt.endLocal.getMinutes()
