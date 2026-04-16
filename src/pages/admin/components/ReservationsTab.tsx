@@ -4325,8 +4325,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               '{dropoff_time}': formData.return_time,
               '{total}': formData.total_amount || '0',
               '{payment_method}': formData.payment_method || '',
-            },
-            fallback: `Gentile ${customerInfo?.full_name || 'Cliente'},\n\nLa sua prenotazione #${insertedBooking?.id?.substring(0, 8).toUpperCase()} è stata *confermata*.\n\n*Veicolo:* ${vehicle?.display_name || ''}\n*Ritiro:* ${formData.pickup_date} alle ${formData.pickup_time}\n*Riconsegna:* ${formData.return_date} alle ${formData.return_time}\n*Totale:* €${formData.total_amount}\n\n*Stato Pagamento:* Da saldare\n\nLa ringraziamo e attendiamo il pagamento per completare la prenotazione.\n\nDR7`
+            }
           })
         })
           .then(() => logger.log('✅ Confirmed-unpaid WhatsApp sent'))
