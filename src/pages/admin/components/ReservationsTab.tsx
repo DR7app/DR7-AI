@@ -4398,11 +4398,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
 
           // Pick the right template:
-          // - Pending + Nexi Pay by Link → payment_link_customer (already sent by nexi-pay-by-link flow if link generated)
-          // - Pending + NOT Nexi → rental_da_saldare_customer (Contanti, Bonifico, etc.)
+          // - Conferma Prenotazione checkbox ON → rental_new_customer (full confirmation, no expiry)
+          // - Pending + Nexi Pay by Link → payment_link_customer (already sent by nexi-pay-by-link flow)
+          // - Pending + NOT Nexi (no conferma) → rental_da_saldare_customer (pay within 1h)
           // - Paid or edit → rental_new_customer (normal confirmation)
           let templateKey: string
-          if (isPending && !isNexi) {
+          if (confirmBooking) {
+            // Manually confirmed booking — always send full confirmation, regardless of payment status
+            templateKey = 'rental_new_customer'
+          } else if (isPending && !isNexi) {
             templateKey = 'rental_da_saldare_customer'
           } else if (isPending && isNexi) {
             // Nexi link message is handled elsewhere — skip here
