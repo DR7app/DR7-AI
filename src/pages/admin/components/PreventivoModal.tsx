@@ -5,9 +5,11 @@ import Input from './Input'
 import AddressAutocomplete from './AddressAutocomplete'
 import Select from './Select'
 import Button from './Button'
+import CustomerAutocomplete from './CustomerAutocomplete'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice, getSecondDriverPrice, getNoCauzioneSurcharge, getSforoKm } from '../../../utils/configLookup'
+import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 import type { DriverTier } from '../../../types/rentalConfig'
 
 // --- Types ---
@@ -280,6 +282,11 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [saving, setSaving] = useState(false)
 
+  // Customers (for select + auto-fascia)
+  const [customers, setCustomers] = useState<any[]>([])
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
+  const [tierReason, setTierReason] = useState<string>('')
+
   // Load vehicles
   useEffect(() => {
     if (!isOpen) return
@@ -292,6 +299,54 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       if (data) setVehicles(data)
     })()
   }, [isOpen])
+
+  // Load customers
+  useEffect(() => {
+    if (!isOpen) return
+    ;(async () => {
+      const { data } = await supabase
+        .from('customers_extended')
+        .select('id, nome, cognome, denominazione, email, telefono, data_nascita, patente_data_rilascio, scadenza_patente')
+        .order('updated_at', { ascending: false })
+        .limit(500)
+      if (data) {
+        const mapped = data.map((c: any) => ({
+          id: c.id,
+          full_name: c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || 'Cliente',
+          email: c.email,
+          phone: c.telefono,
+          scadenza_patente: c.scadenza_patente,
+          data_nascita: c.data_nascita,
+          patente_data_rilascio: c.patente_data_rilascio,
+        }))
+        setCustomers(mapped)
+      }
+    })()
+  }, [isOpen])
+
+  // Auto-set fascia when customer selected
+  useEffect(() => {
+    if (!selectedCustomerId) { setTierReason(''); return }
+    const c = customers.find(x => x.id === selectedCustomerId)
+    if (!c?.data_nascita || !c?.patente_data_rilascio) {
+      setTierReason('Dati mancanti (data nascita o patente) — imposta fascia manualmente')
+      return
+    }
+    try {
+      const age = calculateAge(c.data_nascita)
+      const licYears = calculateLicenseYears(c.patente_data_rilascio)
+      const tier = classifyDriverTier(age, licYears)
+      if (tier.tier === 'BLOCKED') {
+        setTierReason(`⚠️ Cliente non idoneo: ${tier.reason}`)
+        return
+      }
+      const fascia: Fascia = tier.tier === 'TIER_2' ? 'A' : 'B'
+      setForm(prev => ({ ...prev, fascia }))
+      setTierReason(`Fascia ${fascia} auto (età ${age}, patente ${licYears} anni)`)
+    } catch {
+      setTierReason('')
+    }
+  }, [selectedCustomerId, customers])
 
   // Pre-fill if editing
   useEffect(() => {
@@ -548,12 +603,18 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       const pickupISO = `${form.pickup_date}T${form.pickup_time}:00${pickupOffset}`
       const dropoffISO = `${form.return_date}T${form.return_time}:00${dropoffOffset}`
 
+      const selectedCust = selectedCustomerId ? customers.find(c => c.id === selectedCustomerId) : null
       const record: any = {
         vehicle_id: form.vehicle_id,
         vehicle_name: form.vehicle_name,
         vehicle_plate: form.vehicle_plate,
         vehicle_category: form.vehicle_category,
         fascia: form.fascia,
+        ...(selectedCust ? {
+          customer_id: selectedCustomerId,
+          customer_name: selectedCust.full_name,
+          customer_phone: selectedCust.phone,
+        } : {}),
         pickup_date: pickupISO,
         dropoff_date: dropoffISO,
         pickup_location: form.pickup_location,
@@ -694,6 +755,49 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 Durata: {rentalDays} giorn{rentalDays === 1 ? 'o' : 'i'}
               </div>
             )}
+          </div>
+
+          {/* Customer Selection + Fascia auto-detection */}
+          <div className="p-4 rounded-lg border border-theme-border">
+            <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cliente (opzionale — auto-imposta Fascia)</label>
+            <CustomerAutocomplete
+              customers={customers}
+              selectedCustomerId={selectedCustomerId}
+              onSelectCustomer={(id) => {
+                setSelectedCustomerId(id)
+                const c = customers.find(x => x.id === id)
+                if (c) {
+                  setForm(prev => ({
+                    ...prev,
+                    // @ts-ignore - these fields may not exist but spread is safe
+                    ...(c.phone ? { customer_phone: c.phone } : {}),
+                    // @ts-ignore
+                    ...(c.full_name ? { customer_name: c.full_name } : {}),
+                  }))
+                }
+              }}
+              placeholder="Cerca cliente per nome, email o telefono..."
+              required={false}
+            />
+            {tierReason && (
+              <div className={`mt-2 text-xs ${tierReason.startsWith('⚠️') ? 'text-red-400' : tierReason.includes('mancanti') ? 'text-amber-400' : 'text-green-400'}`}>
+                {tierReason}
+              </div>
+            )}
+            <div className="mt-3 flex gap-2">
+              {(['A', 'B'] as const).map(f => (
+                <button key={f} type="button"
+                  onClick={() => setForm(prev => ({ ...prev, fascia: f }))}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    form.fascia === f
+                      ? 'bg-dr7-gold text-white'
+                      : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
+                  }`}
+                >
+                  Fascia {f} {f === 'A' ? '(esperto)' : '(giovane)'}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Vehicle Selection */}
