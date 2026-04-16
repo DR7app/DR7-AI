@@ -10,6 +10,7 @@ import Select from './Select'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 
 // ─── Time slots (office hours, 30-min intervals) ────────────────────────────
 function genSlots(ranges: [number, number][]): { value: string; label: string }[] {
@@ -213,6 +214,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [customers, setCustomers] = useState<any[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
+  const [tierReason, setTierReason] = useState<string>('')
   // No Cauzione requests (from bookings table)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [noCauzioneRequests, setNoCauzioneRequests] = useState<any[]>([])
@@ -444,7 +446,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     while (true) {
       const { data } = await supabase
         .from('customers_extended')
-        .select('id, nome, cognome, email, telefono, tipo_cliente, denominazione, scadenza_patente')
+        .select('id, nome, cognome, email, telefono, tipo_cliente, denominazione, scadenza_patente, data_nascita, patente_data_rilascio')
         .order('cognome')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
@@ -456,6 +458,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         email: c.email || null,
         phone: c.telefono || null,
         scadenza_patente: c.scadenza_patente || null,
+        data_nascita: c.data_nascita || null,
+        patente_data_rilascio: c.patente_data_rilascio || null,
       })))
       from += data.length
       if (data.length < PAGE) break
@@ -1377,6 +1381,45 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-theme-text-primary">{editingId ? 'Modifica Preventivo' : 'Nuovo Preventivo'}</h2>
         <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Torna alla Lista</Button>
+      </div>
+
+      {/* Customer Selection + Auto Fascia */}
+      <div className="p-4 rounded-lg border border-theme-border">
+        <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cliente (opzionale — auto-imposta Fascia)</label>
+        <CustomerAutocomplete
+          customers={customers}
+          selectedCustomerId={selectedCustomerId}
+          onSelectCustomer={(id) => {
+            setSelectedCustomerId(id)
+            if (!id) { setTierReason(''); return }
+            const c = customers.find((x: any) => x.id === id)
+            if (!c?.data_nascita || !c?.patente_data_rilascio) {
+              setTierReason('Dati mancanti (data nascita o patente) — imposta fascia manualmente')
+              return
+            }
+            try {
+              const age = calculateAge(c.data_nascita)
+              const licYears = calculateLicenseYears(c.patente_data_rilascio)
+              const tier = classifyDriverTier(age, licYears)
+              if (tier.tier === 'BLOCKED') {
+                setTierReason(`⚠️ Cliente non idoneo: ${tier.reason}`)
+                return
+              }
+              setForm(prev => ({ ...prev, driver_tier: tier.tier as DriverTier, insurance_option: '' }))
+              const fasciaLabel = tier.tier === 'TIER_2' ? 'A' : 'B'
+              setTierReason(`Fascia ${fasciaLabel} auto (età ${age}, patente ${licYears} anni)`)
+            } catch {
+              setTierReason('')
+            }
+          }}
+          placeholder="Cerca cliente per nome, email o telefono..."
+          required={false}
+        />
+        {tierReason && (
+          <div className={`mt-2 text-xs ${tierReason.startsWith('⚠️') ? 'text-red-400' : tierReason.includes('mancanti') ? 'text-amber-400' : 'text-green-400'}`}>
+            {tierReason}
+          </div>
+        )}
       </div>
 
       {/* Vehicle Selection — ALL vehicles, no availability check */}
