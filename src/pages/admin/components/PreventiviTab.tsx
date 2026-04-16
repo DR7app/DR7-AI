@@ -1383,46 +1383,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Torna alla Lista</Button>
       </div>
 
-      {/* Customer Selection + Auto Fascia */}
-      <div className="p-4 rounded-lg border border-theme-border">
-        <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cliente (opzionale — auto-imposta Fascia)</label>
-        <CustomerAutocomplete
-          customers={customers}
-          selectedCustomerId={selectedCustomerId}
-          onSelectCustomer={(id) => {
-            setSelectedCustomerId(id)
-            if (!id) { setTierReason(''); return }
-            const c = customers.find((x: any) => x.id === id)
-            if (!c?.data_nascita || !c?.patente_data_rilascio) {
-              setTierReason('Dati mancanti (data nascita o patente) — imposta fascia manualmente')
-              return
-            }
-            try {
-              const age = calculateAge(c.data_nascita)
-              const licYears = calculateLicenseYears(c.patente_data_rilascio)
-              const tier = classifyDriverTier(age, licYears)
-              if (tier.tier === 'BLOCKED') {
-                setTierReason(`⚠️ Cliente non idoneo: ${tier.reason}`)
-                return
-              }
-              setForm(prev => ({ ...prev, driver_tier: tier.tier as DriverTier, insurance_option: '' }))
-              const fasciaLabel = tier.tier === 'TIER_2' ? 'A' : 'B'
-              setTierReason(`Fascia ${fasciaLabel} auto (età ${age}, patente ${licYears} anni)`)
-            } catch {
-              setTierReason('')
-            }
-          }}
-          placeholder="Cerca cliente per nome, email o telefono..."
-          required={false}
-        />
-        {tierReason && (
-          <div className={`mt-2 text-xs ${tierReason.startsWith('⚠️') ? 'text-red-400' : tierReason.includes('mancanti') ? 'text-amber-400' : 'text-green-400'}`}>
-            {tierReason}
-          </div>
-        )}
-      </div>
-
-      {/* Vehicle Selection — ALL vehicles, no availability check */}
+      {/* Vehicle + Fascia/Customer combined dropdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select
           label="Veicolo *"
@@ -1433,15 +1394,53 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}${v.status === 'maintenance' ? ' [Manutenzione]' : ''}` }))
           ]}
         />
-        <Select
-          label="Fascia Cliente"
-          value={form.driver_tier}
-          onChange={(e) => setForm(prev => ({ ...prev, driver_tier: e.target.value as DriverTier, insurance_option: '' }))}
-          options={[
-            { value: 'TIER_2', label: 'Fascia A (26-69, patente 5+ anni)' },
-            { value: 'TIER_1', label: 'Fascia B (21-25 o patente 3-4 anni)' },
-          ]}
-        />
+        <div>
+          <label className="block text-sm font-medium text-theme-text-secondary mb-2">Fascia Cliente</label>
+          <Select
+            value={form.driver_tier}
+            onChange={(e) => setForm(prev => ({ ...prev, driver_tier: e.target.value as DriverTier, insurance_option: '' }))}
+            options={[
+              { value: 'TIER_2', label: 'Fascia A (26-69, patente 5+ anni)' },
+              { value: 'TIER_1', label: 'Fascia B (21-25 o patente 3-4 anni)' },
+            ]}
+          />
+          <div className="mt-2">
+            <CustomerAutocomplete
+              customers={customers}
+              selectedCustomerId={selectedCustomerId}
+              onSelectCustomer={(id) => {
+                setSelectedCustomerId(id)
+                if (!id) { setTierReason(''); return }
+                const c = customers.find((x: any) => x.id === id)
+                if (!c?.data_nascita || !c?.patente_data_rilascio) {
+                  setTierReason('Dati mancanti — imposta fascia manualmente')
+                  return
+                }
+                try {
+                  const age = calculateAge(c.data_nascita)
+                  const licYears = calculateLicenseYears(c.patente_data_rilascio)
+                  const tier = classifyDriverTier(age, licYears)
+                  if (tier.tier === 'BLOCKED') {
+                    setTierReason(`⚠️ Cliente non idoneo: ${tier.reason}`)
+                    return
+                  }
+                  setForm(prev => ({ ...prev, driver_tier: tier.tier as DriverTier, insurance_option: '' }))
+                  const fasciaLabel = tier.tier === 'TIER_2' ? 'A' : 'B'
+                  setTierReason(`✓ Fascia ${fasciaLabel} auto (età ${age}, patente ${licYears} anni)`)
+                } catch {
+                  setTierReason('')
+                }
+              }}
+              placeholder="Cerca cliente per auto-impostare Fascia..."
+              required={false}
+            />
+            {tierReason && (
+              <div className={`mt-1 text-xs ${tierReason.startsWith('⚠️') ? 'text-red-400' : tierReason.includes('mancanti') ? 'text-amber-400' : 'text-green-400'}`}>
+                {tierReason}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Vehicle Specs */}
