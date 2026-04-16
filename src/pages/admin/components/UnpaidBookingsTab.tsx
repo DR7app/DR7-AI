@@ -428,6 +428,33 @@ export default function UnpaidBookingsTab() {
           } catch (sigErr) {
             logger.warn('Contract/signing link generation failed:', sigErr)
           }
+
+          // 3. Send "Conferma Noleggio (cliente)" confirmation via rental_new_customer template
+          try {
+            const { data: fullBooking } = await supabase
+              .from('bookings')
+              .select('*')
+              .eq('id', bookingId)
+              .single()
+            const custPhone = fullBooking?.customer_phone || fullBooking?.booking_details?.customer?.phone
+            if (custPhone && fullBooking) {
+              fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customPhone: custPhone,
+                  booking: {
+                    ...fullBooking,
+                    service_type: 'car_rental',
+                    payment_status: 'paid',
+                  }
+                })
+              }).then(() => logger.log('✅ Booking confirmation (rental_new_customer) sent to', custPhone))
+                .catch(err => logger.warn('⚠️ Confirmation WhatsApp failed:', err))
+            }
+          } catch (confErr) {
+            logger.warn('Confirmation message send failed:', confErr)
+          }
         }
       }
 
