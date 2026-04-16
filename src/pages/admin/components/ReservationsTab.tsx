@@ -1898,13 +1898,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // 2. Send WhatsApp to customer using Messaggi di Sistema template
       const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
       if (custPhone) {
-        const pickup = new Date(booking.pickup_date)
-        const dropoff = new Date(booking.dropoff_date)
-        const pickupDateStr = pickup.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
-        const pickupTimeStr = pickup.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
-        const dropoffDateStr = dropoff.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
-        const dropoffTimeStr = dropoff.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
-
         // Use the existing "Conferma Noleggio (cliente)" template (rental_new_customer)
         // Force payment_status to 'pending' and strip Nexi Pay by Link so payment shows "Da saldare"
         const pmForConferma = (booking.payment_method || '').includes('Nexi Pay by Link') ? 'Bonifico' : (booking.payment_method || '')
@@ -1924,7 +1917,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               pickup_date: booking.pickup_date,
               dropoff_date: booking.dropoff_date,
               pickup_location: booking.pickup_location || '',
-              insurance_option: booking.insurance_option || booking.booking_details?.insuranceOption || '',
+              insurance_option: booking.booking_details?.insuranceOption || '',
               price_total: booking.price_total || 0,
               payment_status: 'pending',
               payment_method: pmForConferma,
