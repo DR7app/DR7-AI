@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7'
 
@@ -29,7 +29,6 @@ const INITIAL_CATEGORIES: Category[] = [
 ]
 
 type ServiceUnit = 'per_day' | 'per_hour' | 'per_item' | 'flat'
-type TierRestriction = '' | 'TIER_1' | 'TIER_2'
 
 const UNIT_LABELS: Record<ServiceUnit, string> = {
   per_day: 'al giorno',
@@ -38,19 +37,13 @@ const UNIT_LABELS: Record<ServiceUnit, string> = {
   flat: 'una tantum',
 }
 
-const TIER_LABELS: Record<TierRestriction, string> = {
-  '': 'Tutte le fasce',
-  TIER_2: 'Solo Fascia A',
-  TIER_1: 'Solo Fascia B',
-}
-
 type ExperienceService = {
   id: string
   name: string
   price: number | ''
   unit: ServiceUnit
   is_active: boolean
-  tier_only: TierRestriction
+  tier_only: string // '' = all fasce, otherwise fascia.id
 }
 
 type ServiziConfig = {
@@ -58,12 +51,12 @@ type ServiziConfig = {
   dr7_flex: {
     daily_price: number | ''
     refund_percent: number | ''
-    tier_restriction: TierRestriction
+    tier_restriction: string // '' = all fasce, otherwise fascia.id
     description: string
   }
   lavaggio: { fee: number | ''; mandatory: boolean }
   delivery: { price_per_km: number | '' }
-  second_driver: { fasciaA: number | ''; fasciaB: number | '' }
+  second_driver: Record<string, number | ''> // keyed by fascia.id
 }
 
 const INITIAL_SERVIZI: ServiziConfig = {
@@ -74,18 +67,18 @@ const INITIAL_SERVIZI: ServiziConfig = {
     { id: 'restaurant', name: 'Prenotazione ristorante', price: 10, unit: 'flat', is_active: true, tier_only: '' },
     { id: 'video_drone', name: 'Video Maker + Drone shooting', price: 200, unit: 'per_hour', is_active: true, tier_only: '' },
     { id: 'premium_24h', name: 'Assistenza premium 24h dedicata', price: 19.9, unit: 'per_day', is_active: true, tier_only: '' },
-    { id: 'vehicle_replacement', name: 'Sostituzione immediata veicolo', price: 19.9, unit: 'per_day', is_active: true, tier_only: 'TIER_2' },
+    { id: 'vehicle_replacement', name: 'Sostituzione immediata veicolo', price: 19.9, unit: 'per_day', is_active: true, tier_only: 'A' },
     { id: 'chauffeur_vip', name: 'Noleggio con autista + itinerario VIP', price: 189, unit: 'per_hour', is_active: true, tier_only: '' },
   ],
   dr7_flex: {
     daily_price: 19.9,
     refund_percent: 90,
-    tier_restriction: 'TIER_2',
+    tier_restriction: 'A',
     description: 'Cancella fino al giorno del noleggio',
   },
   lavaggio: { fee: 9.9, mandatory: true },
   delivery: { price_per_km: 3 },
-  second_driver: { fasciaA: 10, fasciaB: 20 },
+  second_driver: { A: 10, B: 20 },
 }
 
 // ========== PREZZO DINAMICO (Punto 6) types ==========
@@ -237,37 +230,37 @@ type DepositOption = {
   surcharge_per_day: number | ''
 }
 
-type DepositGroupId = 'fasciaB_residente' | 'fasciaA_residente' | 'fasciaB_non_residente' | 'fasciaA_non_residente'
-
-type DepositsConfig = Record<DepositGroupId, DepositOption[]>
-
-const DEPOSIT_GROUP_LABELS: Record<DepositGroupId, string> = {
-  fasciaB_residente: 'Fascia B — Residente',
-  fasciaA_residente: 'Fascia A — Residente',
-  fasciaB_non_residente: 'Fascia B — Non Residente',
-  fasciaA_non_residente: 'Fascia A — Non Residente',
+type DepositFasciaConfig = {
+  residente: DepositOption[]
+  non_residente: DepositOption[]
 }
 
+type DepositsConfig = Record<string, DepositFasciaConfig> // keyed by fascia.id
+
 const INITIAL_DEPOSITS: DepositsConfig = {
-  fasciaB_residente: [
-    { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
-    { id: 'credit_card', label: 'Carta di credito', amount: 2000, surcharge_per_day: 0 },
-    { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
-  ],
-  fasciaA_residente: [
-    { id: 'no_deposit', label: 'Nessuna cauzione', amount: 0, surcharge_per_day: 49 },
-    { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
-    { id: 'credit_card', label: 'Carta di credito', amount: 1000, surcharge_per_day: 0 },
-    { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
-  ],
-  fasciaB_non_residente: [
-    { id: 'credit_card', label: 'Carta di credito', amount: 5000, surcharge_per_day: 0 },
-    { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
-  ],
-  fasciaA_non_residente: [
-    { id: 'credit_card', label: 'Carta di credito', amount: 3500, surcharge_per_day: 0 },
-    { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
-  ],
+  B: {
+    residente: [
+      { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+      { id: 'credit_card', label: 'Carta di credito', amount: 2000, surcharge_per_day: 0 },
+      { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
+    ],
+    non_residente: [
+      { id: 'credit_card', label: 'Carta di credito', amount: 5000, surcharge_per_day: 0 },
+      { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+    ],
+  },
+  A: {
+    residente: [
+      { id: 'no_deposit', label: 'Nessuna cauzione', amount: 0, surcharge_per_day: 49 },
+      { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+      { id: 'credit_card', label: 'Carta di credito', amount: 1000, surcharge_per_day: 0 },
+      { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
+    ],
+    non_residente: [
+      { id: 'credit_card', label: 'Carta di credito', amount: 3500, surcharge_per_day: 0 },
+      { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+    ],
+  },
 }
 
 type KmConfig = {
@@ -329,7 +322,62 @@ function uid() {
   return Math.random().toString(36).slice(2, 10)
 }
 
-const STORAGE_KEY = 'centralina_pro_v1'
+// ─── DYNAMIC SYNC HELPERS ───
+// Keep an array of {id,label,...} aligned with a master list of categories
+function syncByCategory<T extends { id: string; label?: string }>(
+  arr: T[],
+  master: { id: string; label: string }[],
+  makeBlank: (cat: { id: string; label: string }) => T
+): T[] {
+  const byId = new Map(arr.map((x) => [x.id, x]))
+  return master.map((m) => {
+    const existing = byId.get(m.id)
+    if (existing) {
+      // Update label if it changed
+      return existing.label !== undefined ? ({ ...existing, label: m.label } as T) : existing
+    }
+    return makeBlank(m)
+  })
+}
+
+// Keep a Record's keys aligned with a master list of ids
+function syncRecord<V>(rec: Record<string, V>, ids: string[], blank: V): Record<string, V> {
+  const next: Record<string, V> = {}
+  ids.forEach((id) => {
+    next[id] = rec[id] !== undefined ? rec[id] : blank
+  })
+  return next
+}
+
+const blankInsurance = (cat: { id: string; label: string }): InsuranceCategoryConfig => ({
+  id: cat.id,
+  label: cat.label,
+  mode: 'all_tiers',
+  byFascia: {},
+  all: [],
+})
+
+const blankKm = (cat: { id: string; label: string }): KmConfig => ({
+  id: cat.id,
+  label: cat.label,
+  table: { '1': '', '2': '', '3': '', '4': '', '5': '' },
+  extraPerDay: 0,
+  sforo: 0,
+  unlimitedPerDay: 0,
+})
+
+const blankTariffa = (cat: { id: string; label: string }): TariffaGiornaliera => ({
+  id: cat.id,
+  label: cat.label,
+  mode: 'unica',
+  days: ['1', '2', '3', '4', '5', '6', '7'],
+  unica: {},
+  residente: {},
+  non_residente: {},
+  extraPerDay: 0,
+})
+
+const STORAGE_KEY = 'centralina_pro_v2'
 
 type PersistedSnapshot = {
   categories: Category[]
@@ -403,6 +451,52 @@ export default function CentralinaProTab() {
   const [savedPreventivi, setSavedPreventivi] = useState<PreventiviConfig>(initialPreventivi)
 
   const [justSaved, setJustSaved] = useState(false)
+
+  // ─── SYNC EFFECTS ───
+  // When categories change, ensure dependent configs (insurance, km, tariffe, base/min/max) have entries
+  useEffect(() => {
+    setInsurance((prev) => syncByCategory(prev, categories, blankInsurance))
+    setKm((prev) => syncByCategory(prev, categories, blankKm))
+    setPrezzoDinamico((pd) => ({
+      ...pd,
+      tariffe: syncByCategory(pd.tariffe, categories, blankTariffa),
+      dynamic: {
+        ...pd.dynamic,
+        base_prices: syncRecord(pd.dynamic.base_prices, categories.map((c) => c.id), ''),
+        min_prices: syncRecord(pd.dynamic.min_prices, categories.map((c) => c.id), 0),
+        max_prices: syncRecord(pd.dynamic.max_prices, categories.map((c) => c.id), 0),
+      },
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories])
+
+  // When fasce change, ensure insurance.byFascia, deposits, second_driver have entries
+  useEffect(() => {
+    const fasciaIds = fasce.map((f) => f.id)
+    setInsurance((prev) =>
+      prev.map((cat) => ({
+        ...cat,
+        byFascia: syncRecord(cat.byFascia, fasciaIds, [] as InsuranceOption[]),
+      }))
+    )
+    setDeposits((prev) => syncRecord(prev, fasciaIds, { residente: [], non_residente: [] } as DepositFasciaConfig))
+    setServizi((prev) => ({
+      ...prev,
+      second_driver: syncRecord(prev.second_driver, fasciaIds, '' as number | ''),
+      // clear orphan tier_only / tier_restriction references
+      experience: prev.experience.map((s) =>
+        s.tier_only && !fasciaIds.includes(s.tier_only) ? { ...s, tier_only: '' } : s
+      ),
+      dr7_flex: {
+        ...prev.dr7_flex,
+        tier_restriction:
+          prev.dr7_flex.tier_restriction && !fasciaIds.includes(prev.dr7_flex.tier_restriction)
+            ? ''
+            : prev.dr7_flex.tier_restriction,
+      },
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fasce])
 
   const changes = useMemo(
     () =>
@@ -517,11 +611,11 @@ export default function CentralinaProTab() {
               />
             )}
             {section === 'p2' && (
-              <AssicurazioniSection insurance={insurance} setInsurance={setInsurance} />
+              <AssicurazioniSection insurance={insurance} setInsurance={setInsurance} fasce={fasce} />
             )}
             {section === 'p3' && <KmSforoSection km={km} setKm={setKm} />}
-            {section === 'p4' && <CauzioniSection deposits={deposits} setDeposits={setDeposits} />}
-            {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} />}
+            {section === 'p4' && <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} />}
+            {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} />}
             {section === 'p6' && (
               <PrezzoDinamicoSection config={prezzoDinamico} setConfig={setPrezzoDinamico} />
             )}
@@ -727,7 +821,7 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
       if (p.name !== s.name) out.push(`Servizi: "${p.name}" rinominato in "${s.name}"`)
       if (p.price !== s.price) out.push(`Servizi / ${s.name}: prezzo €${p.price} → €${s.price}`)
       if (p.unit !== s.unit) out.push(`Servizi / ${s.name}: unita ${UNIT_LABELS[p.unit]} → ${UNIT_LABELS[s.unit]}`)
-      if (p.tier_only !== s.tier_only) out.push(`Servizi / ${s.name}: fascia ${TIER_LABELS[p.tier_only]} → ${TIER_LABELS[s.tier_only]}`)
+      if (p.tier_only !== s.tier_only) out.push(`Servizi / ${s.name}: restrizione fascia modificata`)
       if (p.is_active !== s.is_active) out.push(`Servizi / ${s.name}: ${s.is_active ? 'attivato' : 'disattivato'}`)
     })
 
@@ -735,14 +829,20 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     const pf = saved.servizi.dr7_flex
     if (pf.daily_price !== cf.daily_price) out.push(`DR7 Flex: prezzo €${pf.daily_price} → €${cf.daily_price}/g`)
     if (pf.refund_percent !== cf.refund_percent) out.push(`DR7 Flex: rimborso ${pf.refund_percent}% → ${cf.refund_percent}%`)
-    if (pf.tier_restriction !== cf.tier_restriction) out.push(`DR7 Flex: disponibile per ${TIER_LABELS[pf.tier_restriction]} → ${TIER_LABELS[cf.tier_restriction]}`)
+    if (pf.tier_restriction !== cf.tier_restriction) out.push(`DR7 Flex: restrizione fascia modificata`)
     if (pf.description !== cf.description) out.push(`DR7 Flex: descrizione modificata`)
 
     if (saved.servizi.lavaggio.fee !== current.servizi.lavaggio.fee) out.push(`Pulizia Finale: €${saved.servizi.lavaggio.fee} → €${current.servizi.lavaggio.fee}`)
     if (saved.servizi.lavaggio.mandatory !== current.servizi.lavaggio.mandatory) out.push(`Pulizia Finale: ${current.servizi.lavaggio.mandatory ? 'obbligatoria' : 'facoltativa'}`)
     if (saved.servizi.delivery.price_per_km !== current.servizi.delivery.price_per_km) out.push(`Consegna a domicilio: €${saved.servizi.delivery.price_per_km} → €${current.servizi.delivery.price_per_km}/km`)
-    if (saved.servizi.second_driver.fasciaA !== current.servizi.second_driver.fasciaA) out.push(`Secondo Guidatore Fascia A: €${saved.servizi.second_driver.fasciaA} → €${current.servizi.second_driver.fasciaA}/g`)
-    if (saved.servizi.second_driver.fasciaB !== current.servizi.second_driver.fasciaB) out.push(`Secondo Guidatore Fascia B: €${saved.servizi.second_driver.fasciaB} → €${current.servizi.second_driver.fasciaB}/g`)
+    {
+      const sdKeys = new Set([...Object.keys(saved.servizi.second_driver), ...Object.keys(current.servizi.second_driver)])
+      sdKeys.forEach((k) => {
+        if (saved.servizi.second_driver[k] !== current.servizi.second_driver[k]) {
+          out.push(`Secondo Guidatore (${k}): €${saved.servizi.second_driver[k] ?? 0} → €${current.servizi.second_driver[k] ?? 0}/g`)
+        }
+      })
+    }
   }
 
   // Prezzo Dinamico — Tariffe
@@ -791,24 +891,27 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   }
 
   // Cauzioni
-  ;(Object.keys(current.deposits) as DepositGroupId[]).forEach((gid) => {
-    const cur = current.deposits[gid]
-    const prev = saved.deposits[gid]
-    const prefix = `Cauzioni / ${DEPOSIT_GROUP_LABELS[gid]}`
-    const savedIds = new Set(prev.map((o) => o.id))
-    const curIds = new Set(cur.map((o) => o.id))
-    cur.forEach((o) => {
-      if (!savedIds.has(o.id)) out.push(`${prefix}: aggiunta "${o.label || 'Nuova opzione'}"`)
-    })
-    prev.forEach((o) => {
-      if (!curIds.has(o.id)) out.push(`${prefix}: rimossa "${o.label}"`)
-    })
-    cur.forEach((o) => {
-      const p = prev.find((x) => x.id === o.id)
-      if (!p) return
-      if (p.label !== o.label) out.push(`${prefix}: "${p.label}" rinominata in "${o.label}"`)
-      if (p.amount !== o.amount) out.push(`${prefix} / ${o.label}: importo €${p.amount} → €${o.amount}`)
-      if (p.surcharge_per_day !== o.surcharge_per_day) out.push(`${prefix} / ${o.label}: sovrapprezzo €${p.surcharge_per_day}/g → €${o.surcharge_per_day}/g`)
+  const allFasciaIds = new Set([...Object.keys(current.deposits), ...Object.keys(saved.deposits)])
+  allFasciaIds.forEach((fid) => {
+    ;(['residente', 'non_residente'] as const).forEach((scope) => {
+      const cur = current.deposits[fid]?.[scope] ?? []
+      const prev = saved.deposits[fid]?.[scope] ?? []
+      const prefix = `Cauzioni / Fascia ${fid} ${scope === 'residente' ? 'Residente' : 'Non Residente'}`
+      const savedIds = new Set(prev.map((o) => o.id))
+      const curIds = new Set(cur.map((o) => o.id))
+      cur.forEach((o) => {
+        if (!savedIds.has(o.id)) out.push(`${prefix}: aggiunta "${o.label || 'Nuova opzione'}"`)
+      })
+      prev.forEach((o) => {
+        if (!curIds.has(o.id)) out.push(`${prefix}: rimossa "${o.label}"`)
+      })
+      cur.forEach((o) => {
+        const p = prev.find((x) => x.id === o.id)
+        if (!p) return
+        if (p.label !== o.label) out.push(`${prefix}: "${p.label}" rinominata in "${o.label}"`)
+        if (p.amount !== o.amount) out.push(`${prefix} / ${o.label}: importo €${p.amount} → €${o.amount}`)
+        if (p.surcharge_per_day !== o.surcharge_per_day) out.push(`${prefix} / ${o.label}: sovrapprezzo €${p.surcharge_per_day}/g → €${o.surcharge_per_day}/g`)
+      })
     })
   })
 
@@ -819,8 +922,10 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     if (prevCat.mode !== cat.mode) {
       out.push(`${cat.label}: modalita cambiata (${prevCat.mode === 'per_fascia' ? 'per fascia' : 'tutte le fasce'} → ${cat.mode === 'per_fascia' ? 'per fascia' : 'tutte le fasce'})`)
     }
-    diffInsuranceList(cat.label, 'Fascia A', cat.fasciaA, prevCat.fasciaA, out)
-    diffInsuranceList(cat.label, 'Fascia B', cat.fasciaB, prevCat.fasciaB, out)
+    const fasciaIds = new Set([...Object.keys(cat.byFascia), ...Object.keys(prevCat.byFascia)])
+    fasciaIds.forEach((fid) => {
+      diffInsuranceList(cat.label, `Fascia ${fid}`, cat.byFascia[fid] ?? [], prevCat.byFascia[fid] ?? [], out)
+    })
     diffInsuranceList(cat.label, '', cat.all, prevCat.all, out)
   })
 
@@ -1104,8 +1209,7 @@ type InsuranceCategoryConfig = {
   id: string
   label: string
   mode: Mode
-  fasciaA: InsuranceOption[]
-  fasciaB: InsuranceOption[]
+  byFascia: Record<string, InsuranceOption[]> // keyed by fascia.id
   all: InsuranceOption[]
 }
 
@@ -1114,25 +1218,26 @@ const INITIAL_INSURANCE: InsuranceCategoryConfig[] = [
     id: 'supercars',
     label: 'Supercars / Exotic',
     mode: 'per_fascia',
-    fasciaA: [
-      { id: uid(), name: 'RCA Compresa (no Kasko)', daily_price: 0, mandatory_deposit: 10000, deductible_fixed: 0, deductible_percent: 0 },
-      { id: uid(), name: 'Kasko Base', daily_price: 89, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 30 },
-      { id: uid(), name: 'Kasko Black', daily_price: 149, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 10 },
-      { id: uid(), name: 'Kasko Signature', daily_price: 189, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 0 },
-      { id: uid(), name: 'Kasko DR7', daily_price: 289, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
-    ],
-    fasciaB: [
-      { id: uid(), name: 'RCA Compresa (no Kasko)', daily_price: 0, mandatory_deposit: 15000, deductible_fixed: 0, deductible_percent: 0 },
-      { id: uid(), name: 'Kasko Base', daily_price: 119, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 30 },
-    ],
+    byFascia: {
+      A: [
+        { id: uid(), name: 'RCA Compresa (no Kasko)', daily_price: 0, mandatory_deposit: 10000, deductible_fixed: 0, deductible_percent: 0 },
+        { id: uid(), name: 'Kasko Base', daily_price: 89, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 30 },
+        { id: uid(), name: 'Kasko Black', daily_price: 149, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 10 },
+        { id: uid(), name: 'Kasko Signature', daily_price: 189, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 0 },
+        { id: uid(), name: 'Kasko DR7', daily_price: 289, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
+      ],
+      B: [
+        { id: uid(), name: 'RCA Compresa (no Kasko)', daily_price: 0, mandatory_deposit: 15000, deductible_fixed: 0, deductible_percent: 0 },
+        { id: uid(), name: 'Kasko Base', daily_price: 119, mandatory_deposit: 0, deductible_fixed: 5000, deductible_percent: 30 },
+      ],
+    },
     all: [],
   },
   {
     id: 'urban',
     label: 'Urban',
     mode: 'all_tiers',
-    fasciaA: [],
-    fasciaB: [],
+    byFascia: {},
     all: [
       { id: uid(), name: 'Kasko Base', daily_price: 15, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
       { id: uid(), name: 'Kasko DR7', daily_price: 45, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
@@ -1142,8 +1247,7 @@ const INITIAL_INSURANCE: InsuranceCategoryConfig[] = [
     id: 'aziendali',
     label: 'Aziendali',
     mode: 'all_tiers',
-    fasciaA: [],
-    fasciaB: [],
+    byFascia: {},
     all: [
       { id: uid(), name: 'RCA Compresa (no Kasko)', daily_price: 0, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
       { id: uid(), name: 'Kasko Base', daily_price: 45, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
@@ -1157,8 +1261,10 @@ const INITIAL_INSURANCE: InsuranceCategoryConfig[] = [
 function AssicurazioniSection({
   insurance,
   setInsurance,
+  fasce,
 }: {
   insurance: InsuranceCategoryConfig[]
+  fasce: Fascia[]
   setInsurance: (next: InsuranceCategoryConfig[]) => void
 }) {
   const config = insurance
@@ -1182,6 +1288,7 @@ function AssicurazioniSection({
         <InsuranceCategoryCard
           key={cat.id}
           category={cat}
+          fasce={fasce}
           onChange={(patch) => updateCategory(cat.id, patch)}
         />
       ))}
@@ -1191,9 +1298,11 @@ function AssicurazioniSection({
 
 function InsuranceCategoryCard({
   category,
+  fasce,
   onChange,
 }: {
   category: InsuranceCategoryConfig
+  fasce: Fascia[]
   onChange: (patch: Partial<InsuranceCategoryConfig>) => void
 }) {
   return (
@@ -1209,7 +1318,7 @@ function InsuranceCategoryCard({
             onChange={(e) => onChange({ mode: e.target.value as Mode })}
             className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
           >
-            <option value="per_fascia">Per fascia (A/B separate)</option>
+            <option value="per_fascia">Per fascia (separata)</option>
             <option value="all_tiers">Uguale per tutte le fasce</option>
           </select>
         </label>
@@ -1217,16 +1326,21 @@ function InsuranceCategoryCard({
 
       {category.mode === 'per_fascia' ? (
         <div className="divide-y divide-black/5 border-t border-black/5">
-          <InsuranceList
-            heading="Fascia B — giovane"
-            items={category.fasciaB}
-            onChange={(next) => onChange({ fasciaB: next })}
-          />
-          <InsuranceList
-            heading="Fascia A — esperto"
-            items={category.fasciaA}
-            onChange={(next) => onChange({ fasciaA: next })}
-          />
+          {fasce.map((f) => (
+            <InsuranceList
+              key={f.id}
+              heading={`${f.label}${f.description ? ` — ${f.description}` : ''}`}
+              items={category.byFascia[f.id] ?? []}
+              onChange={(next) =>
+                onChange({ byFascia: { ...category.byFascia, [f.id]: next } })
+              }
+            />
+          ))}
+          {fasce.length === 0 && (
+            <p className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+              Nessuna fascia configurata. Aggiungine una in "Categorie & Fascia".
+            </p>
+          )}
         </div>
       ) : (
         <div className="border-t border-black/5">
@@ -1505,35 +1619,37 @@ function KmSforoSection({
 function CauzioniSection({
   deposits,
   setDeposits,
+  fasce,
 }: {
   deposits: DepositsConfig
   setDeposits: (next: DepositsConfig) => void
+  fasce: Fascia[]
 }) {
-  function patchOption(gid: DepositGroupId, optId: string, p: Partial<DepositOption>) {
+  type Scope = 'residente' | 'non_residente'
+  function patchOption(fid: string, scope: Scope, optId: string, p: Partial<DepositOption>) {
+    const cur = deposits[fid] ?? { residente: [], non_residente: [] }
     setDeposits({
       ...deposits,
-      [gid]: deposits[gid].map((o) => (o.id === optId ? { ...o, ...p } : o)),
+      [fid]: { ...cur, [scope]: cur[scope].map((o) => (o.id === optId ? { ...o, ...p } : o)) },
     })
   }
-  function removeOption(gid: DepositGroupId, optId: string) {
-    setDeposits({ ...deposits, [gid]: deposits[gid].filter((o) => o.id !== optId) })
-  }
-  function addOption(gid: DepositGroupId) {
+  function removeOption(fid: string, scope: Scope, optId: string) {
+    const cur = deposits[fid] ?? { residente: [], non_residente: [] }
     setDeposits({
       ...deposits,
-      [gid]: [
-        ...deposits[gid],
-        { id: uid(), label: 'Nuova opzione', amount: 0, surcharge_per_day: 0 },
-      ],
+      [fid]: { ...cur, [scope]: cur[scope].filter((o) => o.id !== optId) },
     })
   }
-
-  const groupOrder: DepositGroupId[] = [
-    'fasciaB_residente',
-    'fasciaA_residente',
-    'fasciaB_non_residente',
-    'fasciaA_non_residente',
-  ]
+  function addOption(fid: string, scope: Scope) {
+    const cur = deposits[fid] ?? { residente: [], non_residente: [] }
+    setDeposits({
+      ...deposits,
+      [fid]: {
+        ...cur,
+        [scope]: [...cur[scope], { id: uid(), label: 'Nuova opzione', amount: 0, surcharge_per_day: 0 }],
+      },
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -1546,106 +1662,112 @@ function CauzioniSection({
         </p>
       </div>
 
+      {fasce.length === 0 && (
+        <p className="text-center text-[13px] text-[#6e6e73] py-8">
+          Nessuna fascia configurata. Aggiungine una in "Categorie & Fascia".
+        </p>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {groupOrder.map((gid) => (
-          <section
-            key={gid}
-            className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden"
-          >
-            <header className="px-5 pt-5 pb-3">
-              <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
-                {DEPOSIT_GROUP_LABELS[gid]}
-              </h3>
-            </header>
-
-            <ul className="divide-y divide-black/5">
-              {deposits[gid].map((opt) => (
-                <li key={opt.id} className="px-5 py-3 group">
-                  <div className="flex items-center gap-3 mb-2">
-                    <input
-                      value={opt.label}
-                      onChange={(e) => patchOption(gid, opt.id, { label: e.target.value })}
-                      placeholder="Nome opzione"
-                      className="flex-1 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
-                    />
-                    <button
-                      onClick={() => removeOption(gid, opt.id)}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-7 h-7 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
-                      aria-label="Rimuovi"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="block">
-                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
-                        Importo
-                      </span>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
-                          €
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={opt.amount}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            patchOption(gid, opt.id, { amount: v === '' ? '' : Number(v) })
-                          }}
-                          className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-                        />
-                      </div>
-                    </label>
-                    <label className="block">
-                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
-                        Sovrapprezzo / giorno
-                      </span>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
-                          €
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={opt.surcharge_per_day}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            patchOption(gid, opt.id, { surcharge_per_day: v === '' ? '' : Number(v) })
-                          }}
-                          className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6] pointer-events-none">
-                          /g
-                        </span>
-                      </div>
-                    </label>
-                  </div>
-                </li>
-              ))}
-              {deposits[gid].length === 0 && (
-                <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
-                  Nessuna opzione
-                </li>
-              )}
-            </ul>
-
-            <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa]">
-              <button
-                onClick={() => addOption(gid)}
-                className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+        {fasce.flatMap((f) =>
+          (['residente', 'non_residente'] as Scope[]).map((scope) => {
+            const groupLabel = `${f.label} — ${scope === 'residente' ? 'Residente' : 'Non Residente'}`
+            const items = deposits[f.id]?.[scope] ?? []
+            return (
+              <section
+                key={`${f.id}_${scope}`}
+                className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
-                Aggiungi opzione
-              </button>
-            </footer>
-          </section>
-        ))}
+                <header className="px-5 pt-5 pb-3">
+                  <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+                    {groupLabel}
+                  </h3>
+                </header>
+
+                <ul className="divide-y divide-black/5">
+                  {items.map((opt) => (
+                    <li key={opt.id} className="px-5 py-3 group">
+                      <div className="flex items-center gap-3 mb-2">
+                        <input
+                          value={opt.label}
+                          onChange={(e) => patchOption(f.id, scope, opt.id, { label: e.target.value })}
+                          placeholder="Nome opzione"
+                          className="flex-1 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] rounded-lg px-2 py-1 -mx-2 transition-colors"
+                        />
+                        <button
+                          onClick={() => removeOption(f.id, scope, opt.id)}
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-7 h-7 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                          aria-label="Rimuovi"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+                            Importo
+                          </span>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={opt.amount}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                patchOption(f.id, scope, opt.id, { amount: v === '' ? '' : Number(v) })
+                              }}
+                              className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                            />
+                          </div>
+                        </label>
+                        <label className="block">
+                          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+                            Sovrapprezzo / giorno
+                          </span>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={opt.surcharge_per_day}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                patchOption(f.id, scope, opt.id, { surcharge_per_day: v === '' ? '' : Number(v) })
+                              }}
+                              className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6] pointer-events-none">/g</span>
+                          </div>
+                        </label>
+                      </div>
+                    </li>
+                  ))}
+                  {items.length === 0 && (
+                    <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+                      Nessuna opzione
+                    </li>
+                  )}
+                </ul>
+
+                <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa]">
+                  <button
+                    onClick={() => addOption(f.id, scope)}
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Aggiungi opzione
+                  </button>
+                </footer>
+              </section>
+            )
+          })
+        )}
       </div>
     </div>
   )
@@ -1656,9 +1778,11 @@ function CauzioniSection({
 function ServiziSection({
   servizi,
   setServizi,
+  fasce,
 }: {
   servizi: ServiziConfig
   setServizi: (next: ServiziConfig) => void
+  fasce: Fascia[]
 }) {
   function patchExp(id: string, p: Partial<ExperienceService>) {
     setServizi({ ...servizi, experience: servizi.experience.map((s) => (s.id === id ? { ...s, ...p } : s)) })
@@ -1747,12 +1871,13 @@ function ServiziSection({
                 </select>
                 <select
                   value={s.tier_only}
-                  onChange={(e) => patchExp(s.id, { tier_only: e.target.value as TierRestriction })}
+                  onChange={(e) => patchExp(s.id, { tier_only: e.target.value })}
                   className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 >
                   <option value="">Tutte le fasce</option>
-                  <option value="TIER_2">Solo Fascia A</option>
-                  <option value="TIER_1">Solo Fascia B</option>
+                  {fasce.map((f) => (
+                    <option key={f.id} value={f.id}>Solo {f.label}</option>
+                  ))}
                 </select>
                 <button
                   onClick={() => removeExp(s.id)}
@@ -1833,13 +1958,14 @@ function ServiziSection({
               <select
                 value={servizi.dr7_flex.tier_restriction}
                 onChange={(e) =>
-                  setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, tier_restriction: e.target.value as TierRestriction } })
+                  setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, tier_restriction: e.target.value } })
                 }
                 className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">Tutte le fasce</option>
-                <option value="TIER_2">Solo Fascia A</option>
-                <option value="TIER_1">Solo Fascia B</option>
+                {fasce.map((f) => (
+                  <option key={f.id} value={f.id}>Solo {f.label}</option>
+                ))}
               </select>
             </label>
           </div>
@@ -1932,34 +2058,33 @@ function ServiziSection({
             Secondo Guidatore
           </h3>
           <div className="space-y-2">
-            {(['fasciaA', 'fasciaB'] as const).map((k) => (
-              <div key={k} className="flex items-center gap-3">
-                <span className="w-16 text-[13px] text-[#6e6e73]">
-                  {k === 'fasciaA' ? 'Fascia A' : 'Fascia B'}
-                </span>
+            {fasce.map((f) => (
+              <div key={f.id} className="flex items-center gap-3">
+                <span className="w-20 text-[13px] text-[#6e6e73] truncate">{f.label}</span>
                 <div className="flex-1 relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
-                    €
-                  </span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
                   <input
                     type="number"
                     min={0}
-                    value={servizi.second_driver[k]}
+                    value={servizi.second_driver[f.id] ?? ''}
                     onChange={(e) => {
                       const v = e.target.value
                       setServizi({
                         ...servizi,
-                        second_driver: { ...servizi.second_driver, [k]: v === '' ? '' : Number(v) },
+                        second_driver: { ...servizi.second_driver, [f.id]: v === '' ? '' : Number(v) },
                       })
                     }}
                     className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
-                    /g
-                  </span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">/g</span>
                 </div>
               </div>
             ))}
+            {fasce.length === 0 && (
+              <p className="text-center text-[13px] text-[#6e6e73] py-2">
+                Nessuna fascia configurata
+              </p>
+            )}
           </div>
         </section>
       </div>
