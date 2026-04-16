@@ -2505,12 +2505,20 @@ export default function UnpaidBookingsTab() {
                     {group.chargedViaMit > 0 && (
                       <div className="text-xs text-orange-400 mt-0.5">Da incassare: €{(group.totalRemaining / 100).toFixed(2)}</div>
                     )}
-                    {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 && (
+                    {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 ? (
                       <button
                         onClick={() => markAllCustomerPaid(group)}
                         disabled={!!processingKey}
                         className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
+                    ) : (
+                      /* Single booking: show direct "Segna Pagato" button */
+                      group.noleggioBookings[0] && (
+                        <button
+                          onClick={() => updatePaymentStatus(group.noleggioBookings[0].id, 'paid')}
+                          className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                        >Segna Pagato</button>
+                      )
                     )}
                     <button
                       onClick={() => {
