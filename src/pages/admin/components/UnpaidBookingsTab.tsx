@@ -361,8 +361,16 @@ export default function UnpaidBookingsTab() {
       logAdminAction('mark_paid', 'booking', bookingId, { method: newStatus })
 
       if (newStatus === 'paid') {
+        // Get service_type to check if it's a car rental
+        const { data: bookingData } = await supabase
+          .from('bookings')
+          .select('service_type')
+          .eq('id', bookingId)
+          .maybeSingle()
+        const isCarRental = !bookingData?.service_type || bookingData.service_type === 'rental'
+
+        // 1. Generate fattura
         try {
-          // Check if fattura already exists for this booking
           const { data: existingFattura } = await supabase
             .from('fatture')
             .select('id, numero_fattura')
@@ -384,6 +392,38 @@ export default function UnpaidBookingsTab() {
           }
         } catch (invoiceErr) {
           logger.warn('Auto-invoice generation failed:', invoiceErr)
+        }
+
+        // 2. Generate contract + send signing link (ONLY for car rentals)
+        if (isCarRental) {
+          try {
+            await authFetch('/.netlify/functions/generate-contract', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId, silent: true })
+            })
+
+            const { data: contractForSig } = await supabase
+              .from('contracts')
+              .select('id, pdf_url')
+              .eq('booking_id', bookingId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+
+            if (contractForSig?.id && contractForSig?.pdf_url) {
+              await fetch('/.netlify/functions/signature-init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId: contractForSig.id, bookingId })
+              })
+              toast.success('Contratto e link firma inviati al cliente')
+            } else {
+              logger.warn('No contract found for booking — skipping signing link')
+            }
+          } catch (sigErr) {
+            logger.warn('Contract/signing link generation failed:', sigErr)
+          }
         }
       }
 
