@@ -150,7 +150,6 @@ export default function MessaggiSistemaProTab() {
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editBody, setEditBody] = useState('')
     const [saving, setSaving] = useState(false)
-    const [initializing, setInitializing] = useState(false)
 
     // New template form
     const [showNewForm, setShowNewForm] = useState(false)
@@ -199,15 +198,46 @@ export default function MessaggiSistemaProTab() {
     async function loadTemplates() {
         setLoading(true)
         try {
-            const proKeys = ALL_PRO_TEMPLATES.map(t => t.key)
+            // Fetch every pro_* row AND any pro_custom_* the admin created
             const { data, error } = await supabase
                 .from('system_messages')
                 .select('*')
-                .in('message_key', proKeys)
+                .like('message_key', 'pro_%')
                 .order('created_at', { ascending: true })
 
             if (error) throw error
-            setTemplates(data || [])
+            let rows = data || []
+
+            // Auto-seed missing pro_* rows so every template appears instantly with empty body
+            const existingKeys = new Set(rows.map(r => r.message_key))
+            const missing = ALL_PRO_TEMPLATES.filter(t => !existingKeys.has(t.key))
+            if (missing.length > 0) {
+                const toInsert = missing.map(t => ({
+                    message_key: t.key,
+                    label: t.label,
+                    description: t.description,
+                    message_body: '',
+                    is_automatic: false,
+                    is_enabled: false,
+                    include_header: true,
+                    trigger_event: 'before_dropoff',
+                    trigger_offset_hours: 24,
+                    send_hour: 9,
+                    target_category: 'all',
+                    target_status: 'confirmed,active',
+                }))
+                const { data: inserted, error: insErr } = await supabase
+                    .from('system_messages')
+                    .insert(toInsert)
+                    .select()
+                if (insErr) {
+                    console.error('Auto-seed pro templates failed:', insErr)
+                } else if (inserted) {
+                    rows = [...rows, ...inserted]
+                }
+            }
+
+            setTemplates(rows)
         } catch (err: unknown) {
             console.error('Error loading templates:', err)
             toast.error('Errore caricamento messaggi')
@@ -231,46 +261,6 @@ export default function MessaggiSistemaProTab() {
             console.error('Error loading sent logs:', err)
         } finally {
             setLogsLoading(false)
-        }
-    }
-
-    async function handleInitializeProMessages() {
-        if (!confirm('Inizializzare tutti i messaggi Pro con body vuoto?\n\nQuesta operazione crea solo le righe mancanti — non sovrascrive quelle già esistenti.')) return
-        setInitializing(true)
-        try {
-            const existingKeys = new Set(templates.map(t => t.message_key))
-            const toInsert = ALL_PRO_TEMPLATES
-                .filter(t => !existingKeys.has(t.key))
-                .map(t => ({
-                    message_key: t.key,
-                    label: t.label,
-                    description: t.description,
-                    message_body: '',
-                    is_automatic: false,
-                    is_enabled: false,
-                    include_header: true,
-                    trigger_event: 'before_dropoff',
-                    trigger_offset_hours: 24,
-                    send_hour: 9,
-                    target_category: 'all',
-                    target_status: 'confirmed,active',
-                }))
-
-            if (toInsert.length === 0) {
-                toast.success('Tutti i messaggi Pro sono già inizializzati')
-                return
-            }
-
-            const { error } = await supabase.from('system_messages').insert(toInsert)
-            if (error) throw error
-            toast.success(`Creati ${toInsert.length} messaggi Pro`)
-            loadTemplates()
-        } catch (err: unknown) {
-            const _errMsg = err instanceof Error ? err.message : String(err)
-            console.error('Error initializing pro messages:', err)
-            toast.error('Errore inizializzazione: ' + _errMsg)
-        } finally {
-            setInitializing(false)
         }
     }
 
@@ -600,9 +590,6 @@ export default function MessaggiSistemaProTab() {
         return <div className="text-center py-10 text-dr7-gold">Caricamento messaggi...</div>
     }
 
-    const existingKeys = new Set(templates.map(t => t.message_key))
-    const missingCount = ALL_PRO_TEMPLATES.filter(t => !existingKeys.has(t.key)).length
-
     return (
         <div className="space-y-8">
             {/* ═══════════ SECTION A: Template Manager (Pro) ═══════════ */}
@@ -613,17 +600,6 @@ export default function MessaggiSistemaProTab() {
                         <p className="text-theme-text-muted text-sm">Template dei messaggi WhatsApp organizzati per tipologia</p>
                     </div>
                     <div className="flex gap-2">
-                        <button
-                            onClick={handleInitializeProMessages}
-                            disabled={initializing || missingCount === 0}
-                            className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {initializing
-                                ? 'Inizializzazione...'
-                                : missingCount === 0
-                                    ? 'Tutti i messaggi Pro creati'
-                                    : `Inizializza Messaggi Pro (${missingCount})`}
-                        </button>
                         <button
                             onClick={() => setShowNewForm(!showNewForm)}
                             className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f]"
@@ -749,18 +725,12 @@ export default function MessaggiSistemaProTab() {
                         const catKeys = cat.templates.map(t => t.key)
                         const catTemplates = templates.filter(t => catKeys.includes(t.message_key))
 
-                        // Show category header even if empty, so admin sees the structure
                         return (
                             <div key={cat.label}>
                                 <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2 px-1">
-                                    {cat.label} ({catTemplates.length}/{cat.templates.length})
+                                    {cat.label} ({catTemplates.length})
                                 </h4>
                                 <div className="space-y-2">
-                                    {catTemplates.length === 0 && (
-                                        <div className="text-center py-4 text-xs text-theme-text-muted border border-dashed border-theme-border rounded-lg">
-                                            Nessun messaggio Pro inizializzato — premi "Inizializza Messaggi Pro"
-                                        </div>
-                                    )}
                                     {catTemplates.map((template) => (
                                         <details key={template.id} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
                                             <summary className="px-4 py-3 cursor-pointer hover:bg-theme-bg-hover/30">
@@ -772,9 +742,6 @@ export default function MessaggiSistemaProTab() {
                                                         <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${template.is_enabled !== false ? 'left-5' : 'left-0.5'}`} />
                                                     </button>
                                                     <span className="font-semibold text-theme-text-primary text-sm min-w-0">{template.label}</span>
-                                                    {!template.message_body && (
-                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-600/20 text-yellow-400 shrink-0">VUOTO</span>
-                                                    )}
                                                     <div className="flex items-center gap-1.5 ml-auto shrink-0">
                                                         <button
                                                             onClick={(e) => { e.preventDefault(); handleToggleAutomatic(template) }}
@@ -889,11 +856,9 @@ export default function MessaggiSistemaProTab() {
                                                     </div>
                                                 ) : (
                                                     <pre className="px-4 py-3 rounded-lg bg-theme-bg-primary text-xs text-theme-text-secondary whitespace-pre-wrap max-h-72 overflow-y-auto border border-theme-border">
-                                                        {template.message_body
-                                                            ? (template.include_header !== false
-                                                                ? `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${template.message_body}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
-                                                                : template.message_body)
-                                                            : <span className="italic text-theme-text-muted">(messaggio vuoto — premi Modifica per compilare)</span>}
+                                                        {template.include_header !== false
+                                                            ? `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${template.message_body}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
+                                                            : template.message_body}
                                                     </pre>
                                                 )}
 
