@@ -219,7 +219,7 @@ export default function MessaggiSistemaProTab() {
                     message_body: '',
                     is_automatic: false,
                     is_enabled: false,
-                    include_header: true,
+                    include_header: false,
                     trigger_event: 'before_dropoff',
                     trigger_offset_hours: 24,
                     send_hour: 9,
@@ -234,6 +234,27 @@ export default function MessaggiSistemaProTab() {
                     console.error('Auto-seed pro templates failed:', insErr)
                 } else if (inserted) {
                     rows = [...rows, ...inserted]
+                }
+            }
+
+            // One-time cleanup: flip include_header=false on untouched seeded rows
+            // (empty body + manual + disabled = admin hasn't configured yet)
+            const untouchedWithHeader = rows.filter(r =>
+                r.include_header === true &&
+                !r.message_body &&
+                r.is_automatic === false &&
+                r.is_enabled === false
+            )
+            if (untouchedWithHeader.length > 0) {
+                const ids = untouchedWithHeader.map(r => r.id)
+                const { error: upErr } = await supabase
+                    .from('system_messages')
+                    .update({ include_header: false })
+                    .in('id', ids)
+                if (upErr) {
+                    console.error('Reset include_header on untouched pro rows failed:', upErr)
+                } else {
+                    rows = rows.map(r => ids.includes(r.id) ? { ...r, include_header: false } : r)
                 }
             }
 
