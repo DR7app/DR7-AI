@@ -156,6 +156,7 @@ export default function MessaggiSistemaProTab() {
     const [loading, setLoading] = useState(true)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editBody, setEditBody] = useState('')
+    const [editLabel, setEditLabel] = useState('')
     const [saving, setSaving] = useState(false)
 
     // New template form
@@ -295,17 +296,23 @@ export default function MessaggiSistemaProTab() {
     }
 
     async function handleSaveEdit(id: string) {
+        const trimmedLabel = editLabel.trim()
+        if (!trimmedLabel) {
+            toast.error('Il titolo non può essere vuoto')
+            return
+        }
         setSaving(true)
         try {
             // Try the Netlify function first (service-role, bypasses RLS).
             // Fall back to direct supabase.update() if the function errors.
             const updatedAt = new Date().toISOString()
+            const payload = { message_body: editBody, label: trimmedLabel }
             let saved = false
             try {
                 const response = await authFetch('/.netlify/functions/update-system-message', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id, message_body: editBody })
+                    body: JSON.stringify({ id, ...payload })
                 })
                 if (response.ok) {
                     saved = true
@@ -320,7 +327,7 @@ export default function MessaggiSistemaProTab() {
             if (!saved) {
                 const { data, error } = await supabase
                     .from('system_messages')
-                    .update({ message_body: editBody, updated_at: updatedAt })
+                    .update({ ...payload, updated_at: updatedAt })
                     .eq('id', id)
                     .select()
                     .single()
@@ -337,7 +344,7 @@ export default function MessaggiSistemaProTab() {
             if (fresh) {
                 setTemplates(prev => prev.map(t => t.id === id ? fresh : t))
             } else {
-                setTemplates(prev => prev.map(t => t.id === id ? { ...t, message_body: editBody, updated_at: updatedAt } : t))
+                setTemplates(prev => prev.map(t => t.id === id ? { ...t, ...payload, updated_at: updatedAt } : t))
             }
             setEditingId(null)
             toast.success('Messaggio salvato')
@@ -936,15 +943,28 @@ export default function MessaggiSistemaProTab() {
                                                 )}
 
                                                 {editingId === template.id ? (
-                                                    <div>
-                                                        <textarea
-                                                            value={editBody}
-                                                            onChange={e => setEditBody(e.target.value)}
-                                                            rows={6}
-                                                            placeholder="Buongiorno {nome},&#10;&#10;..."
-                                                            className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
-                                                        />
-                                                        <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-theme-text-primary mb-1">Titolo</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editLabel}
+                                                                onChange={e => setEditLabel(e.target.value)}
+                                                                placeholder="Titolo del messaggio"
+                                                                className="w-full px-4 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 text-sm"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-theme-text-primary mb-1">Messaggio</label>
+                                                            <textarea
+                                                                value={editBody}
+                                                                onChange={e => setEditBody(e.target.value)}
+                                                                rows={6}
+                                                                placeholder="Buongiorno {nome},&#10;&#10;..."
+                                                                className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
+                                                            />
+                                                            <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
+                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <pre className="px-4 py-3 rounded-lg bg-theme-bg-primary text-xs text-theme-text-secondary whitespace-pre-wrap max-h-72 overflow-y-auto border border-theme-border">
@@ -966,7 +986,7 @@ export default function MessaggiSistemaProTab() {
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <button onClick={() => { setEditingId(template.id); setEditBody(template.message_body) }}
+                                                            <button onClick={() => { setEditingId(template.id); setEditBody(template.message_body); setEditLabel(template.label) }}
                                                                 className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors">Modifica</button>
                                                             <button onClick={() => handleDeleteTemplate(template)}
                                                                 className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors">Elimina</button>
