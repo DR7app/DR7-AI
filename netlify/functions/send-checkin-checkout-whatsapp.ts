@@ -203,17 +203,17 @@ const handler: Handler = async (event) => {
     try {
       const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 
-      // Add wrapper from DB
+      // Add wrapper from Messaggi di Sistema Pro — no hardcoded fallback.
       let wrappedMsg = message;
       try {
         const { data: wrappers } = await supabase
           .from('system_messages')
-          .select('message_key, message_body')
-          .in('message_key', ['message_wrapper_header', 'message_wrapper_footer']);
-        const hdr = wrappers?.find((w: any) => w.message_key === 'message_wrapper_header')?.message_body || '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._';
-        const ftr = wrappers?.find((w: any) => w.message_key === 'message_wrapper_footer')?.message_body || '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
-        wrappedMsg = hdr + '\n\n' + message + '\n\n' + ftr;
-      } catch { /* fallback: send without wrapper */ }
+          .select('message_key, message_body, is_enabled')
+          .in('message_key', ['pro_wrapper_header', 'pro_wrapper_footer']);
+        const hdr = wrappers?.find((w: any) => w.message_key === 'pro_wrapper_header' && w.is_enabled !== false)?.message_body || '';
+        const ftr = wrappers?.find((w: any) => w.message_key === 'pro_wrapper_footer' && w.is_enabled !== false)?.message_body || '';
+        wrappedMsg = [hdr, message, ftr].filter(Boolean).join('\n\n');
+      } catch { /* no wrapper if DB query fails */ }
 
       const response = await fetch(greenApiUrl, {
         method: "POST",

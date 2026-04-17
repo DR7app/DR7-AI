@@ -25,19 +25,19 @@ function cleanPhone(phone: string): string | null {
  * Send WhatsApp message via Green API
  */
 async function loadWrapper(): Promise<{ header: string; footer: string }> {
-  const defaultH = '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora._';
-  const defaultF = '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
+  // Pulled from Messaggi di Sistema Pro. NO HARDCODED FALLBACK: if the rows are
+  // missing or disabled, we send the message without a wrapper.
   try {
     const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
     const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!sbUrl || !sbKey) return { header: defaultH, footer: defaultF };
+    if (!sbUrl || !sbKey) return { header: '', footer: '' };
     const sb = createClient(sbUrl, sbKey);
-    const { data } = await sb.from('system_messages').select('message_key, message_body').in('message_key', ['message_wrapper_header', 'message_wrapper_footer']);
+    const { data } = await sb.from('system_messages').select('message_key, message_body, is_enabled').in('message_key', ['pro_wrapper_header', 'pro_wrapper_footer']);
     return {
-      header: data?.find((w: any) => w.message_key === 'message_wrapper_header')?.message_body || defaultH,
-      footer: data?.find((w: any) => w.message_key === 'message_wrapper_footer')?.message_body || defaultF,
+      header: data?.find((w: any) => w.message_key === 'pro_wrapper_header' && w.is_enabled !== false)?.message_body || '',
+      footer: data?.find((w: any) => w.message_key === 'pro_wrapper_footer' && w.is_enabled !== false)?.message_body || '',
     };
-  } catch { return { header: defaultH, footer: defaultF }; }
+  } catch { return { header: '', footer: '' }; }
 }
 
 async function sendWhatsApp(instanceId: string, token: string, phone: string, message: string): Promise<boolean> {
@@ -49,7 +49,7 @@ async function sendWhatsApp(instanceId: string, token: string, phone: string, me
 
   try {
     const { header, footer } = await loadWrapper();
-    const wrappedMessage = header + '\n\n' + message + '\n\n' + footer;
+    const wrappedMessage = [header, message, footer].filter(Boolean).join('\n\n');
     const url = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${token}`;
     const response = await fetch(url, {
       method: 'POST',

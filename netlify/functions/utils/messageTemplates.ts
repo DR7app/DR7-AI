@@ -21,35 +21,53 @@ interface MessageTemplate {
 }
 
 /**
- * Pro-template A/B gate.
+ * Old-key → Pro-key router.
  *
- * When a booking's vehicle plate matches TEST_PRO_PLATE, the sender swaps the
- * old message_key for the mapped `pro_*` key BEFORE fetching from DB. This
- * lets the admin validate new Pro templates on a test vehicle without
- * affecting real customers. Remove a mapping entry to stop the swap.
+ * Messaggi di Sistema Pro is now the single source of truth. Every legacy call
+ * to renderTemplate('rental_new_customer', ...) gets silently swapped to the
+ * mapped pro_* template at render time. Unmapped legacy keys return null →
+ * the send is skipped entirely (no hardcoded fallback).
+ *
+ * Admin variants (rental_new, rental_new_admin, carwash_new, carwash_new_admin)
+ * intentionally point at the SAME pro_* slot as the customer variant — per the
+ * product decision that admin should receive the same message as the client.
+ *
+ * Mapping derived from the BODY CONTENT of each pro_* template (labels have
+ * been renamed, so the slot's purpose = its body, not its pro_* name).
  */
-const TEST_PRO_PLATE = 'TEST002'
 const OLD_TO_PRO: Record<string, string> = {
-  // Noleggio
+  // Noleggio — customer + admin get the same template
   rental_new_customer: 'pro_conferma_noleggio',
-  // Add more as Pro templates are configured:
-  // rental_new: 'pro_admin_nuova_prenotazione',
-  // rental_modified: 'pro_conferma_noleggio_modifica',
-  // carwash_new_customer: 'pro_conferma_lavaggio',
-  // mechanical_new_customer: 'pro_conferma_meccanica',
-  // signature_request_link: 'pro_richiesta_firma',
-  // payment_link_customer: 'pro_richiesta_pagamento',
-  // deposit_return_iban: 'pro_richiesta_iban',
-  // birthday_message: 'pro_marketing_compleanno',
-  // review_request_whatsapp: 'pro_marketing_recensione',
-  // referral_otp_whatsapp: 'pro_marketing_referral',
-  // preventivo_whatsapp: 'pro_conferma_preventivo',
-  // admin_no_cauzione_request: 'pro_admin_no_cauzione',
-  // booking_cancelled_whatsapp: 'pro_annullamento_cliente',
-}
+  rental_new: 'pro_conferma_noleggio',
+  rental_new_admin: 'pro_conferma_noleggio',
+  rental_modified: 'pro_promemoria_appuntamento',
+  rental_da_saldare_customer: 'pro_conferma_pagamento',
+  deposit_return_iban: 'pro_richiesta_iban',
 
-function normalizePlate(plate?: string | null): string {
-  return (plate || '').replace(/\s+/g, '').toUpperCase()
+  // Lavaggio — customer + admin get the same template
+  carwash_new_customer: 'pro_conferma_lavaggio',
+  carwash_new: 'pro_conferma_lavaggio',
+  carwash_new_admin: 'pro_conferma_lavaggio',
+  carwash_modified: 'pro_promemoria_pagamento',
+
+  // Firma & Contratto
+  signature_request_link: 'pro_conferma_contratto_firmato',
+  signature_reminder_whatsapp: 'pro_conferma_preventivo',
+  signature_otp_whatsapp: 'pro_promemoria_pickup',
+
+  // Pagamenti & annullamenti
+  payment_link_customer: 'pro_promemoria_dropoff',
+  booking_cancelled_whatsapp: 'pro_richiesta_pagamento',
+
+  // Preventivi
+  preventivo_whatsapp: 'pro_promemoria_checkin',
+  admin_new_website_quote: 'pro_richiesta_otp',
+  admin_no_cauzione_request: 'pro_richiesta_firma',
+
+  // Marketing & Wallet
+  review_request_whatsapp: 'pro_promemoria_firma',
+  birthday_message: 'pro_marketing_compleanno',
+  wallet_bonus_credit: 'pro_richiesta_documenti',
 }
 
 export interface RenderContext {
@@ -57,19 +75,24 @@ export interface RenderContext {
 }
 
 /**
- * If the booking is on the Pro-test vehicle AND a mapping + enabled Pro
- * template exist, returns the pro_* key to use. Otherwise returns the
- * original key unchanged.
+ * Resolves every legacy key to its Pro equivalent.
+ *
+ * - Key already starts with 'pro_' → pass through unchanged.
+ * - Wrapper keys (old or pro namespace) → pass through unchanged.
+ * - Key is in OLD_TO_PRO → return the pro_* key IF that template is enabled + non-empty.
+ * - Otherwise → return null (caller MUST skip sending — no hardcoded fallback).
  */
-export async function resolveKeyForContext(key: string, context?: RenderContext): Promise<string> {
-  if (!context) return key
-  const normalized = normalizePlate(context.vehiclePlate)
-  if (normalized !== TEST_PRO_PLATE) return key
+export async function resolveKeyForContext(key: string, _context?: RenderContext): Promise<string | null> {
+  void _context
+  if (key.startsWith('pro_')) return key
+  if (key === 'message_wrapper_header' || key === 'message_wrapper_footer') return key
+
   const proKey = OLD_TO_PRO[key]
-  if (!proKey) return key
+  if (!proKey) return null
+
   const templates = await loadAllTemplates()
   const pro = templates.find(t => t.message_key === proKey)
-  if (!pro || !pro.is_enabled || !pro.message_body) return key
+  if (!pro || !pro.is_enabled || !pro.message_body) return null
   return proKey
 }
 
@@ -106,6 +129,7 @@ export async function getMessageTemplate(
 ): Promise<string | null> {
   void _fallback // explicitly ignored — no hardcoded fallbacks
   const effectiveKey = await resolveKeyForContext(key, context)
+  if (effectiveKey === null) return null // TEST002 with no Pro equivalent → skip send
   const templates = await loadAllTemplates()
   const tpl = templates.find(t => t.message_key === effectiveKey)
 
@@ -120,10 +144,10 @@ export async function getMessageTemplate(
     body = body.replace(new RegExp(`\\{${k}\\}`, 'g'), v ?? '')
   }
 
-  // Add header/footer if configured — pulled from DB, no hardcoded defaults
+  // Add header/footer if configured — pulled from Messaggi di Sistema Pro
   if (tpl.include_header !== false) {
-    const headerTpl = templates.find(t => t.message_key === 'message_wrapper_header' && t.is_enabled !== false)
-    const footerTpl = templates.find(t => t.message_key === 'message_wrapper_footer' && t.is_enabled !== false)
+    const headerTpl = templates.find(t => t.message_key === 'pro_wrapper_header' && t.is_enabled !== false)
+    const footerTpl = templates.find(t => t.message_key === 'pro_wrapper_footer' && t.is_enabled !== false)
     if (headerTpl?.message_body) body = headerTpl.message_body + '\n\n' + body
     if (footerTpl?.message_body) body = body + '\n\n' + footerTpl.message_body
   }

@@ -41,19 +41,34 @@ const handler: Handler = async (event) => {
   if (templateKey && !customMessage) {
     try {
       const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
-      const { data: tpl } = await sb
-        .from('system_messages')
-        .select('message_body, include_header, is_enabled')
-        .eq('message_key', templateKey)
-        .maybeSingle();
 
-      // If template explicitly disabled → don't send
-      if (tpl && tpl.is_enabled === false) {
-        console.log(`[send-whatsapp] Template "${templateKey}" is disabled — skipping send`);
+      // Route legacy key → Pro key (Messaggi di Sistema Pro is the only source)
+      const resolvedKey = await resolveKeyForContext(templateKey);
+      if (resolvedKey === null) {
+        console.log(`[send-whatsapp] No Pro template mapped for "${templateKey}" — skipping send`);
         return {
           statusCode: 200,
           body: JSON.stringify({
-            message: `Template "${templateKey}" is disabled — notification skipped`,
+            message: `No Pro template mapped for "${templateKey}" — skipped`,
+            success: true,
+            skipped: true,
+            reason: 'pro_template_unavailable',
+          }),
+        };
+      }
+
+      const { data: tpl } = await sb
+        .from('system_messages')
+        .select('message_body, include_header, is_enabled')
+        .eq('message_key', resolvedKey)
+        .maybeSingle();
+
+      if (tpl && tpl.is_enabled === false) {
+        console.log(`[send-whatsapp] Template "${resolvedKey}" is disabled — skipping send`);
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: `Template "${resolvedKey}" is disabled — notification skipped`,
             success: true,
             skipped: true,
             reason: 'template_disabled'
@@ -68,10 +83,15 @@ const handler: Handler = async (event) => {
             rendered = rendered.split(key).join(String(val));
           }
         }
+        // Pull header/footer from Messaggi di Sistema Pro — no hardcoded fallback.
         if (tpl.include_header && !skipHeader) {
-          const HEADER = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n`;
-          const FOOTER = `\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`;
-          rendered = HEADER + rendered + FOOTER;
+          const { data: wrapRows } = await sb
+            .from('system_messages')
+            .select('message_key, message_body, is_enabled')
+            .in('message_key', ['pro_wrapper_header', 'pro_wrapper_footer']);
+          const hdr = wrapRows?.find((w: any) => w.message_key === 'pro_wrapper_header' && w.is_enabled !== false)?.message_body || '';
+          const ftr = wrapRows?.find((w: any) => w.message_key === 'pro_wrapper_footer' && w.is_enabled !== false)?.message_body || '';
+          rendered = [hdr, rendered, ftr].filter(Boolean).join('\n\n');
         }
         message = rendered;
       }
@@ -372,10 +392,23 @@ const handler: Handler = async (event) => {
 
   if (messageKey) {
     try {
-      // Pro-template A/B gate: if booking is on the test vehicle (plate TEST002)
-      // AND a pro_* mapping exists + is enabled, swap to the Pro key.
-      const plateForGate = booking?.vehicle_plate || booking?.booking_details?.vehicle?.plate
-      messageKey = await resolveKeyForContext(messageKey, { vehiclePlate: plateForGate });
+      // Route every legacy key to its Pro equivalent. If the Pro template is
+      // missing/disabled/empty, the resolver returns null → we skip the send
+      // entirely rather than fall back to any hardcoded text.
+      const resolved = await resolveKeyForContext(messageKey);
+      if (resolved === null) {
+        console.log(`[send-whatsapp] no Pro template mapped for "${messageKey}" — skipping send`);
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: `No Pro template mapped for "${messageKey}" — skipped`,
+            success: true,
+            skipped: true,
+            reason: 'pro_template_unavailable',
+          }),
+        };
+      }
+      messageKey = resolved;
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
       let { data: tpl } = await supabase
@@ -490,24 +523,24 @@ const handler: Handler = async (event) => {
     }
   }
 
-  // Add wrapper from DB (or fallback)
+  // Wrap with Messaggi di Sistema Pro header/footer if enabled.
+  // NO HARDCODED FALLBACK: if the pro_wrapper_* rows are missing or disabled,
+  // the message goes out without a wrapper.
   let wrappedMessage = finalMessage;
   if (useHeader) {
     try {
       const supabaseWrap = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
       const { data: wrappers } = await supabaseWrap
         .from('system_messages')
-        .select('message_key, message_body')
-        .in('message_key', ['message_wrapper_header', 'message_wrapper_footer']);
-      const headerTpl = wrappers?.find((w: any) => w.message_key === 'message_wrapper_header');
-      const footerTpl = wrappers?.find((w: any) => w.message_key === 'message_wrapper_footer');
-      const header = headerTpl?.message_body || '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_';
-      const footer = footerTpl?.message_body || '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
-      wrappedMessage = header + '\n\n' + finalMessage + '\n\n' + footer;
+        .select('message_key, message_body, is_enabled')
+        .in('message_key', ['pro_wrapper_header', 'pro_wrapper_footer']);
+      const headerTpl = wrappers?.find((w: any) => w.message_key === 'pro_wrapper_header' && w.is_enabled !== false);
+      const footerTpl = wrappers?.find((w: any) => w.message_key === 'pro_wrapper_footer' && w.is_enabled !== false);
+      const header = headerTpl?.message_body || '';
+      const footer = footerTpl?.message_body || '';
+      wrappedMessage = [header, finalMessage, footer].filter(Boolean).join('\n\n');
     } catch {
-      const defaultHeader = '*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_';
-      const defaultFooter = '_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._';
-      wrappedMessage = defaultHeader + '\n\n' + finalMessage + '\n\n' + defaultFooter;
+      wrappedMessage = finalMessage;
     }
   }
 
@@ -522,7 +555,7 @@ const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         chatId: `${targetPhone}@c.us`,
-        message: finalMessage,
+        message: wrappedMessage,
       }),
     });
 
