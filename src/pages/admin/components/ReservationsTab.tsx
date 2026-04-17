@@ -4395,15 +4395,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '{total}': ((insertedBooking?.price_total || eurToCents(formData.total_amount)) / 100).toFixed(2),
             '{payment_method}': formData.payment_method || '',
             '{payment_status}': isPending ? 'Da saldare' : 'Pagato',
+            '{notes}': formData.notes || '',
           }
 
           // Pick the right template:
+          // - Edit existing booking → rental_modified (confirmation of the change, NOT a new one)
           // - Conferma Prenotazione checkbox ON → rental_new_customer (full confirmation, no expiry)
           // - Pending + Nexi Pay by Link → payment_link_customer (already sent by nexi-pay-by-link flow)
           // - Pending + NOT Nexi (no conferma) → rental_da_saldare_customer (pay within 1h)
-          // - Paid or edit → rental_new_customer (normal confirmation)
+          // - Paid (fresh booking) → rental_new_customer (normal confirmation)
           let templateKey: string
-          if (confirmBooking) {
+          if (editingId) {
+            // Edit flow: send the "modifica" template, never the full new-booking confirmation
+            templateKey = 'rental_modified'
+          } else if (confirmBooking) {
             // Manually confirmed booking — always send full confirmation, regardless of payment status
             templateKey = 'rental_new_customer'
           } else if (isPending && !isNexi) {
