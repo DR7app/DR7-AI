@@ -611,7 +611,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       if (p.unlimited_km_total > 0) pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
       if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
 
-      const specs = [p.vehicle_name, p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '', p.vehicle_cv ? `${p.vehicle_cv}cv` : ''].filter(Boolean).join(' ')
+      const specs = [p.vehicle_name, p.vehicle_model_year ? `${p.vehicle_model_year}` : '', p.vehicle_cv ? `${p.vehicle_cv}cv` : ''].filter(Boolean).join(' ')
       const vars: Record<string, string> = {
         vehicle_specs: specs,
         vehicle_name: p.vehicle_name || '',

@@ -809,7 +809,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   function buildDefaultPreventivoMessage(p: Preventivo): string {
     const specs = [
       p.vehicle_name,
-      p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
+      p.vehicle_model_year ? `${p.vehicle_model_year}` : '',
       p.vehicle_cv ? `${p.vehicle_cv}cv` : '',
       p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
     ].filter(Boolean).join(' ')
@@ -876,7 +876,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         // Build variables for substitution
         const specs = [
           p.vehicle_name,
-          p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
+          p.vehicle_model_year ? `${p.vehicle_model_year}` : '',
           p.vehicle_cv ? `${p.vehicle_cv}cv` : '',
           p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
         ].filter(Boolean).join(' ')
