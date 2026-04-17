@@ -1,6 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
-import { getMessageTemplate } from './utils/messageTemplates';
+import { getMessageTemplate, resolveKeyForContext } from './utils/messageTemplates';
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -372,6 +372,11 @@ const handler: Handler = async (event) => {
 
   if (messageKey) {
     try {
+      // Pro-template A/B gate: if booking is on the test vehicle (plate TEST002)
+      // AND a pro_* mapping exists + is enabled, swap to the Pro key.
+      const plateForGate = booking?.vehicle_plate || booking?.booking_details?.vehicle?.plate
+      messageKey = await resolveKeyForContext(messageKey, { vehiclePlate: plateForGate });
+
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
       let { data: tpl } = await supabase
         .from('system_messages')

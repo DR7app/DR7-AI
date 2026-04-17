@@ -506,7 +506,9 @@ export const handler: Handler = async (event) => {
                             payment_method: fullBooking.payment_method || '',
                         }
 
-                        const confBody = await renderTemplate('rental_new_customer', vars)
+                        const confBody = await renderTemplate('rental_new_customer', vars, undefined, {
+                            vehiclePlate: fullBooking?.vehicle_plate || fullBooking?.booking_details?.vehicle?.plate,
+                        })
                         if (confBody) {
                             let cleanConfPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
                             if (cleanConfPhone.startsWith('00')) cleanConfPhone = cleanConfPhone.substring(2)
