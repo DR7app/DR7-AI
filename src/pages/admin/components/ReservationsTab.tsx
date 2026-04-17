@@ -4483,9 +4483,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         && editingOriginalPaymentStatus !== 'completed'
         && editingOriginalPaymentStatus !== 'succeeded'
 
-      // Auto-generate fattura and send to SDI when payment status is "paid"
-      // SKIP fattura for Credit Wallet payments — wallet credits are not invoiceable
-      if (formData.payment_status === 'paid' && insertedBooking?.id && formData.payment_method !== 'Credit Wallet') {
+      // Auto-generate fattura and send to SDI when payment status is "paid".
+      // SKIP fattura for Credit Wallet payments — wallet credits are not invoiceable.
+      // SKIP on edit if payment was ALREADY paid before (fattura already exists).
+      // Only fire for a fresh booking, OR for an edit where payment JUST transitioned to paid.
+      const shouldGenerateFattura = formData.payment_status === 'paid'
+        && insertedBooking?.id
+        && formData.payment_method !== 'Credit Wallet'
+        && (!editingId || justMarkedPaid)
+      if (shouldGenerateFattura) {
         // Always try to generate fattura — backend has fallbacks for missing data
         try {
           logger.log('[Auto-Gen] Generating fattura for paid booking:', insertedBooking.id, 'payment:', formData.payment_method)
