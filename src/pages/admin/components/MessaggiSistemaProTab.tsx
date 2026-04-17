@@ -618,7 +618,7 @@ export default function MessaggiSistemaProTab() {
                 <div className="flex justify-between items-center">
                     <div>
                         <h3 className="text-lg font-bold text-theme-text-primary">Messaggi di Sistema Pro</h3>
-                        <p className="text-theme-text-muted text-sm">Template dei messaggi WhatsApp organizzati per tipologia</p>
+                        <p className="text-theme-text-primary text-sm">Template dei messaggi WhatsApp organizzati per tipologia</p>
                     </div>
                     <div className="flex gap-2">
                         <button
@@ -748,7 +748,7 @@ export default function MessaggiSistemaProTab() {
 
                         return (
                             <div key={cat.label}>
-                                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2 px-1">
+                                <h4 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-2 px-1">
                                     {cat.label} ({catTemplates.length})
                                 </h4>
                                 <div className="space-y-2">
@@ -816,7 +816,7 @@ export default function MessaggiSistemaProTab() {
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <p className="text-xs text-theme-text-muted mt-1 ml-[52px]">{template.description}</p>
+                                                <p className="text-xs text-theme-text-primary mt-1 ml-[52px]">{template.description}</p>
                                             </summary>
 
                                             <div className="p-4 border-t border-theme-border space-y-3">
@@ -917,7 +917,7 @@ export default function MessaggiSistemaProTab() {
                         if (custom.length === 0) return null
                         return (
                             <div>
-                                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2 px-1">Personalizzati ({custom.length})</h4>
+                                <h4 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-2 px-1">Personalizzati ({custom.length})</h4>
                                 <div className="space-y-2">
                                     {custom.map((template) => (
                                         <details key={`custom-${template.id}`} className={`border rounded-lg overflow-hidden ${template.is_enabled === false ? 'border-red-500/30 opacity-60' : 'border-theme-border'}`}>
