@@ -142,6 +142,13 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
 
 const ALL_PRO_TEMPLATES: ProTemplateDef[] = PRO_MESSAGE_CATEGORIES.flatMap(c => c.templates)
 
+// Sequential numbering for every non-wrapper template (#1 ... #N)
+const TEMPLATE_NUMBER_BY_KEY: Record<string, number> = {}
+PRO_MESSAGE_CATEGORIES
+    .filter(c => c.label !== 'Wrapper Messaggio')
+    .flatMap(c => c.templates)
+    .forEach((t, i) => { TEMPLATE_NUMBER_BY_KEY[t.key] = i + 1 })
+
 
 export default function MessaggiSistemaProTab() {
     // Template state
@@ -821,6 +828,11 @@ export default function MessaggiSistemaProTab() {
                                                     >
                                                         <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${template.is_enabled !== false ? 'left-5' : 'left-0.5'}`} />
                                                     </button>
+                                                    {TEMPLATE_NUMBER_BY_KEY[template.message_key] && (
+                                                        <span className="shrink-0 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-dr7-gold/20 text-dr7-gold text-[11px] font-bold">
+                                                            {TEMPLATE_NUMBER_BY_KEY[template.message_key]}
+                                                        </span>
+                                                    )}
                                                     <span className="font-semibold text-theme-text-primary text-sm min-w-0">{template.label}</span>
                                                     <div className="flex items-center gap-1.5 ml-auto shrink-0">
                                                         <button
