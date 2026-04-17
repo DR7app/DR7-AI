@@ -155,7 +155,6 @@ export default function MessaggiSistemaProTab() {
     const [editLabel, setEditLabel] = useState('')
     const [saving, setSaving] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
-    const [purging, setPurging] = useState(false)
 
     // New template form
     const [showNewForm, setShowNewForm] = useState(false)
@@ -352,46 +351,6 @@ export default function MessaggiSistemaProTab() {
             toast.error('Errore salvataggio: ' + _errMsg)
         } finally {
             setSaving(false)
-        }
-    }
-
-    async function handlePurgeInactive() {
-        // Never touch wrappers, regardless of toggle state
-        const inactive = templates.filter(t =>
-            t.is_enabled === false && !WRAPPER_KEYS.has(t.message_key)
-        )
-        if (inactive.length === 0) {
-            toast.success('Nessun messaggio non attivo da eliminare')
-            return
-        }
-        if (!confirm(`Eliminare definitivamente ${inactive.length} messaggi non attivi?\n\nI messaggi attivi (toggle verde) e i wrapper Header/Footer non saranno toccati. Le righe saranno rimosse dal database.`)) return
-
-        setPurging(true)
-        try {
-            const ids = inactive.map(t => t.id)
-            const { error } = await supabase
-                .from('system_messages')
-                .delete()
-                .in('id', ids)
-            if (error) throw error
-
-            // Verify no inactive rows remain
-            const { data: stillThere } = await supabase
-                .from('system_messages')
-                .select('id')
-                .in('id', ids)
-            if (stillThere && stillThere.length > 0) {
-                throw new Error(`${stillThere.length} righe non rimosse dal database`)
-            }
-
-            setTemplates(prev => prev.filter(t => !ids.includes(t.id)))
-            toast.success(`Eliminati ${inactive.length} messaggi non attivi`)
-        } catch (err: unknown) {
-            const _errMsg = err instanceof Error ? err.message : String(err)
-            console.error('Error deleting inactive templates:', err)
-            toast.error('Errore eliminazione: ' + _errMsg)
-        } finally {
-            setPurging(false)
         }
     }
 
@@ -759,14 +718,6 @@ export default function MessaggiSistemaProTab() {
                         <p className="text-theme-text-primary text-sm">Template dei messaggi WhatsApp organizzati per tipologia</p>
                     </div>
                     <div className="flex gap-2">
-                        <button
-                            onClick={handlePurgeInactive}
-                            disabled={purging}
-                            className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-red-600/80 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Elimina definitivamente i messaggi con toggle spento"
-                        >
-                            {purging ? 'Eliminazione...' : 'Elimina non attivi'}
-                        </button>
                         <button
                             onClick={() => setShowNewForm(!showNewForm)}
                             className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f]"
