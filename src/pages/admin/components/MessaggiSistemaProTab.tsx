@@ -142,6 +142,9 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
 
 const ALL_PRO_TEMPLATES: ProTemplateDef[] = PRO_MESSAGE_CATEGORIES.flatMap(c => c.templates)
 
+// Wrappers are never numbered and never bulk-deleted by "Elimina non attivi"
+const WRAPPER_KEYS = new Set(['pro_wrapper_header', 'pro_wrapper_footer'])
+
 
 export default function MessaggiSistemaProTab() {
     // Template state
@@ -353,12 +356,15 @@ export default function MessaggiSistemaProTab() {
     }
 
     async function handlePurgeInactive() {
-        const inactive = templates.filter(t => t.is_enabled === false)
+        // Never touch wrappers, regardless of toggle state
+        const inactive = templates.filter(t =>
+            t.is_enabled === false && !WRAPPER_KEYS.has(t.message_key)
+        )
         if (inactive.length === 0) {
             toast.success('Nessun messaggio non attivo da eliminare')
             return
         }
-        if (!confirm(`Eliminare definitivamente ${inactive.length} messaggi non attivi?\n\nI messaggi attivi (toggle verde) non saranno toccati. Le righe saranno rimosse dal database.`)) return
+        if (!confirm(`Eliminare definitivamente ${inactive.length} messaggi non attivi?\n\nI messaggi attivi (toggle verde) e i wrapper Header/Footer non saranno toccati. Le righe saranno rimosse dal database.`)) return
 
         setPurging(true)
         try {
@@ -728,7 +734,6 @@ export default function MessaggiSistemaProTab() {
 
     // Dynamic numbering: 1..N for every non-wrapper template currently in DB, in sorted order.
     // Wrappers (pro_wrapper_header, pro_wrapper_footer) never get a number.
-    const WRAPPER_KEYS = new Set(['pro_wrapper_header', 'pro_wrapper_footer'])
     const templateNumberById: Record<string, number> = {}
     sortedTemplates
         .filter(t => !WRAPPER_KEYS.has(t.message_key))
