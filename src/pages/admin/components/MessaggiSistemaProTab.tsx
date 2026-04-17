@@ -208,9 +208,11 @@ export default function MessaggiSistemaProTab() {
             if (error) throw error
             let rows = data || []
 
-            // Auto-seed missing pro_* rows so every template appears instantly with empty body
-            const existingKeys = new Set(rows.map(r => r.message_key))
-            const missing = ALL_PRO_TEMPLATES.filter(t => !existingKeys.has(t.key))
+            // Auto-seed all pro_* rows ONLY on first-ever visit (zero rows exist).
+            // After that, respect user deletions — a deleted template must stay deleted.
+            const missing = rows.length === 0
+                ? ALL_PRO_TEMPLATES
+                : []
             if (missing.length > 0) {
                 const toInsert = missing.map(t => ({
                     message_key: t.key,
@@ -288,17 +290,50 @@ export default function MessaggiSistemaProTab() {
     async function handleSaveEdit(id: string) {
         setSaving(true)
         try {
-            const response = await authFetch('/.netlify/functions/update-system-message', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, message_body: editBody })
-            })
-            const result = await response.json()
-            if (!response.ok) throw new Error(result.error || 'Errore salvataggio')
+            // Try the Netlify function first (service-role, bypasses RLS).
+            // Fall back to direct supabase.update() if the function errors.
+            const updatedAt = new Date().toISOString()
+            let saved = false
+            try {
+                const response = await authFetch('/.netlify/functions/update-system-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, message_body: editBody })
+                })
+                if (response.ok) {
+                    saved = true
+                } else {
+                    const result = await response.json().catch(() => ({}))
+                    console.warn('[Pro] update-system-message fn failed, falling back:', result)
+                }
+            } catch (fnErr) {
+                console.warn('[Pro] update-system-message fn threw, falling back:', fnErr)
+            }
 
-            setTemplates(prev => prev.map(t => t.id === id ? { ...t, message_body: editBody, updated_at: new Date().toISOString() } : t))
+            if (!saved) {
+                const { data, error } = await supabase
+                    .from('system_messages')
+                    .update({ message_body: editBody, updated_at: updatedAt })
+                    .eq('id', id)
+                    .select()
+                    .single()
+                if (error) throw error
+                if (!data) throw new Error('Nessuna riga aggiornata')
+            }
+
+            // Re-fetch to be certain DB state matches UI
+            const { data: fresh } = await supabase
+                .from('system_messages')
+                .select('*')
+                .eq('id', id)
+                .single()
+            if (fresh) {
+                setTemplates(prev => prev.map(t => t.id === id ? fresh : t))
+            } else {
+                setTemplates(prev => prev.map(t => t.id === id ? { ...t, message_body: editBody, updated_at: updatedAt } : t))
+            }
             setEditingId(null)
-            toast.success('Messaggio aggiornato')
+            toast.success('Messaggio salvato')
         } catch (err: unknown) {
             const _errMsg = err instanceof Error ? err.message : String(err)
             console.error('Error saving template:', err)
@@ -408,18 +443,42 @@ export default function MessaggiSistemaProTab() {
     }
 
     async function handleDeleteTemplate(template: SystemMessage) {
-        if (!confirm(`Eliminare definitivamente il messaggio "${template.label}"?\n\nQuesta operazione non è reversibile. Il sistema userà il testo di fallback predefinito (se esiste).`)) return
+        if (!confirm(`Eliminare definitivamente il messaggio "${template.label}"?\n\nQuesta operazione non è reversibile.`)) return
 
         try {
-            const res = await authFetch('/.netlify/functions/delete-system-message', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: template.id }),
-            })
-            const json = await res.json().catch(() => ({}))
-            if (!res.ok || json?.error) {
-                throw new Error(json?.error || `HTTP ${res.status}`)
+            let deleted = false
+            try {
+                const res = await authFetch('/.netlify/functions/delete-system-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: template.id }),
+                })
+                const json = await res.json().catch(() => ({}))
+                if (res.ok && !json?.error) {
+                    deleted = true
+                } else {
+                    console.warn('[Pro] delete-system-message fn failed, falling back:', json)
+                }
+            } catch (fnErr) {
+                console.warn('[Pro] delete-system-message fn threw, falling back:', fnErr)
             }
+
+            if (!deleted) {
+                const { error } = await supabase
+                    .from('system_messages')
+                    .delete()
+                    .eq('id', template.id)
+                if (error) throw error
+            }
+
+            // Verify the row is really gone before updating UI
+            const { data: stillThere } = await supabase
+                .from('system_messages')
+                .select('id')
+                .eq('id', template.id)
+                .maybeSingle()
+            if (stillThere) throw new Error('Il messaggio non è stato rimosso dal database')
+
             setTemplates(prev => prev.filter(t => t.id !== template.id))
             toast.success('Messaggio eliminato')
         } catch (err: unknown) {
