@@ -142,13 +142,6 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
 
 const ALL_PRO_TEMPLATES: ProTemplateDef[] = PRO_MESSAGE_CATEGORIES.flatMap(c => c.templates)
 
-// Sequential numbering for every non-wrapper template (#1 ... #N)
-const TEMPLATE_NUMBER_BY_KEY: Record<string, number> = {}
-PRO_MESSAGE_CATEGORIES
-    .filter(c => c.label !== 'Wrapper Messaggio')
-    .flatMap(c => c.templates)
-    .forEach((t, i) => { TEMPLATE_NUMBER_BY_KEY[t.key] = i + 1 })
-
 
 export default function MessaggiSistemaProTab() {
     // Template state
@@ -362,31 +355,35 @@ export default function MessaggiSistemaProTab() {
     async function handlePurgeInactive() {
         const inactive = templates.filter(t => t.is_enabled === false)
         if (inactive.length === 0) {
-            toast.success('Nessun messaggio non attivo da svuotare')
+            toast.success('Nessun messaggio non attivo da eliminare')
             return
         }
-        if (!confirm(`Svuotare titolo e corpo di ${inactive.length} messaggi non attivi?\n\nI messaggi attivi (toggle verde) non saranno toccati. Le righe restano ma diventano vuote.`)) return
+        if (!confirm(`Eliminare definitivamente ${inactive.length} messaggi non attivi?\n\nI messaggi attivi (toggle verde) non saranno toccati. Le righe saranno rimosse dal database.`)) return
 
         setPurging(true)
         try {
             const ids = inactive.map(t => t.id)
-            const updatedAt = new Date().toISOString()
             const { error } = await supabase
                 .from('system_messages')
-                .update({ label: '', message_body: '', description: '', updated_at: updatedAt })
+                .delete()
                 .in('id', ids)
             if (error) throw error
 
-            setTemplates(prev => prev.map(t =>
-                ids.includes(t.id)
-                    ? { ...t, label: '', message_body: '', description: '', updated_at: updatedAt }
-                    : t
-            ))
-            toast.success(`Svuotati ${inactive.length} messaggi non attivi`)
+            // Verify no inactive rows remain
+            const { data: stillThere } = await supabase
+                .from('system_messages')
+                .select('id')
+                .in('id', ids)
+            if (stillThere && stillThere.length > 0) {
+                throw new Error(`${stillThere.length} righe non rimosse dal database`)
+            }
+
+            setTemplates(prev => prev.filter(t => !ids.includes(t.id)))
+            toast.success(`Eliminati ${inactive.length} messaggi non attivi`)
         } catch (err: unknown) {
             const _errMsg = err instanceof Error ? err.message : String(err)
-            console.error('Error purging inactive templates:', err)
-            toast.error('Errore svuotamento: ' + _errMsg)
+            console.error('Error deleting inactive templates:', err)
+            toast.error('Errore eliminazione: ' + _errMsg)
         } finally {
             setPurging(false)
         }
@@ -729,6 +726,14 @@ export default function MessaggiSistemaProTab() {
         return (a.label || '').localeCompare(b.label || '')
     })
 
+    // Dynamic numbering: 1..N for every non-wrapper template currently in DB, in sorted order.
+    // Wrappers (pro_wrapper_header, pro_wrapper_footer) never get a number.
+    const WRAPPER_KEYS = new Set(['pro_wrapper_header', 'pro_wrapper_footer'])
+    const templateNumberById: Record<string, number> = {}
+    sortedTemplates
+        .filter(t => !WRAPPER_KEYS.has(t.message_key))
+        .forEach((t, i) => { templateNumberById[t.id] = i + 1 })
+
     const q = searchQuery.trim().toLowerCase()
     const filteredTemplates = q
         ? sortedTemplates.filter(t =>
@@ -753,9 +758,9 @@ export default function MessaggiSistemaProTab() {
                             onClick={handlePurgeInactive}
                             disabled={purging}
                             className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-red-600/80 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Svuota titolo e corpo dei messaggi con toggle spento"
+                            title="Elimina definitivamente i messaggi con toggle spento"
                         >
-                            {purging ? 'Svuotamento...' : 'Svuota non attivi'}
+                            {purging ? 'Eliminazione...' : 'Elimina non attivi'}
                         </button>
                         <button
                             onClick={() => setShowNewForm(!showNewForm)}
@@ -917,9 +922,9 @@ export default function MessaggiSistemaProTab() {
                                                     >
                                                         <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${template.is_enabled !== false ? 'left-5' : 'left-0.5'}`} />
                                                     </button>
-                                                    {TEMPLATE_NUMBER_BY_KEY[template.message_key] && (
+                                                    {templateNumberById[template.id] && (
                                                         <span className="shrink-0 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-dr7-gold/20 text-dr7-gold text-[11px] font-bold">
-                                                            {TEMPLATE_NUMBER_BY_KEY[template.message_key]}
+                                                            {templateNumberById[template.id]}
                                                         </span>
                                                     )}
                                                     <span className="font-semibold text-theme-text-primary text-sm min-w-0">{template.label}</span>
