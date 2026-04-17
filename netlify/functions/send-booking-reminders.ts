@@ -173,22 +173,25 @@ export const reminderHandler: Handler = async () => {
   const isMorningRun = currentRomeHour >= 8 && currentRomeHour <= 12;
   console.log(`Current Rome hour: ${currentRomeHour} — Morning run: ${isMorningRun}`);
 
-  // Load message templates from system_messages table
+  // Load message templates from system_messages table (only enabled ones)
   const messageTemplates: Record<string, string> = {};
   try {
     const { data: templates } = await supabase
       .from('system_messages')
-      .select('message_key, message_body');
+      .select('message_key, message_body, is_enabled');
 
     if (templates) {
-      templates.forEach((t: any) => { messageTemplates[t.message_key] = t.message_body; });
-      console.log(`Loaded ${templates.length} message template(s) from database`);
+      templates.forEach((t: any) => {
+        if (t.is_enabled !== false) messageTemplates[t.message_key] = t.message_body;
+      });
+      console.log(`Loaded ${Object.keys(messageTemplates).length} enabled message template(s) from database`);
     }
   } catch (err: any) {
     console.warn('Could not load system_messages, using defaults:', err.message);
   }
 
-  const getTemplate = (key: string, fallback: string) => messageTemplates[key] || fallback;
+  // Returns null when template is disabled (no DB entry AND no fallback desired)
+  const getTemplate = (key: string, fallback: string | null) => messageTemplates[key] || fallback;
 
   // Load vehicles to determine category (exotic vs urban)
   const { data: allVehicles } = await supabase
@@ -215,16 +218,11 @@ export const reminderHandler: Handler = async () => {
     return 'urban';
   }
 
-  function buildExtensionMessage(category: string, firstName: string): string {
-    if (category === 'exotic') {
-      const template = getTemplate('supercar_day_before',
-        `Salve,\n\nla contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nRestiamo in attesa di un suo cortese riscontro.\nGrazie.\n\nCordiali saluti,\nDR7`);
-      return template.replace(/\{nome\}/g, firstName);
-    } else {
-      const template = getTemplate('utilitaria_day_before',
-        `Salve {nome},\n\nLa contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nCordiali saluti,\nDR7`);
-      return template.replace(/\{nome\}/g, firstName);
-    }
+  function buildExtensionMessage(category: string, firstName: string): string | null {
+    const key = category === 'exotic' ? 'supercar_day_before' : 'utilitaria_day_before';
+    const template = getTemplate(key, null);
+    if (!template) return null;
+    return template.replace(/\{nome\}/g, firstName);
   }
 
   // ──────────────────────────────────────────────
@@ -271,6 +269,8 @@ export const reminderHandler: Handler = async () => {
           const firstName = booking.booking_details?.customer?.firstName || booking.customer_name?.split(' ')[0] || 'Cliente';
           const category = getVehicleCategory(booking);
           const message = buildExtensionMessage(category, firstName);
+
+          if (!message) { console.log(`[Extension >24h] Skipping ${booking.id} — template disabled`); continue; }
 
           const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
 
@@ -369,6 +369,8 @@ export const reminderHandler: Handler = async () => {
           const category = getVehicleCategory(booking);
           const message = buildExtensionMessage(category, firstName);
 
+          if (!message) { console.log(`[Extension ≤24h] Skipping ${booking.id} — template disabled`); continue; }
+
           const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
 
           if (success) {
@@ -463,8 +465,8 @@ export const reminderHandler: Handler = async () => {
           if (await isBlacklisted(booking, supabase)) { console.log(`[IBAN Deposit] Skipping ${booking.id} — blacklisted`); continue; }
 
           const firstName = booking.booking_details?.customer?.firstName || booking.customer_name?.split(' ')[0] || 'Cliente';
-          const template = getTemplate('deposit_return_iban',
-            `Salve {nome},\n\nLa ringraziamo per aver scelto i nostri servizi.\n\nAl fine di procedere con la restituzione della cauzione, Le chiediamo cortesemente di comunicarci il Suo IBAN completo e il nominativo dell'intestatario del conto.\n\nIl rimborso verrà effettuato tramite bonifico ordinario entro il quattordicesimo giorno lavorativo, come da condizioni contrattuali.\n\nCordiali saluti,\nDR7`);
+          const template = getTemplate('deposit_return_iban', null);
+          if (!template) { console.log(`[IBAN Deposit] Skipping ${booking.id} — template disabled`); continue; }
           const message = template.replace(/\{nome\}/g, firstName);
 
           const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);

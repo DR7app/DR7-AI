@@ -73,12 +73,14 @@ export const handler: Handler = async () => {
   let sent = 0;
   let failed = 0;
 
-  // Load message templates
+  // Load message templates (only enabled ones)
   const messageTemplates: Record<string, string> = {};
-  const { data: templates } = await supabase.from('system_messages').select('message_key, message_body');
-  if (templates) templates.forEach((t: any) => { messageTemplates[t.message_key] = t.message_body; });
+  const { data: templates } = await supabase.from('system_messages').select('message_key, message_body, is_enabled');
+  if (templates) templates.forEach((t: any) => {
+    if (t.is_enabled !== false) messageTemplates[t.message_key] = t.message_body;
+  });
 
-  const getTemplate = (key: string, fallback: string) => messageTemplates[key] || fallback;
+  const getTemplate = (key: string, fallback: string | null) => messageTemplates[key] || fallback;
 
   // Load vehicles
   const { data: allVehicles } = await supabase.from('vehicles').select('id, plate, category');
@@ -100,16 +102,11 @@ export const handler: Handler = async () => {
     return 'urban';
   }
 
-  function buildExtensionMessage(category: string, firstName: string): string {
-    if (category === 'exotic') {
-      const t = getTemplate('supercar_day_before',
-        `Salve,\n\nla contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nRestiamo in attesa di un suo cortese riscontro.\nGrazie.\n\nCordiali saluti,\nDR7`);
-      return t.replace(/\{nome\}/g, firstName);
-    } else {
-      const t = getTemplate('utilitaria_day_before',
-        `Salve {nome},\n\nLa contattiamo per informarla che, qualora avesse necessità di prolungare il noleggio, restiamo a disposizione per verificarne la disponibilità.\n\nIn caso di estensione, possiamo riservarle uno sconto dedicato sul periodo aggiuntivo.\n\nQualora lo desiderasse, le chiediamo gentilmente di indicarci per quanto tempo intende eventualmente prolungare, così da poter valutare la soluzione più conveniente.\n\nCordiali saluti,\nDR7`);
-      return t.replace(/\{nome\}/g, firstName);
-    }
+  function buildExtensionMessage(category: string, firstName: string): string | null {
+    const key = category === 'exotic' ? 'supercar_day_before' : 'utilitaria_day_before';
+    const t = getTemplate(key, null);
+    if (!t) return null;
+    return t.replace(/\{nome\}/g, firstName);
   }
 
   async function resolvePhone(booking: any): Promise<string | null> {
@@ -166,6 +163,8 @@ export const handler: Handler = async () => {
         const firstName = booking.booking_details?.customer?.firstName || booking.customer_name?.split(' ')[0] || 'Cliente';
         const category = getVehicleCategory(booking);
         const message = buildExtensionMessage(category, firstName);
+
+        if (!message) { console.log(`[Extension >24h] Skipping ${booking.id} — template disabled`); continue; }
 
         console.log(`[Extension >24h] Sending to ${booking.id} (${category}), phone: ${phone}`);
         const success = await sendWhatsApp(phone, message);
