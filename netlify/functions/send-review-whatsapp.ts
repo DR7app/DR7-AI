@@ -7,19 +7,9 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 
-const DEFAULT_REVIEW_MESSAGE = `Ciao {nome} 👋🏻
-
-Grazie per aver scelto DR7 Empire!
-
-La tua opinione è fondamentale per noi. Se ti fa piacere, lasciaci una recensione a 5 stelle raccontando la tua esperienza ⭐
-
-In segno di gratitudine, inviandoci uno screenshot della recensione riceverai un buono sconto da €100 sul tuo prossimo noleggio e uno da €10 sul tuo prossimo lavaggio 🎁
-
-Clicca qui per lasciare la recensione 👇🏻
-https://g.page/r/CQwgJt7OYpsfEBM/review
-
-Grazie mille!
-Dubai Rent 7.0 S.p.A.`;
+// NO hardcoded message body — Messaggi di Sistema Pro is the only source.
+// If the Pro template for review_request_whatsapp is missing/disabled, the
+// send is skipped per-customer (see below).
 
 const reviewHandler: Handler = async (event) => {
   console.log('[Review WhatsApp] Starting automatic review message sender...');
@@ -39,21 +29,6 @@ const reviewHandler: Handler = async (event) => {
   });
 
   try {
-    // Load custom message template from database (fallback to default)
-    let reviewMessage = DEFAULT_REVIEW_MESSAGE;
-    const { data: settingData } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'review_whatsapp_template')
-      .single();
-
-    if (settingData?.value) {
-      reviewMessage = settingData.value;
-      console.log('[Review WhatsApp] Using custom message template from database');
-    } else {
-      console.log('[Review WhatsApp] Using default message template');
-    }
-
     // Find bookings where dropoff_date is between 60 and 120 minutes ago
     const now = new Date();
     const sixtyMinAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -132,9 +107,12 @@ const reviewHandler: Handler = async (event) => {
         // Get first name (split on space, take first part)
         const firstName = (booking.customer_name || 'Cliente').split(' ')[0];
 
-        // Personalize message
-        const fallbackMsg = reviewMessage.replace(/\{nome\}/g, firstName);
-        const personalizedMessage = await renderTemplate('review_request_whatsapp', { nome: firstName }, fallbackMsg);
+        // Body from Messaggi di Sistema Pro — no hardcoded fallback.
+        const personalizedMessage = await renderTemplate('review_request_whatsapp', { nome: firstName });
+        if (!personalizedMessage) {
+          console.log(`[Review WhatsApp] Skipping ${booking.customer_name}: no Pro template for review_request_whatsapp`);
+          continue;
+        }
 
         // Clean phone number — strip all non-digit chars, normalize Italian prefix
         let cleanPhone = booking.customer_phone.replace(/[^\d]/g, '');

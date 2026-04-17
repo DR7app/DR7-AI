@@ -1,5 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
+import { resolveKeyForContext } from "./utils/messageTemplates";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -66,15 +67,23 @@ const handler: Handler = async (event) => {
   } catch (err) {
     console.error("[checkin-checkout] Failed to fetch cauzioni:", err);
   }
-  const { data: sysTemplates } = await supabase
-    .from('system_messages')
-    .select('message_key, message_body, is_enabled')
-    .in('message_key', ['checkin_reminder', 'checkout_reminder'])
-    .eq('is_enabled', true);
+  // Route old keys → Pro keys. If nothing maps, we'll skip those sends below.
+  const checkinResolved = await resolveKeyForContext('checkin_reminder');
+  const checkoutResolved = await resolveKeyForContext('checkout_reminder');
+  const keysToLoad = [checkinResolved, checkoutResolved].filter((k): k is string => !!k);
 
-  const templateMap = new Map(
-    (sysTemplates || []).map((t: any) => [t.message_key, t.message_body])
-  );
+  const templateMap = new Map<string, string>();
+  if (keysToLoad.length > 0) {
+    const { data: sysTemplates } = await supabase
+      .from('system_messages')
+      .select('message_key, message_body, is_enabled')
+      .in('message_key', keysToLoad)
+      .eq('is_enabled', true);
+    (sysTemplates || []).forEach((t: any) => {
+      if (checkinResolved && t.message_key === checkinResolved) templateMap.set('checkin_reminder', t.message_body);
+      if (checkoutResolved && t.message_key === checkoutResolved) templateMap.set('checkout_reminder', t.message_body);
+    });
+  }
 
   let successCount = 0;
   const errors: string[] = [];
@@ -167,38 +176,15 @@ const handler: Handler = async (event) => {
       return result;
     };
 
-    let message = "";
     const templateKey = type === "checkin" ? "checkin_reminder" : "checkout_reminder";
     const dbTemplate = templateMap.get(templateKey);
 
-    if (dbTemplate) {
-      message = applyVars(dbTemplate);
-    } else if (type === "checkin") {
-      message = `Ciao ${firstName}!\n\n`;
-      message += `Ti ricordiamo il ritiro del tuo veicolo previsto per *oggi*.\n\n`;
-      message += `*Veicolo:* ${vehicleName}\n`;
-      if (targa) message += `*Targa:* ${targa}\n`;
-      message += `*Orario Ritiro:* ${pickupTime}\n`;
-      message += `*Luogo:* ${pickupLocation}\n`;
-      if (cauzioneText) message += `*Cauzione:* ${cauzioneText}\n`;
-      message += `\nTi aspettiamo! Per qualsiasi necessita non esitare a contattarci.\n\n`;
-      message += `_DR7 Empire_`;
-    } else {
-      message = `Ciao ${firstName}!\n\n`;
-      message += `Ti ricordiamo la riconsegna del veicolo prevista per *oggi*.\n\n`;
-      message += `*Veicolo:* ${vehicleName}\n`;
-      if (targa) message += `*Targa:* ${targa}\n`;
-      message += `*Orario Riconsegna:* ${returnTime}\n`;
-      message += `*Luogo:* ${dropoffLocation}\n`;
-      if (cauzioneText) {
-        message += `*Cauzione:* ${cauzioneText}\n`;
-        if (cauzione && cauzione.stato !== "Restituita" && cauzione.stato !== "Sbloccata") {
-          message += `_La cauzione verra restituita entro 14 giorni lavorativi dalla riconsegna._\n`;
-        }
-      }
-      message += `\nTi preghiamo di riconsegnare il veicolo nelle stesse condizioni in cui lo hai ritirato.\n\n`;
-      message += `Grazie per aver scelto DR7 Empire!`;
+    // Pro is the only source — if no DB template, skip this booking's send (no hardcoded fallback)
+    if (!dbTemplate) {
+      errors.push(`${booking.id}: nessun template Pro per "${templateKey}"`);
+      continue;
     }
+    const message = applyVars(dbTemplate);
 
     try {
       const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;

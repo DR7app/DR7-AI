@@ -99,39 +99,41 @@ export const handler: Handler = async (event) => {
 
         if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
             try {
-                const cleanedPhone = cleanPhone(signerPhone)
-                const chatId = `${cleanedPhone}@c.us`
-                const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
-
-                const waResponse = await fetch(greenApiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chatId,
-                        message: await renderTemplate('document_signature_link', { signerName, docName, signingUrl }, `Gentile *${signerName}*,\n\ndi seguito trova il documento "${docName}" da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore.\n\nCordiali Saluti,\nDR7`)
-                    })
-                })
-
-                const waResult = await waResponse.json()
-                if (waResponse.ok && waResult.idMessage) {
-                    sentVia = 'whatsapp'
-                    console.log(`[document-sign-init] Signing link sent via WhatsApp to ${cleanedPhone}`)
-
-                    // Log to sent_messages_log
-                    try {
-                        const fullMessage = `Gentile *${signerName}*,\n\ndi seguito trova il documento "${docName}" da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore.\n\nCordiali Saluti,\nDR7`
-                        await supabase.from('sent_messages_log').insert({
-                            customer_name: signerName,
-                            customer_phone: signerPhone,
-                            message_text: fullMessage,
-                            template_label: 'Document Signing Link',
-                            status: 'sent',
-                        })
-                    } catch (logErr) {
-                        console.error('Failed to log message:', logErr)
-                    }
+                // Body comes EXCLUSIVELY from Messaggi di Sistema Pro.
+                // No hardcoded fallback — if no Pro template, we skip the send.
+                const resolvedMessage = await renderTemplate('document_signature_link', { signerName, docName, signingUrl })
+                if (!resolvedMessage) {
+                    console.warn('[document-sign-init] No Pro template for document_signature_link — skipping send')
                 } else {
-                    console.warn('[document-sign-init] WhatsApp failed:', waResult)
+                    const cleanedPhone = cleanPhone(signerPhone)
+                    const chatId = `${cleanedPhone}@c.us`
+                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+
+                    const waResponse = await fetch(greenApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chatId, message: resolvedMessage })
+                    })
+
+                    const waResult = await waResponse.json()
+                    if (waResponse.ok && waResult.idMessage) {
+                        sentVia = 'whatsapp'
+                        console.log(`[document-sign-init] Signing link sent via WhatsApp to ${cleanedPhone}`)
+
+                        try {
+                            await supabase.from('sent_messages_log').insert({
+                                customer_name: signerName,
+                                customer_phone: signerPhone,
+                                message_text: resolvedMessage,
+                                template_label: 'Document Signing Link',
+                                status: 'sent',
+                            })
+                        } catch (logErr) {
+                            console.error('Failed to log message:', logErr)
+                        }
+                    } else {
+                        console.warn('[document-sign-init] WhatsApp failed:', waResult)
+                    }
                 }
             } catch (waErr: any) {
                 console.warn('[document-sign-init] WhatsApp error:', waErr.message)

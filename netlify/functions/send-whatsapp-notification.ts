@@ -118,243 +118,19 @@ const handler: Handler = async (event) => {
   } else if (customMessage) {
     message = customMessage;
   }
-  // Handle booking notifications
-  else if (booking) {
-    const serviceType = booking.service_type;
-    const isCustomerMessage = !!customPhone;
-    const customerName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';
-    const customerEmail = booking.customer_email || booking.booking_details?.customer?.email;
-    const customerPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
-    const bookingId = booking.id.substring(0, 8).toUpperCase();
-    const totalPrice = (booking.price_total / 100).toFixed(2);
-
-    if (serviceType === 'car_wash') {
-      const appointmentDate = new Date(booking.appointment_date);
-      // Get service name from multiple possible sources
-      const serviceName = booking.service_name ||
-        booking.booking_details?.serviceName ||
-        booking.booking_details?.service_name ||
-        'Lavaggio';
-      const additionalService = booking.booking_details?.additionalService;
-      const notes = booking.booking_details?.notes;
-
-      const formattedDate = appointmentDate.toLocaleDateString('it-IT', {
-        weekday: 'long',
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-        timeZone: 'Europe/Rome'
-      });
-      const formattedTime = appointmentDate.toLocaleTimeString('it-IT', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        timeZone: 'Europe/Rome'
-      });
-
-      // Calculate payment info
-      const amountPaid = booking.booking_details?.amountPaid || 0;
-      const totalCents = booking.price_total || 0;
-      const amountPaidEuros = (amountPaid / 100).toFixed(2);
-      const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
-
-      let paymentInfo = '';
-      if (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') {
-        paymentInfo = `Pagato`;
-      } else if (amountPaid > 0) {
-        paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
-      } else {
-        paymentInfo = `Da saldare`;
-      }
-
-      const isEditCarWash = booking.isEdit;
-      const firstName = customerName.split(' ')[0];
-      const vehiclePlate = booking.vehicle_plate || booking.booking_details?.vehicle?.targa || booking.booking_details?.vehicle?.plate || '';
-
-      message = `Salve ${firstName},\n\n`;
-      message += `Confermiamo il suo appuntamento.\n\n`;
-      message += isEditCarWash ? `*MODIFICA PRENOTAZIONE AUTOLAVAGGIO*\n\n` : `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`;
-      message += `*ID:* DR7-${bookingId}\n`;
-      message += `*Servizio:* ${serviceName}\n`;
-      if (vehiclePlate) {
-        message += `*Targa:* ${vehiclePlate}\n`;
-      }
-      message += `*Data e Ora:* ${formattedDate} alle ${formattedTime}\n`;
-      if (additionalService) {
-        message += `*Servizio Aggiuntivo:* ${additionalService}\n`;
-      }
-      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      message += `*Totale:* €${totalPrice}\n`;
-      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}\n`;
-      if (notes) {
-        message += `*Note:* ${notes}\n`;
-      }
-      message += `\nCordiali Saluti,\nDR7`;
-    } else if (serviceType === 'mechanical') {
-      const appointmentDate = new Date(booking.appointment_date);
-      const serviceName = booking.service_name || 'Servizio Meccanica';
-      const vehicleInfo = booking.booking_details?.vehicle || {};
-      const notes = booking.booking_details?.notes;
-
-      const formattedDate = appointmentDate.toLocaleDateString('it-IT', {
-        weekday: 'long',
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-        timeZone: 'Europe/Rome'
-      });
-      const formattedTime = appointmentDate.toLocaleTimeString('it-IT', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        timeZone: 'Europe/Rome'
-      });
-
-      // Calculate payment info
-      const amountPaid = booking.booking_details?.amountPaid || 0;
-      const totalCents = booking.price_total || 0;
-      const amountPaidEuros = (amountPaid / 100).toFixed(2);
-      const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
-
-      let paymentInfo = '';
-      if (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') {
-        paymentInfo = `Pagato`;
-      } else if (amountPaid > 0) {
-        paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
-      } else {
-        paymentInfo = `Da saldare`;
-      }
-
-      const firstName = customerName.split(' ')[0];
-      const isEditMech = booking.isEdit;
-      message = `Salve ${firstName},\n\n`;
-      message += `Confermiamo il suo appuntamento.\n\n`;
-      message += isEditMech ? `*MODIFICA PRENOTAZIONE MECCANICA*\n\n` : `*NUOVA PRENOTAZIONE MECCANICA*\n\n`;
-      message += `*ID:* DR7-${bookingId}\n`;
-      message += `*Servizio:* ${serviceName}\n`;
-      message += `*Data e Ora:* ${formattedDate} alle ${formattedTime}\n`;
-      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      message += `*Totale:* €${totalPrice}\n`;
-      message += `*Pagamento:* ${paymentInfo}${paymentMethod ? ` (${paymentMethod})` : ''}\n`;
-      if (notes) {
-        message += `*Note:* ${notes}\n`;
-      }
-      message += `\nCordiali Saluti,\nDR7`;
-    } else {
-      // Car Rental Booking
-      const vehicleName = booking.vehicle_name;
-      const pickupDate = new Date(booking.pickup_date);
-      const dropoffDate = new Date(booking.dropoff_date);
-      const pickupLocation = booking.pickup_location;
-      // Map insurance option to display name - default to Kasko instead of Nessuna
-      const insuranceRaw = booking.insurance_option || booking.booking_details?.insuranceOption || 'KASKO_BASE';
-      const insuranceMap: Record<string, string> = {
-        'RCA': 'Kasko',
-        'KASKO_BASE': 'Kasko',
-        'KASKO': 'Kasko',
-        'KASKO_BLACK': 'Kasko Black',
-        'KASKO_SIGNATURE': 'Kasko Signature',
-        'DR7': 'Kasko DR7'
-      };
-      const insuranceOption = insuranceMap[insuranceRaw] || 'Kasko';
-
-      const pickupDateFormatted = pickupDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
-      const pickupTimeFormatted = pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
-      const dropoffDateFormatted = dropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
-      const dropoffTimeFormatted = dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
-
-      // Calculate payment info
-      const amountPaid = booking.booking_details?.amountPaid || 0;
-      const totalCents = booking.price_total || 0;
-      const amountPaidEuros = (amountPaid / 100).toFixed(2);
-      const amountRemainingEuros = ((totalCents - amountPaid) / 100).toFixed(2);
-
-      const isNexiPayByLink = (booking.payment_method || '').includes('Nexi Pay by Link');
-      let paymentInfo = '';
-      if (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') {
-        paymentInfo = `Pagato`;
-      } else if (isNexiPayByLink) {
-        paymentInfo = `In attesa di pagamento (Nexi Pay by Link) - se non pagato entro 1 ora, la prenotazione verrà annullata`;
-      } else if (amountPaid > 0) {
-        paymentInfo = `${amountPaidEuros}€ pagati - ${amountRemainingEuros}€ da pagare`;
-      } else {
-        paymentInfo = `Da saldare`;
-      }
-
-      const isEdit = booking.isEdit;
-      const headerLabel = isNexiPayByLink ? `*PRENOTAZIONE IN ATTESA DI PAGAMENTO*` : (isEdit ? `*MODIFICA PRENOTAZIONE NOLEGGIO*` : `*NUOVA PRENOTAZIONE NOLEGGIO*`);
-      message = `${headerLabel}\n\n`;
-      message += `*ID:* DR7-${bookingId}\n`;
-      message += `*Cliente:* ${customerName}\n`;
-      message += `*Email:* ${customerEmail}\n`;
-      message += `*Telefono:* ${customerPhone}\n`;
-      const vehiclePlate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '';
-      message += `*Veicolo:* ${vehicleName}${vehiclePlate ? ` (${vehiclePlate})` : ''}\n`;
-      message += `*Ritiro:* ${pickupDateFormatted} alle ${pickupTimeFormatted}\n`;
-      message += `*Riconsegna:* ${dropoffDateFormatted} alle ${dropoffTimeFormatted}\n`;
-
-      // Show delivery address if enabled, otherwise show standard pickup location
-      const deliveryEnabled = booking.booking_details?.delivery_enabled;
-      const deliveryAddress = booking.booking_details?.delivery_address;
-      const pickupEnabled = booking.booking_details?.pickup_enabled;
-      const pickupAddress = booking.booking_details?.pickup_address;
-
-      if (deliveryEnabled && deliveryAddress) {
-        const addr = [deliveryAddress.street, deliveryAddress.zip, deliveryAddress.city, deliveryAddress.province].filter(Boolean).join(', ');
-        const deliveryFee = booking.booking_details?.delivery_fee || '0';
-        message += `*Consegna a domicilio:* ${addr}`;
-        if (parseFloat(deliveryFee) > 0) message += ` (+€${deliveryFee})`;
-        message += `\n`;
-      } else {
-        message += `*Luogo Ritiro:* ${pickupLocation}\n`;
-      }
-
-      if (pickupEnabled && pickupAddress) {
-        const addr = [pickupAddress.street, pickupAddress.zip, pickupAddress.city, pickupAddress.province].filter(Boolean).join(', ');
-        const pickupFee = booking.booking_details?.pickup_fee || '0';
-        message += `*Ritiro a domicilio:* ${addr}`;
-        if (parseFloat(pickupFee) > 0) message += ` (+€${pickupFee})`;
-        message += `\n`;
-      }
-
-      message += `*Assicurazione:* ${insuranceOption}\n`;
-      message += `*Totale:* €${totalPrice}\n`;
-
-      // Cauzione (deposit) info with status — always show, default to €0
-      const depositAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0);
-      const depositOption = booking.booking_details?.depositOption;
-      const depositStatus = booking.booking_details?.deposit_status;
-      if (depositOption === 'no_deposit') {
-        const surcharge = Number(booking.booking_details?.noDepositSurcharge ?? 0);
-        message += `*Cauzione:* Senza cauzione (+30% = €${surcharge.toFixed(2)})\n`;
-      } else if (depositAmount > 0) {
-        const statusLabel = depositStatus === 'incassata' ? 'Pagata' : 'Da saldare';
-        message += `*Cauzione:* €${depositAmount.toFixed(2)} - ${statusLabel}\n`;
-      } else {
-        message += `*Cauzione:* €0\n`;
-      }
-
-      // KM limit info
-      const unlimitedKm = booking.booking_details?.unlimited_km;
-      const kmLimit = booking.booking_details?.km_limit;
-      if (unlimitedKm || kmLimit === 'Illimitati') {
-        message += `*KM:* Illimitati\n`;
-      } else if (kmLimit && kmLimit !== '0') {
-        message += `*KM:* ${kmLimit} km\n`;
-      }
-
-      const paymentMethod = booking.payment_method || booking.booking_details?.paymentMethod || '';
-      // Don't append payment method again if already included in paymentInfo (e.g. Nexi Pay by Link)
-      message += `*Pagamento:* ${paymentInfo}${!isNexiPayByLink && paymentMethod ? ` (${paymentMethod})` : ''}`;
-    }
-  } else {
+  // Booking notifications — body comes EXCLUSIVELY from Messaggi di Sistema Pro.
+  // Template lookup happens further down in the `if (messageKey)` block.
+  // If no Pro template resolves, the send is skipped there (no hardcoded fallback).
+  else if (!booking) {
     return {
       statusCode: 400,
       body: JSON.stringify({ message: 'No valid data provided for notification' }),
     };
   }
 
-  // ── Try to load edited template from DB ──
+  // Legacy hardcoded composition removed — body now comes exclusively from Messaggi di Sistema Pro.
+
+  // ── Load message body from Messaggi di Sistema Pro ──
   // Determine the message key based on booking type
   // When customPhone is set, this is a CUSTOMER message — use _customer variant if available
   const isCustomerMessage = !!customPhone;
@@ -518,9 +294,23 @@ const handler: Handler = async (event) => {
           finalMessage = finalMessage.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '');
         }
       }
-    } catch {
-      // Fallback to hardcoded message
+    } catch (e) {
+      console.warn('[send-whatsapp] Template fetch failed:', e);
     }
+  }
+
+  // Hard gate: never send an empty body (used to rely on hardcoded composition above).
+  if (!finalMessage || !finalMessage.trim()) {
+    console.log('[send-whatsapp] empty finalMessage — skipping send (no Pro template matched)');
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'No Pro template resolved — skipped',
+        success: true,
+        skipped: true,
+        reason: 'empty_body_no_template',
+      }),
+    };
   }
 
   // Wrap with Messaggi di Sistema Pro header/footer if enabled.
