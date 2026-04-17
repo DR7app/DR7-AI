@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { getMessageTemplate } from './utils/messageTemplates';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -194,20 +195,15 @@ const handler: Handler = async (event) => {
     }
 
     if (needsWhatsapp) {
-      const waTemplateKey = `${candidate.service_type}_WHATSAPP`; // e.g. RENTAL_WHATSAPP, WASH_WHATSAPP
-      const { data: whatsappTemplate } = await supabase
-        .from('review_templates')
-        .select('*')
-        .eq('template_key', waTemplateKey)
-        .single();
-
-      if (whatsappTemplate) {
-        whatsappMessage = renderTemplate(whatsappTemplate.body || '', templateVars);
-      } else {
-        // Fallback default WhatsApp template
-        const custName = candidate.customer_name || 'Cliente';
-        whatsappMessage = `Ciao ${custName}! 👋\nLa tua esperienza con noi è importante.\n\nSe ti fa piacere, lascia una recensione a 5 stelle raccontando il tuo Servizio ricevuto, è il modo migliore per crescere insieme.\n\nIn segno di gratitudine, inviandoci uno screenshot della recensione riceverai subito un codice sconto da 100€ sul tuo prossimo noleggio e uno da 10€ sul tuo prossimo lavaggio utilizzabile sul sito.\n\nClicca qui per lasciarla!👇🏻\n ${reviewLink}\n\n\nDR7`;
-      }
+      // WhatsApp body comes EXCLUSIVELY from Messaggi di Sistema Pro.
+      // review_request_whatsapp gets routed to the mapped pro_* template by the resolver.
+      // The Pro template uses {var} syntax (single braces), which getMessageTemplate substitutes.
+      const proVars: Record<string, string> = {
+        ...templateVars,
+        nome: firstName,
+        review_link: reviewLink,
+      };
+      whatsappMessage = (await getMessageTemplate('review_request_whatsapp', proVars)) || '';
     }
 
     // 6. Create review_request record with TO_SEND status

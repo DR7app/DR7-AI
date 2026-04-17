@@ -237,21 +237,28 @@ export async function notifyPrepaidBlocked(params: {
 }) {
     const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
 
-    // Notify customer
+    // Notify customer — body EXCLUSIVELY from Messaggi di Sistema Pro.
     if (params.customerPhone) {
-        await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                customPhone: params.customerPhone,
-                customMessage: await renderTemplate('prepaid_card_blocked_customer', { customerName: params.customerName || 'Cliente', bookingRef: params.bookingRef || '' }, `⚠️ *Pagamento rifiutato*\n\nGentile ${params.customerName || 'Cliente'},\n\nNon accettiamo carte prepagate. Utilizzare una carta di credito o debito.\n\n${params.bookingRef ? `La prenotazione #${params.bookingRef} è stata annullata e il pagamento verrà rimborsato.\n\n` : ''}Per assistenza contattaci.\n\nDR7`)
+        const customerBody = await renderTemplate('prepaid_card_blocked_customer', { customerName: params.customerName || 'Cliente', bookingRef: params.bookingRef || '' })
+        if (customerBody) {
+            await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customPhone: params.customerPhone,
+                    customMessage: customerBody,
+                })
             })
-        })
+        }
     }
 
-    // Notify admin
+    // Notify admin — body EXCLUSIVELY from Messaggi di Sistema Pro.
     if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-        const adminMessage = await renderTemplate('prepaid_card_blocked_admin', { customerName: params.customerName || '-', amount: params.amount || '0', bookingRef: params.bookingRef || '' }, `🚫 *CARTA PREPAGATA BLOCCATA*\n\n*Cliente:* ${params.customerName || '-'}\n${params.amount ? `*Importo:* €${params.amount}\n` : ''}${params.bookingRef ? `*Prenotazione:* #${params.bookingRef}\n` : ''}\nOperazione rifiutata e rimborso avviato.`)
+        const adminMessage = await renderTemplate('prepaid_card_blocked_admin', { customerName: params.customerName || '-', amount: params.amount || '0', bookingRef: params.bookingRef || '' })
+        if (!adminMessage) {
+            // No Pro template → skip admin notification
+            return
+        }
         await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
