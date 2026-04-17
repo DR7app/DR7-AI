@@ -372,10 +372,13 @@ export default function DailyCalendarTab() {
                                         booking.type === 'check-out' ? 'text-yellow-300' :
                                             'text-theme-text-primary'
 
+                                const bookingHasNotes = !!(booking.booking_details?.notes && String(booking.booking_details.notes).trim())
+
                                 return (
                                     <div
                                         key={booking.id}
                                         className={`${bgColor} text-theme-text-primary rounded px-1.5 lg:px-2 py-1 lg:py-1.5 text-xs mb-1 shadow-md hover:shadow-lg transition-shadow overflow-hidden`}
+                                        style={bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15' } : undefined}
                                     >
                                         <div
                                             className={`font-bold text-[10px] mb-0.5 ${labelColor}`}

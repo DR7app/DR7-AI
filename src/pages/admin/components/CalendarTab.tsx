@@ -564,6 +564,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                       const clampedRight = Math.min(gridWidth, rightEdge)
                       const finalWidth = Math.max(CELL_WIDTH, clampedRight - clampedLeft)
 
+                      const bookingHasNotes = !!(evt.booking.booking_details?.notes && String(evt.booking.booking_details.notes).trim())
+
                       return (
                         <div
                           key={evt.id}
@@ -577,6 +579,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                             width: finalWidth,
                             top: top,
                             height: BAR_HEIGHT,
+                            ...(bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15', borderColor: '#FACC15' } : {}),
                           }}
                           onClick={(e) => {
                             e.stopPropagation()
