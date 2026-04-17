@@ -159,6 +159,7 @@ export default function MessaggiSistemaProTab() {
     const [editLabel, setEditLabel] = useState('')
     const [saving, setSaving] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
+    const [purging, setPurging] = useState(false)
 
     // New template form
     const [showNewForm, setShowNewForm] = useState(false)
@@ -355,6 +356,39 @@ export default function MessaggiSistemaProTab() {
             toast.error('Errore salvataggio: ' + _errMsg)
         } finally {
             setSaving(false)
+        }
+    }
+
+    async function handlePurgeInactive() {
+        const inactive = templates.filter(t => t.is_enabled === false)
+        if (inactive.length === 0) {
+            toast.success('Nessun messaggio non attivo da svuotare')
+            return
+        }
+        if (!confirm(`Svuotare titolo e corpo di ${inactive.length} messaggi non attivi?\n\nI messaggi attivi (toggle verde) non saranno toccati. Le righe restano ma diventano vuote.`)) return
+
+        setPurging(true)
+        try {
+            const ids = inactive.map(t => t.id)
+            const updatedAt = new Date().toISOString()
+            const { error } = await supabase
+                .from('system_messages')
+                .update({ label: '', message_body: '', description: '', updated_at: updatedAt })
+                .in('id', ids)
+            if (error) throw error
+
+            setTemplates(prev => prev.map(t =>
+                ids.includes(t.id)
+                    ? { ...t, label: '', message_body: '', description: '', updated_at: updatedAt }
+                    : t
+            ))
+            toast.success(`Svuotati ${inactive.length} messaggi non attivi`)
+        } catch (err: unknown) {
+            const _errMsg = err instanceof Error ? err.message : String(err)
+            console.error('Error purging inactive templates:', err)
+            toast.error('Errore svuotamento: ' + _errMsg)
+        } finally {
+            setPurging(false)
         }
     }
 
@@ -715,6 +749,14 @@ export default function MessaggiSistemaProTab() {
                         <p className="text-theme-text-primary text-sm">Template dei messaggi WhatsApp organizzati per tipologia</p>
                     </div>
                     <div className="flex gap-2">
+                        <button
+                            onClick={handlePurgeInactive}
+                            disabled={purging}
+                            className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-red-600/80 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Svuota titolo e corpo dei messaggi con toggle spento"
+                        >
+                            {purging ? 'Svuotamento...' : 'Svuota non attivi'}
+                        </button>
                         <button
                             onClick={() => setShowNewForm(!showNewForm)}
                             className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f]"
