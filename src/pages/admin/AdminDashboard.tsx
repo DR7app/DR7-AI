@@ -19,6 +19,7 @@ const CarWashBookingsTab = lazyWithRetry(() => import('./components/CarWashBooki
 const CarWashCalendarTab = lazyWithRetry(() => import('./components/CarWashCalendarTab'))
 const UnpaidBookingsTab = lazyWithRetry(() => import('./components/UnpaidBookingsTab'))
 const MarketingTab = lazyWithRetry(() => import('./components/MarketingTab'))
+const MessaggiSistemaProTab = lazyWithRetry(() => import('./components/MessaggiSistemaProTab'))
 const ReviewManagementTab = lazyWithRetry(() => import('./components/ReviewManagementTab'))
 const FatturaTab = lazyWithRetry(() => import('./components/FatturaTab'))
 const ContrattoTab = lazyWithRetry(() => import('./components/ContrattoTab'))
@@ -53,7 +54,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing' | 'marketing-pro' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro'
 
 export default function AdminDashboard() {
   const [activeTab, _setActiveTab] = useState<TabType>('reservations')
@@ -189,6 +190,7 @@ export default function AdminDashboard() {
     'birthdays': 'Compleanni',
     'reviews': 'Recensioni',
     'marketing': 'Messaggi di Sistema',
+    'marketing-pro': 'Messaggi di Sistema Pro',
     'referral': 'Referral',
     'codice-sconto': 'Codice Sconto',
     'bulk-import': 'Import Clienti',
@@ -277,6 +279,7 @@ export default function AdminDashboard() {
           </button>
           <button onClick={() => { setActiveTab('reviews'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reviews')}>Recensioni</button>
           <button onClick={() => { setActiveTab('marketing'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'marketing')}>Messaggi di Sistema</button>
+          <button onClick={() => { setActiveTab('marketing-pro'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'marketing-pro')}>Messaggi di Sistema Pro</button>
           <button onClick={() => { setActiveTab('referral'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'referral')}>Referral</button>
           <button onClick={() => { setActiveTab('codice-sconto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
 
@@ -438,6 +441,7 @@ export default function AdminDashboard() {
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'cauzioni' && (isTabRestricted('cauzioni') ? <PlaceholderTab title="Accesso non autorizzato" /> : <CauzioniTab />)}
           {activeTab === 'marketing' && <MarketingTab />}
+          {activeTab === 'marketing-pro' && <MessaggiSistemaProTab />}
           {activeTab === 'birthdays' && <BirthdaysTab />}
           {activeTab === 'reviews' && <ReviewManagementTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
