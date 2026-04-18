@@ -285,6 +285,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [revenueData, setRevenueData] = useState<{
     finalDailyRateEur: number
     finalTotalEur: number
+    selectedBaseRateEur?: number
     rentalDays: number
     breakdown: { label: string; coeff: number; description: string }[]
     mode: string
@@ -338,20 +339,24 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── Pricing Calculation ────────────────────────────────────────────────
 
   const pricing = useMemo(() => {
-    // Read base rate from Centralina Pro tariffe — NO vehicle.daily_rate
+    // Base rate: per-vehicle from Prezzo Dinamico > category tariffe
     let listDailyRate = 0
-    if (rentalConfig && selectedVehicle && rentalDays >= 1) {
+
+    // Priority 1: per-vehicle price from dynamic engine (Centralina Pro Prezzi Base per Veicolo)
+    if (revenueData?.enabled && revenueData.selectedBaseRateEur) {
+      listDailyRate = revenueData.selectedBaseRateEur
+    }
+    // Priority 2: category tariffe from Centralina Pro
+    else if (rentalConfig && selectedVehicle && rentalDays >= 1) {
       const category = selectedVehicle.category || 'exotic'
       const dayRates = rentalConfig.rental_day_rates?.[category]
       if (dayRates) {
-        // Price is the same regardless of residency — residency only affects cauzione
         const table = dayRates.flat || dayRates.resident || dayRates.non_resident
         if (table) {
           const directTotal = table[String(rentalDays)]
           if (directTotal) {
             listDailyRate = Math.round(directTotal / rentalDays * 100) / 100
           } else {
-            // Beyond table: find highest day and extrapolate
             const maxDay = Math.max(...Object.keys(table).map(Number).filter(n => !isNaN(n)))
             if (maxDay > 0 && table[String(maxDay)]) {
               const lastTotal = table[String(maxDay)]
