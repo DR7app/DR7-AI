@@ -72,13 +72,24 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     })())
 
     // Helper: add alarm to triggered set with timestamp for cleanup
-    const markAlarmTriggered = (trackingId: string) => {
+    const markAlarmTriggered = (trackingId: string, bookingId?: string) => {
         triggeredAlarmsRef.current.add(trackingId)
         try {
             const stored = JSON.parse(localStorage.getItem('triggered_alarms') || '[]')
             stored.push({ id: trackingId, ts: Date.now() })
             localStorage.setItem('triggered_alarms', JSON.stringify(stored))
         } catch { /* ignore storage errors */ }
+
+        // Persist DB-side so other admin sessions / browser reloads won't re-ring
+        // the same booking. Only for real booking IDs (skip fleet maintenance etc).
+        if (bookingId && !trackingId.startsWith('fleet_')) {
+            supabase.from('bookings')
+                .update({ alarm_triggered_at: new Date().toISOString() })
+                .eq('id', bookingId)
+                .then(({ error }) => {
+                    if (error) console.warn('[alarm] failed to persist alarm_triggered_at:', error)
+                })
+        }
     }
 
     // Track auth state — only run alarms when logged in
@@ -244,6 +255,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     if (details.internal === true) continue
                     if (details.createdBy === 'automatic_system') continue
                     if (booking.vehicle_name && booking.vehicle_name.toUpperCase().startsWith('INTERNO')) continue
+                    // Rientri (auto-created on rental return) have customer_name='Lavaggio Rientro'
+                    if ((booking.customer_name || '').trim().toLowerCase() === 'lavaggio rientro') continue
                     // Zero-price washes are likely internal
                     if (!booking.price_total || booking.price_total === 0) continue
                     const source = (details.source || '').toLowerCase()
@@ -262,7 +275,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
                     const diff = appointmentDateTime.getTime() - now.getTime()
                     if (diff >= 600000 && diff < 660000) {
-                        markAlarmTriggered(trackingId)
+                        markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
                             bookingId: booking.id,
@@ -277,12 +290,14 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             }
 
             // --- 1A. CHECK RETURNS - 10 mins BEFORE return (pre-return warning) ---
-            // Only active rentals (not completed, not car wash)
+            // Only active rentals (not completed, not car wash), and only if
+            // alarm_triggered_at is null — ie. no admin has dismissed it yet.
             const { data: returnsBefore, error: returnsBeforeError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
                 .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
                 .not('service_type', 'eq', 'car_wash')
+                .is('alarm_triggered_at', null)
                 .gte('dropoff_date', tenMinutesFutureISO)
                 .lt('dropoff_date', tenMinutesFuturePlusOne)
 
@@ -296,7 +311,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     returnTime.setSeconds(0, 0)
 
                     if (returnTime.getTime() === tenMinutesFuture.getTime()) {
-                        markAlarmTriggered(trackingId)
+                        markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
                             bookingId: booking.id,
@@ -311,12 +326,14 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             }
 
             // --- 1B. CHECK RETURNS - 10 mins AFTER return (second alarm, independent of before-alarm) ---
-            // Only active rentals (not completed, not car wash)
+            // Only active rentals (not completed, not car wash), and only if
+            // alarm_triggered_at is null (same gating as §1A).
             const { data: returnsAfter, error: returnsAfterError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
                 .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
                 .not('service_type', 'eq', 'car_wash')
+                .is('alarm_triggered_at', null)
                 .gte('dropoff_date', tenMinutesAgoISO)
                 .lt('dropoff_date', tenMinutesAgoPlusOne)
 
@@ -330,7 +347,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     returnTime.setSeconds(0, 0)
 
                     if (returnTime.getTime() === tenMinutesAgo.getTime()) {
-                        markAlarmTriggered(trackingId)
+                        markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
                             bookingId: booking.id,
@@ -373,7 +390,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     pickupTime.setSeconds(0, 0)
 
                     if (pickupTime.getTime() === tenMinutesFuture.getTime()) {
-                        markAlarmTriggered(trackingId)
+                        markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
                             bookingId: booking.id,
@@ -389,11 +406,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             }
 
             // --- 3. CHECK UNPAID PICKUP (10 mins BEFORE pickup) ---
+            // Per project rule, three payment values count as paid: paid, completed, succeeded.
             const { data: unpaidPickups, error: unpaidError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, pickup_date, status, payment_status, price_total, booking_details, service_type')
                 .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
-                .neq('payment_status', 'paid')
+                .not('payment_status', 'in', '("paid","completed","succeeded")')
                 .not('service_type', 'eq', 'car_wash')
                 .gte('pickup_date', tenMinutesFutureISO)
                 .lt('pickup_date', tenMinutesFuturePlusOne)
@@ -408,7 +426,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
                     // Double check time match just in case
                     if (pickupTime.getTime() === tenMinutesFuture.getTime()) {
-                        markAlarmTriggered(trackingId)
+                        markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
                             bookingId: booking.id,
