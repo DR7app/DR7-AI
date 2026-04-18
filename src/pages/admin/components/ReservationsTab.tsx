@@ -72,7 +72,6 @@ import {
   classifyDriverTier,
   calculateAge,
   calculateLicenseYears,
-  TIER_KASKO_BASE_PRICE,
   EXPERIENCE_SERVICES,
   getExperienceServicesForTier,
   type DriverTier,
@@ -85,60 +84,8 @@ import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, ge
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
 
-// SUPERCARS (Exotic) - Tier-based insurance options
-// Tier 1 (Fascia B): only RCA + Kasko Base at 119€/day
-// eslint-disable-next-line react-refresh/only-export-components
-export const INSURANCE_OPTIONS_TIER_1 = [
-  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: TIER_KASKO_BASE_PRICE.TIER_1 },
-];
-// Tier 2 (Fascia A): all options, Kasko Base at 89€/day
-// eslint-disable-next-line react-refresh/only-export-components
-export const INSURANCE_OPTIONS_TIER_2 = [
-  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: TIER_KASKO_BASE_PRICE.TIER_2 },
-  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 149 },
-  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 189 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 289 },
-];
-// Fallback when no tier is known yet
-// eslint-disable-next-line react-refresh/only-export-components
-export const INSURANCE_OPTIONS = INSURANCE_OPTIONS_TIER_1;
-
-// URBAN - Full insurance tiers (same structure as supercar)
-// eslint-disable-next-line react-refresh/only-export-components
-export const URBAN_INSURANCE_OPTIONS = [
-  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 15 },
-  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 25 },
-  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 35 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 45 },
-];
-
-// UTILITAIRE - Full insurance tiers (same structure as supercar)
-// eslint-disable-next-line react-refresh/only-export-components
-export const UTILITAIRE_INSURANCE_OPTIONS = [
-  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
-  { id: 'KASKO_BLACK', label: 'Kasko Black', pricePerDay: 65 },
-  { id: 'KASKO_SIGNATURE', label: 'Kasko Signature', pricePerDay: 80 },
-  { id: 'DR7', label: 'Kasko DR7', pricePerDay: 90 },
-];
-
-// FURGONE (Ducato/Vito/Tourer) - Full insurance tiers (same structure as supercar)
-// eslint-disable-next-line react-refresh/only-export-components
-export const FURGONE_INSURANCE_OPTIONS = [
-  { id: 'RCA', label: 'RCA Compresa (no Kasko)', pricePerDay: 0 },
-  { id: 'KASKO_BASE', label: 'Kasko Base', pricePerDay: 45 },
-];
-
-// Deposit amounts by vehicle type
-// eslint-disable-next-line react-refresh/only-export-components
-export const DEPOSIT_AMOUNTS = {
-  UTILITAIRE: 1000,
-  FURGONE: 2500, // Ducato, Vito
-  SUPERCAR: 10000,
-};
+// All insurance options, deposits, pricing now read from Centralina Pro config
+// No hardcoded fallback arrays
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const INSURANCE_ELIGIBILITY = {
@@ -205,8 +152,8 @@ function getSforoForVehicle(vehicleName: string): string {
 // Reads from Centralina Pro config via configLookup, falls back to overlay
 function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: ReturnType<typeof buildConfigOverlay>, config?: import('../../../types/rentalConfig').RentalConfig | null) {
   if (!vehicle) {
-    const t2 = overlay?.insuranceTier2 || INSURANCE_OPTIONS_TIER_2
-    const t1 = overlay?.insuranceTier1 || INSURANCE_OPTIONS_TIER_1
+    const t2 = overlay?.insuranceTier2 || []
+    const t1 = overlay?.insuranceTier1 || []
     return tier === 'TIER_2' ? t2 : t1
   }
 
@@ -221,10 +168,10 @@ function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: Ret
     }
   }
 
-  // Fallback to overlay
-  if (category === 'urban') return overlay?.urbanInsurance || URBAN_INSURANCE_OPTIONS
-  if (category === 'aziendali') return overlay?.utilitaireInsurance || UTILITAIRE_INSURANCE_OPTIONS
-  return tier === 'TIER_2' ? (overlay?.insuranceTier2 || INSURANCE_OPTIONS_TIER_2) : (overlay?.insuranceTier1 || INSURANCE_OPTIONS_TIER_1)
+  // Fallback to overlay (no hardcoded values)
+  if (category === 'urban') return overlay?.urbanInsurance || []
+  if (category === 'aziendali') return overlay?.utilitaireInsurance || []
+  return tier === 'TIER_2' ? (overlay?.insuranceTier2 || []) : (overlay?.insuranceTier1 || [])
 }
 interface Customer {
   id: string
