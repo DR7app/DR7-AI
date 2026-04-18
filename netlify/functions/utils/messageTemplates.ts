@@ -68,6 +68,9 @@ const OLD_TO_PRO: Record<string, string> = {
   review_request_whatsapp: 'pro_promemoria_firma',
   birthday_message: 'pro_marketing_compleanno',
   wallet_bonus_credit: 'pro_richiesta_documenti',
+
+  // Website customer actions
+  website_booking_cancelled_customer: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
 }
 
 export interface RenderContext {
