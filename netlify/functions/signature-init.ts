@@ -40,8 +40,11 @@ async function sendWhatsAppSigningLink(
         const chatId = `${cleanedPhone}@c.us`
         const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
 
-        const fallbackSigMsg = `Gentile *${signerName}*,\n\ndi seguito trova il contratto di noleggio n. *${contractNumber}* da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore: trascorso questo termine, la prenotazione potrà decadere automaticamente come da policy.\n\nLa invitiamo quindi a completare la firma ora per confermare il noleggio.\n\nCordiali Saluti,\nDR7`
-        const sigMessage = await renderTemplate('signature_request_link', { signerName, contractNumber, signingUrl }, fallbackSigMsg)
+        const sigMessage = await renderTemplate('signature_request_link', { signerName, contractNumber, signingUrl })
+        if (sigMessage === null) {
+            console.log('[signature-init] Template "signature_request_link" missing/disabled — skipping send')
+            return false
+        }
 
         const waResponse = await fetch(greenApiUrl, {
             method: 'POST',
@@ -59,11 +62,10 @@ async function sendWhatsAppSigningLink(
             // Log to sent_messages_log
             try {
                 const sb = createClient(supabaseUrl, supabaseServiceKey)
-                const fullMessage = `Gentile *${signerName}*,\n\ndi seguito trova il contratto di noleggio n. *${contractNumber}* da visionare e firmare digitalmente.\n\n${signingUrl}\n\nLa firma richiede meno di 1 minuto.\nIl link è valido per ${TOKEN_EXPIRY_HOURS} ore: trascorso questo termine, la prenotazione potrà decadere automaticamente come da policy.\n\nLa invitiamo quindi a completare la firma ora per confermare il noleggio.\n\nCordiali Saluti,\nDR7`
                 await sb.from('sent_messages_log').insert({
                     customer_name: signerName,
                     customer_phone: phone,
-                    message_text: fullMessage,
+                    message_text: sigMessage,
                     template_label: 'Signature Request Link',
                     status: 'sent',
                 })
@@ -111,6 +113,20 @@ export const handler: Handler = async (event) => {
 
         if (!contract.pdf_url) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il contratto non ha un PDF generato' }) }
+        }
+
+        // Block if contract already has a signed request
+        const { data: alreadySigned } = await supabase
+            .from('signature_requests')
+            .select('id')
+            .eq('contract_id', contract.id)
+            .eq('status', 'signed')
+            .limit(1)
+            .maybeSingle()
+
+        if (alreadySigned) {
+            console.log(`[signature-init] Contract ${contract.id} already signed (request ${alreadySigned.id}), skipping`)
+            return { statusCode: 400, body: JSON.stringify({ error: 'Contratto già firmato' }) }
         }
 
         // Cancel any existing active signature requests for this contract

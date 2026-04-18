@@ -73,6 +73,26 @@ const reminderHandler: Handler = async () => {
                 continue
             }
 
+            // Check if contract already has a signed request (avoid reminding after signature)
+            if (req.contract_id) {
+                const { data: signedReq } = await supabase
+                    .from('signature_requests')
+                    .select('id')
+                    .eq('contract_id', req.contract_id)
+                    .eq('status', 'signed')
+                    .limit(1)
+                    .maybeSingle()
+
+                if (signedReq) {
+                    console.log(`[signature-reminder] Contract already signed (request ${signedReq.id}), cancelling stale request ${req.id}`)
+                    await supabase
+                        .from('signature_requests')
+                        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                        .eq('id', req.id)
+                    continue
+                }
+            }
+
             // Get contract number
             let contractNumber = ''
             if (req.contract_id) {
@@ -125,8 +145,11 @@ const reminderHandler: Handler = async () => {
             const signingUrl = `${SIGNING_BASE_URL}/firma/${req.token}`
             const signerName = req.signer_name || 'Cliente'
 
-            const fallbackReminder = `Gentile *${signerName}*,\n\nle ricordiamo che il contratto di noleggio n. *${contractNumber}* è ancora in attesa di firma.\n\n${signingUrl}\n\nIl link resterà valido per le prossime 6 ore.\nLa invitiamo a completare la firma quanto prima per confermare la prenotazione, altrimenti potrà decadere automaticamente allo scadere del termine, come da policy.\n\nSe ha già firmato il contratto o ricevuto questa comunicazione, può ignorare il presente messaggio.\n\nCordiali Saluti,\nDR7`
-            const message = await renderTemplate('signature_reminder_whatsapp', { signerName, contractNumber, signingUrl }, fallbackReminder)
+            const message = await renderTemplate('signature_reminder_whatsapp', { signerName, contractNumber, signingUrl })
+            if (message === null) {
+                console.log('[signature-reminder] Template "signature_reminder_whatsapp" missing/disabled — skipping send')
+                continue
+            }
 
             try {
                 const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
@@ -154,11 +177,10 @@ const reminderHandler: Handler = async () => {
 
                     // Log to sent_messages_log
                     try {
-                        const fullMessage = message
                         await supabase.from('sent_messages_log').insert({
                             customer_name: signerName,
                             customer_phone: cleanedPhone,
-                            message_text: fullMessage,
+                            message_text: message,
                             template_label: 'Signature Reminder',
                             status: 'sent',
                         })
