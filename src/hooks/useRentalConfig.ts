@@ -1,6 +1,7 @@
 /**
  * Centralina Unica — Admin hook to load rental config from Supabase
  * Reads from centralina_pro_config table and converts to legacy RentalConfig format.
+ * Subscribes to real-time changes so all tabs update immediately.
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -28,7 +29,6 @@ export function useRentalConfig(): UseRentalConfigResult {
       setLoading(true)
       setError(null)
 
-      // Read from Centralina Pro
       const { data, error: fetchErr } = await supabase
         .from('centralina_pro_config')
         .select('config')
@@ -61,6 +61,27 @@ export function useRentalConfig(): UseRentalConfigResult {
 
   useEffect(() => {
     fetchConfig()
+
+    // Subscribe to real-time changes on centralina_pro_config
+    const channel = supabase
+      .channel('centralina-pro-changes')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' },
+        (payload) => {
+          console.log('[useRentalConfig] Pro config updated via realtime')
+          const newConfig = payload.new?.config as ProSnapshot
+          if (newConfig && typeof newConfig === 'object' && Object.keys(newConfig).length > 0) {
+            const converted = convertProToRentalConfig(newConfig)
+            setConfig(converted)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [fetchConfig])
 
   const saveConfig = useCallback(async (
@@ -70,15 +91,6 @@ export function useRentalConfig(): UseRentalConfigResult {
     description?: string
   ): Promise<boolean> => {
     try {
-      // Save is handled by CentralinaProTab directly — this is a no-op for legacy compat
-      const saveErr: any = null
-
-      if (saveErr) {
-        console.error('[useRentalConfig] Save error:', saveErr)
-        return false
-      }
-
-      // Write audit log
       await supabase.from('config_audit_log').insert({
         changed_by: changedBy,
         section,
