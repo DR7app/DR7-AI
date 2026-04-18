@@ -18,6 +18,10 @@ interface InvoiceData {
   exempt_amount?: number
   importo_totale: number
   stato?: string
+  // Nota di Credito (TD04) fields
+  tipo_documento?: 'TD01' | 'TD04'
+  riferimento_fattura_numero?: string  // Original invoice number
+  riferimento_fattura_data?: string    // Original invoice date (YYYY-MM-DD)
 }
 
 interface InvoiceItem {
@@ -311,12 +315,16 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   <FatturaElettronicaBody>
     <DatiGenerali>
       <DatiGeneraliDocumento>
-        <TipoDocumento>TD01</TipoDocumento>
+        <TipoDocumento>${invoice.tipo_documento || 'TD01'}</TipoDocumento>
         <Divisa>EUR</Divisa>
         <Data>${invoice.data_emissione}</Data>
         <Numero>${escapeXml(invoice.numero_fattura)}</Numero>
         <ImportoTotaleDocumento>${formatAmount(calculatedTotal)}</ImportoTotaleDocumento>
-      </DatiGeneraliDocumento>
+      </DatiGeneraliDocumento>${invoice.tipo_documento === 'TD04' && invoice.riferimento_fattura_numero ? `
+      <DatiFattureCollegate>
+        <IdDocumento>${escapeXml(invoice.riferimento_fattura_numero)}</IdDocumento>
+        <Data>${invoice.riferimento_fattura_data || invoice.data_emissione}</Data>
+      </DatiFattureCollegate>` : ''}
     </DatiGenerali>
     <DatiBeniServizi>${dettaglioLinee}${datiRiepilogo}
     </DatiBeniServizi>${datiPagamento}

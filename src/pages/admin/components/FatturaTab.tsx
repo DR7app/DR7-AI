@@ -31,6 +31,9 @@ interface Invoice {
   sdi_response?: any
   customer_sdi_code?: string
   customer_pec?: string
+  // Nota di credito
+  tipo_fattura?: string
+  related_invoice_id?: string
 }
 
 interface InvoiceItem {
@@ -48,6 +51,7 @@ export default function FatturaTab() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [creatingNdc, setCreatingNdc] = useState<string | null>(null)
 
   useEffect(() => {
     loadInvoices()
@@ -173,6 +177,31 @@ export default function FatturaTab() {
     }
   }
 
+  async function handleNotaDiCredito(invoice: Invoice) {
+    if (!confirm(`Creare Nota di Credito per ${invoice.numero_fattura} (€${(invoice.importo_totale || 0).toFixed(2)})?`)) return
+    setCreatingNdc(invoice.id)
+    try {
+      const response = await authFetch('/.netlify/functions/generate-nota-di-credito', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: invoice.id })
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        alert(`Errore: ${result.error}`)
+        return
+      }
+      alert(`${result.message}`)
+      logAdminAction('create_nota_di_credito', 'fattura', invoice.id)
+      loadInvoices()
+    } catch (error) {
+      console.error('Error creating nota di credito:', error)
+      alert('Errore durante la creazione della nota di credito')
+    } finally {
+      setCreatingNdc(null)
+    }
+  }
+
   async function handleSendToSDI(invoice: Invoice) {
     if (!invoice.customer_tax_code) {
       alert('Il Codice Fiscale è obbligatorio per la fatturazione elettronica.')
@@ -287,6 +316,9 @@ export default function FatturaTab() {
                       />
                     )}
                     <h3 className="text-lg font-bold text-theme-text-primary">{invoice.numero_fattura}</h3>
+                    {invoice.tipo_fattura === 'nota_di_credito' && (
+                      <span className="px-2 py-1 rounded text-xs font-bold bg-amber-600 text-white">Nota di Credito</span>
+                    )}
                     <span className={`px-2 py-1 rounded text-xs font-bold ${invoice.stato === 'paid' ? 'bg-green-600 text-theme-text-primary' :
                       invoice.stato === 'pending' ? 'bg-yellow-600 text-theme-text-primary' :
                         'bg-red-600 text-theme-text-primary'
@@ -361,6 +393,15 @@ export default function FatturaTab() {
                         Reinvia SDI
                       </button>
                     </>
+                  )}
+                  {invoice.tipo_fattura !== 'nota_di_credito' && (
+                    <button
+                      onClick={() => handleNotaDiCredito(invoice)}
+                      disabled={creatingNdc === invoice.id}
+                      className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-full text-sm transition-colors disabled:opacity-50"
+                    >
+                      {creatingNdc === invoice.id ? 'Creazione...' : 'N. Credito'}
+                    </button>
                   )}
                   <button
                     onClick={() => handleDelete(invoice.id)}

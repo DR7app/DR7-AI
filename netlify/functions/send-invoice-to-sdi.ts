@@ -177,6 +177,21 @@ export const handler: Handler = async (event) => {
             invoice.customer_address = normalizedAddress
         }
 
+        // For nota di credito, add TD04 fields and fetch the original invoice reference
+        if (invoice.tipo_fattura === 'nota_di_credito' && invoice.related_invoice_id) {
+            const { data: originalInvoice } = await supabase
+                .from('fatture')
+                .select('numero_fattura, data_emissione')
+                .eq('id', invoice.related_invoice_id)
+                .single()
+
+            if (originalInvoice) {
+                invoice.tipo_documento = 'TD04'
+                invoice.riferimento_fattura_numero = originalInvoice.numero_fattura
+                invoice.riferimento_fattura_data = originalInvoice.data_emissione
+            }
+        }
+
         // 1. Generate XML
         const xmlContent = generateFatturaXML(invoice as any)
         const filename = generateInvoiceFilename(invoice as any)
