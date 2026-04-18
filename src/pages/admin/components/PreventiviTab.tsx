@@ -337,8 +337,31 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── Pricing Calculation ────────────────────────────────────────────────
 
   const pricing = useMemo(() => {
-    // Always use vehicle list price (not dynamic Revenue price)
-    const listDailyRate = selectedVehicle ? selectedVehicle.daily_rate : 0
+    // Read base rate from Centralina Pro tariffe — NO vehicle.daily_rate
+    let listDailyRate = 0
+    if (rentalConfig && selectedVehicle) {
+      const category = selectedVehicle.category || 'exotic'
+      const dayRates = rentalConfig.rental_day_rates?.[category]
+      if (dayRates) {
+        const table = dayRates.flat || dayRates.resident || dayRates.non_resident
+        if (table) {
+          const directTotal = table[String(rentalDays)]
+          if (directTotal) {
+            listDailyRate = Math.round(directTotal / rentalDays * 100) / 100
+          } else {
+            // Beyond table: find highest day and extrapolate
+            const maxDay = Math.max(...Object.keys(table).map(Number).filter(n => !isNaN(n)))
+            if (maxDay > 0 && table[String(maxDay)]) {
+              const lastTotal = table[String(maxDay)]
+              const avgPerDay = lastTotal / maxDay
+              const extraDays = rentalDays - maxDay
+              const total = lastTotal + extraDays * avgPerDay
+              listDailyRate = Math.round(total / rentalDays * 100) / 100
+            }
+          }
+        }
+      }
+    }
     const maggiorazione = parseFloat(form.maggiorazione_pct) || 0
 
     // Base prices at list rate
