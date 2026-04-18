@@ -49,11 +49,14 @@ const LateReturnAlarm: React.FC = () => {
         if (!session) return;
         const checkLateBookings = async () => {
             try {
+                // Only ring for ACTIVE rentals. A booking marked completed/completata/cancelled/
+                // annullata/returned is done and must never ring again, no matter how late
+                // its scheduled dropoff was.
                 const { data: bookings, error } = await supabase
                     .from('bookings')
                     .select('id, vehicle_name, customer_name, customer_phone, dropoff_date, status, booking_details')
                     .eq('service_type', 'car_rental')
-                    .neq('status', 'returned')
+                    .not('status', 'in', '("returned","completed","completata","cancelled","annullata")')
                     .not('dropoff_date', 'is', null);
 
                 if (error) {
@@ -167,7 +170,10 @@ const LateReturnAlarm: React.FC = () => {
 
     const handleMarkAsReturned = async (bookingId: string) => {
         try {
-            const { error } = await supabase.from('bookings').update({ status: 'returned' }).eq('id', bookingId);
+            // Use 'completata' — the project's standard completion status (recognized by
+            // availability, reports, and the alarm filter). 'returned' was a custom value
+            // only this component used, invisible to the rest of the system.
+            const { error } = await supabase.from('bookings').update({ status: 'completata' }).eq('id', bookingId);
 
             if (error) {
                 console.error('Error marking booking as returned:', error);
