@@ -169,12 +169,10 @@ export const TIME_OPTIONS = Array.from({ length: 96 }).map((_, i) => {
 
 // Vehicle category is now read from DB (exotic/urban/aziendali) — no name-based detection needed
 
-// Sforo (km overage fee) defaults per vehicle type
+// Sforo defaults — now read from Centralina Pro config via configOverlay.sforoDefaults
+// These are kept as fallback only if config is empty
 // eslint-disable-next-line react-refresh/only-export-components
-export const SFORO_DEFAULTS: { match: (name: string) => boolean; sforo: string; label: string }[] = [
-  { match: (n) => n.includes('rs3') || n.includes('macan') || n.includes('test'), sforo: '0.89', label: 'RS3/Macan/Test' },
-  { match: (n) => n.includes('ducato') || n.includes('vito') || n.includes('furgone') || n.includes('ncc') || n.includes('tourer'), sforo: '0.49', label: 'Furgone/NCC' },
-]
+export const SFORO_DEFAULTS: { match: (name: string) => boolean; sforo: string; label: string }[] = []
 const DEFAULT_SFORO = '1.80'
 const DEFAULT_KM_LIMIT = '100'
 // LAVAGGIO_FEE now driven by configOverlay.lavaggioFee
@@ -630,6 +628,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const CFG_SECOND_DRIVER = { TIER_1: configOverlay.secondDriverTier1, TIER_2: configOverlay.secondDriverTier2 }
   const CFG_DR7_FLEX_PER_DAY = configOverlay.dr7FlexPerDay
 
+  // Get daily rate from Centralina Pro tariffe — NO vehicle.daily_rate
+  function getDailyRateFromConfig(vehicle: Vehicle | undefined, days: number): number {
+    if (!vehicle || !rentalConfig) return 0
+    const category = vehicle.category || 'exotic'
+    const dayRates = rentalConfig.rental_day_rates?.[category]
+    if (!dayRates) return 0
+    const table = dayRates.flat || dayRates.resident || dayRates.non_resident
+    if (!table) return 0
+    const directTotal = table[String(days)]
+    if (directTotal) return Math.round(directTotal / days * 100) / 100
+    const maxDay = Math.max(...Object.keys(table).map(Number).filter(n => !isNaN(n)))
+    if (maxDay > 0 && table[String(maxDay)]) {
+      const lastTotal = table[String(maxDay)]
+      const avgPerDay = lastTotal / maxDay
+      const extraDays = days - maxDay
+      return Math.round((lastTotal + extraDays * avgPerDay) / days * 100) / 100
+    }
+    return 0
+  }
+
   useEffect(() => {
     if (!formData.vehicle_id || !formData.pickup_date || !formData.return_date) {
       setRevenueSuggestion(null)
@@ -671,7 +689,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
               // List price: base rate (no coefficients) × days + all services
-              const listDailyRate = data.selectedBaseRateEur || (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
+              const listDailyRate = data.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, data.rentalDays)
               const listRentalTotal = listDailyRate * data.rentalDays
               const listSubtotal = listRentalTotal + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
               // Combined coefficient from revenue engine
@@ -723,7 +741,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
       // List price: base rate (no coefficients) × days + all services
-      const listDailyRate = revenueSuggestion.selectedBaseRateEur || (selectedVehicle ? selectedVehicle.daily_rate / 100 : 0)
+      const listDailyRate = revenueSuggestion.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, revenueSuggestion.rentalDays)
       const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
       const listSubtotal = listRentalTotal + insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
       // Combined coefficient from revenue engine
@@ -1303,7 +1321,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
    
     // Standard Calculation
     // Get vehicle daily rate (convert from cents to euros)
-    const vehicleDailyRate = selectedVehicle.daily_rate / 100
+    const vehicleDailyRate = getDailyRateFromConfig(selectedVehicle, diffDays)
    
     // Get Kasko daily cost
     const kaskoOptions = getInsuranceOptions(selectedVehicle, undefined, configOverlay, rentalConfig)
@@ -6116,7 +6134,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
                           const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
                           // List price (no coefficients)
-                          const listDailyRate = revenueSuggestion.selectedBaseRateEur || (sv ? sv.daily_rate / 100 : 0)
+                          const listDailyRate = revenueSuggestion.selectedBaseRateEur || getDailyRateFromConfig(sv, revenueSuggestion.rentalDays)
                           const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
                           const listSubtotal = listRentalTotal + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost + secondDriverCost + experienceCost + flexCost
                           // Combined coefficient

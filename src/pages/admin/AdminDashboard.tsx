@@ -44,7 +44,7 @@ const TrusteraTab = lazyWithRetry(() => import('./components/TrusteraTab'))
 const CarWashCatalogTab = lazyWithRetry(() => import('./components/CarWashCatalogTab'))
 const OperatoriTab = lazyWithRetry(() => import('./components/OperatoriTab'))
 const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
-const RevenuePricingTab = lazyWithRetry(() => import('./components/RevenuePricingTab'))
+// RevenuePricingTab removed — replaced by CentralinaProTab
 const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreventiviTab'))
 const CentralinaProTab = lazyWithRetry(() => import('./components/CentralinaProTab'))
 
@@ -471,7 +471,7 @@ export default function AdminDashboard() {
           {activeTab === 'com-aruba' && <PlaceholderTab title="Aruba" />}
           {activeTab === 'operatori' && adminRole === 'superadmin' && <OperatoriTab />}
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
-          {activeTab === 'revenue-pricing' && <RevenuePricingTab />}
+          {activeTab === 'revenue-pricing' && <CentralinaProTab />}
           {activeTab === 'centralina-pro' && <CentralinaProTab />}
           </div>
           </Suspense>
