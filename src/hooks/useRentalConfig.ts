@@ -1,12 +1,14 @@
 /**
  * Centralina Unica — Admin hook to load rental config from Supabase
- * Reads directly from rental_extras_config table (admin is authenticated).
+ * Reads from centralina_pro_config table and converts to legacy RentalConfig format.
  */
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import type { RentalConfig } from '../types/rentalConfig'
 import { DEFAULT_RENTAL_CONFIG } from './rentalConfigDefaults'
+import { convertProToRentalConfig } from '../utils/convertProConfig'
+import type { ProSnapshot } from '../utils/convertProConfig'
 
 interface UseRentalConfigResult {
   config: RentalConfig
@@ -25,24 +27,27 @@ export function useRentalConfig(): UseRentalConfigResult {
     try {
       setLoading(true)
       setError(null)
+
+      // Read from Centralina Pro
       const { data, error: fetchErr } = await supabase
-        .from('rental_extras_config')
+        .from('centralina_pro_config')
         .select('config')
-        .limit(1)
-        .single()
+        .eq('id', 'main')
+        .maybeSingle()
 
       if (fetchErr) {
-        console.warn('[useRentalConfig] Fetch error, using defaults:', fetchErr.message)
-        setConfig(DEFAULT_RENTAL_CONFIG)
-        setError(fetchErr.message)
-        return
+        console.warn('[useRentalConfig] Pro fetch error, falling back to old config:', fetchErr.message)
+        // Fallback to old config
+        return await fetchLegacyConfig()
       }
 
       if (data?.config && typeof data.config === 'object') {
-        // Merge with defaults to fill any missing sections
-        setConfig({ ...DEFAULT_RENTAL_CONFIG, ...data.config } as RentalConfig)
+        const proConfig = data.config as ProSnapshot
+        const converted = convertProToRentalConfig(proConfig)
+        setConfig(converted)
       } else {
-        setConfig(DEFAULT_RENTAL_CONFIG)
+        console.warn('[useRentalConfig] Pro config empty, falling back to old config')
+        return await fetchLegacyConfig()
       }
     } catch (err) {
       console.warn('[useRentalConfig] Unexpected error, using defaults:', err)
@@ -52,6 +57,27 @@ export function useRentalConfig(): UseRentalConfigResult {
       setLoading(false)
     }
   }, [])
+
+  // Fallback: read from old rental_extras_config if Pro is not available
+  async function fetchLegacyConfig() {
+    try {
+      const { data, error: legacyErr } = await supabase
+        .from('rental_extras_config')
+        .select('config')
+        .limit(1)
+        .single()
+
+      if (legacyErr || !data?.config) {
+        setConfig(DEFAULT_RENTAL_CONFIG)
+        setError(legacyErr?.message || 'No config found')
+        return
+      }
+
+      setConfig({ ...DEFAULT_RENTAL_CONFIG, ...data.config } as RentalConfig)
+    } catch {
+      setConfig(DEFAULT_RENTAL_CONFIG)
+    }
+  }
 
   useEffect(() => {
     fetchConfig()
@@ -64,7 +90,7 @@ export function useRentalConfig(): UseRentalConfigResult {
     description?: string
   ): Promise<boolean> => {
     try {
-      // Save config
+      // Save to old config table (CentralinaConfig still uses this for writes)
       const { error: saveErr } = await supabase
         .from('rental_extras_config')
         .update({
@@ -72,7 +98,7 @@ export function useRentalConfig(): UseRentalConfigResult {
           updated_at: new Date().toISOString(),
           updated_by: changedBy,
         })
-        .not('id', 'is', null) // update the singleton row
+        .not('id', 'is', null)
 
       if (saveErr) {
         console.error('[useRentalConfig] Save error:', saveErr)

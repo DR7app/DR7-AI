@@ -48,8 +48,9 @@ export function buildConfigOverlay(config: RentalConfig | null): ConfigOverlay {
   const exoticT1 = (config.insurance?.exotic as Record<string, { id: string; name: string; daily_price: number }[]>)?.TIER_1
   const exoticT2 = (config.insurance?.exotic as Record<string, { id: string; name: string; daily_price: number }[]>)?.TIER_2
   const urbanIns = (config.insurance?.urban as Record<string, { id: string; name: string; daily_price: number }[]>)?._all_tiers
-  const utilIns = (config.insurance?.utilitaire as Record<string, { id: string; name: string; daily_price: number }[]>)?._all_tiers
-  const furgIns = (config.insurance?.furgone as Record<string, { id: string; name: string; daily_price: number }[]>)?._all_tiers
+  const aziendaliIns = (config.insurance?.aziendali as Record<string, { id: string; name: string; daily_price: number }[]>)?._all_tiers
+  const utilIns = aziendaliIns || (config.insurance?.utilitaire as Record<string, { id: string; name: string; daily_price: number }[]>)?._all_tiers
+  const furgIns = aziendaliIns || (config.insurance?.furgone as Record<string, { id: string; name: string; daily_price: number }[]>)?._all_tiers
 
   const toOpts = (arr: { id: string; name: string; daily_price: number }[] | undefined): InsuranceOpt[] | null => {
     if (!arr || arr.length === 0) return null
@@ -71,11 +72,11 @@ export function buildConfigOverlay(config: RentalConfig | null): ConfigOverlay {
         label: 'Supercar',
       })
     }
-    if (catSforo.furgone) {
+    if (catSforo.aziendali || catSforo.furgone) {
       sforoRules.push({
         match: (n) => n.includes('ducato') || n.includes('vito') || n.includes('furgone') || n.includes('ncc') || n.includes('tourer'),
-        sforo: String(catSforo.furgone),
-        label: 'Furgone/NCC',
+        sforo: String(catSforo.aziendali ?? catSforo.furgone),
+        label: 'Aziendali',
       })
     }
   }
