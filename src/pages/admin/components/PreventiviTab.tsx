@@ -4,7 +4,8 @@ import { supabase } from '../../../supabaseClient'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
-import { getKmIncluded } from '../../../utils/configLookup'
+import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice } from '../../../utils/configLookup'
+import type { RentalConfig } from '../../../types/rentalConfig'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
@@ -108,43 +109,37 @@ function formatEur(n: number): string {
   return n.toFixed(2).replace('.', ',')
 }
 
-function isFurgone(vehicle?: Vehicle): boolean {
-  if (!vehicle) return false
-  const name = vehicle.display_name.toLowerCase()
-  return name.includes('ducato') || name.includes('vito') || name.includes('furgone')
-}
-
 function getInsuranceOptionsForVehicle(
   vehicle: Vehicle | undefined,
   tier: DriverTier,
-  overlay: ReturnType<typeof buildConfigOverlay>
+  overlay: ReturnType<typeof buildConfigOverlay>,
+  rentalConfig: RentalConfig | null
 ): InsuranceOpt[] {
-  const t1 = overlay.insuranceTier1
-  const t2 = overlay.insuranceTier2
-  const urban = overlay.urbanInsurance
-  const util = overlay.utilitaireInsurance
-  const furg = overlay.furgoneInsurance
+  if (!vehicle) return tier === 'TIER_2' ? overlay.insuranceTier2 : overlay.insuranceTier1
 
-  if (!vehicle) return tier === 'TIER_2' ? t2 : t1
-  if (isFurgone(vehicle)) return furg
-  if (vehicle.category === 'aziendali') return util
-  if (vehicle.category === 'urban') return urban
-
-  const name = vehicle.display_name.toLowerCase()
-  if (name.includes('panda') || name.includes('captur') || name.includes('clio') ||
-    name.includes('citroen') || name.includes('208') || name.includes('urban')) {
-    return urban
+  // Use vehicle category to look up from config
+  const category = vehicle.category || 'exotic'
+  if (rentalConfig) {
+    const opts = getInsuranceOptions(rentalConfig, category, tier)
+    if (opts.length > 0) {
+      return opts.map(o => ({ id: o.id, label: o.name, pricePerDay: o.daily_price }))
+    }
   }
 
-  return tier === 'TIER_2' ? t2 : t1
+  // Fallback to overlay
+  if (category === 'urban') return overlay.urbanInsurance
+  if (category === 'aziendali') return overlay.utilitaireInsurance
+  return tier === 'TIER_2' ? overlay.insuranceTier2 : overlay.insuranceTier1
 }
 
-function getUnlimitedKmPrice(vehicle: Vehicle | undefined, tier: DriverTier, overlay: ReturnType<typeof buildConfigOverlay>): number {
+function getUnlimitedKmPriceForVehicle(vehicle: Vehicle | undefined, tier: DriverTier, rentalConfig: RentalConfig | null, overlay: ReturnType<typeof buildConfigOverlay>): number {
   if (!vehicle) return tier === 'TIER_2' ? overlay.unlimitedKmTier2 : overlay.unlimitedKmTier1
-  if (vehicle.category === 'urban') return 0
-  const name = vehicle.display_name.toLowerCase()
-  if (name.includes('vito') || name.includes('mercedes') || name.includes('ncc') || name.includes('tourer')) return 189
-  if (isFurgone(vehicle)) return 94.50
+
+  const category = vehicle.category || 'exotic'
+  if (rentalConfig) {
+    return getUnlimitedKmPrice(rentalConfig, category, tier)
+  }
+
   return tier === 'TIER_2' ? overlay.unlimitedKmTier2 : overlay.unlimitedKmTier1
 }
 
@@ -276,7 +271,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }, [form.pickup_date, form.return_date, form.pickup_time, form.return_time])
 
   const insuranceOptions = useMemo(
-    () => getInsuranceOptionsForVehicle(selectedVehicle, form.driver_tier, configOverlay),
+    () => getInsuranceOptionsForVehicle(selectedVehicle, form.driver_tier, configOverlay, rentalConfig),
     [selectedVehicle, form.driver_tier, configOverlay]
   )
 
@@ -359,7 +354,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const noCauzioneTotal = Math.round(noCauzioneDaily * rentalDays * 100) / 100
 
     const unlimitedKmDaily = form.include_unlimited_km
-      ? getUnlimitedKmPrice(selectedVehicle, form.driver_tier, configOverlay)
+      ? getUnlimitedKmPriceForVehicle(selectedVehicle, form.driver_tier, rentalConfig, configOverlay)
       : 0
     const unlimitedKmTotal = Math.round(unlimitedKmDaily * rentalDays * 100) / 100
 
@@ -1603,7 +1598,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_unlimited_km} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
-              Km Illimitati ({formatEur(getUnlimitedKmPrice(selectedVehicle, form.driver_tier, configOverlay))}/giorno)
+              Km Illimitati ({formatEur(getUnlimitedKmPriceForVehicle(selectedVehicle, form.driver_tier, rentalConfig, configOverlay))}/giorno)
             </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">

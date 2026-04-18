@@ -81,7 +81,7 @@ import {
 } from '../../../utils/tierClassification'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
-import { getKmIncluded } from '../../../utils/configLookup'
+import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig } from '../../../utils/configLookup'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -167,12 +167,7 @@ export const TIME_OPTIONS = Array.from({ length: 96 }).map((_, i) => {
   return { value: time, label: time }
 })
 
-// Helper function to check if vehicle is a furgone (Ducato/Vito)
-function isFurgone(vehicle?: Vehicle): boolean {
-  if (!vehicle) return false;
-  const name = vehicle.display_name.toLowerCase();
-  return name.includes('ducato') || name.includes('vito') || name.includes('furgone');
-}
+// Vehicle category is now read from DB (exotic/urban/aziendali) — no name-based detection needed
 
 // Sforo (km overage fee) defaults per vehicle type
 // eslint-disable-next-line react-refresh/only-export-components
@@ -210,36 +205,29 @@ function getSforoForVehicle(vehicleName: string): string {
 
 
 // Helper function to get insurance options for vehicle + tier
-// When overlay is provided, uses Centralina config prices instead of hardcoded
-function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: ReturnType<typeof buildConfigOverlay>) {
-  const t1 = overlay?.insuranceTier1 || INSURANCE_OPTIONS_TIER_1
-  const t2 = overlay?.insuranceTier2 || INSURANCE_OPTIONS_TIER_2
-  const urban = overlay?.urbanInsurance || URBAN_INSURANCE_OPTIONS
-  const util = overlay?.utilitaireInsurance || UTILITAIRE_INSURANCE_OPTIONS
-  const furg = overlay?.furgoneInsurance || FURGONE_INSURANCE_OPTIONS
-
-  if (!vehicle) return tier === 'TIER_2' ? t2 : t1;
-
-  // Non-exotic vehicles: tier doesn't affect insurance options
-  if (isFurgone(vehicle)) return furg;
-  if (vehicle.category === 'aziendali') return util;
-  if (vehicle.category === 'urban') return urban;
-
-  // Fallback for vehicles without category (legacy)
-  const name = vehicle.display_name.toLowerCase();
-  if (name.includes('panda') || name.includes('captur') || name.includes('clio') ||
-    name.includes('citroen') || name.includes('208') || name.includes('urban')) {
-    return urban;
-  }
-  if (name.includes('ducato') || name.includes('vito') || name.includes('v class') || name.includes('v-class') || name.includes('classe v') || name.includes('furgone')) {
-    return furg;
-  }
-  if (name.includes('van') || name.includes('utilitaire')) {
-    return util;
+// Reads from Centralina Pro config via configLookup, falls back to overlay
+function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: ReturnType<typeof buildConfigOverlay>, config?: import('../../../types/rentalConfig').RentalConfig | null) {
+  if (!vehicle) {
+    const t2 = overlay?.insuranceTier2 || INSURANCE_OPTIONS_TIER_2
+    const t1 = overlay?.insuranceTier1 || INSURANCE_OPTIONS_TIER_1
+    return tier === 'TIER_2' ? t2 : t1
   }
 
-  // Exotic/Supercar: tier-based insurance
-  return tier === 'TIER_2' ? t2 : t1;
+  const category = vehicle.category || 'exotic'
+  const driverTier = (tier || 'TIER_2') as import('../../../types/rentalConfig').DriverTier
+
+  // Read from Centralina Pro config
+  if (config) {
+    const opts = getInsuranceOptionsFromConfig(config, category, driverTier)
+    if (opts.length > 0) {
+      return opts.map(o => ({ id: o.id, label: o.name, pricePerDay: o.daily_price }))
+    }
+  }
+
+  // Fallback to overlay
+  if (category === 'urban') return overlay?.urbanInsurance || URBAN_INSURANCE_OPTIONS
+  if (category === 'aziendali') return overlay?.utilitaireInsurance || UTILITAIRE_INSURANCE_OPTIONS
+  return tier === 'TIER_2' ? (overlay?.insuranceTier2 || INSURANCE_OPTIONS_TIER_2) : (overlay?.insuranceTier1 || INSURANCE_OPTIONS_TIER_1)
 }
 interface Customer {
   id: string
@@ -629,18 +617,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const CFG_LAVAGGIO_FEE = configOverlay.lavaggioFee
   const CFG_NO_CAUZIONE_PER_DAY = configOverlay.noCauzionePerDay
   const CFG_UNLIMITED_KM = { TIER_1: configOverlay.unlimitedKmTier1, TIER_2: configOverlay.unlimitedKmTier2 }
-  // Unlimited KM prices per vehicle category (per day)
-  const CFG_UNLIMITED_KM_FURGONE = { TIER_1: 94.50, TIER_2: 94.50 } // Ducato
-  const CFG_UNLIMITED_KM_NCC = { TIER_1: 189, TIER_2: 189 } // Vito Mercedes
-  const CFG_UNLIMITED_KM_URBAN = { TIER_1: 0, TIER_2: 0 } // Urban: KM always unlimited (included)
-
-  function getUnlimitedKmPrice(vehicle?: Vehicle, tier?: string): number {
+  // Unlimited KM prices — read from Centralina Pro config by vehicle category
+  function getUnlimitedKmPriceRes(vehicle?: Vehicle, tier?: string): number {
     if (!vehicle) return tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
-    const name = vehicle.display_name.toLowerCase()
-    if (vehicle.category === 'urban') return tier === 'TIER_2' ? CFG_UNLIMITED_KM_URBAN.TIER_2 : CFG_UNLIMITED_KM_URBAN.TIER_1
-    if (name.includes('vito') || name.includes('mercedes') || name.includes('ncc') || name.includes('tourer')) return tier === 'TIER_2' ? CFG_UNLIMITED_KM_NCC.TIER_2 : CFG_UNLIMITED_KM_NCC.TIER_1
-    if (isFurgone(vehicle)) return tier === 'TIER_2' ? CFG_UNLIMITED_KM_FURGONE.TIER_2 : CFG_UNLIMITED_KM_FURGONE.TIER_1
-    // Exotic/supercar
+    const category = vehicle.category || 'exotic'
+    if (rentalConfig) {
+      const t = (tier === 'TIER_1' || tier === 'TIER_2') ? tier : 'TIER_2'
+      return getUnlimitedKmPriceFromConfig(rentalConfig, category, t as import('../../../types/rentalConfig').DriverTier)
+    }
     return tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
   }
   const CFG_SECOND_DRIVER = { TIER_1: configOverlay.secondDriverTier1, TIER_2: configOverlay.secondDriverTier2 }
@@ -671,7 +655,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             setFormData(prev => {
               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
               const activeTier = customerTier?.tier
-              const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay) : []
+              const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
               const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
               const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
@@ -679,7 +663,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const noCauzioneSurcharge = prev.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * data.rentalDays : 0
               let unlimitedKmSurcharge = 0
               if (prev.unlimited_km) {
-                unlimitedKmSurcharge = getUnlimitedKmPrice(selectedVehicle, activeTier) * data.rentalDays
+                unlimitedKmSurcharge = getUnlimitedKmPriceRes(selectedVehicle, activeTier) * data.rentalDays
               }
               const secondDriverFee = prev.has_second_driver
                 ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * data.rentalDays
@@ -699,7 +683,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const updates: Record<string, string> = { total_amount: total.toFixed(2) }
               if (!prev.unlimited_km) {
                 const vehCategory = selectedVehicle?.category || ''
-                const kmCat = vehCategory === 'urban' ? 'urban' : (isFurgone(selectedVehicle) ? 'furgone' : '_global')
+                const kmCat = vehCategory === 'urban' ? 'urban' : (vehCategory || '_global')
                 const kmIncluded = getKmIncluded(rentalConfig, data.rentalDays, kmCat)
                 if (kmIncluded !== 'unlimited') {
                   updates.km_limit = String(kmIncluded)
@@ -723,7 +707,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id && !editingId) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       const activeTier = customerTier?.tier || 'TIER_1'
-      const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay) : []
+      const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
       const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
       const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
       const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
@@ -731,7 +715,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const noCauzioneSurcharge = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
       let unlimitedKmSurcharge = 0
       if (formData.unlimited_km) {
-        unlimitedKmSurcharge = getUnlimitedKmPrice(selectedVehicle, activeTier) * revenueSuggestion.rentalDays
+        unlimitedKmSurcharge = getUnlimitedKmPriceRes(selectedVehicle, activeTier) * revenueSuggestion.rentalDays
       }
       const secondDriverFee = formData.has_second_driver
         ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays
@@ -751,7 +735,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Auto-calculate KM limit from rental days
       if (!formData.unlimited_km) {
         const vehCategory = selectedVehicle?.category || ''
-        const kmCat = vehCategory === 'urban' ? 'urban' : (isFurgone(selectedVehicle) ? 'furgone' : '_global')
+        const kmCat = vehCategory === 'urban' ? 'urban' : (vehCategory || '_global')
         const kmIncluded = getKmIncluded(rentalConfig, revenueSuggestion.rentalDays, kmCat)
         if (kmIncluded !== 'unlimited') {
           updates.km_limit = String(kmIncluded)
@@ -1322,7 +1306,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const vehicleDailyRate = selectedVehicle.daily_rate / 100
    
     // Get Kasko daily cost
-    const kaskoOptions = getInsuranceOptions(selectedVehicle, undefined, configOverlay)
+    const kaskoOptions = getInsuranceOptions(selectedVehicle, undefined, configOverlay, rentalConfig)
     const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
     const kaskoDailyCost = selectedKasko?.pricePerDay || 0
    
@@ -1370,7 +1354,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!selectedVehicle) return;
 
       const activeTier = customerTier?.tier
-      const availableOptions = getInsuranceOptions(selectedVehicle, activeTier, configOverlay)
+      const availableOptions = getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig)
 
       // Check if current insurance option is valid for this vehicle + tier
       const isCurrentOptionValid = availableOptions.some(opt => opt.id === formData.insurance_option)
@@ -5107,7 +5091,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               }
                               // Check if current insurance option is valid for this tier
                               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
-                              const tierOptions = getInsuranceOptions(selectedVehicle, tier.tier, configOverlay)
+                              const tierOptions = getInsuranceOptions(selectedVehicle, tier.tier, configOverlay, rentalConfig)
                               if (!tierOptions.some(o => o.id === prev.insurance_option)) {
                                 updates.insurance_option = 'KASKO_BASE'
                               }
@@ -5627,7 +5611,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     {(() => {
                       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
                       const activeTier = customerTier?.tier;
-                      return getInsuranceOptions(selectedVehicle, activeTier, configOverlay).map(opt => (
+                      return getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig).map(opt => (
                         <option key={opt.id} value={opt.id}>
                           {opt.label} {opt.pricePerDay > 0 ? `(€${opt.pricePerDay}/giorno)` : '(inclusa)'}
                         </option>
@@ -6119,14 +6103,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         {(() => {
                           const sv = vehicles.find(v => v.id === formData.vehicle_id)
                           const activeTier = customerTier?.tier || 'TIER_1'
-                          const ko = sv ? getInsuranceOptions(sv, activeTier, configOverlay) : []
+                          const ko = sv ? getInsuranceOptions(sv, activeTier, configOverlay, rentalConfig) : []
                           const sk = ko.find(k => k.id === formData.insurance_option)
                           const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
                           const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
                             + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
                           const noCauzioneCost = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
                           const unlimitedKmCost = formData.unlimited_km
-                            ? getUnlimitedKmPrice(sv, activeTier) * revenueSuggestion.rentalDays : 0
+                            ? getUnlimitedKmPriceRes(sv, activeTier) * revenueSuggestion.rentalDays : 0
                           const secondDriverCost = formData.has_second_driver
                             ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays : 0
                           const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
@@ -6209,7 +6193,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         {(() => {
                           const sv = vehicles.find(v => v.id === formData.vehicle_id)
                           const at = customerTier?.tier || 'TIER_1'
-                          const ko = sv ? getInsuranceOptions(sv, at, configOverlay) : []
+                          const ko = sv ? getInsuranceOptions(sv, at, configOverlay, rentalConfig) : []
                           const sk = ko.find(k => k.id === formData.insurance_option)
                           if (!sk || sk.pricePerDay === 0) return null
                           return (
@@ -6229,7 +6213,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const sv = vehicles.find(v => v.id === formData.vehicle_id)
                           if (!sv) return null
                           const at = customerTier?.tier || 'TIER_1'
-                          const kmPrice = getUnlimitedKmPrice(sv, at)
+                          const kmPrice = getUnlimitedKmPriceRes(sv, at)
                           if (kmPrice === 0) return null // Urban: KM already unlimited
                           return (
                             <div className="flex justify-between text-xs pt-1 border-t border-theme-border/50">
@@ -6376,7 +6360,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const ret = new Date(formData.return_date)
                   const days = Math.max(1, Math.ceil((ret.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)))
                   const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
-                  const cat = selectedVeh?.category === 'urban' ? 'urban' : (isFurgone(selectedVeh) ? 'furgone' : '_global')
+                  const cat = selectedVeh?.category || '_global'
                   const km = getKmIncluded(rentalConfig, days, cat)
                   if (km === 'unlimited') return <p className="text-xs text-green-400">KM illimitati inclusi per questa categoria</p>
                   return (
@@ -6425,7 +6409,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
                     if (selectedVehicle) {
                       const tier = customerTier?.tier
-                      const price = getUnlimitedKmPrice(selectedVehicle, tier)
+                      const price = getUnlimitedKmPriceRes(selectedVehicle, tier)
                       if (price === 0) return null // Urban: KM already unlimited
                       return ` (+€${price}/giorno)`
                     }
