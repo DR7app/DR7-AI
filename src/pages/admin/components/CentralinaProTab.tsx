@@ -506,9 +506,11 @@ export default function CentralinaProTab() {
         if (remote.preventivi) { setPreventivi(remote.preventivi); setSavedPreventivi(remote.preventivi) }
         // Refresh local cache with the authoritative copy
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
-      } else if (persisted) {
-        // Supabase is empty but this browser has localStorage data → migrate it up
-        savePersisted(persisted)
+      } else {
+        // Supabase is empty — seed with initial/localStorage values
+        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi }
+        savePersisted(seed)
+        console.log('[CentralinaPro] Seeded Pro config to Supabase')
       }
     })()
     return () => { cancelled = true }
@@ -603,7 +605,7 @@ export default function CentralinaProTab() {
     setPreventivi(savedPreventivi)
   }
 
-  const hasChanges = changes.length > 0
+  void changes.length // SaveBar always visible
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] pb-32">
@@ -614,12 +616,12 @@ export default function CentralinaProTab() {
               Centralina Pro
             </h1>
             <p className="mt-2 text-[15px] text-[#6e6e73]">
-              Anteprima design · non ancora collegata ai dati
+              Configurazione centralizzata noleggio
             </p>
           </div>
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-medium bg-[#fff7e6] text-[#b25e09] border border-[#f5d08a]">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-medium bg-[#e8f5e9] text-[#2e7d32] border border-[#a5d6a7]">
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
-            Preview
+            Attivo
           </span>
         </div>
 
@@ -692,14 +694,12 @@ export default function CentralinaProTab() {
         </div>
       </div>
 
-      {(hasChanges || justSaved) && (
-        <SaveBar
-          changes={changes}
-          justSaved={justSaved}
-          onSave={handleSave}
-          onDiscard={handleDiscard}
-        />
-      )}
+      <SaveBar
+        changes={changes}
+        justSaved={justSaved}
+        onSave={handleSave}
+        onDiscard={handleDiscard}
+      />
     </div>
   )
 }
