@@ -36,9 +36,10 @@ export function useRentalConfig(): UseRentalConfigResult {
         .maybeSingle()
 
       if (fetchErr) {
-        console.warn('[useRentalConfig] Pro fetch error, falling back to old config:', fetchErr.message)
-        // Fallback to old config
-        return await fetchLegacyConfig()
+        console.warn('[useRentalConfig] Pro fetch error, using defaults:', fetchErr.message)
+        setConfig(DEFAULT_RENTAL_CONFIG)
+        setError(fetchErr.message)
+        return
       }
 
       if (data?.config && typeof data.config === 'object') {
@@ -46,8 +47,8 @@ export function useRentalConfig(): UseRentalConfigResult {
         const converted = convertProToRentalConfig(proConfig)
         setConfig(converted)
       } else {
-        console.warn('[useRentalConfig] Pro config empty, falling back to old config')
-        return await fetchLegacyConfig()
+        console.warn('[useRentalConfig] Pro config empty, using defaults')
+        setConfig(DEFAULT_RENTAL_CONFIG)
       }
     } catch (err) {
       console.warn('[useRentalConfig] Unexpected error, using defaults:', err)
@@ -57,27 +58,6 @@ export function useRentalConfig(): UseRentalConfigResult {
       setLoading(false)
     }
   }, [])
-
-  // Fallback: read from old rental_extras_config if Pro is not available
-  async function fetchLegacyConfig() {
-    try {
-      const { data, error: legacyErr } = await supabase
-        .from('rental_extras_config')
-        .select('config')
-        .limit(1)
-        .single()
-
-      if (legacyErr || !data?.config) {
-        setConfig(DEFAULT_RENTAL_CONFIG)
-        setError(legacyErr?.message || 'No config found')
-        return
-      }
-
-      setConfig({ ...DEFAULT_RENTAL_CONFIG, ...data.config } as RentalConfig)
-    } catch {
-      setConfig(DEFAULT_RENTAL_CONFIG)
-    }
-  }
 
   useEffect(() => {
     fetchConfig()
@@ -90,15 +70,8 @@ export function useRentalConfig(): UseRentalConfigResult {
     description?: string
   ): Promise<boolean> => {
     try {
-      // Save to old config table (CentralinaConfig still uses this for writes)
-      const { error: saveErr } = await supabase
-        .from('rental_extras_config')
-        .update({
-          config: newConfig,
-          updated_at: new Date().toISOString(),
-          updated_by: changedBy,
-        })
-        .not('id', 'is', null)
+      // Save is handled by CentralinaProTab directly — this is a no-op for legacy compat
+      const saveErr: any = null
 
       if (saveErr) {
         console.error('[useRentalConfig] Save error:', saveErr)

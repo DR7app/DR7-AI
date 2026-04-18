@@ -24,35 +24,15 @@ const handler: Handler = async (event) => {
       .eq('id', 'main')
       .maybeSingle()
 
-    if (proData?.config && typeof proData.config === 'object') {
-      const converted = convertProToLegacy(proData.config)
-      if (converted) {
-        return {
-          statusCode: 200,
-          headers: { ...headers, 'Cache-Control': 'public, max-age=60' },
-          body: JSON.stringify({ config: converted, updated_at: proData.updated_at }),
-        }
-      }
+    if (!proData?.config || typeof proData.config !== 'object') {
+      return { statusCode: 200, headers, body: JSON.stringify({ config: null }) }
     }
 
-    // Fallback to old config
-    const { data, error } = await supabase
-      .from('rental_extras_config')
-      .select('config, updated_at')
-      .limit(1)
-      .single()
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return { statusCode: 200, headers, body: JSON.stringify({ config: null }) }
-      }
-      throw error
-    }
-
+    const converted = convertProToLegacy(proData.config)
     return {
       statusCode: 200,
       headers: { ...headers, 'Cache-Control': 'public, max-age=60' },
-      body: JSON.stringify({ config: data.config, updated_at: data.updated_at }),
+      body: JSON.stringify({ config: converted, updated_at: proData.updated_at }),
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
