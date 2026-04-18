@@ -231,6 +231,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     return_date: '',
     return_time: '10:00',
     driver_tier: 'TIER_2' as DriverTier,
+    residente_sardegna: true,
     maggiorazione_pct: String(configOverlay.maggiorazionePct),
     insurance_option: '',
     // Extras
@@ -339,10 +340,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const pricing = useMemo(() => {
     // Read base rate from Centralina Pro tariffe — NO vehicle.daily_rate
     let listDailyRate = 0
-    if (rentalConfig && selectedVehicle) {
+    if (rentalConfig && selectedVehicle && rentalDays >= 1) {
       const category = selectedVehicle.category || 'exotic'
       const dayRates = rentalConfig.rental_day_rates?.[category]
       if (dayRates) {
+        // Price is the same regardless of residency — residency only affects cauzione
         const table = dayRates.flat || dayRates.resident || dayRates.non_resident
         if (table) {
           const directTotal = table[String(rentalDays)]
@@ -444,7 +446,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       sconto,
       totalFinal,
       kmIncluded: rentalConfig ? getKmIncluded(rentalConfig, rentalDays, selectedVehicle?.category || 'exotic') : 0,
-      sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 1.80,
+      sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 0,
     }
   }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig])
 
@@ -678,6 +680,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         driver_tier: form.driver_tier,
         pricing_trace: revenueData || null,
         extras_detail: {
+          residente_sardegna: form.residente_sardegna,
           include_lavaggio: form.include_lavaggio,
           include_no_cauzione: form.include_no_cauzione,
           include_unlimited_km: form.include_unlimited_km,
@@ -767,6 +770,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       return_date: returnDateStr,
       return_time: returnTimeStr,
       driver_tier: (p.driver_tier as DriverTier) || 'TIER_2',
+      residente_sardegna: extras.residente_sardegna !== undefined ? !!extras.residente_sardegna : true,
       maggiorazione_pct: String(p.maggiorazione_pct || 0),
       insurance_option: p.insurance_option || '',
       include_lavaggio: !!extras.include_lavaggio || p.lavaggio_fee > 0,
@@ -799,6 +803,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       return_date: '',
       return_time: '10:00',
       driver_tier: 'TIER_2',
+      residente_sardegna: true,
       maggiorazione_pct: String(configOverlay.maggiorazionePct),
       insurance_option: '',
       include_lavaggio: true,
@@ -1456,6 +1461,22 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               { value: 'TIER_1', label: 'Fascia B (21-25 o patente 3-4 anni)' },
             ]}
           />
+          <div className="mt-2 flex gap-2">
+            {([true, false] as const).map(val => (
+              <button
+                key={String(val)}
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, residente_sardegna: val }))}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                  form.residente_sardegna === val
+                    ? 'bg-dr7-gold text-white'
+                    : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
+                }`}
+              >
+                {val ? 'Residente Sardegna' : 'Non Residente'}
+              </button>
+            ))}
+          </div>
           <div className="mt-2">
             <CustomerAutocomplete
               customers={customers}

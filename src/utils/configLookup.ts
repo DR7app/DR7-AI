@@ -71,12 +71,12 @@ export function getUnlimitedKmPrice(config: RentalConfig, category: string, tier
 /** Get second driver price per day for a tier */
 export function getSecondDriverPrice(config: RentalConfig, tier: DriverTier): number {
   if (tier === 'BLOCKED') return 0
-  return config.second_driver?.[tier] ?? 10
+  return config.second_driver?.[tier] ?? 0
 }
 
 /** Get no cauzione surcharge per day */
 export function getNoCauzioneSurcharge(config: RentalConfig): number {
-  return config.no_cauzione_surcharge?.per_day ?? 49
+  return config.no_cauzione_surcharge?.per_day ?? 0
 }
 
 /** Check if no cauzione is available for a given tier + insurance */
@@ -118,15 +118,15 @@ export function getCategoryDepositDefault(config: RentalConfig, category: string
 
 /** Get lavaggio fee */
 export function getLavaggioFee(config: RentalConfig): number {
-  return config.lavaggio?.fee ?? 9.90
+  return config.lavaggio?.fee ?? 0
 }
 
 /** Get delivery price per km */
 export function getDeliveryPricePerKm(config: RentalConfig): number {
-  return config.delivery?.price_per_km ?? 3
+  return config.delivery?.price_per_km ?? 0
 }
 
 /** Get DR7 Flex daily price */
 export function getDr7FlexPrice(config: RentalConfig): number {
-  return config.dr7_flex?.daily_price ?? 19.90
+  return config.dr7_flex?.daily_price ?? 0
 }

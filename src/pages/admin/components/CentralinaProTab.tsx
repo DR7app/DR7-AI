@@ -432,10 +432,10 @@ function savePersisted(snap: PersistedSnapshot) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snap))
   } catch { /* ignore quota / private mode errors */ }
   // Then persist to Supabase so the website + other admins see it.
+  // Use upsert so a missing row (id='main') is created, not silently ignored.
   supabase
     .from('centralina_pro_config')
-    .update({ config: snap })
-    .eq('id', 'main')
+    .upsert({ id: 'main', config: snap }, { onConflict: 'id' })
     .then(({ error }) => {
       if (error) console.error('[CentralinaPro] failed to save to Supabase:', error)
     })

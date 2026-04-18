@@ -61,7 +61,6 @@ import NewClientModal from './NewClientModal'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
-import PreventivoModal from './PreventivoModal'
 import DanniPenaliModal from './DanniPenaliModal'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
@@ -424,7 +423,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [showPreventivoModal, setShowPreventivoModal] = useState(false)
   const [editingOriginalPaymentStatus, setEditingOriginalPaymentStatus] = useState<string | null>(null) // Track if payment changed from unpaid → paid
   const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
 
@@ -4737,10 +4735,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           {/* Main Title - Italian Translation verified */}
           <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Noleggio</h2>
           <div className="flex gap-2 sm:gap-3">
-            <Button variant="secondary" onClick={() => setShowPreventivoModal(true)} className="flex-1 sm:flex-none text-sm sm:text-base border border-dr7-gold/50 text-dr7-gold hover:bg-dr7-gold/10">
-              <span className="hidden sm:inline">Preventivo</span>
-              <span className="sm:hidden">Prev.</span>
-            </Button>
             <Button onClick={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
               <span className="hidden sm:inline">+ Nuova Prenotazione</span>
               <span className="sm:hidden">+ Nuova</span>
@@ -7387,13 +7381,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )}
 
       </div >
-
-      {/* Preventivo Modal */}
-      <PreventivoModal
-        isOpen={showPreventivoModal}
-        onClose={() => setShowPreventivoModal(false)}
-        onSaved={() => {}}
-      />
     </>
   )
 }

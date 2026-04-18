@@ -64,7 +64,7 @@ export function useLimitationOverride() {
   const flowType = flowTypeRef.current
 
   /** Generate a new session (call when form opens or resets) */
-  const newSession = useCallback((ft: 'booking_create' | 'booking_edit' = 'booking_create') => {
+  const newSession = useCallback((ft: 'booking_create' | 'booking_edit' | 'preventivo_create' | 'preventivo_edit' = 'booking_create') => {
     draftSessionIdRef.current = crypto.randomUUID()
     flowTypeRef.current = ft
     overrideMap.current.clear()
