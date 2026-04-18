@@ -398,6 +398,8 @@ type PersistedSnapshot = {
   preventivi: PreventiviConfig
 }
 
+// Supabase singleton row: centralina_pro_config (id='main', config jsonb).
+// localStorage is kept as a fast-path cache + offline fallback.
 function loadPersisted(): PersistedSnapshot | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -408,12 +410,35 @@ function loadPersisted(): PersistedSnapshot | null {
   }
 }
 
+async function loadPersistedFromSupabase(): Promise<PersistedSnapshot | null> {
+  try {
+    const { data, error } = await supabase
+      .from('centralina_pro_config')
+      .select('config')
+      .eq('id', 'main')
+      .maybeSingle()
+    if (error || !data) return null
+    const cfg = data.config as Partial<PersistedSnapshot> | null
+    if (!cfg || Object.keys(cfg).length === 0) return null
+    return cfg as PersistedSnapshot
+  } catch {
+    return null
+  }
+}
+
 function savePersisted(snap: PersistedSnapshot) {
+  // Always cache locally first — instant + resilient to offline.
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snap))
-  } catch {
-    // ignore quota / private mode errors
-  }
+  } catch { /* ignore quota / private mode errors */ }
+  // Then persist to Supabase so the website + other admins see it.
+  supabase
+    .from('centralina_pro_config')
+    .update({ config: snap })
+    .eq('id', 'main')
+    .then(({ error }) => {
+      if (error) console.error('[CentralinaPro] failed to save to Supabase:', error)
+    })
 }
 
 function pick<T>(persisted: PersistedSnapshot | null, key: keyof PersistedSnapshot, fallback: T): T {
@@ -459,6 +484,36 @@ export default function CentralinaProTab() {
   const [savedPreventivi, setSavedPreventivi] = useState<PreventiviConfig>(initialPreventivi)
 
   const [justSaved, setJustSaved] = useState(false)
+
+  // ─── HYDRATE FROM SUPABASE + ONE-TIME LOCALSTORAGE MIGRATION ───
+  // On first mount: fetch Pro config from Supabase. If present, replace local
+  // state (Supabase is the source of truth for the website). If absent AND
+  // localStorage has data, push it up so nothing is lost.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const remote = await loadPersistedFromSupabase()
+      if (cancelled) return
+      if (remote) {
+        // Supabase has data → adopt it
+        if (remote.categories) { setCategories(remote.categories); setSavedCategories(remote.categories) }
+        if (remote.fasce) { setFasce(remote.fasce); setSavedFasce(remote.fasce) }
+        if (remote.insurance) { setInsurance(remote.insurance); setSavedInsurance(remote.insurance) }
+        if (remote.km) { setKm(remote.km); setSavedKm(remote.km) }
+        if (remote.deposits) { setDeposits(remote.deposits); setSavedDeposits(remote.deposits) }
+        if (remote.servizi) { setServizi(remote.servizi); setSavedServizi(remote.servizi) }
+        if (remote.prezzoDinamico) { setPrezzoDinamico(remote.prezzoDinamico); setSavedPrezzoDinamico(remote.prezzoDinamico) }
+        if (remote.preventivi) { setPreventivi(remote.preventivi); setSavedPreventivi(remote.preventivi) }
+        // Refresh local cache with the authoritative copy
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
+      } else if (persisted) {
+        // Supabase is empty but this browser has localStorage data → migrate it up
+        savePersisted(persisted)
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ─── SYNC EFFECTS ───
   // When categories change, ensure dependent configs (insurance, km, tariffe) have entries.
