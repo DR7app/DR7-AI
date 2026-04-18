@@ -82,7 +82,24 @@ export default function FatturaTab() {
     }
   }
 
+  function requireOtpConfirm(label: string): boolean {
+    const code = String(Math.floor(1000 + Math.random() * 9000))
+    const input = window.prompt(`⚠️ ${label}\n\nDigita il codice ${code} per confermare:`)
+    return input === code
+  }
+
   async function handleDelete(id: string) {
+    const invoice = invoices.find(i => i.id === id)
+    if (!invoice) return
+
+    // Block deletion of fatture already sent to SDI
+    if (invoice.sdi_status && ['sending', 'sent', 'accepted'].includes(invoice.sdi_status)) {
+      alert(`Impossibile eliminare ${invoice.numero_fattura}: fattura già inviata a SDI (stato: ${invoice.sdi_status}).\n\nSe necessario, crea una Nota di Credito.`)
+      return
+    }
+
+    if (!requireOtpConfirm(`Eliminare fattura ${invoice.numero_fattura} — ${invoice.customer_name}?`)) return
+
     try {
       const { error } = await supabase.from('fatture').delete().eq('id', id)
       if (error) throw error
@@ -95,10 +112,20 @@ export default function FatturaTab() {
   }
 
   async function handleBulkDelete() {
+    // Block if any selected fattura was sent to SDI
+    const sentInvoices = invoices.filter(i => selectedIds.includes(i.id) && i.sdi_status && ['sending', 'sent', 'accepted'].includes(i.sdi_status))
+    if (sentInvoices.length > 0) {
+      alert(`Impossibile eliminare: ${sentInvoices.length} fattura/e già inviate a SDI.\n\n${sentInvoices.map(i => i.numero_fattura).join(', ')}\n\nRimuovile dalla selezione.`)
+      return
+    }
+
+    if (!requireOtpConfirm(`Eliminare ${selectedIds.length} fatture selezionate?`)) return
+
     try {
       const { error } = await supabase.from('fatture').delete().in('id', selectedIds)
       if (error) throw error
       setSelectedIds([])
+      logAdminAction('bulk_delete_fatture', 'fattura', selectedIds.join(','))
       loadInvoices()
     } catch (error) {
       console.error('Error bulk deleting invoices:', error)
