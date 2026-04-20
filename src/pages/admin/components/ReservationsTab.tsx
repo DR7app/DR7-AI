@@ -667,7 +667,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   // Recalculate total when insurance, delivery fees, or payment method change
   useEffect(() => {
-    if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id && !editingId) {
+    if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       const activeTier = customerTier?.tier || 'TIER_1'
       const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
