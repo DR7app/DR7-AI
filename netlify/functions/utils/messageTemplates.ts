@@ -59,6 +59,7 @@ const OLD_TO_PRO: Record<string, string> = {
   signature_request_link: 'pro_richiesta_firma',
   signature_reminder_whatsapp: 'pro_promemoria_firma',
   signature_otp_whatsapp: 'pro_richiesta_otp',
+  document_signature_link: 'pro_richiesta_firma',
 
   // Pagamenti & annullamenti
   payment_link_customer: 'pro_richiesta_pagamento',

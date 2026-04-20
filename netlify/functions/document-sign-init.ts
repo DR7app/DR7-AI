@@ -101,7 +101,7 @@ export const handler: Handler = async (event) => {
             try {
                 // Body comes EXCLUSIVELY from Messaggi di Sistema Pro.
                 // No hardcoded fallback — if no Pro template, we skip the send.
-                const resolvedMessage = await renderTemplate('document_signature_link', { signerName, docName, signingUrl })
+                const resolvedMessage = await renderTemplate('document_signature_link', { signerName, docName, contractNumber: docName, signingUrl })
                 if (!resolvedMessage) {
                     console.warn('[document-sign-init] No Pro template for document_signature_link — skipping send')
                 } else {
