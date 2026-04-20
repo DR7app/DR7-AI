@@ -66,8 +66,9 @@ const OLD_TO_PRO: Record<string, string> = {
   booking_cancelled_whatsapp: 'pro_annullamento_cliente',
 
   // Preventivi
-  preventivo_whatsapp: 'pro_conferma_preventivo',
-  preventivo_whatsapp_no_sconto: 'pro_conferma_preventivo',
+  // NOTE: preventivo_whatsapp / preventivo_whatsapp_no_sconto sono letti
+  // direttamente da PreventiviTab (slot admin-created in Messaggi di Sistema
+  // con quelle esatte chiavi). Nessun rerouting qui.
   admin_new_website_quote: 'pro_admin_nuovo_preventivo',
   admin_no_cauzione_request: 'pro_admin_nuova_prenotazione',
 

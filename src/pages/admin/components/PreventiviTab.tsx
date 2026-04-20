@@ -969,14 +969,17 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
   async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Due template separati, scelta in base alla presenza di uno sconto:
-    //   sconto > 0  → pro_promemoria_checkin   (label: "Preventivo WhatsApp")
-    //   sconto = 0  → pro_promemoria_checkout  (label: "Preventivo senza sconto")
-    // Nessun fallback hardcoded — se la slot scelta è vuota/disattivata,
+    // Due template admin-created in Messaggi di Sistema:
+    //   sconto > 0  → "Preventivo WhatsApp"        (key: preventivo_whatsapp)
+    //   sconto = 0  → "Preventivo senza sconto"    (key: preventivo_whatsapp_no_sconto)
+    // Leggiamo DIRETTAMENTE queste chiavi (niente routing verso pro_*),
+    // così l'admin modifica e vede esattamente ciò che riceve il cliente.
+    // Nessun fallback hardcoded: se la slot scelta è vuota/disattivata
     // torniamo '' e il chiamante mostra un toast di errore.
     const hasSconto = (p.sconto || 0) > 0
-    const primaryKey = hasSconto ? 'pro_promemoria_checkin' : 'pro_promemoria_checkout'
-    const keyChain = [primaryKey]
+    const keyChain = hasSconto
+      ? ['preventivo_whatsapp']
+      : ['preventivo_whatsapp_no_sconto', 'preventivo_whatsapp']
 
     try {
       let tpl: { message_body: string; is_enabled: boolean } | null = null
