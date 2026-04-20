@@ -115,20 +115,6 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il contratto non ha un PDF generato' }) }
         }
 
-        // Block if contract already has a signed request
-        const { data: alreadySigned } = await supabase
-            .from('signature_requests')
-            .select('id')
-            .eq('contract_id', contract.id)
-            .eq('status', 'signed')
-            .limit(1)
-            .maybeSingle()
-
-        if (alreadySigned) {
-            console.log(`[signature-init] Contract ${contract.id} already signed (request ${alreadySigned.id}), skipping`)
-            return { statusCode: 400, body: JSON.stringify({ error: 'Contratto già firmato' }) }
-        }
-
         // Cancel any existing active signature requests for this contract
         const { data: existingRequests } = await supabase
             .from('signature_requests')
