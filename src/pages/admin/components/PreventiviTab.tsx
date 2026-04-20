@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
@@ -10,6 +10,7 @@ import Input from './Input'
 import Select from './Select'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 
@@ -218,6 +219,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [sortField, setSortField] = useState<'created_at' | 'pickup_date' | 'total_final' | 'rental_days'>('created_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  // No-Cauzione OTP override (when client is Fascia B and admin is not Valerio)
+  const draftSessionIdRef = useRef<string>(crypto.randomUUID())
+  const [noCauzioneOverrideId, setNoCauzioneOverrideId] = useState<string | null>(null)
+  const [otpModalOpen, setOtpModalOpen] = useState(false)
+
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
   const configOverlay = useMemo(() => buildConfigOverlay(rentalConfig), [rentalConfig])
@@ -280,6 +286,17 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     () => configOverlay.experienceServices.filter(s => !s.tierOnly || s.tierOnly === form.driver_tier),
     [configOverlay.experienceServices, form.driver_tier]
   )
+
+  // Per-day surcharge for "No Cauzione" — reads tier+residency from Centralina PRO
+  // (rentalConfig.deposits[TIER_X_RESIDENT|NON_RESIDENT]), falls back to overlay.
+  const noCauzioneResolvedDaily = useMemo(() => {
+    const key = `${form.driver_tier}_${form.residente_sardegna ? 'RESIDENT' : 'NON_RESIDENT'}` as
+      'TIER_1_RESIDENT' | 'TIER_2_RESIDENT' | 'TIER_1_NON_RESIDENT' | 'TIER_2_NON_RESIDENT'
+    const opts = (rentalConfig?.deposits?.[key] as { id: string; surcharge_per_day?: number }[] | undefined) || []
+    const fromPro = opts.find(o => o.id === 'no_deposit')?.surcharge_per_day
+    if (fromPro && fromPro > 0) return fromPro
+    return configOverlay.noCauzionePerDay || 0
+  }, [rentalConfig, form.driver_tier, form.residente_sardegna, configOverlay.noCauzionePerDay])
 
   // Revenue pricing
   const [revenueData, setRevenueData] = useState<{
@@ -380,7 +397,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
     const lavaggioFee = form.include_lavaggio ? configOverlay.lavaggioFee : 0
 
-    const noCauzioneDaily = form.include_no_cauzione ? configOverlay.noCauzionePerDay : 0
+    const noCauzioneDaily = form.include_no_cauzione ? noCauzioneResolvedDaily : 0
     const noCauzioneTotal = Math.round(noCauzioneDaily * rentalDays * 100) / 100
 
     const unlimitedKmDaily = form.include_unlimited_km
@@ -453,7 +470,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       kmIncluded: rentalConfig ? getKmIncluded(rentalConfig, rentalDays, selectedVehicle?.category || 'exotic') : 0,
       sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 0,
     }
-  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig])
+  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig, noCauzioneResolvedDaily])
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
 
@@ -830,7 +847,42 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       acceleration_0_100: '',
     })
     setRevenueData(null)
+    // Reset No-Cauzione approval when form is reset
+    setNoCauzioneOverrideId(null)
+    draftSessionIdRef.current = crypto.randomUUID()
   }
+
+  // ─── No-Cauzione guard: require OTP when client is Fascia B and admin is not Valerio ───
+
+  const isFasciaB = form.driver_tier === 'TIER_1'
+
+  function handleNoCauzioneToggle(nextChecked: boolean) {
+    // Unchecking: always allow, clear any pending override
+    if (!nextChecked) {
+      setForm(prev => ({ ...prev, include_no_cauzione: false }))
+      setNoCauzioneOverrideId(null)
+      return
+    }
+
+    // Valerio himself OR not Fascia B OR already-approved for this session → allow directly
+    if (isValerio || !isFasciaB || noCauzioneOverrideId) {
+      setForm(prev => ({ ...prev, include_no_cauzione: true }))
+      return
+    }
+
+    // Fascia B + non-Valerio: open shared OTP modal (blocks until verified)
+    setOtpModalOpen(true)
+  }
+
+  // Close loophole: if tier changes to Fascia B after "No Cauzione" was already
+  // checked (e.g. customer autofill switches TIER_2 → TIER_1), force uncheck
+  // unless admin is Valerio or there's a valid override.
+  useEffect(() => {
+    if (form.include_no_cauzione && isFasciaB && !isValerio && !noCauzioneOverrideId) {
+      setForm(prev => ({ ...prev, include_no_cauzione: false }))
+      toast.error('"No Cauzione" richiede autorizzazione per Fascia B')
+    }
+  }, [form.driver_tier, form.include_no_cauzione, isFasciaB, isValerio, noCauzioneOverrideId])
 
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
@@ -1641,8 +1693,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <span className="text-sm text-theme-text-primary">Lavaggio ({formatEur(configOverlay.lavaggioFee)})</span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-            <input type="checkbox" checked={form.include_no_cauzione} onChange={(e) => setForm(prev => ({ ...prev, include_no_cauzione: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
-            <span className="text-sm text-theme-text-primary">No Cauzione ({formatEur(configOverlay.noCauzionePerDay)}/giorno)</span>
+            <input type="checkbox" checked={form.include_no_cauzione} onChange={(e) => handleNoCauzioneToggle(e.target.checked)} className="w-4 h-4 accent-dr7-gold" />
+            <span className="text-sm text-theme-text-primary">
+              No Cauzione ({formatEur(noCauzioneResolvedDaily)}/giorno)
+              {isFasciaB && !isValerio && (
+                <span className="ml-2 text-xs text-amber-400">(Fascia B → richiede autorizzazione)</span>
+              )}
+            </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_unlimited_km} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
@@ -1874,6 +1931,25 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           </Button>
         )}
       </div>
+
+      {/* No-Cauzione OTP — reuses the shared LimitationOverrideModal pattern */}
+      <LimitationOverrideModal
+        isOpen={otpModalOpen}
+        limitationCode="NO_CAUZIONE_FASCIA_B"
+        limitationMessage={`Richiesta "No Cauzione" per cliente Fascia B (residente: ${form.residente_sardegna ? 'sì' : 'no'}).`}
+        draftSessionId={draftSessionIdRef.current}
+        flowType="preventivo"
+        onCancel={() => {
+          setOtpModalOpen(false)
+          // Keep No Cauzione deselected when admin cancels without verifying
+          setForm(prev => ({ ...prev, include_no_cauzione: false }))
+        }}
+        onOverrideApproved={(overrideId) => {
+          setNoCauzioneOverrideId(overrideId)
+          setForm(prev => ({ ...prev, include_no_cauzione: true }))
+          setOtpModalOpen(false)
+        }}
+      />
     </div>
   )
 }
