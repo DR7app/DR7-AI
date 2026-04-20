@@ -49,7 +49,11 @@ const handler: Handler = async (event) => {
   });
 
   try {
-    const { action, code, booking_id, service_type, order_total } = JSON.parse(event.body || "{}");
+    const body = JSON.parse(event.body || "{}");
+    const { action, code, booking_id } = body;
+    const service_type = body.service_type || body.serviceType;
+    const order_total = body.order_total ?? body.orderTotal;
+    const user_email = body.user_email || body.userEmail;
 
     if (!code) {
       return {
@@ -82,7 +86,7 @@ const handler: Handler = async (event) => {
       .maybeSingle();
 
     if (marketingCode) {
-      return handleMarketingCode(supabase, marketingCode, normalizedCode, action, booking_id, service_type, order_total, headers);
+      return handleMarketingCode(supabase, marketingCode, normalizedCode, action, booking_id, service_type, order_total, user_email, headers);
     }
 
     // Code not found in either table
@@ -261,11 +265,30 @@ async function handleMarketingCode(
   booking_id: string,
   service_type: string,
   order_total: number,
+  user_email: string | undefined,
   headers: any
 ) {
   const now = new Date();
   const validUntil = new Date(discountCode.valid_until);
   const validFrom = new Date(discountCode.valid_from);
+
+  // Per-user restriction: when customer_email is set on the code, only that
+  // email may use it. (Admin UI field: "Limita a cliente specifico".)
+  if (discountCode.customer_email) {
+    const restricted = String(discountCode.customer_email).toLowerCase().trim();
+    const provided = (user_email || '').toLowerCase().trim();
+    if (!provided || provided !== restricted) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({
+          valid: false,
+          error: 'Codice riservato',
+          message: 'Questo codice è riservato a un altro cliente'
+        }),
+      };
+    }
+  }
 
   // Check if expired by date
   if (validUntil < now) {
