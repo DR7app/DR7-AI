@@ -235,7 +235,7 @@ const handler: Handler = async (event) => {
           vehicle_name: booking.vehicle_name || '',
           plate: booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '',
           pickup_location: booking.pickup_location || '',
-          insurance: booking.insurance_option || '',
+          insurance: booking.booking_details?.insuranceLabel || booking.insurance_option?.replace(/_/g, ' ') || '',
           payment_status: (() => {
             const ps = booking.payment_status;
             if (ps === 'paid' || ps === 'succeeded' || ps === 'completed') return 'Pagato';
@@ -280,6 +280,7 @@ const handler: Handler = async (event) => {
         // KM info for template — same logic as contract
         const tplUnlimitedKm = booking.booking_details?.unlimited_km;
         const tplKmLimit = booking.booking_details?.km_limit;
+        const tplKmPackage = booking.booking_details?.kmPackage;
         if (tplUnlimitedKm === true || tplKmLimit === 'Illimitati' || Number(tplKmLimit) >= 9999) {
           vars.km_info = 'Illimitati';
         } else if (tplKmLimit && tplKmLimit !== '0') {
@@ -287,6 +288,15 @@ const handler: Handler = async (event) => {
           vars.km_info = isNum ? `${tplKmLimit} Km` : String(tplKmLimit);
         } else {
           vars.km_info = booking.booking_details?.total_km ? `${booking.booking_details.total_km} Km` : 'Illimitati';
+        }
+
+        // KM package details (type + cost) for template
+        if (tplKmPackage) {
+          const kmType = tplKmPackage.type === 'unlimited' ? 'Illimitati' : (tplKmPackage.distance || `${tplKmPackage.includedKm || 100} Km`);
+          const kmCost = Number(tplKmPackage.cost || 0);
+          vars.km_package = kmCost > 0 ? `${kmType} (€${kmCost.toFixed(2)})` : `${kmType} inclusi`;
+        } else {
+          vars.km_package = vars.km_info;
         }
 
         // Replace all {variable} placeholders
