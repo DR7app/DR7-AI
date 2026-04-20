@@ -17,6 +17,7 @@ import { logger } from '../utils/logger'
 
 // Configuration constants
 const BUFFER_MINUTES = 75 // 30min gap + 45min wash
+const CROSS_VEHICLE_GAP_MINUTES = 15 // Min gap between ANY two rental events (pickup or return) on different vehicles — staff can only handle one handover at a time
 const BUSINESS_START_HOUR = 0  // Admin can book any time
 const BUSINESS_END_HOUR = 24   // Admin can book any time
 const TIME_SLOT_INTERVAL_MINUTES = 15
@@ -371,6 +372,45 @@ export function isVehicleAvailable(
                 available: false,
                 reason: `Vehicle is booked until ${bookingEnd.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}. Earliest available: ${earliestTime ? earliestTime.toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) : 'not today'}`,
                 earliestTime: earliestTime || undefined
+            }
+        }
+    }
+
+    // Cross-vehicle handover gap: any pickup or return on a DIFFERENT rental
+    // must be at least 15 minutes apart from our pickup and our return.
+    // Same-car buffer above stays untouched (75 min).
+    const crossGapMs = CROSS_VEHICLE_GAP_MINUTES * 60 * 1000
+    for (const booking of existingBookings) {
+        if (excludeBookingId && booking.id === excludeBookingId) continue
+        if (booking.status === 'cancelled' || booking.status === 'annullata') continue
+        if (booking.status === 'completed' || booking.status === 'completata') continue
+        if (booking.status === 'expired') continue
+        if (booking.status === 'pending_payment' && booking.payment_status === 'expired') continue
+        // Only rental bookings consume handover staff. Car wash / mechanical are appointments.
+        if (booking.service_type && booking.service_type !== 'car_rental') continue
+        // Same-vehicle conflicts are already covered above with the 75-min buffer.
+        if (matchVehicleByPlate(booking, vehicle)) continue
+
+        const otherPickup = new Date(booking.pickup_date).getTime()
+        const otherDropoff = new Date(booking.dropoff_date).getTime()
+        const myPickup = requestStart.getTime()
+        const myDropoff = requestEnd.getTime()
+
+        const pairs: Array<[string, number, string, number]> = [
+            ['Ritiro', myPickup, 'ritiro', otherPickup],
+            ['Ritiro', myPickup, 'riconsegna', otherDropoff],
+            ['Riconsegna', myDropoff, 'ritiro', otherPickup],
+            ['Riconsegna', myDropoff, 'riconsegna', otherDropoff],
+        ]
+
+        for (const [myLabel, myTime, otherLabel, otherTime] of pairs) {
+            if (Math.abs(myTime - otherTime) < crossGapMs) {
+                const otherTimeFmt = new Date(otherTime).toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+                const plateInfo = booking.vehicle_plate || booking.vehicle_name || 'altro veicolo'
+                return {
+                    available: false,
+                    reason: `${myLabel} a meno di ${CROSS_VEHICLE_GAP_MINUTES} minuti dalla ${otherLabel} di ${plateInfo} (${otherTimeFmt}). Serve almeno ${CROSS_VEHICLE_GAP_MINUTES} minuti tra due operazioni su auto diverse.`
+                }
             }
         }
     }

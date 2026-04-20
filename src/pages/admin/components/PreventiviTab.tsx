@@ -13,6 +13,7 @@ import CustomerAutocomplete from './CustomerAutocomplete'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
+import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 
 // ─── Time slots (office hours, 30-min intervals) ────────────────────────────
 function genSlots(ranges: [number, number][]): { value: string; label: string }[] {
@@ -223,6 +224,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const draftSessionIdRef = useRef<string>(crypto.randomUUID())
   const [noCauzioneOverrideId, setNoCauzioneOverrideId] = useState<string | null>(null)
   const [otpModalOpen, setOtpModalOpen] = useState(false)
+
+  // Slot-unavailable OTP override (same-car buffer OR 15-min cross-vehicle gap)
+  const [slotOverrideId, setSlotOverrideId] = useState<string | null>(null)
+  const [slotOverrideModalOpen, setSlotOverrideModalOpen] = useState(false)
+  const [slotOverrideReason, setSlotOverrideReason] = useState<string>('')
+  const [pendingSendAfterSave, setPendingSendAfterSave] = useState(false)
 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
@@ -666,6 +673,48 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       }
     }
 
+    // Availability guard: a preventivo reserves the slot just like a booking.
+    // Blocks same-car 75-min buffer AND the 15-min cross-vehicle handover gap.
+    // If blocked, the admin can override via a director OTP.
+    if (selectedVehicle && !slotOverrideId) {
+      const windowStart = new Date(`${form.pickup_date}T00:00:00+02:00`)
+      const windowEnd = new Date(`${form.return_date}T23:59:59+02:00`)
+      windowStart.setDate(windowStart.getDate() - 1)
+      windowEnd.setDate(windowEnd.getDate() + 1)
+      const { data: windowBookings } = await supabase
+        .from('bookings')
+        .select('id,vehicle_id,vehicle_plate,vehicle_name,customer_name,pickup_date,dropoff_date,status,service_type,payment_method,payment_status')
+        .lt('pickup_date', windowEnd.toISOString())
+        .gt('dropoff_date', windowStart.toISOString())
+      const availVehicle: AvailabilityVehicle = {
+        id: selectedVehicle.id,
+        display_name: selectedVehicle.display_name,
+        plate: selectedVehicle.plate,
+        status: (selectedVehicle.status === 'available' || selectedVehicle.status === 'rented' || selectedVehicle.status === 'maintenance' || selectedVehicle.status === 'retired')
+          ? selectedVehicle.status
+          : 'available',
+        daily_rate: selectedVehicle.daily_rate,
+        category: (selectedVehicle.category as AvailabilityVehicle['category']) || undefined,
+        metadata: selectedVehicle.metadata,
+        created_at: '',
+        updated_at: '',
+      }
+      const result = isVehicleAvailable(
+        availVehicle,
+        form.pickup_date,
+        form.return_date,
+        form.pickup_time,
+        form.return_time,
+        (windowBookings || []) as AvailabilityBooking[],
+      )
+      if (!result.available) {
+        setSlotOverrideReason(result.reason || 'Slot non disponibile')
+        setPendingSendAfterSave(sendAfterSave)
+        setSlotOverrideModalOpen(true)
+        return
+      }
+    }
+
     setSaving(true)
     try {
       const pickup = `${form.pickup_date}T${form.pickup_time}:00+02:00`
@@ -849,6 +898,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     setRevenueData(null)
     // Reset No-Cauzione approval when form is reset
     setNoCauzioneOverrideId(null)
+    // Reset slot-availability override
+    setSlotOverrideId(null)
+    setSlotOverrideReason('')
     draftSessionIdRef.current = crypto.randomUUID()
   }
 
@@ -1941,13 +1993,32 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         flowType="preventivo"
         onCancel={() => {
           setOtpModalOpen(false)
-          // Keep No Cauzione deselected when admin cancels without verifying
           setForm(prev => ({ ...prev, include_no_cauzione: false }))
         }}
         onOverrideApproved={(overrideId) => {
           setNoCauzioneOverrideId(overrideId)
           setForm(prev => ({ ...prev, include_no_cauzione: true }))
           setOtpModalOpen(false)
+        }}
+      />
+
+      {/* Slot-unavailable OTP — same-car 75-min buffer OR 15-min cross-vehicle gap */}
+      <LimitationOverrideModal
+        isOpen={slotOverrideModalOpen}
+        limitationCode="SLOT_NON_DISPONIBILE"
+        limitationMessage={slotOverrideReason || 'Slot non disponibile'}
+        draftSessionId={draftSessionIdRef.current}
+        flowType="preventivo"
+        onCancel={() => {
+          setSlotOverrideModalOpen(false)
+          setSlotOverrideReason('')
+          setPendingSendAfterSave(false)
+        }}
+        onOverrideApproved={(overrideId) => {
+          setSlotOverrideId(overrideId)
+          setSlotOverrideModalOpen(false)
+          // Re-run save now that the override is valid
+          handleSave(pendingSendAfterSave)
         }}
       />
     </div>

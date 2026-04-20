@@ -3353,9 +3353,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // ===== AVAILABILITY ENGINE VALIDATION =====
-      // Check if the selected vehicle is actually available for the selected dates/times
-      // SKIP this check when EDITING an existing booking - admin knows what they're doing
-      // SKIP this check when showAllVehicles is enabled - admin is forcing the booking
+      // Blocks same-car 75-min buffer AND the 15-min cross-vehicle handover gap.
+      // Admin can override both via director OTP (slot_unavailable).
+      // SKIP when EDITING an existing booking or when showAllVehicles is forced.
       if (formData.vehicle_id && !editingId && !showAllVehicles) {
         const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
 
@@ -3374,8 +3374,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             undefined
           )
 
-          if (!availabilityResult.available) {
-            logger.warn('⚠️ Vehicle availability warning:', availabilityResult.reason)
+          if (!availabilityResult.available && !hasOverride('slot_unavailable')) {
+            requestOverride('slot_unavailable', availabilityResult.reason || 'Slot non disponibile')
+            setIsSubmitting(false)
+            return
           }
 
           logger.log('✅ Vehicle availability check passed')
