@@ -217,7 +217,7 @@ export default function ContrattoTab() {
       })
       const data = await res.json()
       if (res.ok) {
-        toast.success(`Email di firma inviata a ${contract.customer_email}`)
+        toast.success(data.message || `Link di firma inviato via WhatsApp a ${contract.customer_phone || contract.customer_name}`)
         loadContracts()
       } else {
         toast.error(data.error || 'Errore nell\'invio')
