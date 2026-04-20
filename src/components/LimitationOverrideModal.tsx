@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../utils/authFetch'
 
@@ -37,6 +37,19 @@ export default function LimitationOverrideModal({
 
   // Keep _onClose to satisfy prop interface but modal is not dismissible
   void _onClose
+
+  // Reset internal state whenever the modal is closed externally (isOpen→false)
+  // or whenever the limitationCode changes (re-open for a different rule).
+  useEffect(() => {
+    if (!isOpen) {
+      setStep('blocked')
+      setOverrideId(null)
+      setOtpDigits(['', '', '', '', '', ''])
+      setError(null)
+      setSending(false)
+      setVerifying(false)
+    }
+  }, [isOpen, limitationCode])
 
   async function sendOtp() {
     setSending(true)
