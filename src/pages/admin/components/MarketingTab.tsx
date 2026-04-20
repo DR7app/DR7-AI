@@ -7,7 +7,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import toast from 'react-hot-toast'
 import ReferralProgramTab from './ReferralProgramTab'
 import CustomerWalletTab from './CustomerWalletTab'
-import MessaggiSistemaTab from './MessaggiSistemaTab'
+// MessaggiSistemaTab removed — replaced by MessaggiSistemaProTab
 import { logger } from '../../../utils/logger'
 
 interface Customer {
@@ -72,7 +72,7 @@ interface CustomerMarketingConsent {
 type ActiveSection = 'customers' | 'consents' | 'discount_codes' | 'marketing_consent'
 type MarketingConsentFilter = 'all' | 'yes' | 'no' | 'unregistered'
 type DiscountCodeFilter = 'all' | 'active' | 'deactivated' | 'expired'
-type MarketingSubTab = 'marketing' | 'referral' | 'wallet' | 'messaggi'
+type MarketingSubTab = 'marketing' | 'referral' | 'wallet'
 
 export default function MarketingTab() {
     const [activeSubTab, setActiveSubTab] = useState<MarketingSubTab>('marketing')
@@ -111,22 +111,11 @@ export default function MarketingTab() {
                 >
                     Credit Wallet
                 </button>
-                <button
-                    onClick={() => setActiveSubTab('messaggi')}
-                    className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
-                        activeSubTab === 'messaggi'
-                            ? 'bg-dr7-gold text-white'
-                            : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-                    }`}
-                >
-                    Messaggi di Sistema
-                </button>
             </div>
 
             {/* Sub-tab Content */}
             {activeSubTab === 'referral' && <ReferralProgramTab />}
             {activeSubTab === 'wallet' && <CustomerWalletTab />}
-            {activeSubTab === 'messaggi' && <MessaggiSistemaTab />}
             {activeSubTab === 'marketing' && <MarketingContent />}
         </div>
     )
