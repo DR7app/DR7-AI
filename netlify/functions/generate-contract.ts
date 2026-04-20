@@ -724,16 +724,24 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                     .select('config')
                     .eq('id', 'main')
                     .maybeSingle()
-                const proInsurance = cfg?.config?.insurance || []
-                for (const catIns of proInsurance) {
-                    const allOpts: any[] = [
-                        ...(catIns.all || []),
-                        ...Object.values(catIns.byFascia || {}).flat() as any[],
-                    ]
-                    const found = allOpts.find((o: any) => o.id === insuranceOptionId)
-                    if (found?.name) {
-                        insuranceLabel = found.name
-                        break
+                const proInsurance: any[] = (cfg as any)?.config?.insurance || []
+                console.log(`[generate-contract] Loaded ${proInsurance.length} insurance categories from centralina for id="${insuranceOptionId}"`)
+                outer: for (const catIns of proInsurance) {
+                    const pools: any[][] = []
+                    if (Array.isArray(catIns?.all)) pools.push(catIns.all)
+                    if (catIns?.byFascia && typeof catIns.byFascia === 'object') {
+                        for (const key of Object.keys(catIns.byFascia)) {
+                            const arr = catIns.byFascia[key]
+                            if (Array.isArray(arr)) pools.push(arr)
+                        }
+                    }
+                    for (const pool of pools) {
+                        for (const opt of pool) {
+                            if (opt?.id === insuranceOptionId && opt?.name) {
+                                insuranceLabel = opt.name
+                                break outer
+                            }
+                        }
                     }
                 }
             } catch (cfgErr: any) {
@@ -741,7 +749,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             }
         }
         if (!insuranceLabel) insuranceLabel = insuranceOptionId
-        console.log(`[generate-contract] Insurance: id="${insuranceOptionId}" → label="${insuranceLabel}"`)
+        console.log(`[generate-contract] Insurance resolution: id="${insuranceOptionId}" → label="${insuranceLabel}"`)
 
         // Standardized Data Field Map
         // We map to BOTH potential English and Italian field names to be safe, as we don't see the PDF structure directly.
