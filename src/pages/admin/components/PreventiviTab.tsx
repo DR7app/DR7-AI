@@ -594,13 +594,33 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       }).eq('id', booking.id)
 
       if (custPhone) {
-        await fetch('/.netlify/functions/send-whatsapp-notification', {
+        const pickupIso = booking.pickup_date || booking.booking_details?.pickup_date || ''
+        const dropoffIso = booking.dropoff_date || booking.booking_details?.dropoff_date || ''
+        const fmtDate = (iso: string) => {
+          if (!iso) return ''
+          try {
+            return new Date(iso).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          } catch { return iso }
+        }
+        const rentalPeriod = pickupIso && dropoffIso ? `${fmtDate(pickupIso)} - ${fmtDate(dropoffIso)}` : ''
+        const resp = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: custPhone,
-            customMessage: `Gentile ${custName.split(' ')[0]},\n\nla sua richiesta per la formula senza cauzione è stata approvata!\n\nPer completare la prenotazione #${bookingRef}, effettui il pagamento di €${totalEur.toFixed(2)} tramite il seguente link:\n${linkData.paymentUrl}\n\n⏳ Il link è valido per 24 ore.\n\nCordiali Saluti,\nDR7`,
+            templateKey: 'pro_no_cauzione_approvato',
+            templateVars: {
+              '{customer_name}': custName.split(' ')[0],
+              '{vehicle_name}': booking.vehicle_name || 'Veicolo',
+              '{rental_period}': rentalPeriod,
+              '{link}': linkData.paymentUrl,
+              '{total}': `€${totalEur.toFixed(2)}`,
+            },
           })
         })
+        const respJson = await resp.json().catch(() => ({}))
+        if (respJson?.skipped) {
+          toast.error('Template "pro_no_cauzione_approvato" non configurato in Messaggi di Sistema Pro')
+        }
       }
       toast.success('Approvata! Link di pagamento inviato.')
       await loadNoCauzioneRequests()
@@ -631,13 +651,22 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       }).eq('id', booking.id)
 
       if (custPhone) {
-        await fetch('/.netlify/functions/send-whatsapp-notification', {
+        const resp = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: custPhone,
-            customMessage: `Gentile ${custName.split(' ')[0]},\n\nla formula senza cauzione non risulta disponibile per questa prenotazione.\n\nPuò comunque procedere subito con la conferma tramite formula standard:\nil preventivo è già nel suo account.\n\nAbbiamo attivato per lei uno sconto del 5% con codice:\n${code}\n\nDisponibilità limitata.\n\nCordiali Saluti,\nDR7`,
+            templateKey: 'pro_no_cauzione_rifiutato',
+            templateVars: {
+              '{customer_name}': custName.split(' ')[0],
+              '{vehicle_name}': booking.vehicle_name || 'Veicolo',
+              '{reason}': `Codice sconto 5%: ${code}`,
+            },
           })
         })
+        const respJson = await resp.json().catch(() => ({}))
+        if (respJson?.skipped) {
+          toast.error('Template "pro_no_cauzione_rifiutato" non configurato in Messaggi di Sistema Pro')
+        }
       }
       toast.success(`Rifiutata. Codice sconto ${code} inviato.`)
       await loadNoCauzioneRequests()
@@ -940,11 +969,14 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
   async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Il preventivo WhatsApp legge ESCLUSIVAMENTE dalla slot Pro
-    // "Conferma Preventivo Inviato" (pro_conferma_preventivo). Niente
-    // fallback hardcoded — se l'admin non l'ha compilata, torniamo ''
-    // e il chiamante mostra un toast di errore.
-    const keyChain = ['pro_conferma_preventivo']
+    // Due template separati, scelta in base alla presenza di uno sconto:
+    //   sconto > 0  → pro_promemoria_checkin   (label: "Preventivo WhatsApp")
+    //   sconto = 0  → pro_promemoria_checkout  (label: "Preventivo senza sconto")
+    // Nessun fallback hardcoded — se la slot scelta è vuota/disattivata,
+    // torniamo '' e il chiamante mostra un toast di errore.
+    const hasSconto = (p.sconto || 0) > 0
+    const primaryKey = hasSconto ? 'pro_promemoria_checkin' : 'pro_promemoria_checkout'
+    const keyChain = [primaryKey]
 
     try {
       let tpl: { message_body: string; is_enabled: boolean } | null = null
@@ -1165,19 +1197,32 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
     // Send rejection WhatsApp to customer
     if (preventivo.customer_phone) {
-      const msg = `Gentile ${firstName},\n\n`
-        + `la formula senza cauzione non risulta disponibile per questa prenotazione.\n\n`
-        + `Può comunque procedere subito con la conferma tramite formula standard:\n`
-        + `il preventivo è già nel suo account.\n\n`
-        + `Abbiamo attivato per lei uno sconto del 5% con codice:\n`
-        + `${code}\n\n`
-        + `Disponibilità limitata.`
-
+      const subtotal = Number(preventivo.subtotal || preventivo.total_final || 0)
+      const totalAfter = Math.max(0, subtotal * 0.95)
+      const eur = (n: number) => `€${n.toFixed(2)}`
       fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customPhone: preventivo.customer_phone, customMessage: msg }),
-      }).catch(() => {})
+        body: JSON.stringify({
+          customPhone: preventivo.customer_phone,
+          templateKey: 'pro_sconto_concesso',
+          templateVars: {
+            '{customer_name}': firstName,
+            '{vehicle_name}': preventivo.vehicle_name || 'Veicolo',
+            '{discount_percent}': '5',
+            '{total_before}': eur(subtotal),
+            '{total_after}': eur(totalAfter),
+            '{link}': code,
+          },
+        }),
+      })
+        .then(r => r.json().catch(() => ({})))
+        .then((respJson: any) => {
+          if (respJson?.skipped) {
+            toast.error('Template "pro_sconto_concesso" non configurato in Messaggi di Sistema Pro')
+          }
+        })
+        .catch(() => {})
     }
 
     appendPreventivoEvent(preventivo.id, 'no_cauzione_rifiutato', { detail: `discount_code: ${code}` })
