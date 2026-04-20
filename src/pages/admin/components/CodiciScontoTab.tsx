@@ -18,6 +18,8 @@ interface DiscountCode {
     single_use: boolean
     message: string | null
     usage_conditions: string | null
+    customer_email: string | null
+    customer_phone: string | null
     qr_url: string | null
     status: 'active' | 'deactivated' | 'expired'
     created_at: string
@@ -25,6 +27,16 @@ interface DiscountCode {
     usage_count?: number
     usage_total?: number
     last_used_at?: string | null
+}
+
+interface DiscountCodeUsage {
+    id: string
+    discount_code_id: string
+    booking_id: string | null
+    service_type: string | null
+    discount_applied: number
+    used_at: string
+    notes: string | null
 }
 
 type DiscountCodeFilter = 'all' | 'active' | 'deactivated' | 'expired'
@@ -37,6 +49,9 @@ export default function CodiciScontoTab() {
     const [discountCodeSearch, setDiscountCodeSearch] = useState('')
     const [selectedCodeForQR, setSelectedCodeForQR] = useState<DiscountCode | null>(null)
     const [editingCode, setEditingCode] = useState<DiscountCode | null>(null)
+    const [detailCode, setDetailCode] = useState<DiscountCode | null>(null)
+    const [detailUsages, setDetailUsages] = useState<DiscountCodeUsage[]>([])
+    const [detailLoading, setDetailLoading] = useState(false)
 
     useEffect(() => {
         loadDiscountCodes()
@@ -146,6 +161,26 @@ export default function CodiciScontoTab() {
         }
     }
 
+    async function openDetails(code: DiscountCode) {
+        setDetailCode(code)
+        setDetailUsages([])
+        setDetailLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('discount_code_usages')
+                .select('*')
+                .eq('discount_code_id', code.id)
+                .order('used_at', { ascending: false })
+            if (error && error.code !== '42P01') throw error
+            setDetailUsages((data as DiscountCodeUsage[]) || [])
+        } catch (err) {
+            console.error('Error loading usages:', err)
+            toast.error('Errore nel caricamento dello storico utilizzi')
+        } finally {
+            setDetailLoading(false)
+        }
+    }
+
     function copyCode(code: string) {
         navigator.clipboard.writeText(code).then(() => {
             toast.success('Codice copiato!')
@@ -192,7 +227,9 @@ export default function CodiciScontoTab() {
             return (
                 code.code.toLowerCase().includes(q) ||
                 code.message?.toLowerCase().includes(q) ||
-                code.code_type.toLowerCase().includes(q)
+                code.code_type.toLowerCase().includes(q) ||
+                code.customer_email?.toLowerCase().includes(q) ||
+                code.customer_phone?.toLowerCase().includes(q)
             )
         }
         return true
@@ -259,6 +296,7 @@ export default function CodiciScontoTab() {
                                     <th className="p-4">Valore</th>
                                     <th className="p-4">Ambito</th>
                                     <th className="p-4">Validità</th>
+                                    <th className="p-4">Cliente</th>
                                     <th className="p-4">Stato</th>
                                     <th className="p-4">Utilizzi</th>
                                     <th className="p-4 text-right">Azioni</th>
@@ -300,6 +338,18 @@ export default function CodiciScontoTab() {
                                             <div>{new Date(code.valid_from).toLocaleDateString('it-IT')}</div>
                                             <div className="text-theme-text-muted">{new Date(code.valid_until).toLocaleDateString('it-IT')}</div>
                                         </td>
+                                        <td className="p-4 text-xs">
+                                            {code.customer_email ? (
+                                                <>
+                                                    <div className="text-theme-text-primary">{code.customer_email}</div>
+                                                    {code.customer_phone && (
+                                                        <div className="text-theme-text-muted">{code.customer_phone}</div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <span className="text-theme-text-muted">Pubblico</span>
+                                            )}
+                                        </td>
                                         <td className="p-4">
                                             {statusBadge(code.status)}
                                         </td>
@@ -311,6 +361,18 @@ export default function CodiciScontoTab() {
                                         </td>
                                         <td className="p-4">
                                             <div className="flex gap-2 justify-end">
+                                                <button
+                                                    onClick={() => openDetails(code)}
+                                                    className="px-3 py-1 rounded-full text-xs font-medium bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors"
+                                                >
+                                                    Dettagli
+                                                </button>
+                                                <button
+                                                    onClick={() => { setEditingCode(code); setShowDiscountCodeModal(true) }}
+                                                    className="px-3 py-1 rounded-full text-xs font-medium bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
+                                                >
+                                                    Modifica
+                                                </button>
                                                 <button
                                                     onClick={() => toggleCodeStatus(code.id, code.status)}
                                                     className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -348,7 +410,7 @@ export default function CodiciScontoTab() {
                                 ))}
                                 {filteredDiscountCodes.length === 0 && (
                                     <tr>
-                                        <td colSpan={8} className="p-8 text-center text-theme-text-muted">
+                                        <td colSpan={9} className="p-8 text-center text-theme-text-muted">
                                             {discountCodes.length === 0
                                                 ? 'Nessun codice sconto creato. Clicca "Genera Codice" per iniziare.'
                                                 : 'Nessun codice trovato con i filtri selezionati.'
@@ -368,6 +430,129 @@ export default function CodiciScontoTab() {
                     onClose={() => { setShowDiscountCodeModal(false); setEditingCode(null) }}
                     onSave={() => { setShowDiscountCodeModal(false); setEditingCode(null); loadDiscountCodes() }}
                 />
+            )}
+
+            {detailCode && (
+                <div className="fixed inset-0 bg-theme-overlay flex items-center justify-center z-50 p-4" onClick={() => setDetailCode(null)}>
+                    <div className="bg-theme-bg-secondary rounded-3xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6 border-b border-theme-border flex justify-between items-center sticky top-0 bg-theme-bg-secondary z-10">
+                            <div>
+                                <h3 className="text-xl font-bold text-theme-text-primary font-mono tracking-wider">{detailCode.code}</h3>
+                                <p className="text-sm text-theme-text-muted mt-1">Dettagli codice sconto</p>
+                            </div>
+                            <button onClick={() => setDetailCode(null)} className="text-theme-text-muted hover:text-theme-text-primary text-3xl leading-none">×</button>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            {/* Metadata grid */}
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <div className="text-xs text-theme-text-muted">Tipo</div>
+                                    <div className="text-theme-text-primary font-medium">{detailCode.code_type === 'gift_card' ? 'Gift Card' : 'Codice Sconto'}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-theme-text-muted">Valore</div>
+                                    <div className="text-theme-text-primary font-medium">{detailCode.value_type === 'percentage' ? `${detailCode.value_amount}%` : `${detailCode.value_amount.toFixed(2)} €`}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-theme-text-muted">Ambito</div>
+                                    <div className="text-theme-text-primary">{formatScopeBadges(detailCode.scope).join(', ')}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-theme-text-muted">Stato</div>
+                                    <div>{statusBadge(detailCode.status)}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-theme-text-muted">Valido dal</div>
+                                    <div className="text-theme-text-primary">{new Date(detailCode.valid_from).toLocaleDateString('it-IT')}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-theme-text-muted">Valido fino al</div>
+                                    <div className="text-theme-text-primary">{new Date(detailCode.valid_until).toLocaleDateString('it-IT')}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-theme-text-muted">Spesa minima</div>
+                                    <div className="text-theme-text-primary">{detailCode.minimum_spend ? `${detailCode.minimum_spend.toFixed(2)} €` : 'Nessuna'}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-theme-text-muted">Utilizzabile</div>
+                                    <div className="text-theme-text-primary">{detailCode.single_use ? 'Una sola volta' : 'Illimitato'}</div>
+                                </div>
+                            </div>
+
+                            {/* Customer */}
+                            <div className="border-t border-theme-border pt-4">
+                                <h4 className="text-sm font-semibold text-theme-text-primary mb-2">Cliente assegnato</h4>
+                                {detailCode.customer_email || detailCode.customer_phone ? (
+                                    <div className="text-sm space-y-1">
+                                        {detailCode.customer_email && (
+                                            <div><span className="text-theme-text-muted">Email:</span> <span className="text-theme-text-primary">{detailCode.customer_email}</span></div>
+                                        )}
+                                        {detailCode.customer_phone && (
+                                            <div><span className="text-theme-text-muted">Telefono:</span> <span className="text-theme-text-primary">{detailCode.customer_phone}</span></div>
+                                        )}
+                                        <p className="text-xs text-amber-400 mt-2">Solo questo cliente può usare il codice (verifica email all'applicazione).</p>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-theme-text-muted">Codice pubblico — nessun cliente specifico assegnato.</p>
+                                )}
+                            </div>
+
+                            {/* Message / usage conditions */}
+                            {(detailCode.message || detailCode.usage_conditions) && (
+                                <div className="border-t border-theme-border pt-4 space-y-3">
+                                    {detailCode.message && (
+                                        <div>
+                                            <div className="text-xs text-theme-text-muted">Messaggio promozionale</div>
+                                            <div className="text-sm text-theme-text-primary italic">{detailCode.message}</div>
+                                        </div>
+                                    )}
+                                    {detailCode.usage_conditions && (
+                                        <div>
+                                            <div className="text-xs text-theme-text-muted">Condizioni di utilizzo</div>
+                                            <div className="text-sm text-theme-text-primary whitespace-pre-wrap">{detailCode.usage_conditions}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Usage history */}
+                            <div className="border-t border-theme-border pt-4">
+                                <h4 className="text-sm font-semibold text-theme-text-primary mb-3">
+                                    Storico utilizzi ({detailUsages.length})
+                                </h4>
+                                {detailLoading ? (
+                                    <p className="text-sm text-theme-text-muted">Caricamento...</p>
+                                ) : detailUsages.length === 0 ? (
+                                    <p className="text-sm text-theme-text-muted">Il codice non è ancora stato utilizzato.</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                                        {detailUsages.map(u => (
+                                            <div key={u.id} className="flex justify-between items-start text-xs p-2 bg-theme-bg-tertiary rounded">
+                                                <div>
+                                                    <div className="text-theme-text-primary">{new Date(u.used_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}</div>
+                                                    {u.booking_id && (
+                                                        <div className="text-theme-text-muted font-mono">Booking: {u.booking_id.substring(0, 8).toUpperCase()}</div>
+                                                    )}
+                                                    {u.service_type && (
+                                                        <div className="text-theme-text-muted">Servizio: {u.service_type}</div>
+                                                    )}
+                                                </div>
+                                                <div className="text-theme-text-primary font-medium">
+                                                    {Number(u.discount_applied).toFixed(2)} €
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="border-t border-theme-border pt-4 text-xs text-theme-text-muted">
+                                Creato il {new Date(detailCode.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {selectedCodeForQR && (
