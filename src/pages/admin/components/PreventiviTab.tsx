@@ -939,60 +939,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
-  function buildDefaultPreventivoMessage(p: Preventivo): string {
-    const specs = [
-      p.vehicle_name,
-      p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
-      p.vehicle_cv ? `${p.vehicle_cv}cv` : '',
-      p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
-    ].filter(Boolean).join(' ')
-
-    let msg = `Preventivo ${specs}\n\n`
-    msg += `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur(p.base_daily_rate * p.rental_days)}\n`
-
-    if (p.insurance_total > 0) {
-      const insLabel = insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko'
-      msg += `${insLabel} = ${formatEur(p.insurance_total)}\n`
-    }
-
-    if (p.lavaggio_fee > 0) msg += `Lavaggio = ${formatEur(p.lavaggio_fee)}\n`
-    if (p.no_cauzione_total > 0) msg += `No cauzione = ${formatEur(p.no_cauzione_total)}\n`
-    if (p.unlimited_km_total > 0) {
-      msg += `Km illimitati = ${formatEur(p.unlimited_km_total)}\n`
-    } else if (rentalConfig) {
-      const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
-      msg += `Km inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}\n`
-    }
-    if (p.second_driver_total > 0) msg += `Secondo guidatore = ${formatEur(p.second_driver_total)}\n`
-
-    const extras = p.extras_detail as Record<string, unknown> | null
-    if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) msg += `DR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}\n`
-    if (extras?.delivery_fee && Number(extras.delivery_fee) > 0) msg += `Consegna = ${formatEur(Number(extras.delivery_fee))}\n`
-    if (extras?.pickup_fee && Number(extras.pickup_fee) > 0) msg += `Ritiro = ${formatEur(Number(extras.pickup_fee))}\n`
-    if (extras?.experience_cost && Number(extras.experience_cost) > 0) msg += `Servizi experience = ${formatEur(Number(extras.experience_cost))}\n`
-
-    msg += `\nTotale = ${formatEur(p.subtotal)}\n`
-
-    if (p.sconto > 0) {
-      msg += `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}`
-    }
-
-    const footer = rentalConfig?.preventivi?.whatsapp_footer
-    if (footer) msg += `\n\n${footer}`
-
-    return msg.trim()
-  }
-
   async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Resolution order (tries in sequence, stops at first enabled row with a body):
-    //   1. Pro slot for the correct variant (sconto → pro_promemoria_checkin,
-    //      no_sconto → pro_promemoria_checkout)
-    //   2. Pro slot for the other variant (user may only have one)
-    //   3. Legacy keys (preventivo_whatsapp / _no_sconto) for backwards compat
-    const hasSconto = p.sconto > 0
-    const keyChain = hasSconto
-      ? ['pro_promemoria_checkin', 'pro_promemoria_checkout', 'preventivo_whatsapp']
-      : ['pro_promemoria_checkout', 'pro_promemoria_checkin', 'preventivo_whatsapp_no_sconto', 'preventivo_whatsapp']
+    // Il preventivo WhatsApp legge ESCLUSIVAMENTE dalla slot Pro
+    // "Conferma Preventivo Inviato" (pro_conferma_preventivo). Niente
+    // fallback hardcoded — se l'admin non l'ha compilata, torniamo ''
+    // e il chiamante mostra un toast di errore.
+    const keyChain = ['pro_conferma_preventivo']
 
     try {
       let tpl: { message_body: string; is_enabled: boolean } | null = null
@@ -1072,17 +1024,25 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
         return msg
       }
-    } catch {
-      // Fallback to hardcoded
+    } catch (err) {
+      console.error('[PreventiviTab] Errore lettura template preventivo:', err)
     }
 
-    return buildDefaultPreventivoMessage(p)
+    // Template mancante/disabilitato: nessun fallback hardcoded.
+    return ''
   }
 
-  async function handleSendWhatsApp(preventivo: Preventivo, phone: string) {
+  async function handleSendWhatsApp(preventivo: Preventivo, phone: string, messageOverride?: string) {
     setSendingWhatsapp(true)
     try {
-      const message = await formatWhatsAppMessage(preventivo)
+      const message = messageOverride && messageOverride.trim()
+        ? messageOverride
+        : await formatWhatsAppMessage(preventivo)
+
+      if (!message.trim()) {
+        toast.error('Messaggio vuoto: compila "Conferma Preventivo Inviato" in Messaggi di Sistema Pro')
+        return
+      }
 
       const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
@@ -1401,8 +1361,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                           <div className="text-green-400/80">Inviato{p.sent_by ? ` da ${p.sent_by}` : ''} → {p.customer_name ? `${p.customer_name}${p.customer_phone ? ` (${p.customer_phone})` : ''}` : p.customer_phone || 'N/A'} · {new Date(p.whatsapp_sent_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
                         )}
                       </div>
-                      <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
-                        {buildDefaultPreventivoMessage(p)}
+                      <div className="mt-1 text-[11px] text-theme-text-muted font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs space-y-0.5">
+                        <div>{p.vehicle_name}{p.vehicle_model_year ? ` · my ${p.vehicle_model_year}` : ''}</div>
+                        <div>{p.rental_days}gg × {formatEur(p.base_daily_rate)}/g</div>
+                        <div>Totale: <span className="text-theme-text-primary">{formatEur(p.total_final || p.subtotal)}</span></div>
                       </div>
                     </td>
                     <td className="py-2 px-3 text-theme-text-muted text-xs">
@@ -1463,14 +1425,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                                   setSelectedPreventivo(p);
                                   setWhatsappPhone(p.customer_phone || '');
                                   setPreviewMessage('');
-                                  setShowPhoneModal(true);
-                                  // Preview uses the SAME logic as the send — reads Pro template
-                                  try {
-                                    const preview = await formatWhatsAppMessage(p)
-                                    setPreviewMessage(preview)
-                                  } catch {
-                                    setPreviewMessage(buildDefaultPreventivoMessage(p))
+                                  const preview = await formatWhatsAppMessage(p)
+                                  if (!preview) {
+                                    toast.error('Template "Conferma Preventivo Inviato" mancante in Messaggi di Sistema Pro. Compilalo prima di inviare.')
+                                    return
                                   }
+                                  setPreviewMessage(preview)
+                                  setShowPhoneModal(true);
                                 }}
                                 className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
                               >
@@ -1535,8 +1496,17 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                 placeholder="393xxxxxxxxx"
               />
 
-              <div className="bg-theme-bg-primary rounded p-3 text-xs text-theme-text-muted whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
-                {previewMessage || 'Caricamento anteprima…'}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Messaggio (modificabile prima dell'invio)</label>
+                <textarea
+                  value={previewMessage}
+                  onChange={(e) => setPreviewMessage(e.target.value)}
+                  rows={14}
+                  className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap font-mono focus:outline-none focus:ring-1 focus:ring-dr7-gold resize-y"
+                />
+                <p className="text-[11px] text-theme-text-muted mt-1">
+                  Template caricato da "Conferma Preventivo Inviato" in Messaggi di Sistema Pro. Puoi modificarlo qui per questo singolo invio.
+                </p>
               </div>
 
               <div className="flex gap-2 justify-end">
@@ -1544,8 +1514,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                   Annulla
                 </Button>
                 <Button
-                  disabled={!whatsappPhone.trim() || sendingWhatsapp}
-                  onClick={() => handleSendWhatsApp(selectedPreventivo, whatsappPhone.trim())}
+                  disabled={!whatsappPhone.trim() || !previewMessage.trim() || sendingWhatsapp}
+                  onClick={() => handleSendWhatsApp(selectedPreventivo, whatsappPhone.trim(), previewMessage)}
                 >
                   {sendingWhatsapp ? 'Invio...' : 'Invia WhatsApp'}
                 </Button>

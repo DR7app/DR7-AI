@@ -144,6 +144,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_marketing_compleanno', label: 'Messaggio Compleanno', description: 'Auguri di compleanno al cliente' },
       { key: 'pro_marketing_referral',   label: 'Codice Referral',      description: 'Invio codice referral al cliente' },
       { key: 'pro_marketing_rinnovo',    label: 'Promemoria Rinnovo',   description: 'Promemoria rinnovo membership DR7 Club' },
+      { key: 'pro_wallet_bonus_cliente', label: 'Bonus Wallet Cliente', description: 'Notifica bonus wallet accreditato al cliente' },
     ],
   },
   {

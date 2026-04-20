@@ -25,10 +25,10 @@ async function sendWhatsApp(phone: string, message: string): Promise<boolean> {
     const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
     if (sbUrl && sbKey) {
       const sb = createClient(sbUrl, sbKey);
-      const { data } = await sb.from('system_messages').select('message_key, message_body').in('message_key', ['message_wrapper_header', 'message_wrapper_footer']);
-      const hdr = data?.find((w: any) => w.message_key === 'message_wrapper_header')?.message_body || '';
-      const ftr = data?.find((w: any) => w.message_key === 'message_wrapper_footer')?.message_body || '';
-      if (hdr) wrappedMsg = hdr + '\n\n' + message + '\n\n' + ftr;
+      const { data } = await sb.from('system_messages').select('message_key, message_body, is_enabled').in('message_key', ['pro_wrapper_header', 'pro_wrapper_footer']);
+      const hdr = data?.find((w: any) => w.message_key === 'pro_wrapper_header' && w.is_enabled !== false)?.message_body || '';
+      const ftr = data?.find((w: any) => w.message_key === 'pro_wrapper_footer' && w.is_enabled !== false)?.message_body || '';
+      if (hdr || ftr) wrappedMsg = [hdr, message, ftr].filter(Boolean).join('\n\n');
     }
   } catch { /* fallback: no wrapper */ }
 

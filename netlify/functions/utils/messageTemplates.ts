@@ -41,7 +41,6 @@ const OLD_TO_PRO: Record<string, string> = {
   rental_new: 'pro_conferma_noleggio',
   rental_new_admin: 'pro_conferma_noleggio',
   rental_modified: 'pro_modifica_noleggio',
-  rental_da_saldare_customer: 'pro_conferma_pagamento',
   deposit_return_iban: 'pro_richiesta_iban',
 
   // Lavaggio — customer + admin get the same template
@@ -57,26 +56,28 @@ const OLD_TO_PRO: Record<string, string> = {
   mechanical_modified: 'pro_modifica_meccanica',
 
   // Firma & Contratto
-  signature_request_link: 'pro_conferma_contratto_firmato',
-  signature_reminder_whatsapp: 'pro_conferma_preventivo',
-  signature_otp_whatsapp: 'pro_promemoria_pickup',
+  signature_request_link: 'pro_richiesta_firma',
+  signature_reminder_whatsapp: 'pro_promemoria_firma',
+  signature_otp_whatsapp: 'pro_richiesta_otp',
 
   // Pagamenti & annullamenti
-  payment_link_customer: 'pro_promemoria_dropoff',
-  booking_cancelled_whatsapp: 'pro_richiesta_pagamento',
+  payment_link_customer: 'pro_richiesta_pagamento',
+  rental_da_saldare_customer: 'pro_richiesta_pagamento',
+  booking_cancelled_whatsapp: 'pro_annullamento_cliente',
 
   // Preventivi
-  preventivo_whatsapp: 'pro_promemoria_checkin',
-  admin_new_website_quote: 'pro_richiesta_otp',
-  admin_no_cauzione_request: 'pro_richiesta_firma',
+  preventivo_whatsapp: 'pro_conferma_preventivo',
+  preventivo_whatsapp_no_sconto: 'pro_conferma_preventivo',
+  admin_new_website_quote: 'pro_admin_nuovo_preventivo',
+  admin_no_cauzione_request: 'pro_admin_nuova_prenotazione',
 
   // Marketing & Wallet
-  review_request_whatsapp: 'pro_promemoria_firma',
+  review_request_whatsapp: 'pro_marketing_recensione',
   birthday_message: 'pro_marketing_compleanno',
-  wallet_bonus_credit: 'pro_richiesta_documenti',
+  wallet_bonus_credit: 'pro_wallet_bonus_cliente',
 
   // Website customer actions
-  website_booking_cancelled_customer: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
+  website_booking_cancelled_customer: 'pro_annullamento_cliente',
 }
 
 export interface RenderContext {
@@ -160,13 +161,6 @@ export async function getMessageTemplate(
   }
 
   return body
-}
-
-/**
- * Invalidate cache (call after admin edits a template)
- */
-export function invalidateTemplateCache() {
-  cache = null
 }
 
 /**
