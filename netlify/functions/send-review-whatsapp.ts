@@ -36,11 +36,13 @@ const reviewHandler: Handler = async (event) => {
 
     console.log(`[Review WhatsApp] Looking for bookings with dropoff between ${oneHundredTwentyMinAgo.toISOString()} and ${sixtyMinAgo.toISOString()}`);
 
-    // Query eligible bookings
+    // Query eligible bookings — also skip any with review_sent_at already set
+    // (secondary dedupe in case review_whatsapp_sent table lookup fails).
     const { data: bookings, error: bookingsError } = await supabase
       .from('bookings')
-      .select('id, customer_id, customer_name, customer_phone, dropoff_date, service_type')
+      .select('id, customer_id, customer_name, customer_phone, dropoff_date, service_type, review_sent_at')
       .neq('status', 'cancelled')
+      .is('review_sent_at', null)
       .not('customer_phone', 'is', null)
       .not('customer_id', 'is', null)
       .lte('dropoff_date', sixtyMinAgo.toISOString())
@@ -75,7 +77,12 @@ const reviewHandler: Handler = async (event) => {
       .in('customer_id', customerIds);
 
     if (sentError) {
-      console.warn('[Review WhatsApp] Error fetching sent records:', sentError);
+      // If we can't read the dedupe table, DO NOT send — we risk spamming.
+      console.error('[Review WhatsApp] Error fetching sent records — aborting to prevent duplicate sends:', sentError);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'review_whatsapp_sent lookup failed, aborting', details: sentError.message })
+      };
     }
 
     const alreadySentIds = new Set((alreadySent || []).map(r => r.customer_id));
@@ -149,8 +156,10 @@ const reviewHandler: Handler = async (event) => {
 
         console.log(`[Review WhatsApp] ✅ Sent to ${booking.customer_name} (${cleanPhone})`);
 
-        // Record in review_whatsapp_sent (UNIQUE on customer_id prevents duplicates)
-        await supabase
+        // Record in review_whatsapp_sent (UNIQUE on customer_id prevents duplicates).
+        // If this insert fails, the bookings.review_sent_at update below is the
+        // secondary dedupe that still protects against the next cron run.
+        const { error: insertErr } = await supabase
           .from('review_whatsapp_sent')
           .insert({
             customer_id: booking.customer_id,
@@ -158,6 +167,9 @@ const reviewHandler: Handler = async (event) => {
             customer_phone: booking.customer_phone,
             message_text: personalizedMessage
           });
+        if (insertErr) {
+          console.error(`[Review WhatsApp] review_whatsapp_sent insert FAILED for ${booking.customer_name}:`, insertErr);
+        }
 
         // Also update bookings.review_sent_at for tracking in ReviewsTab
         await supabase
