@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 
 type FleetVehicle = {
@@ -113,6 +114,20 @@ type CoefficientRow = {
 }
 
 type DynamicMode = 'disabled' | 'suggestion' | 'auto_apply'
+type OperatingMode = 'auto' | 'riempimento' | 'equilibrio' | 'protezione'
+
+// A named-bucket coefficient — key → multiplier, no numeric range.
+// Used for things like day-of-week, season tiers, promo levels.
+type NamedCoeff = { key: string; label: string; coeff: number | '' }
+
+// Per-window target occupancy (days-ahead → expected % occupancy)
+type OccupancyTargets = {
+  d30plus: number | ''
+  d15_29: number | ''
+  d7_14: number | ''
+  d3_6: number | ''
+  d0_2: number | ''
+}
 
 type DynamicPricingConfig = {
   enabled: boolean
@@ -120,9 +135,38 @@ type DynamicPricingConfig = {
   base_prices: Record<string, number | ''>
   min_prices: Record<string, number | ''>
   max_prices: Record<string, number | ''>
+
+  // Range-based coefficients (min/max/coeff/label)
   occupation_coefficients: CoefficientRow[]
   advance_coefficients: CoefficientRow[]
   duration_coefficients: CoefficientRow[]
+  calendar_gap_coefficients: CoefficientRow[]
+
+  // Named-bucket coefficients (tier/key → multiplier)
+  season_coefficients: NamedCoeff[]
+  day_type_coefficients: NamedCoeff[]
+  vehicle_occupation_coefficients: NamedCoeff[]
+  promo_push_coefficients: NamedCoeff[]
+
+  // Admin controls
+  active_promo_level: string // key from promo_push_coefficients, '' = none
+  operating_mode: OperatingMode
+  // Phase strategy (reshaped based on rental counts)
+  phase_strategy_enabled: boolean
+  phase1_max_rentals: number | ''
+  phase2_max_rentals: number | ''
+
+  // Month → season tier mapping (1..12 → season key)
+  season_by_month: Record<string, string>
+  // Dates admin marks as special days (YYYY-MM-DD → day_type key)
+  special_dates: Record<string, string>
+
+  // Occupancy targets per vehicle class per advance window
+  occupancy_targets: {
+    utilitarie: OccupancyTargets
+    suv_premium: OccupancyTargets
+    luxury: OccupancyTargets
+  }
 }
 
 type PrezzoDinamicoConfig = {
@@ -171,21 +215,112 @@ const INITIAL_PREZZO_DINAMICO: PrezzoDinamicoConfig = {
     base_prices: { supercars: '', urban: '', aziendali: '' },
     min_prices: { supercars: 289, urban: 29, aziendali: 99 },
     max_prices: { supercars: 699, urban: 249, aziendali: 799 },
+
+    // 5. Occupazione Categoria — 7 bands (motore principale)
     occupation_coefficients: [
-      { id: uid(), min: 0, max: 50, coeff: 0.95, label: 'Bassa occupazione' },
-      { id: uid(), min: 50, max: 80, coeff: 1.0, label: 'Normale' },
-      { id: uid(), min: 80, max: 101, coeff: 1.15, label: 'Alta occupazione' },
+      { id: uid(), min: 0, max: 15, coeff: 0.78, label: '0–15% (vuoto)' },
+      { id: uid(), min: 16, max: 30, coeff: 0.86, label: '16–30%' },
+      { id: uid(), min: 31, max: 45, coeff: 0.93, label: '31–45%' },
+      { id: uid(), min: 46, max: 60, coeff: 1.00, label: '46–60% (target)' },
+      { id: uid(), min: 61, max: 75, coeff: 1.08, label: '61–75%' },
+      { id: uid(), min: 76, max: 90, coeff: 1.18, label: '76–90%' },
+      { id: uid(), min: 91, max: 100, coeff: 1.30, label: '91–100% (pieno)' },
     ],
+
+    // 3. Anticipo — 7 bands (premia chi prenota prima / monetizza last minute)
     advance_coefficients: [
-      { id: uid(), min: 0, max: 2, coeff: 1.15, label: 'Last minute' },
-      { id: uid(), min: 2, max: 14, coeff: 1.0, label: 'Normale' },
-      { id: uid(), min: 14, max: 999, coeff: 0.9, label: 'Early bird' },
+      { id: uid(), min: 30, max: 999, coeff: 0.90, label: '30+ giorni' },
+      { id: uid(), min: 21, max: 30, coeff: 0.95, label: '21–29 giorni' },
+      { id: uid(), min: 14, max: 21, coeff: 0.98, label: '14–20 giorni' },
+      { id: uid(), min: 7, max: 14, coeff: 1.00, label: '7–13 giorni' },
+      { id: uid(), min: 3, max: 7, coeff: 1.07, label: '3–6 giorni' },
+      { id: uid(), min: 1, max: 3, coeff: 1.15, label: '1–2 giorni' },
+      { id: uid(), min: 0, max: 1, coeff: 1.22, label: 'Stesso giorno' },
     ],
+
+    // 4. Durata Noleggio — 7 bands (incentiva noleggi più lunghi)
     duration_coefficients: [
-      { id: uid(), min: 1, max: 3, coeff: 1.0, label: 'Breve (1-2g)' },
-      { id: uid(), min: 3, max: 7, coeff: 0.95, label: 'Media (3-6g)' },
-      { id: uid(), min: 7, max: 999, coeff: 0.85, label: 'Lunga (7+g)' },
+      { id: uid(), min: 1, max: 2, coeff: 1.00, label: '1 giorno' },
+      { id: uid(), min: 2, max: 3, coeff: 0.95, label: '2 giorni' },
+      { id: uid(), min: 3, max: 4, coeff: 0.91, label: '3 giorni' },
+      { id: uid(), min: 4, max: 5, coeff: 0.88, label: '4 giorni' },
+      { id: uid(), min: 5, max: 6, coeff: 0.85, label: '5 giorni' },
+      { id: uid(), min: 6, max: 8, coeff: 0.82, label: '6–7 giorni' },
+      { id: uid(), min: 8, max: 15, coeff: 0.76, label: '8–14 giorni' },
     ],
+
+    // 7. Gap Calendario — 5 bands (vendi giorni isolati a sconto, lavora tutti i giorni)
+    calendar_gap_coefficients: [
+      { id: uid(), min: 1, max: 2, coeff: 0.65, label: 'Gap 1 giorno' },
+      { id: uid(), min: 2, max: 3, coeff: 0.75, label: 'Gap 2 giorni' },
+      { id: uid(), min: 3, max: 4, coeff: 0.85, label: 'Gap 3 giorni' },
+      { id: uid(), min: 4, max: 6, coeff: 0.92, label: 'Gap 4–5 giorni' },
+      { id: uid(), min: 999, max: 9999, coeff: 1.00, label: 'Nessun gap' },
+    ],
+
+    // 1. Stagione — 5 named tiers (contesto generale dell'anno)
+    season_coefficients: [
+      { key: 'bassissima', label: 'Bassissima stagione', coeff: 0.75 },
+      { key: 'bassa', label: 'Bassa stagione', coeff: 0.88 },
+      { key: 'media', label: 'Media stagione', coeff: 1.00 },
+      { key: 'alta', label: 'Alta stagione', coeff: 1.22 },
+      { key: 'altissima', label: 'Altissima stagione', coeff: 1.45 },
+    ],
+
+    // 2. Tipo Giorno — weekday + special day tiers
+    day_type_coefficients: [
+      { key: 'monday', label: 'Lunedì', coeff: 0.95 },
+      { key: 'tuesday', label: 'Martedì', coeff: 0.95 },
+      { key: 'wednesday', label: 'Mercoledì', coeff: 0.95 },
+      { key: 'thursday', label: 'Giovedì', coeff: 1.00 },
+      { key: 'friday', label: 'Venerdì', coeff: 1.08 },
+      { key: 'saturday', label: 'Sabato', coeff: 1.15 },
+      { key: 'sunday', label: 'Domenica', coeff: 1.10 },
+      { key: 'prefestivo', label: 'Prefestivo', coeff: 1.18 },
+      { key: 'ponte', label: 'Ponte', coeff: 1.20 },
+      { key: 'evento_speciale', label: 'Evento speciale', coeff: 1.30 },
+      { key: 'evento_top', label: 'Evento top', coeff: 1.45 },
+      { key: 'festivita_debole', label: 'Festività debole', coeff: 1.10 },
+      { key: 'festivita_media', label: 'Festività media', coeff: 1.18 },
+      { key: 'festivita_forte', label: 'Festività forte', coeff: 1.30 },
+    ],
+
+    // 6. Occupazione Veicolo — 3 tiers (correzione singolo mezzo vs categoria)
+    vehicle_occupation_coefficients: [
+      { key: 'sotto', label: 'Veicolo fermo rispetto alla categoria', coeff: 0.92 },
+      { key: 'allineato', label: 'Veicolo allineato', coeff: 1.00 },
+      { key: 'richiesto', label: 'Veicolo molto richiesto', coeff: 1.08 },
+    ],
+
+    // 8. Spinta Direzionale — promo levels (solo quando serve)
+    promo_push_coefficients: [
+      { key: 'soft', label: 'Promo soft', coeff: 0.95 },
+      { key: 'medium', label: 'Promo media', coeff: 0.90 },
+      { key: 'strong', label: 'Promo forte', coeff: 0.82 },
+      { key: 'empty_slot', label: 'Svuota slot', coeff: 0.72 },
+    ],
+
+    active_promo_level: '',         // '' = nessuna promo attiva
+    operating_mode: 'auto',
+    phase_strategy_enabled: false,
+    phase1_max_rentals: 15,
+    phase2_max_rentals: 25,
+
+    // Default month → season mapping (admin can remap from UI)
+    // Sardinia default: estate alta, dic/gen alta (natalizio), resto media/bassa
+    season_by_month: {
+      '1': 'bassa', '2': 'bassissima', '3': 'bassa', '4': 'media',
+      '5': 'media', '6': 'alta', '7': 'altissima', '8': 'altissima',
+      '9': 'alta', '10': 'bassa', '11': 'bassissima', '12': 'alta',
+    },
+    special_dates: {},
+
+    // 9. Target occupazione per finestra temporale per classe
+    occupancy_targets: {
+      utilitarie:  { d30plus: 15, d15_29: 30, d7_14: 50, d3_6: 70, d0_2: 85 },
+      suv_premium: { d30plus: 10, d15_29: 25, d7_14: 45, d3_6: 60, d0_2: 75 },
+      luxury:      { d30plus: 8,  d15_29: 18, d7_14: 30, d3_6: 45, d0_2: 60 },
+    },
   },
 }
 
@@ -437,7 +572,10 @@ function savePersisted(snap: PersistedSnapshot) {
     .from('centralina_pro_config')
     .upsert({ id: 'main', config: snap }, { onConflict: 'id' })
     .then(({ error }) => {
-      if (error) console.error('[CentralinaPro] failed to save to Supabase:', error)
+      if (error) {
+        console.error('[CentralinaPro] failed to save to Supabase:', error)
+        toast.error(`Salvataggio DB fallito: ${error.message}`)
+      }
     })
 }
 
@@ -2384,9 +2522,281 @@ function PrezzoDinamicoSection({
             rows={config.dynamic.duration_coefficients}
             onChange={(rows) => patchDyn({ duration_coefficients: rows })}
           />
+          <CoefficientTable
+            title="Coefficienti Gap Calendario"
+            subtitle="Vendi giorni isolati tra due prenotazioni a prezzo ridotto — lavora tutti i giorni"
+            unit="giorni"
+            rows={config.dynamic.calendar_gap_coefficients}
+            onChange={(rows) => patchDyn({ calendar_gap_coefficients: rows })}
+          />
+
+          {/* Named-bucket coefficient groups (Stagione / Tipo Giorno / Veicolo / Promo) */}
+          <NamedCoefficientTable
+            title="Coefficienti Stagione"
+            subtitle="Contesto generale dell'anno — si combina con occupazione e domanda reale"
+            rows={config.dynamic.season_coefficients}
+            onChange={(rows) => patchDyn({ season_coefficients: rows })}
+          />
+          <NamedCoefficientTable
+            title="Coefficienti Tipo Giorno"
+            subtitle="Giorno della settimana + prefestivi / ponti / eventi / festività"
+            rows={config.dynamic.day_type_coefficients}
+            onChange={(rows) => patchDyn({ day_type_coefficients: rows })}
+          />
+          <NamedCoefficientTable
+            title="Coefficienti Occupazione Veicolo"
+            subtitle="Correzione del singolo mezzo rispetto alla media della categoria"
+            rows={config.dynamic.vehicle_occupation_coefficients}
+            onChange={(rows) => patchDyn({ vehicle_occupation_coefficients: rows })}
+          />
+
+          {/* Promo push (named tiers + live level selector) */}
+          <PromoPushSection
+            coefficients={config.dynamic.promo_push_coefficients}
+            activeLevel={config.dynamic.active_promo_level}
+            onChangeCoefficients={(rows) => patchDyn({ promo_push_coefficients: rows })}
+            onChangeActiveLevel={(level) => patchDyn({ active_promo_level: level })}
+          />
+
+          {/* Operating mode (Riempimento / Equilibrio / Protezione / Auto) */}
+          <OperatingModeSection
+            mode={config.dynamic.operating_mode}
+            onChange={(mode) => patchDyn({ operating_mode: mode })}
+          />
+
+          {/* Target occupazione per classe × finestra temporale */}
+          <OccupancyTargetsSection
+            targets={config.dynamic.occupancy_targets}
+            onChange={(targets) => patchDyn({ occupancy_targets: targets })}
+          />
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Named-bucket coefficient table (key + label + coeff, no min/max) ──
+function NamedCoefficientTable({
+  title, subtitle, rows, onChange,
+}: {
+  title: string
+  subtitle: string
+  rows: NamedCoeff[]
+  onChange: (rows: NamedCoeff[]) => void
+}) {
+  function patchRow(idx: number, patch: Partial<NamedCoeff>) {
+    const next = rows.map((r, i) => (i === idx ? { ...r, ...patch } : r))
+    onChange(next)
+  }
+  function addRow() {
+    onChange([...rows, { key: `custom_${rows.length + 1}`, label: 'Nuova voce', coeff: 1 }])
+  }
+  function removeRow(idx: number) {
+    onChange(rows.filter((_, i) => i !== idx))
+  }
+
+  return (
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">{title}</h3>
+      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">{subtitle}</p>
+      <div className="grid grid-cols-[1fr_100px_40px] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1 mb-1">
+        <span>Etichetta</span>
+        <span className="text-right">Coeff.</span>
+        <span />
+      </div>
+      <div className="space-y-2">
+        {rows.map((r, idx) => (
+          <div key={r.key + idx} className="grid grid-cols-[1fr_100px_40px] gap-2 items-center">
+            <input
+              type="text"
+              value={r.label}
+              onChange={(e) => patchRow(idx, { label: e.target.value })}
+              className="bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+            <input
+              type="number"
+              step={0.01}
+              value={r.coeff}
+              onChange={(e) => patchRow(idx, { coeff: e.target.value === '' ? '' : Number(e.target.value) })}
+              className="bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+            <button
+              type="button"
+              onClick={() => removeRow(idx)}
+              title="Rimuovi"
+              className="text-[#ff3b30] hover:bg-red-50 rounded-lg h-9 w-9 flex items-center justify-center"
+            >
+              −
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={addRow}
+        className="mt-3 text-[#007aff] text-[13px] font-medium hover:underline"
+      >
+        + Aggiungi voce
+      </button>
+    </section>
+  )
+}
+
+// ── Promo Push with active-level selector ──
+function PromoPushSection({
+  coefficients, activeLevel, onChangeCoefficients, onChangeActiveLevel,
+}: {
+  coefficients: NamedCoeff[]
+  activeLevel: string
+  onChangeCoefficients: (rows: NamedCoeff[]) => void
+  onChangeActiveLevel: (level: string) => void
+}) {
+  return (
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+        Coefficienti Spinta Direzionale (Promo)
+      </h3>
+      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+        Moltiplicatore per campagne e promo — attivalo solo quando serve.
+      </p>
+      <label className="block mb-4">
+        <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+          Livello attivo adesso
+        </span>
+        <select
+          value={activeLevel}
+          onChange={(e) => onChangeActiveLevel(e.target.value)}
+          className="bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+        >
+          <option value="">Nessuna promo (coeff. 1,00)</option>
+          {coefficients.map((c) => (
+            <option key={c.key} value={c.key}>{c.label} — {typeof c.coeff === 'number' ? c.coeff.toFixed(2) : c.coeff}</option>
+          ))}
+        </select>
+      </label>
+      <NamedCoefficientTable
+        title=""
+        subtitle=""
+        rows={coefficients}
+        onChange={onChangeCoefficients}
+      />
+    </section>
+  )
+}
+
+// ── Operating mode ──
+function OperatingModeSection({
+  mode, onChange,
+}: {
+  mode: OperatingMode
+  onChange: (mode: OperatingMode) => void
+}) {
+  const options: { value: OperatingMode; label: string; hint: string }[] = [
+    { value: 'auto', label: 'Auto', hint: 'Il sistema sceglie la modalità in base ai target' },
+    { value: 'riempimento', label: 'Riempimento', hint: 'Occupazione sotto target — prezzi aggressivi, gap + promo attive' },
+    { value: 'equilibrio', label: 'Equilibrio', hint: 'Occupazione in linea — prezzo stabile, promo limitate' },
+    { value: 'protezione', label: 'Protezione', hint: 'Occupazione alta — aumento prezzi, nessuna promo' },
+  ]
+  return (
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">Modalità Operativa</h3>
+      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+        Strategia globale corrente del revenue engine.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {options.map((o) => (
+          <label
+            key={o.value}
+            className={`cursor-pointer rounded-xl border p-3 transition-colors ${
+              mode === o.value ? 'border-[#007aff] bg-[#007aff]/5' : 'border-black/10 hover:border-black/20'
+            }`}
+          >
+            <input
+              type="radio"
+              name="operating-mode"
+              value={o.value}
+              checked={mode === o.value}
+              onChange={() => onChange(o.value)}
+              className="sr-only"
+            />
+            <div className="font-semibold text-[14px] text-[#1d1d1f]">{o.label}</div>
+            <div className="text-[12px] text-[#6e6e73] mt-1">{o.hint}</div>
+          </label>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ── Target occupancy per vehicle class × advance window ──
+function OccupancyTargetsSection({
+  targets, onChange,
+}: {
+  targets: DynamicPricingConfig['occupancy_targets']
+  onChange: (t: DynamicPricingConfig['occupancy_targets']) => void
+}) {
+  const classes: { key: keyof DynamicPricingConfig['occupancy_targets']; label: string }[] = [
+    { key: 'utilitarie', label: 'Utilitarie' },
+    { key: 'suv_premium', label: 'SUV / Premium' },
+    { key: 'luxury', label: 'Luxury' },
+  ]
+  const windows: { key: keyof OccupancyTargets; label: string }[] = [
+    { key: 'd30plus', label: '30+ gg' },
+    { key: 'd15_29', label: '15–29 gg' },
+    { key: 'd7_14', label: '7–14 gg' },
+    { key: 'd3_6', label: '3–6 gg' },
+    { key: 'd0_2', label: '0–2 gg' },
+  ]
+  return (
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5 overflow-x-auto">
+      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+        Target Occupazione per Classe × Finestra Temporale
+      </h3>
+      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+        % attesa di occupazione rispetto al ritiro. Sotto target → sistema più aggressivo; sopra → protezione margine.
+      </p>
+      <table className="min-w-full text-[13px]">
+        <thead>
+          <tr className="text-[11px] uppercase tracking-wide text-[#a1a1a6]">
+            <th className="text-left py-2 pr-4">Classe</th>
+            {windows.map((w) => (
+              <th key={w.key} className="text-right px-2">{w.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {classes.map((cls) => (
+            <tr key={cls.key} className="border-t border-black/5">
+              <td className="py-2 pr-4 font-medium text-[#1d1d1f]">{cls.label}</td>
+              {windows.map((w) => (
+                <td key={w.key} className="py-2 px-2">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={targets[cls.key][w.key]}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        onChange({
+                          ...targets,
+                          [cls.key]: {
+                            ...targets[cls.key],
+                            [w.key]: v === '' ? '' : Number(v),
+                          },
+                        })
+                      }}
+                      className="w-20 text-right tabular-nums bg-white border border-black/10 rounded-lg pr-6 pl-2 py-1 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6]">%</span>
+                  </div>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   )
 }
 
