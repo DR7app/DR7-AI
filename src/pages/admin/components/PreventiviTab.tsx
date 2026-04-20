@@ -205,6 +205,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [saving, setSaving] = useState(false)
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false)
   const [selectedPreventivo, setSelectedPreventivo] = useState<Preventivo | null>(null)
+  const [previewMessage, setPreviewMessage] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [whatsappPhone, setWhatsappPhone] = useState('')
   const [showPhoneModal, setShowPhoneModal] = useState(false)
@@ -983,25 +984,28 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }
 
   async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Pick template based on whether a discount was applied
-    const templateKey = p.sconto > 0 ? 'preventivo_whatsapp' : 'preventivo_whatsapp_no_sconto'
+    // Resolution order (tries in sequence, stops at first enabled row with a body):
+    //   1. Pro slot for the correct variant (sconto → pro_promemoria_checkin,
+    //      no_sconto → pro_promemoria_checkout)
+    //   2. Pro slot for the other variant (user may only have one)
+    //   3. Legacy keys (preventivo_whatsapp / _no_sconto) for backwards compat
+    const hasSconto = p.sconto > 0
+    const keyChain = hasSconto
+      ? ['pro_promemoria_checkin', 'pro_promemoria_checkout', 'preventivo_whatsapp']
+      : ['pro_promemoria_checkout', 'pro_promemoria_checkin', 'preventivo_whatsapp_no_sconto', 'preventivo_whatsapp']
 
-    // Try to load template from system_messages (with fallback to the default key)
     try {
-      let { data: tpl } = await supabase
-        .from('system_messages')
-        .select('message_body, is_enabled')
-        .eq('message_key', templateKey)
-        .maybeSingle()
-
-      // If the no-sconto variant doesn't exist or is disabled, fall back to the main template
-      if ((!tpl || !tpl.is_enabled || !tpl.message_body) && templateKey !== 'preventivo_whatsapp') {
-        const fallback = await supabase
+      let tpl: { message_body: string; is_enabled: boolean } | null = null
+      for (const k of keyChain) {
+        const { data } = await supabase
           .from('system_messages')
           .select('message_body, is_enabled')
-          .eq('message_key', 'preventivo_whatsapp')
+          .eq('message_key', k)
           .maybeSingle()
-        tpl = fallback.data
+        if (data?.is_enabled && data.message_body) {
+          tpl = data
+          break
+        }
       }
 
       if (tpl?.is_enabled && tpl.message_body) {
@@ -1455,7 +1459,19 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                             )}
                             {(p.status === 'bozza' || p.status === 'inviato') && (
                               <button
-                                onClick={() => { setSelectedPreventivo(p); setWhatsappPhone(p.customer_phone || ''); setShowPhoneModal(true) }}
+                                onClick={async () => {
+                                  setSelectedPreventivo(p);
+                                  setWhatsappPhone(p.customer_phone || '');
+                                  setPreviewMessage('');
+                                  setShowPhoneModal(true);
+                                  // Preview uses the SAME logic as the send — reads Pro template
+                                  try {
+                                    const preview = await formatWhatsAppMessage(p)
+                                    setPreviewMessage(preview)
+                                  } catch {
+                                    setPreviewMessage(buildDefaultPreventivoMessage(p))
+                                  }
+                                }}
                                 className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
                               >
                                 Invia
@@ -1520,7 +1536,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               />
 
               <div className="bg-theme-bg-primary rounded p-3 text-xs text-theme-text-muted whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
-                {buildDefaultPreventivoMessage(selectedPreventivo)}
+                {previewMessage || 'Caricamento anteprima…'}
               </div>
 
               <div className="flex gap-2 justify-end">
