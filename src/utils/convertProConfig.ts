@@ -171,6 +171,7 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
   // ── Deposits ──
   if (pro.deposits) {
     const deps = config.deposits
+    let noCauzioneSurcharge = 0
     for (const [fasciaId, fasciaDeposits] of Object.entries(pro.deposits)) {
       const tier = PRO_TO_TIER[fasciaId]
       if (!tier) continue
@@ -180,8 +181,25 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
 
       const resKey = `${tier}_RESIDENT` as keyof typeof deps
       const nonResKey = `${tier}_NON_RESIDENT` as keyof typeof deps
-      ;(deps as unknown as Record<string, DepositOption[]>)[resKey] = mapOptions(fasciaDeposits.residente || [])
-      ;(deps as unknown as Record<string, DepositOption[]>)[nonResKey] = mapOptions(fasciaDeposits.non_residente || [])
+      const resOpts = mapOptions(fasciaDeposits.residente || [])
+      const nonResOpts = mapOptions(fasciaDeposits.non_residente || [])
+      ;(deps as unknown as Record<string, DepositOption[]>)[resKey] = resOpts
+      ;(deps as unknown as Record<string, DepositOption[]>)[nonResKey] = nonResOpts
+
+      // Extract no_cauzione surcharge — take the first non-zero we find across fasce.
+      // configOverlay.noCauzionePerDay reads from config.no_cauzione_surcharge.per_day.
+      for (const opt of [...resOpts, ...nonResOpts]) {
+        const s = opt.surcharge_per_day ?? 0
+        if (opt.id === 'no_deposit' && s > 0 && noCauzioneSurcharge === 0) {
+          noCauzioneSurcharge = s
+        }
+      }
+    }
+    if (noCauzioneSurcharge > 0) {
+      config.no_cauzione_surcharge = {
+        ...(config.no_cauzione_surcharge || {}),
+        per_day: noCauzioneSurcharge,
+      } as RentalConfig['no_cauzione_surcharge']
     }
   }
 
