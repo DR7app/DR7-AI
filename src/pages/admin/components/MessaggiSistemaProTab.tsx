@@ -81,6 +81,13 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
     ],
   },
   {
+    label: 'Email',
+    templates: [
+      { key: 'pro_email_addebito',         label: 'Email Addebito — Corpo',    description: 'Corpo dell\'email di comunicazione addebito (var: {customer_name}, {contract_ref}, {amount}, {causale})' },
+      { key: 'pro_email_addebito_subject', label: 'Email Addebito — Oggetto',  description: 'Oggetto dell\'email di addebito (var: {contract_ref})' },
+    ],
+  },
+  {
     label: 'Promemoria',
     templates: [
       { key: 'pro_promemoria_pickup',        label: 'Promemoria Ritiro',         description: 'Promemoria prima del ritiro veicolo' },

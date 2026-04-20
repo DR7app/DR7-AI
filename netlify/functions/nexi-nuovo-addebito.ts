@@ -3,6 +3,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { requireAuth } from './require-auth'
+import { renderTemplate } from './utils/messageTemplates'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -54,35 +55,32 @@ export const handler: Handler = async (event) => {
         const amountFormatted = parseFloat(amount).toFixed(2)
         const contractRef = contractNumber || bookingId?.substring(0, 8)?.toUpperCase() || 'N/A'
 
-        const emailBody = `Spett.le ${customerName || 'Cliente'},
-
-con la presente Le comunichiamo formalmente che, in relazione al contratto di noleggio n. ${contractRef}, è stato rilevato un importo a Suo carico derivante da obbligazioni contrattuali maturate nel corso o al termine del periodo di utilizzo del veicolo.
-
-L'importo complessivo oggetto di addebito è pari a € ${amountFormatted}, con la seguente causale:
-• ${causale}
-
-Tale importo è determinato in conformità:
-• alle condizioni generali di contratto sottoscritte e accettate;
-• alla documentazione contrattuale e/o tecnica disponibile (ove applicabile);
-• alle disposizioni normative vigenti.
-
-Ai sensi dell'art. 1218 c.c., il debitore che non esegue esattamente la prestazione dovuta è tenuto al risarcimento del danno.
-Ai sensi dell'art. 1372 c.c., il contratto ha forza di legge tra le parti.
-Ai sensi dell'art. 1588 c.c., il conduttore risponde della perdita e del deterioramento del bene locato.
-
-Si richiama inoltre quanto espressamente previsto nel contratto di noleggio in merito.
-
-Resta a disposizione, su richiesta, la documentazione a supporto dell'addebito (contratto, report, documentazione fotografica, verbali, ecc.).
-
-Cordiali saluti,
-Dubai Rent 7.0 S.p.A.`
+        // Body + subject provengono esclusivamente da Messaggi di Sistema Pro.
+        // Nessun fallback hardcoded: se il template è mancante/disabilitato
+        // non si invia l'email e la richiesta viene rifiutata.
+        const templateVars = {
+            customer_name: customerName || 'Cliente',
+            contract_ref: contractRef,
+            amount: amountFormatted,
+            causale,
+        }
+        const emailBody = await renderTemplate('pro_email_addebito', templateVars)
+        const emailSubject = await renderTemplate('pro_email_addebito_subject', templateVars)
+        if (!emailBody || !emailSubject) {
+            console.error('[nexi-nuovo-addebito] Pro email template missing/disabled')
+            return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: 'Template email addebito non configurato in Messaggi di Sistema Pro' }),
+            }
+        }
 
         const emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
 
         const { error: emailError } = await resend.emails.send({
             from: 'DR7 Empire <info@dr7.app>',
             to: customerEmail,
-            subject: `Comunicazione addebito - Contratto ${contractRef}`,
+            subject: emailSubject,
             html: emailHtml,
         })
 
