@@ -238,25 +238,38 @@ const handler: Handler = async (event) => {
           insurance: await (async () => {
             const insId = booking.booking_details?.insuranceOption || booking.insurance_option || '';
             if (!insId) return 'N/A';
-            // Look up insurance name from Centralina Pro config
+            // Look up insurance name from Centralina Pro config (match by ID or legacy name)
             try {
               const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
               const { data: proRow } = await sb.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle();
               const insuranceList = proRow?.config?.insurance;
               if (Array.isArray(insuranceList)) {
+                // Legacy ID → name mapping for bookings created before Pro UIDs
+                const legacyMap: Record<string, string[]> = {
+                  RCA: ['RCA', 'rca'],
+                  KASKO_BASE: ['Kasko Base', 'Base'],
+                  KASKO_BLACK: ['Kasko Black', 'Black'],
+                  KASKO_SIGNATURE: ['Kasko Signature', 'Signature'],
+                  DR7: ['Kasko DR7', 'DR7'],
+                  KASKO_DR7: ['Kasko DR7', 'DR7'],
+                };
+                const searchNames = legacyMap[insId];
                 for (const cat of insuranceList) {
-                  // Check all_tiers options
-                  const found = (cat.all || []).find((o: any) => o.id === insId);
-                  if (found) return found.name;
-                  // Check per-fascia options
-                  for (const opts of Object.values(cat.byFascia || {})) {
-                    const match = (opts as any[]).find((o: any) => o.id === insId);
-                    if (match) return match.name;
+                  const allOpts = [...(cat.all || [])];
+                  for (const opts of Object.values(cat.byFascia || {})) allOpts.push(...(opts as any[]));
+                  // Match by Pro UID
+                  const byId = allOpts.find((o: any) => o.id === insId);
+                  if (byId) return byId.name;
+                  // Match by legacy name
+                  if (searchNames) {
+                    const byName = allOpts.find((o: any) => searchNames.some(n => o.name?.includes(n)));
+                    if (byName) return byName.name;
                   }
                 }
               }
             } catch { /* fallback */ }
-            return insId.replace(/_/g, ' ');
+            // Final fallback: humanize the ID
+            return insId.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
           })(),
           payment_status: (() => {
             const ps = booking.payment_status;
