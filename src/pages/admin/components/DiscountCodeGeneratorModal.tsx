@@ -45,6 +45,8 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
         code: editingCode?.code || generateCode(),
         message: editingCode?.message || '',
         usage_conditions: editingCode?.usage_conditions || '',
+        customer_email: editingCode?.customer_email || '',
+        customer_phone: editingCode?.customer_phone || '',
     })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,6 +102,16 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
             toast.error('La percentuale non può superare il 100%')
             return
         }
+        const trimmedEmail = formData.customer_email.trim()
+        if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+            toast.error('Inserisci un indirizzo email valido')
+            return
+        }
+        const trimmedPhone = formData.customer_phone.trim()
+        if (trimmedPhone && !/^[+\d][\d\s().-]{5,}$/.test(trimmedPhone)) {
+            toast.error('Inserisci un numero di telefono valido')
+            return
+        }
 
         setLoading(true)
         try {
@@ -130,6 +142,8 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                 single_use: formData.single_use,
                 message: formData.message || null,
                 usage_conditions: formData.usage_conditions || null,
+                customer_email: formData.customer_email.trim().toLowerCase() || null,
+                customer_phone: formData.customer_phone.trim() || null,
                 qr_url: `https://dr7empire.com/promo/${formData.code.toUpperCase().trim()}`,
                 status: 'active',
                 updated_at: new Date().toISOString(),
@@ -336,6 +350,38 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                             />
                             <span className="text-sm font-semibold text-theme-text-primary">Utilizzabile una sola volta</span>
                         </label>
+                    </div>
+
+                    {/* 6b. Limita a cliente specifico */}
+                    <div>
+                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                            Limita a cliente specifico (opzionale)
+                        </label>
+                        <p className="text-xs text-theme-text-muted mb-2">
+                            Compila almeno un campo per legare il codice a un solo cliente. Lascia vuoto per renderlo pubblico.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs text-theme-text-muted mb-1">Email cliente</label>
+                                <input
+                                    type="email"
+                                    value={formData.customer_email}
+                                    onChange={(e) => updateField('customer_email', e.target.value)}
+                                    placeholder="es. massimorunchina69@gmail.com"
+                                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-theme-text-muted mb-1">Telefono cliente</label>
+                                <input
+                                    type="tel"
+                                    value={formData.customer_phone}
+                                    onChange={(e) => updateField('customer_phone', e.target.value)}
+                                    placeholder="es. +39 345 790 5205"
+                                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     {/* 7. Codice */}
