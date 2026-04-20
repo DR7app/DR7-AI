@@ -586,6 +586,44 @@ function pick<T>(persisted: PersistedSnapshot | null, key: keyof PersistedSnapsh
   return fallback
 }
 
+/**
+ * Merge a persisted PrezzoDinamicoConfig with the current defaults.
+ * New fields added after a user saved their config would otherwise land as
+ * `undefined`, crashing the UI on `.map()` calls. We deep-merge `dynamic`
+ * field-by-field so any missing key gets the default value.
+ */
+function mergePrezzoDinamico(saved: Partial<PrezzoDinamicoConfig> | null | undefined): PrezzoDinamicoConfig {
+  if (!saved) return INITIAL_PREZZO_DINAMICO
+  const defaultDyn = INITIAL_PREZZO_DINAMICO.dynamic
+  const savedDyn = (saved.dynamic || {}) as Partial<DynamicPricingConfig>
+  return {
+    tariffe: saved.tariffe ?? INITIAL_PREZZO_DINAMICO.tariffe,
+    dynamic: {
+      enabled: savedDyn.enabled ?? defaultDyn.enabled,
+      mode: savedDyn.mode ?? defaultDyn.mode,
+      base_prices: savedDyn.base_prices ?? defaultDyn.base_prices,
+      min_prices: savedDyn.min_prices ?? defaultDyn.min_prices,
+      max_prices: savedDyn.max_prices ?? defaultDyn.max_prices,
+      occupation_coefficients: savedDyn.occupation_coefficients ?? defaultDyn.occupation_coefficients,
+      advance_coefficients: savedDyn.advance_coefficients ?? defaultDyn.advance_coefficients,
+      duration_coefficients: savedDyn.duration_coefficients ?? defaultDyn.duration_coefficients,
+      calendar_gap_coefficients: savedDyn.calendar_gap_coefficients ?? defaultDyn.calendar_gap_coefficients,
+      season_coefficients: savedDyn.season_coefficients ?? defaultDyn.season_coefficients,
+      day_type_coefficients: savedDyn.day_type_coefficients ?? defaultDyn.day_type_coefficients,
+      vehicle_occupation_coefficients: savedDyn.vehicle_occupation_coefficients ?? defaultDyn.vehicle_occupation_coefficients,
+      promo_push_coefficients: savedDyn.promo_push_coefficients ?? defaultDyn.promo_push_coefficients,
+      active_promo_level: savedDyn.active_promo_level ?? defaultDyn.active_promo_level,
+      operating_mode: savedDyn.operating_mode ?? defaultDyn.operating_mode,
+      phase_strategy_enabled: savedDyn.phase_strategy_enabled ?? defaultDyn.phase_strategy_enabled,
+      phase1_max_rentals: savedDyn.phase1_max_rentals ?? defaultDyn.phase1_max_rentals,
+      phase2_max_rentals: savedDyn.phase2_max_rentals ?? defaultDyn.phase2_max_rentals,
+      season_by_month: savedDyn.season_by_month ?? defaultDyn.season_by_month,
+      special_dates: savedDyn.special_dates ?? defaultDyn.special_dates,
+      occupancy_targets: savedDyn.occupancy_targets ?? defaultDyn.occupancy_targets,
+    },
+  }
+}
+
 export default function CentralinaProTab() {
   const [section, setSection] = useState<SectionId>('categorie-fascia')
 
@@ -598,7 +636,7 @@ export default function CentralinaProTab() {
   const initialKm = pick(persisted, 'km', INITIAL_KM)
   const initialDeposits = pick(persisted, 'deposits', INITIAL_DEPOSITS)
   const initialServizi = pick(persisted, 'servizi', INITIAL_SERVIZI)
-  const initialPrezzoDinamico = pick(persisted, 'prezzoDinamico', INITIAL_PREZZO_DINAMICO)
+  const initialPrezzoDinamico = mergePrezzoDinamico(pick(persisted, 'prezzoDinamico', INITIAL_PREZZO_DINAMICO))
   const initialPreventivi = pick(persisted, 'preventivi', INITIAL_PREVENTIVI)
 
   // Current (working) state
@@ -640,7 +678,11 @@ export default function CentralinaProTab() {
         if (remote.km) { setKm(remote.km); setSavedKm(remote.km) }
         if (remote.deposits) { setDeposits(remote.deposits); setSavedDeposits(remote.deposits) }
         if (remote.servizi) { setServizi(remote.servizi); setSavedServizi(remote.servizi) }
-        if (remote.prezzoDinamico) { setPrezzoDinamico(remote.prezzoDinamico); setSavedPrezzoDinamico(remote.prezzoDinamico) }
+        if (remote.prezzoDinamico) {
+          const merged = mergePrezzoDinamico(remote.prezzoDinamico)
+          setPrezzoDinamico(merged)
+          setSavedPrezzoDinamico(merged)
+        }
         if (remote.preventivi) { setPreventivi(remote.preventivi); setSavedPreventivi(remote.preventivi) }
         // Refresh local cache with the authoritative copy
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
