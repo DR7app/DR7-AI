@@ -1037,6 +1037,21 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           total: formatEur(p.total_final || p.subtotal),
           sconto: discountLine,
           customer_name: p.customer_name || '',
+          // Pickup / dropoff date-time — Europe/Rome, split into date and time slots
+          // so the Pro template placeholders {pickup_date}, {pickup_time},
+          // {dropoff_date}, {dropoff_time} all resolve.
+          pickup_date: p.pickup_date
+            ? new Date(p.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+            : '',
+          pickup_time: p.pickup_date
+            ? new Date(p.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+            : '',
+          dropoff_date: p.dropoff_date
+            ? new Date(p.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+            : '',
+          dropoff_time: p.dropoff_date
+            ? new Date(p.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+            : '',
           km_info: p.unlimited_km_total > 0 ? 'Illimitati' : (() => {
             if (!rentalConfig) return ''
             const km = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
