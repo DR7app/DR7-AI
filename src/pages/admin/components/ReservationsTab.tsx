@@ -2726,33 +2726,37 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             || extendingBooking.customer_name?.split(' ')[0]
             || 'Cliente'
 
-          const custExtPayLabel = extendData.extension_payment_status === 'paid'
-            ? `Pagato${extendData.extension_payment_method ? ` (${extendData.extension_payment_method})` : ''}`
-            : extendData.extension_payment_status === 'nexi_pay_by_link'
-            ? 'Nexi Pay by Link'
-            : 'Da saldare'
+          const extraDaysCount = Math.max(
+            1,
+            Math.ceil((newDropoffDateTime.getTime() - prevDropoff.getTime()) / (1000 * 60 * 60 * 24))
+          )
+          const vehicleNameForMsg = newVehicle
+            ? newVehicle.display_name
+            : (extendingBooking.vehicle_name || 'N/A')
 
-          const customerMsg = `Salve ${customerFirstName},\n\n`
-            + `Confermiamo l'estensione della sua prenotazione.\n\n`
-            + `*ESTENSIONE PRENOTAZIONE NOLEGGIO*\n\n`
-            + `*ID:* DR7-${bookingIdShort}\n`
-            + (newVehicle
-              ? `*Nuovo veicolo:* ${newVehicle.display_name}\n`
-              : `*Veicolo:* ${extendingBooking.vehicle_name || 'N/A'}\n`)
-            + `*Riconsegna precedente:* ${prevDropoffStr} alle ${prevTimeStr}\n`
-            + `*Nuova riconsegna:* ${newDropoffStr} alle ${newTimeStr}\n`
-            + `*Km:* ${extendData.extension_unlimited_km ? 'Illimitati' : (extensionKmAdded > 0 ? `+${extensionKmAdded} km (totale: ${newKmLimit} Km)` : `${newKmLimit} Km`)}\n`
-            + `*Importo aggiuntivo:* €${additionalAmount.toFixed(2)}\n`
-            + `*Nuovo totale:* €${(newTotal / 100).toFixed(2)}\n`
-            + `*Pagamento estensione:* ${custExtPayLabel}\n`
-            + `\nCordiali Saluti,\nDR7`
-
-          await fetch('/.netlify/functions/send-whatsapp-notification', {
+          const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customMessage: customerMsg, customPhone: customerPhone })
+            body: JSON.stringify({
+              customPhone: customerPhone,
+              templateKey: 'pro_estensione_noleggio',
+              templateVars: {
+                customer_name: customerFirstName,
+                vehicle_name: vehicleNameForMsg,
+                new_dropoff_date: newDropoffStr,
+                new_dropoff_time: newTimeStr,
+                extra_days: String(extraDaysCount),
+                extra_cost: additionalAmount.toFixed(2),
+              },
+              skipHeader: true,
+            })
           })
-          logger.log('[handleConfirmExtend] ✅ WhatsApp customer notification sent to', customerPhone)
+          const waResult = await waResp.json().catch(() => ({}))
+          if (!waResp.ok || waResult?.skipped) {
+            toast.error('Template mancante in Messaggi di Sistema Pro: pro_estensione_noleggio')
+          } else {
+            logger.log('[handleConfirmExtend] ✅ WhatsApp customer notification sent to', customerPhone)
+          }
         } else {
           logger.warn('[handleConfirmExtend] ⚠️ No customer phone — skipped customer notification')
         }
@@ -4491,11 +4495,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Auto-send contract for signature via WhatsApp
-      // Send when: new paid booking, OR payment just marked paid, OR editing an already-paid booking (contract regenerated with new data)
-      const shouldSendSigningLink = insertedBooking?.id && formData.payment_status === 'paid' && (
-        !editingId ||          // New booking
-        justMarkedPaid ||      // Payment just changed to paid
-        editingId              // Editing existing paid booking (contract was regenerated above)
+      // Send when: editing (always — new contract with updated data), OR new paid booking, OR payment just marked paid
+      const shouldSendSigningLink = !!insertedBooking?.id && (
+        !!editingId ||                             // ANY edit — resend updated contract
+        formData.payment_status === 'paid' ||      // New paid booking
+        justMarkedPaid                             // Payment just transitioned to paid
       )
       if (shouldSendSigningLink) {
         try {
