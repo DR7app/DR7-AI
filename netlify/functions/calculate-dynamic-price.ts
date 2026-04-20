@@ -12,6 +12,48 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// Converts Pro's named season tiers + month→tier map into the engine's
+// season_rules format (one rule per month, MM-DD ranges).
+function buildSeasonRulesFromProConfig(proDynamic: any): Array<{ name: string; type: string; start_date: string; end_date: string; coeff: number }> {
+  const coeffs = Array.isArray(proDynamic?.season_coefficients) ? proDynamic.season_coefficients : []
+  const monthMap: Record<string, string> = (proDynamic?.season_by_month && typeof proDynamic.season_by_month === 'object') ? proDynamic.season_by_month : {}
+  if (!coeffs.length || Object.keys(monthMap).length === 0) return []
+
+  const tierToCoeff = new Map<string, number>()
+  const tierToLabel = new Map<string, string>()
+  for (const c of coeffs) {
+    if (c && typeof c.key === 'string' && typeof c.coeff === 'number') {
+      tierToCoeff.set(c.key, c.coeff)
+      tierToLabel.set(c.key, typeof c.label === 'string' ? c.label : c.key)
+    }
+  }
+
+  const daysInMonth = (m: number) => {
+    // Use 2024 (leap) just for Feb safety; last day across years is 28/29 — engine uses MM-DD string compare, so pick 28 for Feb to stay inclusive.
+    if (m === 2) return 28
+    if ([4, 6, 9, 11].includes(m)) return 30
+    return 31
+  }
+
+  const rules: Array<{ name: string; type: string; start_date: string; end_date: string; coeff: number }> = []
+  for (let m = 1; m <= 12; m++) {
+    const tier = monthMap[String(m)]
+    if (!tier) continue
+    const coeff = tierToCoeff.get(tier)
+    if (typeof coeff !== 'number') continue
+    const mm = String(m).padStart(2, '0')
+    const lastDay = String(daysInMonth(m)).padStart(2, '0')
+    rules.push({
+      name: tierToLabel.get(tier) || tier,
+      type: tier,
+      start_date: `${mm}-01`,
+      end_date: `${mm}-${lastDay}`,
+      coeff,
+    })
+  }
+  return rules
+}
+
 /**
  * Convert Centralina Pro's prezzoDinamico.dynamic to RevenueConfig format.
  * Falls back to revenue_config table if Pro config is empty.
@@ -74,7 +116,10 @@ async function loadRevenueConfig(): Promise<RevenueConfig | null> {
         ? mapAdvCoeffs(proDynamic.advance_coefficients) : [],
       duration_coefficients: proDynamic.duration_coefficients?.length
         ? mapDurCoeffs(proDynamic.duration_coefficients) : [],
-      season_rules: proDynamic.season_rules || [],
+      // Build engine-format season_rules from Pro's named tiers + month→tier map.
+      // Pro stores: season_coefficients=[{key,label,coeff}], season_by_month={1:'alta',...}
+      // Engine expects: [{name, type, start_date: 'MM-DD', end_date: 'MM-DD', coeff}]
+      season_rules: buildSeasonRulesFromProConfig(proDynamic),
     }
   }
 

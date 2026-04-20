@@ -2579,6 +2579,11 @@ function PrezzoDinamicoSection({
             rows={config.dynamic.season_coefficients}
             onChange={(rows) => patchDyn({ season_coefficients: rows })}
           />
+          <SeasonByMonthSection
+            seasonByMonth={config.dynamic.season_by_month}
+            seasonTiers={config.dynamic.season_coefficients}
+            onChange={(map) => patchDyn({ season_by_month: map })}
+          />
           <NamedCoefficientTable
             title="Coefficienti Tipo Giorno"
             subtitle="Giorno della settimana + prefestivi / ponti / eventi / festività"
@@ -2771,6 +2776,53 @@ function OperatingModeSection({
 }
 
 // ── Target occupancy per vehicle class × advance window ──
+// ── Month → Season tier mapping ──
+function SeasonByMonthSection({
+  seasonByMonth, seasonTiers, onChange,
+}: {
+  seasonByMonth: Record<string, string>
+  seasonTiers: NamedCoeff[]
+  onChange: (map: Record<string, string>) => void
+}) {
+  const months = [
+    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
+  ]
+  return (
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+        Stagione per Mese
+      </h3>
+      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+        Quale tier di stagione applicare a ogni mese. Il coefficiente arriva dalla tabella sopra.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {months.map((name, i) => {
+          const m = String(i + 1)
+          const currentTier = seasonByMonth[m] || ''
+          return (
+            <label key={m} className="flex items-center gap-2">
+              <span className="text-[13px] text-[#1d1d1f] font-medium w-24">{name}</span>
+              <select
+                value={currentTier}
+                onChange={(e) => onChange({ ...seasonByMonth, [m]: e.target.value })}
+                className="flex-1 bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              >
+                <option value="">— (nessuna)</option>
+                {seasonTiers.map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label} {typeof t.coeff === 'number' ? `(${t.coeff.toFixed(2)})` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function OccupancyTargetsSection({
   targets, onChange,
 }: {
