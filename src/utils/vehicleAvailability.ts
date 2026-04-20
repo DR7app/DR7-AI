@@ -380,6 +380,7 @@ export function isVehicleAvailable(
     // must be at least 15 minutes apart from our pickup and our return.
     // Same-car buffer above stays untouched (75 min).
     const crossGapMs = CROSS_VEHICLE_GAP_MINUTES * 60 * 1000
+    logger.log(`[CROSS-GAP] Scanning ${existingBookings.length} bookings for cross-vehicle conflicts. My pickup=${requestStart.toISOString()}, my dropoff=${requestEnd.toISOString()}, target vehicle=${vehicle.display_name} (${vehiclePlate})`)
     for (const booking of existingBookings) {
         if (excludeBookingId && booking.id === excludeBookingId) continue
         if (booking.status === 'cancelled' || booking.status === 'annullata') continue
@@ -403,10 +404,15 @@ export function isVehicleAvailable(
             ['Riconsegna', myDropoff, 'riconsegna', otherDropoff],
         ]
 
+        logger.log(`[CROSS-GAP] Other booking id=${booking.id?.substring(0,8)} plate=${booking.vehicle_plate} pickup=${new Date(otherPickup).toISOString()} dropoff=${new Date(otherDropoff).toISOString()}`)
+
         for (const [myLabel, myTime, otherLabel, otherTime] of pairs) {
+            const diffMin = Math.abs(myTime - otherTime) / 60000
+            logger.log(`[CROSS-GAP]   ${myLabel} vs ${otherLabel}: ${diffMin.toFixed(1)} min`)
             if (Math.abs(myTime - otherTime) < crossGapMs) {
                 const otherTimeFmt = new Date(otherTime).toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
                 const plateInfo = booking.vehicle_plate || booking.vehicle_name || 'altro veicolo'
+                logger.log(`[CROSS-GAP] CONFLICT: ${myLabel} within 15 min of ${otherLabel} (${diffMin.toFixed(1)} min), booking ${booking.id?.substring(0,8)}`)
                 return {
                     available: false,
                     reason: `${myLabel} a meno di ${CROSS_VEHICLE_GAP_MINUTES} minuti dalla ${otherLabel} di ${plateInfo} (${otherTimeFmt}). Serve almeno ${CROSS_VEHICLE_GAP_MINUTES} minuti tra due operazioni su auto diverse.`
