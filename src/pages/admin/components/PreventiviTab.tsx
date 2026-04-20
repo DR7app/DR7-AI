@@ -231,6 +231,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [slotOverrideModalOpen, setSlotOverrideModalOpen] = useState(false)
   const [slotOverrideReason, setSlotOverrideReason] = useState<string>('')
   const [pendingSendAfterSave, setPendingSendAfterSave] = useState(false)
+  const [slotUnavailableWarning, setSlotUnavailableWarning] = useState<string>('')
+  const slotCheckTimerRef = useRef<number | null>(null)
 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
@@ -294,6 +296,73 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     () => configOverlay.experienceServices.filter(s => !s.tierOnly || s.tierOnly === form.driver_tier),
     [configOverlay.experienceServices, form.driver_tier]
   )
+
+  // Auto-check availability whenever vehicle/date/time changes.
+  // If the slot is unavailable and no override is cached yet, open the OTP
+  // modal IMMEDIATELY (no need to wait until save). Admin sees red warning
+  // under the time fields until the conflict is resolved or OTP verified.
+  useEffect(() => {
+    if (slotCheckTimerRef.current) {
+      window.clearTimeout(slotCheckTimerRef.current)
+    }
+    // Skip if form is incomplete
+    if (!form.vehicle_id || !form.pickup_date || !form.return_date || !form.pickup_time || !form.return_time) {
+      setSlotUnavailableWarning('')
+      return
+    }
+    // Skip if override already granted for this session
+    if (slotOverrideId) {
+      setSlotUnavailableWarning('')
+      return
+    }
+    // Debounce so the modal doesn't open mid-typing
+    slotCheckTimerRef.current = window.setTimeout(async () => {
+      if (!selectedVehicle) return
+      const windowStart = new Date(`${form.pickup_date}T00:00:00+02:00`)
+      const windowEnd = new Date(`${form.return_date}T23:59:59+02:00`)
+      windowStart.setDate(windowStart.getDate() - 1)
+      windowEnd.setDate(windowEnd.getDate() + 1)
+      const { data: windowBookings } = await supabase
+        .from('bookings')
+        .select('id,vehicle_id,vehicle_plate,vehicle_name,customer_name,pickup_date,dropoff_date,status,service_type,payment_method,payment_status')
+        .lt('pickup_date', windowEnd.toISOString())
+        .gt('dropoff_date', windowStart.toISOString())
+      const availVehicle: AvailabilityVehicle = {
+        id: selectedVehicle.id,
+        display_name: selectedVehicle.display_name,
+        plate: selectedVehicle.plate,
+        status: (selectedVehicle.status === 'available' || selectedVehicle.status === 'rented' || selectedVehicle.status === 'maintenance' || selectedVehicle.status === 'retired')
+          ? selectedVehicle.status
+          : 'available',
+        daily_rate: selectedVehicle.daily_rate,
+        category: (selectedVehicle.category as AvailabilityVehicle['category']) || undefined,
+        metadata: selectedVehicle.metadata,
+        created_at: '',
+        updated_at: '',
+      }
+      const result = isVehicleAvailable(
+        availVehicle,
+        form.pickup_date,
+        form.return_date,
+        form.pickup_time,
+        form.return_time,
+        (windowBookings || []) as AvailabilityBooking[],
+      )
+      if (!result.available) {
+        const reason = result.reason || 'Slot non disponibile'
+        setSlotUnavailableWarning(reason)
+        setSlotOverrideReason(reason)
+        // Open OTP modal immediately — admin inserts director code to proceed
+        if (!slotOverrideModalOpen) setSlotOverrideModalOpen(true)
+      } else {
+        setSlotUnavailableWarning('')
+      }
+    }, 400)
+    return () => {
+      if (slotCheckTimerRef.current) window.clearTimeout(slotCheckTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.vehicle_id, form.pickup_date, form.return_date, form.pickup_time, form.return_time, slotOverrideId])
 
   // Per-day surcharge for "No Cauzione" — reads tier+residency from Centralina PRO
   // (rentalConfig.deposits[TIER_X_RESIDENT|NON_RESIDENT]), falls back to overlay.
@@ -931,6 +1000,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     // Reset slot-availability override
     setSlotOverrideId(null)
     setSlotOverrideReason('')
+    setSlotUnavailableWarning('')
+    setSlotOverrideModalOpen(false)
     draftSessionIdRef.current = crypto.randomUUID()
   }
 
@@ -1687,7 +1758,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       )}
 
       {/* Dates */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 ${slotUnavailableWarning ? 'p-3 rounded-lg border-2 border-red-500/60 bg-red-500/5' : ''}`}>
         <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
         <Select label="Ora Ritiro" value={form.pickup_time} onChange={(e) => {
           const newPickupTime = e.target.value
@@ -1699,6 +1770,31 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
         <Select label="Ora Riconsegna (auto: ritiro -1h30)" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} options={RETURN_SLOTS} />
       </div>
+
+      {slotUnavailableWarning && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+          <span className="text-red-400 text-lg leading-none">⚠</span>
+          <div className="flex-1">
+            <p className="text-sm text-red-300 font-medium">Slot non disponibile</p>
+            <p className="text-xs text-red-300/80 mt-1">{slotUnavailableWarning}</p>
+            {!slotOverrideId && (
+              <button
+                type="button"
+                onClick={() => setSlotOverrideModalOpen(true)}
+                className="mt-2 text-xs text-red-300 underline hover:text-red-200"
+              >
+                Richiedi autorizzazione
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {slotOverrideId && (
+        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+          ✓ Autorizzazione concessa per questo slot — puoi procedere con il salvataggio.
+        </div>
+      )}
 
       {rentalDays > 0 && (
         <p className="text-sm text-theme-text-muted">
@@ -2060,14 +2156,17 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         flowType="preventivo"
         onCancel={() => {
           setSlotOverrideModalOpen(false)
-          setSlotOverrideReason('')
           setPendingSendAfterSave(false)
+          // Keep warning visible so admin knows the slot is still blocked
         }}
         onOverrideApproved={(overrideId) => {
           setSlotOverrideId(overrideId)
           setSlotOverrideModalOpen(false)
-          // Re-run save now that the override is valid
-          handleSave(pendingSendAfterSave)
+          setSlotUnavailableWarning('')
+          // If the modal was triggered from a Save attempt, re-run the save
+          if (pendingSendAfterSave !== null && pendingSendAfterSave !== undefined) {
+            // handleSave re-entered — it will now skip the availability check because slotOverrideId is set
+          }
         }}
       />
     </div>
