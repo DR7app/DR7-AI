@@ -609,11 +609,14 @@ export default function ContrattoTab() {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ bookingId: contract.booking_id })
                           })
+                          const data = await res.json().catch(() => ({}))
                           if (!res.ok) {
-                            const err = await res.json().catch(() => ({}))
-                            throw new Error(err.error || err.message || res.statusText)
+                            throw new Error(data.error || data.message || res.statusText)
                           }
                           toast.success('Contratto rigenerato!', { id: 'regen' })
+                          if (data.url) {
+                            window.open(data.url, '_blank', 'noopener,noreferrer')
+                          }
                           loadContracts()
                         } catch (err: unknown) {
                           const _errMsg = err instanceof Error ? err.message : String(err)
