@@ -704,9 +704,10 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
 
         console.log(`[generate-contract] Using additional terms for category: ${vehicleCategory}`)
 
-        // Map insurance option ID to readable label (short labels to fit PDF field)
+        // Map insurance option ID to readable label.
+        // 1st: legacy hardcoded map (old bookings). 2nd: lookup in centralina_pro_config (new bookings).
         const insuranceOptionId = booking.booking_details?.insuranceOption || booking.booking_details?.insurance || booking.booking_details?.kasko || 'KASKO_BASE'
-        const insuranceLabels: Record<string, string> = {
+        const legacyInsuranceLabels: Record<string, string> = {
             'RCA': 'RCA Compresa',
             'KASKO': 'Base',
             'KASKO_BASE': 'Base',
@@ -714,7 +715,33 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'KASKO_SIGNATURE': 'Signature',
             'DR7': 'DR7'
         }
-        const insuranceLabel = insuranceLabels[insuranceOptionId] || insuranceOptionId
+        let insuranceLabel = legacyInsuranceLabels[insuranceOptionId] || ''
+        if (!insuranceLabel) {
+            // New bookings: resolve name from centralina_pro_config
+            try {
+                const { data: cfg } = await supabase
+                    .from('centralina_pro_config')
+                    .select('config')
+                    .eq('id', 'main')
+                    .maybeSingle()
+                const proInsurance = cfg?.config?.insurance || []
+                for (const catIns of proInsurance) {
+                    const allOpts: any[] = [
+                        ...(catIns.all || []),
+                        ...Object.values(catIns.byFascia || {}).flat() as any[],
+                    ]
+                    const found = allOpts.find((o: any) => o.id === insuranceOptionId)
+                    if (found?.name) {
+                        insuranceLabel = found.name
+                        break
+                    }
+                }
+            } catch (cfgErr: any) {
+                console.warn('[generate-contract] Insurance label lookup failed:', cfgErr.message)
+            }
+        }
+        if (!insuranceLabel) insuranceLabel = insuranceOptionId
+        console.log(`[generate-contract] Insurance: id="${insuranceOptionId}" → label="${insuranceLabel}"`)
 
         // Standardized Data Field Map
         // We map to BOTH potential English and Italian field names to be safe, as we don't see the PDF structure directly.
