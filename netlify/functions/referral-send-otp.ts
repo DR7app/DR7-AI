@@ -91,8 +91,15 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const fallbackOtp = `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP: *${code}*\n\nScade tra 5 minuti.\nNon condividere questo codice con nessuno.`;
-    const message = await renderTemplate('referral_otp_whatsapp', { code }, fallbackOtp);
+    const message = await renderTemplate('referral_otp_whatsapp', { code });
+    if (!message) {
+      console.error('[referral-send-otp] Pro template referral_otp_whatsapp missing/disabled');
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Template OTP non configurato in Messaggi di Sistema Pro' }),
+      };
+    }
 
     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
 

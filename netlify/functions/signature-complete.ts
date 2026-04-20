@@ -540,10 +540,14 @@ export const handler: Handler = async (event) => {
             try {
                 const ADMIN_PHONE = '393457905205'
                 const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY || '6526748'
-                const adminMsg = await renderTemplate('admin_contract_signed_alert', { docIdentifier, signerName: sigRequest.signer_name || 'cliente', signedPdfUrl }, `✅ CONTRATTO FIRMATO\n\n${docIdentifier} firmato da ${sigRequest.signer_name || 'cliente'}\n\nScarica PDF:\n${signedPdfUrl}`)
-                const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${ADMIN_PHONE}&text=${encodeURIComponent(adminMsg)}&apikey=${CALLMEBOT_API_KEY}`
-                const adminRes = await fetch(callmebotUrl)
-                console.log('[signature-complete] Admin CallMeBot notification status:', adminRes.status)
+                const adminMsg = await renderTemplate('admin_contract_signed_alert', { docIdentifier, signerName: sigRequest.signer_name || 'cliente', signedPdfUrl })
+                if (!adminMsg) {
+                    console.log('[signature-complete] Pro template for admin_contract_signed_alert missing/disabled — skipping admin notification')
+                } else {
+                    const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${ADMIN_PHONE}&text=${encodeURIComponent(adminMsg)}&apikey=${CALLMEBOT_API_KEY}`
+                    const adminRes = await fetch(callmebotUrl)
+                    console.log('[signature-complete] Admin CallMeBot notification status:', adminRes.status)
+                }
             } catch (adminErr: any) {
                 console.error('[signature-complete] Failed to send to admin:', adminErr.message)
             }

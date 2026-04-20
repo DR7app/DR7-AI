@@ -1,35 +1,11 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { renderTemplate } from './utils/messageTemplates';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
-
-// Default birthday message template - {nome} and {codice} will be replaced
-const DEFAULT_BIRTHDAY_MESSAGE = `Ciao {nome} 👋🏻
-
-mancano esattamente 10 giorni a una data speciale: il tuo compleanno 🥳
-
-Non vogliamo anticipare gli auguri, ma fare qualcosa di più autentico: riconoscere il tuo valore, prima ancora di celebrarlo.
-
-In qualità di nostro cliente, abbiamo il piacere di riservarti un pensiero dedicato, in linea con il tuo stile 🎁
-
-Per questo ti abbiamo riservato:
-
-Credito personale di €100 utilizzabile per un noleggio DR7
-
-Buono sconto di €10 per un lavaggio auto DR7
-
-CODICE SCONTO: {codice}
-
-Non è solo un regalo, ma un invito a concederti un'esperienza che ti rappresenti: potente, elegante, inconfondibile.
-
-Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo lieti di accompagnarti nella scelta 👇🏻
-
-Con stima,
-Dubai Rent 7.0 S.p.A.
-Ogni compleanno merita uno stile all'altezza.`;
 
 // Generate unique discount code
 function generateDiscountCode(): string {
@@ -64,31 +40,13 @@ const birthdayHandler: Handler = async (event) => {
   });
 
   try {
-    // Load custom message template from system_messages (fallback to app_settings, then default)
-    let birthdayMessage = DEFAULT_BIRTHDAY_MESSAGE;
-    const { data: sysTemplate } = await supabase
-      .from('system_messages')
-      .select('message_body, is_enabled')
-      .eq('message_key', 'birthday_message')
-      .eq('is_enabled', true)
-      .single();
-
-    if (sysTemplate?.message_body) {
-      birthdayMessage = sysTemplate.message_body;
-      console.log('[Birthday Auto] Using template from system_messages');
-    } else {
-      // Fallback to legacy app_settings
-      const { data: settingData } = await supabase
-        .from('app_settings')
-        .select('value')
-        .eq('key', 'birthday_message_template')
-        .single();
-      if (settingData?.value) {
-        birthdayMessage = settingData.value;
-        console.log('[Birthday Auto] Using legacy template from app_settings');
-      } else {
-        console.log('[Birthday Auto] Using default message template');
-      }
+    // Birthday template comes EXCLUSIVELY from Messaggi di Sistema Pro.
+    // 'birthday_message' routes to 'pro_marketing_compleanno' via OLD_TO_PRO.
+    // If missing/disabled/empty we abort — no hardcoded fallback.
+    const probeMessage = await renderTemplate('birthday_message', { nome: '', codice: '' });
+    if (!probeMessage) {
+      console.warn('[Birthday Auto] Pro template for birthday_message is missing/disabled — aborting run');
+      return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: 'pro_template_unavailable' }) };
     }
 
     const currentYear = new Date().getFullYear();
@@ -196,10 +154,13 @@ const birthdayHandler: Handler = async (event) => {
 
         console.log(`[Birthday Auto] Generated code ${discountCode} for ${fullName}`);
 
-        // Personalize message with name and code
-        const personalizedMessage = birthdayMessage
-          .replace('{nome}', firstName)
-          .replace('{codice}', discountCode);
+        // Render the Pro template for this customer (no hardcoded fallback)
+        const personalizedMessage = await renderTemplate('birthday_message', { nome: firstName, codice: discountCode });
+        if (!personalizedMessage) {
+          console.warn(`[Birthday Auto] Pro template disappeared mid-run for ${fullName} — skipping`);
+          errors++;
+          continue;
+        }
 
         // Clean phone number — strip all non-digit chars, normalize Italian prefix
         let cleanPhone = customer.telefono.replace(/[^\d]/g, '');

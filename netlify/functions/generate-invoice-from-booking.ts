@@ -659,7 +659,7 @@ export const handler: Handler = async (event) => {
                             chatId: `${cleanPhone}@c.us`,
                             urlFile: pdfUrl,
                             fileName: `Fattura_${invoice.numero_fattura}.pdf`,
-                            caption: await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura }, `Fattura ${invoice.numero_fattura} - DR7 Empire`)
+                            caption: (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
                         })
                     })
 
