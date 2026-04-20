@@ -235,12 +235,28 @@ const handler: Handler = async (event) => {
           vehicle_name: booking.vehicle_name || '',
           plate: booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '',
           pickup_location: booking.pickup_location || '',
-          insurance: (() => {
+          insurance: await (async () => {
             const insId = booking.booking_details?.insuranceOption || booking.insurance_option || '';
             if (!insId) return 'N/A';
-            // Convert ID to readable name
-            const nameMap: Record<string, string> = { RCA: 'RCA Compresa', KASKO_BASE: 'Kasko Base', KASKO_BLACK: 'Kasko Black', KASKO_SIGNATURE: 'Kasko Signature', DR7: 'Kasko DR7', KASKO_DR7: 'Kasko DR7' };
-            return nameMap[insId] || insId.replace(/_/g, ' ');
+            // Look up insurance name from Centralina Pro config
+            try {
+              const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+              const { data: proRow } = await sb.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle();
+              const insuranceList = proRow?.config?.insurance;
+              if (Array.isArray(insuranceList)) {
+                for (const cat of insuranceList) {
+                  // Check all_tiers options
+                  const found = (cat.all || []).find((o: any) => o.id === insId);
+                  if (found) return found.name;
+                  // Check per-fascia options
+                  for (const opts of Object.values(cat.byFascia || {})) {
+                    const match = (opts as any[]).find((o: any) => o.id === insId);
+                    if (match) return match.name;
+                  }
+                }
+              }
+            } catch { /* fallback */ }
+            return insId.replace(/_/g, ' ');
           })(),
           payment_status: (() => {
             const ps = booking.payment_status;
