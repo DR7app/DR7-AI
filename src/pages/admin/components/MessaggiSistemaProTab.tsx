@@ -73,6 +73,14 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
     ],
   },
   {
+    label: 'Modifica',
+    templates: [
+      { key: 'pro_modifica_noleggio',  label: 'Modifica Noleggio',  description: 'Comunicazione al cliente dopo modifica di una prenotazione noleggio' },
+      { key: 'pro_modifica_lavaggio',  label: 'Modifica Lavaggio',  description: 'Comunicazione al cliente dopo modifica di una prenotazione lavaggio' },
+      { key: 'pro_modifica_meccanica', label: 'Modifica Meccanica', description: 'Comunicazione al cliente dopo modifica di una prenotazione meccanica' },
+    ],
+  },
+  {
     label: 'Promemoria',
     templates: [
       { key: 'pro_promemoria_pickup',        label: 'Promemoria Ritiro',         description: 'Promemoria prima del ritiro veicolo' },

@@ -40,7 +40,7 @@ const OLD_TO_PRO: Record<string, string> = {
   rental_new_customer: 'pro_conferma_noleggio',
   rental_new: 'pro_conferma_noleggio',
   rental_new_admin: 'pro_conferma_noleggio',
-  rental_modified: 'pro_promemoria_appuntamento',
+  rental_modified: 'pro_modifica_noleggio',
   rental_da_saldare_customer: 'pro_conferma_pagamento',
   deposit_return_iban: 'pro_richiesta_iban',
 
@@ -48,7 +48,13 @@ const OLD_TO_PRO: Record<string, string> = {
   carwash_new_customer: 'pro_conferma_lavaggio',
   carwash_new: 'pro_conferma_lavaggio',
   carwash_new_admin: 'pro_conferma_lavaggio',
-  carwash_modified: 'pro_promemoria_pagamento',
+  carwash_modified: 'pro_modifica_lavaggio',
+
+  // Meccanica (Prime Wash umbrella)
+  mechanical_new_customer: 'pro_conferma_meccanica',
+  mechanical_new: 'pro_conferma_meccanica',
+  mechanical_new_admin: 'pro_conferma_meccanica',
+  mechanical_modified: 'pro_modifica_meccanica',
 
   // Firma & Contratto
   signature_request_link: 'pro_conferma_contratto_firmato',
