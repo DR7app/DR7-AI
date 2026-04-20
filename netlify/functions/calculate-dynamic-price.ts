@@ -116,10 +116,18 @@ async function loadRevenueConfig(): Promise<RevenueConfig | null> {
         ? mapAdvCoeffs(proDynamic.advance_coefficients) : [],
       duration_coefficients: proDynamic.duration_coefficients?.length
         ? mapDurCoeffs(proDynamic.duration_coefficients) : [],
+      calendar_gap_coefficients: proDynamic.calendar_gap_coefficients?.length
+        ? mapDurCoeffs(proDynamic.calendar_gap_coefficients) : [],
       // Build engine-format season_rules from Pro's named tiers + month→tier map.
-      // Pro stores: season_coefficients=[{key,label,coeff}], season_by_month={1:'alta',...}
-      // Engine expects: [{name, type, start_date: 'MM-DD', end_date: 'MM-DD', coeff}]
       season_rules: buildSeasonRulesFromProConfig(proDynamic),
+      day_type_coefficients: Array.isArray(proDynamic.day_type_coefficients)
+        ? proDynamic.day_type_coefficients.map((d: any) => ({ key: d.key, label: d.label, coeff: Number(d.coeff) || 1.0 })) : [],
+      vehicle_occupation_coefficients: Array.isArray(proDynamic.vehicle_occupation_coefficients)
+        ? proDynamic.vehicle_occupation_coefficients.map((d: any) => ({ key: d.key, label: d.label, coeff: Number(d.coeff) || 1.0 })) : [],
+      promo_push_coefficients: Array.isArray(proDynamic.promo_push_coefficients)
+        ? proDynamic.promo_push_coefficients.map((d: any) => ({ key: d.key, label: d.label, coeff: Number(d.coeff) || 1.0 })) : [],
+      special_dates: (proDynamic.special_dates && typeof proDynamic.special_dates === 'object') ? proDynamic.special_dates : {},
+      active_promo_level: proDynamic.active_promo_level || '',
     }
   }
 
@@ -199,6 +207,40 @@ export const handler: Handler = async (event) => {
     const busyVehicleIds = new Set((overlappingBookings || []).map((b: { vehicle_id: string }) => b.vehicle_id))
     const occupancyPct = Math.round((busyVehicleIds.size / totalInCategory) * 100)
 
+    // 3b. Per-vehicle own occupancy over last 30 days (for vehicle_occupation_coefficients)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const thirtyDaysAhead = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: thisVehicleBookings } = await supabase
+      .from('bookings')
+      .select('pickup_date, dropoff_date')
+      .eq('vehicle_id', vehicle.id)
+      .not('status', 'in', '(cancelled,annullata)')
+      .gte('pickup_date', thirtyDaysAgo)
+      .lte('dropoff_date', thirtyDaysAhead)
+    let vehicleOwnOccupiedDays = 0
+    for (const b of (thisVehicleBookings || [])) {
+      const p = new Date(b.pickup_date).getTime()
+      const d = new Date(b.dropoff_date).getTime()
+      vehicleOwnOccupiedDays += Math.max(1, Math.ceil((d - p) / (1000 * 60 * 60 * 24)))
+    }
+    const vehicleOwnOccupancyPct = Math.min(100, Math.round((vehicleOwnOccupiedDays / 60) * 100))
+
+    // 3c. Calendar gap: days from pickup to nearest previous booking's dropoff on same vehicle
+    const pickupMs = new Date(pickup_date).getTime()
+    const { data: priorBookings } = await supabase
+      .from('bookings')
+      .select('dropoff_date')
+      .eq('vehicle_id', vehicle.id)
+      .not('status', 'in', '(cancelled,annullata)')
+      .lt('dropoff_date', pickup_date)
+      .order('dropoff_date', { ascending: false })
+      .limit(1)
+    let calendarGapDays: number | undefined
+    if (priorBookings && priorBookings.length > 0) {
+      const prevDropMs = new Date(priorBookings[0].dropoff_date).getTime()
+      calendarGapDays = Math.max(0, Math.floor((pickupMs - prevDropMs) / (1000 * 60 * 60 * 24)))
+    }
+
     // 4. Build pricing input and run the shared engine
     const pricingInput: PricingInput = {
       vehicleId: vehicle.id,
@@ -208,6 +250,8 @@ export const handler: Handler = async (event) => {
       pickupDate: pickup_date,
       dropoffDate: dropoff_date,
       occupancyPct,
+      vehicleOwnOccupancyPct,
+      calendarGapDays,
     }
 
     const trace: PricingTrace = calculateDynamicPrice(config, pricingInput)

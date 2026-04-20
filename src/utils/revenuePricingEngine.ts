@@ -35,6 +35,12 @@ export interface SeasonRule {
   type: string
 }
 
+export interface NamedCoefficient {
+  key: string
+  label: string
+  coeff: number
+}
+
 export interface RevenueConfig {
   enabled: boolean
   mode: RevenueMode
@@ -44,7 +50,13 @@ export interface RevenueConfig {
   occupation_coefficients: CoefficientRow[]
   advance_coefficients: CoefficientRow[]
   duration_coefficients: CoefficientRow[]
+  calendar_gap_coefficients: CoefficientRow[]
   season_rules: SeasonRule[]
+  day_type_coefficients: NamedCoefficient[]
+  vehicle_occupation_coefficients: NamedCoefficient[]
+  promo_push_coefficients: NamedCoefficient[]
+  special_dates: Record<string, string>     // YYYY-MM-DD -> day_type key
+  active_promo_level: string
 }
 
 export interface PricingInput {
@@ -54,7 +66,9 @@ export interface PricingInput {
   vehicleCategory: string
   pickupDate: string              // ISO date string
   dropoffDate: string             // ISO date string
-  occupancyPct: number            // 0-100
+  occupancyPct: number            // 0-100 (fleet-wide for this category)
+  vehicleOwnOccupancyPct?: number // 0-100 (this vehicle only, last N days)
+  calendarGapDays?: number        // gap before this booking on same vehicle's calendar
 }
 
 export interface BreakdownItem {
@@ -122,7 +136,13 @@ export function getDefaultConfig(): RevenueConfig {
       { min_days: 14, max_days: 30, coeff: 0.85, label: 'Mensile' },
       { min_days: 30, max_days: 9999, coeff: 0.80, label: 'Lungo termine' },
     ],
+    calendar_gap_coefficients: [],
     season_rules: [],
+    day_type_coefficients: [],
+    vehicle_occupation_coefficients: [],
+    promo_push_coefficients: [],
+    special_dates: {},
+    active_promo_level: '',
   }
 }
 
@@ -349,8 +369,84 @@ export function calculateDynamicPrice(
     description: seasonMatch?.name || 'Nessuna regola stagionale'
   })
 
+  // Calendar gap: range-based lookup on calendarGapDays input
+  let gapCoeff = 1.0
+  let gapLabel = 'Nessun dato gap'
+  if ((config.calendar_gap_coefficients || []).length && typeof input.calendarGapDays === 'number') {
+    const gapBracket = matchBracket(config.calendar_gap_coefficients, input.calendarGapDays, 'days')
+    if (gapBracket) {
+      gapCoeff = gapBracket.coeff
+      gapLabel = gapBracket.label
+    }
+  }
+  breakdown.push({
+    label: 'Gap calendario',
+    coeff: gapCoeff,
+    description: gapLabel
+  })
+
+  // Day type: pickup date -> special_dates[YYYY-MM-DD] -> day_type key -> coeff
+  let dayTypeCoeff = 1.0
+  let dayTypeLabel = 'Giorno standard'
+  const pickupYmd = input.pickupDate.slice(0, 10)
+  const dayTypeKey = config.special_dates?.[pickupYmd]
+  if (dayTypeKey) {
+    const dayTypeMatch = (config.day_type_coefficients || []).find(d => d.key === dayTypeKey)
+    if (dayTypeMatch) {
+      dayTypeCoeff = dayTypeMatch.coeff
+      dayTypeLabel = dayTypeMatch.label
+    }
+  }
+  breakdown.push({
+    label: 'Tipo giorno',
+    coeff: dayTypeCoeff,
+    description: dayTypeLabel
+  })
+
+  // Vehicle own occupation: bucketed match on vehicleOwnOccupancyPct into named keys
+  let vehOccCoeff = 1.0
+  let vehOccLabel = 'Nessun dato singolo veicolo'
+  if ((config.vehicle_occupation_coefficients || []).length && typeof input.vehicleOwnOccupancyPct === 'number') {
+    const pct = input.vehicleOwnOccupancyPct
+    // Map pct to named bucket: key can be 'basso'/'medio'/'alto' or '0-30'/etc.
+    let bucketKey = 'medio'
+    if (pct < 33) bucketKey = 'basso'
+    else if (pct < 66) bucketKey = 'medio'
+    else bucketKey = 'alto'
+    const vehOccMatch = (config.vehicle_occupation_coefficients || []).find(v => v.key === bucketKey)
+      ?? (config.vehicle_occupation_coefficients || [])[Math.min(
+        Math.floor(pct / (100 / Math.max(1, (config.vehicle_occupation_coefficients || []).length))),
+        (config.vehicle_occupation_coefficients || []).length - 1
+      )]
+    if (vehOccMatch) {
+      vehOccCoeff = vehOccMatch.coeff
+      vehOccLabel = `${vehOccMatch.label} (${pct}%)`
+    }
+  }
+  breakdown.push({
+    label: 'Occupazione veicolo',
+    coeff: vehOccCoeff,
+    description: vehOccLabel
+  })
+
+  // Promo push: lookup by active_promo_level
+  let promoCoeff = 1.0
+  let promoLabel = 'Nessuna promo attiva'
+  if (config.active_promo_level) {
+    const promoMatch = (config.promo_push_coefficients || []).find(p => p.key === config.active_promo_level)
+    if (promoMatch) {
+      promoCoeff = promoMatch.coeff
+      promoLabel = promoMatch.label
+    }
+  }
+  breakdown.push({
+    label: 'Promo push',
+    coeff: promoCoeff,
+    description: promoLabel
+  })
+
   // ─── 5. Formula ───
-  let rawDailyRate = selectedBaseRateEur * occCoeff * advCoeff * durCoeff * seasonCoeff
+  let rawDailyRate = selectedBaseRateEur * occCoeff * advCoeff * durCoeff * seasonCoeff * gapCoeff * dayTypeCoeff * vehOccCoeff * promoCoeff
 
   // ─── 6. Min/Max clamp ───
   const minPrice = config.min_prices[input.vehicleId]
@@ -451,6 +547,12 @@ export function parseConfigFromDB(row: {
     occupation_coefficients: occCoeffs?.length ? occCoeffs : defaults.occupation_coefficients,
     advance_coefficients: advCoeffs?.length ? advCoeffs : defaults.advance_coefficients,
     duration_coefficients: durCoeffs?.length ? durCoeffs : defaults.duration_coefficients,
+    calendar_gap_coefficients: (c.calendar_gap_coefficients as CoefficientRow[]) || [],
     season_rules: (c.season_rules as SeasonRule[]) || [],
+    day_type_coefficients: (c.day_type_coefficients as NamedCoefficient[]) || [],
+    vehicle_occupation_coefficients: (c.vehicle_occupation_coefficients as NamedCoefficient[]) || [],
+    promo_push_coefficients: (c.promo_push_coefficients as NamedCoefficient[]) || [],
+    special_dates: (c.special_dates as Record<string, string>) || {},
+    active_promo_level: (c.active_promo_level as string) || '',
   }
 }
