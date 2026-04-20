@@ -2891,6 +2891,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submitLockRef = useRef(false)
   const [confirmBooking, setConfirmBooking] = useState(false)
 
   async function processBookingSubmission(skipValidation = false, overrideCustomerId?: string) {
@@ -3220,7 +3221,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     // Call the original submit logic (embedded here or separate)
 
-    if (isSubmitting) return
+    // Synchronous re-entry guard: React state updates are async, so a rapid
+    // second click lands here before the first call has flipped isSubmitting.
+    // The ref flips synchronously on the same tick, so the second call bails.
+    if (submitLockRef.current || isSubmitting) return
+    submitLockRef.current = true
 
     setIsSubmitting(true)
     try {
@@ -4550,6 +4555,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       alert('Failed to save reservation: ' + (error as Error).message)
     } finally {
       setIsSubmitting(false)
+      submitLockRef.current = false
     }
   }
 
