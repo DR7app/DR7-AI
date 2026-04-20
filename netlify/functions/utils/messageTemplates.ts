@@ -35,51 +35,57 @@ interface MessageTemplate {
  * Mapping derived from the BODY CONTENT of each pro_* template (labels have
  * been renamed, so the slot's purpose = its body, not its pro_* name).
  */
+// IMPORTANT: This mapping points each legacy key to the Pro row that ACTUALLY
+// holds the right body in this tenant's system_messages table. The rows are
+// the ones already present in Messaggi di Sistema Pro — we do NOT require new
+// rows to be created; we just route to where the body already lives.
 const OLD_TO_PRO: Record<string, string> = {
   // Noleggio — customer + admin get the same template
   rental_new_customer: 'pro_conferma_noleggio',
   rental_new: 'pro_conferma_noleggio',
   rental_new_admin: 'pro_conferma_noleggio',
-  rental_modified: 'pro_modifica_noleggio',
+  // Modifica noleggio body lives in pro_promemoria_appuntamento
+  rental_modified: 'pro_promemoria_appuntamento',
   deposit_return_iban: 'pro_richiesta_iban',
 
   // Lavaggio — customer + admin get the same template
   carwash_new_customer: 'pro_conferma_lavaggio',
   carwash_new: 'pro_conferma_lavaggio',
   carwash_new_admin: 'pro_conferma_lavaggio',
-  carwash_modified: 'pro_modifica_lavaggio',
+  // Modifica lavaggio body lives in pro_promemoria_pagamento
+  carwash_modified: 'pro_promemoria_pagamento',
 
-  // Meccanica (Prime Wash umbrella)
+  // Meccanica (Prime Wash umbrella) — reuse lavaggio modifica
   mechanical_new_customer: 'pro_conferma_meccanica',
   mechanical_new: 'pro_conferma_meccanica',
   mechanical_new_admin: 'pro_conferma_meccanica',
-  mechanical_modified: 'pro_modifica_meccanica',
+  mechanical_modified: 'pro_promemoria_pagamento',
 
-  // Firma & Contratto
+  // Firma & Contratto — reminder body lives in pro_conferma_preventivo,
+  // OTP body lives in pro_promemoria_pickup
   signature_request_link: 'pro_richiesta_firma',
-  signature_reminder_whatsapp: 'pro_promemoria_firma',
-  signature_otp_whatsapp: 'pro_richiesta_otp',
+  signature_reminder_whatsapp: 'pro_conferma_preventivo',
+  signature_otp_whatsapp: 'pro_promemoria_pickup',
   document_signature_link: 'pro_richiesta_firma',
 
-  // Pagamenti & annullamenti
+  // Pagamenti & annullamenti — payment-link body now lives in pro_richiesta_pagamento,
+  // cancellation body in pro_custom_prenotazione_annullata_da_sito_1776503923221
   payment_link_customer: 'pro_richiesta_pagamento',
   rental_da_saldare_customer: 'pro_richiesta_pagamento',
-  booking_cancelled_whatsapp: 'pro_annullamento_cliente',
+  booking_cancelled_whatsapp: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
 
-  // Preventivi
-  // NOTE: preventivo_whatsapp / preventivo_whatsapp_no_sconto sono letti
-  // direttamente da PreventiviTab (slot admin-created in Messaggi di Sistema
-  // con quelle esatte chiavi). Nessun rerouting qui.
-  admin_new_website_quote: 'pro_admin_nuovo_preventivo',
-  admin_no_cauzione_request: 'pro_admin_nuova_prenotazione',
+  // Preventivi admin alert body lives in pro_richiesta_otp
+  admin_new_website_quote: 'pro_richiesta_otp',
+  admin_no_cauzione_request: 'pro_richiesta_otp',
 
-  // Marketing & Wallet
-  review_request_whatsapp: 'pro_marketing_recensione',
+  // Marketing & Wallet — review body lives in pro_promemoria_firma,
+  // wallet bonus body lives in pro_richiesta_documenti
+  review_request_whatsapp: 'pro_promemoria_firma',
   birthday_message: 'pro_marketing_compleanno',
-  wallet_bonus_credit: 'pro_wallet_bonus_cliente',
+  wallet_bonus_credit: 'pro_richiesta_documenti',
 
   // Website customer actions
-  website_booking_cancelled_customer: 'pro_annullamento_cliente',
+  website_booking_cancelled_customer: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
 }
 
 export interface RenderContext {

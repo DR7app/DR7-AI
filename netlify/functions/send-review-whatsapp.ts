@@ -115,7 +115,15 @@ const reviewHandler: Handler = async (event) => {
         const firstName = (booking.customer_name || 'Cliente').split(' ')[0];
 
         // Body from Messaggi di Sistema Pro — no hardcoded fallback.
-        const personalizedMessage = await renderTemplate('review_request_whatsapp', { nome: firstName });
+        // Pro template uses {customer_name} + {review_link}; pass legacy {nome} too
+        // for older templates that still reference it.
+        const reviewLink = process.env.GOOGLE_REVIEW_LINK || 'https://g.page/r/CQwgJt7OYpsfEBM/review';
+        const personalizedMessage = await renderTemplate('review_request_whatsapp', {
+          nome: firstName,
+          customer_name: booking.customer_name || 'Cliente',
+          first_name: firstName,
+          review_link: reviewLink,
+        });
         if (!personalizedMessage) {
           console.log(`[Review WhatsApp] Skipping ${booking.customer_name}: no Pro template for review_request_whatsapp`);
           continue;
