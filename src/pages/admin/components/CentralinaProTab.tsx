@@ -1118,6 +1118,52 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     diffCoeffRows('Occupazione', cd.occupation_coefficients, pd.occupation_coefficients, out)
     diffCoeffRows('Anticipo', cd.advance_coefficients, pd.advance_coefficients, out)
     diffCoeffRows('Durata', cd.duration_coefficients, pd.duration_coefficients, out)
+    diffCoeffRows('Gap Calendario', cd.calendar_gap_coefficients, pd.calendar_gap_coefficients, out)
+
+    // Named coefficients (tier -> multiplier)
+    const diffNamed = (label: string, cur: NamedCoeff[], prev: NamedCoeff[]) => {
+      const keys = new Set([...cur.map(c => c.key), ...prev.map(c => c.key)])
+      keys.forEach(k => {
+        const c = cur.find(x => x.key === k)
+        const p = prev.find(x => x.key === k)
+        if (!p && c) out.push(`${label}: aggiunta "${c.label}"`)
+        else if (p && !c) out.push(`${label}: rimossa "${p.label}"`)
+        else if (p && c && (p.coeff !== c.coeff || p.label !== c.label)) out.push(`${label}: "${p.label}" modificato`)
+      })
+    }
+    diffNamed('Stagione', cd.season_coefficients, pd.season_coefficients)
+    diffNamed('Tipo Giorno', cd.day_type_coefficients, pd.day_type_coefficients)
+    diffNamed('Occupazione Veicolo', cd.vehicle_occupation_coefficients, pd.vehicle_occupation_coefficients)
+    diffNamed('Promo', cd.promo_push_coefficients, pd.promo_push_coefficients)
+
+    if (pd.active_promo_level !== cd.active_promo_level) out.push(`Promo attiva: ${pd.active_promo_level || 'nessuna'} → ${cd.active_promo_level || 'nessuna'}`)
+    if (pd.operating_mode !== cd.operating_mode) out.push(`Modalità operativa: ${pd.operating_mode} → ${cd.operating_mode}`)
+
+    // Stagione per Mese
+    for (let m = 1; m <= 12; m++) {
+      const cur = cd.season_by_month?.[String(m)] || ''
+      const prev = pd.season_by_month?.[String(m)] || ''
+      if (cur !== prev) out.push(`Stagione mese ${m}: ${prev || 'nessuna'} → ${cur || 'nessuna'}`)
+    }
+
+    // Special dates (day_type per date)
+    const allDates = new Set([...Object.keys(cd.special_dates || {}), ...Object.keys(pd.special_dates || {})])
+    allDates.forEach(d => {
+      const c = cd.special_dates?.[d] || ''
+      const p = pd.special_dates?.[d] || ''
+      if (c !== p) out.push(`Data speciale ${d}: ${p || 'nessuna'} → ${c || 'nessuna'}`)
+    })
+
+    // Occupancy targets
+    const targetClasses: (keyof typeof cd.occupancy_targets)[] = ['utilitarie', 'suv_premium', 'luxury']
+    const targetWindows: (keyof OccupancyTargets)[] = ['d30plus', 'd15_29', 'd7_14', 'd3_6', 'd0_2']
+    targetClasses.forEach(cls => {
+      targetWindows.forEach(w => {
+        const c = cd.occupancy_targets?.[cls]?.[w]
+        const p = pd.occupancy_targets?.[cls]?.[w]
+        if (c !== p) out.push(`Target ${cls} / ${w}: ${p || 0}% → ${c || 0}%`)
+      })
+    })
   }
 
   // Preventivi
