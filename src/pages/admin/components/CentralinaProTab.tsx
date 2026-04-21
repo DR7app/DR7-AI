@@ -2806,28 +2806,31 @@ function SeasonByMonthSection({
           const m = String(i + 1)
           const currentTier = seasonByMonth[m] || ''
           const tierData = seasonTiers.find(t => t.key === currentTier)
+          const badgeClass = tierData && typeof tierData.coeff === 'number'
+            ? tierData.coeff < 1 ? 'bg-green-100 text-green-700'
+            : tierData.coeff > 1 ? 'bg-red-100 text-red-700'
+            : 'bg-gray-100 text-gray-600'
+            : 'bg-gray-100 text-gray-400'
           return (
-            <div key={m} className="flex items-center gap-3 py-1.5 border-b border-black/5 last:border-0">
-              <span className="text-[13px] text-black font-semibold w-24 shrink-0">{name}</span>
+            <div key={m} className="py-2 border-b border-black/5 last:border-0">
+              {/* Header row: month name + coefficient badge */}
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[13px] text-black font-semibold">{name}</span>
+                <span className={`shrink-0 inline-flex items-center justify-center min-w-[48px] px-2 py-0.5 rounded-md text-[11px] font-bold tabular-nums ${badgeClass}`}>
+                  {tierData && typeof tierData.coeff === 'number' ? `×${tierData.coeff.toFixed(2)}` : '—'}
+                </span>
+              </div>
+              {/* Select full-width on its own line */}
               <select
                 value={currentTier}
                 onChange={(e) => onChange({ ...seasonByMonth, [m]: e.target.value })}
-                className="flex-1 min-w-0 bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">— (nessuna)</option>
                 {seasonTiers.map((t) => (
                   <option key={t.key} value={t.key}>{t.label}</option>
                 ))}
               </select>
-              <span className={`shrink-0 inline-flex items-center justify-center min-w-[44px] px-2 py-0.5 rounded-md text-[11px] font-bold tabular-nums ${
-                tierData && typeof tierData.coeff === 'number'
-                  ? tierData.coeff < 1 ? 'bg-green-100 text-green-700'
-                  : tierData.coeff > 1 ? 'bg-red-100 text-red-700'
-                  : 'bg-gray-100 text-gray-600'
-                  : 'bg-gray-100 text-gray-400'
-              }`}>
-                {tierData && typeof tierData.coeff === 'number' ? `×${tierData.coeff.toFixed(2)}` : '—'}
-              </span>
             </div>
           )
         })}
@@ -2854,14 +2857,51 @@ function OccupancyTargetsSection({
     { key: 'd3_6', label: '3–6 gg' },
     { key: 'd0_2', label: '0–2 gg' },
   ]
+  const handleChange = (clsKey: keyof typeof targets, winKey: keyof OccupancyTargets, raw: string) => {
+    const v = raw.replace(/[^0-9]/g, '')
+    onChange({
+      ...targets,
+      [clsKey]: { ...targets[clsKey], [winKey]: v === '' ? '' : Math.min(100, Number(v)) },
+    })
+  }
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5 overflow-x-auto">
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
       <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
         Target Occupazione per Classe × Finestra Temporale
       </h3>
       <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
         % attesa di occupazione rispetto al ritiro. Sotto target → sistema più aggressivo; sopra → protezione margine.
       </p>
+
+      {/* Mobile / narrow: stacked cards per class */}
+      <div className="space-y-4 md:hidden">
+        {classes.map((cls) => (
+          <div key={cls.key} className="rounded-xl border border-black/10 p-3">
+            <div className="text-[13px] font-semibold text-black mb-2">{cls.label}</div>
+            <div className="grid grid-cols-2 gap-2">
+              {windows.map((w) => (
+                <label key={w.key} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-2 py-1.5">
+                  <span className="text-[11px] uppercase tracking-wide text-[#6e6e73]">{w.label}</span>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={targets[cls.key][w.key] === '' ? '' : String(targets[cls.key][w.key])}
+                      onChange={(e) => handleChange(cls.key, w.key, e.target.value)}
+                      className="w-16 text-right tabular-nums bg-white text-black border border-black/10 rounded-md pr-6 pl-2 py-1 text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6]">%</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tablet / desktop: compact table */}
+      <div className="hidden md:block overflow-x-auto">
       <table className="min-w-full text-[13px]">
         <thead>
           <tr className="text-[11px] uppercase tracking-wide text-[#a1a1a6]">
@@ -2883,16 +2923,7 @@ function OccupancyTargetsSection({
                       inputMode="numeric"
                       pattern="[0-9]*"
                       value={targets[cls.key][w.key] === '' ? '' : String(targets[cls.key][w.key])}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/[^0-9]/g, '')
-                        onChange({
-                          ...targets,
-                          [cls.key]: {
-                            ...targets[cls.key],
-                            [w.key]: v === '' ? '' : Math.min(100, Number(v)),
-                          },
-                        })
-                      }}
+                      onChange={(e) => handleChange(cls.key, w.key, e.target.value)}
                       className="w-20 text-right tabular-nums bg-white text-black border border-black/10 rounded-lg pr-6 pl-2 py-1 text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                     />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6]">%</span>
@@ -2903,6 +2934,7 @@ function OccupancyTargetsSection({
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   )
 }
