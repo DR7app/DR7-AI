@@ -1048,29 +1048,25 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
   async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Due template gestiti dall'admin in Messaggi di Sistema Pro:
-    //   sconto > 0  → "Preventivo WhatsApp"      (key: preventivo_whatsapp)
-    //   sconto = 0  → "Preventivo senza sconto"  (key: preventivo_whatsapp_no_sconto)
-    // Nessun fallback oltre a queste due chiavi: se il template selezionato è
-    // vuoto o disattivato, torniamo '' e il chiamante mostra un toast d'errore.
+    // Due template gestiti dall'admin in Messaggi di Sistema Pro, identificati
+    // per LABEL (non per key) perché creati tramite "Aggiungi template" e
+    // quindi salvati sotto chiavi pro_custom_<slug>_<timestamp>:
+    //   sconto > 0  → label "Preventivo WhatsApp"
+    //   sconto = 0  → label "Preventivo senza sconto"
+    // Nessun fallback: se il template non esiste o è disattivato, torniamo
+    // '' e il chiamante mostra un toast d'errore col nome esatto del template.
     const hasSconto = (p.sconto || 0) > 0
-    const keyChain = hasSconto
-      ? ['preventivo_whatsapp']
-      : ['preventivo_whatsapp_no_sconto']
+    const targetLabel = hasSconto ? 'Preventivo WhatsApp' : 'Preventivo senza sconto'
 
     try {
-      let tpl: { message_body: string; is_enabled: boolean } | null = null
-      for (const k of keyChain) {
-        const { data } = await supabase
-          .from('system_messages')
-          .select('message_body, is_enabled')
-          .eq('message_key', k)
-          .maybeSingle()
-        if (data?.is_enabled && data.message_body) {
-          tpl = data
-          break
-        }
-      }
+      const { data: rows } = await supabase
+        .from('system_messages')
+        .select('message_body, is_enabled, updated_at')
+        .eq('label', targetLabel)
+        .eq('is_enabled', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+      const tpl = rows?.[0] || null
 
       if (tpl?.is_enabled && tpl.message_body) {
         // Resolve insurance options and user-intent flags from the preventivo
