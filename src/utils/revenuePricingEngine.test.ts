@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   calculateDynamicPrice,
+  calculateDayTypeMeanCoeff,
   matchBracket,
   matchSeason,
   validateConfig,
@@ -571,5 +572,112 @@ describe('Validation: season rules', () => {
     })
     const errors = validateConfig(config)
     expect(errors.some(e => e.message.includes('> 0'))).toBe(true)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// calculateDayTypeMeanCoeff — arithmetic mean over every day of the period
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('calculateDayTypeMeanCoeff', () => {
+  // Reference weekday coefficients matching the Centralina Pro defaults.
+  const weekdayTiers = [
+    { key: 'monday',    label: 'Lunedì',    coeff: 0.95 },
+    { key: 'tuesday',   label: 'Martedì',   coeff: 0.95 },
+    { key: 'wednesday', label: 'Mercoledì', coeff: 0.95 },
+    { key: 'thursday',  label: 'Giovedì',   coeff: 1.00 },
+    { key: 'friday',    label: 'Venerdì',   coeff: 1.50 },
+    { key: 'saturday',  label: 'Sabato',    coeff: 1.50 },
+    { key: 'sunday',    label: 'Domenica',  coeff: 1.25 },
+    { key: 'prefestivo', label: 'Prefestivo', coeff: 1.50 },
+    { key: 'evento_top', label: 'Evento top', coeff: 1.50 },
+  ]
+
+  it('returns 1.0 neutral when day_type_coefficients is empty (backward compat)', () => {
+    const r = calculateDayTypeMeanCoeff([], {}, '2026-04-24', 3)
+    expect(r.coeff).toBe(1.0)
+    expect(r.perDay.length).toBe(3)
+  })
+
+  it('is the arithmetic mean of venerdì, sabato, domenica for a Fri→Sun rental', () => {
+    // 2026-04-24 is a Friday (Gregorian)
+    const r = calculateDayTypeMeanCoeff(weekdayTiers, {}, '2026-04-24', 3)
+    expect(r.perDay.map(p => p.key)).toEqual(['friday', 'saturday', 'sunday'])
+    // (1.50 + 1.50 + 1.25) / 3 = 1.4166…
+    expect(r.coeff).toBeCloseTo((1.5 + 1.5 + 1.25) / 3, 10)
+  })
+
+  it('counts a repeated weekday multiple times', () => {
+    // 8-day rental starting Saturday 2026-04-25 covers two Saturdays.
+    const r = calculateDayTypeMeanCoeff(weekdayTiers, {}, '2026-04-25', 8)
+    const keys = r.perDay.map(p => p.key)
+    expect(keys.filter(k => k === 'saturday').length).toBe(2)
+    expect(keys.length).toBe(8)
+  })
+
+  it('uses special_dates override instead of the weekday tier when defined', () => {
+    // 2026-04-24 (Friday) marked as "evento_top" — its coeff replaces the friday coeff.
+    // Second day (Saturday 2026-04-25) has no override and keeps its weekday tier.
+    const r = calculateDayTypeMeanCoeff(
+      weekdayTiers,
+      { '2026-04-24': 'evento_top' },
+      '2026-04-24',
+      2,
+    )
+    expect(r.perDay[0].key).toBe('evento_top')
+    expect(r.perDay[1].key).toBe('saturday')
+    expect(r.coeff).toBeCloseTo((1.5 + 1.5) / 2, 10)
+  })
+
+  it('falls back to 1.0 for a day whose key is not in the tier list', () => {
+    // Only Friday defined. Saturday and Sunday have no matching row → contribute 1.0.
+    const onlyFriday = [{ key: 'friday', label: 'Venerdì', coeff: 2.0 }]
+    const r = calculateDayTypeMeanCoeff(onlyFriday, {}, '2026-04-24', 3)
+    expect(r.perDay[0].coeff).toBe(2.0)
+    expect(r.perDay[1].coeff).toBe(1.0)
+    expect(r.perDay[2].coeff).toBe(1.0)
+    expect(r.coeff).toBeCloseTo((2 + 1 + 1) / 3, 10)
+  })
+
+  it('treats rentalDays < 1 as a single day', () => {
+    const r = calculateDayTypeMeanCoeff(weekdayTiers, {}, '2026-04-24', 0)
+    expect(r.perDay.length).toBe(1)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// calculateDynamicPrice — day_type mean is applied end-to-end
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Day-type mean integration (end-to-end via calculateDynamicPrice)', () => {
+  it('uses the mean day-type coeff in the final formula for a Fri→Sun rental', () => {
+    const config = makeConfig({
+      base_prices: { v1: 100 }, // keep base deterministic
+      min_prices: {}, max_prices: {},
+      occupation_coefficients: [], advance_coefficients: [],
+      duration_coefficients: [], calendar_gap_coefficients: [],
+      season_rules: [],
+      day_type_coefficients: [
+        { key: 'monday',    label: 'Lunedì',    coeff: 1.0 },
+        { key: 'tuesday',   label: 'Martedì',   coeff: 1.0 },
+        { key: 'wednesday', label: 'Mercoledì', coeff: 1.0 },
+        { key: 'thursday',  label: 'Giovedì',   coeff: 1.0 },
+        { key: 'friday',    label: 'Venerdì',   coeff: 1.5 },
+        { key: 'saturday',  label: 'Sabato',    coeff: 1.5 },
+        { key: 'sunday',    label: 'Domenica',  coeff: 1.25 },
+      ],
+      special_dates: {},
+    })
+    const input = makeInput({
+      vehicleId: 'v1',
+      pickupDate: '2026-04-24', // Friday
+      dropoffDate: '2026-04-27', // Monday = 3 days
+    })
+    const result = calculateDynamicPrice(config, input)
+    const dayTypeRow = result.breakdown.find(b => b.label === 'Coefficienti Tipo Giorno')
+    expect(dayTypeRow?.coeff).toBeCloseTo((1.5 + 1.5 + 1.25) / 3, 10)
+    // rawDailyRate should include that mean factor (other coeffs are 1.0 here).
+    // The engine rounds to 2 decimals internally, so use matching precision.
+    expect(result.rawDailyRate).toBeCloseTo(100 * (1.5 + 1.5 + 1.25) / 3, 1)
   })
 })

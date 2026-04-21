@@ -170,6 +170,81 @@ export function matchBracket(
 }
 
 /**
+ * Compute the "tipo giorno" coefficient as the arithmetic mean of the coefficients
+ * that apply to each real day of the rental period.
+ *
+ * Each day is classified using, in order:
+ *   1. config.special_dates[YYYY-MM-DD] → named tier (prefestivo / ponte / evento / festività)
+ *   2. its weekday → monday | tuesday | wednesday | thursday | friday | saturday | sunday
+ *
+ * If a repeated weekday occurs multiple times in the period (e.g. two Saturdays in
+ * an 8-day rental), it is counted once per occurrence. Days whose tier key isn't
+ * present in day_type_coefficients contribute 1.0 (neutral) to the mean.
+ *
+ * Backward compatible: if day_type_coefficients is empty, returns { coeff: 1, ... }.
+ * Exported so it can be unit-tested in isolation.
+ */
+export function calculateDayTypeMeanCoeff(
+  dayTypeCoefficients: NamedCoefficient[],
+  specialDates: Record<string, string>,
+  pickupYmd: string,
+  rentalDays: number,
+): { coeff: number; label: string; perDay: Array<{ date: string; key: string; label: string; coeff: number }> } {
+  // JS Date.getDay(): 0=Sunday .. 6=Saturday. Map to the admin tier keys.
+  const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
+
+  const byKey = new Map<string, NamedCoefficient>()
+  for (const d of (dayTypeCoefficients || [])) byKey.set(d.key, d)
+
+  const start = parseYmdUTC(pickupYmd)
+  const days = Math.max(1, Math.floor(rentalDays))
+  const perDay: Array<{ date: string; key: string; label: string; coeff: number }> = []
+  let sum = 0
+
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start.getTime() + i * 86_400_000)
+    const ymd = ymdFromUTC(d)
+    const specialKey = specialDates?.[ymd]
+    const key = specialKey || WEEKDAY_KEYS[d.getUTCDay()]
+    const match = byKey.get(key)
+    const coeff = match ? match.coeff : 1.0
+    const label = match ? match.label : 'Giorno standard'
+    perDay.push({ date: ymd, key, label, coeff })
+    sum += coeff
+  }
+
+  const coeff = perDay.length > 0 ? sum / perDay.length : 1.0
+  const label = perDay.length === 1
+    ? `${perDay[0].label} (${perDay[0].date})`
+    : `Media ${perDay.length} giorni (${summarizePerDay(perDay)})`
+
+  return { coeff, label, perDay }
+}
+
+function parseYmdUTC(ymd: string): Date {
+  // "YYYY-MM-DD" or full ISO: take first 10 chars, interpret as UTC midnight.
+  const ten = (ymd || '').slice(0, 10)
+  const [y, m, d] = ten.split('-').map(Number)
+  return new Date(Date.UTC(y, (m || 1) - 1, d || 1))
+}
+
+function ymdFromUTC(d: Date): string {
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function summarizePerDay(perDay: Array<{ label: string; coeff: number }>): string {
+  // Group consecutive equal labels to keep the description short.
+  const counts: Record<string, number> = {}
+  for (const p of perDay) counts[p.label] = (counts[p.label] ?? 0) + 1
+  return Object.entries(counts)
+    .map(([label, n]) => (n > 1 ? `${label}×${n}` : label))
+    .join(' + ')
+}
+
+/**
  * Match a season rule for a rental period.
  * If multiple match, pick highest coeff.
  */
@@ -385,18 +460,16 @@ export function calculateDynamicPrice(
     description: gapLabel
   })
 
-  // Day type: pickup date -> special_dates[YYYY-MM-DD] -> day_type key -> coeff
-  let dayTypeCoeff = 1.0
-  let dayTypeLabel = 'Giorno standard'
+  // Day type: arithmetic mean over every real day of the rental period.
+  // Each day is classified via special_dates first, then by weekday. Repeated
+  // weekdays (e.g. two Saturdays in an 8-day rental) count once per occurrence.
   const pickupYmd = input.pickupDate.slice(0, 10)
-  const dayTypeKey = config.special_dates?.[pickupYmd]
-  if (dayTypeKey) {
-    const dayTypeMatch = (config.day_type_coefficients || []).find(d => d.key === dayTypeKey)
-    if (dayTypeMatch) {
-      dayTypeCoeff = dayTypeMatch.coeff
-      dayTypeLabel = dayTypeMatch.label
-    }
-  }
+  const { coeff: dayTypeCoeff, label: dayTypeLabel } = calculateDayTypeMeanCoeff(
+    config.day_type_coefficients || [],
+    config.special_dates || {},
+    pickupYmd,
+    rentalDays,
+  )
   breakdown.push({
     label: 'Coefficienti Tipo Giorno',
     coeff: dayTypeCoeff,
