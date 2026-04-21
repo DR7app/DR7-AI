@@ -1048,10 +1048,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
   async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Unica fonte: "Conferma Preventivo Inviato" in Messaggi di Sistema Pro
-    // (key: pro_conferma_preventivo). Nessun fallback: se il template è vuoto
-    // o disattivato, torniamo '' e il chiamante mostra un toast d'errore.
-    const keyChain = ['pro_conferma_preventivo']
+    // Due template gestiti dall'admin in Messaggi di Sistema Pro:
+    //   sconto > 0  → "Preventivo WhatsApp"      (key: preventivo_whatsapp)
+    //   sconto = 0  → "Preventivo senza sconto"  (key: preventivo_whatsapp_no_sconto)
+    // Nessun fallback oltre a queste due chiavi: se il template selezionato è
+    // vuoto o disattivato, torniamo '' e il chiamante mostra un toast d'errore.
+    const hasSconto = (p.sconto || 0) > 0
+    const keyChain = hasSconto
+      ? ['preventivo_whatsapp']
+      : ['preventivo_whatsapp_no_sconto']
 
     try {
       let tpl: { message_body: string; is_enabled: boolean } | null = null
@@ -1579,7 +1584,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                                   setPreviewMessage('');
                                   const preview = await formatWhatsAppMessage(p)
                                   if (!preview) {
-                                    toast.error('Template "Conferma Preventivo Inviato" (pro_conferma_preventivo) vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.')
+                                    const which = (p.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'
+                                    toast.error(`Template ${which} vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.`)
                                     return
                                   }
                                   setPreviewMessage(preview)
@@ -1657,7 +1663,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                   className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap font-mono focus:outline-none focus:ring-1 focus:ring-dr7-gold resize-y"
                 />
                 <p className="text-[11px] text-theme-text-muted mt-1">
-                  Template caricato da "Conferma Preventivo Inviato" in Messaggi di Sistema Pro. Puoi modificarlo qui per questo singolo invio.
+                  Template caricato da {(selectedPreventivo.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'} in Messaggi di Sistema Pro. Puoi modificarlo qui per questo singolo invio.
                 </p>
               </div>
 
