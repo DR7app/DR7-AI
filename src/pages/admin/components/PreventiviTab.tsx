@@ -1048,15 +1048,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
   async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Template primario: "Conferma Preventivo Inviato" in Messaggi di Sistema Pro
-    // (key: pro_conferma_preventivo). Il flag {sconto} gestisce il caso con/senza
-    // sconto dentro lo stesso template. Le chiavi legacy restano come fallback
-    // per installazioni più vecchie dove l'admin non ha ancora compilato il Pro.
-    const keyChain = [
-      'pro_conferma_preventivo',
-      'preventivo_whatsapp',
-      'preventivo_whatsapp_no_sconto',
-    ]
+    // Unica fonte: "Conferma Preventivo Inviato" in Messaggi di Sistema Pro
+    // (key: pro_conferma_preventivo). Nessun fallback: se il template è vuoto
+    // o disattivato, torniamo '' e il chiamante mostra un toast d'errore.
+    const keyChain = ['pro_conferma_preventivo']
 
     try {
       let tpl: { message_body: string; is_enabled: boolean } | null = null
