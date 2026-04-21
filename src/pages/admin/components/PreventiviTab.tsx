@@ -1048,17 +1048,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
   async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Due template admin-created in Messaggi di Sistema:
-    //   sconto > 0  → "Preventivo WhatsApp"        (key: preventivo_whatsapp)
-    //   sconto = 0  → "Preventivo senza sconto"    (key: preventivo_whatsapp_no_sconto)
-    // Leggiamo DIRETTAMENTE queste chiavi (niente routing verso pro_*),
-    // così l'admin modifica e vede esattamente ciò che riceve il cliente.
-    // Nessun fallback hardcoded: se la slot scelta è vuota/disattivata
-    // torniamo '' e il chiamante mostra un toast di errore.
-    const hasSconto = (p.sconto || 0) > 0
-    const keyChain = hasSconto
-      ? ['preventivo_whatsapp']
-      : ['preventivo_whatsapp_no_sconto', 'preventivo_whatsapp']
+    // Template primario: "Conferma Preventivo Inviato" in Messaggi di Sistema Pro
+    // (key: pro_conferma_preventivo). Il flag {sconto} gestisce il caso con/senza
+    // sconto dentro lo stesso template. Le chiavi legacy restano come fallback
+    // per installazioni più vecchie dove l'admin non ha ancora compilato il Pro.
+    const keyChain = [
+      'pro_conferma_preventivo',
+      'preventivo_whatsapp',
+      'preventivo_whatsapp_no_sconto',
+    ]
 
     try {
       let tpl: { message_body: string; is_enabled: boolean } | null = null
@@ -1586,7 +1584,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                                   setPreviewMessage('');
                                   const preview = await formatWhatsAppMessage(p)
                                   if (!preview) {
-                                    toast.error('Template "Conferma Preventivo Inviato" mancante in Messaggi di Sistema Pro. Compilalo prima di inviare.')
+                                    toast.error('Template "Conferma Preventivo Inviato" (pro_conferma_preventivo) vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.')
                                     return
                                   }
                                   setPreviewMessage(preview)
