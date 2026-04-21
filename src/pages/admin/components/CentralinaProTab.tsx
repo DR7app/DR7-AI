@@ -343,10 +343,15 @@ const INITIAL_PREVENTIVI: PreventiviConfig = {
   scadenza_default_ore: 24,
   messaggi: [
     {
+      // DEPRECATED: The real body now lives EXCLUSIVELY in Messaggi di Sistema Pro
+      // under the key `pro_conferma_preventivo` (mapped from legacy `preventivo_whatsapp`
+      // via netlify/functions/utils/messageTemplates.ts). This Centralina slot is kept
+      // for backwards compatibility with existing saved configs but is no longer read
+      // as a template source. Body defaults to empty.
       key: 'preventivo_whatsapp',
-      label: 'Invio preventivo (WhatsApp cliente)',
-      description: 'Messaggio inviato al cliente con il preventivo',
-      body: 'Ciao {{nome}}, ecco il tuo preventivo per {{veicolo}}:\n\nPeriodo: {{pickup}} → {{dropoff}}\nTotale: €{{totale}}\n\nValido {{scadenza_ore}} ore. Link: {{link}}',
+      label: 'Invio preventivo (WhatsApp cliente) — GESTITO IN MESSAGGI DI SISTEMA PRO',
+      description: 'Il testo del preventivo WhatsApp si modifica in Messaggi di Sistema Pro → Conferma Preventivo Inviato',
+      body: '',
       is_enabled: true,
     },
     {
@@ -2796,17 +2801,17 @@ function SeasonByMonthSection({
       <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
         Quale tier di stagione applicare a ogni mese. Il coefficiente arriva dalla tabella sopra.
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {months.map((name, i) => {
           const m = String(i + 1)
           const currentTier = seasonByMonth[m] || ''
           return (
-            <label key={m} className="flex items-center gap-2">
-              <span className="text-[13px] text-[#1d1d1f] font-medium w-24">{name}</span>
+            <label key={m} className="flex flex-col gap-1 min-w-0">
+              <span className="text-[13px] text-[#1d1d1f] font-medium">{name}</span>
               <select
                 value={currentTier}
                 onChange={(e) => onChange({ ...seasonByMonth, [m]: e.target.value })}
-                className="flex-1 bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">— (nessuna)</option>
                 {seasonTiers.map((t) => (
@@ -2866,17 +2871,17 @@ function OccupancyTargetsSection({
                 <td key={w.key} className="py-2 px-2">
                   <div className="relative">
                     <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={targets[cls.key][w.key]}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={targets[cls.key][w.key] === '' ? '' : String(targets[cls.key][w.key])}
                       onChange={(e) => {
-                        const v = e.target.value
+                        const v = e.target.value.replace(/[^0-9]/g, '')
                         onChange({
                           ...targets,
                           [cls.key]: {
                             ...targets[cls.key],
-                            [w.key]: v === '' ? '' : Number(v),
+                            [w.key]: v === '' ? '' : Math.min(100, Number(v)),
                           },
                         })
                       }}
@@ -3120,35 +3125,51 @@ function PreventiviSection({
         </header>
 
         <ul className="divide-y divide-black/5">
-          {preventivi.messaggi.map((m) => (
-            <li key={m.key} className="p-5">
-              <div className="flex items-start gap-3 mb-3">
-                <label className="inline-flex items-center cursor-pointer pt-0.5">
-                  <input
-                    type="checkbox"
-                    checked={m.is_enabled}
-                    onChange={(e) => patchMsg(m.key, { is_enabled: e.target.checked })}
-                    className="w-4 h-4 accent-[#007aff]"
-                  />
-                </label>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-[14px] font-semibold text-[#1d1d1f]">
-                    {m.label}
-                  </h4>
-                  <p className="text-[12px] text-[#6e6e73] mt-0.5">
-                    {m.description}
-                  </p>
-                  <p className="text-[11px] text-[#a1a1a6] mt-0.5 font-mono">{m.key}</p>
+          {preventivi.messaggi.map((m) => {
+            const isDeprecated = m.key === 'preventivo_whatsapp'
+            return (
+              <li key={m.key} className="p-5">
+                <div className="flex items-start gap-3 mb-3">
+                  <label className="inline-flex items-center cursor-pointer pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={m.is_enabled}
+                      onChange={(e) => patchMsg(m.key, { is_enabled: e.target.checked })}
+                      className="w-4 h-4 accent-[#007aff]"
+                      disabled={isDeprecated}
+                    />
+                  </label>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-[14px] font-semibold text-[#1d1d1f]">
+                      {m.label}
+                    </h4>
+                    <p className="text-[12px] text-[#6e6e73] mt-0.5">
+                      {m.description}
+                    </p>
+                    <p className="text-[11px] text-[#a1a1a6] mt-0.5 font-mono">{m.key}</p>
+                  </div>
                 </div>
-              </div>
-              <textarea
-                value={m.body}
-                onChange={(e) => patchMsg(m.key, { body: e.target.value })}
-                rows={5}
-                className="w-full bg-[#f5f5f7] border border-black/5 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 resize-y font-mono leading-relaxed"
-              />
-            </li>
-          ))}
+                {isDeprecated ? (
+                  <div className="w-full bg-[#fff8e1] border border-[#f0c36d]/60 rounded-lg px-3 py-3 text-[13px] text-[#6b4e00] leading-relaxed">
+                    <strong>Questo campo è stato spostato.</strong><br />
+                    Il testo del preventivo WhatsApp si modifica in{' '}
+                    <strong>Messaggi di Sistema Pro → Conferma Preventivo Inviato</strong>.
+                    <br />
+                    <span className="text-[12px] text-[#8a6d00]">
+                      (Lo slot qui è deprecato e non viene più letto come template.)
+                    </span>
+                  </div>
+                ) : (
+                  <textarea
+                    value={m.body}
+                    onChange={(e) => patchMsg(m.key, { body: e.target.value })}
+                    rows={5}
+                    className="w-full bg-[#f5f5f7] border border-black/5 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 resize-y font-mono leading-relaxed"
+                  />
+                )}
+              </li>
+            )
+          })}
         </ul>
       </section>
     </div>
