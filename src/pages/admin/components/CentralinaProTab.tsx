@@ -2801,26 +2801,34 @@ function SeasonByMonthSection({
       <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
         Quale tier di stagione applicare a ogni mese. Il coefficiente arriva dalla tabella sopra.
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-5 gap-y-2">
         {months.map((name, i) => {
           const m = String(i + 1)
           const currentTier = seasonByMonth[m] || ''
+          const tierData = seasonTiers.find(t => t.key === currentTier)
           return (
-            <label key={m} className="flex flex-col gap-1 min-w-0">
-              <span className="text-[13px] text-[#1d1d1f] font-medium">{name}</span>
+            <div key={m} className="flex items-center gap-3 py-1.5 border-b border-black/5 last:border-0">
+              <span className="text-[13px] text-black font-semibold w-24 shrink-0">{name}</span>
               <select
                 value={currentTier}
                 onChange={(e) => onChange({ ...seasonByMonth, [m]: e.target.value })}
-                className="w-full bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="flex-1 min-w-0 bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">— (nessuna)</option>
                 {seasonTiers.map((t) => (
-                  <option key={t.key} value={t.key}>
-                    {t.label} {typeof t.coeff === 'number' ? `(${t.coeff.toFixed(2)})` : ''}
-                  </option>
+                  <option key={t.key} value={t.key}>{t.label}</option>
                 ))}
               </select>
-            </label>
+              <span className={`shrink-0 inline-flex items-center justify-center min-w-[44px] px-2 py-0.5 rounded-md text-[11px] font-bold tabular-nums ${
+                tierData && typeof tierData.coeff === 'number'
+                  ? tierData.coeff < 1 ? 'bg-green-100 text-green-700'
+                  : tierData.coeff > 1 ? 'bg-red-100 text-red-700'
+                  : 'bg-gray-100 text-gray-600'
+                  : 'bg-gray-100 text-gray-400'
+              }`}>
+                {tierData && typeof tierData.coeff === 'number' ? `×${tierData.coeff.toFixed(2)}` : '—'}
+              </span>
+            </div>
           )
         })}
       </div>
