@@ -681,3 +681,96 @@ describe('Day-type mean integration (end-to-end via calculateDynamicPrice)', () 
     expect(result.rawDailyRate).toBeCloseTo(100 * (1.5 + 1.5 + 1.25) / 3, 1)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Per-vehicle monthly revenue target → coefficient
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('vehicle_revenue_targets (Spinta Veicolo)', () => {
+  function flatConfig() {
+    // All other coefficients neutralised so we can read the target in isolation.
+    return makeConfig({
+      base_prices: { v1: 100 },
+      min_prices: {}, max_prices: {},
+      occupation_coefficients: [], advance_coefficients: [],
+      duration_coefficients: [], calendar_gap_coefficients: [],
+      season_rules: [], day_type_coefficients: [],
+      vehicle_occupation_coefficients: [],
+      promo_push_coefficients: [],
+      active_promo_level: '',
+    })
+  }
+
+  it('does NOT activate the coefficient when no target is configured for the vehicle', () => {
+    const result = calculateDynamicPrice(flatConfig(), makeInput({ vehicleId: 'v1' }))
+    const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
+    expect(row?.coeff).toBe(1.0)
+  })
+
+  it('does NOT activate when monthly revenue is below the minimum', () => {
+    const config = flatConfig()
+    config.vehicle_revenue_targets = { v1: { min_revenue: 10000, coeff: 1.2 } }
+    const result = calculateDynamicPrice(config, makeInput({
+      vehicleId: 'v1',
+      vehicleMonthlyRevenueEur: 4999,
+    }))
+    const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
+    expect(row?.coeff).toBe(1.0)
+    expect(row?.description).toMatch(/non raggiunto/i)
+  })
+
+  it('activates when monthly revenue reaches the minimum', () => {
+    const config = flatConfig()
+    config.vehicle_revenue_targets = { v1: { min_revenue: 10000, coeff: 1.2 } }
+    const result = calculateDynamicPrice(config, makeInput({
+      vehicleId: 'v1',
+      vehicleMonthlyRevenueEur: 10000, // equal to minimum → counts as reached
+    }))
+    const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
+    expect(row?.coeff).toBe(1.2)
+    expect(row?.description).toMatch(/raggiunto/i)
+    // Base 100 × 1.2 with every other coeff at 1.0 = 120
+    expect(result.rawDailyRate).toBeCloseTo(120, 1)
+  })
+
+  it('is vehicle-scoped — another vehicle is unaffected by v1 target', () => {
+    const config = flatConfig()
+    config.vehicle_revenue_targets = { v1: { min_revenue: 1, coeff: 2.0 } }
+    const result = calculateDynamicPrice(config, makeInput({
+      vehicleId: 'v2',
+      vehicleMonthlyRevenueEur: 99999,
+    }))
+    const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
+    expect(row?.coeff).toBe(1.0)
+  })
+
+  it('ignores rows with empty min_revenue or empty coeff (not fully configured)', () => {
+    const config = flatConfig()
+    // Half-configured rows must be treated as "no target".
+    config.vehicle_revenue_targets = {
+      v1: { min_revenue: '', coeff: 1.5 },
+      v2: { min_revenue: 5000, coeff: '' },
+    }
+    for (const vid of ['v1', 'v2']) {
+      const result = calculateDynamicPrice(config, makeInput({
+        vehicleId: vid,
+        vehicleMonthlyRevenueEur: 999999,
+      }))
+      const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
+      expect(row?.coeff).toBe(1.0)
+    }
+  })
+
+  it('combines multiplicatively with the global promo', () => {
+    const config = flatConfig()
+    config.promo_push_coefficients = [{ key: 'soft', label: 'Promo soft', coeff: 0.9 }]
+    config.active_promo_level = 'soft'
+    config.vehicle_revenue_targets = { v1: { min_revenue: 1000, coeff: 1.2 } }
+    const result = calculateDynamicPrice(config, makeInput({
+      vehicleId: 'v1',
+      vehicleMonthlyRevenueEur: 2000,
+    }))
+    // 100 × 0.9 (promo) × 1.2 (vehicle target) = 108
+    expect(result.rawDailyRate).toBeCloseTo(108, 1)
+  })
+})

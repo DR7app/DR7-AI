@@ -57,6 +57,10 @@ export interface RevenueConfig {
   promo_push_coefficients: NamedCoefficient[]
   special_dates: Record<string, string>     // YYYY-MM-DD -> day_type key
   active_promo_level: string
+  // Per-vehicle monthly revenue target → coefficient.
+  // When a vehicle's current-month revenue reaches min_revenue, coeff multiplies
+  // the daily rate. Works alongside promo_push_coefficients / active_promo_level.
+  vehicle_revenue_targets: Record<string, { min_revenue: number | ''; coeff: number | '' }>
 }
 
 export interface PricingInput {
@@ -69,6 +73,10 @@ export interface PricingInput {
   occupancyPct: number            // 0-100 (fleet-wide for this category)
   vehicleOwnOccupancyPct?: number // 0-100 (this vehicle only, last N days)
   calendarGapDays?: number        // gap before this booking on same vehicle's calendar
+  // Current-month paid revenue for this specific vehicle (in EUR). Used to decide
+  // whether the per-vehicle revenue-target coefficient activates. Optional for
+  // backward compat — when omitted, the per-vehicle boost never triggers.
+  vehicleMonthlyRevenueEur?: number
 }
 
 export interface BreakdownItem {
@@ -143,6 +151,7 @@ export function getDefaultConfig(): RevenueConfig {
     promo_push_coefficients: [],
     special_dates: {},
     active_promo_level: '',
+    vehicle_revenue_targets: {},
   }
 }
 
@@ -518,8 +527,29 @@ export function calculateDynamicPrice(
     description: promoLabel
   })
 
+  // Per-vehicle monthly revenue target → coefficient.
+  // Activates only when the vehicle's current-month revenue has reached the
+  // configured minimum. Runs ALONGSIDE the global promo (multiplicative).
+  let vehTargetCoeff = 1.0
+  let vehTargetLabel = 'Nessun obiettivo raggiunto'
+  const target = config.vehicle_revenue_targets?.[input.vehicleId]
+  if (target && typeof target.coeff === 'number' && target.coeff > 0 && typeof target.min_revenue === 'number') {
+    const currentRevenue = typeof input.vehicleMonthlyRevenueEur === 'number' ? input.vehicleMonthlyRevenueEur : 0
+    if (currentRevenue >= target.min_revenue) {
+      vehTargetCoeff = target.coeff
+      vehTargetLabel = `Obiettivo raggiunto (€${currentRevenue.toFixed(0)} ≥ €${target.min_revenue})`
+    } else {
+      vehTargetLabel = `Obiettivo non raggiunto (€${currentRevenue.toFixed(0)} / €${target.min_revenue})`
+    }
+  }
+  breakdown.push({
+    label: 'Spinta Veicolo (Obiettivo Mensile)',
+    coeff: vehTargetCoeff,
+    description: vehTargetLabel
+  })
+
   // ─── 5. Formula ───
-  let rawDailyRate = selectedBaseRateEur * occCoeff * advCoeff * durCoeff * seasonCoeff * gapCoeff * dayTypeCoeff * vehOccCoeff * promoCoeff
+  let rawDailyRate = selectedBaseRateEur * occCoeff * advCoeff * durCoeff * seasonCoeff * gapCoeff * dayTypeCoeff * vehOccCoeff * promoCoeff * vehTargetCoeff
 
   // ─── 6. Min/Max clamp ───
   const minPrice = config.min_prices[input.vehicleId]
@@ -627,5 +657,6 @@ export function parseConfigFromDB(row: {
     promo_push_coefficients: (c.promo_push_coefficients as NamedCoefficient[]) || [],
     special_dates: (c.special_dates as Record<string, string>) || {},
     active_promo_level: (c.active_promo_level as string) || '',
+    vehicle_revenue_targets: (c.vehicle_revenue_targets as RevenueConfig['vehicle_revenue_targets']) || {},
   }
 }

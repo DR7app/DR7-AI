@@ -7,6 +7,15 @@ type FleetVehicle = {
   display_name: string
   daily_rate: number | null
   category: string | null
+  plate: string | null
+}
+
+// Per-vehicle monthly revenue target → coefficient.
+// When the vehicle's current-month revenue reaches `min_revenue` €, the engine
+// multiplies the daily rate by `coeff`. Empty values = target not configured (no effect).
+type VehicleRevenueTarget = {
+  min_revenue: number | ''
+  coeff: number | ''
 }
 
 type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7'
@@ -161,6 +170,11 @@ type DynamicPricingConfig = {
   // Dates admin marks as special days (YYYY-MM-DD → day_type key)
   special_dates: Record<string, string>
 
+  // Per-vehicle monthly revenue targets → coefficient (keyed by vehicle.id).
+  // When vehicle's current-month revenue reaches min_revenue, coeff multiplies
+  // the daily rate. Works ALONGSIDE the global promo_push_coefficients.
+  vehicle_revenue_targets: Record<string, VehicleRevenueTarget>
+
   // Occupancy targets per vehicle class per advance window
   occupancy_targets: {
     utilitarie: OccupancyTargets
@@ -314,6 +328,10 @@ const INITIAL_PREZZO_DINAMICO: PrezzoDinamicoConfig = {
       '9': 'alta', '10': 'bassa', '11': 'bassissima', '12': 'alta',
     },
     special_dates: {},
+
+    // Empty by default — rows auto-appear in the UI from the fleet table;
+    // admin fills min_revenue + coeff per vehicle.
+    vehicle_revenue_targets: {},
 
     // 9. Target occupazione per finestra temporale per classe
     occupancy_targets: {
@@ -624,6 +642,7 @@ function mergePrezzoDinamico(saved: Partial<PrezzoDinamicoConfig> | null | undef
       phase2_max_rentals: savedDyn.phase2_max_rentals ?? defaultDyn.phase2_max_rentals,
       season_by_month: savedDyn.season_by_month ?? defaultDyn.season_by_month,
       special_dates: savedDyn.special_dates ?? defaultDyn.special_dates,
+      vehicle_revenue_targets: savedDyn.vehicle_revenue_targets ?? defaultDyn.vehicle_revenue_targets,
       occupancy_targets: savedDyn.occupancy_targets ?? defaultDyn.occupancy_targets,
     },
   }
@@ -1152,6 +1171,22 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
       const c = cd.special_dates?.[d] || ''
       const p = pd.special_dates?.[d] || ''
       if (c !== p) out.push(`Data speciale ${d}: ${p || 'nessuna'} → ${c || 'nessuna'}`)
+    })
+
+    // Per-vehicle revenue targets (min_revenue + coeff)
+    const allVids = new Set([
+      ...Object.keys(cd.vehicle_revenue_targets || {}),
+      ...Object.keys(pd.vehicle_revenue_targets || {}),
+    ])
+    allVids.forEach(vid => {
+      const c = cd.vehicle_revenue_targets?.[vid] || { min_revenue: '', coeff: '' }
+      const p = pd.vehicle_revenue_targets?.[vid] || { min_revenue: '', coeff: '' }
+      if (c.min_revenue !== p.min_revenue) {
+        out.push(`Spinta veicolo ${vid} — min incasso: ${p.min_revenue || '—'} → ${c.min_revenue || '—'}`)
+      }
+      if (c.coeff !== p.coeff) {
+        out.push(`Spinta veicolo ${vid} — coeff: ${p.coeff || '—'} → ${c.coeff || '—'}`)
+      }
     })
 
     // Occupancy targets
@@ -2417,7 +2452,7 @@ function PrezzoDinamicoSection({
     ;(async () => {
       const { data } = await supabase
         .from('vehicles')
-        .select('id, display_name, daily_rate, category')
+        .select('id, display_name, daily_rate, category, plate')
         .neq('status', 'retired')
         .order('display_name')
       if (!cancelled) {
@@ -2653,12 +2688,15 @@ function PrezzoDinamicoSection({
             onChange={(rows) => patchDyn({ vehicle_occupation_coefficients: rows })}
           />
 
-          {/* Promo push (named tiers + live level selector) */}
+          {/* Promo push (named tiers + live level selector) + per-vehicle targets */}
           <PromoPushSection
             coefficients={config.dynamic.promo_push_coefficients}
             activeLevel={config.dynamic.active_promo_level}
             onChangeCoefficients={(rows) => patchDyn({ promo_push_coefficients: rows })}
             onChangeActiveLevel={(level) => patchDyn({ active_promo_level: level })}
+            vehicles={vehicles}
+            vehicleTargets={config.dynamic.vehicle_revenue_targets}
+            onChangeVehicleTargets={(map) => patchDyn({ vehicle_revenue_targets: map })}
           />
 
           {/* Operating mode (Riempimento / Equilibrio / Protezione / Auto) */}
@@ -2748,12 +2786,29 @@ function NamedCoefficientTable({
 // ── Promo Push with active-level selector ──
 function PromoPushSection({
   coefficients, activeLevel, onChangeCoefficients, onChangeActiveLevel,
+  vehicles, vehicleTargets, onChangeVehicleTargets,
 }: {
   coefficients: NamedCoeff[]
   activeLevel: string
   onChangeCoefficients: (rows: NamedCoeff[]) => void
   onChangeActiveLevel: (level: string) => void
+  vehicles: FleetVehicle[]
+  vehicleTargets: Record<string, VehicleRevenueTarget>
+  onChangeVehicleTargets: (map: Record<string, VehicleRevenueTarget>) => void
 }) {
+  function patchTarget(vid: string, p: Partial<VehicleRevenueTarget>) {
+    const prev = vehicleTargets[vid] || { min_revenue: '', coeff: '' }
+    const next = { ...prev, ...p }
+    // If both fields are cleared, drop the row entirely to keep storage tidy.
+    if (next.min_revenue === '' && next.coeff === '') {
+      const { [vid]: _drop, ...rest } = vehicleTargets
+      void _drop
+      onChangeVehicleTargets(rest)
+    } else {
+      onChangeVehicleTargets({ ...vehicleTargets, [vid]: next })
+    }
+  }
+
   return (
     <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
       <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
@@ -2783,6 +2838,52 @@ function PromoPushSection({
         rows={coefficients}
         onChange={onChangeCoefficients}
       />
+
+      {/* Per-vehicle monthly revenue target → coefficient */}
+      <div className="mt-6 pt-5 border-t border-black/5">
+        <h4 className="text-[14px] font-semibold text-[#1d1d1f] tracking-tight">
+          Obiettivo Mensile per Veicolo
+        </h4>
+        <p className="text-[12px] text-[#6e6e73] mt-0.5 mb-3">
+          Quando un veicolo raggiunge l'incasso minimo nel mese corrente, il suo coefficiente moltiplica la tariffa giornaliera. Si combina con la promo globale qui sopra.
+        </p>
+
+        {vehicles.length === 0 ? (
+          <p className="text-[13px] text-[#a1a1a6] py-3 text-center border border-dashed border-black/10 rounded-lg">
+            Nessun veicolo nella flotta.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-[2fr_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
+              <span>Modello auto</span>
+              <span className="text-right">Incasso minimo mese (€)</span>
+              <span className="text-right">Coeff.</span>
+            </div>
+            <div className="max-h-[500px] overflow-y-auto -mx-1 px-1 space-y-2">
+              {vehicles.map(v => {
+                const t = vehicleTargets[v.id] || { min_revenue: '', coeff: '' }
+                return (
+                  <div key={v.id} className="grid grid-cols-[2fr_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center">
+                    <div className="min-w-0">
+                      <div className="text-[14px] text-[#1d1d1f] font-medium truncate">{v.display_name}</div>
+                      <div className="text-[11px] text-[#a1a1a6] font-mono">{v.plate || '— senza targa'}</div>
+                    </div>
+                    <PriceBox
+                      value={t.min_revenue}
+                      onChange={(val) => patchTarget(v.id, { min_revenue: val })}
+                      placeholder="—"
+                    />
+                    <CoeffBox
+                      value={t.coeff}
+                      onChange={(val) => patchTarget(v.id, { coeff: val })}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </section>
   )
 }
@@ -3123,6 +3224,34 @@ function PriceBox({
   return (
     <div className="relative">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+      <input
+        type="number"
+        min={0}
+        step={0.01}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value
+          onChange(v === '' ? '' : Number(v))
+        }}
+        className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+      />
+    </div>
+  )
+}
+
+function CoeffBox({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: number | ''
+  onChange: (v: number | '') => void
+  placeholder?: string
+}) {
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">×</span>
       <input
         type="number"
         min={0}

@@ -128,6 +128,8 @@ async function loadRevenueConfig(): Promise<RevenueConfig | null> {
         ? proDynamic.promo_push_coefficients.map((d: any) => ({ key: d.key, label: d.label, coeff: Number(d.coeff) || 1.0 })) : [],
       special_dates: (proDynamic.special_dates && typeof proDynamic.special_dates === 'object') ? proDynamic.special_dates : {},
       active_promo_level: proDynamic.active_promo_level || '',
+      vehicle_revenue_targets: (proDynamic.vehicle_revenue_targets && typeof proDynamic.vehicle_revenue_targets === 'object')
+        ? proDynamic.vehicle_revenue_targets : {},
     }
   }
 
@@ -241,6 +243,28 @@ export const handler: Handler = async (event) => {
       calendarGapDays = Math.max(0, Math.floor((pickupMs - prevDropMs) / (1000 * 60 * 60 * 24)))
     }
 
+    // 3d. Vehicle monthly revenue — current calendar month (Europe/Rome), paid bookings only.
+    // Used by the per-vehicle target coefficient ("Spinta Veicolo"). Skipped when no
+    // target is configured for this vehicle to avoid unnecessary queries.
+    let vehicleMonthlyRevenueEur: number | undefined
+    const hasTarget = !!config.vehicle_revenue_targets?.[vehicle.id]
+    if (hasTarget) {
+      const nowRome = new Date()
+      const monthStart = new Date(Date.UTC(nowRome.getUTCFullYear(), nowRome.getUTCMonth(), 1)).toISOString()
+      const monthEnd = new Date(Date.UTC(nowRome.getUTCFullYear(), nowRome.getUTCMonth() + 1, 1)).toISOString()
+      const { data: paidRows } = await supabase
+        .from('bookings')
+        .select('total_amount, payment_status, paid_at, created_at')
+        .eq('vehicle_id', vehicle.id)
+        .in('payment_status', ['paid', 'completed', 'succeeded'])
+        .gte('paid_at', monthStart)
+        .lt('paid_at', monthEnd)
+      vehicleMonthlyRevenueEur = (paidRows || []).reduce((sum, r: any) => {
+        const amt = Number(r.total_amount) || 0
+        return sum + amt
+      }, 0)
+    }
+
     // 4. Build pricing input and run the shared engine
     const pricingInput: PricingInput = {
       vehicleId: vehicle.id,
@@ -252,6 +276,7 @@ export const handler: Handler = async (event) => {
       occupancyPct,
       vehicleOwnOccupancyPct,
       calendarGapDays,
+      vehicleMonthlyRevenueEur,
     }
 
     const trace: PricingTrace = calculateDynamicPrice(config, pricingInput)
