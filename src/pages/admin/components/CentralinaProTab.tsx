@@ -2811,7 +2811,7 @@ function SeasonByMonthSection({
               <select
                 value={currentTier}
                 onChange={(e) => onChange({ ...seasonByMonth, [m]: e.target.value })}
-                className="w-full bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">— (nessuna)</option>
                 {seasonTiers.map((t) => (
@@ -2885,7 +2885,7 @@ function OccupancyTargetsSection({
                           },
                         })
                       }}
-                      className="w-20 text-right tabular-nums bg-white border border-black/10 rounded-lg pr-6 pl-2 py-1 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      className="w-20 text-right tabular-nums bg-white text-black border border-black/10 rounded-lg pr-6 pl-2 py-1 text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                     />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6]">%</span>
                   </div>
