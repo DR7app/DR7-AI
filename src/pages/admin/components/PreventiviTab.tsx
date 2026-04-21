@@ -1072,11 +1072,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const targetLabel = hasSconto ? 'Preventivo WhatsApp' : 'Preventivo senza sconto'
 
     try {
+      // Scope: SOLO righe visibili in Messaggi di Sistema Pro (key pro_%),
+      // così escludiamo i seed legacy (preventivo_whatsapp, ecc.) che hanno
+      // la stessa label ma non sono editabili dall'admin.
       const { data: rows } = await supabase
         .from('system_messages')
-        .select('message_body, is_enabled, updated_at')
+        .select('message_body, message_key, is_enabled, updated_at')
         .eq('label', targetLabel)
         .eq('is_enabled', true)
+        .like('message_key', 'pro_%')
         .order('updated_at', { ascending: false })
         .limit(1)
       const tpl = rows?.[0] || null
