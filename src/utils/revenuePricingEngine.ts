@@ -41,16 +41,6 @@ export interface NamedCoefficient {
   coeff: number
 }
 
-export type OperatingMode = 'auto' | 'riempimento' | 'equilibrio' | 'protezione'
-
-export interface OccupancyTargets {
-  d30plus: number
-  d15_29: number
-  d7_14: number
-  d3_6: number
-  d0_2: number
-}
-
 export interface RevenueConfig {
   enabled: boolean
   mode: RevenueMode
@@ -67,12 +57,6 @@ export interface RevenueConfig {
   promo_push_coefficients: NamedCoefficient[]
   special_dates: Record<string, string>     // YYYY-MM-DD -> day_type key
   active_promo_level: string
-  operating_mode: OperatingMode
-  occupancy_targets: {
-    utilitarie: OccupancyTargets
-    suv_premium: OccupancyTargets
-    luxury: OccupancyTargets
-  }
 }
 
 export interface PricingInput {
