@@ -59,7 +59,8 @@ const retryHandler: Handler = async () => {
 
         for (const booking of missedBookings) {
             // Skip test vehicles and Hummer experiences
-            if ((booking.vehicle_name || '').toLowerCase() === 'test' || (booking.vehicle_name || '').toLowerCase().includes('hummer')) {
+            const vn = (booking.vehicle_name || '').toLowerCase()
+            if (vn === 'test' || /test00\d/.test(vn) || vn.includes('hummer')) {
                 skipped++
                 continue
             }

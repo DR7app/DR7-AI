@@ -178,11 +178,12 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         }
 
         // Skip test vehicles and Hummer experience bookings
-        if ((booking.vehicle_name || '').toLowerCase() === 'test') {
-            console.log('[cargos-auto-send] Test vehicle — skipping CARGOS')
+        const vehName = (booking.vehicle_name || '').toLowerCase()
+        if (vehName === 'test' || /test00\d/.test(vehName) || vehName.includes('test000') || vehName.includes('test002')) {
+            console.log(`[cargos-auto-send] Test vehicle (${booking.vehicle_name}) — skipping CARGOS`)
             return { success: true }
         }
-        if ((booking.vehicle_name || '').toLowerCase().includes('hummer')) {
+        if (vehName.includes('hummer')) {
             console.log('[cargos-auto-send] Hummer experience — skipping CARGOS')
             return { success: true }
         }
