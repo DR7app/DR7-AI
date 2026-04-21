@@ -175,6 +175,108 @@ const handler: Handler = async (event) => {
             updated_at: new Date().toISOString()
         }).eq('id', transaction.id);
 
+        // ── AUTO-RESEND FRESH PAY-BY-LINK ON PAYMENT REFUSAL ───────────────
+        // When Nexi refuses a payment (wrong card, insufficient funds, 3DS failure,
+        // bank decline, etc.) generate a fresh Pay-by-Link and send it to the
+        // customer via WhatsApp so they can try again without admin intervention.
+        // Capped at MAX_AUTO_RETRIES to avoid spamming the customer.
+        if (!isSuccess && transaction.booking_id) {
+            const retryCount = transaction.metadata?.auto_retry_count || 0;
+            const MAX_AUTO_RETRIES = 2;
+
+            if (retryCount >= MAX_AUTO_RETRIES) {
+                console.log(`[nexi-payment-callback] Max auto-retry reached (${retryCount}/${MAX_AUTO_RETRIES}) for booking ${transaction.booking_id} — no new link sent.`);
+            } else {
+                try {
+                    const { data: refusedBooking } = await supabase
+                        .from('bookings')
+                        .select('id, customer_name, customer_phone, customer_email, vehicle_name, booking_details')
+                        .eq('id', transaction.booking_id)
+                        .single();
+
+                    if (refusedBooking) {
+                        const rbPhone = refusedBooking.customer_phone || refusedBooking.booking_details?.customer?.phone;
+                        const rbName = refusedBooking.customer_name || refusedBooking.booking_details?.customer?.fullName || 'Cliente';
+                        const rbEmail = refusedBooking.customer_email || refusedBooking.booking_details?.customer?.email || '';
+                        const rbAmountEur = transaction.amount_cents / 100;
+                        const rbRef = (refusedBooking.id || '').substring(0, 8).toUpperCase();
+                        const rbDescription = transaction.description || `Pagamento DR7 - ${refusedBooking.vehicle_name || 'Prenotazione'} - ${rbName}`;
+
+                        // Generate a fresh Pay-by-Link (1-hour expiry, same as admin flow)
+                        const linkRes = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-pay-by-link`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                bookingId: refusedBooking.id,
+                                amount: rbAmountEur,
+                                customerEmail: rbEmail,
+                                customerName: rbName,
+                                description: rbDescription,
+                                expirationHours: 1,
+                                paymentPurpose,
+                            })
+                        });
+                        const linkData = await linkRes.json().catch(() => ({}));
+
+                        if (linkRes.ok && linkData.paymentUrl) {
+                            // Send WhatsApp using the existing "Richiesta Pagamento" Pro template
+                            // (same message the admin-triggered Pay-by-Link flow uses)
+                            if (rbPhone) {
+                                const retryMsg = await renderTemplate('pro_richiesta_pagamento', {
+                                    customer_name: rbName,
+                                    amount: rbAmountEur.toFixed(2),
+                                    link: linkData.paymentUrl,
+                                    booking_ref: rbRef,
+                                });
+
+                                if (retryMsg === null) {
+                                    console.warn('[nexi-payment-callback] Template "pro_richiesta_pagamento" missing/disabled — skipping auto-retry send');
+                                } else {
+                                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            customPhone: rbPhone,
+                                            customMessage: retryMsg,
+                                        })
+                                    });
+
+                                    // Log message send
+                                    try {
+                                        await supabase.from('sent_messages_log').insert({
+                                            customer_name: rbName,
+                                            customer_phone: rbPhone,
+                                            message_text: retryMsg,
+                                            template_label: `Auto-retry Pay-by-Link (tentativo ${retryCount + 1}/${MAX_AUTO_RETRIES})`,
+                                            status: 'sent',
+                                        });
+                                    } catch (logErr) {
+                                        console.error('[nexi-payment-callback] Failed to log retry message:', logErr);
+                                    }
+                                }
+                            }
+
+                            // Persist retry count on the refused transaction
+                            await supabase.from('nexi_transactions').update({
+                                metadata: {
+                                    ...(transaction.metadata || {}),
+                                    auto_retry_count: retryCount + 1,
+                                    auto_retry_at: new Date().toISOString(),
+                                    auto_retry_link: linkData.paymentUrl,
+                                }
+                            }).eq('id', transaction.id);
+
+                            console.log(`[nexi-payment-callback] ✅ Auto-sent fresh Pay-by-Link to ${rbName} after refused payment (retry ${retryCount + 1}/${MAX_AUTO_RETRIES})`);
+                        } else {
+                            console.warn('[nexi-payment-callback] Auto-retry: could not create fresh link:', linkData.error || `HTTP ${linkRes.status}`);
+                        }
+                    }
+                } catch (retryErr) {
+                    console.error('[nexi-payment-callback] Auto-retry link send failed (non-fatal):', retryErr);
+                }
+            }
+        }
+
         // ── DANNI/PENALI PAYMENT ──────────────────────────────────────────
         if (isSuccess && isDanniPenali && transaction.booking_id) {
             console.log(`[nexi-payment-callback] Processing ${paymentPurpose} payment for booking ${transaction.booking_id}`);
@@ -272,40 +374,49 @@ const handler: Handler = async (event) => {
                 const custPhone = booking.customer_phone || details.customer?.phone;
                 if (custPhone) {
                     const custName = booking.customer_name || details.customer?.fullName || 'Cliente';
-                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            customPhone: custPhone,
-                            customMessage: await renderTemplate('payment_received_damages', { custName, amountEur, paymentType: paymentPurpose === 'danni' ? 'danni' : paymentPurpose === 'penali' ? 'penali' : 'danni/penali' }, `Gentile ${custName},\n\nConfermiamo la ricezione del pagamento di €${amountEur} per ${paymentPurpose === 'danni' ? 'danni' : paymentPurpose === 'penali' ? 'penali' : 'danni/penali'}.\n\nGrazie,\nDR7`)
-                        })
-                    });
+                    const customerMsg = await renderTemplate('payment_received_damages', { custName, amountEur, paymentType: paymentPurpose === 'danni' ? 'danni' : paymentPurpose === 'penali' ? 'penali' : 'danni/penali' });
+                    if (customerMsg === null) {
+                        console.log('[nexi-payment-callback] Template "payment_received_damages" missing/disabled — skipping send');
+                    } else {
+                        await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                customPhone: custPhone,
+                                customMessage: customerMsg
+                            })
+                        });
+                    }
                 }
 
                 // Admin notification
                 const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
                 if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                    const adminMsg = await renderTemplate('payment_received_damages_admin', { customer_name: booking.customer_name, amountEur, paymentType: paymentPurpose }, `💰 *PAGAMENTO ${paymentPurpose.toUpperCase()} RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Tipo:* ${paymentPurpose}\n\nFattura generata automaticamente.`);
-                    await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chatId: `${NOTIFICATION_PHONE}@c.us`,
-                            message: adminMsg
-                        })
-                    });
-
-                    // Log to sent_messages_log
-                    try {
-                        await supabase.from('sent_messages_log').insert({
-                            customer_name: booking.customer_name || 'N/A',
-                            customer_phone: NOTIFICATION_PHONE,
-                            message_text: adminMsg,
-                            template_label: `Payment Confirmation Admin (${paymentPurpose})`,
-                            status: 'sent',
+                    const adminMsg = await renderTemplate('payment_received_damages_admin', { customer_name: booking.customer_name, amountEur, paymentType: paymentPurpose });
+                    if (adminMsg === null) {
+                        console.log('[nexi-payment-callback] Template "payment_received_damages_admin" missing/disabled — skipping send');
+                    } else {
+                        await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                chatId: `${NOTIFICATION_PHONE}@c.us`,
+                                message: adminMsg
+                            })
                         });
-                    } catch (logErr) {
-                        console.error('Failed to log message:', logErr);
+
+                        // Log to sent_messages_log
+                        try {
+                            await supabase.from('sent_messages_log').insert({
+                                customer_name: booking.customer_name || 'N/A',
+                                customer_phone: NOTIFICATION_PHONE,
+                                message_text: adminMsg,
+                                template_label: `Payment Confirmation Admin (${paymentPurpose})`,
+                                status: 'sent',
+                            });
+                        } catch (logErr) {
+                            console.error('Failed to log message:', logErr);
+                        }
                     }
                 }
             }
@@ -368,40 +479,49 @@ const handler: Handler = async (event) => {
                 const custPhone = booking.customer_phone || details.customer?.phone;
                 if (custPhone) {
                     const custName = booking.customer_name || details.customer?.fullName || 'Cliente';
-                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            customPhone: custPhone,
-                            customMessage: await renderTemplate('payment_received_extension', { custName, amountEur }, `Gentile ${custName},\n\nConfermiamo la ricezione del pagamento di €${amountEur} per l'estensione del noleggio.\n\nGrazie,\nDR7`)
-                        })
-                    });
+                    const customerMsg = await renderTemplate('payment_received_extension', { custName, amountEur });
+                    if (customerMsg === null) {
+                        console.log('[nexi-payment-callback] Template "payment_received_extension" missing/disabled — skipping send');
+                    } else {
+                        await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                customPhone: custPhone,
+                                customMessage: customerMsg
+                            })
+                        });
+                    }
                 }
 
                 // Admin notification
                 const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
                 if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                    const adminMsg = await renderTemplate('payment_received_extension_admin', { customer_name: booking.customer_name, amountEur, vehicle_name: booking.vehicle_name || 'N/A' }, `💰 *PAGAMENTO ESTENSIONE RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n\nFattura estensione generata automaticamente.`);
-                    await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chatId: `${NOTIFICATION_PHONE}@c.us`,
-                            message: adminMsg
-                        })
-                    });
-
-                    // Log to sent_messages_log
-                    try {
-                        await supabase.from('sent_messages_log').insert({
-                            customer_name: booking.customer_name || 'N/A',
-                            customer_phone: NOTIFICATION_PHONE,
-                            message_text: adminMsg,
-                            template_label: 'Payment Confirmation Admin (extension)',
-                            status: 'sent',
+                    const adminMsg = await renderTemplate('payment_received_extension_admin', { customer_name: booking.customer_name, amountEur, vehicle_name: booking.vehicle_name || 'N/A' });
+                    if (adminMsg === null) {
+                        console.log('[nexi-payment-callback] Template "payment_received_extension_admin" missing/disabled — skipping send');
+                    } else {
+                        await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                chatId: `${NOTIFICATION_PHONE}@c.us`,
+                                message: adminMsg
+                            })
                         });
-                    } catch (logErr) {
-                        console.error('Failed to log message:', logErr);
+
+                        // Log to sent_messages_log
+                        try {
+                            await supabase.from('sent_messages_log').insert({
+                                customer_name: booking.customer_name || 'N/A',
+                                customer_phone: NOTIFICATION_PHONE,
+                                message_text: adminMsg,
+                                template_label: 'Payment Confirmation Admin (extension)',
+                                status: 'sent',
+                            });
+                        } catch (logErr) {
+                            console.error('Failed to log message:', logErr);
+                        }
                     }
                 }
             }
@@ -576,123 +696,34 @@ const handler: Handler = async (event) => {
                     }
                 }
 
-                // Send full booking confirmation to customer via WhatsApp
+                // Send booking confirmation to customer via WhatsApp — uses Messaggi di Sistema templates
                 const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
+                const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
                 if (custPhone) {
-                    const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';
-                    const custFirstName = custName.split(' ')[0] || 'Cliente';
-                    const bookingRef = booking.id.substring(0, 8).toUpperCase();
-                    const totalEur = booking.price_total ? (booking.price_total / 100).toFixed(2) : amountEur;
-
-                    // Format dates in Rome timezone
-                    const fmtDate = (d: string) => new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' });
-                    const fmtTime = (d: string) => new Date(d).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' });
-
-                    let custMsg = '';
-
-                    // Detect car wash / mechanical
-                    const isCarWashBooking = booking.service_type === 'car_wash' || booking.booking_details?.service_type === 'car_wash' || booking.booking_details?.type === 'car_wash';
-                    const isMechBooking = booking.service_type === 'mechanical_service' || booking.service_type === 'mechanical';
-
-                    if (isCarWashBooking) {
-                        // Car wash confirmation
-                        const serviceName = booking.booking_details?.serviceName || booking.vehicle_name || 'Autolavaggio';
-                        const apptDate = booking.pickup_date || booking.booking_details?.appointment_date;
-                        const fmtApptDate = apptDate ? new Date(apptDate).toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' }) : '';
-                        const fmtApptTime = apptDate ? new Date(apptDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '';
-
-                        const vehiclePlate = booking.booking_details?.vehicle_plate || booking.booking_details?.vehicle?.plate || '';
-                        custMsg = ``;
-                        custMsg += `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`;
-                        custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`;
-                        custMsg += `*ID:* DR7-${bookingRef}\n`;
-                        custMsg += `*Servizio:* ${serviceName}\n`;
-                        if (vehiclePlate) custMsg += `*Targa:* ${vehiclePlate}\n`;
-                        if (fmtApptDate) custMsg += `*Data e Ora:* ${fmtApptDate} alle ${fmtApptTime}\n`;
-                        custMsg += `*Totale:* €${totalEur}\n`;
-                        custMsg += `*Pagamento:* Pagato\n`;
-                        if (booking.booking_details?.notes) custMsg += `*Note:* ${booking.booking_details.notes}\n`;
-                        custMsg += `\nCordiali Saluti,\nDR7\n\nSe questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo.`;
-                    } else if (isMechBooking) {
-                        // Mechanical confirmation (simple)
-                        custMsg = `Salve ${custFirstName},\n\nConfermiamo il pagamento per il servizio meccanico.\n\n`;
-                        custMsg += `*ID:* DR7-${bookingRef}\n`;
-                        custMsg += `*Totale:* €${totalEur}\n`;
-                        custMsg += `*Pagamento:* Pagato\n`;
-                        custMsg += `\nCordiali Saluti,\nDR7`;
-                    } else {
-                        // Car rental confirmation
-                        const pickupLabel = booking.pickup_location === 'dr7_office' ? 'DR7 Office' : (booking.booking_details?.delivery_address ? `${booking.booking_details.delivery_address.street}, ${booking.booking_details.delivery_address.city}` : booking.pickup_location || 'DR7 Office');
-
-                        const unlimitedKm = booking.booking_details?.unlimited_km;
-                        const kmLimit = booking.booking_details?.km_limit;
-                        let kmLabel = '-';
-                        if (unlimitedKm || kmLimit === 'Illimitati') {
-                            kmLabel = 'Illimitati';
-                        } else if (kmLimit) {
-                            kmLabel = `${kmLimit} km`;
-                        }
-
-                        const depositEur = booking.deposit_amount ? (booking.deposit_amount / 100).toFixed(2) : (booking.booking_details?.deposit || '0');
-                        const depositStatus = booking.booking_details?.deposit_status === 'incassata' ? 'Pagata' : 'Da saldare';
-                        const depositLabel = parseFloat(String(depositEur)) > 0 ? `€${depositEur} (${depositStatus})` : '€0';
-
-                        const insMap: Record<string, string> = { 'KASKO': 'Kasko', 'KASKO_BASE': 'Kasko Base', 'KASKO_BLACK': 'Kasko Black', 'KASKO_SIGNATURE': 'Kasko Signature', 'DR7': 'Kasko DR7' };
-                        const insuranceLabel = insMap[booking.booking_details?.insuranceOption || ''] || 'Kasko Base';
-
-                        custMsg = `Salve ${custFirstName},\n\nConfermiamo la sua prenotazione.\n\n`;
-                        custMsg += `*NUOVA PRENOTAZIONE NOLEGGIO*\n\n`;
-                        custMsg += `*ID:* DR7-${bookingRef}\n`;
-                        custMsg += `*Veicolo:* ${booking.vehicle_name || 'N/A'}\n`;
-                        custMsg += `*Ritiro:* ${fmtDate(booking.pickup_date)} alle ${fmtTime(booking.pickup_date)}\n`;
-                        custMsg += `*Riconsegna:* ${fmtDate(booking.dropoff_date)} alle ${fmtTime(booking.dropoff_date)}\n`;
-                        custMsg += `*Luogo ritiro:* ${pickupLabel}\n`;
-                        custMsg += `*Assicurazione:* ${insuranceLabel}\n`;
-                        custMsg += `*Totale:* €${totalEur}\n`;
-                        custMsg += `*Cauzione:* ${depositLabel}\n`;
-                        custMsg += `*KM:* ${kmLabel}\n`;
-                        custMsg += `*Pagamento:* Pagato (Nexi Pay by Link)\n`;
-                        if (booking.booking_details?.notes) custMsg += `*Note:* ${booking.booking_details.notes}\n`;
-                        custMsg += `\nCordiali Saluti,\nDR7`;
-                    }
-
-                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                    // Mark payment as received so templates render "Pagato" via payment_status
+                    const bookingForMsg = { ...booking, payment_status: 'succeeded', payment_method: booking.payment_method || 'Nexi Pay by Link' };
+                    await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            customPhone: custPhone,
-                            customMessage: custMsg
-                        })
+                        body: JSON.stringify({ customPhone: custPhone, booking: bookingForMsg })
                     });
-                    console.log('[nexi-payment-callback] WhatsApp booking confirmation sent to customer');
+                    console.log('[nexi-payment-callback] Customer confirmation dispatched (template-based)');
                 }
 
-                // Send admin notification
-                const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
-                if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                    const adminMsg = `💰 *PAGAMENTO NEXI RICEVUTO*\n\n*Cliente:* ${booking.customer_name}\n*Importo:* €${amountEur}\n*Prenotazione:* #${booking.id.substring(0, 8).toUpperCase()}\n*Veicolo:* ${booking.vehicle_name || 'N/A'}\n\nPrenotazione confermata automaticamente.`;
-                    await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chatId: `${NOTIFICATION_PHONE}@c.us`,
-                            message: adminMsg
-                        })
-                    });
-
-                    // Log to sent_messages_log
-                    try {
-                        await supabase.from('sent_messages_log').insert({
-                            customer_name: booking.customer_name || 'N/A',
-                            customer_phone: NOTIFICATION_PHONE,
-                            message_text: adminMsg,
-                            template_label: 'Payment Confirmation Admin (booking)',
-                            status: 'sent',
-                        });
-                    } catch (logErr) {
-                        console.error('Failed to log message:', logErr);
-                    }
-                }
+                // Admin notification — uses nexi_payment_received_admin template
+                await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        templateKey: 'nexi_payment_received_admin',
+                        templateVars: {
+                            '{customer_name}': booking.customer_name || 'N/A',
+                            '{amount}': amountEur,
+                            '{booking_id}': `DR7-${booking.id.substring(0, 8).toUpperCase()}`,
+                            '{vehicle_name}': booking.vehicle_name || 'N/A',
+                        },
+                    }),
+                });
 
                 // Auto-generate contract → then send signing link via WhatsApp
                 // Skip for car wash / mechanical bookings — only car rentals get contracts
@@ -885,27 +916,37 @@ const handler: Handler = async (event) => {
                             // Notify customer about bonus
                             if (custPhone) {
                                 const custName = booking.customer_name || 'Cliente';
-                                await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        customPhone: custPhone,
-                                        customMessage: await renderTemplate('wallet_bonus_credit', { custName, bonusEur, cardLabel, percentLabel, newBalance: newBalance.toFixed(2) }, `Gentile ${custName},\n\nHa ricevuto *€${bonusEur}* di credito sul suo wallet DR7 grazie al pagamento con ${cardLabel} (${percentLabel}).\n\nSaldo attuale: *€${newBalance.toFixed(2)}*\n\nIl credito è spendibile direttamente sul sito per le prossime prenotazioni.\n\nGrazie per la collaborazione.\n\nDR7`)
-                                    })
-                                });
+                                const customerMsg = await renderTemplate('wallet_bonus_credit', { custName, bonusEur, cardLabel, percentLabel, newBalance: newBalance.toFixed(2) });
+                                if (customerMsg === null) {
+                                    console.log('[nexi-payment-callback] Template "wallet_bonus_credit" missing/disabled — skipping send');
+                                } else {
+                                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            customPhone: custPhone,
+                                            customMessage: customerMsg
+                                        })
+                                    });
+                                }
                             }
 
                             // Notify admin
                             const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
                             if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                                await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        chatId: `${NOTIFICATION_PHONE}@c.us`,
-                                        message: await renderTemplate('wallet_bonus_credit_admin', { customer_name: booking.customer_name || '-', cardLabel, bonusEur, percentLabel, newBalance: newBalance.toFixed(2), bookingRef: booking.id.substring(0, 8).toUpperCase() }, `*BONUS CARTA ACCREDITATO*\n\n*Cliente:* ${booking.customer_name || '-'}\n*Carta:* ${cardLabel}\n*Bonus:* €${bonusEur} (${percentLabel})\n*Nuovo saldo wallet:* €${newBalance.toFixed(2)}\n*Prenotazione:* #${booking.id.substring(0, 8).toUpperCase()}`)
-                                    })
-                                });
+                                const adminBonusMsg = await renderTemplate('wallet_bonus_credit_admin', { customer_name: booking.customer_name || '-', cardLabel, bonusEur, percentLabel, newBalance: newBalance.toFixed(2), bookingRef: booking.id.substring(0, 8).toUpperCase() });
+                                if (adminBonusMsg === null) {
+                                    console.log('[nexi-payment-callback] Template "wallet_bonus_credit_admin" missing/disabled — skipping send');
+                                } else {
+                                    await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            chatId: `${NOTIFICATION_PHONE}@c.us`,
+                                            message: adminBonusMsg
+                                        })
+                                    });
+                                }
                             }
                         } else {
                             console.warn(`[nexi-payment-callback] No auth user found for card bonus. Customer: ${booking.customer_name}, email: ${booking.customer_email}. Bonus of €${bonusEur} NOT applied.`);
