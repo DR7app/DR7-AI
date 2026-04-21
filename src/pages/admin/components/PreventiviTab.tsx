@@ -1074,26 +1074,16 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     try {
       // Scope: SOLO righe visibili in Messaggi di Sistema Pro (key pro_%),
       // così escludiamo i seed legacy (preventivo_whatsapp, ecc.) che hanno
-      // la stessa label ma non sono editabili dall'admin.
-      // Log diagnostico per verificare quale riga viene effettivamente caricata.
-      const { data: rows, error: qErr } = await supabase
+      // la stessa label ma non sono editabili dall'admin. Match per label
+      // case-insensitive perché gli admin spesso riciclano entry del catalogo
+      // (es. pro_promemoria_checkout rinominato "Preventivo senza sconto").
+      const { data: rows } = await supabase
         .from('system_messages')
-        .select('id, message_body, message_key, label, is_enabled, updated_at')
+        .select('message_body, is_enabled, updated_at')
         .ilike('label', targetLabel)
         .like('message_key', 'pro_%')
         .order('updated_at', { ascending: false })
-      if (qErr) console.error('[PreventiviTab] template query error:', qErr)
-      const enabled = (rows || []).filter(r => r.is_enabled !== false && r.message_body)
-      const tpl = enabled[0] || null
-      console.log('[PreventiviTab] template lookup', {
-        targetLabel,
-        hasSconto,
-        rowsFound: rows?.length || 0,
-        enabledCount: enabled.length,
-        chosenKey: tpl?.message_key,
-        chosenUpdatedAt: tpl?.updated_at,
-        allKeys: rows?.map(r => ({ key: r.message_key, label: r.label, enabled: r.is_enabled, updated: r.updated_at, len: (r.message_body || '').length })),
-      })
+      const tpl = (rows || []).find(r => r.is_enabled !== false && r.message_body) || null
 
       if (tpl?.is_enabled && tpl.message_body) {
         // Resolve insurance options and user-intent flags from the preventivo
