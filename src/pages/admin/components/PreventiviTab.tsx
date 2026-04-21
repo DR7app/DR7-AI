@@ -168,6 +168,19 @@ const UNIT_LABELS: Record<string, string> = {
   flat: 'fisso',
 }
 
+function renderWhatsAppHtml(text: string): string {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  // WhatsApp-style formatting: *bold*, _italic_, ~strike~, `mono`
+  return escaped
+    .replace(/\*([^*\n]+?)\*/g, '<strong>$1</strong>')
+    .replace(/(^|\s)_([^_\n]+?)_(?=\s|$|[.,!?:;)])/g, '$1<em>$2</em>')
+    .replace(/~([^~\n]+?)~/g, '<s>$1</s>')
+    .replace(/`([^`\n]+?)`/g, '<code>$1</code>')
+}
+
 const LOCATIONS = [
   { value: 'dr7_office', label: 'DR7 — Viale Marconi 229, Cagliari', fee: 0 },
   { value: 'cagliari_airport', label: 'Aeroporto Cagliari Elmas', fee: 50 },
@@ -1150,6 +1163,20 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             const km = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
             return km === 'unlimited' ? 'Illimitati' : `${km} Km`
           })(),
+          // Luogo di ritiro/riconsegna — se "domicilio" usa l'indirizzo custom,
+          // altrimenti usa la label dell'ufficio/aeroporto.
+          // pickup_location  → dove il cliente ritira (consegna a casa = delivery_address)
+          // dropoff_location → dove il cliente riconsegna (ritiriamo a casa = pickup_address)
+          pickup_location: (() => {
+            const loc = String(extras?.pickup_location || 'dr7_office')
+            if (loc === 'domicilio') return String(extras?.delivery_address || 'Domicilio')
+            return LOCATIONS.find(l => l.value === loc)?.label || loc
+          })(),
+          dropoff_location: (() => {
+            const loc = String(extras?.dropoff_location || 'dr7_office')
+            if (loc === 'domicilio') return String(extras?.pickup_address || 'Domicilio')
+            return LOCATIONS.find(l => l.value === loc)?.label || loc
+          })(),
         }
 
         let msg = tpl.message_body
@@ -1661,6 +1688,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                 <p className="text-[11px] text-theme-text-muted mt-1">
                   Template caricato da {(selectedPreventivo.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'} in Messaggi di Sistema Pro. Puoi modificarlo qui per questo singolo invio.
                 </p>
+
+                <label className="block text-sm font-medium text-theme-text-secondary mt-3 mb-1">Anteprima formattata (come la vedrà il cliente su WhatsApp)</label>
+                <div
+                  className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap break-words"
+                  dangerouslySetInnerHTML={{ __html: renderWhatsAppHtml(previewMessage) }}
+                />
               </div>
 
               <div className="flex gap-2 justify-end">
