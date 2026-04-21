@@ -41,6 +41,16 @@ export interface NamedCoefficient {
   coeff: number
 }
 
+export type OperatingMode = 'auto' | 'riempimento' | 'equilibrio' | 'protezione'
+
+export interface OccupancyTargets {
+  d30plus: number
+  d15_29: number
+  d7_14: number
+  d3_6: number
+  d0_2: number
+}
+
 export interface RevenueConfig {
   enabled: boolean
   mode: RevenueMode
@@ -57,6 +67,12 @@ export interface RevenueConfig {
   promo_push_coefficients: NamedCoefficient[]
   special_dates: Record<string, string>     // YYYY-MM-DD -> day_type key
   active_promo_level: string
+  operating_mode: OperatingMode
+  occupancy_targets: {
+    utilitarie: OccupancyTargets
+    suv_premium: OccupancyTargets
+    luxury: OccupancyTargets
+  }
 }
 
 export interface PricingInput {
@@ -340,7 +356,7 @@ export function calculateDynamicPrice(
   const occBracket = matchBracket(config.occupation_coefficients, input.occupancyPct, 'pct')
   const occCoeff = occBracket?.coeff ?? 1.0
   breakdown.push({
-    label: 'Occupazione flotta',
+    label: 'Coefficienti Occupazione',
     coeff: occCoeff,
     description: occBracket?.label || `${input.occupancyPct}% occupata`
   })
@@ -348,7 +364,7 @@ export function calculateDynamicPrice(
   const advBracket = matchBracket(config.advance_coefficients, daysAhead, 'days')
   const advCoeff = advBracket?.coeff ?? 1.0
   breakdown.push({
-    label: 'Anticipo prenotazione',
+    label: 'Coefficienti Anticipo',
     coeff: advCoeff,
     description: advBracket?.label || `${daysAhead} giorni prima`
   })
@@ -356,7 +372,7 @@ export function calculateDynamicPrice(
   const durBracket = matchBracket(config.duration_coefficients, rentalDays, 'days')
   const durCoeff = durBracket?.coeff ?? 1.0
   breakdown.push({
-    label: 'Durata noleggio',
+    label: 'Coefficienti Durata',
     coeff: durCoeff,
     description: durBracket?.label || `${rentalDays} giorni`
   })
@@ -364,7 +380,7 @@ export function calculateDynamicPrice(
   const seasonMatch = matchSeason(config.season_rules, input.pickupDate, input.dropoffDate)
   const seasonCoeff = seasonMatch?.coeff ?? 1.0
   breakdown.push({
-    label: 'Stagionalità',
+    label: 'Coefficienti Stagione',
     coeff: seasonCoeff,
     description: seasonMatch?.name || 'Nessuna regola stagionale'
   })
@@ -380,7 +396,7 @@ export function calculateDynamicPrice(
     }
   }
   breakdown.push({
-    label: 'Gap calendario',
+    label: 'Coefficienti Gap Calendario',
     coeff: gapCoeff,
     description: gapLabel
   })
@@ -398,7 +414,7 @@ export function calculateDynamicPrice(
     }
   }
   breakdown.push({
-    label: 'Tipo giorno',
+    label: 'Coefficienti Tipo Giorno',
     coeff: dayTypeCoeff,
     description: dayTypeLabel
   })
@@ -424,7 +440,7 @@ export function calculateDynamicPrice(
     }
   }
   breakdown.push({
-    label: 'Occupazione veicolo',
+    label: 'Coefficienti Occupazione Veicolo',
     coeff: vehOccCoeff,
     description: vehOccLabel
   })
@@ -440,7 +456,7 @@ export function calculateDynamicPrice(
     }
   }
   breakdown.push({
-    label: 'Promo push',
+    label: 'Coefficienti Spinta Direzionale (Promo)',
     coeff: promoCoeff,
     description: promoLabel
   })
