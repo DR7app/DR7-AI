@@ -2641,6 +2641,11 @@ function PrezzoDinamicoSection({
             rows={config.dynamic.day_type_coefficients}
             onChange={(rows) => patchDyn({ day_type_coefficients: rows })}
           />
+          <SpecialDatesSection
+            specialDates={config.dynamic.special_dates}
+            dayTypeTiers={config.dynamic.day_type_coefficients}
+            onChange={(map) => patchDyn({ special_dates: map })}
+          />
           <NamedCoefficientTable
             title="Coefficienti Occupazione Veicolo"
             subtitle="Correzione del singolo mezzo rispetto alla media della categoria"
@@ -2881,6 +2886,127 @@ function SeasonByMonthSection({
           )
         })}
       </div>
+    </section>
+  )
+}
+
+// ── Date → Day-type tier classification ──
+// Weekdays (Lunedì…Domenica) are auto-inferred from each date's day-of-week.
+// This section is for calling out SPECIFIC dates that are NOT plain weekdays:
+// prefestivo / ponte / evento / festività. Weekday tiers are filtered out of
+// the dropdown so the admin only picks relevant categories.
+function SpecialDatesSection({
+  specialDates, dayTypeTiers, onChange,
+}: {
+  specialDates: Record<string, string>
+  dayTypeTiers: NamedCoeff[]
+  onChange: (map: Record<string, string>) => void
+}) {
+  const WEEKDAY_KEYS = new Set([
+    'monday', 'tuesday', 'wednesday', 'thursday',
+    'friday', 'saturday', 'sunday',
+  ])
+  const specialTiers = dayTypeTiers.filter(t => !WEEKDAY_KEYS.has(t.key))
+
+  // Stable ordering for display: by ascending date.
+  const entries = Object.entries(specialDates).sort(([a], [b]) => a.localeCompare(b))
+
+  function patchEntry(prevDate: string, nextDate: string, tierKey: string) {
+    const next: Record<string, string> = {}
+    for (const [d, k] of Object.entries(specialDates)) {
+      if (d === prevDate) continue
+      next[d] = k
+    }
+    if (nextDate) next[nextDate] = tierKey
+    onChange(next)
+  }
+  function removeEntry(date: string) {
+    const next = { ...specialDates }
+    delete next[date]
+    onChange(next)
+  }
+  function addEntry() {
+    // Pick an unused placeholder date so we never clobber an existing entry.
+    let candidate = new Date().toISOString().slice(0, 10)
+    let guard = 0
+    while (specialDates[candidate] !== undefined && guard < 365) {
+      const d = new Date(candidate)
+      d.setDate(d.getDate() + 1)
+      candidate = d.toISOString().slice(0, 10)
+      guard++
+    }
+    const firstTier = specialTiers[0]?.key || ''
+    onChange({ ...specialDates, [candidate]: firstTier })
+  }
+
+  return (
+    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+        Classificazione Date Speciali
+      </h3>
+      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+        Assegna un tipo specifico a singole date (prefestivi, ponti, eventi, festività). I giorni della settimana sono già calcolati automaticamente dalla data.
+      </p>
+
+      {entries.length === 0 && (
+        <div className="text-[13px] text-[#a1a1a6] py-3 text-center border border-dashed border-black/10 rounded-lg mb-3">
+          Nessuna data speciale definita. Ogni data verrà classificata come semplice giorno della settimana.
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {entries.map(([date, tierKey]) => {
+          const tierData = dayTypeTiers.find(t => t.key === tierKey)
+          const badgeClass = tierData && typeof tierData.coeff === 'number'
+            ? tierData.coeff < 1 ? 'bg-green-100 text-green-700'
+            : tierData.coeff > 1 ? 'bg-red-100 text-red-700'
+            : 'bg-gray-100 text-gray-600'
+            : 'bg-gray-100 text-gray-400'
+          return (
+            <div key={date} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center">
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => patchEntry(date, e.target.value, tierKey)}
+                className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+              <select
+                value={tierKey}
+                onChange={(e) => patchEntry(date, date, e.target.value)}
+                className="w-full bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              >
+                <option value="">— (nessuna)</option>
+                {specialTiers.map((t) => (
+                  <option key={t.key} value={t.key}>{t.label}</option>
+                ))}
+              </select>
+              <span className={`shrink-0 inline-flex items-center justify-center min-w-[52px] px-2 py-1 rounded-md text-[11px] font-bold tabular-nums ${badgeClass}`}>
+                {tierData && typeof tierData.coeff === 'number' ? `×${tierData.coeff.toFixed(2)}` : '—'}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeEntry(date)}
+                className="text-[#ff3b30] hover:text-[#d70015] text-[16px] px-2 leading-none"
+                aria-label="Rimuovi"
+              >−</button>
+            </div>
+          )
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={addEntry}
+        disabled={specialTiers.length === 0}
+        className="mt-3 text-[13px] text-[#007aff] hover:text-[#0051d5] disabled:text-[#a1a1a6] disabled:cursor-not-allowed"
+      >
+        + Aggiungi data speciale
+      </button>
+      {specialTiers.length === 0 && (
+        <p className="text-[11px] text-[#ff9500] mt-2">
+          Aggiungi prima dei tipi non-settimanali (prefestivo, ponte, evento…) alla tabella sopra.
+        </p>
+      )}
     </section>
   )
 }
