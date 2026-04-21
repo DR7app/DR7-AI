@@ -225,7 +225,12 @@ function DocumentiSubTab() {
       if (res.ok) {
         toast.success(data.message || 'Link di firma inviato via WhatsApp')
         logger.log('[TRUSTERA] About to log action, requestId:', data.requestId)
-        logAdminAction('send_trustera_document', 'signature', data.requestId, { document: formData.documentName, signer: formData.signerName })
+        logAdminAction('send_trustera_document', 'signature', data.requestId, {
+          document: formData.documentName,
+          signer: formData.signerName,
+          email: formData.signerEmail,
+          phone: formData.signerPhone,
+        })
           .then(() => logger.log('[TRUSTERA] logAdminAction completed'))
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .catch((err: any) => console.error('[TRUSTERA] logAdminAction FAILED:', err))
@@ -261,7 +266,14 @@ function DocumentiSubTab() {
       const { error } = await supabase.from('signature_requests').delete().eq('id', id)
       if (error) throw error
       toast.success('Richiesta eliminata')
-      logAdminAction('delete_trustera_document', 'signature', id)
+      {
+        const req = requests.find(r => r.id === id)
+        logAdminAction('delete_trustera_document', 'signature', id, {
+          document: req?.document_name,
+          signer: req?.signer_name,
+          status: req?.status,
+        })
+      }
       loadRequests()
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)

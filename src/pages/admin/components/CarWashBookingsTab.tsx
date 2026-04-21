@@ -6,6 +6,7 @@ import LimitationOverrideModal from '../../../components/LimitationOverrideModal
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { buildCarWashContext } from '../../../utils/adminLogHelpers'
 // Conflict utilities are now handled inline
 import { validateScheduling } from '../../../utils/schedulingRules'
 import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
@@ -726,7 +727,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (error) throw error
 
       toast.success('Prenotazione eliminata')
-      logAdminAction('delete_carwash', 'carwash_booking', bookingId)
+      {
+        const bk = bookings.find(b => b.id === bookingId)
+        logAdminAction('delete_carwash', 'carwash_booking', bookingId, {
+          ...buildCarWashContext(bk),
+          customer: bk?.customer_name || customerName,
+        })
+      }
       loadData()
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
@@ -767,15 +774,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       // Send via WhatsApp if phone available
       if (custPhone) {
-        await fetch('/.netlify/functions/send-whatsapp-notification', {
+        const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: custPhone,
-            customMessage: `Gentile ${custName},\n\nLe ricordiamo che il pagamento per il lavaggio è ancora in sospeso.\n\nPer completare il pagamento di *€${totalEur}*, clicchi sul seguente link:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora.\n\nGrazie,\nDR7`
+            templateKey: 'pro_richiesta_pagamento',
+            templateVars: {
+              customer_name: custName,
+              amount: totalEur,
+              link: linkData.paymentUrl,
+            },
+            skipHeader: true,
           })
         })
-        toast.success('Nuovo link generato e inviato via WhatsApp!', { id: toastId })
+        const waResult = await waResp.json().catch(() => ({}))
+        if (!waResp.ok || waResult?.skipped) {
+          toast.error('Template mancante in Messaggi di Sistema Pro: pro_richiesta_pagamento', { id: toastId })
+        } else {
+          toast.success('Nuovo link generato e inviato via WhatsApp!', { id: toastId })
+        }
       } else {
         navigator.clipboard.writeText(linkData.paymentUrl)
         toast.success('Nuovo link generato e copiato! Nessun telefono per WhatsApp.', { id: toastId })
@@ -872,7 +890,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}. Vai alla tab "Fatture" per visualizzarla.`)
       }
 
-      logAdminAction('generate_carwash_fattura', 'carwash_booking', booking.id)
+      logAdminAction('generate_carwash_fattura', 'carwash_booking', booking.id, {
+        ...buildCarWashContext(booking),
+        fattura_number: data?.invoice?.numero_fattura,
+      })
       loadData()
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
@@ -1049,7 +1070,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     logger.log('✅ Booking created successfully:', data)
-    logAdminAction('create_carwash', 'carwash_booking', data.id, { customer: customerName, service: serviceNames })
+    logAdminAction('create_carwash', 'carwash_booking', data.id, {
+      ...buildCarWashContext(data),
+      customer: data?.customer_name || customerName,
+      service: serviceNames,
+      payment_method: formData.payment_method,
+      payment_status: formData.payment_status,
+      amount: totalPrice,
+    })
 
     // Generate fattura ONLY if paid — never for unpaid bookings, Wallet, or Gift Card
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
@@ -1111,14 +1139,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           }).eq('id', data.id)
 
           if (customerPhone) {
-            await fetch('/.netlify/functions/send-whatsapp-notification', {
+            const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: customerPhone,
-                customMessage: `Gentile ${customerName},\n\nIl suo appuntamento lavaggio #${(data.id || '').substring(0, 8).toUpperCase()} è stato registrato.\n\nPer confermare, completi il pagamento di *€${totalPrice.toFixed(2)}* cliccando qui:\n${linkData.paymentUrl}\n\nIl link scade tra 1 ora. Se non pagato, la prenotazione verrà annullata.\n\nGrazie,\nDR7`
+                templateKey: 'pro_richiesta_pagamento',
+                templateVars: {
+                  customer_name: customerName,
+                  amount: totalPrice.toFixed(2),
+                  link: linkData.paymentUrl,
+                },
+                skipHeader: true,
               })
             })
+            const waResult = await waResp.json().catch(() => ({}))
+            if (!waResp.ok || waResult?.skipped) {
+              toast.error('Template mancante in Messaggi di Sistema Pro: pro_richiesta_pagamento')
+            }
           }
           toast.success('Pay by Link generato e inviato al cliente!')
         } else {
@@ -1167,35 +1205,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         const fmtDate = apptDt.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
         const fmtTime = apptDt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
         const totalEur = totalPrice.toFixed(2)
-        const bookingIdShort = (data.id || '').substring(0, 8).toUpperCase()
 
-        let paymentLabel = ''
-        if (paymentStatus === 'paid') {
-          paymentLabel = 'Pagato'
-        } else if (amountPaid > 0) {
-          paymentLabel = `${(amountPaid / 100).toFixed(2)}€ pagati - ${((totalPrice * 100 - amountPaid) / 100).toFixed(2)}€ da pagare`
-        } else {
-          paymentLabel = 'Da saldare'
-        }
-
-        let custMsg = ``
-        custMsg += `Salve ${custFirstName},\n\nConfermiamo il suo appuntamento.\n\n`
-        custMsg += `*NUOVA PRENOTAZIONE AUTOLAVAGGIO*\n\n`
-        custMsg += `*ID:* DR7-${bookingIdShort}\n`
-        custMsg += `*Servizio:* ${serviceNames}\n`
-        if (vehiclePlate) custMsg += `*Targa:* ${vehiclePlate}\n`
-        custMsg += `*Data e Ora:* ${fmtDate} alle ${fmtTime}\n`
-        custMsg += `*Totale:* €${totalEur}\n`
-        custMsg += `*Pagamento:* ${paymentLabel}\n`
-        if (formData.notes) custMsg += `*Note:* ${formData.notes}\n`
-        custMsg += `\nCordiali Saluti,\nDR7`
-
-        await fetch('/.netlify/functions/send-whatsapp-notification', {
+        const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customMessage: custMsg, customPhone: customerPhone })
+          body: JSON.stringify({
+            customPhone: customerPhone,
+            templateKey: 'pro_conferma_lavaggio',
+            templateVars: {
+              customer_name: custFirstName,
+              service_name: serviceNames,
+              appointment_date: fmtDate,
+              appointment_time: fmtTime,
+              total: totalEur,
+              vehicle_plate: vehiclePlate || '',
+            },
+            skipHeader: true,
+          })
         })
-        logger.log('✅ WhatsApp customer confirmation sent to', customerPhone)
+        const waResult = await waResp.json().catch(() => ({}))
+        if (!waResp.ok || waResult?.skipped) {
+          toast.error('Template mancante in Messaggi di Sistema Pro: pro_conferma_lavaggio')
+        } else {
+          logger.log('✅ WhatsApp customer confirmation sent to', customerPhone)
+        }
       }
     } catch (whatsappError) {
       console.error('⚠️ WhatsApp notification failed:', whatsappError)

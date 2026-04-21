@@ -119,6 +119,7 @@ export default function CassaCauzioneModal({ cauzione, onClose, onSuccess }: Pro
 
       // Log admin action
       logAdminAction('cassa_cauzione', 'cauzione', cauzione.id, {
+        customer: cauzione.cliente_nome,
         importo_originale: maxAmount,
         importo_incassato: amount,
         importo_rilasciato: residuo,

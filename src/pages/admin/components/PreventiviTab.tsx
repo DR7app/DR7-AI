@@ -14,6 +14,8 @@ import LimitationOverrideModal from '../../../components/LimitationOverrideModal
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
+import { logAdminAction } from '../../../utils/logAdminAction'
+import { buildBookingContext } from '../../../utils/adminLogHelpers'
 
 // ─── Time slots (office hours, 30-min intervals) ────────────────────────────
 function genSlots(ranges: [number, number][]): { value: string; label: string }[] {
@@ -718,6 +720,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         status: 'cancelled',
         booking_details: { ...booking.booking_details, no_cauzione_status: 'rejected', rejection_discount_code: code },
       }).eq('id', booking.id)
+
+      logAdminAction('cancel_booking', 'booking', booking.id, {
+        ...buildBookingContext(booking),
+        reason: 'Rifiuto No Cauzione',
+        discount_code: code,
+      })
 
       if (custPhone) {
         const resp = await fetch('/.netlify/functions/send-whatsapp-notification', {

@@ -47,6 +47,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 // bookingConflictUtils imports removed - admin can select any time
 import { validateRentalBooking } from '../../../utils/schedulingRules'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { buildBookingContext } from '../../../utils/adminLogHelpers'
 
 import {
   getAvailableVehicles,
@@ -1957,7 +1958,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         window.open(data.url, '_blank')
       }
 
-      logAdminAction('generate_contract', 'booking', booking.id)
+      logAdminAction('generate_contract', 'booking', booking.id, buildBookingContext(booking))
 
       // Reload data to show the contract link and Yousign button in the UI
       await loadData()
@@ -1999,7 +2000,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.dismiss('resend-contract')
       if (sigRes.ok) {
         toast.success('Link firma contratto rinviato via WhatsApp!')
-        logAdminAction('resend_contract', 'booking', booking.id)
+        logAdminAction('resend_contract', 'booking', booking.id, buildBookingContext(booking))
       } else {
         toast.error('Errore rinvio: ' + (sigData.error || 'Errore'))
       }
@@ -2109,7 +2110,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         logger.warn('PDF auto-open failed, continuing flow:', err)
       }
 
-      logAdminAction('generate_fattura', 'booking', booking.id)
+      logAdminAction('generate_fattura', 'booking', booking.id, buildBookingContext(booking))
 
       // SDI send is now handled automatically by the backend
       loadData()
@@ -2194,7 +2195,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't fail the whole deletion if calendar delete fails
       }
 
-      logAdminAction('delete_booking', 'booking', bookingId, { customer: customerName })
+      {
+        const bookingForLog = bookingType === 'booking' ? bookings.find(b => b.id === bookingId) : null
+        logAdminAction('delete_booking', 'booking', bookingId, {
+          ...buildBookingContext(bookingForLog),
+          customer: bookingForLog?.customer_name || customerName,
+          vehicle: bookingForLog?.vehicle_name || vehicleName,
+        })
+      }
       toast.success('Prenotazione eliminata')
       loadData()
     } catch (error) {
@@ -2663,7 +2671,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       logger.log('[handleConfirmExtend] ✅ Booking extended successfully')
-      logAdminAction('extend_booking', 'booking', extendingBooking.id, { new_dropoff: newDropoffDateTime.toISOString() })
+      logAdminAction('extend_booking', 'booking', extendingBooking.id, {
+        ...buildBookingContext(extendingBooking),
+        old_dropoff: extendingBooking.dropoff_date,
+        new_dropoff: newDropoffDateTime.toISOString(),
+      })
 
       // Send WhatsApp notification for extension
       try {
@@ -4108,7 +4120,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         logger.log('Booking updated successfully:', insertedBooking)
-        logAdminAction('edit_booking', 'booking', editingId, { customer: customerInfo?.full_name })
+        logAdminAction('edit_booking', 'booking', editingId, {
+          ...buildBookingContext(insertedBooking),
+          customer: insertedBooking?.customer_name || customerInfo?.full_name,
+        })
       } else {
         // Create new booking - direct insert
         logger.log('Creating new booking...', showAllVehicles ? '(FORCE MODE)' : '')
@@ -4125,7 +4140,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         logger.log('Booking created successfully:', insertedBooking)
-        logAdminAction('create_booking', 'booking', insertedBooking?.id, { customer: customerInfo?.full_name })
+        logAdminAction('create_booking', 'booking', insertedBooking?.id, {
+          ...buildBookingContext(insertedBooking),
+          customer: insertedBooking?.customer_name || customerInfo?.full_name,
+        })
       }
 
       // Generate Nexi Pay by Link if payment method is Nexi AND not already paid

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 
@@ -358,7 +359,17 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Stato pagamento aggiornato!')
-      logAdminAction('mark_paid', 'booking', bookingId, { method: newStatus })
+      {
+        const { data: bookingForLog } = await supabase
+          .from('bookings')
+          .select('customer_name, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total')
+          .eq('id', bookingId)
+          .maybeSingle()
+        logAdminAction('mark_paid', 'booking', bookingId, {
+          ...buildBookingContext(bookingForLog),
+          method: newStatus,
+        })
+      }
 
       if (newStatus === 'paid') {
         // Get service_type to check if it's a car rental
@@ -579,7 +590,7 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Estensione rimossa e date ripristinate!')
-      logAdminAction('delete_extension', 'booking', booking.id)
+      logAdminAction('delete_extension', 'booking', booking.id, buildBookingContext(booking))
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: unknown) {
@@ -603,7 +614,11 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Estensione segnata come pagata!')
-      logAdminAction('mark_extension_paid', 'booking', booking.id, { extension_index: extIndex })
+      logAdminAction('mark_extension_paid', 'booking', booking.id, {
+        ...buildBookingContext(booking),
+        extension_index: extIndex,
+        amount: ext.additional_amount,
+      })
 
       // Generate fattura for the extension
       const extAmount = ext.additional_amount || 0
@@ -656,7 +671,11 @@ export default function UnpaidBookingsTab() {
 
       if (error) throw error
       toast.success('Pagamento parziale estensione registrato!')
-      logAdminAction('partial_payment', 'booking', booking.id, { amount: paymentAmount })
+      logAdminAction('partial_payment', 'booking', booking.id, {
+        ...buildBookingContext(booking),
+        amount: paymentAmount,
+        extension_index: extIndex,
+      })
       setPartialPayItemKey(null)
 
       // Generate fattura when fully paid
@@ -727,7 +746,7 @@ export default function UnpaidBookingsTab() {
       }
 
       toast.success('Prenotazione eliminata!')
-      logAdminAction('delete_unpaid_booking', 'booking', bookingId)
+      logAdminAction('delete_unpaid_booking', 'booking', bookingId, buildBookingContext(booking))
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
     } catch (error: unknown) {
@@ -798,15 +817,28 @@ export default function UnpaidBookingsTab() {
         // Send via WhatsApp
         const phone = booking.customer_phone || booking.booking_details?.customer?.phone
         if (phone) {
-          await fetch('/.netlify/functions/send-whatsapp-notification', {
+          const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
+          const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               customPhone: phone,
-              customMessage: `Gentile ${booking.customer_name || 'Cliente'},\n\nPer completare il pagamento di *€${amountEur.toFixed(2)}* (${description}), clicchi qui:\n${result.paymentUrl}\n\nGrazie,\nDR7`
+              templateKey: 'pro_richiesta_pagamento',
+              templateVars: {
+                '{customer_name}': booking.customer_name || 'Cliente',
+                '{amount}': amountEur.toFixed(2),
+                '{link}': result.paymentUrl,
+                '{booking_ref}': bookingRef,
+              },
+              skipHeader: false,
             })
           })
-          toast.success('Link inviato via WhatsApp!')
+          const sendJson = await sendRes.json().catch(() => ({}))
+          if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
+            toast.error('Template mancante in Messaggi di Sistema Pro')
+          } else {
+            toast.success('Link inviato via WhatsApp!')
+          }
         }
       }
     } catch (err: unknown) {
@@ -831,7 +863,12 @@ export default function UnpaidBookingsTab() {
       }
 
       await supabase.from('fatture').update({ items }).eq('id', fi.fatturaId)
-      logAdminAction('mark_fattura_item_paid', 'fattura', fi.fatturaId)
+      logAdminAction('mark_fattura_item_paid', 'fattura', fi.fatturaId, {
+        fattura_number: fi.fatturaNumero,
+        description: fi.description,
+        type: fi.type,
+        amount: fi.total - fi.amountPaid,
+      })
       toast.success('Pagamento registrato')
       loadUnpaidBookings()
     } catch (err: unknown) {
@@ -874,7 +911,11 @@ export default function UnpaidBookingsTab() {
       }
 
       toast.success(`${type === 'danni' ? 'Danni' : 'Penali'} segnati come pagati`)
-      logAdminAction('mark_type_paid', 'booking', booking.id, { type })
+      logAdminAction('mark_type_paid', 'booking', booking.id, {
+        ...buildBookingContext(booking),
+        type,
+        items_count: pending.length,
+      })
 
       // 2. THEN: Try to generate fattura (non-blocking — payment is already marked)
       if (pending.length > 0) {
@@ -1158,7 +1199,7 @@ export default function UnpaidBookingsTab() {
       }).eq('id', booking.id)
       if (error) throw error
       toast.success('Tutto segnato come pagato!')
-      logAdminAction('mark_booking_extensions_paid', 'booking', booking.id)
+      logAdminAction('mark_booking_extensions_paid', 'booking', booking.id, buildBookingContext(booking))
 
       loadUnpaidBookings()
     } catch (err: unknown) {
@@ -1348,7 +1389,14 @@ export default function UnpaidBookingsTab() {
         toast.success(`Tutto pagato per ${group.customerName}!`)
       }
 
-      logAdminAction('mark_all_customer_paid', 'customer', group.customerKey)
+      logAdminAction('mark_all_customer_paid', 'customer', group.customerKey, {
+        customer: group.customerName,
+        noleggio_count: group.noleggioBookings.length,
+        prime_wash_count: group.primeWashBookings.length,
+        penalties_count: group.penaliItems.length,
+        danni_count: group.danniItems.length,
+        total: invoiceLineItems.reduce((sum, i) => sum + i.amount, 0),
+      })
       loadUnpaidBookings()
     } catch (err: unknown) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

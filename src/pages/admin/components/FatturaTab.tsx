@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { buildFatturaContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 
 interface Invoice {
@@ -103,7 +104,7 @@ export default function FatturaTab() {
     try {
       const { error } = await supabase.from('fatture').delete().eq('id', id)
       if (error) throw error
-      logAdminAction('delete_fattura', 'fattura', id)
+      logAdminAction('delete_fattura', 'fattura', id, buildFatturaContext(invoice))
       loadInvoices()
     } catch (error) {
       console.error('Error deleting invoice:', error)
@@ -125,7 +126,15 @@ export default function FatturaTab() {
       const { error } = await supabase.from('fatture').delete().in('id', selectedIds)
       if (error) throw error
       setSelectedIds([])
-      logAdminAction('bulk_delete_fatture', 'fattura', selectedIds.join(','))
+      {
+        const deleted = invoices.filter(i => selectedIds.includes(i.id))
+        logAdminAction('bulk_delete_fatture', 'fattura', selectedIds.join(','), {
+          count: deleted.length,
+          fatture: deleted.map(i => i.numero_fattura).join(', '),
+          customers: Array.from(new Set(deleted.map(i => i.customer_name).filter(Boolean))).join(', '),
+          total: deleted.reduce((sum, i) => sum + (i.importo_totale || 0), 0),
+        })
+      }
       loadInvoices()
     } catch (error) {
       console.error('Error bulk deleting invoices:', error)
@@ -219,7 +228,7 @@ export default function FatturaTab() {
         return
       }
       alert(`${result.message}`)
-      logAdminAction('create_nota_di_credito', 'fattura', invoice.id)
+      logAdminAction('create_nota_di_credito', 'fattura', invoice.id, buildFatturaContext(invoice))
       loadInvoices()
     } catch (error) {
       console.error('Error creating nota di credito:', error)
@@ -253,7 +262,7 @@ export default function FatturaTab() {
       if (!response.ok) {
         console.error('SDI send failed:', result.error, result.details)
       } else {
-        logAdminAction('send_sdi', 'fattura', invoice.id)
+        logAdminAction('send_sdi', 'fattura', invoice.id, buildFatturaContext(invoice))
       }
 
       loadInvoices()

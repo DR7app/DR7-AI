@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 
 interface DanniModalProps {
@@ -170,7 +171,13 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
             if (paymentStatus === 'paid' && paidAmount < cartTotal) {
                 // PARTIAL: save but no fattura
                 toast.success(`Danno registrato (Parziale: €${paidAmount.toFixed(2)} / €${cartTotal.toFixed(2)}) — fattura non generata`)
-                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, amountPaid: paidAmount, status: 'partial' })
+                logAdminAction('create_danni', 'booking', booking.id, {
+                  ...buildBookingContext(booking),
+                  amount: cartTotal,
+                  amountPaid: paidAmount,
+                  status: 'partial',
+                  items: cart.map(c => c.label).join(', '),
+                })
             } else if (isFullyPaid) {
                 // FULLY PAID: generate fattura + send to SDI
                 const response = await authFetch('/.netlify/functions/generate-penalty-invoice', {
@@ -209,7 +216,13 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 }
 
                 toast.success(`Fattura danni generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+                logAdminAction('create_danni', 'booking', booking.id, {
+                  ...buildBookingContext(booking),
+                  amount: cartTotal,
+                  status: paymentStatus,
+                  items: cart.map(c => c.label).join(', '),
+                  fattura_number: data?.invoice?.numero_fattura,
+                })
             } else if (paymentStatus === 'nexi_pay_by_link') {
                 // NEXI PAY BY LINK: generate link + send WhatsApp
                 try {
@@ -231,15 +244,27 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     if (linkRes.ok && linkData.paymentUrl) {
                         // Send WhatsApp to customer
                         const custPhone = booking.customer_phone
+                        const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
                         if (custPhone) {
-                            await fetch('/.netlify/functions/send-whatsapp-notification', {
+                            const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     customPhone: custPhone,
-                                    customMessage: `Gentile ${booking.customer_name},\n\nIn riferimento al contratto di noleggio, sono stati rilevati danni per un importo di €${cartTotal.toFixed(2)}.\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 1 ora.\n\nGrazie per la collaborazione.\n\nDR7`
+                                    templateKey: 'pro_richiesta_danni',
+                                    templateVars: {
+                                        '{customer_name}': booking.customer_name || 'Cliente',
+                                        '{amount}': cartTotal.toFixed(2),
+                                        '{link}': linkData.paymentUrl,
+                                        '{booking_ref}': bookingRef,
+                                    },
+                                    skipHeader: false,
                                 })
                             })
+                            const sendJson = await sendRes.json().catch(() => ({}))
+                            if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
+                                toast.error('Template mancante in Messaggi di Sistema Pro')
+                            }
                         }
 
                         // Copy link to clipboard
@@ -253,11 +278,21 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 } catch (linkErr: any) {
                     toast.error('Errore Pay by Link: ' + linkErr.message)
                 }
-                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: 'nexi_pay_by_link' })
+                logAdminAction('create_danni', 'booking', booking.id, {
+                  ...buildBookingContext(booking),
+                  amount: cartTotal,
+                  status: 'nexi_pay_by_link',
+                  items: cart.map(c => c.label).join(', '),
+                })
             } else {
                 // DA SALDARE: already saved above, just show toast
                 toast.success(`Danno registrato (Da Saldare) — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+                logAdminAction('create_danni', 'booking', booking.id, {
+                  ...buildBookingContext(booking),
+                  amount: cartTotal,
+                  status: paymentStatus,
+                  items: cart.map(c => c.label).join(', '),
+                })
             }
 
             setCart([]); setNote(''); setPhotos([]); setPhotoPreviewUrls([]); onSuccess(); onClose()

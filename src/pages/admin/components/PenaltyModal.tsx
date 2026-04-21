@@ -2,6 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 
 interface PenaltyModalProps {
@@ -207,7 +208,14 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 }
 
                 toast.success(`Fattura penale generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_penalty', 'booking', booking.id, { amount: cartTotal, status: paymentStatus, paymentMethod })
+                logAdminAction('create_penalty', 'booking', booking.id, {
+                  ...buildBookingContext(booking),
+                  amount: cartTotal,
+                  status: paymentStatus,
+                  paymentMethod,
+                  items: cart.map(c => c.label).join(', '),
+                  fattura_number: data?.invoice?.numero_fattura,
+                })
             } else if (paymentStatus === 'nexi_pay_by_link') {
                 // NEXI PAY BY LINK: save to booking_details + generate link + WhatsApp
                 const { data: currentBookingNexi, error: fetchErrNexi } = await supabase
@@ -258,15 +266,27 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                     const linkData = await linkRes.json()
 
                     if (linkRes.ok && linkData.paymentUrl) {
+                        const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
                         if (custPhone) {
-                            await fetch('/.netlify/functions/send-whatsapp-notification', {
+                            const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     customPhone: custPhone,
-                                    customMessage: `Gentile ${custName},\n\nIn riferimento al contratto di noleggio, sono state rilevate penali per un importo di €${cartTotal.toFixed(2)}.\n\nPer procedere al pagamento, clicchi sul seguente link sicuro:\n${linkData.paymentUrl}\n\n⚠️ Il link ha validità di 1 ora.\n\nGrazie per la collaborazione.\n\nDR7`
+                                    templateKey: 'pro_richiesta_penali',
+                                    templateVars: {
+                                        '{customer_name}': custName || 'Cliente',
+                                        '{amount}': cartTotal.toFixed(2),
+                                        '{link}': linkData.paymentUrl,
+                                        '{booking_ref}': bookingRef,
+                                    },
+                                    skipHeader: false,
                                 })
                             })
+                            const sendJson = await sendRes.json().catch(() => ({}))
+                            if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
+                                toast.error('Template mancante in Messaggi di Sistema Pro')
+                            }
                         }
                         try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
                         toast.success(`Pay by Link penali inviato! €${cartTotal.toFixed(2)}`)
@@ -277,7 +297,12 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 } catch (linkErr: any) {
                     toast.error('Errore Pay by Link: ' + linkErr.message)
                 }
-                logAdminAction('create_penalty', 'booking', booking.id, { amount: cartTotal, status: 'nexi_pay_by_link' })
+                logAdminAction('create_penalty', 'booking', booking.id, {
+                  ...buildBookingContext(booking),
+                  amount: cartTotal,
+                  status: 'nexi_pay_by_link',
+                  items: cart.map(c => c.label).join(', '),
+                })
             } else {
                 // DA SALDARE: save to booking_details.penalties[] (no fattura)
                 const { data: currentBooking, error: fetchErr } = await supabase
@@ -315,7 +340,12 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 if (updateErr) throw new Error('Errore nel salvataggio della penale.')
 
                 toast.success(`Penale registrata (Da Saldare) — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_penalty', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+                logAdminAction('create_penalty', 'booking', booking.id, {
+                  ...buildBookingContext(booking),
+                  amount: cartTotal,
+                  status: paymentStatus,
+                  items: cart.map(c => c.label).join(', '),
+                })
             }
 
             setCart([]); setNote(''); onSuccess(); onClose()
