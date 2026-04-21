@@ -1075,6 +1075,19 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       }
 
       if (tpl?.is_enabled && tpl.message_body) {
+        // Resolve insurance options and user-intent flags from the preventivo
+        // itself (not from the form), because this function is called from the
+        // list where the form may be empty or on a different vehicle.
+        const pVehicle = vehicles.find(v => v.id === p.vehicle_id)
+        const pInsOpts = getInsuranceOptionsForVehicle(
+          pVehicle,
+          (p.driver_tier as DriverTier) || 'TIER_2',
+          configOverlay,
+          rentalConfig
+        )
+        const extras = p.extras_detail as Record<string, unknown> | null
+        const pickedUnlimitedKm = !!extras?.include_unlimited_km || p.unlimited_km_total > 0
+
         // Build variables for substitution
         const specs = [
           p.vehicle_name,
@@ -1083,22 +1096,26 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
         ].filter(Boolean).join(' ')
 
+        const resolveInsLabel = () =>
+          pInsOpts.find(i => i.id === p.insurance_option)?.label
+          || (p.insurance_option ? String(p.insurance_option) : 'Kasko')
+
         // Build pricing lines
         let pricingLines = `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur((p.base_daily_rate) * p.rental_days)}`
-        if (p.insurance_total > 0) {
-          const insLabel = insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko'
-          pricingLines += `\n${insLabel} = ${formatEur(p.insurance_total)}`
+        if (p.insurance_option && p.insurance_total >= 0) {
+          pricingLines += `\n${resolveInsLabel()} = ${formatEur(p.insurance_total)}`
         }
         if (p.lavaggio_fee > 0) pricingLines += `\nLavaggio = ${formatEur(p.lavaggio_fee)}`
         if (p.no_cauzione_total > 0) pricingLines += `\nNo cauzione = ${formatEur(p.no_cauzione_total)}`
-        if (p.unlimited_km_total > 0) {
-          pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+        if (pickedUnlimitedKm) {
+          pricingLines += p.unlimited_km_total > 0
+            ? `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+            : `\nKm illimitati = Incluso`
         } else if (rentalConfig) {
           const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
           pricingLines += `\nKm inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}`
         }
         if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
-        const extras = p.extras_detail as Record<string, unknown> | null
         if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) pricingLines += `\nDR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}`
         if (extras?.delivery_fee && Number(extras.delivery_fee) > 0) pricingLines += `\nConsegna = ${formatEur(Number(extras.delivery_fee))}`
         if (extras?.pickup_fee && Number(extras.pickup_fee) > 0) pricingLines += `\nRitiro = ${formatEur(Number(extras.pickup_fee))}`
@@ -1113,7 +1130,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           rental_days: String(p.rental_days),
           daily_rate: formatEur(p.base_daily_rate),
           rental_total: formatEur((p.base_daily_rate) * p.rental_days),
-          insurance_line: p.insurance_total > 0 ? `${insuranceOptions.find(i => i.id === p.insurance_option)?.label || 'Kasko'} = ${formatEur(p.insurance_total)}` : '',
+          insurance_line: p.insurance_option ? `${resolveInsLabel()} = ${formatEur(p.insurance_total)}` : '',
           pricing_lines: pricingLines,
           subtotal: formatEur(p.subtotal),
           total: formatEur(p.total_final || p.subtotal),
@@ -1134,7 +1151,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           dropoff_time: p.dropoff_date
             ? new Date(p.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
             : '',
-          km_info: p.unlimited_km_total > 0 ? 'Illimitati' : (() => {
+          km_info: pickedUnlimitedKm ? 'Illimitati' : (() => {
             if (!rentalConfig) return ''
             const km = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
             return km === 'unlimited' ? 'Illimitati' : `${km} Km`
