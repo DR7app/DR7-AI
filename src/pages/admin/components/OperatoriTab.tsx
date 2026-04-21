@@ -444,9 +444,9 @@ export default function OperatoriTab() {
                             </td>
                             <td className="py-3 px-3 text-theme-text-muted text-xs">
                               {hasDetails ? (
-                                <span className="line-clamp-1">
-                                  {detailKeys.slice(0, 2).map(k => `${formatDetailKey(k)}: ${formatDetailValue(log.details[k])}`).join(' · ')}
-                                  {detailKeys.length > 2 && ` · +${detailKeys.length - 2}`}
+                                <span className="line-clamp-2">
+                                  {detailKeys.slice(0, 4).map(k => `${formatDetailKey(k)}: ${formatDetailValue(log.details[k])}`).join(' · ')}
+                                  {detailKeys.length > 4 && ` · +${detailKeys.length - 4}`}
                                 </span>
                               ) : '—'}
                             </td>

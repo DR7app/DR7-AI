@@ -11,6 +11,7 @@ interface SignatureRequest {
   contract_id: string | null
   signer_name: string
   signer_email: string
+  signer_phone: string | null
   status: string
   document_name: string | null
   document_url: string | null
@@ -18,6 +19,8 @@ interface SignatureRequest {
   signed_at: string | null
   created_at: string
   token_expires_at: string
+  sent_by_name?: string | null
+  sent_by_email?: string | null
   contract?: {
     contract_number: string
     customer_name: string
@@ -94,12 +97,36 @@ function DocumentiSubTab() {
     try {
       const { data, error } = await supabase
         .from('signature_requests')
-        .select('id, contract_id, signer_name, signer_email, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at')
+        .select('id, contract_id, signer_name, signer_email, signer_phone, status, document_name, document_url, signed_pdf_url, signed_at, created_at, token_expires_at')
         .order('created_at', { ascending: false })
         .limit(100)
 
       if (error) throw error
-      setRequests(data || [])
+      const reqs = (data || []) as SignatureRequest[]
+
+      // Look up sender (admin) for each request via admin_activity_log
+      if (reqs.length > 0) {
+        const ids = reqs.map(r => r.id)
+        const { data: logs } = await supabase
+          .from('admin_activity_log')
+          .select('entity_id, admin_name, admin_email')
+          .eq('action', 'send_trustera_document')
+          .in('entity_id', ids)
+
+        const senderMap = new Map<string, { name: string | null; email: string | null }>()
+        logs?.forEach(l => {
+          senderMap.set(l.entity_id, { name: l.admin_name, email: l.admin_email })
+        })
+        for (const r of reqs) {
+          const sender = senderMap.get(r.id)
+          if (sender) {
+            r.sent_by_name = sender.name
+            r.sent_by_email = sender.email
+          }
+        }
+      }
+
+      setRequests(reqs)
     } catch (err: unknown) {
       console.error('Failed to load signature requests:', err)
       toast.error('Errore caricamento richieste')
@@ -454,6 +481,18 @@ function DocumentiSubTab() {
                       <div>
                         <span className="text-theme-text-muted">Email:</span>
                         <p className="text-theme-text-primary">{req.signer_email}</p>
+                      </div>
+                      {req.signer_phone && (
+                        <div>
+                          <span className="text-theme-text-muted">Telefono:</span>
+                          <p className="text-theme-text-primary">{req.signer_phone}</p>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-theme-text-muted">Inviato da:</span>
+                        <p className="text-theme-text-primary">
+                          {req.sent_by_name || req.sent_by_email || <span className="text-theme-text-muted italic">—</span>}
+                        </p>
                       </div>
                       <div>
                         <span className="text-theme-text-muted">Inviato:</span>
