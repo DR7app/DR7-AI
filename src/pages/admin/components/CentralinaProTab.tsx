@@ -877,12 +877,10 @@ export default function CentralinaProTab() {
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
 
-    if (changesSnapshot.length > 0) {
-      logAdminAction('centralina_pro_updated', 'config', 'centralina_pro', {
-        changes_count: changesSnapshot.length,
-        changes: changesSnapshot,
-      })
-    }
+    logAdminAction('centralina_pro_updated', 'config', 'centralina_pro', {
+      changes_count: changesSnapshot.length,
+      changes: changesSnapshot.length > 0 ? changesSnapshot : ['(nessuna modifica rilevata)'],
+    })
   }
 
   function handleDiscard() {
