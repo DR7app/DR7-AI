@@ -7,6 +7,7 @@ import {
   type PricingInput,
   type PricingTrace,
 } from '../../src/utils/revenuePricingEngine'
+import { computeVehicleMonthlyRevenue } from './utils/vehicleRevenue'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -243,26 +244,23 @@ export const handler: Handler = async (event) => {
       calendarGapDays = Math.max(0, Math.floor((pickupMs - prevDropMs) / (1000 * 60 * 60 * 24)))
     }
 
-    // 3d. Vehicle monthly revenue — current calendar month (Europe/Rome), paid bookings only.
-    // Used by the per-vehicle target coefficient ("Spinta Veicolo"). Skipped when no
-    // target is configured for this vehicle to avoid unnecessary queries.
+    // 3d. Vehicle monthly revenue — SAME calculation the Report uses, so the
+    // per-vehicle target coefficient ("Spinta Veicolo") activates against the
+    // number the admin sees in Reports. Skipped when no target is configured
+    // for this vehicle to avoid the extra query.
     let vehicleMonthlyRevenueEur: number | undefined
     const hasTarget = !!config.vehicle_revenue_targets?.[vehicle.id]
     if (hasTarget) {
       const nowRome = new Date()
-      const monthStart = new Date(Date.UTC(nowRome.getUTCFullYear(), nowRome.getUTCMonth(), 1)).toISOString()
-      const monthEnd = new Date(Date.UTC(nowRome.getUTCFullYear(), nowRome.getUTCMonth() + 1, 1)).toISOString()
-      const { data: paidRows } = await supabase
-        .from('bookings')
-        .select('total_amount, payment_status, paid_at, created_at')
-        .eq('vehicle_id', vehicle.id)
-        .in('payment_status', ['paid', 'completed', 'succeeded'])
-        .gte('paid_at', monthStart)
-        .lt('paid_at', monthEnd)
-      vehicleMonthlyRevenueEur = (paidRows || []).reduce((sum, r: any) => {
-        const amt = Number(r.total_amount) || 0
-        return sum + amt
-      }, 0)
+      const year = nowRome.getUTCFullYear()
+      const monthNum = nowRome.getUTCMonth() + 1
+      const { totalRevenue } = await computeVehicleMonthlyRevenue(
+        supabase,
+        { id: vehicle.id, plate: vehicle.plate, display_name: vehicle.display_name },
+        year,
+        monthNum,
+      )
+      vehicleMonthlyRevenueEur = totalRevenue
     }
 
     // 4. Build pricing input and run the shared engine

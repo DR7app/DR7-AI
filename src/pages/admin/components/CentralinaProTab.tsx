@@ -2446,6 +2446,10 @@ function PrezzoDinamicoSection({
 }) {
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
   const [vehiclesLoading, setVehiclesLoading] = useState(true)
+  // Current-month revenue per vehicle, computed by the Report (same source of
+  // truth as what admins see under Reports). Drives the "raggiunto" indicator
+  // next to the per-vehicle monthly target.
+  const [vehicleRevenues, setVehicleRevenues] = useState<Record<string, number>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -2463,6 +2467,31 @@ function PrezzoDinamicoSection({
     return () => {
       cancelled = true
     }
+  }, [])
+
+  // Load current-month revenue per vehicle from monthly-report (same calc the
+  // admin sees under Reports → Utilizzo Flotta).
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const now = new Date()
+        const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        const res = await fetch(`/.netlify/functions/monthly-report?type=vehicles&month=${ym}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled || !data?.vehicles) return
+        const map: Record<string, number> = {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data.vehicles.forEach((v: any) => {
+          if (v.vehicleId) map[v.vehicleId] = typeof v.totalRevenue === 'number' ? v.totalRevenue : 0
+        })
+        setVehicleRevenues(map)
+      } catch {
+        // non-blocking: the UI falls back to a plain "—" for revenue
+      }
+    })()
+    return () => { cancelled = true }
   }, [])
 
   function patchDyn(p: Partial<DynamicPricingConfig>) {
@@ -2697,6 +2726,7 @@ function PrezzoDinamicoSection({
             vehicles={vehicles}
             vehicleTargets={config.dynamic.vehicle_revenue_targets}
             onChangeVehicleTargets={(map) => patchDyn({ vehicle_revenue_targets: map })}
+            vehicleRevenues={vehicleRevenues}
           />
 
           {/* Operating mode (Riempimento / Equilibrio / Protezione / Auto) */}
@@ -2786,7 +2816,7 @@ function NamedCoefficientTable({
 // ── Promo Push with active-level selector ──
 function PromoPushSection({
   coefficients, activeLevel, onChangeCoefficients, onChangeActiveLevel,
-  vehicles, vehicleTargets, onChangeVehicleTargets,
+  vehicles, vehicleTargets, onChangeVehicleTargets, vehicleRevenues,
 }: {
   coefficients: NamedCoeff[]
   activeLevel: string
@@ -2795,6 +2825,7 @@ function PromoPushSection({
   vehicles: FleetVehicle[]
   vehicleTargets: Record<string, VehicleRevenueTarget>
   onChangeVehicleTargets: (map: Record<string, VehicleRevenueTarget>) => void
+  vehicleRevenues: Record<string, number>
 }) {
   function patchTarget(vid: string, p: Partial<VehicleRevenueTarget>) {
     const prev = vehicleTargets[vid] || { min_revenue: '', coeff: '' }
@@ -2854,19 +2885,43 @@ function PromoPushSection({
           </p>
         ) : (
           <div className="space-y-2">
-            <div className="grid grid-cols-[2fr_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
+            <div className="grid grid-cols-[2fr_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
               <span>Modello auto</span>
-              <span className="text-right">Incasso minimo mese (€)</span>
+              <span className="text-right">Incasso mese corrente</span>
+              <span className="text-right">Incasso minimo (€)</span>
               <span className="text-right">Coeff.</span>
             </div>
             <div className="max-h-[500px] overflow-y-auto -mx-1 px-1 space-y-2">
               {vehicles.map(v => {
                 const t = vehicleTargets[v.id] || { min_revenue: '', coeff: '' }
+                const currentRevenue = vehicleRevenues[v.id]
+                const minRevenueNum = typeof t.min_revenue === 'number' ? t.min_revenue : null
+                const hasTarget = minRevenueNum !== null && minRevenueNum > 0
+                const hasRevenue = typeof currentRevenue === 'number'
+                const reached = hasTarget && hasRevenue && (currentRevenue as number) >= (minRevenueNum as number)
+                const missing = hasTarget && hasRevenue ? Math.max(0, (minRevenueNum as number) - (currentRevenue as number)) : 0
+
                 return (
-                  <div key={v.id} className="grid grid-cols-[2fr_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center">
+                  <div key={v.id} className="grid grid-cols-[2fr_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center">
                     <div className="min-w-0">
                       <div className="text-[14px] text-[#1d1d1f] font-medium truncate">{v.display_name}</div>
                       <div className="text-[11px] text-[#a1a1a6] font-mono">{v.plate || '— senza targa'}</div>
+                    </div>
+                    <div className="text-right">
+                      {hasRevenue ? (
+                        <>
+                          <div className={`text-[13px] font-semibold ${reached ? 'text-green-600' : 'text-[#1d1d1f]'}`}>
+                            €{(currentRevenue as number).toFixed(0)}
+                          </div>
+                          {hasTarget && (
+                            <div className={`text-[11px] ${reached ? 'text-green-600' : 'text-[#a1a1a6]'}`}>
+                              {reached ? '✓ raggiunto' : `mancano €${missing.toFixed(0)}`}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[11px] text-[#a1a1a6]">—</span>
+                      )}
                     </div>
                     <PriceBox
                       value={t.min_revenue}
