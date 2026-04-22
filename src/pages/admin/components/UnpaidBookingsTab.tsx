@@ -1733,9 +1733,17 @@ export default function UnpaidBookingsTab() {
 
     let groups = Array.from(groupMap.values())
 
-    // Apply filter
+    // Apply filter. Penali belong to the rental tab (they are billed against a
+    // rental), danni likewise. A customer whose main rental is already PAID but
+    // has an outstanding penale/danno (e.g. Nexi Pay by Link still in flight)
+    // must still appear here — otherwise the "In attesa di pagamento" item is
+    // invisible and the admin thinks the link was never sent.
     if (filterService === 'rental') {
-      groups = groups.filter(g => g.noleggioBookings.length > 0)
+      groups = groups.filter(g =>
+        g.noleggioBookings.length > 0
+        || g.penaliItems.length > 0
+        || g.danniItems.length > 0
+      )
     } else if (filterService === 'prime_wash') {
       groups = groups.filter(g => g.primeWashBookings.length > 0)
     }
