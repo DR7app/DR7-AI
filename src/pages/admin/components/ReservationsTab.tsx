@@ -4400,10 +4400,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '{insurance}': formData.insurance_option || 'KASKO_BASE',
             '{deposit}': parseFloat(formData.deposit) > 0 ? `€${parseFloat(formData.deposit).toFixed(2)}` : '€0',
             '{km_info}': (() => {
+              // 1. Form says unlimited → Illimitati
               if (formData.unlimited_km) return 'Illimitati'
-              // Prefer the value stored on the booking (saved above), then formData,
-              // finally fall back to getKmIncluded or the engine default so the
-              // template never renders "0 km" just because one source is missing.
+              // 2. Freshly-saved booking has unlimited flag set → Illimitati (covers edits
+              //    where the original booking was unlimited but form state got out of sync)
+              if (insertedBooking?.booking_details?.unlimited_km === true) return 'Illimitati'
+              // 3. Original pre-edit booking had unlimited — if the user didn't explicitly
+              //    toggle it off in the form, preserve it rather than writing 0 km.
+              if (editingId) {
+                const orig = bookings.find(b => b.id === editingId)
+                if (orig?.booking_details?.unlimited_km === true || orig?.booking_details?.km_limit === 'Illimitati') {
+                  return 'Illimitati'
+                }
+              }
               const fromBooking = insertedBooking?.booking_details?.km_limit
               if (fromBooking === 'Illimitati') return 'Illimitati'
               const candidates = [
