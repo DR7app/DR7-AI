@@ -22,25 +22,64 @@ interface MessageTemplate {
 }
 
 /**
- * Fallback label fragments. When a predefined pro_* slot is missing or
- * empty but the admin has created a custom template (pro_custom_<slug>_<ts>)
- * with a label matching one of these fragments, we route to that custom
- * template instead of skipping. This keeps customer-facing messages flowing
- * when the admin filled a custom card ("Link Pagamento") instead of the
- * predefined slot.
+ * Fallback label matchers. Each entry is an ordered list of AND-groups:
+ * the FIRST group where all fragments are present in the template's label
+ * wins. This lets a specific template ("Link pagamento penali e danni")
+ * beat a generic one ("Link Pagamento") for the penali flow, while the
+ * generic "Link Pagamento" still serves the plain pay-by-link flow.
  */
-const LABEL_FALLBACKS: Record<string, string[]> = {
-  pro_richiesta_pagamento: ['link pagamento', 'richiesta pagamento', 'invio link pagamento', 'pay by link', 'payment link'],
-  pro_modifica_noleggio: ['modifica noleggio', 'modifica prenotazione', 'modifica rental', 'modifica rent'],
-  pro_modifica_lavaggio: ['modifica lavaggio', 'modifica prime wash', 'modifica primewash', 'modifica wash'],
-  // Penali / Danni / Addebito / Estensione — admins typically keep ONE generic
-  // "Link Pagamento" template for every paid-by-link flow. If no dedicated
-  // pro_richiesta_penali (etc.) row exists, fall back to the payment-link label.
-  pro_richiesta_penali: ['link pagamento', 'richiesta pagamento', 'penal', 'pay by link', 'payment link'],
-  pro_richiesta_danni: ['link pagamento', 'richiesta pagamento', 'dann', 'pay by link', 'payment link'],
-  pro_richiesta_danni_penali: ['link pagamento', 'richiesta pagamento', 'dann', 'penal', 'pay by link', 'payment link'],
-  pro_richiesta_addebito: ['link pagamento', 'richiesta pagamento', 'addebit', 'pay by link', 'payment link'],
-  pro_richiesta_estensione: ['link pagamento', 'richiesta pagamento', 'estension', 'pay by link', 'payment link'],
+const LABEL_FALLBACKS: Record<string, string[][]> = {
+  pro_richiesta_pagamento: [
+    ['link pagamento'],
+    ['richiesta pagamento'],
+    ['invio link pagamento'],
+    ['pay by link'],
+    ['payment link'],
+  ],
+  pro_modifica_noleggio: [
+    ['modifica', 'noleggio'],
+    ['modifica', 'prenotazione'],
+    ['modifica', 'rental'],
+    ['modifica', 'rent'],
+  ],
+  pro_modifica_lavaggio: [
+    ['modifica', 'lavaggio'],
+    ['modifica', 'prime wash'],
+    ['modifica', 'primewash'],
+    ['modifica', 'wash'],
+  ],
+  // Penali / Danni — prefer a template whose label explicitly mentions the
+  // word, then fall through to a generic "Link Pagamento".
+  pro_richiesta_penali: [
+    ['link', 'pagamento', 'penal'],      // "Link pagamento penali e danni"
+    ['penal'],
+    ['link pagamento'],
+    ['pay by link'],
+  ],
+  pro_richiesta_danni: [
+    ['link', 'pagamento', 'dann'],        // "Link pagamento penali e danni"
+    ['dann'],
+    ['link pagamento'],
+    ['pay by link'],
+  ],
+  pro_richiesta_danni_penali: [
+    ['link', 'pagamento', 'dann', 'penal'], // most specific: both keywords
+    ['link', 'pagamento', 'penal'],
+    ['link', 'pagamento', 'dann'],
+    ['dann'],
+    ['penal'],
+    ['link pagamento'],
+  ],
+  pro_richiesta_addebito: [
+    ['link', 'pagamento', 'addebit'],
+    ['addebit'],
+    ['link pagamento'],
+  ],
+  pro_richiesta_estensione: [
+    ['link', 'pagamento', 'estension'],
+    ['estension'],
+    ['link pagamento'],
+  ],
 }
 
 /**
@@ -133,14 +172,20 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
   const resolveWithLabelFallback = async (proKey: string, templates: MessageTemplate[]): Promise<string | null> => {
     const pro = templates.find(t => t.message_key === proKey)
     if (pro && pro.is_enabled && pro.message_body) return proKey
-    const fragments = LABEL_FALLBACKS[proKey]
-    if (fragments && fragments.length) {
-      const match = templates.find(t => {
-        if (!t.is_enabled || !t.message_body) return false
-        const lbl = (t.label || '').toLowerCase()
-        return fragments.some(f => lbl.includes(f))
-      })
-      if (match) return match.message_key
+    const groups = LABEL_FALLBACKS[proKey]
+    if (groups && groups.length) {
+      const enabled = templates.filter(t => t.is_enabled && t.message_body && t.label)
+      // Try each AND-group in order. First group where a template has ALL
+      // fragments in its lowercase label wins. More-specific groups are
+      // listed first in LABEL_FALLBACKS so they take priority over generic
+      // fallbacks like ['link pagamento'].
+      for (const group of groups) {
+        const match = enabled.find(t => {
+          const lbl = (t.label || '').toLowerCase()
+          return group.every(f => lbl.includes(f))
+        })
+        if (match) return match.message_key
+      }
     }
     return null
   }
