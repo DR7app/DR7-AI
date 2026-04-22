@@ -18,6 +18,21 @@ interface MessageTemplate {
   message_body: string
   is_enabled: boolean
   include_header: boolean
+  label?: string
+}
+
+/**
+ * Fallback label fragments. When a predefined pro_* slot is missing or
+ * empty but the admin has created a custom template (pro_custom_<slug>_<ts>)
+ * with a label matching one of these fragments, we route to that custom
+ * template instead of skipping. This keeps customer-facing messages flowing
+ * when the admin filled a custom card ("Link Pagamento") instead of the
+ * predefined slot.
+ */
+const LABEL_FALLBACKS: Record<string, string[]> = {
+  pro_richiesta_pagamento: ['link pagamento', 'richiesta pagamento', 'invio link pagamento', 'pay by link', 'payment link'],
+  pro_modifica_noleggio: ['modifica noleggio', 'modifica prenotazione', 'modifica rental', 'modifica rent'],
+  pro_modifica_lavaggio: ['modifica lavaggio', 'modifica prime wash', 'modifica primewash', 'modifica wash'],
 }
 
 /**
@@ -102,16 +117,36 @@ export interface RenderContext {
  */
 export async function resolveKeyForContext(key: string, _context?: RenderContext): Promise<string | null> {
   void _context
-  if (key.startsWith('pro_')) return key
   if (key === 'message_wrapper_header' || key === 'message_wrapper_footer') return key
+
+  // Helper: if the chosen pro_* key has no enabled+non-empty row, try a
+  // label-based match against custom (pro_custom_*) templates the admin
+  // may have created.
+  const resolveWithLabelFallback = async (proKey: string, templates: MessageTemplate[]): Promise<string | null> => {
+    const pro = templates.find(t => t.message_key === proKey)
+    if (pro && pro.is_enabled && pro.message_body) return proKey
+    const fragments = LABEL_FALLBACKS[proKey]
+    if (fragments && fragments.length) {
+      const match = templates.find(t => {
+        if (!t.is_enabled || !t.message_body) return false
+        const lbl = (t.label || '').toLowerCase()
+        return fragments.some(f => lbl.includes(f))
+      })
+      if (match) return match.message_key
+    }
+    return null
+  }
+
+  const templates = await loadAllTemplates()
+
+  if (key.startsWith('pro_')) {
+    // Allow label-based fallback for predefined pro_* slots that are empty.
+    return await resolveWithLabelFallback(key, templates)
+  }
 
   const proKey = OLD_TO_PRO[key]
   if (!proKey) return null
-
-  const templates = await loadAllTemplates()
-  const pro = templates.find(t => t.message_key === proKey)
-  if (!pro || !pro.is_enabled || !pro.message_body) return null
-  return proKey
+  return await resolveWithLabelFallback(proKey, templates)
 }
 
 // No cache — admin edits to Pro templates must take effect on the very next
@@ -124,7 +159,7 @@ async function loadAllTemplates(): Promise<MessageTemplate[]> {
     const supabase = createClient(supabaseUrl, supabaseKey)
     const { data, error } = await supabase
       .from('system_messages')
-      .select('message_key, message_body, is_enabled, include_header')
+      .select('message_key, message_body, is_enabled, include_header, label')
     if (error) throw error
     return data || []
   } catch {
