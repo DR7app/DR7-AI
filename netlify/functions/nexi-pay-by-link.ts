@@ -184,13 +184,13 @@ const handler: Handler = async (event) => {
 
         if (dbError) console.error('[nexi-pay-by-link] DB error:', dbError);
 
-        // ─── Update booking with expiration tracking ────────────────────
-        if (bookingId) {
-            await supabase.from('bookings').update({
-                booking_details: supabase.rpc ? undefined : undefined, // Will be updated by caller
-            }).eq('id', bookingId);
-            // Note: the caller (ReservationsTab) updates booking_details with the link
-        }
+        // Note: the caller (ReservationsTab / PenaltyModal / DanniModal) writes
+        // booking_details with the payment link + pending penali/danni entries
+        // BEFORE invoking this function. Previously this block did
+        // `.update({ booking_details: undefined })` which could wipe the
+        // freshly-saved booking_details — removed to prevent penali/danni
+        // with nexi_pay_by_link status from vanishing before they reach the
+        // "In attesa di pagamento" list.
 
         // ─── Return with exact expiration timestamps ────────────────────
         return {
