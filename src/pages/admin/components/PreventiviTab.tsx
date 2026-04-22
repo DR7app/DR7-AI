@@ -1884,9 +1884,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
   // ═══ FORM VIEW (Nuovo / Modifica Preventivo) ═══
   return (
-    // Desktop layout unchanged. Mobile: sticky top nav + extra bottom padding
-    // so the sticky action bar we render further down doesn't cover content.
-    <div className="space-y-6 pb-[120px] sm:pb-0">
+    // Desktop layout unchanged. Mobile: sticky top nav + inline action row
+    // at the end of the form (no fixed bottom bar — too fragile across
+    // different webview/drawer layouts).
+    <div className="space-y-6">
       {/* Mobile iOS-style nav bar (< 640px) */}
       <div className="sm:hidden sticky top-0 -mx-4 px-4 py-3 bg-theme-bg-primary/90 backdrop-blur-md border-b border-theme-border z-30 flex items-center justify-between">
         <button
@@ -2360,12 +2361,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         </div>
       </div>
 
-      {/* Desktop actions (≥ 640px) — unchanged */}
-      <div className="hidden sm:flex gap-3 justify-end">
-        <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Annulla</Button>
-        <Button disabled={saving || !form.vehicle_id || rentalDays < 1} onClick={() => handleSave(false)}>
-          {saving ? 'Salvataggio...' : (editingId ? 'Aggiorna Preventivo' : 'Salva Preventivo')}
-        </Button>
+      {/* Actions — single inline block, responsive on its own.
+          Mobile (< 640px): full-width stacked, primary CTA on top, Annulla at
+          bottom. Desktop (≥ 640px): right-aligned horizontal row, Annulla left. */}
+      <div className="flex flex-col sm:flex-row sm:gap-3 sm:justify-end gap-2 pt-2">
         {!editingId && (
           <Button
             disabled={
@@ -2377,6 +2376,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               !customers.find((c: any) => c.id === selectedCustomerId)?.phone
             }
             onClick={() => handleSave(true)}
+            className="w-full sm:w-auto order-1"
             title={
               !selectedCustomerId
                 ? 'Seleziona un cliente sopra (campo Fascia)'
@@ -2388,37 +2388,20 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             {saving || sendingWhatsapp ? 'Invio...' : 'Salva e invia'}
           </Button>
         )}
-      </div>
-
-      {/* Mobile sticky bottom action bar (< 640px) — iOS-style translucent
-          toolbar with live total on the left, primary action on the right.
-          Stays visible as the admin scrolls the form. */}
-      <div className="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-theme-bg-primary/95 backdrop-blur-md border-t border-theme-border pb-[env(safe-area-inset-bottom)]">
-        <div className="px-4 py-3 flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Totale finale</div>
-            <div className="text-[19px] font-bold text-dr7-gold truncate tabular-nums">{formatEur(pricing.totalFinal)}</div>
-          </div>
-          {!editingId && selectedCustomerId && customers.find((c: any) => c.id === selectedCustomerId)?.phone ? (
-            <button
-              type="button"
-              disabled={saving || sendingWhatsapp || !form.vehicle_id || rentalDays < 1}
-              onClick={() => handleSave(true)}
-              className="shrink-0 px-4 h-11 rounded-full bg-dr7-gold text-black text-[15px] font-semibold disabled:opacity-40 active:opacity-70"
-            >
-              {saving || sendingWhatsapp ? 'Invio…' : 'Salva e invia'}
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={saving || !form.vehicle_id || rentalDays < 1}
-              onClick={() => handleSave(false)}
-              className="shrink-0 px-4 h-11 rounded-full bg-dr7-gold text-black text-[15px] font-semibold disabled:opacity-40 active:opacity-70"
-            >
-              {saving ? 'Salvataggio…' : (editingId ? 'Aggiorna' : 'Salva')}
-            </button>
-          )}
-        </div>
+        <Button
+          disabled={saving || !form.vehicle_id || rentalDays < 1}
+          onClick={() => handleSave(false)}
+          className="w-full sm:w-auto order-2"
+        >
+          {saving ? 'Salvataggio...' : (editingId ? 'Aggiorna Preventivo' : 'Salva Preventivo')}
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => { setView('list'); setEditingId(null); resetForm() }}
+          className="w-full sm:w-auto order-3 sm:-order-1"
+        >
+          Annulla
+        </Button>
       </div>
 
       {/* No-Cauzione OTP — reuses the shared LimitationOverrideModal pattern */}
