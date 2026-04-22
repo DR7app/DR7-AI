@@ -2866,14 +2866,16 @@ function PromoPushSection({
   }
 
   function commitTiers(vid: string, nextTiers: VehicleRevenueTier[]) {
-    // Drop entries whose both fields are empty to keep storage tidy.
-    const cleaned = nextTiers.filter(t => !(t.min_revenue === '' && t.coeff === ''))
-    if (cleaned.length === 0) {
+    // Keep empty tiers as-is while the admin is editing — an all-empty row is
+    // simply a newly-added threshold waiting for input. The engine already skips
+    // half-configured tiers at runtime, so there's no risk of them affecting
+    // pricing. Admins remove unwanted rows explicitly via the "−" button.
+    if (nextTiers.length === 0) {
       const { [vid]: _drop, ...rest } = vehicleTargets
       void _drop
       onChangeVehicleTargets(rest)
     } else {
-      onChangeVehicleTargets({ ...vehicleTargets, [vid]: { tiers: cleaned } })
+      onChangeVehicleTargets({ ...vehicleTargets, [vid]: { tiers: nextTiers } })
     }
   }
 
