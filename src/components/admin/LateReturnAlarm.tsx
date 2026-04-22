@@ -173,20 +173,35 @@ const LateReturnAlarm: React.FC = () => {
             // Use 'completata' — the project's standard completion status (recognized by
             // availability, reports, and the alarm filter). 'returned' was a custom value
             // only this component used, invisible to the rest of the system.
-            const { error } = await supabase.from('bookings').update({ status: 'completata' }).eq('id', bookingId);
+            // We .select() so a 0-row result (RLS silently filtered the update) is
+            // visible instead of looking like success.
+            const { data, error } = await supabase
+                .from('bookings')
+                .update({ status: 'completata' })
+                .eq('id', bookingId)
+                .select('id');
 
             if (error) {
                 console.error('Error marking booking as returned:', error);
-                toast.error('Failed to mark booking as returned');
+                toast.error(`Errore: ${error.message || 'impossibile aggiornare la prenotazione'}`, { duration: 8000 });
+                return;
+            }
+
+            if (!data || data.length === 0) {
+                // RLS returned 0 rows → update didn't land. Surface this clearly.
+                console.error('Mark-as-returned: 0 rows updated for booking', bookingId);
+                toast.error('Prenotazione non aggiornata — controlla i permessi amministratore', { duration: 8000 });
                 return;
             }
 
             const updated = lateBookings.filter((b) => b.id !== bookingId);
             setLateBookings(updated);
             if (updated.length === 0) setIsAlarmActive(false);
+            toast.success('Prenotazione segnata come rientrata');
         } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
             console.error('Error updating booking:', err);
-            toast.error('Failed to mark booking as returned');
+            toast.error(`Errore: ${errMsg}`, { duration: 8000 });
         }
     };
 
