@@ -1880,60 +1880,81 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         )}
         </>}
 
-        {/* Phone Modal */}
+        {/* Phone Modal — iOS-style sheet on mobile, centred card on desktop.
+            Structure: sticky header + scrollable body + sticky action bar so
+            the action buttons are always reachable even when the preview is
+            very long. */}
         {showPhoneModal && selectedPreventivo && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-            <div className="bg-theme-bg-secondary rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
-              <h3 className="text-lg font-bold text-theme-text-primary">Invia Preventivo via WhatsApp</h3>
-              <p className="text-sm text-theme-text-muted">{selectedPreventivo.vehicle_name} - {formatEur(selectedPreventivo.total_final)}</p>
-
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Cerca Cliente</label>
-                <CustomerAutocomplete
-                  customers={customers}
-                  selectedCustomerId={selectedCustomerId}
-                  onSelectCustomer={(id) => {
-                    setSelectedCustomerId(id)
-                    const c = customers.find((c: any) => c.id === id)
-                    if (c?.phone) setWhatsappPhone(c.phone)
-                  }}
-                  placeholder="Nome, email o telefono..."
-                  required={false}
-                />
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
+            <div className="bg-theme-bg-secondary w-full sm:max-w-md sm:mx-4 sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[92vh] sm:max-h-[85vh]">
+              {/* Sticky header */}
+              <div className="shrink-0 px-5 pt-4 pb-3 border-b border-theme-border flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-[17px] font-semibold text-theme-text-primary">Invia Preventivo via WhatsApp</h3>
+                  <p className="text-[12px] text-theme-text-muted truncate">{selectedPreventivo.vehicle_name} · {formatEur(selectedPreventivo.total_final)}</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Chiudi"
+                  onClick={() => { setShowPhoneModal(false); setWhatsappPhone('') }}
+                  className="shrink-0 w-8 h-8 rounded-full bg-theme-bg-tertiary text-theme-text-muted flex items-center justify-center text-[18px] leading-none active:opacity-60"
+                >
+                  ×
+                </button>
               </div>
 
-              <Input
-                label="Numero di Telefono"
-                type="tel"
-                value={whatsappPhone}
-                onChange={(e) => setWhatsappPhone(e.target.value)}
-                placeholder="393xxxxxxxxx"
-              />
+              {/* Scrollable body — all form content lives here */}
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Cerca Cliente</label>
+                  <CustomerAutocomplete
+                    customers={customers}
+                    selectedCustomerId={selectedCustomerId}
+                    onSelectCustomer={(id) => {
+                      setSelectedCustomerId(id)
+                      const c = customers.find((c: any) => c.id === id)
+                      if (c?.phone) setWhatsappPhone(c.phone)
+                    }}
+                    placeholder="Nome, email o telefono..."
+                    required={false}
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Messaggio (modificabile prima dell'invio)</label>
-                <textarea
-                  value={previewMessage}
-                  onChange={(e) => setPreviewMessage(e.target.value)}
-                  rows={14}
-                  className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap font-mono focus:outline-none focus:ring-1 focus:ring-dr7-gold resize-y"
+                <Input
+                  label="Numero di Telefono"
+                  type="tel"
+                  value={whatsappPhone}
+                  onChange={(e) => setWhatsappPhone(e.target.value)}
+                  placeholder="393xxxxxxxxx"
                 />
-                <p className="text-[11px] text-theme-text-muted mt-1">
-                  Template caricato da {(selectedPreventivo.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'} in Messaggi di Sistema Pro. Puoi modificarlo qui per questo singolo invio.
-                </p>
 
-                <label className="block text-sm font-medium text-theme-text-secondary mt-3 mb-1">Anteprima formattata (come la vedrà il cliente su WhatsApp)</label>
-                <div
-                  className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap break-words"
-                  dangerouslySetInnerHTML={{ __html: renderWhatsAppHtml(previewMessage) }}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Messaggio (modificabile prima dell'invio)</label>
+                  <textarea
+                    value={previewMessage}
+                    onChange={(e) => setPreviewMessage(e.target.value)}
+                    rows={10}
+                    className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap font-mono focus:outline-none focus:ring-1 focus:ring-dr7-gold resize-y"
+                  />
+                  <p className="text-[11px] text-theme-text-muted mt-1">
+                    Template caricato da {(selectedPreventivo.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'} in Messaggi di Sistema Pro.
+                  </p>
+
+                  <label className="block text-sm font-medium text-theme-text-secondary mt-3 mb-1">Anteprima formattata</label>
+                  <div
+                    className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap break-words"
+                    dangerouslySetInnerHTML={{ __html: renderWhatsAppHtml(previewMessage) }}
+                  />
+                </div>
               </div>
 
-              <div className="flex gap-2 justify-end">
-                <Button variant="secondary" onClick={() => { setShowPhoneModal(false); setWhatsappPhone('') }}>
+              {/* Sticky action bar — always reachable */}
+              <div className="shrink-0 px-5 py-3 border-t border-theme-border bg-theme-bg-secondary flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+                <Button variant="secondary" className="w-full sm:w-auto" onClick={() => { setShowPhoneModal(false); setWhatsappPhone('') }}>
                   Annulla
                 </Button>
                 <Button
+                  className="w-full sm:w-auto"
                   disabled={!whatsappPhone.trim() || !previewMessage.trim() || sendingWhatsapp}
                   onClick={() => handleSendWhatsApp(selectedPreventivo, whatsappPhone.trim(), previewMessage)}
                 >
