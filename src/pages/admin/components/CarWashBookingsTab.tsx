@@ -780,11 +780,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           body: JSON.stringify({
             customPhone: custPhone,
             templateKey: 'pro_richiesta_pagamento',
-            templateVars: {
-              customer_name: custName,
-              amount: totalEur,
-              link: linkData.paymentUrl,
-            },
+            templateVars: (() => {
+              // Keys WITH braces + tutti gli alias — come pro_richiesta_pagamento
+              // può usare {amount}|{total}|{importo} e {link}|{payment_link}
+              // nel corpo, passiamo ogni variante.
+              const amtStr = typeof totalEur === 'number' ? totalEur.toFixed(2) : String(totalEur)
+              return {
+                '{customer_name}': custName,
+                '{nome}': (custName || '').split(' ')[0] || 'Cliente',
+                '{amount}': amtStr,
+                '{total}': amtStr,
+                '{importo}': amtStr,
+                '{link}': linkData.paymentUrl,
+                '{payment_link}': linkData.paymentUrl,
+              }
+            })(),
             skipHeader: true,
           })
         })

@@ -380,15 +380,39 @@ export default function CauzioniTab() {
                 // Send via WhatsApp first (priority)
                 const phone = cauzione.cliente_telefono
                 if (phone) {
-                    await fetch('/.netlify/functions/send-whatsapp-notification', {
+                    const contractRef = (cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'
+                    const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: phone,
-                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nLe ricordiamo che la Preautorizzazione per la cauzione riferita alla prenotazione #${(cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'} è ancora in sospeso.\n\nPer completare il pagamento di €${Number(cauzione.importo).toFixed(2)}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nNel frattempo può registrarsi gratuitamente sul nostro sito,\nricevere subito 10€ spendibile nel wallet e beneficiare subito dei nostri sconti:\n\n➡️ www.dr7empire.com`
+                            templateKey: 'pro_richiesta_cauzione',
+                            templateVars: (() => {
+                                const customerName = cauzione.cliente_nome || 'Cliente'
+                                const amountStr = Number(cauzione.importo).toFixed(2)
+                                return {
+                                    '{customer_name}': customerName,
+                                    '{nome}': customerName.split(' ')[0] || 'Cliente',
+                                    '{amount}': amountStr,
+                                    '{total}': amountStr,
+                                    '{importo}': amountStr,
+                                    '{link}': result.paymentUrl,
+                                    '{payment_link}': result.paymentUrl,
+                                    '{contract_ref}': contractRef,
+                                    '{contratto}': contractRef,
+                                    '{booking_ref}': contractRef,
+                                    '{booking_id}': contractRef,
+                                }
+                            })(),
+                            skipHeader: false,
                         })
                     })
-                    toast.success('Link cauzione inviato via WhatsApp al cliente!')
+                    const sendJson = await sendRes.json().catch(() => ({}))
+                    if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
+                        toast.error('Template mancante in Messaggi di Sistema Pro')
+                    } else {
+                        toast.success('Link cauzione inviato via WhatsApp al cliente!')
+                    }
                 } else {
                     // No phone — copy to clipboard as fallback
                     try {
@@ -439,15 +463,39 @@ export default function CauzioniTab() {
                 // Send via WhatsApp with full branded message
                 const phone = cauzione.cliente_telefono
                 if (phone) {
-                    await fetch('/.netlify/functions/send-whatsapp-notification', {
+                    const contractRef = (cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'
+                    const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: phone,
-                            customMessage: `Gentile ${cauzione.cliente_nome || 'Cliente'},\n\nLe ricordiamo che la Preautorizzazione per la cauzione riferita alla prenotazione #${(cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'} è ancora in sospeso.\n\nPer completare il pagamento di €${Number(cauzione.importo).toFixed(2)}, clicchi sul seguente link sicuro:\n${result.paymentUrl}\n\n⚠️ Il link scade tra 1 ora. In assenza di pagamento, la prenotazione verrà automaticamente annullata.\n\nIl pagamento implica accettazione delle condizioni sopra indicate, delle condizioni contrattuali DR7, nonché dichiarazione di utilizzo di carta intestata o comunque autorizzata dal titolare.\n\nGrazie per la collaborazione.\n\nNel frattempo può registrarsi gratuitamente sul nostro sito,\nricevere subito 10€ spendibile nel wallet e beneficiare subito dei nostri sconti:\n\n➡️ www.dr7empire.com`
+                            templateKey: 'pro_richiesta_cauzione',
+                            templateVars: (() => {
+                                const customerName = cauzione.cliente_nome || 'Cliente'
+                                const amountStr = Number(cauzione.importo).toFixed(2)
+                                return {
+                                    '{customer_name}': customerName,
+                                    '{nome}': customerName.split(' ')[0] || 'Cliente',
+                                    '{amount}': amountStr,
+                                    '{total}': amountStr,
+                                    '{importo}': amountStr,
+                                    '{link}': result.paymentUrl,
+                                    '{payment_link}': result.paymentUrl,
+                                    '{contract_ref}': contractRef,
+                                    '{contratto}': contractRef,
+                                    '{booking_ref}': contractRef,
+                                    '{booking_id}': contractRef,
+                                }
+                            })(),
+                            skipHeader: false,
                         })
                     })
-                    toast.success('Link cauzione inviato via WhatsApp!')
+                    const sendJson = await sendRes.json().catch(() => ({}))
+                    if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
+                        toast.error('Template mancante in Messaggi di Sistema Pro')
+                    } else {
+                        toast.success('Link cauzione inviato via WhatsApp!')
+                    }
                 } else {
                     toast.success('Link cauzione creato e copiato!')
                 }

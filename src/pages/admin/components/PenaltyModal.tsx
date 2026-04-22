@@ -274,12 +274,22 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                 body: JSON.stringify({
                                     customPhone: custPhone,
                                     templateKey: 'pro_richiesta_penali',
-                                    templateVars: {
-                                        '{customer_name}': custName || 'Cliente',
-                                        '{amount}': cartTotal.toFixed(2),
-                                        '{link}': linkData.paymentUrl,
-                                        '{booking_ref}': bookingRef,
-                                    },
+                                    templateVars: (() => {
+                                        const customerName = custName || 'Cliente'
+                                        const amountStr = cartTotal.toFixed(2)
+                                        return {
+                                            '{customer_name}': customerName,
+                                            '{nome}': customerName.split(' ')[0] || 'Cliente',
+                                            '{amount}': amountStr,
+                                            '{total}': amountStr,
+                                            '{importo}': amountStr,
+                                            '{link}': linkData.paymentUrl,
+                                            '{payment_link}': linkData.paymentUrl,
+                                            '{booking_ref}': bookingRef,
+                                            '{booking_id}': bookingRef,
+                                            '{contract_ref}': bookingRef,
+                                        }
+                                    })(),
                                     skipHeader: false,
                                 })
                             })

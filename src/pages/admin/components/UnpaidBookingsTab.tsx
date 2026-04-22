@@ -824,12 +824,25 @@ export default function UnpaidBookingsTab() {
             body: JSON.stringify({
               customPhone: phone,
               templateKey: 'pro_richiesta_pagamento',
-              templateVars: {
-                '{customer_name}': booking.customer_name || 'Cliente',
-                '{amount}': amountEur.toFixed(2),
-                '{link}': result.paymentUrl,
-                '{booking_ref}': bookingRef,
-              },
+              templateVars: (() => {
+                // Alias tutti i placeholder: il template Pro può usare
+                // {amount}|{total}|{importo}, {link}|{payment_link},
+                // {booking_ref}|{booking_id} — passiamo tutte le varianti
+                // così nessuno leaka come {...} letterale nel messaggio.
+                const customerName = booking.customer_name || 'Cliente'
+                const amountStr = amountEur.toFixed(2)
+                return {
+                  '{customer_name}': customerName,
+                  '{nome}': customerName.split(' ')[0] || 'Cliente',
+                  '{amount}': amountStr,
+                  '{total}': amountStr,
+                  '{importo}': amountStr,
+                  '{link}': result.paymentUrl,
+                  '{payment_link}': result.paymentUrl,
+                  '{booking_ref}': bookingRef,
+                  '{booking_id}': bookingRef,
+                }
+              })(),
               skipHeader: false,
             })
           })

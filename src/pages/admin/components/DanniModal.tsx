@@ -252,12 +252,22 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                                 body: JSON.stringify({
                                     customPhone: custPhone,
                                     templateKey: 'pro_richiesta_danni',
-                                    templateVars: {
-                                        '{customer_name}': booking.customer_name || 'Cliente',
-                                        '{amount}': cartTotal.toFixed(2),
-                                        '{link}': linkData.paymentUrl,
-                                        '{booking_ref}': bookingRef,
-                                    },
+                                    templateVars: (() => {
+                                        const customerName = booking.customer_name || 'Cliente'
+                                        const amountStr = cartTotal.toFixed(2)
+                                        return {
+                                            '{customer_name}': customerName,
+                                            '{nome}': customerName.split(' ')[0] || 'Cliente',
+                                            '{amount}': amountStr,
+                                            '{total}': amountStr,
+                                            '{importo}': amountStr,
+                                            '{link}': linkData.paymentUrl,
+                                            '{payment_link}': linkData.paymentUrl,
+                                            '{booking_ref}': bookingRef,
+                                            '{booking_id}': bookingRef,
+                                            '{contract_ref}': bookingRef,
+                                        }
+                                    })(),
                                     skipHeader: false,
                                 })
                             })
