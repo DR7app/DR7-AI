@@ -329,11 +329,17 @@ const handler: Handler = async (event) => {
         const tplUnlimitedKm = booking.booking_details?.unlimited_km;
         const tplKmLimit = booking.booking_details?.km_limit;
         const tplKmPackage = booking.booking_details?.kmPackage;
-        if (tplUnlimitedKm === true || tplKmLimit === 'Illimitati' || Number(tplKmLimit) >= 9999) {
+        const pkgUnlimited =
+          tplKmPackage?.type === 'unlimited'
+          || tplKmPackage?.distance === 'unlimited'
+          || Number(tplKmPackage?.includedKm) >= 9999;
+        if (tplUnlimitedKm === true || tplKmLimit === 'Illimitati' || Number(tplKmLimit) >= 9999 || pkgUnlimited) {
           vars.km_info = 'Illimitati';
         } else if (tplKmLimit && tplKmLimit !== '0') {
           const isNum = !isNaN(Number(tplKmLimit)) && !String(tplKmLimit).toLowerCase().includes('km');
           vars.km_info = isNum ? `${tplKmLimit} Km` : String(tplKmLimit);
+        } else if (tplKmPackage?.includedKm && Number(tplKmPackage.includedKm) > 0) {
+          vars.km_info = `${tplKmPackage.includedKm} Km`;
         } else {
           vars.km_info = booking.booking_details?.total_km ? `${booking.booking_details.total_km} Km` : 'Illimitati';
         }

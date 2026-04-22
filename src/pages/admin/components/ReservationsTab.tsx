@@ -2508,8 +2508,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       garante_phone: booking.booking_details?.garante_veicolo?.phone || '',
       garante_email: booking.booking_details?.garante_veicolo?.email || '',
       km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : DEFAULT_SFORO,
-      unlimited_km: booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati' || false,
-      km_limit: (booking.booking_details?.unlimited_km || booking.booking_details?.km_limit === 'Illimitati') ? '0' : (booking.booking_details?.km_limit || DEFAULT_KM_LIMIT),
+      unlimited_km: booking.booking_details?.unlimited_km === true
+        || booking.booking_details?.km_limit === 'Illimitati'
+        // Website-created bookings store unlimited in kmPackage.type / includedKm.
+        || booking.booking_details?.kmPackage?.type === 'unlimited'
+        || Number(booking.booking_details?.kmPackage?.includedKm) >= 9999
+        || false,
+      km_limit: (booking.booking_details?.unlimited_km === true
+        || booking.booking_details?.km_limit === 'Illimitati'
+        || booking.booking_details?.kmPackage?.type === 'unlimited'
+        || Number(booking.booking_details?.kmPackage?.includedKm) >= 9999)
+        ? '0'
+        : (booking.booking_details?.km_limit
+            || (typeof booking.booking_details?.kmPackage?.includedKm === 'number' ? String(booking.booking_details.kmPackage.includedKm) : null)
+            || DEFAULT_KM_LIMIT),
       // Home Delivery & Pickup
       delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
       delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
@@ -4409,7 +4421,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               //    toggle it off in the form, preserve it rather than writing 0 km.
               if (editingId) {
                 const orig = bookings.find(b => b.id === editingId)
-                if (orig?.booking_details?.unlimited_km === true || orig?.booking_details?.km_limit === 'Illimitati') {
+                const od = orig?.booking_details as Record<string, unknown> | undefined
+                const pkg = od?.kmPackage as Record<string, unknown> | undefined
+                if (od?.unlimited_km === true
+                  || od?.km_limit === 'Illimitati'
+                  || pkg?.type === 'unlimited'
+                  || Number(pkg?.includedKm) >= 9999) {
                   return 'Illimitati'
                 }
               }
