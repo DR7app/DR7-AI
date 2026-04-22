@@ -47,6 +47,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 // bookingConflictUtils imports removed - admin can select any time
 import { validateRentalBooking } from '../../../utils/schedulingRules'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { bookingLogDetails } from '../../../utils/formatAdminLog'
 
 import {
   getAvailableVehicles,
@@ -1932,17 +1933,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
-      // Send via WhatsApp
-      await fetch('/.netlify/functions/send-whatsapp-notification', {
+      // Send via WhatsApp using the "Richiesta Pagamento" template from Messaggi di Sistema Pro
+      const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: custPhone,
-          templateKey: 'payment_link_customer',
+          templateKey: 'pro_richiesta_pagamento',
           templateVars: { '{customer_name}': custName, '{booking_id}': bookingRef, '{total}': totalEur, '{payment_link}': newPaymentLink, '{expiry}': '1 ora' }
         })
       })
-      toast.success('Nuovo link di pagamento generato e inviato via WhatsApp!')
+      const waData = await waRes.json().catch(() => ({} as { skipped?: boolean; reason?: string; message?: string }))
+      if (!waRes.ok) {
+        toast.error(`Link creato ma WhatsApp non inviato: ${waData.message || waRes.statusText}. Configura il template "Richiesta Pagamento" in Messaggi di Sistema Pro.`)
+      } else if (waData.skipped) {
+        toast.error(`Link creato ma WhatsApp non inviato (template "Richiesta Pagamento" disattivato o vuoto in Messaggi di Sistema Pro).`)
+      } else {
+        toast.success('Nuovo link di pagamento generato e inviato via WhatsApp!')
+      }
 
       // Refresh bookings list
       await loadData()
@@ -2010,7 +2018,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         window.open(data.url, '_blank')
       }
 
-      logAdminAction('generate_contract', 'booking', booking.id)
+      logAdminAction('generate_contract', 'booking', booking.id, bookingLogDetails(booking))
 
       // Reload data to show the contract link and Yousign button in the UI
       await loadData()
@@ -2052,7 +2060,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.dismiss('resend-contract')
       if (sigRes.ok) {
         toast.success('Link firma contratto rinviato via WhatsApp!')
-        logAdminAction('resend_contract', 'booking', booking.id)
+        logAdminAction('resend_contract', 'booking', booking.id, bookingLogDetails(booking))
       } else {
         toast.error('Errore rinvio: ' + (sigData.error || 'Errore'))
       }
@@ -2162,7 +2170,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         logger.warn('PDF auto-open failed, continuing flow:', err)
       }
 
-      logAdminAction('generate_fattura', 'booking', booking.id)
+      logAdminAction('generate_fattura', 'booking', booking.id, bookingLogDetails(booking))
 
       // SDI send is now handled automatically by the backend
       loadData()
@@ -2247,7 +2255,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Don't fail the whole deletion if calendar delete fails
       }
 
-      logAdminAction('delete_booking', 'booking', bookingId, { customer: customerName })
+      logAdminAction('delete_booking', 'booking', bookingId, { customer: customerName, vehicle: vehicleName })
       toast.success('Prenotazione eliminata')
       loadData()
     } catch (error) {
@@ -2716,7 +2724,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       logger.log('[handleConfirmExtend] ✅ Booking extended successfully')
-      logAdminAction('extend_booking', 'booking', extendingBooking.id, { new_dropoff: newDropoffDateTime.toISOString() })
+      logAdminAction('extend_booking', 'booking', extendingBooking.id, bookingLogDetails(extendingBooking, {
+        new_dropoff: newDropoffDateTime.toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      }))
 
       // Send WhatsApp notification for extension
       try {
@@ -2900,15 +2910,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             if (customerPhone) {
               const bookingRef = extendingBooking.id.substring(0, 8).toUpperCase()
-              await fetch('/.netlify/functions/send-whatsapp-notification', {
+              const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: customerPhone,
-                  templateKey: 'payment_link_customer',
+                  templateKey: 'pro_richiesta_pagamento',
                   templateVars: { '{customer_name}': custName, '{booking_id}': bookingRef, '{total}': additionalAmount.toFixed(2), '{payment_link}': linkData.paymentUrl, '{expiry}': `${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}` }
                 })
               })
+              const waData = await waRes.json().catch(() => ({} as { skipped?: boolean; message?: string }))
+              if (!waRes.ok || waData.skipped) {
+                toast.error(`WhatsApp non inviato: ${waData.message || 'template "Richiesta Pagamento" mancante o disattivato in Messaggi di Sistema Pro'}`)
+              }
             }
 
             try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
@@ -4150,7 +4164,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         logger.log('Booking updated successfully:', insertedBooking)
-        logAdminAction('edit_booking', 'booking', editingId, { customer: customerInfo?.full_name })
+        logAdminAction('edit_booking', 'booking', editingId, bookingLogDetails(insertedBooking, { customer: customerInfo?.full_name || insertedBooking?.customer_name }))
       } else {
         // Create new booking - direct insert
         logger.log('Creating new booking...', showAllVehicles ? '(FORCE MODE)' : '')
@@ -4167,7 +4181,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         logger.log('Booking created successfully:', insertedBooking)
-        logAdminAction('create_booking', 'booking', insertedBooking?.id, { customer: customerInfo?.full_name })
+        logAdminAction('create_booking', 'booking', insertedBooking?.id, bookingLogDetails(insertedBooking, { customer: customerInfo?.full_name || insertedBooking?.customer_name }))
       }
 
       // Generate Nexi Pay by Link if payment method is Nexi AND not already paid
@@ -4214,19 +4228,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             // Send payment link to customer via WhatsApp
             const custPhone = customerInfo?.phone
+            let waOk = true
+            let waErrMsg = ''
             if (custPhone) {
-              await fetch('/.netlify/functions/send-whatsapp-notification', {
+              const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: custPhone,
-                  templateKey: 'payment_link_customer',
+                  templateKey: 'pro_richiesta_pagamento',
                   templateVars: { '{customer_name}': customerInfo?.full_name || 'Cliente', '{booking_id}': insertedBooking.id.substring(0, 8).toUpperCase(), '{total}': totalEur.toFixed(2), '{payment_link}': linkData.paymentUrl, '{expiry}': '1 ora' }
                 })
               })
+              const waData = await waRes.json().catch(() => ({} as { skipped?: boolean; message?: string }))
+              if (!waRes.ok || waData.skipped) {
+                waOk = false
+                waErrMsg = waData.message || 'template "Richiesta Pagamento" mancante o disattivato in Messaggi di Sistema Pro'
+              }
             }
 
-            toast.success(`Pay by Link generato e inviato al cliente!`)
+            if (waOk) {
+              toast.success(`Pay by Link generato e inviato al cliente!`)
+            } else {
+              toast.error(`Pay by Link creato ma WhatsApp non inviato: ${waErrMsg}`)
+            }
             logger.log('✅ Nexi Pay by Link created:', linkData.paymentUrl)
           } else {
             toast.error('Errore generazione Pay by Link: ' + (linkData.error || 'Errore'))
@@ -4399,7 +4424,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           // Pick the right template:
           // - Conferma Prenotazione checkbox ON → rental_new_customer (full confirmation, no expiry)
-          // - Pending + Nexi Pay by Link → payment_link_customer (already sent by nexi-pay-by-link flow)
+          // - Pending + Nexi Pay by Link → pro_richiesta_pagamento (already sent by nexi-pay-by-link flow)
           // - Pending + NOT Nexi (no conferma) → rental_da_saldare_customer (pay within 1h)
           // - Paid or edit → rental_new_customer (normal confirmation)
           let templateKey: string

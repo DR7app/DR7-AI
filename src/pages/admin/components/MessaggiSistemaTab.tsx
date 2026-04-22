@@ -63,7 +63,7 @@ const MESSAGE_CATEGORIES: { label: string; keys: string[] }[] = [
   { label: 'Lavaggio', keys: ['carwash_new', 'carwash_new_customer', 'carwash_new_admin', 'carwash_modified'] },
   { label: 'Meccanica', keys: ['mechanical_new', 'mechanical_new_customer', 'mechanical_new_admin', 'mechanical_modified'] },
   { label: 'Firma & Contratto', keys: ['signature_request_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp', 'admin_contract_signed_alert', 'document_signature_link'] },
-  { label: 'Pagamenti', keys: ['payment_link_customer', 'booking_cancelled_whatsapp', 'cancellation_admin_alert', 'payment_received_damages', 'payment_received_damages_admin', 'payment_received_extension', 'payment_received_extension_admin', 'prepaid_card_blocked_customer', 'prepaid_card_blocked_admin'] },
+  { label: 'Pagamenti', keys: ['booking_cancelled_whatsapp', 'cancellation_admin_alert', 'payment_received_damages', 'payment_received_damages_admin', 'payment_received_extension', 'payment_received_extension_admin', 'prepaid_card_blocked_customer', 'prepaid_card_blocked_admin'] },
   { label: 'Fatture', keys: ['invoice_pdf_whatsapp', 'penalty_invoice_pdf_whatsapp'] },
   { label: 'Wallet & Crediti', keys: ['wallet_bonus_credit', 'wallet_bonus_credit_admin'] },
   { label: 'Preventivi', keys: ['preventivo_whatsapp', 'admin_new_website_quote', 'admin_no_cauzione_request'] },
