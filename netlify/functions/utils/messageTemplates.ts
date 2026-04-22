@@ -33,6 +33,14 @@ const LABEL_FALLBACKS: Record<string, string[]> = {
   pro_richiesta_pagamento: ['link pagamento', 'richiesta pagamento', 'invio link pagamento', 'pay by link', 'payment link'],
   pro_modifica_noleggio: ['modifica noleggio', 'modifica prenotazione', 'modifica rental', 'modifica rent'],
   pro_modifica_lavaggio: ['modifica lavaggio', 'modifica prime wash', 'modifica primewash', 'modifica wash'],
+  // Penali / Danni / Addebito / Estensione — admins typically keep ONE generic
+  // "Link Pagamento" template for every paid-by-link flow. If no dedicated
+  // pro_richiesta_penali (etc.) row exists, fall back to the payment-link label.
+  pro_richiesta_penali: ['link pagamento', 'richiesta pagamento', 'penal', 'pay by link', 'payment link'],
+  pro_richiesta_danni: ['link pagamento', 'richiesta pagamento', 'dann', 'pay by link', 'payment link'],
+  pro_richiesta_danni_penali: ['link pagamento', 'richiesta pagamento', 'dann', 'penal', 'pay by link', 'payment link'],
+  pro_richiesta_addebito: ['link pagamento', 'richiesta pagamento', 'addebit', 'pay by link', 'payment link'],
+  pro_richiesta_estensione: ['link pagamento', 'richiesta pagamento', 'estension', 'pay by link', 'payment link'],
 }
 
 /**
