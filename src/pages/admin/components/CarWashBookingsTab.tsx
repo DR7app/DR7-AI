@@ -783,8 +783,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             templateVars: (() => {
               // Keys WITH braces + tutti gli alias — come pro_richiesta_pagamento
               // può usare {amount}|{total}|{importo} e {link}|{payment_link}
-              // nel corpo, passiamo ogni variante.
-              const amtStr = typeof totalEur === 'number' ? totalEur.toFixed(2) : String(totalEur)
+              // nel corpo, passiamo ogni variante. totalEur is already the
+              // pre-formatted "€X.XX" string (see declaration above).
+              const amtStr = String(totalEur)
               return {
                 '{customer_name}': custName,
                 '{nome}': (custName || '').split(' ')[0] || 'Cliente',
