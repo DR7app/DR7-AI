@@ -519,25 +519,40 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       ? (revenueData.breakdown || []).reduce((acc, b) => acc * b.coeff, 1)
       : 1
 
-    // List totals (before coefficients)
-    const extrasListTotal = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost
-    const listSubtotal = listRentalTotal + extrasListTotal
+    // List totals split by whether they're subject to the min/max clamp.
+    // Experience services are INTENTIONALLY excluded from the clamp — they're
+    // bespoke add-ons paid to third parties, the Max €/g from Centralina
+    // applies only to the rental + standard extras.
+    const extrasListTotalNoExp = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee
+    const listSubtotalNoExp = listRentalTotal + extrasListTotalNoExp
+    const listSubtotal = listSubtotalNoExp + experienceCost
 
-    // Apply revenue coefficients to the full package (rental + extras)
-    const rawAfterRevenue = listSubtotal * revenueCoeff
+    // Apply revenue coefficients to both parts (experience keeps the coefficient,
+    // just not the clamp).
+    const rawAfterRevenueNoExp = listSubtotalNoExp * revenueCoeff
+    const experienceAfterCoeff = Math.round(experienceCost * revenueCoeff * 100) / 100
 
-    // Clamp the TOTAL against the per-vehicle daily max/min from Centralina Pro
-    // (Prezzi Base + Limiti). The Max is an absolute ceiling for the full
-    // package per day, including extras — so 800 €/g max × 3 giorni = 2400 €
-    // maximum total, regardless of which coefficients were applied.
+    // Clamp the clamp-eligible portion (rental + standard extras) against the
+    // per-vehicle daily max/min from Centralina Pro. 800 €/g × 3 giorni =
+    // 2400 € max for (rental + insurance + lavaggio + delivery + ecc.);
+    // experience is added ON TOP afterwards.
     const minDaily = revenueData?.enabled && typeof revenueData.minPrice === 'number' ? revenueData.minPrice : null
     const maxDaily = revenueData?.enabled && typeof revenueData.maxPrice === 'number' ? revenueData.maxPrice : null
     const maxTotal = maxDaily != null ? maxDaily * rentalDays : null
     const minTotal = minDaily != null ? minDaily * rentalDays : null
-    let afterRevenueTotal = rawAfterRevenue
-    if (maxTotal != null && afterRevenueTotal > maxTotal) afterRevenueTotal = maxTotal
-    if (minTotal != null && afterRevenueTotal < minTotal) afterRevenueTotal = minTotal
-    const afterRevenue = Math.round(afterRevenueTotal * 100) / 100
+    let afterRevenueTotalNoExp = rawAfterRevenueNoExp
+    let clampHit: 'min' | 'max' | null = null
+    if (maxTotal != null && afterRevenueTotalNoExp > maxTotal) { afterRevenueTotalNoExp = maxTotal; clampHit = 'max' }
+    if (minTotal != null && afterRevenueTotalNoExp < minTotal) { afterRevenueTotalNoExp = minTotal; clampHit = 'min' }
+
+    // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
+    // line the admin sees, reflecting what the engine would ask for without
+    // limits. The clamp lines below show how it's been capped.
+    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff) * 100) / 100
+    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff) * 100) / 100
+    // Keep the legacy `afterRevenue` alias = the clamped subtotal used for all
+    // downstream math (markup, sconto, totale finale).
+    const afterRevenue = subtotalClamped
 
     // Apply maggiorazione on top
     const markupMultiplier = 1 + maggiorazione / 100
@@ -573,10 +588,17 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       deliveryFee,
       pickupFee,
       experienceCost,
+      experienceAfterCoeff,
       listSubtotal,
       revenueCoeff,
       revenueBreakdown: revenueData?.breakdown || [],
+      // Uncapped subtotal — what the admin sees as "Subtotale" in the riepilogo.
+      subtotalDisplay,
+      // Clamped version (used by maggiorazione / sconto / totale finale).
       afterRevenue,
+      clampHit,
+      clampLimitDaily: clampHit === 'max' ? maxDaily : clampHit === 'min' ? minDaily : null,
+      clampLimitTotal: clampHit === 'max' ? maxTotal : clampHit === 'min' ? minTotal : null,
       maggiorazioneAmount,
       subtotal,
       sconto,
@@ -2185,8 +2207,27 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
         <div className="border-t border-theme-border pt-2 flex justify-between text-theme-text-primary font-semibold">
           <span>Subtotale</span>
-          <span>{formatEur(pricing.afterRevenue)}</span>
+          <span>{formatEur(pricing.subtotalDisplay)}</span>
         </div>
+
+        {/* Min/Max clamp indicator — shown only when the uncapped subtotal was
+            clipped by the per-vehicle daily limits (Prezzi Base in Centralina). */}
+        {pricing.clampHit && (
+          <>
+            <div className="flex justify-between text-sm text-yellow-500 font-medium">
+              <span>
+                ⚠️ Limite {pricing.clampHit === 'max' ? 'Max' : 'Min'} Raggiunto
+                {pricing.clampLimitDaily != null && (
+                  <span className="text-theme-text-muted font-normal"> ({formatEur(pricing.clampLimitDaily)}/g × {rentalDays}gg, escl. experience)</span>
+                )}
+              </span>
+            </div>
+            <div className="flex justify-between text-theme-text-primary font-semibold">
+              <span>Nuovo totale</span>
+              <span>{formatEur(pricing.afterRevenue)}</span>
+            </div>
+          </>
+        )}
 
         {pricing.maggiorazione > 0 && (
           <div className="flex justify-between text-sm text-dr7-gold">

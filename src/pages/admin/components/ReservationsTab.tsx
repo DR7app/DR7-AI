@@ -635,25 +635,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 : 0
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
-              // List price: base rate (no coefficients) × days + all services
+              // List price: base rate (no coefficients) × days + all services.
+              // Experience services are EXCLUDED from the clamp — the Max €/g
+              // from Centralina applies to rental + standard extras only; any
+              // bespoke experience add-on is added on top afterwards.
               const listDailyRate = data.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, data.rentalDays)
               const listRentalTotal = listDailyRate * data.rentalDays
-              const extrasListTotal = insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
-              const listSubtotal = listRentalTotal + extrasListTotal
+              const extrasNoExp = insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + flexCost
+              const listSubtotalNoExp = listRentalTotal + extrasNoExp
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
-              // Clamp the TOTAL against Centralina Pro's per-vehicle daily
-              // min/max. The Max is an absolute ceiling for the full package
-              // per day (rental + extras), so 800 €/g × 3 giorni = 2400 €
-              // totale massimo, qualunque combinazione di coefficienti sia applicata.
+              // Clamp the clamp-eligible portion (rental + standard extras)
+              // against the per-vehicle daily min/max from Centralina Pro.
               const minDaily = typeof data.minPrice === 'number' ? data.minPrice : null
               const maxDaily = typeof data.maxPrice === 'number' ? data.maxPrice : null
               const maxTotal = maxDaily != null ? maxDaily * data.rentalDays : null
               const minTotal = minDaily != null ? minDaily * data.rentalDays : null
-              let afterRevenueTotal = listSubtotal * combinedCoeff
-              if (maxTotal != null && afterRevenueTotal > maxTotal) afterRevenueTotal = maxTotal
-              if (minTotal != null && afterRevenueTotal < minTotal) afterRevenueTotal = minTotal
-              const subtotal = Math.round(afterRevenueTotal * 100) / 100
+              let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
+              if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
+              if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
+              const experienceAfter = experienceCost * combinedCoeff
+              const subtotal = Math.round((afterRevenueNoExp + experienceAfter) * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               const updates: Record<string, string> = { total_amount: total.toFixed(2) }
@@ -702,22 +704,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         : 0
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
-      // List price: base rate (no coefficients) × days + all services
+      // List price: base rate (no coefficients) × days + all services.
+      // Experience excluded from the clamp — same rationale as the
+      // auto_apply branch above.
       const listDailyRate = revenueSuggestion.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, revenueSuggestion.rentalDays)
       const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
-      const extrasListTotal = insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
-      const listSubtotal = listRentalTotal + extrasListTotal
-      // Combined coefficient from revenue engine
+      const extrasNoExp = insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + flexCost
+      const listSubtotalNoExp = listRentalTotal + extrasNoExp
       const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
-      // Clamp the TOTAL against the per-vehicle daily min/max from Centralina Pro.
       const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
       const maxDaily = typeof revenueSuggestion.maxPrice === 'number' ? revenueSuggestion.maxPrice : null
       const maxTotal = maxDaily != null ? maxDaily * revenueSuggestion.rentalDays : null
       const minTotal = minDaily != null ? minDaily * revenueSuggestion.rentalDays : null
-      let afterRevenueTotal = listSubtotal * combinedCoeff
-      if (maxTotal != null && afterRevenueTotal > maxTotal) afterRevenueTotal = maxTotal
-      if (minTotal != null && afterRevenueTotal < minTotal) afterRevenueTotal = minTotal
-      const subtotal = Math.round(afterRevenueTotal * 100) / 100
+      let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
+      if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
+      if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
+      const experienceAfter = experienceCost * combinedCoeff
+      const subtotal = Math.round((afterRevenueNoExp + experienceAfter) * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
       // Auto-calculate KM limit from rental days
@@ -6158,14 +6161,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays : 0
                           const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
                           const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
-                          // List price (no coefficients)
+                          // List price (no coefficients). Experience excluded from
+                          // the clamp-eligible subtotal.
                           const listDailyRate = revenueSuggestion.selectedBaseRateEur || getDailyRateFromConfig(sv, revenueSuggestion.rentalDays)
                           const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
-                          const listSubtotal = listRentalTotal + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost + secondDriverCost + experienceCost + flexCost
-                          // Combined coefficient
+                          const listSubtotalNoExp = listRentalTotal + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost + secondDriverCost + flexCost
+                          const listSubtotal = listSubtotalNoExp + experienceCost
                           const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
-                          const dynamicSubtotal = Math.round(listSubtotal * combinedCoeff * 100) / 100
+                          const rawAfterCoeffNoExp = listSubtotalNoExp * combinedCoeff
+                          const experienceAfter = experienceCost * combinedCoeff
+                          // Min/Max clamp on the no-experience subtotal.
+                          const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
+                          const maxDaily = typeof revenueSuggestion.maxPrice === 'number' ? revenueSuggestion.maxPrice : null
+                          const maxTotal = maxDaily != null ? maxDaily * revenueSuggestion.rentalDays : null
+                          const minTotal = minDaily != null ? minDaily * revenueSuggestion.rentalDays : null
+                          let clampedNoExp = rawAfterCoeffNoExp
+                          let clampHit: 'min' | 'max' | null = null
+                          if (maxTotal != null && clampedNoExp > maxTotal) { clampedNoExp = maxTotal; clampHit = 'max' }
+                          if (minTotal != null && clampedNoExp < minTotal) { clampedNoExp = minTotal; clampHit = 'min' }
+                          const uncappedSubtotal = Math.round((rawAfterCoeffNoExp + experienceAfter) * 100) / 100
+                          const dynamicSubtotal = Math.round((clampedNoExp + experienceAfter) * 100) / 100
                           const grandTotal = formData.payment_method === 'Contanti' ? dynamicSubtotal * 1.20 : dynamicSubtotal
+                          const uncappedGrand = formData.payment_method === 'Contanti' ? uncappedSubtotal * 1.20 : uncappedSubtotal
                           const hasDiscount = Math.abs(combinedCoeff - 1) > 0.001
                           const discountPct = hasDiscount ? Math.round((1 - combinedCoeff) * 100) : 0
                           const listGrandTotal = formData.payment_method === 'Contanti' ? listSubtotal * 1.20 : listSubtotal
@@ -6174,6 +6191,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               {hasDiscount && (
                                 <span className="text-sm text-theme-text-muted line-through">
                                   EUR {listGrandTotal.toFixed(2)}
+                                </span>
+                              )}
+                              {clampHit && (
+                                <span className="text-xs text-yellow-400" title={`Uncapped: EUR ${uncappedGrand.toFixed(2)} · Limite ${clampHit === 'max' ? 'Max' : 'Min'}: EUR ${(clampHit === 'max' ? maxDaily! : minDaily!).toFixed(2)}/g x ${revenueSuggestion.rentalDays}gg (escl. experience)`}>
+                                  ⚠️ Limite {clampHit === 'max' ? 'Max' : 'Min'} raggiunto
                                 </span>
                               )}
                               <span className={`text-lg font-bold ${
