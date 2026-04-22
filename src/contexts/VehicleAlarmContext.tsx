@@ -159,12 +159,36 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             isPlaying: false
         }))
 
-        // Mark as triggered in database
+        // IMMEDIATE session-level block — every tracking-ID variant for this booking
+        // gets added to the in-memory set + localStorage, so the alarm cannot
+        // re-trigger in the current tab even if the DB update below fails.
+        const ids = [
+            bookingId,
+            `return_before_${bookingId}`,
+            `return_after_${bookingId}`,
+            `deposit_${bookingId}`,
+            `unpaid_${bookingId}`,
+            `car_wash_${bookingId}`,
+        ]
         try {
-            await supabase
+            const stored = JSON.parse(localStorage.getItem('triggered_alarms') || '[]')
+            const now = Date.now()
+            for (const id of ids) {
+                triggeredAlarmsRef.current.add(id)
+                stored.push({ id, ts: now })
+            }
+            localStorage.setItem('triggered_alarms', JSON.stringify(stored))
+        } catch { /* ignore storage errors */ }
+
+        // Persist DB-side so other sessions and page reloads stay quiet.
+        // Fire-and-forget — if the column is missing or RLS blocks, the localStorage
+        // block above still keeps this tab silent until the row actually returns.
+        try {
+            const { error } = await supabase
                 .from('bookings')
                 .update({ alarm_triggered_at: new Date().toISOString() })
                 .eq('id', bookingId)
+            if (error) console.warn('[alarm] stopAlarm DB update failed:', error.message)
         } catch (error) {
             console.error('Failed to update alarm status:', error)
         }
