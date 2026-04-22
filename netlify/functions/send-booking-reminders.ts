@@ -193,17 +193,24 @@ export const reminderHandler: Handler = async () => {
   // Returns null when template is disabled (no DB entry AND no fallback desired)
   const getTemplate = (key: string, fallback: string | null) => messageTemplates[key] || fallback;
 
-  // Load vehicles to determine category (exotic vs urban)
+  // Load vehicles to determine category (exotic vs urban) AND display name
   const { data: allVehicles } = await supabase
     .from('vehicles')
-    .select('id, plate, category');
+    .select('id, plate, category, display_name');
 
   const vehicleMap = new Map<string, string>();
   const plateMap = new Map<string, string>();
+  const vehicleNameById = new Map<string, string>();
+  const vehicleNameByPlate = new Map<string, string>();
   if (allVehicles) {
     allVehicles.forEach((v: any) => {
       vehicleMap.set(v.id, v.category || 'urban');
-      if (v.plate) plateMap.set(v.plate.replace(/\s/g, '').toUpperCase(), v.category || 'urban');
+      if (v.display_name) vehicleNameById.set(v.id, v.display_name);
+      if (v.plate) {
+        const np = v.plate.replace(/\s/g, '').toUpperCase();
+        plateMap.set(np, v.category || 'urban');
+        if (v.display_name) vehicleNameByPlate.set(np, v.display_name);
+      }
     });
   }
 
@@ -216,6 +223,22 @@ export const reminderHandler: Handler = async () => {
       if (plateMap.has(normPlate)) return plateMap.get(normPlate)!;
     }
     return 'urban';
+  }
+
+  // Risolve il nome display del veicolo dalla fonte più affidabile
+  // (vehicles.display_name) con fallback sui dati embed nel booking.
+  function getVehicleDisplayName(booking: any): string {
+    if (booking.vehicle_id && vehicleNameById.has(booking.vehicle_id)) {
+      return vehicleNameById.get(booking.vehicle_id)!;
+    }
+    if (booking.vehicle_plate) {
+      const np = booking.vehicle_plate.replace(/\s/g, '').toUpperCase();
+      if (vehicleNameByPlate.has(np)) return vehicleNameByPlate.get(np)!;
+    }
+    return booking.vehicle_name
+      || booking.booking_details?.vehicle?.name
+      || booking.booking_details?.vehicle?.display_name
+      || '';
   }
 
   function buildExtensionMessage(category: string, firstName: string): string | null {
@@ -478,7 +501,7 @@ export const reminderHandler: Handler = async () => {
           const fullName = booking.customer_name
             || [booking.booking_details?.customer?.firstName, booking.booking_details?.customer?.lastName].filter(Boolean).join(' ').trim()
             || firstName;
-          const vehicleName = booking.vehicle_name || booking.booking_details?.vehicle?.name || '';
+          const vehicleName = getVehicleDisplayName(booking);
 
           // SOLO Messaggi di Sistema Pro. La chiave `pro_richiesta_iban`
           // è il template "Richiesta IBAN" editato dall'admin. Nessun
