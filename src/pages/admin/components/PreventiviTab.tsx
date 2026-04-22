@@ -514,38 +514,39 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
 
-    // Product of revenue coefficients. Multiplied against the rental rate and
-    // the ancillary extras below.
+    // Product of revenue coefficients.
     const revenueCoeff = revenueData?.enabled
       ? (revenueData.breakdown || []).reduce((acc, b) => acc * b.coeff, 1)
       : 1
 
-    // Clamp the RENTAL daily rate against the per-vehicle min/max from
-    // Centralina Pro (Prezzi Base + Limiti). Without this guard the product of
-    // several coefficients (season × day_type × advance × …) can push the daily
-    // rate arbitrarily far above the configured max.
+    // List totals (before coefficients)
+    const extrasListTotal = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost
+    const listSubtotal = listRentalTotal + extrasListTotal
+
+    // Apply revenue coefficients to the full package (rental + extras)
+    const rawAfterRevenue = listSubtotal * revenueCoeff
+
+    // Clamp the TOTAL against the per-vehicle daily max/min from Centralina Pro
+    // (Prezzi Base + Limiti). The Max is an absolute ceiling for the full
+    // package per day, including extras — so 800 €/g max × 3 giorni = 2400 €
+    // maximum total, regardless of which coefficients were applied.
     const minDaily = revenueData?.enabled && typeof revenueData.minPrice === 'number' ? revenueData.minPrice : null
     const maxDaily = revenueData?.enabled && typeof revenueData.maxPrice === 'number' ? revenueData.maxPrice : null
-    const dailyAfterRev = listDailyRate * revenueCoeff
-    let dailyClamped = dailyAfterRev
-    if (maxDaily != null && dailyClamped > maxDaily) dailyClamped = maxDaily
-    if (minDaily != null && dailyClamped < minDaily) dailyClamped = minDaily
-    const rentalTotalAfterRev = Math.round(dailyClamped * rentalDays * 100) / 100
-
-    // Extras keep the existing revenue-coeff multiplication (no min/max — those
-    // apply to the rental rate only, per the Centralina "Prezzi Base" config).
-    const extrasListTotal = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee + experienceCost
-    const extrasAfterRev = Math.round(extrasListTotal * revenueCoeff * 100) / 100
-
-    const listSubtotal = listRentalTotal + extrasListTotal
-    const afterRevenue = Math.round((rentalTotalAfterRev + extrasAfterRev) * 100) / 100
+    const maxTotal = maxDaily != null ? maxDaily * rentalDays : null
+    const minTotal = minDaily != null ? minDaily * rentalDays : null
+    let afterRevenueTotal = rawAfterRevenue
+    if (maxTotal != null && afterRevenueTotal > maxTotal) afterRevenueTotal = maxTotal
+    if (minTotal != null && afterRevenueTotal < minTotal) afterRevenueTotal = minTotal
+    const afterRevenue = Math.round(afterRevenueTotal * 100) / 100
 
     // Apply maggiorazione on top
     const markupMultiplier = 1 + maggiorazione / 100
     const subtotal = Math.round(afterRevenue * markupMultiplier * 100) / 100
 
-    // Daily rate for display: clamped rental rate × markup.
-    const dailyAfterCoeff = Math.round(dailyClamped * markupMultiplier * 100) / 100
+    // Daily rate for display: derived from the clamped total so "€X/giorno ×
+    // N giorni" always adds up to the subtotal (before markup).
+    const dailyFromClamped = rentalDays > 0 ? afterRevenue / rentalDays : 0
+    const dailyAfterCoeff = Math.round(dailyFromClamped * markupMultiplier * 100) / 100
     const rentalTotal = Math.round(listDailyRate * rentalDays * 100) / 100
     const maggiorazioneAmount = Math.round(afterRevenue * (maggiorazione / 100) * 100) / 100
 

@@ -637,19 +637,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
               // List price: base rate (no coefficients) × days + all services
               const listDailyRate = data.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, data.rentalDays)
+              const listRentalTotal = listDailyRate * data.rentalDays
               const extrasListTotal = insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+              const listSubtotal = listRentalTotal + extrasListTotal
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
-              // Clamp the daily rental rate against Centralina Pro's per-vehicle
-              // min/max (Prezzi Base). Prevents the product of many coefficients
-              // from pushing the price beyond the admin-configured ceiling.
+              // Clamp the TOTAL against Centralina Pro's per-vehicle daily
+              // min/max. The Max is an absolute ceiling for the full package
+              // per day (rental + extras), so 800 €/g × 3 giorni = 2400 €
+              // totale massimo, qualunque combinazione di coefficienti sia applicata.
               const minDaily = typeof data.minPrice === 'number' ? data.minPrice : null
               const maxDaily = typeof data.maxPrice === 'number' ? data.maxPrice : null
-              let dailyClamped = listDailyRate * combinedCoeff
-              if (maxDaily != null && dailyClamped > maxDaily) dailyClamped = maxDaily
-              if (minDaily != null && dailyClamped < minDaily) dailyClamped = minDaily
-              const rentalTotalAfter = dailyClamped * data.rentalDays
-              const subtotal = Math.round((rentalTotalAfter + extrasListTotal * combinedCoeff) * 100) / 100
+              const maxTotal = maxDaily != null ? maxDaily * data.rentalDays : null
+              const minTotal = minDaily != null ? minDaily * data.rentalDays : null
+              let afterRevenueTotal = listSubtotal * combinedCoeff
+              if (maxTotal != null && afterRevenueTotal > maxTotal) afterRevenueTotal = maxTotal
+              if (minTotal != null && afterRevenueTotal < minTotal) afterRevenueTotal = minTotal
+              const subtotal = Math.round(afterRevenueTotal * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               const updates: Record<string, string> = { total_amount: total.toFixed(2) }
@@ -696,17 +700,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
       // List price: base rate (no coefficients) × days + all services
       const listDailyRate = revenueSuggestion.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, revenueSuggestion.rentalDays)
+      const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
       const extrasListTotal = insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + experienceCost + flexCost
+      const listSubtotal = listRentalTotal + extrasListTotal
       // Combined coefficient from revenue engine
       const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
-      // Clamp the daily rental rate against Centralina Pro's per-vehicle min/max.
+      // Clamp the TOTAL against the per-vehicle daily min/max from Centralina Pro.
       const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
       const maxDaily = typeof revenueSuggestion.maxPrice === 'number' ? revenueSuggestion.maxPrice : null
-      let dailyClamped = listDailyRate * combinedCoeff
-      if (maxDaily != null && dailyClamped > maxDaily) dailyClamped = maxDaily
-      if (minDaily != null && dailyClamped < minDaily) dailyClamped = minDaily
-      const rentalTotalAfter = dailyClamped * revenueSuggestion.rentalDays
-      const subtotal = Math.round((rentalTotalAfter + extrasListTotal * combinedCoeff) * 100) / 100
+      const maxTotal = maxDaily != null ? maxDaily * revenueSuggestion.rentalDays : null
+      const minTotal = minDaily != null ? minDaily * revenueSuggestion.rentalDays : null
+      let afterRevenueTotal = listSubtotal * combinedCoeff
+      if (maxTotal != null && afterRevenueTotal > maxTotal) afterRevenueTotal = maxTotal
+      if (minTotal != null && afterRevenueTotal < minTotal) afterRevenueTotal = minTotal
+      const subtotal = Math.round(afterRevenueTotal * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
       // Auto-calculate KM limit from rental days
