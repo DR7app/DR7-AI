@@ -1596,7 +1596,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         ) : filtered.length === 0 ? (
           <p className="text-theme-text-muted text-center py-8">Nessun preventivo</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-border text-left text-theme-text-muted">
@@ -1741,6 +1741,63 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             </table>
           </div>
         )}
+
+        {/* Mobile list — iOS-style grouped cards (< 640px). Reuses the same
+            filtered array; keeps desktop table above untouched. */}
+        {!loading && filtered.length > 0 && (
+          <div className="sm:hidden space-y-2">
+            {filtered.map(p => {
+              const statusTone: Record<string, string> = {
+                bozza: 'bg-gray-500/15 text-gray-400',
+                inviato: 'bg-blue-500/15 text-blue-400',
+                accettato: 'bg-green-500/15 text-green-500',
+                rifiutato: 'bg-red-500/15 text-red-400',
+                scaduto: 'bg-amber-500/15 text-amber-500',
+              }
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handleEdit(p)}
+                  className="w-full text-left bg-theme-bg-tertiary/60 rounded-2xl p-4 border border-theme-border/60 active:opacity-70 transition-opacity"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[15px] font-semibold text-theme-text-primary truncate">{p.vehicle_name}</span>
+                        {p.source === 'website_no_cauzione' && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-orange-600 text-white uppercase tracking-wide">No Cauzione</span>
+                        )}
+                        {p.source === 'website' && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-500/20 text-blue-400">SITO</span>
+                        )}
+                      </div>
+                      {p.customer_name && <div className="text-[12px] text-theme-text-muted truncate">{p.customer_name}{p.customer_phone ? ` · ${p.customer_phone}` : ''}</div>}
+                      {!p.customer_name && p.customer_phone && <div className="text-[12px] text-theme-text-muted">{p.customer_phone}</div>}
+                    </div>
+                    <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${statusTone[p.status] || 'bg-gray-500/15 text-gray-400'}`}>
+                      {STATUS_LABELS[p.status] || p.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-[1fr_auto] gap-y-1 gap-x-3 text-[12px]">
+                    <span className="text-theme-text-muted">Noleggio</span>
+                    <span className="text-theme-text-primary tabular-nums">
+                      {new Date(p.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Rome' })}
+                      {' → '}
+                      {new Date(p.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Rome' })}
+                      <span className="text-theme-text-muted ml-1">· {p.rental_days}gg</span>
+                    </span>
+                    <span className="text-theme-text-muted">Subtotale</span>
+                    <span className="text-theme-text-primary tabular-nums">{formatEur(p.subtotal)}</span>
+                    <span className="text-theme-text-muted">{p.sconto > 0 ? 'Scontato' : 'Totale'}</span>
+                    <span className="text-dr7-gold font-semibold tabular-nums">{formatEur(p.total_final)}</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
         </>}
 
         {/* Phone Modal */}
@@ -1812,8 +1869,29 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
   // ═══ FORM VIEW (Nuovo / Modifica Preventivo) ═══
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    // Desktop layout unchanged. Mobile: sticky top nav + extra bottom padding
+    // so the sticky action bar we render further down doesn't cover content.
+    <div className="space-y-6 pb-[120px] sm:pb-0">
+      {/* Mobile iOS-style nav bar (< 640px) */}
+      <div className="sm:hidden sticky top-0 -mx-4 px-4 py-3 bg-theme-bg-primary/90 backdrop-blur-md border-b border-theme-border z-30 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => { setView('list'); setEditingId(null); resetForm() }}
+          className="flex items-center gap-1 text-[15px] text-dr7-gold active:opacity-60"
+        >
+          <svg width="11" height="18" viewBox="0 0 11 18" fill="none" aria-hidden="true">
+            <path d="M10 1L2 9L10 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span>Lista</span>
+        </button>
+        <div className="text-[17px] font-semibold text-theme-text-primary truncate">
+          {editingId ? 'Modifica' : 'Nuovo Preventivo'}
+        </div>
+        <div className="w-[60px]" aria-hidden="true" />
+      </div>
+
+      {/* Desktop header (≥ 640px) */}
+      <div className="hidden sm:flex items-center justify-between">
         <h2 className="text-2xl font-bold text-theme-text-primary">{editingId ? 'Modifica Preventivo' : 'Nuovo Preventivo'}</h2>
         <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Torna alla Lista</Button>
       </div>
@@ -1907,7 +1985,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       )}
 
       {/* Dates */}
-      <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 ${slotUnavailableWarning ? 'p-3 rounded-lg border-2 border-red-500/60 bg-red-500/5' : ''}`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 ${slotUnavailableWarning ? 'p-3 rounded-lg border-2 border-red-500/60 bg-red-500/5' : ''}`}>
         <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
         <Select label="Ora Ritiro" value={form.pickup_time} onChange={(e) => {
           const newPickupTime = e.target.value
@@ -1969,7 +2047,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             options={LOCATIONS.map(l => ({ value: l.value, label: l.label }))}
           />
           {form.pickup_location === 'domicilio' && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Input label="Indirizzo consegna" value={form.delivery_address} onChange={(e) => setForm(prev => ({ ...prev, delivery_address: e.target.value }))} placeholder="Via, citta, CAP" />
               <Input label="Costo consegna (€)" type="number" value={form.delivery_fee} onChange={(e) => setForm(prev => ({ ...prev, delivery_fee: e.target.value }))} placeholder="0" />
             </div>
@@ -1991,7 +2069,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             options={LOCATIONS.map(l => ({ value: l.value, label: l.label }))}
           />
           {form.dropoff_location === 'domicilio' && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Input label="Indirizzo ritiro" value={form.pickup_address} onChange={(e) => setForm(prev => ({ ...prev, pickup_address: e.target.value }))} placeholder="Via, citta, CAP" />
               <Input label="Costo ritiro (€)" type="number" value={form.pickup_fee} onChange={(e) => setForm(prev => ({ ...prev, pickup_fee: e.target.value }))} placeholder="0" />
             </div>
@@ -2239,7 +2317,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         )}
 
         {/* Sconto */}
-        <div className="grid grid-cols-2 gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
           <Input label="Prezzo Finale Desiderato (€)" type="number" step="0.01" value={form.sconto} onChange={(e) => setForm(prev => ({ ...prev, sconto: e.target.value }))} placeholder="Lascia vuoto per nessuno sconto" />
           <Input label="Nota sconto" value={form.sconto_note} onChange={(e) => setForm(prev => ({ ...prev, sconto_note: e.target.value }))} placeholder="valido solo 24h" />
         </div>
@@ -2267,8 +2345,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-3 justify-end">
+      {/* Desktop actions (≥ 640px) — unchanged */}
+      <div className="hidden sm:flex gap-3 justify-end">
         <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Annulla</Button>
         <Button disabled={saving || !form.vehicle_id || rentalDays < 1} onClick={() => handleSave(false)}>
           {saving ? 'Salvataggio...' : (editingId ? 'Aggiorna Preventivo' : 'Salva Preventivo')}
@@ -2295,6 +2373,37 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             {saving || sendingWhatsapp ? 'Invio...' : 'Salva e invia'}
           </Button>
         )}
+      </div>
+
+      {/* Mobile sticky bottom action bar (< 640px) — iOS-style translucent
+          toolbar with live total on the left, primary action on the right.
+          Stays visible as the admin scrolls the form. */}
+      <div className="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-theme-bg-primary/95 backdrop-blur-md border-t border-theme-border pb-[env(safe-area-inset-bottom)]">
+        <div className="px-4 py-3 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Totale finale</div>
+            <div className="text-[19px] font-bold text-dr7-gold truncate tabular-nums">{formatEur(pricing.totalFinal)}</div>
+          </div>
+          {!editingId && selectedCustomerId && customers.find((c: any) => c.id === selectedCustomerId)?.phone ? (
+            <button
+              type="button"
+              disabled={saving || sendingWhatsapp || !form.vehicle_id || rentalDays < 1}
+              onClick={() => handleSave(true)}
+              className="shrink-0 px-4 h-11 rounded-full bg-dr7-gold text-black text-[15px] font-semibold disabled:opacity-40 active:opacity-70"
+            >
+              {saving || sendingWhatsapp ? 'Invio…' : 'Salva e invia'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={saving || !form.vehicle_id || rentalDays < 1}
+              onClick={() => handleSave(false)}
+              className="shrink-0 px-4 h-11 rounded-full bg-dr7-gold text-black text-[15px] font-semibold disabled:opacity-40 active:opacity-70"
+            >
+              {saving ? 'Salvataggio…' : (editingId ? 'Aggiorna' : 'Salva')}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* No-Cauzione OTP — reuses the shared LimitationOverrideModal pattern */}
