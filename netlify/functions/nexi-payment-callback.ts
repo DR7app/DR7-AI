@@ -222,11 +222,21 @@ const handler: Handler = async (event) => {
                             // Send WhatsApp using the existing "Richiesta Pagamento" Pro template
                             // (same message the admin-triggered Pay-by-Link flow uses)
                             if (rbPhone) {
+                                // Passa tutti gli alias: il template admin-edited può usare
+                                // {amount} o {total}, {link} o {payment_link}, {booking_ref}
+                                // o {booking_id} — tutti risolvono allo stesso valore così
+                                // niente leaka come {...} letterale nel messaggio al cliente.
+                                const amountStr = rbAmountEur.toFixed(2);
                                 const retryMsg = await renderTemplate('pro_richiesta_pagamento', {
                                     customer_name: rbName,
-                                    amount: rbAmountEur.toFixed(2),
+                                    nome: (rbName || '').split(' ')[0] || 'Cliente',
+                                    amount: amountStr,
+                                    total: amountStr,
+                                    importo: amountStr,
                                     link: linkData.paymentUrl,
+                                    payment_link: linkData.paymentUrl,
                                     booking_ref: rbRef,
+                                    booking_id: rbRef,
                                 });
 
                                 if (retryMsg === null) {
