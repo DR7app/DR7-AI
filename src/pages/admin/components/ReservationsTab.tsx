@@ -661,7 +661,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 const vehCategory = selectedVehicle?.category || ''
                 const kmCat = vehCategory === 'urban' ? 'urban' : (vehCategory || '_global')
                 const kmIncluded = getKmIncluded(rentalConfig, data.rentalDays, kmCat)
-                if (kmIncluded !== 'unlimited') {
+                // Only overwrite km_limit when the config returns a real, positive
+                // number. If kmIncluded is 0 it means the config is missing/empty for
+                // this category — in that case, leave formData.km_limit as-is so the
+                // admin's previously-saved value survives a re-render.
+                if (kmIncluded !== 'unlimited' && typeof kmIncluded === 'number' && kmIncluded > 0) {
                   updates.km_limit = String(kmIncluded)
                 }
               }
@@ -4387,7 +4391,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '{pickup_location}': pickupLocationLabel || '',
             '{insurance}': formData.insurance_option || 'KASKO_BASE',
             '{deposit}': parseFloat(formData.deposit) > 0 ? `€${parseFloat(formData.deposit).toFixed(2)}` : '€0',
-            '{km_info}': formData.unlimited_km ? 'Illimitati' : `${formData.km_limit || 0} km`,
+            '{km_info}': (() => {
+              if (formData.unlimited_km) return 'Illimitati'
+              // Prefer the value stored on the booking (saved above), then formData,
+              // finally fall back to getKmIncluded or the engine default so the
+              // template never renders "0 km" just because one source is missing.
+              const fromBooking = insertedBooking?.booking_details?.km_limit
+              if (fromBooking === 'Illimitati') return 'Illimitati'
+              const candidates = [
+                typeof fromBooking === 'string' ? parseInt(fromBooking, 10) : (typeof fromBooking === 'number' ? fromBooking : NaN),
+                typeof formData.km_limit === 'string' ? parseInt(formData.km_limit, 10) : NaN,
+              ]
+              let km = candidates.find(n => Number.isFinite(n) && n > 0)
+              if (!km && vehicle && rentalConfig) {
+                const kmCat = vehicle.category === 'urban' ? 'urban' : (vehicle.category || '_global')
+                const rentalDaysForKm = Math.max(1, Math.ceil((new Date(returnDateTime).getTime() - new Date(pickupDateTime).getTime()) / (1000 * 60 * 60 * 24)))
+                const computed = getKmIncluded(rentalConfig, rentalDaysForKm, kmCat)
+                if (computed === 'unlimited') return 'Illimitati'
+                if (typeof computed === 'number' && computed > 0) km = computed
+              }
+              return km ? `${km} km` : 'Illimitati'
+            })(),
             '{total}': ((insertedBooking?.price_total || eurToCents(formData.total_amount)) / 100).toFixed(2),
             '{payment_method}': formData.payment_method || '',
             '{payment_status}': isPending ? 'Da saldare' : 'Pagato',
@@ -4564,7 +4588,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             })
             if (sigRes.ok) {
               logger.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
-
+              if (editingId) toast.success('Nuovo contratto inviato per firma', { duration: 4000 })
               // Garante signing link is now handled by signature-init (multi-signer support)
             } else {
               const sigErr = await sigRes.json()
@@ -4572,10 +4596,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               toast.error(`Link firma non inviato: ${sigErr.error || 'Errore sconosciuto'}`, { duration: 8000 })
             }
           } else {
+            // Surface this to the admin on edit — the expectation is that saving a
+            // modification regenerates and resends the contract. If the contract
+            // row isn't available yet (generate-contract above failed or returned
+            // empty), the admin needs to know so they can retry manually.
             logger.warn('[Auto-Gen] ⚠️ No contract found for booking, skipping signature-init')
+            if (editingId) {
+              toast.error('Contratto modificato non trovato — usa il tasto "Rigenera contratto" e poi "Invia contratto" per rispedirlo.', { duration: 10000 })
+            }
           }
         } catch (sigError) {
           console.error('[Auto-Gen] ⚠️ Failed to send signing link:', sigError)
+          if (editingId) {
+            toast.error(`Errore invio contratto: ${sigError instanceof Error ? sigError.message : 'sconosciuto'}`, { duration: 8000 })
+          }
         }
       }
 
