@@ -1762,7 +1762,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         )}
 
         {/* Mobile list — iOS-style grouped cards (< 640px). Reuses the same
-            filtered array; keeps desktop table above untouched. */}
+            filtered array; keeps desktop table above untouched. Every action
+            the desktop Azioni column exposes is mirrored as a pill button in
+            the card footer so admins can Modifica / Invia / Converti /
+            Rifiutato without a desktop. */}
         {!loading && filtered.length > 0 && (
           <div className="sm:hidden space-y-2">
             {filtered.map(p => {
@@ -1773,12 +1776,14 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                 rifiutato: 'bg-red-500/15 text-red-400',
                 scaduto: 'bg-amber-500/15 text-amber-500',
               }
+              const canEdit = p.status === 'bozza' || p.status === 'inviato'
+              const canSend = p.status === 'bozza' || p.status === 'inviato'
+              const canConvert = p.status === 'bozza' || p.status === 'inviato'
+              const canReject = p.status === 'inviato'
               return (
-                <button
+                <div
                   key={p.id}
-                  type="button"
-                  onClick={() => handleEdit(p)}
-                  className="w-full text-left bg-theme-bg-tertiary/60 rounded-2xl p-4 border border-theme-border/60 active:opacity-70 transition-opacity"
+                  className="bg-theme-bg-tertiary/60 rounded-2xl p-4 border border-theme-border/60"
                 >
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="min-w-0 flex-1">
@@ -1812,7 +1817,63 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                     <span className="text-theme-text-muted">{p.sconto > 0 ? 'Scontato' : 'Totale'}</span>
                     <span className="text-dr7-gold font-semibold tabular-nums">{formatEur(p.total_final)}</span>
                   </div>
-                </button>
+
+                  {/* Action row — mirrors the desktop Azioni column, gated by
+                      the same status rules. Wraps onto a second row when
+                      needed so every button stays a full 44pt tap target. */}
+                  {(canEdit || canSend || canConvert || canReject) && (
+                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-theme-border/40">
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(p)}
+                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-blue-600 hover:bg-blue-500 active:opacity-70 text-white text-[13px] font-semibold"
+                        >
+                          Modifica
+                        </button>
+                      )}
+                      {canSend && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setSelectedPreventivo(p)
+                            setWhatsappPhone(p.customer_phone || '')
+                            setPreviewMessage('')
+                            const preview = await formatWhatsAppMessage(p)
+                            if (!preview) {
+                              const which = (p.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'
+                              toast.error(`Template ${which} vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.`)
+                              return
+                            }
+                            setPreviewMessage(preview)
+                            setShowPhoneModal(true)
+                          }}
+                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-green-600 hover:bg-green-500 active:opacity-70 text-white text-[13px] font-semibold"
+                        >
+                          Invia
+                        </button>
+                      )}
+                      {canConvert && (
+                        <button
+                          type="button"
+                          onClick={() => handleConvertToBooking(p)}
+                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-dr7-gold hover:bg-[#247a6f] active:opacity-70 text-white text-[13px] font-semibold"
+                        >
+                          Converti
+                        </button>
+                      )}
+                      {canReject && (
+                        <button
+                          type="button"
+                          onClick={() => updateStatus(p.id, 'rifiutato')}
+                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-red-600 hover:bg-red-500 active:opacity-70 text-white text-[13px] font-semibold"
+                        >
+                          Rifiutato
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
