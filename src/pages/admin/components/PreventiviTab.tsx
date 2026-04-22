@@ -1209,6 +1209,21 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           rental_total: formatEur((p.base_daily_rate) * p.rental_days),
           insurance_line: p.insurance_option ? `${resolveInsLabel()} = ${formatEur(p.insurance_total)}` : '',
           pricing_lines: pricingLines,
+          // Subtotale listino: somma di tutte le voci a prezzo di listino,
+          // PRIMA dell'applicazione dei coefficienti della Centralina Pro.
+          // Usare in Messaggi di Sistema Pro come placeholder {subtotal_listino}.
+          subtotal_listino: formatEur(
+            (p.base_daily_rate || 0) * (p.rental_days || 1)
+            + Number(p.insurance_total || 0)
+            + Number(p.lavaggio_fee || 0)
+            + Number(p.no_cauzione_total || 0)
+            + Number(p.unlimited_km_total || 0)
+            + Number(p.second_driver_total || 0)
+            + Number(extras?.dr7_flex_total || 0)
+            + Number(extras?.delivery_fee || 0)
+            + Number(extras?.pickup_fee || 0)
+            + Number(extras?.experience_cost || 0)
+          ),
           subtotal: formatEur(p.subtotal),
           total: formatEur(p.total_final || p.subtotal),
           sconto: discountLine,
