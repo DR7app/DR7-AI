@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 // ── Keyword classification (mirrors report-danni.ts) ──────────────────────────
 const DANNI_KEYWORDS = [
@@ -402,6 +403,20 @@ export default function GestioneDanniTab() {
         if (updateErr) throw updateErr
       }
 
+      // Log aggregato: UN evento con count + voci, così Operatori vede
+      // "eliminato 10 penali/danni" invece di N righe separate.
+      const firstBookingId = pendingItems[0]?.bookingId || null
+      const totalAmount = pendingItems.reduce((s, i) => s + Number(i.total || 0), 0)
+      const labels = pendingItems.slice(0, 20).map(i => i.label)
+      logAdminAction('edit_booking', 'booking', firstBookingId || undefined, {
+        _subaction: type === 'penali' ? 'delete_penali_bulk' : 'delete_danni_bulk',
+        count: pendingItems.length,
+        customer_name: customer.customerName,
+        total_amount: totalAmount,
+        labels,
+        booking_ids: Array.from(byBooking.keys()),
+      })
+
       toast.success(`${type === 'penali' ? 'Penali' : 'Danni'} eliminati`)
       await loadData()
     } catch (err: unknown) {
@@ -472,6 +487,16 @@ export default function GestioneDanniTab() {
           }
         }
       }
+
+      // Log del singolo delete con _subaction per mostrare in Operatori
+      // "Eliminazione penale" / "Eliminazione danno" invece di edit_booking.
+      logAdminAction('edit_booking', 'booking', item.bookingId, {
+        _subaction: item.arrayKey === 'penalties' ? 'delete_penale' : 'delete_danno',
+        label: item.label,
+        amount: item.total,
+        status: item.status,
+        fattura_numero: item.fatturaNumero || null,
+      })
 
       toast.success('Voce eliminata')
       setEditModal(null)

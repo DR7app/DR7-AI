@@ -48,6 +48,10 @@ const ACTION_LABELS: Record<string, string> = {
   update_customer_status: 'Aggiornamento stato cliente',
   delete_fattura: 'Eliminazione fattura',
   bulk_delete_fatture: 'Eliminazione fatture multiple',
+  delete_penale: 'Eliminazione penale',
+  delete_danno: 'Eliminazione danno',
+  delete_penali_bulk: 'Eliminazione multipla penali',
+  delete_danni_bulk: 'Eliminazione multipla danni',
   create_nota_di_credito: 'Nota di credito',
   send_sdi: 'Invio SDI',
   send_trustera_document: 'Invio documento Trustera',
@@ -133,6 +137,12 @@ const DETAIL_LABELS: Record<string, string> = {
   km_included: 'Km inclusi',
   notes: 'Note',
   note: 'Note',
+  count: 'Quantità',
+  total_amount: 'Totale',
+  labels: 'Voci',
+  booking_ids: 'Prenotazioni',
+  label: 'Voce',
+  fattura_numero: 'Fattura',
 }
 
 function formatDetailKey(key: string): string {
