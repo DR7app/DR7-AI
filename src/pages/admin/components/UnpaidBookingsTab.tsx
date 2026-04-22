@@ -794,8 +794,16 @@ export default function UnpaidBookingsTab() {
   }
 
   async function sendPayByLink(booking: UnpaidBooking, amountEur: number, description: string) {
+    // Structured so that (a) link generation errors show clearly, and (b)
+    // NOTHING between link creation and the WhatsApp send can abort the flow.
+    // Clipboard, toast, or any other browser-gated API that throws
+    // "The request is not allowed by the user agent…" (Safari/iOS after an
+    // await breaks user-gesture context) is fully isolated.
+    toast.loading('Generazione link...', { id: 'paylink' })
+
+    // 1. Create Nexi link
+    let result: { paymentUrl?: string; error?: string } = {}
     try {
-      toast.loading('Generazione link...', { id: 'paylink' })
       const res = await authFetch('/.netlify/functions/nexi-pay-by-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -808,58 +816,76 @@ export default function UnpaidBookingsTab() {
           expirationDays: 7
         })
       })
-      const result = await res.json()
-      toast.dismiss('paylink')
-      if (!res.ok) throw new Error(result.error || 'Errore')
-      if (result.paymentUrl) {
-        // Clipboard write can throw NotAllowedError on Safari/iOS when the
-        // user-gesture context was broken by the preceding await. Swallow the
-        // error here so it doesn't abort the WhatsApp send below.
-        try { await navigator.clipboard.writeText(result.paymentUrl) } catch { /* clipboard blocked — ignore, link still sent via WhatsApp */ }
-        // Send via WhatsApp
-        const phone = booking.customer_phone || booking.booking_details?.customer?.phone
-        if (phone) {
-          const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
-          const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customPhone: phone,
-              templateKey: 'pro_richiesta_pagamento',
-              templateVars: (() => {
-                // Alias tutti i placeholder: il template Pro può usare
-                // {amount}|{total}|{importo}, {link}|{payment_link},
-                // {booking_ref}|{booking_id} — passiamo tutte le varianti
-                // così nessuno leaka come {...} letterale nel messaggio.
-                const customerName = booking.customer_name || 'Cliente'
-                const amountStr = amountEur.toFixed(2)
-                return {
-                  '{customer_name}': customerName,
-                  '{nome}': customerName.split(' ')[0] || 'Cliente',
-                  '{amount}': amountStr,
-                  '{total}': amountStr,
-                  '{importo}': amountStr,
-                  '{link}': result.paymentUrl,
-                  '{payment_link}': result.paymentUrl,
-                  '{booking_ref}': bookingRef,
-                  '{booking_id}': bookingRef,
-                }
-              })(),
-              skipHeader: false,
-            })
-          })
-          const sendJson = await sendRes.json().catch(() => ({}))
-          if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
-            toast.error('Template mancante in Messaggi di Sistema Pro')
-          } else {
-            toast.success('Link inviato via WhatsApp!')
-          }
-        }
+      result = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(result.error || 'Errore generazione link', { id: 'paylink' })
+        return
       }
-    } catch (err: unknown) {
-      const _errMsg = err instanceof Error ? err.message : String(err)
-      toast.dismiss('paylink')
-      toast.error(_errMsg || 'Errore')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Errore generazione link'
+      toast.error(msg, { id: 'paylink' })
+      return
+    }
+
+    toast.dismiss('paylink')
+    if (!result.paymentUrl) {
+      toast.error('Link non generato')
+      return
+    }
+
+    // 2. Best-effort clipboard — ALWAYS ignore any failure. Wrapped twice so
+    // that even a synchronous throw (e.g. navigator.clipboard === undefined in
+    // some iframe contexts) can't leak.
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(result.paymentUrl).catch(() => {})
+      }
+    } catch { /* clipboard blocked — ignore */ }
+
+    // 3. Send via WhatsApp (independent of clipboard outcome)
+    const phone = booking.customer_phone || booking.booking_details?.customer?.phone
+    if (!phone) {
+      toast.success(`Link generato: ${result.paymentUrl}`, { duration: 10000 })
+      return
+    }
+
+    try {
+      const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
+      const customerName = booking.customer_name || 'Cliente'
+      const amountStr = amountEur.toFixed(2)
+      const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: phone,
+          templateKey: 'pro_richiesta_pagamento',
+          // Pass every alias the Pro template might use so nothing leaks as
+          // raw `{...}` in the outbound message.
+          templateVars: {
+            '{customer_name}': customerName,
+            '{nome}': customerName.split(' ')[0] || 'Cliente',
+            '{amount}': amountStr,
+            '{total}': amountStr,
+            '{importo}': amountStr,
+            '{link}': result.paymentUrl,
+            '{payment_link}': result.paymentUrl,
+            '{booking_ref}': bookingRef,
+            '{booking_id}': bookingRef,
+          },
+          skipHeader: false,
+        })
+      })
+      const sendJson = await sendRes.json().catch(() => ({}))
+      if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
+        toast.error('Template "pro_richiesta_pagamento" mancante in Messaggi di Sistema Pro')
+      } else if (!sendRes.ok) {
+        toast.error(`Invio WhatsApp fallito: ${sendJson?.message || 'errore sconosciuto'}`)
+      } else {
+        toast.success('Link inviato via WhatsApp!')
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Invio WhatsApp fallito'
+      toast.error(msg)
     }
   }
 
