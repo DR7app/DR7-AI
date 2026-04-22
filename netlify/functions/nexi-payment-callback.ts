@@ -182,7 +182,9 @@ const handler: Handler = async (event) => {
         // Capped at MAX_AUTO_RETRIES to avoid spamming the customer.
         if (!isSuccess && transaction.booking_id) {
             const retryCount = transaction.metadata?.auto_retry_count || 0;
-            const MAX_AUTO_RETRIES = 2;
+            // Un solo auto-retry dopo il primo link. Se anche il retry viene
+            // rifiutato, l'admin interviene manualmente (niente spam al cliente).
+            const MAX_AUTO_RETRIES = 1;
 
             if (retryCount >= MAX_AUTO_RETRIES) {
                 console.log(`[nexi-payment-callback] Max auto-retry reached (${retryCount}/${MAX_AUTO_RETRIES}) for booking ${transaction.booking_id} — no new link sent.`);
