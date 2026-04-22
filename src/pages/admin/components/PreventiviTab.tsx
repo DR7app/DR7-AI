@@ -527,10 +527,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const listSubtotalNoExp = listRentalTotal + extrasListTotalNoExp
     const listSubtotal = listSubtotalNoExp + experienceCost
 
-    // Apply revenue coefficients to both parts (experience keeps the coefficient,
-    // just not the clamp).
+    // Apply revenue coefficients ONLY to the clamp-eligible portion.
+    // Experience stays at LIST PRICE — no coefficient, no clamp — so the
+    // price stamped on the preventivo matches the cost the experience
+    // provider actually charges us.
     const rawAfterRevenueNoExp = listSubtotalNoExp * revenueCoeff
-    const experienceAfterCoeff = Math.round(experienceCost * revenueCoeff * 100) / 100
+    const experienceAfterCoeff = Math.round(experienceCost * 100) / 100
 
     // Clamp the clamp-eligible portion (rental + standard extras) against the
     // per-vehicle daily max/min from Centralina Pro. 800 €/g × 3 giorni =

@@ -654,8 +654,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
               if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
               if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-              const experienceAfter = experienceCost * combinedCoeff
-              const subtotal = Math.round((afterRevenueNoExp + experienceAfter) * 100) / 100
+              // Experience stays at LIST PRICE — no coefficient, no clamp.
+              const subtotal = Math.round((afterRevenueNoExp + experienceCost) * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               const updates: Record<string, string> = { total_amount: total.toFixed(2) }
@@ -719,8 +719,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
       if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
       if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-      const experienceAfter = experienceCost * combinedCoeff
-      const subtotal = Math.round((afterRevenueNoExp + experienceAfter) * 100) / 100
+      // Experience stays at LIST PRICE — no coefficient, no clamp.
+      const subtotal = Math.round((afterRevenueNoExp + experienceCost) * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
       // Auto-calculate KM limit from rental days
@@ -6169,7 +6169,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const listSubtotal = listSubtotalNoExp + experienceCost
                           const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
                           const rawAfterCoeffNoExp = listSubtotalNoExp * combinedCoeff
-                          const experienceAfter = experienceCost * combinedCoeff
+                          // Experience stays at LIST PRICE — no coefficient, no clamp.
                           // Min/Max clamp on the no-experience subtotal.
                           const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
                           const maxDaily = typeof revenueSuggestion.maxPrice === 'number' ? revenueSuggestion.maxPrice : null
@@ -6179,8 +6179,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           let clampHit: 'min' | 'max' | null = null
                           if (maxTotal != null && clampedNoExp > maxTotal) { clampedNoExp = maxTotal; clampHit = 'max' }
                           if (minTotal != null && clampedNoExp < minTotal) { clampedNoExp = minTotal; clampHit = 'min' }
-                          const uncappedSubtotal = Math.round((rawAfterCoeffNoExp + experienceAfter) * 100) / 100
-                          const dynamicSubtotal = Math.round((clampedNoExp + experienceAfter) * 100) / 100
+                          const uncappedSubtotal = Math.round((rawAfterCoeffNoExp + experienceCost) * 100) / 100
+                          const dynamicSubtotal = Math.round((clampedNoExp + experienceCost) * 100) / 100
                           const grandTotal = formData.payment_method === 'Contanti' ? dynamicSubtotal * 1.20 : dynamicSubtotal
                           const uncappedGrand = formData.payment_method === 'Contanti' ? uncappedSubtotal * 1.20 : uncappedSubtotal
                           const hasDiscount = Math.abs(combinedCoeff - 1) > 0.001
