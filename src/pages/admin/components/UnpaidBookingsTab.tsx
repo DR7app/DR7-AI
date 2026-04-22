@@ -2248,6 +2248,12 @@ export default function UnpaidBookingsTab() {
                   €{item.amountPaid.toFixed(2)} pagati su €{item.amount.toFixed(2)}
                 </div>
               )}
+              {item.paymentStatus === 'nexi_pay_by_link' && (
+                <div className="text-[10px] inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300 border border-orange-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
+                  In attesa di pagamento (Nexi Pay by Link inviato)
+                </div>
+              )}
 
               <div className={`flex gap-1 flex-wrap mt-2 pt-2 border-t ${colorClasses.divider}`}>
                 {item.source === 'booking_details' ? (
