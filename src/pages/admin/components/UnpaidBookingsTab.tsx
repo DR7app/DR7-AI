@@ -247,12 +247,34 @@ export default function UnpaidBookingsTab() {
   async function loadUnpaidBookings() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
+      // Primary fetch: active/pending bookings that might be unpaid.
+      const { data: activeData, error: activeErr } = await supabase
         .from('bookings')
         .select('*')
         .not('status', 'in', '(cancelled,annullata,completed,completata,deleted)')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
+
+      if (activeErr) throw activeErr
+
+      // Secondary fetch: cancelled / completed bookings that still have
+      // unpaid penali or danni. Without this, a penale added against a
+      // cancelled booking would never appear in "In attesa di pagamento".
+      const { data: terminalWithItems } = await supabase
+        .from('bookings')
+        .select('*')
+        .in('status', ['cancelled', 'annullata', 'completed', 'completata'])
+        .neq('customer_name', 'Lavaggio Rientro')
+        .or('booking_details->penalties.neq.[],booking_details->danni.neq.[]')
+        .order('created_at', { ascending: false })
+
+      const seen = new Set((activeData || []).map(b => b.id))
+      const merged = [
+        ...(activeData || []),
+        ...((terminalWithItems || []).filter(b => !seen.has(b.id))),
+      ]
+      const data = merged
+      const error = null as null | { message: string }
 
       if (error) throw error
 
