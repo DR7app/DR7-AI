@@ -60,7 +60,13 @@ export interface RevenueConfig {
   // Per-vehicle monthly revenue target → coefficient.
   // When a vehicle's current-month revenue reaches min_revenue, coeff multiplies
   // the daily rate. Works alongside promo_push_coefficients / active_promo_level.
-  vehicle_revenue_targets: Record<string, { min_revenue: number | ''; coeff: number | '' }>
+  // List of tiers per vehicle; when several tiers are reached the one with
+  // the highest min_revenue wins. The legacy single-object shape
+  // ({ min_revenue, coeff }) is also accepted — see parseConfigFromDB.
+  vehicle_revenue_targets: Record<
+    string,
+    { tiers: Array<{ min_revenue: number | ''; coeff: number | '' }> }
+  >
 }
 
 export interface PricingInput {
@@ -527,19 +533,29 @@ export function calculateDynamicPrice(
     description: promoLabel
   })
 
-  // Per-vehicle monthly revenue target → coefficient.
-  // Activates only when the vehicle's current-month revenue has reached the
-  // configured minimum. Runs ALONGSIDE the global promo (multiplicative).
+  // Per-vehicle monthly revenue tiers → coefficient.
+  // When multiple tiers are reached (currentRevenue ≥ tier.min_revenue), the
+  // one with the HIGHEST min_revenue wins. Runs ALONGSIDE the global promo
+  // (multiplicative). Skips tiers that are only half-configured.
   let vehTargetCoeff = 1.0
   let vehTargetLabel = 'Nessun obiettivo raggiunto'
   const target = config.vehicle_revenue_targets?.[input.vehicleId]
-  if (target && typeof target.coeff === 'number' && target.coeff > 0 && typeof target.min_revenue === 'number') {
+  const tiers = target?.tiers || []
+  if (tiers.length > 0) {
     const currentRevenue = typeof input.vehicleMonthlyRevenueEur === 'number' ? input.vehicleMonthlyRevenueEur : 0
-    if (currentRevenue >= target.min_revenue) {
-      vehTargetCoeff = target.coeff
-      vehTargetLabel = `Obiettivo raggiunto (€${currentRevenue.toFixed(0)} ≥ €${target.min_revenue})`
-    } else {
-      vehTargetLabel = `Obiettivo non raggiunto (€${currentRevenue.toFixed(0)} / €${target.min_revenue})`
+    const validTiers = tiers
+      .filter(t => typeof t.min_revenue === 'number' && t.min_revenue >= 0
+                && typeof t.coeff === 'number' && t.coeff > 0)
+      .map(t => ({ min: t.min_revenue as number, coeff: t.coeff as number }))
+    const reached = validTiers
+      .filter(t => currentRevenue >= t.min)
+      .sort((a, b) => b.min - a.min)
+    if (reached.length > 0) {
+      vehTargetCoeff = reached[0].coeff
+      vehTargetLabel = `Obiettivo raggiunto (€${currentRevenue.toFixed(0)} ≥ €${reached[0].min})`
+    } else if (validTiers.length > 0) {
+      const nextTier = validTiers.sort((a, b) => a.min - b.min)[0]
+      vehTargetLabel = `Prossima soglia: €${currentRevenue.toFixed(0)} / €${nextTier.min}`
     }
   }
   breakdown.push({
@@ -610,6 +626,36 @@ export function calculateDynamicPrice(
 }
 
 /**
+ * Normalise vehicle_revenue_targets into the tiered form the engine expects.
+ * Accepts both the new { tiers: [...] } shape and the legacy { min_revenue, coeff }
+ * single-object shape (converted to a 1-element tier list).
+ */
+function normaliseVehicleRevenueTargets(raw: unknown): RevenueConfig['vehicle_revenue_targets'] {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: RevenueConfig['vehicle_revenue_targets'] = {}
+  for (const [vid, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object') continue
+    const obj = value as Record<string, unknown>
+    if (Array.isArray(obj.tiers)) {
+      out[vid] = {
+        tiers: (obj.tiers as Array<Record<string, unknown>>).map(t => ({
+          min_revenue: (typeof t?.min_revenue === 'number' ? t.min_revenue : '') as number | '',
+          coeff: (typeof t?.coeff === 'number' ? t.coeff : '') as number | '',
+        })),
+      }
+    } else if ('min_revenue' in obj || 'coeff' in obj) {
+      out[vid] = {
+        tiers: [{
+          min_revenue: (typeof obj.min_revenue === 'number' ? obj.min_revenue : '') as number | '',
+          coeff: (typeof obj.coeff === 'number' ? obj.coeff : '') as number | '',
+        }],
+      }
+    }
+  }
+  return out
+}
+
+/**
  * Parse raw DB config row into a typed RevenueConfig.
  * Handles missing/malformed fields gracefully.
  */
@@ -657,6 +703,6 @@ export function parseConfigFromDB(row: {
     promo_push_coefficients: (c.promo_push_coefficients as NamedCoefficient[]) || [],
     special_dates: (c.special_dates as Record<string, string>) || {},
     active_promo_level: (c.active_promo_level as string) || '',
-    vehicle_revenue_targets: (c.vehicle_revenue_targets as RevenueConfig['vehicle_revenue_targets']) || {},
+    vehicle_revenue_targets: normaliseVehicleRevenueTargets(c.vehicle_revenue_targets),
   }
 }

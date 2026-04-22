@@ -10,12 +10,16 @@ type FleetVehicle = {
   plate: string | null
 }
 
-// Per-vehicle monthly revenue target → coefficient.
-// When the vehicle's current-month revenue reaches `min_revenue` €, the engine
-// multiplies the daily rate by `coeff`. Empty values = target not configured (no effect).
-type VehicleRevenueTarget = {
+// Per-vehicle monthly revenue targets → coefficient, with MULTIPLE thresholds.
+// Each tier: reach `min_revenue` € in the current month → multiply the daily rate
+// by `coeff`. When several tiers are reached, the one with the highest `min_revenue`
+// wins. Empty fields mean the tier isn't fully configured (engine ignores it).
+type VehicleRevenueTier = {
   min_revenue: number | ''
   coeff: number | ''
+}
+type VehicleRevenueTarget = {
+  tiers: VehicleRevenueTier[]
 }
 
 type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7'
@@ -602,6 +606,35 @@ function savePersisted(snap: PersistedSnapshot) {
     })
 }
 
+// Accept both the legacy single-tier shape ({ min_revenue, coeff }) and the new
+// tiered shape ({ tiers: [...] }), normalising everything to the tiered form.
+// Returns undefined when the input is not a recognisable object, letting the
+// caller fall back to the default.
+function migrateVehicleRevenueTargets(raw: unknown): Record<string, VehicleRevenueTarget> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const out: Record<string, VehicleRevenueTarget> = {}
+  for (const [vid, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object') continue
+    const obj = value as Record<string, unknown>
+    if (Array.isArray(obj.tiers)) {
+      const tiers = (obj.tiers as Array<Record<string, unknown>>)
+        .map((t) => ({
+          min_revenue: (typeof t?.min_revenue === 'number' ? t.min_revenue : '') as number | '',
+          coeff: (typeof t?.coeff === 'number' ? t.coeff : '') as number | '',
+        }))
+      out[vid] = { tiers }
+    } else if ('min_revenue' in obj || 'coeff' in obj) {
+      out[vid] = {
+        tiers: [{
+          min_revenue: (typeof obj.min_revenue === 'number' ? obj.min_revenue : '') as number | '',
+          coeff: (typeof obj.coeff === 'number' ? obj.coeff : '') as number | '',
+        }],
+      }
+    }
+  }
+  return out
+}
+
 function pick<T>(persisted: PersistedSnapshot | null, key: keyof PersistedSnapshot, fallback: T): T {
   if (persisted && persisted[key] !== undefined && persisted[key] !== null) {
     return persisted[key] as unknown as T
@@ -642,7 +675,7 @@ function mergePrezzoDinamico(saved: Partial<PrezzoDinamicoConfig> | null | undef
       phase2_max_rentals: savedDyn.phase2_max_rentals ?? defaultDyn.phase2_max_rentals,
       season_by_month: savedDyn.season_by_month ?? defaultDyn.season_by_month,
       special_dates: savedDyn.special_dates ?? defaultDyn.special_dates,
-      vehicle_revenue_targets: savedDyn.vehicle_revenue_targets ?? defaultDyn.vehicle_revenue_targets,
+      vehicle_revenue_targets: migrateVehicleRevenueTargets(savedDyn.vehicle_revenue_targets) ?? defaultDyn.vehicle_revenue_targets,
       occupancy_targets: savedDyn.occupancy_targets ?? defaultDyn.occupancy_targets,
     },
   }
@@ -1173,19 +1206,20 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
       if (c !== p) out.push(`Data speciale ${d}: ${p || 'nessuna'} → ${c || 'nessuna'}`)
     })
 
-    // Per-vehicle revenue targets (min_revenue + coeff)
+    // Per-vehicle revenue targets (list of tiers)
     const allVids = new Set([
       ...Object.keys(cd.vehicle_revenue_targets || {}),
       ...Object.keys(pd.vehicle_revenue_targets || {}),
     ])
+    const serializeTiers = (t?: VehicleRevenueTarget) =>
+      JSON.stringify((t?.tiers || []).map(x => [x.min_revenue, x.coeff]))
     allVids.forEach(vid => {
-      const c = cd.vehicle_revenue_targets?.[vid] || { min_revenue: '', coeff: '' }
-      const p = pd.vehicle_revenue_targets?.[vid] || { min_revenue: '', coeff: '' }
-      if (c.min_revenue !== p.min_revenue) {
-        out.push(`Spinta veicolo ${vid} — min incasso: ${p.min_revenue || '—'} → ${c.min_revenue || '—'}`)
-      }
-      if (c.coeff !== p.coeff) {
-        out.push(`Spinta veicolo ${vid} — coeff: ${p.coeff || '—'} → ${c.coeff || '—'}`)
+      const c = serializeTiers(cd.vehicle_revenue_targets?.[vid])
+      const p = serializeTiers(pd.vehicle_revenue_targets?.[vid])
+      if (c !== p) {
+        const count = (cd.vehicle_revenue_targets?.[vid]?.tiers || []).length
+        const prevCount = (pd.vehicle_revenue_targets?.[vid]?.tiers || []).length
+        out.push(`Spinta veicolo ${vid} — soglie: ${prevCount} → ${count}`)
       }
     })
 
@@ -2827,17 +2861,36 @@ function PromoPushSection({
   onChangeVehicleTargets: (map: Record<string, VehicleRevenueTarget>) => void
   vehicleRevenues: Record<string, number>
 }) {
-  function patchTarget(vid: string, p: Partial<VehicleRevenueTarget>) {
-    const prev = vehicleTargets[vid] || { min_revenue: '', coeff: '' }
-    const next = { ...prev, ...p }
-    // If both fields are cleared, drop the row entirely to keep storage tidy.
-    if (next.min_revenue === '' && next.coeff === '') {
+  function getTiers(vid: string): VehicleRevenueTier[] {
+    return vehicleTargets[vid]?.tiers || []
+  }
+
+  function commitTiers(vid: string, nextTiers: VehicleRevenueTier[]) {
+    // Drop entries whose both fields are empty to keep storage tidy.
+    const cleaned = nextTiers.filter(t => !(t.min_revenue === '' && t.coeff === ''))
+    if (cleaned.length === 0) {
       const { [vid]: _drop, ...rest } = vehicleTargets
       void _drop
       onChangeVehicleTargets(rest)
     } else {
-      onChangeVehicleTargets({ ...vehicleTargets, [vid]: next })
+      onChangeVehicleTargets({ ...vehicleTargets, [vid]: { tiers: cleaned } })
     }
+  }
+
+  function patchTier(vid: string, idx: number, p: Partial<VehicleRevenueTier>) {
+    const prev = getTiers(vid)
+    const next = prev.map((t, i) => (i === idx ? { ...t, ...p } : t))
+    commitTiers(vid, next)
+  }
+
+  function addTier(vid: string) {
+    const prev = getTiers(vid)
+    commitTiers(vid, [...prev, { min_revenue: '', coeff: '' }])
+  }
+
+  function removeTier(vid: string, idx: number) {
+    const prev = getTiers(vid)
+    commitTiers(vid, prev.filter((_, i) => i !== idx))
   }
 
   return (
@@ -2884,58 +2937,89 @@ function PromoPushSection({
             Nessun veicolo nella flotta.
           </p>
         ) : (
-          <div className="space-y-2">
-            <div className="grid grid-cols-[2fr_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
-              <span>Modello auto</span>
-              <span className="text-right">Incasso mese corrente</span>
-              <span className="text-right">Incasso minimo (€)</span>
-              <span className="text-right">Coeff.</span>
-            </div>
-            <div className="max-h-[500px] overflow-y-auto -mx-1 px-1 space-y-2">
-              {vehicles.map(v => {
-                const t = vehicleTargets[v.id] || { min_revenue: '', coeff: '' }
-                const currentRevenue = vehicleRevenues[v.id]
-                const minRevenueNum = typeof t.min_revenue === 'number' ? t.min_revenue : null
-                const hasTarget = minRevenueNum !== null && minRevenueNum > 0
-                const hasRevenue = typeof currentRevenue === 'number'
-                const reached = hasTarget && hasRevenue && (currentRevenue as number) >= (minRevenueNum as number)
-                const missing = hasTarget && hasRevenue ? Math.max(0, (minRevenueNum as number) - (currentRevenue as number)) : 0
+          <div className="max-h-[600px] overflow-y-auto -mx-1 px-1 space-y-4">
+            {vehicles.map(v => {
+              const tiers = getTiers(v.id)
+              const currentRevenue = vehicleRevenues[v.id]
+              const hasRevenue = typeof currentRevenue === 'number'
+              // Highest reached tier (for live "active" indicator).
+              const configuredTiers = tiers
+                .map((t, i) => ({ idx: i, min: typeof t.min_revenue === 'number' ? t.min_revenue : null, coeff: typeof t.coeff === 'number' ? t.coeff : null }))
+                .filter(t => t.min !== null && t.coeff !== null && (t.min as number) > 0 && (t.coeff as number) > 0)
+              const reachedIdx = hasRevenue
+                ? configuredTiers
+                    .filter(t => (currentRevenue as number) >= (t.min as number))
+                    .sort((a, b) => (b.min as number) - (a.min as number))[0]?.idx
+                : undefined
 
-                return (
-                  <div key={v.id} className="grid grid-cols-[2fr_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center">
+              return (
+                <div key={v.id} className="rounded-xl border border-black/5 p-3">
+                  {/* Header row: vehicle + live monthly revenue */}
+                  <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="min-w-0">
-                      <div className="text-[14px] text-[#1d1d1f] font-medium truncate">{v.display_name}</div>
+                      <div className="text-[14px] text-[#1d1d1f] font-semibold truncate">{v.display_name}</div>
                       <div className="text-[11px] text-[#a1a1a6] font-mono">{v.plate || '— senza targa'}</div>
                     </div>
-                    <div className="text-right">
-                      {hasRevenue ? (
-                        <>
-                          <div className={`text-[13px] font-semibold ${reached ? 'text-green-600' : 'text-[#1d1d1f]'}`}>
-                            €{(currentRevenue as number).toFixed(0)}
-                          </div>
-                          {hasTarget && (
-                            <div className={`text-[11px] ${reached ? 'text-green-600' : 'text-[#a1a1a6]'}`}>
-                              {reached ? '✓ raggiunto' : `mancano €${missing.toFixed(0)}`}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-[11px] text-[#a1a1a6]">—</span>
-                      )}
+                    <div className="text-right shrink-0">
+                      <div className="text-[10px] uppercase tracking-wide text-[#a1a1a6]">Incasso mese</div>
+                      <div className="text-[14px] text-[#1d1d1f] font-semibold tabular-nums">
+                        {hasRevenue ? `€${(currentRevenue as number).toFixed(0)}` : '—'}
+                      </div>
                     </div>
-                    <PriceBox
-                      value={t.min_revenue}
-                      onChange={(val) => patchTarget(v.id, { min_revenue: val })}
-                      placeholder="—"
-                    />
-                    <CoeffBox
-                      value={t.coeff}
-                      onChange={(val) => patchTarget(v.id, { coeff: val })}
-                    />
                   </div>
-                )
-              })}
-            </div>
+
+                  {/* Tier list */}
+                  {tiers.length === 0 ? (
+                    <p className="text-[12px] text-[#a1a1a6] py-2 text-center border border-dashed border-black/10 rounded-lg">
+                      Nessuna soglia configurata — clicca "+" per aggiungerne una.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-center text-[10px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
+                        <span>Incasso minimo (€)</span>
+                        <span className="text-right">Coeff.</span>
+                        <span></span>
+                      </div>
+                      {tiers.map((t, idx) => {
+                        const isReached = reachedIdx === idx
+                        return (
+                          <div
+                            key={idx}
+                            className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-center ${isReached ? 'rounded-md bg-green-50 px-1 py-0.5' : ''}`}
+                          >
+                            <PriceBox
+                              value={t.min_revenue}
+                              onChange={(val) => patchTier(v.id, idx, { min_revenue: val })}
+                              placeholder="—"
+                            />
+                            <CoeffBox
+                              value={t.coeff}
+                              onChange={(val) => patchTier(v.id, idx, { coeff: val })}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeTier(v.id, idx)}
+                              className="text-[#ff3b30] hover:text-[#d70015] text-[18px] px-2 leading-none"
+                              aria-label="Rimuovi soglia"
+                            >−</button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Add tier button */}
+                  <button
+                    type="button"
+                    onClick={() => addTier(v.id)}
+                    className="mt-2 inline-flex items-center gap-1 text-[13px] text-[#007aff] hover:text-[#0051d5]"
+                  >
+                    <span className="text-[16px] leading-none">+</span>
+                    <span>Aggiungi soglia</span>
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

@@ -707,21 +707,21 @@ describe('vehicle_revenue_targets (Spinta Veicolo)', () => {
     expect(row?.coeff).toBe(1.0)
   })
 
-  it('does NOT activate when monthly revenue is below the minimum', () => {
+  it('does NOT activate when monthly revenue is below the lowest tier', () => {
     const config = flatConfig()
-    config.vehicle_revenue_targets = { v1: { min_revenue: 10000, coeff: 1.2 } }
+    config.vehicle_revenue_targets = { v1: { tiers: [{ min_revenue: 10000, coeff: 1.2 }] } }
     const result = calculateDynamicPrice(config, makeInput({
       vehicleId: 'v1',
       vehicleMonthlyRevenueEur: 4999,
     }))
     const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
     expect(row?.coeff).toBe(1.0)
-    expect(row?.description).toMatch(/non raggiunto/i)
+    expect(row?.description).toMatch(/prossima soglia/i)
   })
 
-  it('activates when monthly revenue reaches the minimum', () => {
+  it('activates when monthly revenue reaches a tier', () => {
     const config = flatConfig()
-    config.vehicle_revenue_targets = { v1: { min_revenue: 10000, coeff: 1.2 } }
+    config.vehicle_revenue_targets = { v1: { tiers: [{ min_revenue: 10000, coeff: 1.2 }] } }
     const result = calculateDynamicPrice(config, makeInput({
       vehicleId: 'v1',
       vehicleMonthlyRevenueEur: 10000, // equal to minimum → counts as reached
@@ -733,9 +733,44 @@ describe('vehicle_revenue_targets (Spinta Veicolo)', () => {
     expect(result.rawDailyRate).toBeCloseTo(120, 1)
   })
 
+  it('picks the HIGHEST tier whose minimum has been reached', () => {
+    const config = flatConfig()
+    config.vehicle_revenue_targets = {
+      v1: { tiers: [
+        { min_revenue: 4000, coeff: 1.10 },
+        { min_revenue: 4500, coeff: 1.15 },
+        { min_revenue: 5000, coeff: 1.20 },
+      ] },
+    }
+    // Revenue €4700 → reaches 4000 and 4500 tiers, but not 5000. Highest wins.
+    const result = calculateDynamicPrice(config, makeInput({
+      vehicleId: 'v1',
+      vehicleMonthlyRevenueEur: 4700,
+    }))
+    const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
+    expect(row?.coeff).toBe(1.15)
+  })
+
+  it('tier order in the array does not matter — highest reached always wins', () => {
+    const config = flatConfig()
+    config.vehicle_revenue_targets = {
+      v1: { tiers: [
+        { min_revenue: 5000, coeff: 1.20 }, // highest
+        { min_revenue: 4000, coeff: 1.10 }, // lowest
+        { min_revenue: 4500, coeff: 1.15 }, // middle
+      ] },
+    }
+    const result = calculateDynamicPrice(config, makeInput({
+      vehicleId: 'v1',
+      vehicleMonthlyRevenueEur: 9999, // reaches all tiers
+    }))
+    const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
+    expect(row?.coeff).toBe(1.20)
+  })
+
   it('is vehicle-scoped — another vehicle is unaffected by v1 target', () => {
     const config = flatConfig()
-    config.vehicle_revenue_targets = { v1: { min_revenue: 1, coeff: 2.0 } }
+    config.vehicle_revenue_targets = { v1: { tiers: [{ min_revenue: 1, coeff: 2.0 }] } }
     const result = calculateDynamicPrice(config, makeInput({
       vehicleId: 'v2',
       vehicleMonthlyRevenueEur: 99999,
@@ -744,28 +779,45 @@ describe('vehicle_revenue_targets (Spinta Veicolo)', () => {
     expect(row?.coeff).toBe(1.0)
   })
 
-  it('ignores rows with empty min_revenue or empty coeff (not fully configured)', () => {
+  it('ignores half-configured tiers (empty min_revenue or empty coeff)', () => {
     const config = flatConfig()
-    // Half-configured rows must be treated as "no target".
     config.vehicle_revenue_targets = {
-      v1: { min_revenue: '', coeff: 1.5 },
-      v2: { min_revenue: 5000, coeff: '' },
+      v1: { tiers: [
+        { min_revenue: '', coeff: 1.5 },  // missing min → ignored
+        { min_revenue: 5000, coeff: '' }, // missing coeff → ignored
+        { min_revenue: 6000, coeff: 1.3 }, // valid
+      ] },
     }
-    for (const vid of ['v1', 'v2']) {
-      const result = calculateDynamicPrice(config, makeInput({
-        vehicleId: vid,
-        vehicleMonthlyRevenueEur: 999999,
-      }))
-      const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
-      expect(row?.coeff).toBe(1.0)
-    }
+    // Revenue €7000 reaches the third tier only (the other two are invalid).
+    const result = calculateDynamicPrice(config, makeInput({
+      vehicleId: 'v1',
+      vehicleMonthlyRevenueEur: 7000,
+    }))
+    const row = result.breakdown.find(b => b.label === 'Spinta Veicolo (Obiettivo Mensile)')
+    expect(row?.coeff).toBe(1.3)
+  })
+
+  it('parseConfigFromDB migrates the legacy single-object shape to tiers[]', () => {
+    // Raw DB rows keep their fields under `config`, not at the top level.
+    const parsed = parseConfigFromDB({
+      enabled: true,
+      mode: 'suggestion',
+      config: {
+        vehicle_revenue_targets: {
+          v1: { min_revenue: 4000, coeff: 1.1 }, // legacy shape
+        },
+      },
+    })
+    expect(parsed.vehicle_revenue_targets.v1.tiers).toEqual([
+      { min_revenue: 4000, coeff: 1.1 },
+    ])
   })
 
   it('combines multiplicatively with the global promo', () => {
     const config = flatConfig()
     config.promo_push_coefficients = [{ key: 'soft', label: 'Promo soft', coeff: 0.9 }]
     config.active_promo_level = 'soft'
-    config.vehicle_revenue_targets = { v1: { min_revenue: 1000, coeff: 1.2 } }
+    config.vehicle_revenue_targets = { v1: { tiers: [{ min_revenue: 1000, coeff: 1.2 }] } }
     const result = calculateDynamicPrice(config, makeInput({
       vehicleId: 'v1',
       vehicleMonthlyRevenueEur: 2000,
