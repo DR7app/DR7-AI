@@ -264,14 +264,23 @@ export const handler: Handler = async (event) => {
 
     let calendarGapDays: number | undefined
     const hasNext = !!(nextBookings && nextBookings.length > 0)
-    if (hasNext && priorBookings && priorBookings.length > 0) {
-      // Sandwiched: compute gap from previous dropoff to this pickup
-      const prevDropMs = new Date(priorBookings[0].dropoff_date).getTime()
-      calendarGapDays = Math.max(0, Math.floor((pickupMs - prevDropMs) / (1000 * 60 * 60 * 24)))
-    } else if (hasNext) {
-      // No prior booking but there's a tight next booking — still a gap to fill
+    const hasPrior = !!(priorBookings && priorBookings.length > 0)
+    if (hasNext) {
       const nextPickMs = new Date(nextBookings![0].pickup_date).getTime()
-      calendarGapDays = Math.max(0, Math.floor((nextPickMs - dropoffMs) / (1000 * 60 * 60 * 24)))
+      let windowMs: number
+      if (hasPrior) {
+        // Sandwich: gap = dimensione TOTALE della finestra libera tra prior e next.
+        // Se il quote riempie perfettamente (prior.drop = new.pickup = new.drop = next.pick),
+        // la finestra è comunque 1 giorno → sconto massimo.
+        const prevDropMs = new Date(priorBookings![0].dropoff_date).getTime()
+        windowMs = nextPickMs - prevDropMs
+      } else {
+        // Solo next: gap = giorni dal dropoff del quote al prossimo pickup.
+        windowMs = nextPickMs - dropoffMs
+      }
+      // Math.ceil per catturare anche gap frazionari (es. 16h = 1 giorno, non 0).
+      // Clamp min 1 perché la presenza di hasNext significa che un gap esiste.
+      calendarGapDays = Math.max(1, Math.ceil(windowMs / (1000 * 60 * 60 * 24)))
     }
     // else: niente booking successivo entro 30gg → calendario aperto → no gap
 
