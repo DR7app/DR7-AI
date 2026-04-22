@@ -176,18 +176,32 @@ const handler: Handler = async (event) => {
         }).eq('id', transaction.id);
 
         // ── AUTO-RESEND FRESH PAY-BY-LINK ON PAYMENT REFUSAL ───────────────
-        // When Nexi refuses a payment (wrong card, insufficient funds, 3DS failure,
-        // bank decline, etc.) generate a fresh Pay-by-Link and send it to the
-        // customer via WhatsApp so they can try again without admin intervention.
-        // Capped at MAX_AUTO_RETRIES to avoid spamming the customer.
+        // Quando Nexi rifiuta un pagamento, genera e invia un link fresco al
+        // cliente. Ripete ad ogni rifiuto entro una finestra di 1 ora che parte
+        // dal PRIMO link generato per questa prenotazione+purpose. Dopo 1 ora
+        // niente più auto-resend — l'admin interviene manualmente.
         if (!isSuccess && transaction.booking_id) {
-            const retryCount = transaction.metadata?.auto_retry_count || 0;
-            // Un solo auto-retry dopo il primo link. Se anche il retry viene
-            // rifiutato, l'admin interviene manualmente (niente spam al cliente).
-            const MAX_AUTO_RETRIES = 1;
+            // Trova il primo link generato per questa prenotazione + purpose.
+            // Tutte le nexi_transactions sono ordinate per created_at — la più
+            // vecchia è la prima del ciclo.
+            const { data: firstTx } = await supabase
+                .from('nexi_transactions')
+                .select('created_at')
+                .eq('booking_id', transaction.booking_id)
+                .eq('payment_purpose', paymentPurpose || 'booking')
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
 
-            if (retryCount >= MAX_AUTO_RETRIES) {
-                console.log(`[nexi-payment-callback] Max auto-retry reached (${retryCount}/${MAX_AUTO_RETRIES}) for booking ${transaction.booking_id} — no new link sent.`);
+            const windowStartMs = firstTx?.created_at
+                ? new Date(firstTx.created_at).getTime()
+                : new Date(transaction.created_at).getTime();
+            const elapsedMs = Date.now() - windowStartMs;
+            const ONE_HOUR_MS = 60 * 60 * 1000;
+            const retryCount = transaction.metadata?.auto_retry_count || 0;
+
+            if (elapsedMs >= ONE_HOUR_MS) {
+                console.log(`[nexi-payment-callback] Finestra 1h scaduta (${Math.round(elapsedMs / 60000)}min dal primo link) per booking ${transaction.booking_id} — no new link sent.`);
             } else {
                 try {
                     const { data: refusedBooking } = await supabase
@@ -255,11 +269,12 @@ const handler: Handler = async (event) => {
 
                                     // Log message send
                                     try {
+                                        const minsLeft = Math.max(0, Math.round((ONE_HOUR_MS - elapsedMs) / 60000));
                                         await supabase.from('sent_messages_log').insert({
                                             customer_name: rbName,
                                             customer_phone: rbPhone,
                                             message_text: retryMsg,
-                                            template_label: `Auto-retry Pay-by-Link (tentativo ${retryCount + 1}/${MAX_AUTO_RETRIES})`,
+                                            template_label: `Auto-retry Pay-by-Link (tentativo #${retryCount + 1}, finestra ${minsLeft}min rimanenti)`,
                                             status: 'sent',
                                         });
                                     } catch (logErr) {
@@ -278,7 +293,8 @@ const handler: Handler = async (event) => {
                                 }
                             }).eq('id', transaction.id);
 
-                            console.log(`[nexi-payment-callback] ✅ Auto-sent fresh Pay-by-Link to ${rbName} after refused payment (retry ${retryCount + 1}/${MAX_AUTO_RETRIES})`);
+                            const elapsedMinStr = Math.round(elapsedMs / 60000);
+                            console.log(`[nexi-payment-callback] ✅ Auto-sent fresh Pay-by-Link to ${rbName} after refused payment (retry #${retryCount + 1}, ${elapsedMinStr}min dal primo link / finestra 60min)`);
                         } else {
                             console.warn('[nexi-payment-callback] Auto-retry: could not create fresh link:', linkData.error || `HTTP ${linkRes.status}`);
                         }
