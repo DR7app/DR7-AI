@@ -30,6 +30,7 @@ interface VehicleAlarmContextType {
     alarmState: AlarmState
     enableAudio: () => void
     stopAlarm: (bookingId: string) => void
+    markReturned: (bookingId: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 const VehicleAlarmContext = createContext<VehicleAlarmContextType | undefined>(undefined)
@@ -191,6 +192,31 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             if (error) console.warn('[alarm] stopAlarm DB update failed:', error.message)
         } catch (error) {
             console.error('Failed to update alarm status:', error)
+        }
+    }
+
+    // Mark booking as returned: status=completed + alarm off in one action.
+    const markReturned = async (bookingId: string): Promise<{ ok: boolean; error?: string }> => {
+        // Silence the alarm locally first (so user sees it stop even if DB hiccups)
+        await stopAlarm(bookingId)
+        try {
+            const { error } = await supabase
+                .from('bookings')
+                .update({
+                    status: 'completed',
+                    actual_return_date: new Date().toISOString(),
+                    alarm_triggered_at: new Date().toISOString(),
+                })
+                .eq('id', bookingId)
+            if (error) {
+                console.warn('[alarm] markReturned DB update failed:', error.message)
+                return { ok: false, error: error.message }
+            }
+            return { ok: true }
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error)
+            console.error('markReturned failed:', msg)
+            return { ok: false, error: msg }
         }
     }
 
@@ -785,7 +811,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     }, [])
 
     return (
-        <VehicleAlarmContext.Provider value={{ alarmState, enableAudio, stopAlarm }}>
+        <VehicleAlarmContext.Provider value={{ alarmState, enableAudio, stopAlarm, markReturned }}>
             {children}
         </VehicleAlarmContext.Provider>
     )
