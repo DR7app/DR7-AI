@@ -231,21 +231,49 @@ export const handler: Handler = async (event) => {
     }
     const vehicleOwnOccupancyPct = Math.min(100, Math.round((vehicleOwnOccupiedDays / 60) * 100))
 
-    // 3c. Calendar gap: days from pickup to nearest previous booking's dropoff on same vehicle
+    // 3c. Calendar gap: finestra "stretta" tra la prenotazione PRECEDENTE
+    //     e quella SUCCESSIVA sullo stesso veicolo. Il coefficiente serve a
+    //     incentivare il riempimento dei buchi — quindi richiediamo che ci sia
+    //     una prenotazione SUCCESSIVA (entro 30 giorni). Se il calendario è
+    //     aperto dopo il dropoff (es. Macan libero fino a fine mese), niente
+    //     gap, niente sconto.
     const pickupMs = new Date(pickup_date).getTime()
-    const { data: priorBookings } = await supabase
-      .from('bookings')
-      .select('dropoff_date')
-      .eq('vehicle_id', vehicle.id)
-      .not('status', 'in', '(cancelled,annullata)')
-      .lt('dropoff_date', pickup_date)
-      .order('dropoff_date', { ascending: false })
-      .limit(1)
+    const dropoffMs = new Date(dropoff_date).getTime()
+    const horizon30Ms = dropoffMs + 30 * 24 * 60 * 60 * 1000
+    const horizon30Iso = new Date(horizon30Ms).toISOString()
+
+    const [{ data: priorBookings }, { data: nextBookings }] = await Promise.all([
+      supabase
+        .from('bookings')
+        .select('dropoff_date')
+        .eq('vehicle_id', vehicle.id)
+        .not('status', 'in', '(cancelled,annullata)')
+        .lt('dropoff_date', pickup_date)
+        .order('dropoff_date', { ascending: false })
+        .limit(1),
+      supabase
+        .from('bookings')
+        .select('pickup_date')
+        .eq('vehicle_id', vehicle.id)
+        .not('status', 'in', '(cancelled,annullata)')
+        .gte('pickup_date', dropoff_date)
+        .lte('pickup_date', horizon30Iso)
+        .order('pickup_date', { ascending: true })
+        .limit(1),
+    ])
+
     let calendarGapDays: number | undefined
-    if (priorBookings && priorBookings.length > 0) {
+    const hasNext = !!(nextBookings && nextBookings.length > 0)
+    if (hasNext && priorBookings && priorBookings.length > 0) {
+      // Sandwiched: compute gap from previous dropoff to this pickup
       const prevDropMs = new Date(priorBookings[0].dropoff_date).getTime()
       calendarGapDays = Math.max(0, Math.floor((pickupMs - prevDropMs) / (1000 * 60 * 60 * 24)))
+    } else if (hasNext) {
+      // No prior booking but there's a tight next booking — still a gap to fill
+      const nextPickMs = new Date(nextBookings![0].pickup_date).getTime()
+      calendarGapDays = Math.max(0, Math.floor((nextPickMs - dropoffMs) / (1000 * 60 * 60 * 24)))
     }
+    // else: niente booking successivo entro 30gg → calendario aperto → no gap
 
     // 3d. Vehicle monthly revenue — computed for the MONTH of the rental's
     // pickup date (not "now"), so a preventivo for August checks August's
