@@ -995,7 +995,11 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       setEditingId(null)
       resetForm()
 
-      if (sendAfterSave && !wasEditing && data) {
+      // Send WhatsApp after save OR update — whenever the admin clicked the
+      // "...e invia" CTA and the selected customer has a phone. Previously
+      // this only fired on create; the edit flow silently skipped the send.
+      void wasEditing // kept for readability / future diverging logic
+      if (sendAfterSave && data) {
         const cust = customers.find((c: any) => c.id === selectedCustomerId)
         if (cust?.phone) {
           await handleSendWhatsApp(data, cust.phone)
@@ -2361,33 +2365,32 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         </div>
       </div>
 
-      {/* Actions — single inline block, responsive on its own.
-          Mobile (< 640px): full-width stacked, primary CTA on top, Annulla at
-          bottom. Desktop (≥ 640px): right-aligned horizontal row, Annulla left. */}
+      {/* Actions — inline, responsive. Mobile (< 640px): stacked full-width,
+          primary on top. Desktop (≥ 640px): right-aligned row, Annulla left.
+          Both new and edit flows offer a "save + send via WhatsApp" CTA when
+          a customer with a phone is selected. */}
       <div className="flex flex-col sm:flex-row sm:gap-3 sm:justify-end gap-2 pt-2">
-        {!editingId && (
-          <Button
-            disabled={
-              saving ||
-              sendingWhatsapp ||
-              !form.vehicle_id ||
-              rentalDays < 1 ||
-              !selectedCustomerId ||
-              !customers.find((c: any) => c.id === selectedCustomerId)?.phone
-            }
-            onClick={() => handleSave(true)}
-            className="w-full sm:w-auto order-1"
-            title={
-              !selectedCustomerId
-                ? 'Seleziona un cliente sopra (campo Fascia)'
-                : !customers.find((c: any) => c.id === selectedCustomerId)?.phone
-                  ? 'Il cliente selezionato non ha un numero di telefono'
-                  : ''
-            }
-          >
-            {saving || sendingWhatsapp ? 'Invio...' : 'Salva e invia'}
-          </Button>
-        )}
+        <Button
+          disabled={
+            saving ||
+            sendingWhatsapp ||
+            !form.vehicle_id ||
+            rentalDays < 1 ||
+            !selectedCustomerId ||
+            !customers.find((c: any) => c.id === selectedCustomerId)?.phone
+          }
+          onClick={() => handleSave(true)}
+          className="w-full sm:w-auto order-1"
+          title={
+            !selectedCustomerId
+              ? 'Seleziona un cliente sopra (campo Fascia)'
+              : !customers.find((c: any) => c.id === selectedCustomerId)?.phone
+                ? 'Il cliente selezionato non ha un numero di telefono'
+                : ''
+          }
+        >
+          {saving || sendingWhatsapp ? 'Invio...' : (editingId ? 'Aggiorna e invia' : 'Salva e invia')}
+        </Button>
         <Button
           disabled={saving || !form.vehicle_id || rentalDays < 1}
           onClick={() => handleSave(false)}
