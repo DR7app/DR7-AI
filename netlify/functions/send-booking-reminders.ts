@@ -460,14 +460,48 @@ export const reminderHandler: Handler = async () => {
             continue;
           }
 
+          // Safety: never send if dropoff_date is more than 3 days ago.
+          // Protegge contro dati sporchi (dropoff_date aggiornato per errore)
+          // che farebbero matchare vecchie prenotazioni al filtro di ieri.
+          const dropoffTime = booking.dropoff_date ? new Date(booking.dropoff_date).getTime() : 0;
+          const threeDaysAgoMs = Date.now() - 3 * 24 * 60 * 60 * 1000;
+          if (!dropoffTime || dropoffTime < threeDaysAgoMs) {
+            console.log(`[IBAN Deposit] Skipping ${booking.id} — dropoff_date ${booking.dropoff_date} fuori finestra sicura (>3 giorni fa)`);
+            continue;
+          }
+
           const phone = await resolvePhone(booking, supabase);
           if (!phone) { console.log(`[IBAN Deposit] Skipping ${booking.id} — no phone`); continue; }
           if (await isBlacklisted(booking, supabase)) { console.log(`[IBAN Deposit] Skipping ${booking.id} — blacklisted`); continue; }
 
           const firstName = booking.booking_details?.customer?.firstName || booking.customer_name?.split(' ')[0] || 'Cliente';
-          const template = getTemplate('deposit_return_iban', null);
-          if (!template) { console.log(`[IBAN Deposit] Skipping ${booking.id} — template disabled`); continue; }
-          const message = template.replace(/\{nome\}/g, firstName);
+          const fullName = booking.customer_name
+            || [booking.booking_details?.customer?.firstName, booking.booking_details?.customer?.lastName].filter(Boolean).join(' ').trim()
+            || firstName;
+          const vehicleName = booking.vehicle_name || booking.booking_details?.vehicle?.name || '';
+
+          // SOLO Messaggi di Sistema Pro. La chiave `pro_richiesta_iban`
+          // è il template "Richiesta IBAN" editato dall'admin. Nessun
+          // fallback sul legacy `deposit_return_iban` hardcoded nel seed.
+          const { data: ibanTpl } = await supabase
+            .from('system_messages')
+            .select('message_body, is_enabled')
+            .eq('message_key', 'pro_richiesta_iban')
+            .maybeSingle();
+          if (!ibanTpl || ibanTpl.is_enabled === false || !ibanTpl.message_body?.trim()) {
+            console.log(`[IBAN Deposit] Skipping ${booking.id} — pro_richiesta_iban template vuoto o disattivato`);
+            continue;
+          }
+          const vars: Record<string, string> = {
+            'nome cliente': fullName,
+            nome: firstName,
+            customer_name: fullName,
+            vehicle_name: vehicleName,
+          };
+          let message = ibanTpl.message_body as string;
+          for (const [k, v] of Object.entries(vars)) {
+            message = message.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '');
+          }
 
           const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
 
