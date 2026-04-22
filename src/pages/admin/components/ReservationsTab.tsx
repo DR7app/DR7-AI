@@ -4424,6 +4424,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '{payment_method}': formData.payment_method || '',
             '{payment_status}': isPending ? 'Da saldare' : 'Pagato',
             '{notes}': formData.notes || '',
+            // Payment link + expiry placeholders — only meaningful when the
+            // rental_da_saldare_customer / payment_link_customer template is
+            // chosen below. Pass '' when no link exists so the placeholder
+            // doesn't leak into the message as "{payment_link}".
+            '{payment_link}': '',
+            '{link}': '',
+            '{expiry}': '1 ora',
           }
 
           // Pick the right template:

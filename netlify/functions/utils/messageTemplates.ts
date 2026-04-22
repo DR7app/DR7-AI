@@ -155,9 +155,17 @@ export async function getMessageTemplate(
 
   let body = tpl.message_body
 
-  // Replace variables
-  for (const [k, v] of Object.entries(variables)) {
-    body = body.replace(new RegExp(`\\{${k}\\}`, 'g'), v ?? '')
+  // Replace variables. Accept BOTH bare (`name`) and wrapped (`{name}`) keys
+  // coming in, and substitute every brace-wrapped form the template may
+  // contain ({name}, {{name}}, { name }). Historically some callers passed
+  // wrapped keys here — previously they'd produce a `\{\{name\}\}` regex that
+  // only matched `{{name}}` in the body, silently leaving `{name}` untouched.
+  const escRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  for (const [rawKey, v] of Object.entries(variables)) {
+    const cleanKey = String(rawKey).replace(/^\s*\{+\s*|\s*\}+\s*$/g, '').trim()
+    if (!cleanKey) continue
+    body = body.replace(new RegExp(`\\{\\s*${escRx(cleanKey)}\\s*\\}`, 'g'), v ?? '')
+    body = body.replace(new RegExp(`\\{\\{\\s*${escRx(cleanKey)}\\s*\\}\\}`, 'g'), v ?? '')
   }
 
   // Add header/footer if configured — pulled from Messaggi di Sistema Pro

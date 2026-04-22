@@ -79,8 +79,21 @@ const handler: Handler = async (event) => {
       if (tpl?.message_body) {
         let rendered = tpl.message_body;
         if (templateVars && typeof templateVars === 'object') {
-          for (const [key, val] of Object.entries(templateVars)) {
-            rendered = rendered.split(key).join(String(val));
+          // Normalise each key: strip optional leading/trailing braces and any
+          // surrounding whitespace, then substitute EVERY brace-wrapped form
+          // the template may contain:
+          //   {name}  {{name}}  { name }   *{name}*
+          // Also handles callers that pass bare keys (`'name'`) OR wrapped
+          // keys (`'{name}'`). Prevents silent leaks where a caller sends one
+          // convention but the template expects the other.
+          const escRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          for (const [rawKey, val] of Object.entries(templateVars)) {
+            const cleanKey = String(rawKey).replace(/^\s*\{+\s*|\s*\}+\s*$/g, '').trim();
+            if (!cleanKey) continue;
+            // Match {key}, {{key}}, { key }, etc.
+            rendered = rendered.replace(new RegExp(`\\{\\s*${escRx(cleanKey)}\\s*\\}`, 'g'), String(val ?? ''));
+            // Match accidental double-brace {{key}} → some templates were pasted that way
+            rendered = rendered.replace(new RegExp(`\\{\\{\\s*${escRx(cleanKey)}\\s*\\}\\}`, 'g'), String(val ?? ''));
           }
         }
         // Pull header/footer from Messaggi di Sistema Pro — no hardcoded fallback.
