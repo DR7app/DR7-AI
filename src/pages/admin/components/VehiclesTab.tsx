@@ -201,12 +201,15 @@ export default function VehiclesTab() {
     }
     logger.log(`  Deleted ${deletedReservations?.length || 0} reservations`)
 
-    // Get booking IDs first so we can delete dependent records
+    // Get booking IDs first so we can delete dependent records.
+    // Match BOTH on vehicle_id (authoritative FK) AND vehicle_name (string fallback
+    // for legacy bookings that never had vehicle_id populated). Prima bug: solo
+    // vehicle_name → prenotazioni rimanevano orfane dopo delete del veicolo.
     logger.log('  Fetching booking IDs...')
     const { data: bookingsToDelete, error: fetchError } = await supabase
       .from('bookings')
       .select('id')
-      .eq('vehicle_name', vehicleName)
+      .or(`vehicle_id.eq.${id},vehicle_name.eq.${vehicleName}`)
 
     if (fetchError) {
       console.error('  Error fetching bookings:', fetchError)
@@ -214,7 +217,7 @@ export default function VehiclesTab() {
     }
 
     const bookingIds = (bookingsToDelete || []).map(b => b.id)
-    logger.log(`  Found ${bookingIds.length} bookings to delete`)
+    logger.log(`  Found ${bookingIds.length} bookings to delete (matched by vehicle_id or vehicle_name)`)
 
     if (bookingIds.length > 0) {
       // Delete contracts referencing these bookings (FK: contracts_booking_id_fkey)
@@ -242,12 +245,12 @@ export default function VehiclesTab() {
       }
     }
 
-    // Delete from bookings
+    // Delete from bookings — same OR match so niente prenotazioni orfane
     logger.log('  Deleting bookings...')
     const { data: deletedBookings, error: bookError } = await supabase
       .from('bookings')
       .delete()
-      .eq('vehicle_name', vehicleName)
+      .or(`vehicle_id.eq.${id},vehicle_name.eq.${vehicleName}`)
       .select()
 
     if (bookError) {
