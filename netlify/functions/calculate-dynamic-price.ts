@@ -247,23 +247,27 @@ export const handler: Handler = async (event) => {
       calendarGapDays = Math.max(0, Math.floor((pickupMs - prevDropMs) / (1000 * 60 * 60 * 24)))
     }
 
-    // 3d. Vehicle monthly revenue — SAME calculation the Report uses, so the
-    // per-vehicle target coefficient ("Spinta Veicolo") activates against the
-    // number the admin sees in Reports. Skipped when no target is configured
-    // for this vehicle to avoid the extra query.
+    // 3d. Vehicle monthly revenue — computed for the MONTH of the rental's
+    // pickup date (not "now"), so a preventivo for August checks August's
+    // accumulated revenue on that vehicle. Uses the same calculation as the
+    // Report so the Spinta Veicolo target matches what admin sees there.
+    // Skipped when no target is configured for this vehicle.
     let vehicleMonthlyRevenueEur: number | undefined
     const hasTarget = !!config.vehicle_revenue_targets?.[vehicle.id]
     if (hasTarget) {
-      const nowRome = new Date()
-      const year = nowRome.getUTCFullYear()
-      const monthNum = nowRome.getUTCMonth() + 1
-      const { totalRevenue } = await computeVehicleMonthlyRevenue(
-        supabase,
-        { id: vehicle.id, plate: vehicle.plate, display_name: vehicle.display_name },
-        year,
-        monthNum,
-      )
-      vehicleMonthlyRevenueEur = totalRevenue
+      const pickupYmd = String(pickup_date).slice(0, 10)
+      const [yearStr, monthStr] = pickupYmd.split('-')
+      const year = Number(yearStr)
+      const monthNum = Number(monthStr)
+      if (Number.isFinite(year) && Number.isFinite(monthNum) && monthNum >= 1 && monthNum <= 12) {
+        const { totalRevenue } = await computeVehicleMonthlyRevenue(
+          supabase,
+          { id: vehicle.id, plate: vehicle.plate, display_name: vehicle.display_name },
+          year,
+          monthNum,
+        )
+        vehicleMonthlyRevenueEur = totalRevenue
+      }
     }
 
     // 4. Build pricing input and run the shared engine

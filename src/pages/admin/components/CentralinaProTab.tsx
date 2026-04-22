@@ -2984,7 +2984,7 @@ function PromoPushSection({
           Obiettivo Mensile per Veicolo
         </h4>
         <p className="text-[12px] text-[#6e6e73] mt-0.5 mb-3">
-          Quando un veicolo raggiunge l'incasso minimo nel mese corrente, il suo coefficiente moltiplica la tariffa giornaliera. Si combina con la promo globale qui sopra.
+          Quando un veicolo raggiunge la soglia di incasso mensile nel mese del noleggio (es. preventivo per agosto → controlla l'incasso di agosto), il coefficiente moltiplica la tariffa. La soglia piu' alta raggiunta vince. Si combina con la promo globale qui sopra.
         </p>
 
         {vehicles.length === 0 ? (
@@ -3016,7 +3016,7 @@ function PromoPushSection({
                       <div className="text-[11px] text-[#a1a1a6] font-mono">{v.plate || '— senza targa'}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-[10px] uppercase tracking-wide text-[#a1a1a6]">Incasso mese</div>
+                      <div className="text-[10px] uppercase tracking-wide text-[#a1a1a6]">Incasso mese corrente</div>
                       <div className="text-[14px] text-[#1d1d1f] font-semibold tabular-nums">
                         {hasRevenue ? `€${(currentRevenue as number).toFixed(0)}` : '—'}
                       </div>
