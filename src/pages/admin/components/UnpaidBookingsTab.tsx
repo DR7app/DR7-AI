@@ -812,8 +812,10 @@ export default function UnpaidBookingsTab() {
       toast.dismiss('paylink')
       if (!res.ok) throw new Error(result.error || 'Errore')
       if (result.paymentUrl) {
-        await navigator.clipboard.writeText(result.paymentUrl)
-        toast.success('Link copiato!')
+        // Clipboard write can throw NotAllowedError on Safari/iOS when the
+        // user-gesture context was broken by the preceding await. Swallow the
+        // error here so it doesn't abort the WhatsApp send below.
+        try { await navigator.clipboard.writeText(result.paymentUrl) } catch { /* clipboard blocked — ignore, link still sent via WhatsApp */ }
         // Send via WhatsApp
         const phone = booking.customer_phone || booking.booking_details?.customer?.phone
         if (phone) {

@@ -806,8 +806,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           toast.success('Nuovo link generato e inviato via WhatsApp!', { id: toastId })
         }
       } else {
-        navigator.clipboard.writeText(linkData.paymentUrl)
-        toast.success('Nuovo link generato e copiato! Nessun telefono per WhatsApp.', { id: toastId })
+        // Best-effort clipboard copy; Safari/iOS may deny after the preceding
+        // await. Always show the URL in the toast so admin can copy manually.
+        try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard blocked */ }
+        toast.success(`Nuovo link generato: ${linkData.paymentUrl}`, { id: toastId, duration: 10000 })
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err)
