@@ -62,9 +62,29 @@ const ACTION_LABELS: Record<string, string> = {
   delete_unpaid_booking: 'Eliminazione prenotazione non pagata',
   cassa_cauzione: 'Cassa cauzione',
   limitation_override_approved: 'Override limitazione approvato',
+  // Virtual actions (stored as edit_booking with _subaction, unwrapped on display)
+  preventivo_created: 'Creazione preventivo',
+  preventivo_updated: 'Modifica preventivo',
+  preventivo_sent: 'Invio preventivo WhatsApp',
+  preventivo_converted: 'Conversione preventivo',
+  preventivo_rejected: 'Rifiuto preventivo',
+  centralina_pro_updated: 'Modifica Centralina Pro',
+  system_message_updated: 'Modifica template messaggio',
+  system_message_toggled: 'Toggle template messaggio',
+  system_message_created: 'Nuovo template messaggio',
+  whatsapp_sent: 'Invio WhatsApp',
+  whatsapp_free_text: 'Messaggio libero WhatsApp',
+  whatsapp_bulk_send: 'Invio massivo WhatsApp',
 }
 
 const ACTION_OPTIONS = Object.entries(ACTION_LABELS).map(([value, label]) => ({ value, label }))
+
+// Unwrap the real action when it was stored as edit_booking + details._subaction
+// (used to bypass the CHECK constraint on admin_activity_log.action).
+function resolveAction(log: { action: string; details: Record<string, any> | null }): string {
+  const sub = log.details?._subaction
+  return typeof sub === 'string' ? sub : log.action
+}
 
 // Human-readable labels for detail keys (snake_case → Italian)
 const DETAIL_LABELS: Record<string, string> = {
@@ -436,7 +456,7 @@ export default function OperatoriTab() {
                             <td className="py-3 px-3 whitespace-nowrap text-theme-text-secondary">{formatDate(log.created_at)}</td>
                             <td className="py-3 px-3">
                               <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-dr7-gold/10 text-dr7-gold">
-                                {ACTION_LABELS[log.action] || log.action}
+                                {ACTION_LABELS[resolveAction(log)] || resolveAction(log)}
                               </span>
                             </td>
                             <td className="py-3 px-3 text-theme-text-secondary">

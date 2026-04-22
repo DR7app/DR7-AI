@@ -45,20 +45,41 @@ export async function logAdminAction(
 ) {
   try {
     const admin = await getAdminInfo()
-    if (!admin) {
-      logger.warn('[LOG] No admin info found, skipping log for:', action)
-      return
-    }
-    logger.log('[LOG] Inserting:', action, entity_type, entity_id)
+    if (!admin) return
+
+    // Whitelist of action names known to pass the CHECK constraint on the
+    // admin_activity_log table. Anything outside this list is mapped to
+    // edit_booking + the real action goes into details._subaction.
+    const ALLOWED = new Set([
+      'login', 'create_booking', 'edit_booking', 'delete_booking',
+      'cancel_booking', 'cancel_carwash', 'cancel_mechanical',
+      'generate_contract', 'resend_contract', 'generate_fattura',
+      'extend_booking', 'mark_paid', 'create_penalty', 'create_danni',
+      'create_danni_penali', 'create_carwash', 'delete_carwash',
+      'generate_carwash_fattura', 'create_mechanical', 'delete_mechanical',
+      'generate_mechanical_fattura', 'edit_customer', 'delete_customer',
+      'update_customer_status', 'delete_fattura', 'bulk_delete_fatture',
+      'create_nota_di_credito', 'send_sdi', 'send_trustera_document',
+      'delete_trustera_document', 'mark_extension_paid',
+      'mark_booking_extensions_paid', 'mark_all_customer_paid',
+      'mark_fattura_item_paid', 'mark_type_paid', 'partial_payment',
+      'delete_extension', 'delete_unpaid_booking', 'cassa_cauzione',
+      'limitation_override_approved',
+    ])
+
+    const safeAction = ALLOWED.has(action) ? action : 'edit_booking'
+    const safeDetails = ALLOWED.has(action)
+      ? (details || {})
+      : { ...(details || {}), _subaction: action }
 
     const { error: insertError } = await supabase.from('admin_activity_log').insert({
       admin_id: admin.id,
       admin_email: admin.email,
       admin_name: admin.nome,
-      action,
+      action: safeAction,
       entity_type: entity_type || null,
       entity_id: entity_id || null,
-      details: details || {},
+      details: safeDetails,
     })
     if (insertError) console.error('[LOG] Insert failed:', insertError)
     else logger.log('[LOG] Insert OK:', action)

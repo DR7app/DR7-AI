@@ -919,6 +919,26 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
       if (error) throw error
       toast.success(editingId ? 'Preventivo aggiornato!' : 'Preventivo salvato!')
+
+      // Audit log
+      const logDetails = {
+        number: data?.id ? data.id.substring(0, 8) : null,
+        customer: data?.customer_name || customers.find((c: any) => c.id === selectedCustomerId)?.full_name || null,
+        phone: data?.customer_phone || customers.find((c: any) => c.id === selectedCustomerId)?.phone || null,
+        vehicle: data?.vehicle_name || null,
+        plate: data?.vehicle_plate || null,
+        pickup_date: data?.pickup_date || null,
+        dropoff_date: data?.dropoff_date || null,
+        total: data?.total_final || null,
+        rental_days: data?.rental_days || null,
+      }
+      logAdminAction(
+        editingId ? 'preventivo_updated' : 'preventivo_created',
+        'preventivo',
+        data?.id || editingId || undefined,
+        logDetails,
+      )
+
       if (editingId) {
         setPreventivi(prev => prev.map(p => p.id === editingId ? data : p))
       } else {
@@ -1243,6 +1263,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         .eq('id', preventivo.id)
 
       appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: `${phone} - ${selectedCust?.full_name || ''}` })
+      logAdminAction('preventivo_sent', 'preventivo', preventivo.id, {
+        number: preventivo.id.substring(0, 8),
+        customer: selectedCust?.full_name || preventivo.customer_name || null,
+        phone,
+        vehicle: preventivo.vehicle_name,
+        plate: preventivo.vehicle_plate,
+        total: preventivo.total_final,
+        rental_days: preventivo.rental_days,
+      })
       toast.success('Preventivo inviato via WhatsApp!')
       setShowPhoneModal(false)
       setWhatsappPhone('')
@@ -1285,6 +1314,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       .from('preventivi')
       .update({ status: 'accettato' })
       .eq('id', preventivo.id)
+
+    logAdminAction('preventivo_converted', 'preventivo', preventivo.id, {
+      number: preventivo.id.substring(0, 8),
+      customer: preventivo.customer_name,
+      phone: preventivo.customer_phone,
+      vehicle: preventivo.vehicle_name,
+      plate: preventivo.vehicle_plate,
+      total: preventivo.total_final,
+    })
 
     if (onConvertToBooking) {
       onConvertToBooking({
@@ -1365,6 +1403,14 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     }
 
     appendPreventivoEvent(preventivo.id, 'no_cauzione_rifiutato', { detail: `discount_code: ${code}` })
+    logAdminAction('preventivo_rejected', 'preventivo', preventivo.id, {
+      number: preventivo.id.substring(0, 8),
+      customer: preventivo.customer_name,
+      phone: preventivo.customer_phone,
+      vehicle: preventivo.vehicle_name,
+      reason: 'no_cauzione non disponibile',
+      discount_code: code,
+    })
     toast.success(`Rifiutato — codice sconto ${code} inviato al cliente`)
     loadPreventivi()
   }

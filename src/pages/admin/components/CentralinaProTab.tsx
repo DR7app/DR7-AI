@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 type FleetVehicle = {
   id: string
@@ -863,6 +864,7 @@ export default function CentralinaProTab() {
   )
 
   function handleSave() {
+    const changesSnapshot = changes.slice()
     setSavedCategories(categories)
     setSavedFasce(fasce)
     setSavedInsurance(insurance)
@@ -874,6 +876,13 @@ export default function CentralinaProTab() {
     savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi })
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
+
+    if (changesSnapshot.length > 0) {
+      logAdminAction('centralina_pro_updated', 'config', 'centralina_pro', {
+        changes_count: changesSnapshot.length,
+        changes: changesSnapshot,
+      })
+    }
   }
 
   function handleDiscard() {
