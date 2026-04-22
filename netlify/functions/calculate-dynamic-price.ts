@@ -128,6 +128,9 @@ async function loadRevenueConfig(): Promise<RevenueConfig | null> {
       promo_push_coefficients: Array.isArray(proDynamic.promo_push_coefficients)
         ? proDynamic.promo_push_coefficients.map((d: any) => ({ key: d.key, label: d.label, coeff: Number(d.coeff) || 1.0 })) : [],
       special_dates: (proDynamic.special_dates && typeof proDynamic.special_dates === 'object') ? proDynamic.special_dates : {},
+      special_periods: Array.isArray(proDynamic.special_periods)
+        ? proDynamic.special_periods.filter((p: any) => p && typeof p.start_date === 'string')
+        : [],
       active_promo_level: proDynamic.active_promo_level || '',
       vehicle_revenue_targets: (proDynamic.vehicle_revenue_targets && typeof proDynamic.vehicle_revenue_targets === 'object')
         ? proDynamic.vehicle_revenue_targets : {},
@@ -177,7 +180,7 @@ export const handler: Handler = async (event) => {
     // 2. Fetch vehicle
     const { data: vehicle, error: vehicleError } = await supabase
       .from('vehicles')
-      .select('id, display_name, daily_rate, category, status')
+      .select('id, display_name, daily_rate, category, status, plate')
       .eq('id', vehicle_id)
       .single()
 

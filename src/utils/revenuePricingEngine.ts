@@ -55,7 +55,12 @@ export interface RevenueConfig {
   day_type_coefficients: NamedCoefficient[]
   vehicle_occupation_coefficients: NamedCoefficient[]
   promo_push_coefficients: NamedCoefficient[]
-  special_dates: Record<string, string>     // YYYY-MM-DD -> day_type key
+  special_dates: Record<string, string>     // LEGACY: YYYY-MM-DD -> day_type key
+  special_periods: Array<{                  // PREFERRED: ranges
+    start_date: string   // YYYY-MM-DD inclusive
+    end_date: string     // YYYY-MM-DD inclusive
+    day_type_key: string
+  }>
   active_promo_level: string
   // Per-vehicle monthly revenue target → coefficient.
   // When a vehicle's current-month revenue reaches min_revenue, coeff multiplies
@@ -156,6 +161,7 @@ export function getDefaultConfig(): RevenueConfig {
     vehicle_occupation_coefficients: [],
     promo_push_coefficients: [],
     special_dates: {},
+    special_periods: [],
     active_promo_level: '',
     vehicle_revenue_targets: {},
   }
@@ -189,8 +195,10 @@ export function matchBracket(
  * that apply to each real day of the rental period.
  *
  * Each day is classified using, in order:
- *   1. config.special_dates[YYYY-MM-DD] → named tier (prefestivo / ponte / evento / festività)
- *   2. its weekday → monday | tuesday | wednesday | thursday | friday | saturday | sunday
+ *   1. special_periods — any range covering the day; if multiple overlap, the LAST
+ *      entry wins (so admin can layer overrides by appending).
+ *   2. special_dates[YYYY-MM-DD] — legacy single-day override (kept for back-compat).
+ *   3. its weekday → monday | tuesday | wednesday | thursday | friday | saturday | sunday
  *
  * If a repeated weekday occurs multiple times in the period (e.g. two Saturdays in
  * an 8-day rental), it is counted once per occurrence. Days whose tier key isn't
@@ -204,6 +212,7 @@ export function calculateDayTypeMeanCoeff(
   specialDates: Record<string, string>,
   pickupYmd: string,
   rentalDays: number,
+  specialPeriods: RevenueConfig['special_periods'] = [],
 ): { coeff: number; label: string; perDay: Array<{ date: string; key: string; label: string; coeff: number }> } {
   // JS Date.getDay(): 0=Sunday .. 6=Saturday. Map to the admin tier keys.
   const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
@@ -216,10 +225,25 @@ export function calculateDayTypeMeanCoeff(
   const perDay: Array<{ date: string; key: string; label: string; coeff: number }> = []
   let sum = 0
 
+  // Precompute periods so each day does a simple lookup. Later entries win on
+  // overlap (admin's most recent override takes precedence).
+  const normalisedPeriods = (specialPeriods || [])
+    .map(p => ({
+      start: (p.start_date || '').slice(0, 10),
+      end: (p.end_date || p.start_date || '').slice(0, 10),
+      key: p.day_type_key || '',
+    }))
+    .filter(p => p.start && p.end && p.key && p.start <= p.end)
+
   for (let i = 0; i < days; i++) {
     const d = new Date(start.getTime() + i * 86_400_000)
     const ymd = ymdFromUTC(d)
-    const specialKey = specialDates?.[ymd]
+    // Period match: last-wins so appending an entry can override earlier ones.
+    let periodKey = ''
+    for (const p of normalisedPeriods) {
+      if (ymd >= p.start && ymd <= p.end) periodKey = p.key
+    }
+    const specialKey = periodKey || specialDates?.[ymd]
     const key = specialKey || WEEKDAY_KEYS[d.getUTCDay()]
     const match = byKey.get(key)
     const coeff = match ? match.coeff : 1.0
@@ -476,14 +500,16 @@ export function calculateDynamicPrice(
   })
 
   // Day type: arithmetic mean over every real day of the rental period.
-  // Each day is classified via special_dates first, then by weekday. Repeated
-  // weekdays (e.g. two Saturdays in an 8-day rental) count once per occurrence.
+  // Each day is classified via special_periods (ranges), then special_dates
+  // (legacy single-day), then by weekday. Repeated weekdays (e.g. two Saturdays
+  // in an 8-day rental) count once per occurrence.
   const pickupYmd = input.pickupDate.slice(0, 10)
   const { coeff: dayTypeCoeff, label: dayTypeLabel } = calculateDayTypeMeanCoeff(
     config.day_type_coefficients || [],
     config.special_dates || {},
     pickupYmd,
     rentalDays,
+    config.special_periods || [],
   )
   breakdown.push({
     label: 'Coefficienti Tipo Giorno',
@@ -702,6 +728,9 @@ export function parseConfigFromDB(row: {
     vehicle_occupation_coefficients: (c.vehicle_occupation_coefficients as NamedCoefficient[]) || [],
     promo_push_coefficients: (c.promo_push_coefficients as NamedCoefficient[]) || [],
     special_dates: (c.special_dates as Record<string, string>) || {},
+    special_periods: Array.isArray(c.special_periods)
+      ? (c.special_periods as RevenueConfig['special_periods']).filter(p => p && typeof p.start_date === 'string')
+      : [],
     active_promo_level: (c.active_promo_level as string) || '',
     vehicle_revenue_targets: normaliseVehicleRevenueTargets(c.vehicle_revenue_targets),
   }

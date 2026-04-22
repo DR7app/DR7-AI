@@ -10,6 +10,15 @@ type FleetVehicle = {
   plate: string | null
 }
 
+// A period over which a specific day_type (prefestivo, ponte, evento,
+// festività…) applies. Inclusive on both ends. A 1-day entry is simply
+// start_date === end_date.
+type SpecialPeriod = {
+  start_date: string  // YYYY-MM-DD
+  end_date: string    // YYYY-MM-DD
+  day_type_key: string
+}
+
 // Per-vehicle monthly revenue targets → coefficient, with MULTIPLE thresholds.
 // Each tier: reach `min_revenue` € in the current month → multiply the daily rate
 // by `coeff`. When several tiers are reached, the one with the highest `min_revenue`
@@ -171,8 +180,10 @@ type DynamicPricingConfig = {
 
   // Month → season tier mapping (1..12 → season key)
   season_by_month: Record<string, string>
-  // Dates admin marks as special days (YYYY-MM-DD → day_type key)
-  special_dates: Record<string, string>
+  // Date ranges admin marks as a specific day_type (prefestivo / ponte / evento /
+  // festività). A single-day mark is just start_date === end_date. Legacy
+  // `special_dates: Record<date, key>` is migrated into 1-day periods on load.
+  special_periods: SpecialPeriod[]
 
   // Per-vehicle monthly revenue targets → coefficient (keyed by vehicle.id).
   // When vehicle's current-month revenue reaches min_revenue, coeff multiplies
@@ -331,7 +342,7 @@ const INITIAL_PREZZO_DINAMICO: PrezzoDinamicoConfig = {
       '5': 'media', '6': 'alta', '7': 'altissima', '8': 'altissima',
       '9': 'alta', '10': 'bassa', '11': 'bassissima', '12': 'alta',
     },
-    special_dates: {},
+    special_periods: [],
 
     // Empty by default — rows auto-appear in the UI from the fleet table;
     // admin fills min_revenue + coeff per vehicle.
@@ -635,6 +646,34 @@ function migrateVehicleRevenueTargets(raw: unknown): Record<string, VehicleReven
   return out
 }
 
+// Accept either the new array-of-periods shape, the legacy flat
+// { [YYYY-MM-DD]: tier_key } map, or both (merged). Returns undefined when
+// nothing recognisable is present so the caller can fall back to the default.
+function migrateSpecialPeriods(
+  rawPeriods: unknown,
+  rawDates: unknown,
+): SpecialPeriod[] | undefined {
+  const out: SpecialPeriod[] = []
+  if (Array.isArray(rawPeriods)) {
+    for (const p of rawPeriods as Array<Record<string, unknown>>) {
+      if (!p || typeof p !== 'object') continue
+      const start = typeof p.start_date === 'string' ? p.start_date : ''
+      const end   = typeof p.end_date   === 'string' ? p.end_date   : start
+      const key   = typeof p.day_type_key === 'string' ? p.day_type_key : ''
+      if (start) out.push({ start_date: start, end_date: end || start, day_type_key: key })
+    }
+  }
+  if (rawDates && typeof rawDates === 'object' && !Array.isArray(rawDates)) {
+    for (const [d, k] of Object.entries(rawDates as Record<string, unknown>)) {
+      if (!d || typeof k !== 'string') continue
+      out.push({ start_date: d, end_date: d, day_type_key: k })
+    }
+  }
+  if (out.length === 0 && !Array.isArray(rawPeriods) && !rawDates) return undefined
+  // Stable order: by start date ascending.
+  return out.sort((a, b) => a.start_date.localeCompare(b.start_date))
+}
+
 function pick<T>(persisted: PersistedSnapshot | null, key: keyof PersistedSnapshot, fallback: T): T {
   if (persisted && persisted[key] !== undefined && persisted[key] !== null) {
     return persisted[key] as unknown as T
@@ -674,7 +713,13 @@ function mergePrezzoDinamico(saved: Partial<PrezzoDinamicoConfig> | null | undef
       phase1_max_rentals: savedDyn.phase1_max_rentals ?? defaultDyn.phase1_max_rentals,
       phase2_max_rentals: savedDyn.phase2_max_rentals ?? defaultDyn.phase2_max_rentals,
       season_by_month: savedDyn.season_by_month ?? defaultDyn.season_by_month,
-      special_dates: savedDyn.special_dates ?? defaultDyn.special_dates,
+      // Legacy `special_dates` may still exist in persisted configs — read it
+      // via an index lookup so TypeScript doesn't complain, and let the
+      // migration helper fold it into the new `special_periods` array.
+      special_periods: migrateSpecialPeriods(
+        savedDyn.special_periods,
+        (savedDyn as Record<string, unknown>).special_dates,
+      ) ?? defaultDyn.special_periods,
       vehicle_revenue_targets: migrateVehicleRevenueTargets(savedDyn.vehicle_revenue_targets) ?? defaultDyn.vehicle_revenue_targets,
       occupancy_targets: savedDyn.occupancy_targets ?? defaultDyn.occupancy_targets,
     },
@@ -1198,13 +1243,12 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
       if (cur !== prev) out.push(`Stagione mese ${m}: ${prev || 'nessuna'} → ${cur || 'nessuna'}`)
     }
 
-    // Special dates (day_type per date)
-    const allDates = new Set([...Object.keys(cd.special_dates || {}), ...Object.keys(pd.special_dates || {})])
-    allDates.forEach(d => {
-      const c = cd.special_dates?.[d] || ''
-      const p = pd.special_dates?.[d] || ''
-      if (c !== p) out.push(`Data speciale ${d}: ${p || 'nessuna'} → ${c || 'nessuna'}`)
-    })
+    // Special periods (day_type over a range of dates)
+    const serializePeriods = (list?: SpecialPeriod[]) =>
+      JSON.stringify((list || []).map(p => [p.start_date, p.end_date, p.day_type_key]))
+    if (serializePeriods(cd.special_periods) !== serializePeriods(pd.special_periods)) {
+      out.push(`Periodi speciali: ${(pd.special_periods || []).length} → ${(cd.special_periods || []).length}`)
+    }
 
     // Per-vehicle revenue targets (list of tiers)
     const allVids = new Set([
@@ -2739,10 +2783,10 @@ function PrezzoDinamicoSection({
             rows={config.dynamic.day_type_coefficients}
             onChange={(rows) => patchDyn({ day_type_coefficients: rows })}
           />
-          <SpecialDatesSection
-            specialDates={config.dynamic.special_dates}
+          <SpecialPeriodsSection
+            periods={config.dynamic.special_periods}
             dayTypeTiers={config.dynamic.day_type_coefficients}
-            onChange={(map) => patchDyn({ special_dates: map })}
+            onChange={(next) => patchDyn({ special_periods: next })}
           />
           <NamedCoefficientTable
             title="Coefficienti Occupazione Veicolo"
@@ -3137,12 +3181,12 @@ function SeasonByMonthSection({
 // This section is for calling out SPECIFIC dates that are NOT plain weekdays:
 // prefestivo / ponte / evento / festività. Weekday tiers are filtered out of
 // the dropdown so the admin only picks relevant categories.
-function SpecialDatesSection({
-  specialDates, dayTypeTiers, onChange,
+function SpecialPeriodsSection({
+  periods, dayTypeTiers, onChange,
 }: {
-  specialDates: Record<string, string>
+  periods: SpecialPeriod[]
   dayTypeTiers: NamedCoeff[]
-  onChange: (map: Record<string, string>) => void
+  onChange: (next: SpecialPeriod[]) => void
 }) {
   const WEEKDAY_KEYS = new Set([
     'monday', 'tuesday', 'wednesday', 'thursday',
@@ -3150,71 +3194,70 @@ function SpecialDatesSection({
   ])
   const specialTiers = dayTypeTiers.filter(t => !WEEKDAY_KEYS.has(t.key))
 
-  // Stable ordering for display: by ascending date.
-  const entries = Object.entries(specialDates).sort(([a], [b]) => a.localeCompare(b))
-
-  function patchEntry(prevDate: string, nextDate: string, tierKey: string) {
-    const next: Record<string, string> = {}
-    for (const [d, k] of Object.entries(specialDates)) {
-      if (d === prevDate) continue
-      next[d] = k
-    }
-    if (nextDate) next[nextDate] = tierKey
-    onChange(next)
+  function patch(idx: number, p: Partial<SpecialPeriod>) {
+    onChange(periods.map((row, i) => (i === idx ? { ...row, ...p } : row)))
   }
-  function removeEntry(date: string) {
-    const next = { ...specialDates }
-    delete next[date]
-    onChange(next)
+  function remove(idx: number) {
+    onChange(periods.filter((_, i) => i !== idx))
   }
-  function addEntry() {
-    // Pick an unused placeholder date so we never clobber an existing entry.
-    let candidate = new Date().toISOString().slice(0, 10)
-    let guard = 0
-    while (specialDates[candidate] !== undefined && guard < 365) {
-      const d = new Date(candidate)
-      d.setDate(d.getDate() + 1)
-      candidate = d.toISOString().slice(0, 10)
-      guard++
-    }
+  function addPeriod() {
+    const today = new Date().toISOString().slice(0, 10)
     const firstTier = specialTiers[0]?.key || ''
-    onChange({ ...specialDates, [candidate]: firstTier })
+    onChange([...periods, { start_date: today, end_date: today, day_type_key: firstTier }])
   }
 
   return (
     <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
       <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
-        Classificazione Date Speciali
+        Classificazione Periodi Speciali
       </h3>
       <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
-        Assegna un tipo specifico a singole date (prefestivi, ponti, eventi, festività). I giorni della settimana sono già calcolati automaticamente dalla data.
+        Assegna un tipo a un periodo di date (es. ponte dell'Immacolata, vacanze natalizie, evento). I giorni della settimana restano calcolati automaticamente al di fuori dei periodi definiti.
       </p>
 
-      {entries.length === 0 && (
+      {periods.length === 0 && (
         <div className="text-[13px] text-[#a1a1a6] py-3 text-center border border-dashed border-black/10 rounded-lg mb-3">
-          Nessuna data speciale definita. Ogni data verrà classificata come semplice giorno della settimana.
+          Nessun periodo definito. Ogni data verrà classificata come semplice giorno della settimana.
+        </div>
+      )}
+
+      {periods.length > 0 && (
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto_auto] gap-2 items-center text-[10px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1 mb-1">
+          <span>Data inizio</span>
+          <span>Data fine</span>
+          <span>Tipo</span>
+          <span className="text-right">Coeff.</span>
+          <span></span>
         </div>
       )}
 
       <div className="space-y-2">
-        {entries.map(([date, tierKey]) => {
-          const tierData = dayTypeTiers.find(t => t.key === tierKey)
+        {periods.map((p, idx) => {
+          const tierData = dayTypeTiers.find(t => t.key === p.day_type_key)
           const badgeClass = tierData && typeof tierData.coeff === 'number'
             ? tierData.coeff < 1 ? 'bg-green-100 text-green-700'
             : tierData.coeff > 1 ? 'bg-red-100 text-red-700'
             : 'bg-gray-100 text-gray-600'
             : 'bg-gray-100 text-gray-400'
+          const invalidRange = !!p.start_date && !!p.end_date && p.end_date < p.start_date
           return (
-            <div key={date} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center">
+            <div key={idx} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto_auto] gap-2 items-center">
               <input
                 type="date"
-                value={date}
-                onChange={(e) => patchEntry(date, e.target.value, tierKey)}
-                className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                value={p.start_date}
+                onChange={(e) => patch(idx, { start_date: e.target.value })}
+                className={`bg-white border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${invalidRange ? 'border-red-400' : 'border-black/10'}`}
+              />
+              <input
+                type="date"
+                value={p.end_date}
+                min={p.start_date || undefined}
+                onChange={(e) => patch(idx, { end_date: e.target.value })}
+                className={`bg-white border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${invalidRange ? 'border-red-400' : 'border-black/10'}`}
               />
               <select
-                value={tierKey}
-                onChange={(e) => patchEntry(date, date, e.target.value)}
+                value={p.day_type_key}
+                onChange={(e) => patch(idx, { day_type_key: e.target.value })}
                 className="w-full bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">— (nessuna)</option>
@@ -3227,7 +3270,7 @@ function SpecialDatesSection({
               </span>
               <button
                 type="button"
-                onClick={() => removeEntry(date)}
+                onClick={() => remove(idx)}
                 className="text-[#ff3b30] hover:text-[#d70015] text-[16px] px-2 leading-none"
                 aria-label="Rimuovi"
               >−</button>
@@ -3238,11 +3281,11 @@ function SpecialDatesSection({
 
       <button
         type="button"
-        onClick={addEntry}
+        onClick={addPeriod}
         disabled={specialTiers.length === 0}
         className="mt-3 text-[13px] text-[#007aff] hover:text-[#0051d5] disabled:text-[#a1a1a6] disabled:cursor-not-allowed"
       >
-        + Aggiungi data speciale
+        + Aggiungi periodo speciale
       </button>
       {specialTiers.length === 0 && (
         <p className="text-[11px] text-[#ff9500] mt-2">

@@ -351,8 +351,9 @@ describe('Config persistence roundtrip', () => {
 
   it('handles null DB row gracefully', () => {
     const parsed = parseConfigFromDB(null)
-    expect(parsed.enabled).toBe(false)
-    expect(parsed.mode).toBe('suggestion')
+    // Defaults come from getDefaultConfig(): enabled=true, mode=auto_apply
+    expect(parsed.enabled).toBe(true)
+    expect(parsed.mode).toBe('auto_apply')
   })
 
   it('maps legacy mode names', () => {
@@ -545,7 +546,9 @@ describe('Audit trace completeness', () => {
     expect(result).toHaveProperty('mode')
     expect(result).toHaveProperty('enabled')
     expect(result).toHaveProperty('breakdown')
-    expect(result.breakdown.length).toBe(4) // occ, adv, dur, season
+    // 9 coefficients: occ, adv, dur, season, calendar-gap, day-type,
+    // vehicle-occupation, promo-push, vehicle-target
+    expect(result.breakdown.length).toBe(9)
   })
 })
 
