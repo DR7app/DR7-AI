@@ -185,8 +185,9 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
 
     function addCustomPenale() {
         const amt = parseFloat(penaleAmount)
-        if (!penaleLabel.trim() || isNaN(amt) || amt <= 0) return
-        setCart(prev => [...prev, { id: `penale_${Date.now()}`, type: 'penale', label: penaleLabel.trim(), unitPrice: amt, quantity: 1 }])
+        if (isNaN(amt) || amt <= 0) return
+        const label = penaleLabel.trim() || 'Penale personalizzata'
+        setCart(prev => [...prev, { id: `penale_${Date.now()}`, type: 'penale', label, unitPrice: amt, quantity: 1 }])
         setPenaleLabel('')
         setPenaleAmount('')
     }
@@ -646,7 +647,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                         />
                                     </div>
                                     <button type="button" onClick={addCustomPenale}
-                                        disabled={!penaleLabel.trim() || !penaleAmount || parseFloat(penaleAmount) <= 0}
+                                        disabled={!penaleAmount || parseFloat(penaleAmount) <= 0}
                                         className="w-9 h-9 rounded-full bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 flex items-center justify-center transition-all disabled:opacity-20 disabled:cursor-not-allowed shrink-0"
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>

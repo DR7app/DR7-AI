@@ -1902,7 +1902,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.dismiss()
 
       if (!custPhone) {
-        try { await navigator.clipboard.writeText(newPaymentLink) } catch { /* clipboard blocked */ }
+        // Don't call navigator.clipboard.writeText here — Safari/iOS throws
+        // NotAllowedError ("The request is not allowed by the user agent…")
+        // when the call happens after an async gap (the preceding await
+        // broke the user-gesture context). The link is already shown in
+        // the toast so the admin can select-copy it manually.
         toast.success(`Link generato: ${newPaymentLink}`, { duration: 10000 })
         return
       }
@@ -2901,7 +2905,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               })
             }
 
-            try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
+            // Skip navigator.clipboard — Safari throws NotAllowedError after the
+            // awaited WhatsApp fetch because the user-gesture context is lost.
             toast.success(`Pay by Link estensione inviato! €${additionalAmount.toFixed(2)} (validità ${expirationHours}h)`)
           } else {
             toast.error('Errore Pay by Link: ' + (linkData.error || 'Errore'))
