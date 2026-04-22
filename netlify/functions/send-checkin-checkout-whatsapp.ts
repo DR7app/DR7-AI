@@ -1,6 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { resolveKeyForContext } from "./utils/messageTemplates";
+import { resolveVehicleName } from "./utils/resolveVehicleName";
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -110,7 +111,7 @@ const handler: Handler = async (event) => {
       booking.booking_details?.customer?.fullName ||
       "Cliente";
     const firstName = customerName.split(" ")[0];
-    const vehicleName = booking.vehicle_name || "Veicolo";
+    const vehicleName = (await resolveVehicleName(supabase, booking)) || "Veicolo";
     const targa =
       booking.vehicle_plate ||
       booking.booking_details?.vehicle?.targa ||

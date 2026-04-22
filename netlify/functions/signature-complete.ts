@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import { sendToCargos } from './cargos-auto-send'
 import { renderTemplate } from './utils/messageTemplates'
+import { resolveVehicleName } from './utils/resolveVehicleName'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -462,7 +463,7 @@ export const handler: Handler = async (event) => {
                         const customerName = fullBooking.customer_name || fullBooking.booking_details?.customer?.fullName || 'Cliente'
                         const bookingIdShort = String(fullBooking.id).substring(0, 8).toUpperCase()
                         const totalPrice = ((fullBooking.price_total || 0) / 100).toFixed(2)
-                        const vehicleName = fullBooking.vehicle_name || ''
+                        const vehicleName = await resolveVehicleName(supabase, fullBooking)
                         const plate = fullBooking.vehicle_plate || fullBooking.booking_details?.vehicle?.plate || ''
                         const pickupDate = fullBooking.pickup_date ? new Date(fullBooking.pickup_date) : null
                         const dropoffDate = fullBooking.dropoff_date ? new Date(fullBooking.dropoff_date) : null
