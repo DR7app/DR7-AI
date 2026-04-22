@@ -334,14 +334,28 @@ export const handler: Handler = async (event) => {
             .select('id', { count: 'exact', head: true })
         const contractNumber = `DR7${1000 + (contractCount || 0)}`
 
-        // KM limit: use unlimited_km flag (strict boolean check) or legacy km_limit === 'Illimitati'
-        const isUnlimitedKm = booking.booking_details?.unlimited_km === true || booking.booking_details?.km_limit === 'Illimitati'
+        // KM limit: recognize BOTH shapes.
+        //   admin shape:   booking_details.unlimited_km=true  + km_limit='Illimitati'
+        //   website shape: booking_details.kmPackage.type='unlimited' + includedKm>=9999
+        const bdKmPkg = booking.booking_details?.kmPackage || {}
+        const isUnlimitedKm =
+            booking.booking_details?.unlimited_km === true
+            || booking.booking_details?.km_limit === 'Illimitati'
+            || bdKmPkg.type === 'unlimited'
+            || bdKmPkg.distance === 'unlimited'
+            || Number(bdKmPkg.includedKm) >= 9999
         const rawKmLimit = booking.booking_details?.km_limit
+        const includedKmNum = Number(bdKmPkg.includedKm)
+        const websiteIncludedKm = Number.isFinite(includedKmNum) && includedKmNum > 0 && includedKmNum < 9999
+            ? String(includedKmNum)
+            : null
         const kmLimitRaw = isUnlimitedKm
             ? 'Illimitati'
             : (rawKmLimit && rawKmLimit !== '0' && rawKmLimit !== 'Illimitati'
                 ? rawKmLimit
-                : (booking.booking_details?.total_km || 'Illimitati'))
+                : (websiteIncludedKm
+                    || booking.booking_details?.total_km
+                    || 'Illimitati'))
         // Format KM limit for contract display
         let kmLimitValue: string
         if (kmLimitRaw === '50/giorno') {
