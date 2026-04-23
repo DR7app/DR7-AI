@@ -569,7 +569,7 @@ const handler: Handler = async (event) => {
         if (isSuccess && isTopup && transaction.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
-                .select('id, customer_name, customer_phone, customer_email, vehicle_name, price_total, booking_details, payment_status')
+                .select('id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_plate, service_type, service_name, appointment_date, price_total, booking_details, payment_status')
                 .eq('id', transaction.booking_id)
                 .single();
 
@@ -700,7 +700,7 @@ const handler: Handler = async (event) => {
         if (isSuccess && transaction.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
-                .select('id, user_id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_type, service_type, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee, status, payment_status')
+                .select('id, user_id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_plate, vehicle_type, service_type, service_name, appointment_date, payment_method, booking_details, price_total, pickup_date, dropoff_date, pickup_location, dropoff_location, deposit_amount, km_overage_fee, status, payment_status')
                 .eq('id', transaction.booking_id)
                 .single();
 
