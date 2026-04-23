@@ -1215,9 +1215,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (customerPhone && !isNexiPayByLink) {
         const custFirstName = customerName?.split(' ')[0] || 'Cliente'
         const apptDt = new Date(appointmentDateTime)
-        const fmtDate = apptDt.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
+        // Short date — the Pro "Conferma Lavaggio" body uses "24/04/2026"
+        // style, not the long "sabato 24 aprile 2026" form.
+        const fmtDateShort = apptDt.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+        const fmtDateLong = apptDt.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
         const fmtTime = apptDt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
         const totalEur = totalPrice.toFixed(2)
+        const paymentInfoLabel = paymentStatus === 'paid' || paymentStatus === 'succeeded' || paymentStatus === 'completed'
+          ? 'Pagato'
+          : paymentStatus === 'pending'
+            ? 'Da saldare'
+            : (paymentStatus || '—')
 
         const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
@@ -1225,13 +1233,45 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           body: JSON.stringify({
             customPhone: customerPhone,
             templateKey: 'pro_conferma_lavaggio',
+            // Alias every placeholder name the Pro template might use —
+            // English (service_name, appointment_date, ...), Italian
+            // (servizio, data, ora, targa, pagamento), and short aliases
+            // (date, time). Any of these the body references will resolve;
+            // the ones it doesn't reference are simply ignored by the renderer.
             templateVars: {
+              // Customer
               customer_name: custFirstName,
+              nome: custFirstName,
+              // Service
               service_name: serviceNames,
-              appointment_date: fmtDate,
+              servizio: serviceNames,
+              // Date/time (short + long + aliases)
+              appointment_date: fmtDateShort,
               appointment_time: fmtTime,
+              date: fmtDateShort,
+              time: fmtTime,
+              data: fmtDateShort,
+              ora: fmtTime,
+              data_lunga: fmtDateLong,
+              // Totals
               total: totalEur,
+              totale: totalEur,
+              amount: totalEur,
+              importo: totalEur,
+              // Vehicle
               vehicle_plate: vehiclePlate || '',
+              targa: vehiclePlate || '',
+              plate: vehiclePlate || '',
+              // Payment status label
+              payment_info: paymentInfoLabel,
+              payment_status: paymentInfoLabel,
+              pagamento: paymentInfoLabel,
+              // Booking id
+              booking_id: (data?.id || '').substring(0, 8).toUpperCase(),
+              booking_ref: (data?.id || '').substring(0, 8).toUpperCase(),
+              // Notes
+              notes: formData.notes || '',
+              note: formData.notes || '',
             },
             skipHeader: true,
           })
