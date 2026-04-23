@@ -113,12 +113,30 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il contratto non ha un PDF generato' }) }
         }
 
-        // Cancel any existing active signature requests for this contract
-        const { data: existingRequests } = await supabase
+        // Cancel any existing active signature requests for this contract OR booking.
+        // We match by booking_id as well as contract_id so that when a contract is
+        // regenerated (e.g. admin edited the booking), stale signing links from any
+        // previous contract row for the same booking are killed too.
+        const activeStatuses = ['pending', 'otp_sent', 'otp_verified']
+        const effBookingIdForCancel = bookingId || contract.booking_id
+        const { data: byContract } = await supabase
             .from('signature_requests')
             .select('id, status')
             .eq('contract_id', contract.id)
-            .in('status', ['pending', 'otp_sent', 'otp_verified'])
+            .in('status', activeStatuses)
+        const { data: byBooking } = effBookingIdForCancel
+            ? await supabase
+                .from('signature_requests')
+                .select('id, status')
+                .eq('booking_id', effBookingIdForCancel)
+                .in('status', activeStatuses)
+            : { data: null }
+        const seen = new Set<string>()
+        const existingRequests = [...(byContract || []), ...(byBooking || [])].filter(r => {
+            if (seen.has(r.id)) return false
+            seen.add(r.id)
+            return true
+        })
 
         if (existingRequests && existingRequests.length > 0) {
             for (const req of existingRequests) {

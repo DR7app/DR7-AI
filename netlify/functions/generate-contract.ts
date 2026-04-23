@@ -1126,31 +1126,54 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             .getPublicUrl(fileName)
 
         // 8. Save/Update Contracts Table
-        const { error: dbError } = await supabase
+        // NOTE: we intentionally do NOT use .upsert({onConflict:'booking_id'}) here.
+        // contracts.booking_id has an index but NO unique constraint, so upsert fails
+        // silently and leaves pdf_url stale — causing signature flows to deliver an
+        // older contract. Do explicit "update latest-if-exists else insert" instead.
+        const contractFields = {
+            contract_number: contractNumber,
+            contract_date: new Date().toISOString().split('T')[0],
+            customer_name: clientName || resolvedName || '',
+            customer_email: customer?.email || resolvedEmail || '',
+            customer_phone: customer?.telefono || resolvedPhone || '',
+            customer_address: clientAddress,
+            customer_tax_code: clientVat,
+            customer_license_number: driverLicense,
+            vehicle_name: vehicleName,
+            rental_start_date: pickupDate.toISOString().split('T')[0],
+            rental_end_date: dropoffDate.toISOString().split('T')[0],
+            daily_rate: 0, // We rely on total amount mostly
+            total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
+            total_amount: booking.price_total / 100,
+            status: 'active',
+            pdf_url: publicUrl,
+            updated_at: new Date().toISOString()
+        }
+
+        const { data: existingContracts } = await supabase
             .from('contracts')
-            .upsert({
-                booking_id: bookingId,
-                contract_number: contractNumber,
-                contract_date: new Date().toISOString().split('T')[0],
-                customer_name: clientName || resolvedName || '',
-                customer_email: customer?.email || resolvedEmail || '',
-                customer_phone: customer?.telefono || resolvedPhone || '',
-                customer_address: clientAddress,
-                customer_tax_code: clientVat,
-                customer_license_number: driverLicense,
-                vehicle_name: vehicleName,
-                rental_start_date: pickupDate.toISOString().split('T')[0],
-                rental_end_date: dropoffDate.toISOString().split('T')[0],
-                daily_rate: 0, // We rely on total amount mostly
-                total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
-                total_amount: booking.price_total / 100,
-                status: 'active',
-                pdf_url: publicUrl,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'booking_id' })
+            .select('id')
+            .eq('booking_id', bookingId)
+            .order('created_at', { ascending: false })
+
+        let dbError: any = null
+        if (existingContracts && existingContracts.length > 0) {
+            const latestId = existingContracts[0].id
+            const res = await supabase
+                .from('contracts')
+                .update(contractFields)
+                .eq('id', latestId)
+            dbError = res.error
+        } else {
+            const res = await supabase
+                .from('contracts')
+                .insert({ booking_id: bookingId, ...contractFields })
+            dbError = res.error
+        }
 
         if (dbError) {
             console.error('[generate-contract] Failed to sync with contracts table:', dbError)
+            return { statusCode: 500, body: JSON.stringify({ error: 'Failed to persist contract: ' + dbError.message }) }
         }
 
         // 8b. Update Booking with contract URL (optional but good for direct access)
