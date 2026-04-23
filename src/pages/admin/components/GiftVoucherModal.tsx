@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Button from './Button'
 import toast from 'react-hot-toast'
-import { supabase } from '../../../supabaseClient'
 
 interface GiftVoucherModalProps {
     isOpen: boolean
@@ -13,39 +12,10 @@ interface GiftVoucherModalProps {
 export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, onSend }: GiftVoucherModalProps) {
     const [channel, setChannel] = useState<'email' | 'whatsapp'>('email')
     const [subject, setSubject] = useState('🎁 Buono Regalo per te!')
-    const [message, setMessage] = useState('')
+    const [message, setMessage] = useState('Gentile Cliente,\nDR7 apre una finestra esclusiva a disponibilità limitata.\nCordiali saluti,\nDR7 S.p.A.')
     const [images, setImages] = useState<File[]>([])
     const [imagePreviews, setImagePreviews] = useState<string[]>([])
     const [sending, setSending] = useState(false)
-
-    // Load template body from Messaggi di Sistema Pro each time modal opens.
-    useEffect(() => {
-        if (!isOpen) return
-        let cancelled = false
-        ;(async () => {
-            try {
-                const { data: tplRow } = await supabase
-                    .from('system_messages')
-                    .select('message_body, is_enabled')
-                    .eq('message_key', 'pro_gift_voucher')
-                    .maybeSingle()
-                if (cancelled) return
-                if (tplRow?.is_enabled !== false && tplRow?.message_body) {
-                    setMessage(tplRow.message_body)
-                } else {
-                    setMessage('')
-                    toast.error('Template "pro_gift_voucher" non configurato o disabilitato in Messaggi di Sistema Pro')
-                }
-            } catch (err) {
-                console.error('[GiftVoucherModal] template load failed:', err)
-                if (!cancelled) {
-                    setMessage('')
-                    toast.error('Impossibile caricare il template "pro_gift_voucher"')
-                }
-            }
-        })()
-        return () => { cancelled = true }
-    }, [isOpen])
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || [])
@@ -102,9 +72,9 @@ export default function GiftVoucherModal({ isOpen, onClose, selectedCustomers, o
         try {
             await onSend({ subject, message, images, channel })
 
-            // Reset form — message will be reloaded from pro_gift_voucher on next open.
+            // Reset form
             setSubject('🎁 Buono Regalo per te!')
-            setMessage('')
+            setMessage('Gentile Cliente,\nDR7 apre una finestra esclusiva a disponibilità limitata.\nCordiali saluti,\nDR7 S.p.A.')
             setImages([])
             setImagePreviews([])
             onClose()

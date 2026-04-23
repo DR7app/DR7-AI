@@ -4689,8 +4689,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // SKIP fattura for Credit Wallet payments — wallet credits are not invoiceable.
       // SKIP on edit if payment was ALREADY paid before (fattura already exists).
       // Only fire for a fresh booking, OR for an edit where payment JUST transitioned to paid.
-      const isFullyPaidStatus = (s: string | undefined) => s === 'paid' || s === 'succeeded' || s === 'completed'
-      const shouldGenerateFattura = isFullyPaidStatus(formData.payment_status)
+      const shouldGenerateFattura = formData.payment_status === 'paid'
         && insertedBooking?.id
         && formData.payment_method !== 'Credit Wallet'
         && (!editingId || justMarkedPaid)
@@ -4788,7 +4787,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // (no balance outstanding even if total went up — admin recorded the
           // extra as paid, so no link needed). Any other status (pending,
           // partial, unpaid) falls through and we compute the balance.
-          if (isFullyPaidStatus(formData.payment_status) && formPaidCents >= newTotalCents) {
+          if (formData.payment_status === 'paid' && formPaidCents >= newTotalCents) {
             logger.log('[EditDiffLink] Booking marked fully paid — skip pay-by-link')
           } else {
 
@@ -4873,9 +4872,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // NEVER send on an edit that leaves a balance — the Nexi callback sends
       // the signing link AFTER payment, on the freshly regenerated contract.
       const shouldSendSigningLink = !!insertedBooking?.id && !deferContractUntilPaid && (
-        !!editingId ||                                // Edit with no balance — resend updated contract
-        isFullyPaidStatus(formData.payment_status) || // New paid booking (paid/succeeded/completed)
-        justMarkedPaid                                // Payment just transitioned to paid
+        !!editingId ||                             // Edit with no balance — resend updated contract
+        formData.payment_status === 'paid' ||      // New paid booking
+        justMarkedPaid                             // Payment just transitioned to paid
       )
       if (shouldSendSigningLink) {
         try {

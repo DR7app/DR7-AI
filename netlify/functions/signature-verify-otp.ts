@@ -41,10 +41,6 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il documento e gia stato firmato' }) }
         }
 
-        if (sigRequest.status === 'superseded' || sigRequest.status === 'cancelled') {
-            return { statusCode: 410, body: JSON.stringify({ error: 'Questo link di firma non e piu valido — e stato generato un nuovo contratto. Attendi il nuovo link.' }) }
-        }
-
         if (sigRequest.status !== 'otp_sent') {
             return { statusCode: 400, body: JSON.stringify({ error: 'Nessun codice OTP attivo. Richiedi un nuovo codice.' }) }
         }

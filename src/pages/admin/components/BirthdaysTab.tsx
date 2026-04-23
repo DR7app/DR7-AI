@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react'
-import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import { logger } from '../../../utils/logger'
@@ -21,6 +20,30 @@ interface BirthdaySentRecord {
     sent_at: string
 }
 
+const DEFAULT_BIRTHDAY_MESSAGE = `Ciao {nome} 👋🏻
+
+mancano esattamente 10 giorni a una data speciale: il tuo compleanno 🥳
+
+Non vogliamo anticipare gli auguri, ma fare qualcosa di più autentico: riconoscere il tuo valore, prima ancora di celebrarlo.
+
+In qualità di nostro cliente, abbiamo il piacere di riservarti un pensiero dedicato, in linea con il tuo stile 🎁
+
+Per questo ti abbiamo riservato:
+
+Credito personale di €100 utilizzabile per un noleggio DR7
+
+Buono sconto di €10 per un lavaggio auto DR7
+
+CODICE SCONTO: {codice}
+
+Non è solo un regalo, ma un invito a concederti un'esperienza che ti rappresenti: potente, elegante, inconfondibile.
+
+Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo lieti di accompagnarti nella scelta 👇🏻
+
+Con stima,
+Dubai Rent 7.0 S.p.A.
+Ogni compleanno merita uno stile all'altezza.`
+
 export default function BirthdaysTab() {
     const [customers, setCustomers] = useState<CustomerBirthday[]>([])
     const [, setSentRecords] = useState<BirthdaySentRecord[]>([])
@@ -35,9 +58,9 @@ export default function BirthdaysTab() {
     const [showOnlyWithPhone, setShowOnlyWithPhone] = useState(true)
     const [showOnlyNotSent, setShowOnlyNotSent] = useState(false)
 
-    // Editable birthday message template — loaded from pro_marketing_compleanno
+    // Editable birthday message template
     const currentYear = new Date().getFullYear()
-    const [messageTemplate, setMessageTemplate] = useState('')
+    const [messageTemplate, setMessageTemplate] = useState(DEFAULT_BIRTHDAY_MESSAGE)
     const [editingMessage, setEditingMessage] = useState(false)
     const [draftMessage, setDraftMessage] = useState('')
     const [savingMessage, setSavingMessage] = useState(false)
@@ -46,19 +69,22 @@ export default function BirthdaysTab() {
         setSavingMessage(true)
         try {
             const { error } = await supabase
-                .from('system_messages')
-                .update({ message_body: draftMessage, updated_at: new Date().toISOString() })
-                .eq('message_key', 'pro_marketing_compleanno')
+                .from('app_settings')
+                .upsert({
+                    key: 'birthday_message_template',
+                    value: draftMessage,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'key' })
 
             if (error) throw error
 
             setMessageTemplate(draftMessage)
             setEditingMessage(false)
-            toast.success('Messaggio salvato in Messaggi di Sistema Pro')
+            alert('Messaggio salvato!')
         } catch (error: unknown) {
           const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error saving message template:', error)
-            toast.error(`Errore nel salvataggio: ${_errMsg}`)
+            alert(`Errore nel salvataggio: ${_errMsg}`)
         } finally {
             setSavingMessage(false)
         }
@@ -86,18 +112,15 @@ export default function BirthdaysTab() {
     async function loadData() {
         setLoading(true)
         try {
-            // Load birthday message template from Messaggi di Sistema Pro
-            const { data: tplRow } = await supabase
-                .from('system_messages')
-                .select('message_body, is_enabled')
-                .eq('message_key', 'pro_marketing_compleanno')
-                .maybeSingle()
+            // Load saved birthday message template
+            const { data: settingData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'birthday_message_template')
+                .single()
 
-            if (tplRow?.is_enabled !== false && tplRow?.message_body) {
-                setMessageTemplate(tplRow.message_body)
-            } else {
-                setMessageTemplate('')
-                toast.error('Template "pro_marketing_compleanno" non configurato o disabilitato in Messaggi di Sistema Pro')
+            if (settingData?.value) {
+                setMessageTemplate(settingData.value)
             }
 
             // Load customers with birthdays
@@ -261,11 +284,6 @@ export default function BirthdaysTab() {
             return
         }
 
-        if (!messageTemplate.trim()) {
-            toast.error('Template "pro_marketing_compleanno" vuoto o non disponibile — impossibile inviare')
-            return
-        }
-
         setBulkSending(true)
         let sent = 0
         let errors = 0
@@ -369,11 +387,6 @@ export default function BirthdaysTab() {
     async function sendBirthdayMessage(customer: CustomerBirthday) {
         if (!customer.phone) {
             alert('Questo cliente non ha un numero di telefono')
-            return
-        }
-
-        if (!messageTemplate.trim()) {
-            toast.error('Template "pro_marketing_compleanno" vuoto o non disponibile — impossibile inviare')
             return
         }
 

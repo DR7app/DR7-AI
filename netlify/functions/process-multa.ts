@@ -192,18 +192,12 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     // Fetch contract PDF URL — check multiple sources
     let contractUrl = ''
 
-    // 1. Check contracts DB table (signed first, then unsigned).
-    //    Order by created_at DESC so we always pick the NEWEST contract row —
-    //    without this ordering, .maybeSingle() would either error (multiple
-    //    rows) or pick an arbitrary row, potentially attaching a pre-modification
-    //    signed contract to the penalty email.
-    const { data: contractRows } = await supabase
+    // 1. Check contracts DB table (signed first, then unsigned)
+    const { data: contractData } = await supabase
         .from('contracts')
         .select('signed_pdf_url, pdf_url')
         .eq('booking_id', match.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-    const contractData = contractRows?.[0]
+        .maybeSingle()
     if (contractData) {
         contractUrl = contractData.signed_pdf_url || contractData.pdf_url || ''
     }

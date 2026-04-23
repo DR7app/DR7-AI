@@ -37,18 +37,6 @@ export const handler: Handler = async (event) => {
             return { statusCode: 410, body: JSON.stringify({ error: 'Il link di firma e scaduto', status: 'expired' }) }
         }
 
-        // Reject superseded/cancelled requests so the customer cannot sign a
-        // pre-modification contract version.
-        if (sigRequest.status === 'superseded' || sigRequest.status === 'cancelled') {
-            return {
-                statusCode: 410,
-                body: JSON.stringify({
-                    error: 'Questo link di firma non e piu valido — e stato generato un nuovo contratto. Attendi il nuovo link.',
-                    status: sigRequest.status,
-                })
-            }
-        }
-
         // Fetch contract for PDF URL and details (only if contract_id exists)
         let contract: any = null
         let secondDriverName: string | null = null
