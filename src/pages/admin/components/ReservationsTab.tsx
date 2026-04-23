@@ -4664,22 +4664,35 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           // Determine the "already paid" amount:
           //   1. form amount_paid when status is partial/paid (admin just set it)
-          //   2. original booking's amount_paid from booking_details
+          //   2. original booking_details — tries camelCase amountPaid FIRST
+          //      (that's the shape the admin writes at save time, see line 4016),
+          //      then snake_case amount_paid as a backup.
           //   3. original booking's price_total if original status was paid
           //   4. 0 fallback
           const origStatus = editingOriginalPaymentStatus
           const origWasPaid = origStatus === 'paid' || origStatus === 'succeeded' || origStatus === 'completed'
           const formPaidCents = formData.amount_paid ? eurToCents(formData.amount_paid) : 0
-          const origBdPaidCents = Number((originalBooking?.booking_details as Record<string, unknown> | undefined)?.amount_paid) || 0
+          const origBd = (originalBooking?.booking_details as Record<string, unknown> | undefined) || {}
+          const origBdPaidCents = Number(origBd.amountPaid ?? origBd.amount_paid ?? 0) || 0
           const origTotalCents = originalBooking?.price_total || 0
           const alreadyPaidCents = formPaidCents > 0
             ? formPaidCents
             : (origBdPaidCents > 0 ? origBdPaidCents : (origWasPaid ? origTotalCents : 0))
+          logger.log('[EditDiffLink] state:', {
+            newTotalCents,
+            formPaidCents,
+            origBdPaidCents,
+            origTotalCents,
+            alreadyPaidCents,
+            formPaymentStatus: formData.payment_status,
+            origPaymentStatus: origStatus,
+          })
 
           // Skip entirely if the admin has now marked the booking as fully paid
           // (no balance outstanding even if total went up — admin recorded the
-          // extra as paid, so no link needed).
-          if (formData.payment_status === 'paid') {
+          // extra as paid, so no link needed). Any other status (pending,
+          // partial, unpaid) falls through and we compute the balance.
+          if (formData.payment_status === 'paid' && formPaidCents >= newTotalCents) {
             logger.log('[EditDiffLink] Booking marked fully paid — skip pay-by-link')
           } else {
 
