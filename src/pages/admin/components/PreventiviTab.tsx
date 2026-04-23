@@ -272,6 +272,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     include_unlimited_km: false,
     include_second_driver: false,
     include_dr7_flex: false,
+    include_cauzione_veicoli: false,
     // Delivery / Pickup
     pickup_location: 'dr7_office',
     dropoff_location: 'dr7_office',
@@ -510,6 +511,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const dr7FlexDaily = form.include_dr7_flex ? configOverlay.dr7FlexPerDay : 0
     const dr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
 
+    // Cauzione veicoli: €20/giorno (override possibile via configOverlay se impostato)
+    const CAUZIONE_VEICOLI_DAILY_DEFAULT = 20
+    const cauzioneVeicoliDaily = form.include_cauzione_veicoli
+      ? ((configOverlay as any).cauzioneVeicoliPerDay ?? CAUZIONE_VEICOLI_DAILY_DEFAULT)
+      : 0
+    const cauzioneVeicoliTotal = Math.round(cauzioneVeicoliDaily * rentalDays * 100) / 100
+
     const deliveryFee = parseFloat(form.delivery_fee) || 0
     const pickupFee = parseFloat(form.pickup_fee) || 0
 
@@ -524,7 +532,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     // Experience services are INTENTIONALLY excluded from the clamp — they're
     // bespoke add-ons paid to third parties, the Max €/g from Centralina
     // applies only to the rental + standard extras.
-    const extrasListTotalNoExp = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + deliveryFee + pickupFee
+    const extrasListTotalNoExp = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + cauzioneVeicoliTotal + deliveryFee + pickupFee
     const listSubtotalNoExp = listRentalTotal + extrasListTotalNoExp
     const listSubtotal = listSubtotalNoExp + experienceCost
 
@@ -588,6 +596,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       secondDriverTotal,
       dr7FlexDaily,
       dr7FlexTotal,
+      cauzioneVeicoliDaily,
+      cauzioneVeicoliTotal,
       deliveryFee,
       pickupFee,
       experienceCost,
@@ -926,6 +936,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           include_dr7_flex: form.include_dr7_flex,
           dr7_flex_daily: pricing.dr7FlexDaily,
           dr7_flex_total: pricing.dr7FlexTotal,
+          include_cauzione_veicoli: form.include_cauzione_veicoli,
+          cauzione_veicoli_daily: pricing.cauzioneVeicoliDaily,
+          cauzione_veicoli_total: pricing.cauzioneVeicoliTotal,
           delivery_fee: pricing.deliveryFee,
           pickup_fee: pricing.pickupFee,
           pickup_location: form.pickup_location,
@@ -1040,6 +1053,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       include_unlimited_km: !!extras.include_unlimited_km || p.unlimited_km_total > 0,
       include_second_driver: !!extras.include_second_driver || p.second_driver_total > 0,
       include_dr7_flex: !!extras.include_dr7_flex,
+      include_cauzione_veicoli: !!extras.include_cauzione_veicoli || Number(extras.cauzione_veicoli_total || 0) > 0,
       pickup_location: extras.pickup_location || 'dr7_office',
       dropoff_location: extras.dropoff_location || 'dr7_office',
       delivery_fee: String(extras.delivery_fee || 0),
@@ -1073,6 +1087,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       include_unlimited_km: false,
       include_second_driver: false,
       include_dr7_flex: false,
+      include_cauzione_veicoli: false,
       pickup_location: 'dr7_office',
       dropoff_location: 'dr7_office',
       delivery_fee: '0',
@@ -1199,6 +1214,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         }
         if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
         if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) pricingLines += `\nDR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}`
+        if (extras?.cauzione_veicoli_total && Number(extras.cauzione_veicoli_total) > 0) pricingLines += `\nCauzione veicolo = ${formatEur(Number(extras.cauzione_veicoli_total))}`
         if (extras?.delivery_fee && Number(extras.delivery_fee) > 0) pricingLines += `\nConsegna = ${formatEur(Number(extras.delivery_fee))}`
         if (extras?.pickup_fee && Number(extras.pickup_fee) > 0) pricingLines += `\nRitiro = ${formatEur(Number(extras.pickup_fee))}`
         if (extras?.experience_cost && Number(extras.experience_cost) > 0) pricingLines += `\nServizi experience = ${formatEur(Number(extras.experience_cost))}`
@@ -1225,6 +1241,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             + Number(p.unlimited_km_total || 0)
             + Number(p.second_driver_total || 0)
             + Number(extras?.dr7_flex_total || 0)
+            + Number(extras?.cauzione_veicoli_total || 0)
             + Number(extras?.delivery_fee || 0)
             + Number(extras?.pickup_fee || 0)
             + Number(extras?.experience_cost || 0)
@@ -2246,6 +2263,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               DR7 FLEX — Cancellazione Premium ({formatEur(configOverlay.dr7FlexPerDay)}/giorno)
             </span>
           </label>
+          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
+            <input type="checkbox" checked={form.include_cauzione_veicoli} onChange={(e) => setForm(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
+            <span className="text-sm text-theme-text-primary">
+              Cauzione Veicolo ({formatEur((configOverlay as any).cauzioneVeicoliPerDay ?? 20)}/giorno)
+            </span>
+          </label>
         </div>
       </div>
 
@@ -2348,6 +2371,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           <div className="flex justify-between text-sm text-theme-text-muted">
             <span>DR7 FLEX ({rentalDays}gg x {formatEur(pricing.dr7FlexDaily)})</span>
             <span>{formatEur(pricing.dr7FlexTotal)}</span>
+          </div>
+        )}
+        {pricing.cauzioneVeicoliTotal > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>Cauzione Veicolo ({rentalDays}gg x {formatEur(pricing.cauzioneVeicoliDaily)})</span>
+            <span>{formatEur(pricing.cauzioneVeicoliTotal)}</span>
           </div>
         )}
         {pricing.deliveryFee > 0 && (
