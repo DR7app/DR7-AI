@@ -4208,59 +4208,91 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const totalCents = Math.max(0, fullTotalCents - alreadyPaidCents)
           const totalEur = totalCents / 100
 
-          const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookingId: insertedBooking.id,
-              amount: totalEur,
-              customerEmail: customerInfo?.email || '',
-              customerName: customerInfo?.full_name || 'Cliente',
-              description: `Noleggio DR7 - ${vehicle?.display_name || ''} - ${customerInfo?.full_name || ''}`,
-              expirationHours: 1
-            })
-          })
-          const linkData = await linkRes.json()
-
-          if (linkRes.ok && linkData.paymentUrl) {
-            // Payment link tracking fields are now set by the backend (nexi-pay-by-link),
-            // but we also update booking_details for backward compatibility
-            await supabase.from('bookings').update({
-              booking_details: {
-                ...insertedBooking.booking_details,
-                nexi_payment_link: linkData.paymentUrl,
-                nexi_order_id: linkData.orderId,
-                nexi_link_id: linkData.nexiLinkId || null,
-                payment_link_sent_at: linkData.sentAt,
-                payment_link_expires_at: linkData.expiresAt,
-                payment_link_created_at: linkData.linkCreatedAt || new Date().toISOString(),
-                payment_provider_expires_at: linkData.providerExpiresAt,
-              }
-            }).eq('id', insertedBooking.id)
-
-            // Send payment link to customer via WhatsApp
-            const custPhone = customerInfo?.phone
-            if (custPhone) {
-              await fetch('/.netlify/functions/send-whatsapp-notification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  customPhone: custPhone,
-                  templateKey: 'payment_link_customer',
-                  templateVars: { '{customer_name}': customerInfo?.full_name || 'Cliente', '{booking_id}': insertedBooking.id.substring(0, 8).toUpperCase(), '{total}': totalEur.toFixed(2), '{payment_link}': linkData.paymentUrl, '{expiry}': '1 ora' }
-                })
-              })
-            }
-
-            toast.success(`Pay by Link generato e inviato al cliente!`)
-            logger.log('✅ Nexi Pay by Link created:', linkData.paymentUrl)
+          if (totalEur <= 0) {
+            toast.error('Totale non valido per generare il link di pagamento.')
+            logger.warn('[PayByLink] Skipped — totalEur is 0. Check total_amount field.')
           } else {
-            toast.error('Errore generazione Pay by Link: ' + (linkData.error || 'Errore'))
+            logger.log('[PayByLink] Generating link for booking', insertedBooking.id, 'amount €' + totalEur.toFixed(2))
+            const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookingId: insertedBooking.id,
+                amount: totalEur,
+                customerEmail: customerInfo?.email || '',
+                customerName: customerInfo?.full_name || 'Cliente',
+                description: `Noleggio DR7 - ${vehicle?.display_name || ''} - ${customerInfo?.full_name || ''}`,
+                expirationHours: 1
+              })
+            })
+            const linkData = await linkRes.json().catch(() => ({} as any))
+
+            if (linkRes.ok && linkData.paymentUrl) {
+              // Payment link tracking fields are now set by the backend (nexi-pay-by-link),
+              // but we also update booking_details for backward compatibility
+              await supabase.from('bookings').update({
+                booking_details: {
+                  ...insertedBooking.booking_details,
+                  nexi_payment_link: linkData.paymentUrl,
+                  nexi_order_id: linkData.orderId,
+                  nexi_link_id: linkData.nexiLinkId || null,
+                  payment_link_sent_at: linkData.sentAt,
+                  payment_link_expires_at: linkData.expiresAt,
+                  payment_link_created_at: linkData.linkCreatedAt || new Date().toISOString(),
+                  payment_provider_expires_at: linkData.providerExpiresAt,
+                }
+              }).eq('id', insertedBooking.id)
+
+              // Send payment link to customer via WhatsApp. Verify the send
+              // actually went out — the endpoint returns 200 with skipped:true
+              // when the Pro template is missing, and previously we showed a
+              // "sent!" toast even on silent skip.
+              const custPhone = customerInfo?.phone
+              if (!custPhone) {
+                toast(`Link generato ma cliente senza numero: ${linkData.paymentUrl}`, { duration: 12000 })
+                logger.warn('[PayByLink] No customer phone — link not sent via WhatsApp')
+              } else {
+                const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    customPhone: custPhone,
+                    templateKey: 'payment_link_customer',
+                    templateVars: {
+                      '{customer_name}': customerInfo?.full_name || 'Cliente',
+                      '{nome}': (customerInfo?.full_name || 'Cliente').split(' ')[0] || 'Cliente',
+                      '{booking_id}': insertedBooking.id.substring(0, 8).toUpperCase(),
+                      '{booking_ref}': insertedBooking.id.substring(0, 8).toUpperCase(),
+                      '{total}': totalEur.toFixed(2),
+                      '{amount}': totalEur.toFixed(2),
+                      '{importo}': totalEur.toFixed(2),
+                      '{payment_link}': linkData.paymentUrl,
+                      '{link}': linkData.paymentUrl,
+                      '{expiry}': '1 ora',
+                    }
+                  })
+                })
+                const waJson = await waRes.json().catch(() => ({} as any))
+                if (waJson?.skipped && waJson?.reason === 'pro_template_unavailable') {
+                  toast.error('Link creato ma template "pro_richiesta_pagamento" mancante in Messaggi di Sistema Pro — messaggio NON inviato.', { duration: 10000 })
+                  logger.error('[PayByLink] Template pro_richiesta_pagamento missing/disabled — WhatsApp skipped')
+                } else if (!waRes.ok) {
+                  toast.error(`Link creato ma invio WhatsApp fallito: ${waJson?.message || waRes.status}`, { duration: 10000 })
+                } else {
+                  toast.success('Pay by Link generato e inviato al cliente!')
+                  logger.log('✅ Nexi Pay by Link sent:', linkData.paymentUrl)
+                }
+              }
+            } else {
+              const errMsg = linkData.error || linkData.message || `HTTP ${linkRes.status}`
+              toast.error('Errore generazione Pay by Link: ' + errMsg, { duration: 10000 })
+              logger.error('[PayByLink] nexi-pay-by-link failed:', errMsg, linkData)
+            }
           }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (linkErr: any) {
           console.error('⚠️ Nexi Pay by Link error:', linkErr)
-          toast.error('Errore Pay by Link: ' + linkErr.message)
+          toast.error('Errore Pay by Link: ' + (linkErr?.message || 'sconosciuto'), { duration: 10000 })
         }
       }
 
