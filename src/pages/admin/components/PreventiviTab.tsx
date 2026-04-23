@@ -21,7 +21,8 @@ import { buildBookingContext } from '../../../utils/adminLogHelpers'
 function genSlots(ranges: [number, number][]): { value: string; label: string }[] {
   const s: { value: string; label: string }[] = []
   for (const [a, b] of ranges) {
-    for (let m = a; m <= b; m += 30) {
+    // 15-minute granularity (was 30). Gives 10:30, 10:45, 11:00, 11:15 ...
+    for (let m = a; m <= b; m += 15) {
       const t = `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`
       s.push({ value: t, label: t })
     }
