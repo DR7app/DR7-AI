@@ -231,20 +231,32 @@ export function generateFatturaXML(invoice: InvoiceData): string {
     throw new Error('XML generation failed: customer has no CodiceFiscale or PartitaIVA')
   }
 
-  // Only include P.IVA for B2B customers (those with a real SDI code, not 0000000)
-  // to avoid SDI error 00324 (P.IVA/CF mismatch) for individuals
+  // Build customer identification.
+  //   - B2B / azienda (P.IVA present): IdFiscaleIVA is MANDATORY; CodiceFiscale
+  //     is optional and must refer to the SAME entity as the P.IVA — never the
+  //     legal representative's personal CF, or SDI rejects with 00324/00320.
+  //   - Persona fisica (no P.IVA): only CodiceFiscale.
+  // A personal 16-char CF alongside a real P.IVA is almost always the owner's
+  // CF on a company customer — drop it to avoid the mismatch rejection.
+  const personalCfPattern = /^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/
+  const cfLooksPersonal = personalCfPattern.test(customerFiscalCode)
+  const safeFiscalCode = (customerVAT && cfLooksPersonal) ? '' : customerFiscalCode
+
   let customerIdSection = ''
-  const isB2B = codiceDestinatario !== '0000000'
-  if (customerVAT && (isB2B || !customerFiscalCode)) {
+  if (customerVAT) {
+    // Azienda / P.IVA holder: always include IdFiscaleIVA, regardless of SDI code.
     customerIdSection += `
           <IdFiscaleIVA>
             <IdPaese>IT</IdPaese>
             <IdCodice>${customerVAT}</IdCodice>
           </IdFiscaleIVA>`
   }
-  if (customerFiscalCode) {
+  if (safeFiscalCode) {
     customerIdSection += `
-          <CodiceFiscale>${customerFiscalCode}</CodiceFiscale>`
+          <CodiceFiscale>${safeFiscalCode}</CodiceFiscale>`
+  }
+  if (!customerIdSection) {
+    throw new Error('XML generation failed: customer has no valid CodiceFiscale or PartitaIVA')
   }
 
   // PECDestinatario: required when CodiceDestinatario is 0000000 and PEC is available

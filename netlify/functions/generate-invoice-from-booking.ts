@@ -254,8 +254,31 @@ export const handler: Handler = async (event) => {
         }
 
         // Ensure tax fields are robustly fetched
-        const taxCode = (customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || '').toUpperCase().trim()
+        const rawTaxCode = (customerData?.codiceFiscale || customerData?.codice_fiscale || customerData?.tax_code || bookingCustomer.taxCode || bookingCustomer.codiceFiscale || '').toUpperCase().trim()
         const vatNumber = (customerData?.partitaIva || customerData?.partita_iva || customerData?.vat_number || bookingCustomer.vatNumber || bookingCustomer.pIva || '').toUpperCase().trim()
+
+        // AZIENDA: SDI rejects the invoice (Scartata, err 00324 / 00320) if the
+        // CodiceFiscale carried in the XML is the LEGAL REPRESENTATIVE's personal
+        // CF instead of the company's fiscal code. Common cases:
+        //   - CF === 16-char personal letters+digits (persona fisica of rep)
+        //   - tipo_cliente is explicitly 'azienda' / 'societa' / 'ditta'
+        //   - customer has ragione_sociale / denominazione set
+        // For companies, the XML must carry ONLY IdFiscaleIVA (the P.IVA) unless
+        // a legitimate company CF (often identical to P.IVA) is available.
+        const tipoCliente = String(customerData?.tipo_cliente || customerData?.customer_type || '').toLowerCase()
+        const isAzienda =
+            tipoCliente === 'azienda' || tipoCliente === 'societa' || tipoCliente === 'ditta' || tipoCliente === 'professionista'
+            || !!customerData?.ragione_sociale || !!customerData?.denominazione
+            || !!bookingCustomer?.ragione_sociale || !!bookingCustomer?.denominazione
+        // 16-char alphanumeric CF = personal (persona fisica). 11-digit numeric = P.IVA / company CF.
+        const looksLikePersonalCF = /^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/.test(rawTaxCode)
+        const taxCode = (isAzienda && looksLikePersonalCF && vatNumber)
+            ? '' // strip personal CF; the XML will use only P.IVA for the company
+            : rawTaxCode
+
+        if (isAzienda && looksLikePersonalCF && vatNumber) {
+            console.log(`[Invoice] AZIENDA detected with personal CF "${rawTaxCode}" — dropping CF, using only P.IVA "${vatNumber}" to avoid SDI rejection.`)
+        }
 
         // Debug: log what was found for diagnostics
         const debugInfo = {
