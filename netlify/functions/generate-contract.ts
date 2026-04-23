@@ -1297,51 +1297,22 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             }
         }
 
-        // 8a. Mark ALL previous signature_requests for this booking as superseded
-        // — including ones already in status='signed'. Any code that later tries
-        // to "re-send the signed contract" must filter by status='signed' so it
-        // skips superseded rows and never re-delivers a pre-modification PDF.
-        //
-        // Query by booking_id (via signature_requests.booking_id OR via the
-        // set of contract IDs that ever belonged to this booking) so that even
-        // orphaned rows from legacy duplicate contract rows get superseded.
+        // 8a. Mark any previous signature_requests for this booking as superseded
+        // so the customer can't open a stale signing link and sign an outdated
+        // PDF. signature-init will create a fresh request pointing at the new hash.
         try {
-            const contractIdsForBooking: string[] = []
-            if (upsertedRow?.id) contractIdsForBooking.push(upsertedRow.id)
-            // Query ALL contract rows that ever belonged to this booking (if
-            // any legacy duplicates slipped through the dedupe above).
-            const { data: allRowsForBooking } = await supabase
+            const { data: contractRow } = await supabase
                 .from('contracts')
                 .select('id')
                 .eq('booking_id', bookingId)
-            if (allRowsForBooking) {
-                for (const r of allRowsForBooking) {
-                    if (!contractIdsForBooking.includes(r.id)) contractIdsForBooking.push(r.id)
-                }
-            }
-
-            // Supersede by contract_id (covers all previous signatures).
-            if (contractIdsForBooking.length > 0) {
-                const { data: supersededByContract, error: scErr } = await supabase
+                .maybeSingle()
+            if (contractRow?.id) {
+                await supabase
                     .from('signature_requests')
                     .update({ status: 'superseded', updated_at: new Date().toISOString() })
-                    .in('contract_id', contractIdsForBooking)
+                    .eq('contract_id', contractRow.id)
                     .in('status', ['pending', 'otp_sent', 'otp_verified', 'signed'])
-                    .select('id, status')
-                if (scErr) console.warn('[generate-contract] supersede by contract_id warning:', scErr)
-                else console.log(`[generate-contract] Superseded ${supersededByContract?.length || 0} signature_requests by contract_id`)
             }
-
-            // Also supersede by booking_id directly — catches any rows whose
-            // contract_id is null or points at an already-deleted duplicate row.
-            const { data: supersededByBooking, error: sbErr } = await supabase
-                .from('signature_requests')
-                .update({ status: 'superseded', updated_at: new Date().toISOString() })
-                .eq('booking_id', bookingId)
-                .in('status', ['pending', 'otp_sent', 'otp_verified', 'signed'])
-                .select('id, status')
-            if (sbErr) console.warn('[generate-contract] supersede by booking_id warning:', sbErr)
-            else console.log(`[generate-contract] Superseded ${supersededByBooking?.length || 0} signature_requests by booking_id`)
         } catch (cleanupErr) {
             console.warn('[generate-contract] Failed to supersede old signature_requests:', cleanupErr)
         }

@@ -41,15 +41,6 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il documento e gia stato firmato' }) }
         }
 
-        // A signature_request that was marked superseded (because the booking
-        // was modified and a new contract version was generated) must NEVER
-        // be signable — otherwise the customer could open an older link and
-        // sign the pre-modification contract, then receive that outdated
-        // signed PDF via WhatsApp.
-        if (sigRequest.status === 'superseded' || sigRequest.status === 'cancelled') {
-            return { statusCode: 410, body: JSON.stringify({ error: 'Questo link di firma non e piu valido — e stato generato un nuovo contratto. Attendi il nuovo link.' }) }
-        }
-
         if (sigRequest.status !== 'otp_verified') {
             return { statusCode: 400, body: JSON.stringify({ error: 'Verifica OTP richiesta prima della firma' }) }
         }
