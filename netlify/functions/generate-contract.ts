@@ -1175,38 +1175,82 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             .getPublicUrl(fileName)
 
         // 8. Save/Update Contracts Table
-        // When re-generating a contract (e.g. after a booking modification),
-        // clear any PREVIOUS signed_pdf_url / signed_at. Otherwise the OLD
-        // signed PDF stays in the row and downstream flows that read
-        // contracts.signed_pdf_url deliver the stale signed copy to the
-        // customer — visible bug: "after signing the customer receives
-        // the older contract".
-        const { error: dbError } = await supabase
+        // Explicit check-then-update/insert instead of upsert. Supabase upsert
+        // with onConflict requires a unique constraint on booking_id; without
+        // one it silently inserts duplicates, which leads to the "old signed
+        // contract delivered" bug (two rows for same booking, downstream
+        // picks the old one).
+        //
+        // Also: on UPDATE, explicitly null signed_pdf_url / signed_at so any
+        // previous signed version is forgotten — the regenerated contract
+        // must be re-signed before any "send signed contract" flow can serve
+        // a file.
+        const contractPayload = {
+            contract_number: contractNumber,
+            contract_date: new Date().toISOString().split('T')[0],
+            customer_name: clientName || resolvedName || '',
+            customer_email: customer?.email || resolvedEmail || '',
+            customer_phone: customer?.telefono || resolvedPhone || '',
+            customer_address: clientAddress,
+            customer_tax_code: clientVat,
+            customer_license_number: driverLicense,
+            vehicle_name: vehicleName,
+            rental_start_date: pickupDate.toISOString().split('T')[0],
+            rental_end_date: dropoffDate.toISOString().split('T')[0],
+            daily_rate: 0,
+            total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
+            total_amount: booking.price_total / 100,
+            status: 'active',
+            pdf_url: publicUrl,
+            signed_pdf_url: null,
+            signed_at: null,
+            updated_at: new Date().toISOString(),
+        }
+
+        // Check if a contract already exists for this booking
+        const { data: existingContracts, error: existingErr } = await supabase
             .from('contracts')
-            .upsert({
-                booking_id: bookingId,
-                contract_number: contractNumber,
-                contract_date: new Date().toISOString().split('T')[0],
-                customer_name: clientName || resolvedName || '',
-                customer_email: customer?.email || resolvedEmail || '',
-                customer_phone: customer?.telefono || resolvedPhone || '',
-                customer_address: clientAddress,
-                customer_tax_code: clientVat,
-                customer_license_number: driverLicense,
-                vehicle_name: vehicleName,
-                rental_start_date: pickupDate.toISOString().split('T')[0],
-                rental_end_date: dropoffDate.toISOString().split('T')[0],
-                daily_rate: 0, // We rely on total amount mostly
-                total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
-                total_amount: booking.price_total / 100,
-                status: 'active',
-                pdf_url: publicUrl,
-                // Explicitly null the signed fields so a regenerated contract
-                // never serves its previous signed version by accident.
-                signed_pdf_url: null,
-                signed_at: null,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'booking_id' })
+            .select('id, created_at')
+            .eq('booking_id', bookingId)
+            .order('created_at', { ascending: false })
+
+        if (existingErr) {
+            console.error('[generate-contract] Failed to query existing contract:', existingErr)
+        }
+
+        let dbError: any = null
+        if (existingContracts && existingContracts.length > 0) {
+            // Update the MOST RECENT one with the new PDF + cleared signed fields.
+            const latest = existingContracts[0]
+            const { error } = await supabase
+                .from('contracts')
+                .update(contractPayload)
+                .eq('id', latest.id)
+            dbError = error
+            console.log(`[generate-contract] UPDATED contract id=${latest.id} with new pdf_url=${publicUrl}`)
+
+            // If there are duplicate rows, log them so they can be cleaned up
+            // — they shouldn't be there but historically the upsert-without-
+            // unique-constraint bug may have created them, and we want to
+            // know they're draining into stale flows.
+            if (existingContracts.length > 1) {
+                console.warn(`[generate-contract] ⚠️ Found ${existingContracts.length} contract rows for booking_id=${bookingId}. Deleting older duplicates to prevent stale-contract bugs.`)
+                const idsToDelete = existingContracts.slice(1).map(r => r.id)
+                const { error: delErr } = await supabase
+                    .from('contracts')
+                    .delete()
+                    .in('id', idsToDelete)
+                if (delErr) console.error('[generate-contract] Failed to delete duplicate contracts:', delErr)
+                else console.log(`[generate-contract] Deleted ${idsToDelete.length} duplicate contract(s):`, idsToDelete)
+            }
+        } else {
+            // No existing contract — insert a new row.
+            const { error } = await supabase
+                .from('contracts')
+                .insert({ ...contractPayload, booking_id: bookingId })
+            dbError = error
+            console.log(`[generate-contract] INSERTED new contract for booking_id=${bookingId} pdf_url=${publicUrl}`)
+        }
 
         if (dbError) {
             console.error('[generate-contract] Failed to sync with contracts table:', dbError)
