@@ -294,6 +294,20 @@ const handler: Handler = async (event) => {
           notes: booking.booking_details?.notes || '',
         };
 
+        // Italian-language aliases — the Pro templates often use {servizio},
+        // {targa}, {pagamento}, {payment_info}, {note}. Without these the
+        // placeholders leaked as raw text to the admin/customer.
+        vars.servizio = vars.service_name;
+        vars.targa = vars.plate;
+        vars.nota = vars.notes;
+        vars.note = vars.notes;
+        vars.pagamento = vars.payment_status;
+        vars.payment_info = vars.payment_status;
+        vars.totale = vars.total;
+        vars.importo = vars.total;
+        vars.amount = vars.total;
+        vars.cliente = vars.customer_name;
+
         // Format dates if available
         if (booking.pickup_date) {
           const pd = new Date(booking.pickup_date);
