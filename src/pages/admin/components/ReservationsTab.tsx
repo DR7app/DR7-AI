@@ -4450,6 +4450,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '{payment_method}': formData.payment_method || '',
             '{payment_status}': isPending ? 'Da saldare' : 'Pagato',
             '{notes}': formData.notes || '',
+            // Dropoff location (desktop rental flow may omit it; admin templates
+            // that show "Da X a Y" benefit from having it).
+            '{dropoff_location}': (formData as any).dropoff_location_label || (formData as any).dropoff_location || pickupLocationLabel || '',
             // Payment link + expiry placeholders — only meaningful when the
             // rental_da_saldare_customer / payment_link_customer template is
             // chosen below. Pass '' when no link exists so the placeholder
@@ -4457,6 +4460,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '{payment_link}': '',
             '{link}': '',
             '{expiry}': '1 ora',
+            // Before/after fields for the "rental_modified" template. Populated
+            // only when editingId is set (i.e. modifica noleggio); otherwise
+            // they stay empty so new-booking templates still render clean.
+            ...(editingId ? (() => {
+              const orig = bookings.find(b => b.id === editingId)
+              const fmtDate = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : ''
+              const fmtTime = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }) : ''
+              const oldTotal = ((orig?.price_total || 0) / 100)
+              const newTotal = (insertedBooking?.price_total || eurToCents(formData.total_amount)) / 100
+              const diff = newTotal - oldTotal
+              const diffAbs = Math.abs(diff).toFixed(2)
+              const diffSign = diff > 0 ? '+' : (diff < 0 ? '−' : '')
+              return {
+                '{old_pickup_date}': fmtDate(orig?.pickup_date),
+                '{old_pickup_time}': fmtTime(orig?.pickup_date),
+                '{old_dropoff_date}': fmtDate(orig?.dropoff_date),
+                '{old_dropoff_time}': fmtTime(orig?.dropoff_date),
+                '{old_pickup_location}': (orig as any)?.pickup_location_label || (orig as any)?.pickup_location || '',
+                '{old_dropoff_location}': (orig as any)?.dropoff_location_label || (orig as any)?.dropoff_location || '',
+                '{old_total}': oldTotal.toFixed(2),
+                '{new_total}': newTotal.toFixed(2),
+                '{diff_amount}': diffAbs,
+                '{diff_sign}': diffSign,
+                '{diff_signed}': diff === 0 ? '0,00' : `${diffSign}${diffAbs}`,
+              }
+            })() : {
+              '{old_pickup_date}': '', '{old_pickup_time}': '',
+              '{old_dropoff_date}': '', '{old_dropoff_time}': '',
+              '{old_pickup_location}': '', '{old_dropoff_location}': '',
+              '{old_total}': '', '{new_total}': '',
+              '{diff_amount}': '', '{diff_sign}': '', '{diff_signed}': '',
+            }),
           }
 
           // Pick the right template:
