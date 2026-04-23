@@ -1053,38 +1053,49 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'AdditionalTerms': additionalTermsText,
         }
 
+        // Pre-compute the exact set of text field names actually present in
+        // the PDF template. pdf-lib's getTextField() THROWS NoSuchFieldError
+        // when the name isn't found — it doesn't return null. Looking the
+        // name up in this set first lets us skip absent fields silently
+        // instead of flooding the logs with stack traces for azienda-only
+        // fields (CodiceSDI, RappresentanteLegale, Company*ID…) that don't
+        // exist in the standard template.
+        const existingFieldNames = new Set<string>()
+        try {
+            for (const f of form.getFields()) existingFieldNames.add(f.getName())
+        } catch (e) {
+            console.warn('[generate-contract] Unable to enumerate form fields:', e)
+        }
+        const skippedAbsentFields: string[] = []
+
         let filledFields = 0
         for (const [key, value] of Object.entries(dataMap)) {
+            if (!existingFieldNames.has(key)) {
+                if (value) skippedAbsentFields.push(key)
+                continue
+            }
             try {
-                // Try to find exact match
-                let field = form.getTextField(key)
-                if (!field) {
-                    // Start of fuzzy fix: try to find field by checking containment if exact match fail? 
-                    // No, for now let's rely on the explicit map above.
-                }
-
+                const field = form.getTextField(key)
                 if (field) {
-                    // Sanitize the value to prevent WinAnsi encoding errors
                     const sanitizedValue = sanitizeForPDF(value)
-
-                    // Set font size small enough to fit all fields without text being cut
                     field.setFontSize(7)
-
                     field.setText(sanitizedValue)
                     filledFields++
 
-                    // Log if we had to sanitize (value changed)
                     if (sanitizedValue !== value && value) {
                         console.log(`[generate-contract] Sanitized field '${key}': "${value}" -> "${sanitizedValue}"`)
                     }
                 }
             } catch (e) {
-                // Field matches might fail if types differ (e.g. checkbox vs text), ignore
-                console.error(`[generate-contract] Error setting field '${key}':`, e)
+                // Field exists but isn't a text field (checkbox, radio, etc.) — skip quietly.
+                console.warn(`[generate-contract] Could not fill '${key}' (wrong field type?):`, (e as Error).message)
             }
         }
 
         console.log(`[generate-contract] Filled ${filledFields} fields.`)
+        if (skippedAbsentFields.length > 0) {
+            console.log(`[generate-contract] Skipped ${skippedAbsentFields.length} fields absent from PDF template:`, skippedAbsentFields.join(', '))
+        }
 
         // If no fields were filled, it means field names didn't match or there are no fields.
         if (filledFields === 0) {
