@@ -330,35 +330,11 @@ export const handler: Handler = async (event) => {
 
         const pickupDate = new Date(booking.pickup_date)
         const dropoffDate = new Date(booking.dropoff_date)
-        // Contract number: sequential for first generation (DR71000, DR71001, ...),
-        // revision suffix on regeneration (DR71005 → DR71005-R2 → -R3). This
-        // guarantees a DIFFERENT number every time the contract is regenerated,
-        // so cached/older PDFs can never shadow the current version.
-        const { data: existingContract } = await supabase
+        // Generate sequential contract number: DR71000, DR71001, ...
+        const { count: contractCount } = await supabase
             .from('contracts')
-            .select('contract_number')
-            .eq('booking_id', bookingId)
-            .maybeSingle()
-
-        let contractNumber: string
-        if (existingContract?.contract_number) {
-            const prev = existingContract.contract_number
-            const match = prev.match(/^(.+?)(?:-R(\d+))?$/)
-            if (match) {
-                const base = match[1]
-                const prevRev = match[2] ? parseInt(match[2], 10) : 1
-                contractNumber = `${base}-R${prevRev + 1}`
-            } else {
-                contractNumber = `${prev}-R2`
-            }
-            console.log(`[generate-contract] Regenerating — bumping ${prev} → ${contractNumber}`)
-        } else {
-            const { count: contractCount } = await supabase
-                .from('contracts')
-                .select('id', { count: 'exact', head: true })
-            contractNumber = `DR7${1000 + (contractCount || 0)}`
-            console.log(`[generate-contract] First generation — ${contractNumber}`)
-        }
+            .select('id', { count: 'exact', head: true })
+        const contractNumber = `DR7${1000 + (contractCount || 0)}`
 
         // KM limit: recognize BOTH shapes.
         //   admin shape:   booking_details.unlimited_km=true  + km_limit='Illimitati'
