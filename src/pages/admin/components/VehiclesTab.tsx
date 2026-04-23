@@ -271,6 +271,19 @@ export default function VehiclesTab() {
       throw new Error(`Failed to delete cauzioni: ${cauzioniError.message}`)
     }
 
+    // Nullify preventivi.vehicle_id (FK preventivi_vehicle_id_fkey) so the
+    // vehicle delete doesn't trip the constraint. Preventivi history stays.
+    logger.log('  Clearing preventivi.vehicle_id references...')
+    const { error: preventiviError } = await supabase
+      .from('preventivi')
+      .update({ vehicle_id: null })
+      .eq('vehicle_id', id)
+
+    if (preventiviError) {
+      console.error('  Error clearing preventivi vehicle_id:', preventiviError)
+      throw new Error(`Failed to clear preventivi vehicle_id: ${preventiviError.message}`)
+    }
+
     // Finally, delete the vehicle itself
     logger.log('  Deleting vehicle record...')
     const { data: deletedVehicle, error: vehicleError } = await supabase
@@ -306,6 +319,7 @@ export default function VehiclesTab() {
       // vehicle_name and vehicle_plate are text fields on bookings, they stay untouched
       await supabase.from('cauzioni').update({ veicolo_id: null }).eq('veicolo_id', id)
       await supabase.from('bookings').update({ vehicle_id: null }).eq('vehicle_id', id)
+      await supabase.from('preventivi').update({ vehicle_id: null }).eq('vehicle_id', id)
       await supabase.from('reservations').delete().eq('vehicle_id', id)
 
       // Now delete the vehicle record
