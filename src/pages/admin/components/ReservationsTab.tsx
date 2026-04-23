@@ -4650,13 +4650,32 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         .catch(err => console.error('⚠️ Failed to sync cauzione:', err))
 
-      // Generate Contract PDF — AWAIT so signing link below finds the contract
-      logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)')
-      try {
-        await handleGenerateContract(insertedBooking, false)
-        logger.log('[Auto-Gen] ✅ Contract generated successfully')
-      } catch (err) {
-        console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
+      // Decide whether to generate the contract NOW or DEFER it until after payment.
+      // Rule: on a modification that leaves a balance owed, do NOT produce the
+      // contract — the Nexi callback regenerates it once the pay-by-link is
+      // paid. This guarantees the contract the customer signs always reflects
+      // the paid amount AND forces a brand-new contract number (no cache hit
+      // on an older signed PDF).
+      const editTotalCents = insertedBooking?.price_total || eurToCents(formData.total_amount || '0')
+      const editPaidCents = formData.amount_paid ? eurToCents(formData.amount_paid) : 0
+      const editHasBalance = !!editingId && (
+        formData.payment_status === 'pending'
+        || formData.payment_status === 'unpaid'
+        || (formData.payment_status === 'partial' && editPaidCents < editTotalCents)
+      )
+      const deferContractUntilPaid = editHasBalance
+
+      if (deferContractUntilPaid) {
+        logger.log('[Auto-Gen] Deferring contract generation — edit leaves balance owed; Nexi callback will regenerate after payment')
+      } else {
+        // Generate Contract PDF — AWAIT so signing link below finds the contract
+        logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)')
+        try {
+          await handleGenerateContract(insertedBooking, false)
+          logger.log('[Auto-Gen] ✅ Contract generated successfully')
+        } catch (err) {
+          console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
+        }
       }
 
       // Detect if payment status just changed from unpaid → paid (on edit)
@@ -4849,9 +4868,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Auto-send contract for signature via WhatsApp
-      // Send when: editing (always — new contract with updated data), OR new paid booking, OR payment just marked paid
-      const shouldSendSigningLink = !!insertedBooking?.id && (
-        !!editingId ||                             // ANY edit — resend updated contract
+      // Send when: edit with no balance owed, OR new paid booking, OR payment just marked paid.
+      // NEVER send on an edit that leaves a balance — the Nexi callback sends
+      // the signing link AFTER payment, on the freshly regenerated contract.
+      const shouldSendSigningLink = !!insertedBooking?.id && !deferContractUntilPaid && (
+        !!editingId ||                             // Edit with no balance — resend updated contract
         formData.payment_status === 'paid' ||      // New paid booking
         justMarkedPaid                             // Payment just transitioned to paid
       )
