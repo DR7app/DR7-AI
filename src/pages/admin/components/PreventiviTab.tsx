@@ -2246,6 +2246,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
+            <input type="checkbox" checked={form.include_cauzione_veicoli} onChange={(e) => setForm(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
+            <span className="text-sm text-theme-text-primary">
+              Cauzione Veicolo ({formatEur((configOverlay as any).cauzioneVeicoliPerDay ?? 20)}/giorno)
+            </span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_unlimited_km} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
               Km Illimitati ({formatEur(getUnlimitedKmPriceForVehicle(selectedVehicle, form.driver_tier, rentalConfig, configOverlay))}/giorno)
@@ -2261,12 +2267,6 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             <input type="checkbox" checked={form.include_dr7_flex} onChange={(e) => setForm(prev => ({ ...prev, include_dr7_flex: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
               DR7 FLEX — Cancellazione Premium ({formatEur(configOverlay.dr7FlexPerDay)}/giorno)
-            </span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-            <input type="checkbox" checked={form.include_cauzione_veicoli} onChange={(e) => setForm(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
-            <span className="text-sm text-theme-text-primary">
-              Cauzione Veicolo ({formatEur((configOverlay as any).cauzioneVeicoliPerDay ?? 20)}/giorno)
             </span>
           </label>
         </div>
