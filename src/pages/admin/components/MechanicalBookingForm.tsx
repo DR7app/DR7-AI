@@ -290,23 +290,29 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             .toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
                         const totalEur = formData.price_total.toFixed(2)
 
-                        const custMsg = `Salve ${custFirstName},\n\n`
-                            + `Confermiamo il suo appuntamento.\n\n`
-                            + `*NUOVA PRENOTAZIONE MECCANICA*\n\n`
-                            + `*ID:* ${insertedBooking.id.slice(0, 8).toUpperCase()}\n`
-                            + `*Servizio:* ${formData.service_name}\n`
-                            + `*Data e Ora:* ${fmtDate} alle ${formData.appointment_time}\n`
-                            + `*Totale:* €${totalEur}\n`
-                            + `*Pagamento:* ${formData.payment_status === 'paid' ? 'Pagato' : 'Da pagare'}\n`
-                            + `*Note:* ${formData.notes || '-'}\n\n`
-                            + `Cordiali Saluti,\nDR7`
-
-                        await fetch('/.netlify/functions/send-whatsapp-notification', {
+                        const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ customMessage: custMsg, customPhone: custPhone })
+                            body: JSON.stringify({
+                                customPhone: custPhone,
+                                templateKey: 'pro_conferma_meccanica',
+                                templateVars: {
+                                    customer_name: custFirstName,
+                                    service_name: formData.service_name,
+                                    appointment_date: fmtDate,
+                                    appointment_time: formData.appointment_time,
+                                    total: totalEur,
+                                    vehicle_plate: formData.vehicle_info || '',
+                                },
+                                skipHeader: true,
+                            })
                         })
-                        logger.log('✅ WhatsApp mechanical booking confirmation sent to', custPhone)
+                        const waResult = await waResp.json().catch(() => ({}))
+                        if (!waResp.ok || waResult?.skipped) {
+                            toast.error('Template mancante in Messaggi di Sistema Pro: pro_conferma_meccanica')
+                        } else {
+                            logger.log('✅ WhatsApp mechanical booking confirmation sent to', custPhone)
+                        }
                     } catch (waError) {
                         console.error('⚠️ Failed to send WhatsApp:', waError)
                     }

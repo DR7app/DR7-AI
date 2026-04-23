@@ -78,6 +78,16 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_modifica_noleggio',  label: 'Modifica Noleggio',  description: 'Comunicazione al cliente dopo modifica di una prenotazione noleggio' },
       { key: 'pro_modifica_lavaggio',  label: 'Modifica Lavaggio',  description: 'Comunicazione al cliente dopo modifica di una prenotazione lavaggio' },
       { key: 'pro_modifica_meccanica', label: 'Modifica Meccanica', description: 'Comunicazione al cliente dopo modifica di una prenotazione meccanica' },
+      { key: 'pro_estensione_noleggio', label: 'Estensione Noleggio', description: 'Comunicazione al cliente dopo estensione prenotazione noleggio' },
+    ],
+  },
+  {
+    label: 'No Cauzione & Sconti',
+    templates: [
+      { key: 'pro_no_cauzione_approvato', label: 'No Cauzione Approvato',  description: 'Comunicazione al cliente quando la richiesta No Cauzione è approvata' },
+      { key: 'pro_no_cauzione_rifiutato', label: 'No Cauzione Rifiutato',  description: 'Comunicazione al cliente quando la richiesta No Cauzione non è disponibile' },
+      { key: 'pro_sconto_concesso',       label: 'Sconto Concesso',        description: 'Comunicazione al cliente con sconto applicato' },
+      { key: 'pro_gift_voucher',          label: 'Invio Gift Voucher',     description: 'Messaggio che accompagna il gift voucher' },
     ],
   },
   {
@@ -102,11 +112,15 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
   {
     label: 'Richieste al Cliente',
     templates: [
-      { key: 'pro_richiesta_pagamento',  label: 'Richiesta Pagamento',        description: 'Invio link di pagamento al cliente' },
-      { key: 'pro_richiesta_firma',      label: 'Richiesta Firma',            description: 'Invio link firma contratto' },
-      { key: 'pro_richiesta_otp',        label: 'Richiesta OTP',              description: 'Invio codice OTP per conferma firma' },
-      { key: 'pro_richiesta_iban',       label: 'Richiesta IBAN',             description: 'Richiesta IBAN per rimborso cauzione' },
-      { key: 'pro_richiesta_documenti',  label: 'Richiesta Documenti',        description: 'Richiesta documenti aggiuntivi al cliente' },
+      { key: 'pro_richiesta_pagamento',      label: 'Richiesta Pagamento',         description: 'Invio link di pagamento al cliente' },
+      { key: 'pro_richiesta_firma',          label: 'Richiesta Firma',             description: 'Invio link firma contratto' },
+      { key: 'pro_richiesta_otp',            label: 'Richiesta OTP',               description: 'Invio codice OTP per conferma firma' },
+      { key: 'pro_richiesta_iban',           label: 'Richiesta IBAN',              description: 'Richiesta IBAN per rimborso cauzione' },
+      { key: 'pro_richiesta_documenti',      label: 'Richiesta Documenti',         description: 'Richiesta documenti aggiuntivi al cliente' },
+      { key: 'pro_richiesta_cauzione',       label: 'Richiesta Cauzione',          description: 'Invio link preautorizzazione cauzione al cliente' },
+      { key: 'pro_richiesta_danni',          label: 'Richiesta Pagamento Danni',   description: 'Invio link di pagamento per danni al veicolo' },
+      { key: 'pro_richiesta_penali',         label: 'Richiesta Pagamento Penali',  description: 'Invio link di pagamento per penali contrattuali' },
+      { key: 'pro_richiesta_danni_penali',   label: 'Richiesta Danni + Penali',    description: 'Invio link di pagamento combinato danni + penali' },
     ],
   },
   {

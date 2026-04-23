@@ -149,20 +149,32 @@ export default function ReviewsTab() {
     async function sendWaTest() {
         setWaTesting(true)
         try {
-            const template = waTemplate || 'Ciao {nome} 👋🏻\n\nQuesto è un messaggio di test dal sistema recensioni DR7.'
-            const testMessage = template.replace(/\{nome\}/g, 'Test')
-
+            // Body is pulled EXCLUSIVELY from Messaggi di Sistema Pro → pro_marketing_recensione.
+            // NO hardcoded fallback. If the Pro template is missing/disabled, the server
+            // responds with skipped=true and we surface a toast error.
             const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    customMessage: testMessage
+                    templateKey: 'pro_marketing_recensione',
+                    templateVars: {
+                        '{customer_name}': 'Test',
+                        '{review_link}': 'https://dr7empire.com/recensioni',
+                    },
+                    skipHeader: true,
                 })
             })
 
             const result = await response.json()
 
-            if (response.ok && result.success) {
+            if (!response.ok) {
+                throw new Error(result.message || result.error || 'Errore invio')
+            }
+            if (result.skipped) {
+                toast.error('Template "pro_marketing_recensione" non configurato in Messaggi di Sistema Pro')
+                return
+            }
+            if (result.success) {
                 toast.success('Messaggio test inviato al numero admin!')
             } else {
                 throw new Error(result.message || result.error || 'Errore invio')

@@ -53,6 +53,10 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'La richiesta di firma e stata annullata' }) }
         }
 
+        if (sigRequest.status === 'superseded') {
+            return { statusCode: 410, body: JSON.stringify({ error: 'Questo link di firma non e piu valido — e stato generato un nuovo contratto. Attendi il nuovo link.' }) }
+        }
+
         if (sigRequest.status === 'otp_verified') {
             return { statusCode: 400, body: JSON.stringify({ error: 'OTP gia verificato. Procedi con la firma.' }) }
         }
@@ -133,36 +137,40 @@ export const handler: Handler = async (event) => {
                 if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                 if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
-                const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
-                const waResponse = await fetch(greenApiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chatId: `${cleanPhone}@c.us`,
-                        message: await renderTemplate('signature_otp_whatsapp', { otp }, `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP per la firma del contratto e:\n\n*${otp}*\n\nIl codice scade tra ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice, ignora questo messaggio.`)
-                    })
-                })
-
-                const waResult = await waResponse.json()
-                if (waResponse.ok && waResult.idMessage) {
-                    channel = 'whatsapp'
-                    console.log(`[signature-send-otp] OTP sent via WhatsApp to ${cleanPhone}:`, waResult.idMessage)
-
-                    // Log to sent_messages_log
-                    try {
-                        const fullMessage = `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP per la firma del contratto e:\n\n*${otp}*\n\nIl codice scade tra ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice, ignora questo messaggio.`
-                        await supabase.from('sent_messages_log').insert({
-                            customer_name: sigRequest.signer_name || 'N/A',
-                            customer_phone: cleanPhone,
-                            message_text: fullMessage,
-                            template_label: 'Signature OTP',
-                            status: 'sent',
-                        })
-                    } catch (logErr) {
-                        console.error('Failed to log message:', logErr)
-                    }
+                const otpMsg = await renderTemplate('signature_otp_whatsapp', { otp })
+                if (otpMsg === null) {
+                    console.log('[signature-send-otp] Template "signature_otp_whatsapp" missing/disabled — skipping send')
                 } else {
-                    console.warn('[signature-send-otp] WhatsApp send failed, falling back to email:', waResult)
+                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+                    const waResponse = await fetch(greenApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${cleanPhone}@c.us`,
+                            message: otpMsg
+                        })
+                    })
+
+                    const waResult = await waResponse.json()
+                    if (waResponse.ok && waResult.idMessage) {
+                        channel = 'whatsapp'
+                        console.log(`[signature-send-otp] OTP sent via WhatsApp to ${cleanPhone}:`, waResult.idMessage)
+
+                        // Log to sent_messages_log
+                        try {
+                            await supabase.from('sent_messages_log').insert({
+                                customer_name: sigRequest.signer_name || 'N/A',
+                                customer_phone: cleanPhone,
+                                message_text: otpMsg,
+                                template_label: 'Signature OTP',
+                                status: 'sent',
+                            })
+                        } catch (logErr) {
+                            console.error('Failed to log message:', logErr)
+                        }
+                    } else {
+                        console.warn('[signature-send-otp] WhatsApp send failed, falling back to email:', waResult)
+                    }
                 }
             } catch (waErr: any) {
                 console.warn('[signature-send-otp] WhatsApp error, falling back to email:', waErr.message)
