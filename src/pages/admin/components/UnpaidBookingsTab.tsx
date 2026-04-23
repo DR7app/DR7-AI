@@ -1407,6 +1407,34 @@ export default function UnpaidBookingsTab() {
           payment_status: 'paid', status: 'confirmed',
           booking_details: { ...booking.booking_details, extension_history: extensions }
         }).eq('id', bookingId)
+
+        // Each newly-paid rental needs its contract regenerated and the firma
+        // link re-sent to the customer. Same pipeline used by the single-booking
+        // "Segna Pagato" path (updatePaymentStatus). Best-effort — any failure
+        // here is logged but does not abort the batch.
+        try {
+          await authFetch('/.netlify/functions/generate-contract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId, silent: true })
+          })
+          const { data: contractForSig } = await supabase
+            .from('contracts')
+            .select('id, pdf_url')
+            .eq('booking_id', bookingId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (contractForSig?.id && contractForSig?.pdf_url) {
+            await fetch('/.netlify/functions/signature-init', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contractId: contractForSig.id, bookingId })
+            })
+          }
+        } catch (sigErr) {
+          logger.warn('[markAllCustomerPaid] contract/firma pipeline failed for', bookingId, sigErr)
+        }
       }
 
       for (const pwId of primeWashBookingIds) {
