@@ -96,20 +96,58 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Contract ID or Booking ID is required' }) }
         }
 
+        console.log(`[signature-init] Lookup — contractId="${contractId ?? 'none'}" bookingId="${bookingId ?? 'none'}"`)
+
         // Fetch contract
         let contract: any = null
+
         if (contractId) {
-            const result = await supabase.from('contracts').select('*').eq('id', contractId).single()
-            contract = result.data
+            const { data, error } = await supabase
+                .from('contracts')
+                .select('*')
+                .eq('id', contractId)
+                .maybeSingle()
+            if (error) {
+                console.warn(`[signature-init] contractId lookup error (id=${contractId}):`, error.message)
+            } else if (data) {
+                console.log(`[signature-init] Contract found by id: ${contractId}`)
+                contract = data
+            } else {
+                console.warn(`[signature-init] No contract found by id=${contractId} — will fall back to bookingId lookup`)
+            }
         }
+
+        // Fall back to booking_id lookup when: no contractId provided, or contractId lookup returned nothing (e.g. RLS edge case)
         if (!contract && bookingId) {
-            const result = await supabase.from('contracts').select('*').eq('booking_id', bookingId).single()
-            contract = result.data
+            const { data, error, count } = await supabase
+                .from('contracts')
+                .select('*', { count: 'exact' })
+                .eq('booking_id', bookingId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+            if (error) {
+                console.warn(`[signature-init] bookingId lookup error (booking_id=${bookingId}):`, error.message)
+            } else if (data) {
+                console.log(`[signature-init] Contract found by booking_id=${bookingId} (total rows for this booking: ${count ?? 'unknown'}, using most recent)`)
+                contract = data
+            } else {
+                console.warn(`[signature-init] No contract found by booking_id=${bookingId}`)
+            }
         }
 
         if (!contract) {
-            return { statusCode: 404, body: JSON.stringify({ error: 'Contratto non trovato' }) }
+            const detail = contractId && bookingId
+                ? `nessun contratto per id=${contractId} o booking_id=${bookingId}`
+                : contractId
+                    ? `nessun contratto per id=${contractId}`
+                    : `nessun contratto per booking_id=${bookingId}`
+            console.error(`[signature-init] Contract not found — ${detail}`)
+            return { statusCode: 404, body: JSON.stringify({ error: `Contratto non trovato (${detail})` }) }
         }
+
+        console.log(`[signature-init] Using contract id=${contract.id} number="${contract.contract_number}" booking_id="${contract.booking_id}"`)
+
 
         if (!contract.pdf_url) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il contratto non ha un PDF generato' }) }

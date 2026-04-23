@@ -2050,8 +2050,56 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (retryRes.ok) {
           toast.success('Link firma contratto inviato via WhatsApp!')
           logAdminAction('resend_contract', 'booking', booking.id, buildBookingContext(booking))
+          return
+        }
+
+        // FINAL FALLBACK: signature-init still broken — send the raw PDF URL via WhatsApp
+        // so the customer always receives something usable.
+        console.warn('[handleResendContract] signature-init retry failed, attempting direct WhatsApp fallback', retryData)
+        toast.loading('Invio diretto PDF via WhatsApp...', { id: 'resend-contract' })
+
+        const fallbackGenRes = await authFetch('/.netlify/functions/generate-contract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: booking.id })
+        })
+        const fallbackGenData = await fallbackGenRes.json().catch(() => ({} as any))
+
+        if (!fallbackGenRes.ok || !fallbackGenData?.url) {
+          toast.dismiss('resend-contract')
+          toast.error(
+            'Impossibile inviare il contratto: ' +
+              (fallbackGenData?.error || retryData?.error || `HTTP ${retryRes.status}`),
+            { duration: 12000 }
+          )
+          return
+        }
+
+        const pdfUrl: string = fallbackGenData.url
+        const customerName = booking.customer_name || 'Cliente'
+        const customMessage =
+          `Gentile ${customerName}, ecco il contratto di noleggio: ${pdfUrl}\n\nPer favore firmalo e rinvialo. Grazie. DR7`
+
+        const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: booking.customer_phone,
+            customMessage
+          })
+        })
+
+        toast.dismiss('resend-contract')
+        if (waRes.ok) {
+          toast.success('Contratto inviato direttamente via WhatsApp (senza signature-init)', { duration: 8000 })
+          logAdminAction('resend_contract_fallback', 'booking', booking.id, buildBookingContext(booking))
         } else {
-          toast.error('Errore invio: ' + (retryData?.error || `HTTP ${retryRes.status}`), { duration: 10000 })
+          const waData = await waRes.json().catch(() => ({} as any))
+          toast.error(
+            'WhatsApp fallback fallito: ' + (waData?.error || `HTTP ${waRes.status}`) +
+            `\nURL contratto: ${pdfUrl}`,
+            { duration: 15000 }
+          )
         }
         return
       }
