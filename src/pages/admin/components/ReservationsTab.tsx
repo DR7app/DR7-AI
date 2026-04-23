@@ -2047,14 +2047,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     try {
       toast.loading('Rinvio contratto...', { id: 'resend-contract' })
 
-      // If we don't have a cached contract id from a prior generate in this
-      // session, regenerate now — that guarantees the contracts row exists
-      // and is current. Otherwise the cached id is a shortcut.
+      // Resolve the contract id WITHOUT depending on a direct SELECT from
+      // the frontend — that can be RLS-blocked and return null for
+      // contracts the service-role Netlify function just inserted. Strategy:
+      //
+      //   1. If we have a cached id from a previous handleGenerateContract
+      //      call in this session for this booking, use it.
+      //   2. Otherwise, regenerate the contract now (authoritative — the
+      //      Netlify function returns the id directly).
+      //   3. Only as a last resort fall back to a SELECT.
+      let contractId: string | null = null
       const cached = lastGeneratedContractRef.current
-      const bodyPayload: Record<string, string> = { bookingId: booking.id }
       if (cached && cached.bookingId === booking.id) {
-        bodyPayload.contractId = cached.contractId
-      } else {
+        contractId = cached.contractId
+      }
+
+      if (!contractId) {
         toast.loading('Rigenero il contratto...', { id: 'resend-contract' })
         const ok = await handleGenerateContract(booking, true)
         if (!ok) {
@@ -2064,21 +2072,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         const cachedAfter = lastGeneratedContractRef.current
         if (cachedAfter && cachedAfter.bookingId === booking.id) {
-          bodyPayload.contractId = cachedAfter.contractId
+          contractId = cachedAfter.contractId
         }
-        // No contractId? No problem — signature-init accepts bookingId alone
-        // and looks the contract up server-side with service-role.
       }
 
-      // signature-init runs on the backend with service-role, so it can read
-      // contracts regardless of RLS. Pass bookingId (always) + contractId
-      // (when known) and let it do the work.
+      // Final fallback — try the SELECT (may fail under RLS)
+      if (!contractId) {
+        const { data: contract } = await supabase
+          .from('contracts')
+          .select('id')
+          .eq('booking_id', booking.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        contractId = contract?.id || null
+      }
+
+      if (!contractId) {
+        toast.dismiss('resend-contract')
+        toast.error('Contratto non risolto. Verifica nel log della funzione generate-contract se l\'insert ha restituito un errore.', { duration: 12000 })
+        return
+      }
+
+      // Send signing link via signature-init (service-role backend can read
+      // the contract regardless of RLS).
       const sigRes = await fetch('/.netlify/functions/signature-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload)
+        body: JSON.stringify({ contractId, bookingId: booking.id })
       })
-      const sigData = await sigRes.json().catch(() => ({}))
+      const sigData = await sigRes.json()
 
       toast.dismiss('resend-contract')
       if (sigRes.ok) {
@@ -4843,33 +4866,58 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       )
       if (shouldSendSigningLink) {
         try {
-          // Skip all the frontend contract-id gymnastics: signature-init
-          // already accepts bookingId and looks up the contract server-side
-          // with service-role (bypasses RLS). Pass the cached contractId as a
-          // shortcut when we have one — otherwise just bookingId.
+          // Prefer the contract id that generate-contract JUST returned —
+          // that's authoritative and can't hit RLS (the Netlify function
+          // inserted it with service-role). Fall back to a SELECT only if
+          // handleGenerateContract didn't run (e.g. contract already existed).
+          let contractId: string | null = null
+          let pdfUrl: string | null = null
           const cached = lastGeneratedContractRef.current
-          const bodyPayload: Record<string, string> = { bookingId: insertedBooking.id }
           if (cached && cached.bookingId === insertedBooking.id) {
-            bodyPayload.contractId = cached.contractId
-            logger.log('[Auto-Gen] Using cached contract id from generate-contract response:', cached.contractId)
+            contractId = cached.contractId
+            pdfUrl = cached.pdfUrl
+            logger.log('[Auto-Gen] Using cached contract id from generate-contract response:', contractId)
+          } else {
+            const { data: contractForSig } = await supabase
+              .from('contracts')
+              .select('id, pdf_url, customer_email, booking_id')
+              .eq('booking_id', insertedBooking.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            contractId = contractForSig?.id || null
+            pdfUrl = contractForSig?.pdf_url || null
           }
 
-          logger.log('[Auto-Gen] Calling signature-init for booking:', insertedBooking.id)
-          const sigRes = await fetch('/.netlify/functions/signature-init', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bodyPayload)
-          })
-          if (sigRes.ok) {
-            logger.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
-            toast.success(editingId ? 'Nuovo contratto inviato per firma' : 'Contratto inviato per firma', { duration: 4000 })
+          if (contractId && pdfUrl) {
+            logger.log('[Auto-Gen] Sending contract for signature via WhatsApp:', contractId)
+            const sigRes = await fetch('/.netlify/functions/signature-init', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contractId, bookingId: insertedBooking.id })
+            })
+            if (sigRes.ok) {
+              logger.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
+              toast.success(editingId ? 'Nuovo contratto inviato per firma' : 'Contratto inviato per firma', { duration: 4000 })
+              // Garante signing link is now handled by signature-init (multi-signer support)
+            } else {
+              const sigErr = await sigRes.json().catch(() => ({}))
+              logger.warn('[Auto-Gen] ⚠️ Signature init failed:', sigErr.error || sigErr)
+              toast.error(`Link firma non inviato: ${sigErr.error || `HTTP ${sigRes.status}`}`, { duration: 8000 })
+            }
           } else {
-            const sigErr = await sigRes.json().catch(() => ({}))
-            logger.warn('[Auto-Gen] ⚠️ Signature init failed:', sigErr.error || sigErr)
+            // Surface this to the admin — if we can't resolve a contract id,
+            // signature-init has nothing to work with. Often means
+            // generate-contract silently failed upstream.
+            logger.warn('[Auto-Gen] ⚠️ No contract found for booking, skipping signature-init', {
+              contractGenerated,
+              bookingId: insertedBooking.id,
+              cachedBookingId: cached?.bookingId,
+            })
             const why = !contractGenerated
               ? 'generazione contratto fallita — vedi errore sopra'
-              : (sigErr.error || `HTTP ${sigRes.status}`)
-            toast.error(`Link firma non inviato: ${why}`, { duration: 10000 })
+              : 'il contratto non è stato trovato nel database dopo la generazione'
+            toast.error(`Contratto non inviato per firma: ${why}. Usa "Rigenera contratto" + "Invia contratto" sulla riga della prenotazione.`, { duration: 12000 })
           }
         } catch (sigError) {
           console.error('[Auto-Gen] ⚠️ Failed to send signing link:', sigError)
