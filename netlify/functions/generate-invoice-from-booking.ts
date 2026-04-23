@@ -63,10 +63,23 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Guard: never generate fattura for Wallet or Gift Card payments
-        const paymentMethod = (booking.payment_method || '').toLowerCase()
-        if (paymentMethod === 'wallet' || paymentMethod === 'gift card' || paymentMethod === 'gift_card' || paymentMethod === 'credit_wallet' || paymentMethod === 'credit') {
-            console.log(`[Invoice] Skipping — booking ${bookingId} paid via ${booking.payment_method} (no fattura for Wallet/Gift Card)`)
+        // Guard: never generate fattura for Wallet / Credit / Gift Card payments.
+        // Covers every label variant the codebase writes: "Credit Wallet" (admin UI),
+        // "credit_wallet" (legacy snake_case), "Wallet", "credit", "Gift Card", etc.
+        const paymentMethod = (booking.payment_method || '').toLowerCase().trim()
+        const isWalletOrGift =
+            paymentMethod === 'wallet'
+            || paymentMethod === 'credit'
+            || paymentMethod === 'credit wallet'
+            || paymentMethod === 'credit_wallet'
+            || paymentMethod === 'creditwallet'
+            || paymentMethod === 'gift card'
+            || paymentMethod === 'gift_card'
+            || paymentMethod === 'giftcard'
+            || paymentMethod.includes('wallet')
+            || paymentMethod.includes('gift')
+        if (isWalletOrGift) {
+            console.log(`[Invoice] Skipping — booking ${bookingId} paid via "${booking.payment_method}" (no fattura for Wallet/Gift Card/Credit)`)
             return {
                 statusCode: 200,
                 body: JSON.stringify({ message: 'Fattura non prevista per pagamenti con Wallet o Gift Card', skipped: true })
