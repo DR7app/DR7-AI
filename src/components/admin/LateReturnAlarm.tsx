@@ -13,11 +13,17 @@ interface LateBooking {
     minutesLate: number;
 }
 
+// Only ring for returns that are LATE but still realistic to chase (fresh).
+// Bookings overdue by days/weeks are almost certainly returned in real life
+// and were never marked `completata`; they would spam the alarm forever.
+const MIN_LATE_MINUTES = 10;              // grace period after dropoff_date
+const MAX_LATE_MINUTES = 24 * 60;         // stop ringing after 24h overdue
+
 const LateReturnAlarm: React.FC = () => {
     const [lateBookings, setLateBookings] = useState<LateBooking[]>([]);
-    const [isAlarmActive, setIsAlarmActive] = useState(false);
     const [stoppedAlarms, setStoppedAlarms] = useState<Set<string>>(new Set());
     const [session, setSession] = useState<Session | null>(null);
+    const [busyId, setBusyId] = useState<string | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const oscillatorRef = useRef<OscillatorNode | null>(null);
     const gainNodeRef = useRef<GainNode | null>(null);
@@ -49,43 +55,48 @@ const LateReturnAlarm: React.FC = () => {
         if (!session) return;
         const checkLateBookings = async () => {
             try {
-                // Only ring for ACTIVE rentals. A booking marked completed/completata/cancelled/
-                // annullata/returned is done and must never ring again, no matter how late
-                // its scheduled dropoff was.
+                const now = new Date();
+                const maxLateCutoff = new Date(now.getTime() - MAX_LATE_MINUTES * 60 * 1000);
+                const minLateCutoff = new Date(now.getTime() - MIN_LATE_MINUTES * 60 * 1000);
+
+                // Only ring for ACTIVE rentals whose dropoff_date falls in the
+                // [now - MAX_LATE_MINUTES, now - MIN_LATE_MINUTES] window.
+                // Older than MAX → stale, almost certainly returned IRL.
+                // Also skip test vehicles and "Lavaggio Rientro" internal rows.
                 const { data: bookings, error } = await supabase
                     .from('bookings')
                     .select('id, vehicle_name, customer_name, customer_phone, dropoff_date, status, booking_details')
                     .eq('service_type', 'car_rental')
                     .not('status', 'in', '("returned","completed","completata","cancelled","annullata")')
-                    .not('dropoff_date', 'is', null);
+                    .not('dropoff_date', 'is', null)
+                    .gte('dropoff_date', maxLateCutoff.toISOString())
+                    .lte('dropoff_date', minLateCutoff.toISOString())
+                    .not('customer_name', 'eq', 'Lavaggio Rientro')
+                    .not('vehicle_name', 'ilike', 'test%');
 
                 if (error) {
                     console.error('Error fetching bookings:', error);
                     return;
                 }
 
-                const now = new Date();
                 const late: LateBooking[] = [];
-
                 bookings?.forEach((booking) => {
+                    if (stoppedAlarms.has(booking.id)) return;
                     const dropoffTime = new Date(booking.dropoff_date);
-                    const tenMinutesLater = new Date(dropoffTime.getTime() + 10 * 60 * 1000);
-
-                    if (now > tenMinutesLater && !stoppedAlarms.has(booking.id)) {
-                        const minutesLate = Math.floor((now.getTime() - tenMinutesLater.getTime()) / (60 * 1000));
-                        late.push({
-                            id: booking.id,
-                            vehicle_name: booking.vehicle_name,
-                            customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A',
-                            customer_phone: booking.customer_phone || booking.booking_details?.customer?.phone || '-',
-                            dropoff_date: booking.dropoff_date,
-                            minutesLate,
-                        });
-                    }
+                    const minutesLate = Math.floor((now.getTime() - dropoffTime.getTime()) / (60 * 1000));
+                    // Safety: enforce the window client-side too (in case of TZ weirdness).
+                    if (minutesLate < MIN_LATE_MINUTES || minutesLate > MAX_LATE_MINUTES) return;
+                    late.push({
+                        id: booking.id,
+                        vehicle_name: booking.vehicle_name,
+                        customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A',
+                        customer_phone: booking.customer_phone || booking.booking_details?.customer?.phone || '-',
+                        dropoff_date: booking.dropoff_date,
+                        minutesLate,
+                    });
                 });
-
+                late.sort((a, b) => b.minutesLate - a.minutesLate);
                 setLateBookings(late);
-                setIsAlarmActive(late.length > 0);
             } catch (err) {
                 console.error('Error checking late bookings:', err);
             }
@@ -97,17 +108,16 @@ const LateReturnAlarm: React.FC = () => {
     }, [stoppedAlarms, session]);
 
     useEffect(() => {
-        if (isAlarmActive && lateBookings.length > 0) {
+        if (lateBookings.length > 0) {
             startAlarm();
         } else {
             stopAlarm();
         }
         return () => stopAlarm();
-    }, [isAlarmActive, lateBookings.length]);
+    }, [lateBookings.length]);
 
     const startAlarm = () => {
         if (oscillatorRef.current) return;
-
         try {
             const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
             const oscillator = audioContext.createOscillator();
@@ -115,22 +125,21 @@ const LateReturnAlarm: React.FC = () => {
 
             oscillator.type = 'sine';
             oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.25, audioContext.currentTime);
 
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
             oscillator.start();
 
-            // Use setInterval instead of recursive setTimeout to allow proper cleanup
             if (pulseIntervalRef.current) clearInterval(pulseIntervalRef.current);
             pulseIntervalRef.current = setInterval(() => {
                 if (!oscillatorRef.current || !gainNodeRef.current) {
                     if (pulseIntervalRef.current) clearInterval(pulseIntervalRef.current);
                     return;
                 }
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.25, audioContext.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime + 0.5);
+                gainNode.gain.setValueAtTime(0.25, audioContext.currentTime + 0.5);
             }, 1000);
 
             audioContextRef.current = audioContext;
@@ -147,34 +156,35 @@ const LateReturnAlarm: React.FC = () => {
             pulseIntervalRef.current = null;
         }
         if (oscillatorRef.current) {
-            try { oscillatorRef.current.stop(); oscillatorRef.current.disconnect(); } catch { // intentionally empty
-            }
+            try { oscillatorRef.current.stop(); oscillatorRef.current.disconnect(); } catch { /* noop */ }
             oscillatorRef.current = null;
         }
         if (audioContextRef.current) {
-            try { audioContextRef.current.close(); } catch { // intentionally empty
-            }
+            try { audioContextRef.current.close(); } catch { /* noop */ }
             audioContextRef.current = null;
         }
         gainNodeRef.current = null;
     };
 
-    const handleStopAlarm = () => {
-        const newStoppedAlarms = new Set(stoppedAlarms);
-        lateBookings.forEach((booking) => newStoppedAlarms.add(booking.id));
-        setStoppedAlarms(newStoppedAlarms);
-        localStorage.setItem('stoppedAlarms', JSON.stringify(Array.from(newStoppedAlarms)));
-        setIsAlarmActive(false);
+    const silenceAll = () => {
+        const next = new Set(stoppedAlarms);
+        lateBookings.forEach((b) => next.add(b.id));
+        setStoppedAlarms(next);
+        localStorage.setItem('stoppedAlarms', JSON.stringify(Array.from(next)));
         setLateBookings([]);
     };
 
-    const handleMarkAsReturned = async (bookingId: string) => {
+    const silenceOne = (id: string) => {
+        const next = new Set(stoppedAlarms);
+        next.add(id);
+        setStoppedAlarms(next);
+        localStorage.setItem('stoppedAlarms', JSON.stringify(Array.from(next)));
+        setLateBookings((prev) => prev.filter((b) => b.id !== id));
+    };
+
+    const markReturned = async (bookingId: string) => {
+        setBusyId(bookingId);
         try {
-            // Use 'completata' — the project's standard completion status (recognized by
-            // availability, reports, and the alarm filter). 'returned' was a custom value
-            // only this component used, invisible to the rest of the system.
-            // We .select() so a 0-row result (RLS silently filtered the update) is
-            // visible instead of looking like success.
             const { data, error } = await supabase
                 .from('bookings')
                 .update({ status: 'completata' })
@@ -182,92 +192,141 @@ const LateReturnAlarm: React.FC = () => {
                 .select('id');
 
             if (error) {
-                console.error('Error marking booking as returned:', error);
-                toast.error(`Errore: ${error.message || 'impossibile aggiornare la prenotazione'}`, { duration: 8000 });
+                toast.error(`Errore: ${error.message || 'impossibile aggiornare'}`, { duration: 6000 });
                 return;
             }
-
             if (!data || data.length === 0) {
-                // RLS returned 0 rows → update didn't land. Surface this clearly.
-                console.error('Mark-as-returned: 0 rows updated for booking', bookingId);
-                toast.error('Prenotazione non aggiornata — controlla i permessi amministratore', { duration: 8000 });
+                toast.error('Prenotazione non aggiornata — controlla i permessi', { duration: 6000 });
                 return;
             }
-
-            const updated = lateBookings.filter((b) => b.id !== bookingId);
-            setLateBookings(updated);
-            if (updated.length === 0) setIsAlarmActive(false);
+            setLateBookings((prev) => prev.filter((b) => b.id !== bookingId));
             toast.success('Prenotazione segnata come rientrata');
         } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            console.error('Error updating booking:', err);
-            toast.error(`Errore: ${errMsg}`, { duration: 8000 });
+            const msg = err instanceof Error ? err.message : String(err);
+            toast.error(`Errore: ${msg}`, { duration: 6000 });
+        } finally {
+            setBusyId(null);
         }
     };
 
-    if (!isAlarmActive || lateBookings.length === 0) return null;
+    const fmtLate = (mins: number) => {
+        if (mins < 60) return `${mins} min in ritardo`;
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        return m > 0 ? `${h}h ${m}m in ritardo` : `${h}h in ritardo`;
+    };
+
+    if (lateBookings.length === 0) return null;
 
     return (
         <AnimatePresence>
             <motion.div
+                key="late-alarm-backdrop"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[9999] flex items-center justify-center"
-                style={{ backgroundColor: 'rgba(220, 38, 38, 0.95)' }}
+                onClick={silenceAll}
+                className="fixed inset-0 z-[9998] bg-black/70 backdrop-blur-sm"
+            />
+            <motion.div
+                key="late-alarm-card"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.18 }}
+                className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none"
             >
-                <motion.div
-                    initial={{ scale: 0.9, y: 20 }}
-                    animate={{ scale: 1, y: 0 }}
-                    exit={{ scale: 0.9, y: 20 }}
-                    className="bg-theme-text-primary rounded-lg shadow-2xl max-w-2xl w-full mx-4 p-8"
-                >
-                    <div className="text-center mb-6">
-                        <h2 className="text-3xl font-bold text-red-600 mb-2">LATE RETURN ALERT</h2>
-                        <p className="text-gray-600">The following rental(s) are overdue</p>
+                <div className="pointer-events-auto bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                    {/* Accent strip */}
+                    <div className="h-1.5 w-full bg-red-500" />
+
+                    {/* Header */}
+                    <div className="px-6 pt-5 pb-4 border-b border-gray-100">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <div className="text-[11px] font-bold uppercase tracking-wider text-red-600 flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                    Rientro in ritardo
+                                </div>
+                                <h2 className="text-lg font-bold text-gray-900 mt-0.5">
+                                    {lateBookings.length === 1
+                                        ? '1 noleggio scaduto'
+                                        : `${lateBookings.length} noleggi scaduti`}
+                                </h2>
+                            </div>
+                            <button
+                                onClick={silenceAll}
+                                aria-label="Silenzia tutto"
+                                className="shrink-0 w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
-                        {lateBookings.map((booking) => (
-                            <div key={booking.id} className="border border-red-300 rounded-full p-4 bg-red-50">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h3 className="font-bold text-lg text-gray-900">{booking.vehicle_name}</h3>
-                                        <p className="text-gray-700">{booking.customer_name}</p>
-                                        <p className="text-gray-600 text-sm">{booking.customer_phone}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-red-600 font-bold text-xl">{booking.minutesLate} min late</p>
-                                        <p className="text-gray-600 text-sm">
-                                            Due: {new Date(booking.dropoff_date).toLocaleString('it-IT', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}
-                                        </p>
+                    {/* Body: list */}
+                    <div className="px-4 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+                        {lateBookings.map((b) => (
+                            <div
+                                key={b.id}
+                                className="rounded-xl border border-gray-200 bg-white overflow-hidden"
+                            >
+                                <div className="px-4 py-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-[15px] font-semibold text-gray-900 truncate">{b.vehicle_name || 'Veicolo'}</div>
+                                            <div className="text-sm text-gray-700 truncate">{b.customer_name}</div>
+                                            {b.customer_phone && b.customer_phone !== '-' && (
+                                                <div className="text-xs text-gray-500 truncate">{b.customer_phone}</div>
+                                            )}
+                                        </div>
+                                        <div className="shrink-0 text-right">
+                                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-700 text-[11px] font-bold tabular-nums">
+                                                {fmtLate(b.minutesLate)}
+                                            </div>
+                                            <div className="text-[11px] text-gray-500 mt-1 tabular-nums">
+                                                {new Date(b.dropoff_date).toLocaleString('it-IT', {
+                                                    day: '2-digit', month: '2-digit', year: '2-digit',
+                                                    hour: '2-digit', minute: '2-digit',
+                                                })}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => handleMarkAsReturned(booking.id)}
-                                    className="w-full bg-green-600 hover:bg-green-700 text-theme-text-primary font-semibold py-2 px-4 rounded-full transition-colors"
-                                >
-                                    Mark as Returned
-                                </button>
+                                <div className="grid grid-cols-2 gap-px bg-gray-100">
+                                    <button
+                                        onClick={() => markReturned(b.id)}
+                                        disabled={busyId === b.id}
+                                        className="bg-white hover:bg-green-50 disabled:bg-gray-50 disabled:text-gray-400 text-green-700 text-sm font-semibold py-2.5 transition-colors"
+                                    >
+                                        {busyId === b.id ? 'Aggiornamento…' : 'Segna rientrato'}
+                                    </button>
+                                    <button
+                                        onClick={() => silenceOne(b.id)}
+                                        className="bg-white hover:bg-gray-50 text-gray-600 text-sm font-medium py-2.5 transition-colors"
+                                    >
+                                        Silenzia
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
 
-                    <div className="flex gap-4">
+                    {/* Footer */}
+                    <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+                        <span className="text-[11px] text-gray-500">
+                            Aggiornato ogni 30s · max 24h di ritardo
+                        </span>
                         <button
-                            onClick={handleStopAlarm}
-                            className="flex-1 bg-theme-bg-tertiary hover:bg-theme-bg-secondary text-theme-text-primary font-semibold py-3 px-6 rounded-full transition-colors"
+                            onClick={silenceAll}
+                            className="text-sm font-medium text-gray-700 hover:text-gray-900"
                         >
-                            Stop Alarm
+                            Silenzia tutto
                         </button>
                     </div>
-                </motion.div>
+                </div>
             </motion.div>
         </AnimatePresence>
     );
