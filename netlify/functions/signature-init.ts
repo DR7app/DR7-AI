@@ -98,10 +98,44 @@ export const handler: Handler = async (event) => {
 
         console.log(`[signature-init] Lookup — contractId="${contractId ?? 'none'}" bookingId="${bookingId ?? 'none'}"`)
 
-        // Fetch contract
+        // Fetch contract. ALWAYS prefer the newest contract row for this
+        // booking — even if the caller passed a specific contractId, it may
+        // point at a now-stale row (the callback or admin may have called
+        // generate-contract in between, producing a newer row). Using the
+        // freshest row guarantees the customer signs the current PDF.
         let contract: any = null
+        const effectiveBookingIdForLookup = bookingId
+            || (contractId ? await (async () => {
+                const { data: c } = await supabase
+                    .from('contracts')
+                    .select('booking_id')
+                    .eq('id', contractId)
+                    .maybeSingle()
+                return c?.booking_id || null
+            })() : null)
 
-        if (contractId) {
+        if (effectiveBookingIdForLookup) {
+            const { data, error, count } = await supabase
+                .from('contracts')
+                .select('*', { count: 'exact' })
+                .eq('booking_id', effectiveBookingIdForLookup)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+            if (error) {
+                console.warn(`[signature-init] bookingId lookup error (booking_id=${effectiveBookingIdForLookup}):`, error.message)
+            } else if (data) {
+                console.log(`[signature-init] Using NEWEST contract row for booking_id=${effectiveBookingIdForLookup} (total rows: ${count ?? '?'}, chosen id=${data.id}, number=${data.contract_number})`)
+                if (contractId && contractId !== data.id) {
+                    console.log(`[signature-init] caller passed contractId=${contractId} but newest is ${data.id} — using newest`)
+                }
+                contract = data
+            }
+        }
+
+        // Final fallback: the caller passed contractId and nothing else lined
+        // up — try loading that specific row (last-ditch for edge cases).
+        if (!contract && contractId) {
             const { data, error } = await supabase
                 .from('contracts')
                 .select('*')
@@ -110,29 +144,8 @@ export const handler: Handler = async (event) => {
             if (error) {
                 console.warn(`[signature-init] contractId lookup error (id=${contractId}):`, error.message)
             } else if (data) {
-                console.log(`[signature-init] Contract found by id: ${contractId}`)
+                console.log(`[signature-init] Fallback: loaded contract by id=${contractId}`)
                 contract = data
-            } else {
-                console.warn(`[signature-init] No contract found by id=${contractId} — will fall back to bookingId lookup`)
-            }
-        }
-
-        // Fall back to booking_id lookup when: no contractId provided, or contractId lookup returned nothing (e.g. RLS edge case)
-        if (!contract && bookingId) {
-            const { data, error, count } = await supabase
-                .from('contracts')
-                .select('*', { count: 'exact' })
-                .eq('booking_id', bookingId)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle()
-            if (error) {
-                console.warn(`[signature-init] bookingId lookup error (booking_id=${bookingId}):`, error.message)
-            } else if (data) {
-                console.log(`[signature-init] Contract found by booking_id=${bookingId} (total rows for this booking: ${count ?? 'unknown'}, using most recent)`)
-                contract = data
-            } else {
-                console.warn(`[signature-init] No contract found by booking_id=${bookingId}`)
             }
         }
 

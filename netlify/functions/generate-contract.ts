@@ -1249,44 +1249,41 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             updated_at: new Date().toISOString()
         }
 
-        // Look for the existing contract row for this booking. If multiple
-        // exist (legacy duplicate state), keep the newest and delete the
-        // rest so no orphan points at a stale pdf_url.
-        const { data: existingContracts } = await supabase
+        // ALWAYS INSERT a new contract row. No update, no upsert — each
+        // generation creates a fresh row with its own id, its own pdf_url,
+        // and its own contract_number. The previous rows stay in place as
+        // historical audit (with status='archived'), and any pending
+        // signatures on them get superseded by step 8a below.
+        //
+        // Why INSERT (not UPDATE):
+        //   - contracts.booking_id has no unique constraint, so upsert was
+        //     silently duplicating rows anyway.
+        //   - Updating a row in place made the OLD row's signature_requests
+        //     believe they were still valid (same contract_id), so when the
+        //     customer reopened a stale WhatsApp signing link they'd sign the
+        //     old hash. New row + new id + supersede = zero ambiguity.
+        //   - signature-init always selects the NEWEST contract row for a
+        //     booking (order by created_at desc limit 1), so the new row is
+        //     the one customers will sign.
+        const { data: inserted, error: insErr } = await supabase
             .from('contracts')
-            .select('id, created_at')
-            .eq('booking_id', bookingId)
-            .order('created_at', { ascending: false })
+            .insert(contractFields)
+            .select('id')
+            .single()
+        const upsertedRow = inserted
+        const dbError = insErr
+        console.log(`[generate-contract] Inserted NEW contract row id=${inserted?.id} for booking ${bookingId} → pdf_url=${publicUrl}, number=${contractNumber}`)
 
-        let upsertedRow: { id: string } | null = null
-        let dbError: any = null
-
-        if (existingContracts && existingContracts.length > 0) {
-            const primaryId = existingContracts[0].id
-            // Delete any extra duplicate rows (everything after the newest).
-            if (existingContracts.length > 1) {
-                const orphanIds = existingContracts.slice(1).map(r => r.id)
-                console.log(`[generate-contract] Deleting ${orphanIds.length} duplicate contract row(s) for booking ${bookingId}: ${orphanIds.join(', ')}`)
-                await supabase.from('contracts').delete().in('id', orphanIds)
-            }
-            const { data: updated, error: updErr } = await supabase
+        // Mark any OLDER contract rows for this booking as cancelled so the
+        // Contratti UI doesn't show them as active. The status CHECK only
+        // allows ('active', 'completed', 'cancelled'), so we use 'cancelled'.
+        if (inserted?.id) {
+            const { error: archErr } = await supabase
                 .from('contracts')
-                .update(contractFields)
-                .eq('id', primaryId)
-                .select('id')
-                .single()
-            upsertedRow = updated
-            dbError = updErr
-            console.log(`[generate-contract] Updated existing contract row id=${primaryId} → pdf_url=${publicUrl}, number=${contractNumber}`)
-        } else {
-            const { data: inserted, error: insErr } = await supabase
-                .from('contracts')
-                .insert(contractFields)
-                .select('id')
-                .single()
-            upsertedRow = inserted
-            dbError = insErr
-            console.log(`[generate-contract] Inserted new contract row id=${inserted?.id} → pdf_url=${publicUrl}, number=${contractNumber}`)
+                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                .eq('booking_id', bookingId)
+                .neq('id', inserted.id)
+            if (archErr) console.warn('[generate-contract] Failed to cancel older contract rows:', archErr)
         }
 
         if (dbError) {
