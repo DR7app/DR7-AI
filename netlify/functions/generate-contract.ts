@@ -334,14 +334,11 @@ export const handler: Handler = async (event) => {
         // revision suffix on regeneration (DR71005 → DR71005-R2 → -R3). This
         // guarantees a DIFFERENT number every time the contract is regenerated,
         // so cached/older PDFs can never shadow the current version.
-        // Use order+limit (not maybeSingle alone) in case duplicate rows exist.
-        const { data: existingRows } = await supabase
+        const { data: existingContract } = await supabase
             .from('contracts')
             .select('contract_number')
             .eq('booking_id', bookingId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-        const existingContract = existingRows?.[0]
+            .maybeSingle()
 
         let contractNumber: string
         if (existingContract?.contract_number) {
@@ -1215,79 +1212,46 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             .getPublicUrl(fileName)
 
         // 8. Save/Update Contracts Table
-        // Use EXPLICIT update-or-insert instead of upsert(onConflict) — the
-        // contracts table has NO unique constraint on booking_id, so Supabase's
-        // upsert silently creates duplicates. Duplicate rows orphan old
-        // signature_requests pointing at the pre-modification contract, and
-        // the customer ends up with stale signing links in their WhatsApp.
-        //
-        // Strategy: find the single existing row for this booking_id (if any),
-        // UPDATE it in place; otherwise INSERT a new row. This guarantees
-        // ONE contract row per booking, so every signature_request points at
-        // the row whose pdf_url is always the current version.
-        const contractFields = {
-            booking_id: bookingId,
-            contract_number: contractNumber,
-            contract_date: new Date().toISOString().split('T')[0],
-            customer_name: clientName || resolvedName || '',
-            customer_email: customer?.email || resolvedEmail || '',
-            customer_phone: customer?.telefono || resolvedPhone || '',
-            customer_address: clientAddress,
-            customer_tax_code: clientVat,
-            customer_license_number: driverLicense,
-            vehicle_name: vehicleName,
-            rental_start_date: pickupDate.toISOString().split('T')[0],
-            rental_end_date: dropoffDate.toISOString().split('T')[0],
-            daily_rate: 0,
-            total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
-            total_amount: booking.price_total / 100,
-            status: 'active',
-            pdf_url: publicUrl,
-            // Null the signed PDF so a regenerated contract never serves its
-            // previous signed version by accident.
-            signed_pdf_url: null,
-            updated_at: new Date().toISOString()
-        }
-
-        // Look for the existing contract row for this booking. If multiple
-        // exist (legacy duplicate state), keep the newest and delete the
-        // rest so no orphan points at a stale pdf_url.
-        const { data: existingContracts } = await supabase
+        // When re-generating a contract (e.g. after a booking modification),
+        // clear any PREVIOUS signed_pdf_url. Otherwise the OLD signed PDF
+        // stays in the row and downstream flows that read contracts.
+        // signed_pdf_url deliver the stale signed copy to the customer —
+        // visible bug: "after signing the customer receives the older contract".
+        // NOTE: signed_at is intentionally NOT included here. That column does
+        // not exist on the contracts table in this project (only
+        // signature_requests carries signing timestamps). Including it causes
+        // PostgREST to fail the upsert with PGRST204 "column not in schema".
+        const { data: upsertedRow, error: dbError } = await supabase
             .from('contracts')
-            .select('id, created_at')
-            .eq('booking_id', bookingId)
-            .order('created_at', { ascending: false })
+            .upsert({
+                booking_id: bookingId,
+                contract_number: contractNumber,
+                contract_date: new Date().toISOString().split('T')[0],
+                customer_name: clientName || resolvedName || '',
+                customer_email: customer?.email || resolvedEmail || '',
+                customer_phone: customer?.telefono || resolvedPhone || '',
+                customer_address: clientAddress,
+                customer_tax_code: clientVat,
+                customer_license_number: driverLicense,
+                vehicle_name: vehicleName,
+                rental_start_date: pickupDate.toISOString().split('T')[0],
+                rental_end_date: dropoffDate.toISOString().split('T')[0],
+                daily_rate: 0, // We rely on total amount mostly
+                total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
+                total_amount: booking.price_total / 100,
+                status: 'active',
+                pdf_url: publicUrl,
+                // Null the signed PDF so a regenerated contract never serves
+                // its previous signed version by accident. The signing
+                // timestamp itself lives in signature_requests.signed_at,
+                // which the supersede step below handles separately.
+                signed_pdf_url: null,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'booking_id' })
+            .select('id')
+            .single()
 
-        let upsertedRow: { id: string } | null = null
-        let dbError: any = null
-
-        if (existingContracts && existingContracts.length > 0) {
-            const primaryId = existingContracts[0].id
-            // Delete any extra duplicate rows (everything after the newest).
-            if (existingContracts.length > 1) {
-                const orphanIds = existingContracts.slice(1).map(r => r.id)
-                console.log(`[generate-contract] Deleting ${orphanIds.length} duplicate contract row(s) for booking ${bookingId}: ${orphanIds.join(', ')}`)
-                await supabase.from('contracts').delete().in('id', orphanIds)
-            }
-            const { data: updated, error: updErr } = await supabase
-                .from('contracts')
-                .update(contractFields)
-                .eq('id', primaryId)
-                .select('id')
-                .single()
-            upsertedRow = updated
-            dbError = updErr
-            console.log(`[generate-contract] Updated existing contract row id=${primaryId} → pdf_url=${publicUrl}, number=${contractNumber}`)
-        } else {
-            const { data: inserted, error: insErr } = await supabase
-                .from('contracts')
-                .insert(contractFields)
-                .select('id')
-                .single()
-            upsertedRow = inserted
-            dbError = insErr
-            console.log(`[generate-contract] Inserted new contract row id=${inserted?.id} → pdf_url=${publicUrl}, number=${contractNumber}`)
-        }
+        console.log('[generate-contract] upsert result:', { id: upsertedRow?.id, error: dbError })
 
         if (dbError) {
             console.error('[generate-contract] Failed to sync with contracts table:', dbError)
