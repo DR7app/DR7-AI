@@ -5,6 +5,8 @@ import { requireAuth } from './require-auth'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
+const supabaseKeyType = process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : 'anon'
+console.log('[generate-contract] supabase keyType:', supabaseKeyType)
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
@@ -1187,12 +1189,15 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
 
         // 8. Save/Update Contracts Table
         // When re-generating a contract (e.g. after a booking modification),
-        // clear any PREVIOUS signed_pdf_url / signed_at. Otherwise the OLD
-        // signed PDF stays in the row and downstream flows that read
-        // contracts.signed_pdf_url deliver the stale signed copy to the
-        // customer — visible bug: "after signing the customer receives
-        // the older contract".
-        const { error: dbError } = await supabase
+        // clear any PREVIOUS signed_pdf_url. Otherwise the OLD signed PDF
+        // stays in the row and downstream flows that read contracts.
+        // signed_pdf_url deliver the stale signed copy to the customer —
+        // visible bug: "after signing the customer receives the older contract".
+        // NOTE: signed_at is intentionally NOT included here. That column does
+        // not exist on the contracts table in this project (only
+        // signature_requests carries signing timestamps). Including it causes
+        // PostgREST to fail the upsert with PGRST204 "column not in schema".
+        const { data: upsertedRow, error: dbError } = await supabase
             .from('contracts')
             .upsert({
                 booking_id: bookingId,
@@ -1212,15 +1217,24 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 total_amount: booking.price_total / 100,
                 status: 'active',
                 pdf_url: publicUrl,
-                // Explicitly null the signed fields so a regenerated contract
-                // never serves its previous signed version by accident.
+                // Null the signed PDF so a regenerated contract never serves
+                // its previous signed version by accident. The signing
+                // timestamp itself lives in signature_requests.signed_at,
+                // which the supersede step below handles separately.
                 signed_pdf_url: null,
-                signed_at: null,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'booking_id' })
+            .select('id')
+            .single()
+
+        console.log('[generate-contract] upsert result:', { id: upsertedRow?.id, error: dbError })
 
         if (dbError) {
             console.error('[generate-contract] Failed to sync with contracts table:', dbError)
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ error: `contracts upsert failed: ${dbError.message}`, details: dbError })
+            }
         }
 
         // 8a. Mark any previous signature_requests for this booking as superseded
