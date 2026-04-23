@@ -4501,10 +4501,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Send customer confirmation — template varies by payment state
         const custPhone = customerInfo?.phone
         if (custPhone) {
-          const isPending = paymentStatus === 'pending' || paymentStatus === 'unpaid'
-          // `isNexi` used to branch between two pending sub-cases. Now any
-          // pending booking goes through the unified payment-link flow above,
-          // so we only need the single `isPending` flag here.
+          // A booking is "pending" (owes money) if status is pending, unpaid, or partial.
+          // For partial, also verify amount_paid < total (otherwise admin meant "done").
+          const totalForCheckCents = insertedBooking?.price_total || eurToCents(formData.total_amount || '0')
+          const paidForCheckCents = formData.amount_paid ? eurToCents(formData.amount_paid) : 0
+          const isPending = paymentStatus === 'pending'
+            || paymentStatus === 'unpaid'
+            || (paymentStatus === 'partial' && paidForCheckCents < totalForCheckCents)
 
           // Build template vars
           const pickupD = new Date(pickupDateTime)
@@ -4570,50 +4573,46 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '{expiry}': '1 ora',
           }
 
-          // Pick the right template:
-          // - Edit existing booking → rental_modified (confirmation of the change, NOT a new one)
-          // - Conferma Prenotazione checkbox ON → rental_new_customer (full confirmation, no expiry)
-          // - Pending + Nexi Pay by Link → payment_link_customer (already sent by nexi-pay-by-link flow)
-          // - Pending + NOT Nexi (no conferma) → rental_da_saldare_customer (pay within 1h)
-          // - Paid (fresh booking) → rental_new_customer (normal confirmation)
-          let templateKey: string
+          // Pick the right template. `null` means "do not send confirmation
+          // WhatsApp from this block" — the pay-by-link block handles the
+          // customer message in those cases. IMPORTANT: do NOT `return` from
+          // here; the function still needs to run contract generation, the
+          // EditDiffLink block, and the signing-link dispatch below.
+          // - Edit with balance owed → null (EditDiffLink sends the pay-by-link)
+          // - Edit fully paid → rental_new_customer
+          // - Conferma Prenotazione ON → rental_new_customer
+          // - New + pending → null (payment-link block above already sent link)
+          // - New + paid → rental_new_customer
+          let templateKey: string | null
           if (editingId) {
-            // Edit flow:
-            //   • If the booking is now FULLY PAID → send conferma noleggio
-            //     (rental_new_customer) with the updated values.
-            //   • If there's a BALANCE OWED (pending/partial/unpaid) → do NOT
-            //     send the confirmation. The diff-link block above has
-            //     already sent the pay-by-link. The customer will receive the
-            //     final confirmation only once the callback marks the booking
-            //     fully paid (nexi-payment-callback handles that).
             if (isPending) {
-              logger.log('[Save] Edit with remaining balance — skipping conferma-noleggio until fully paid')
-              return
+              logger.log('[Save] Edit with remaining balance — skipping conferma-noleggio until fully paid (EditDiffLink will send pay-by-link)')
+              templateKey = null
+            } else {
+              templateKey = 'rental_new_customer'
             }
-            templateKey = 'rental_new_customer'
           } else if (confirmBooking) {
-            // Manually confirmed booking — always send full confirmation, regardless of payment status
             templateKey = 'rental_new_customer'
           } else if (isPending) {
-            // Any pending new booking — the payment-link block above has
-            // already created a Nexi link and sent payment_link_customer.
-            // Skip here to avoid a duplicate WhatsApp. The final conferma
-            // will be sent by the Nexi callback once payment lands.
-            return
+            logger.log('[Save] New pending booking — payment-link block handled customer WhatsApp; skipping duplicate conferma')
+            templateKey = null
           } else {
             templateKey = 'rental_new_customer'
           }
 
-          fetch('/.netlify/functions/send-whatsapp-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customPhone: custPhone,
-              templateKey,
-              templateVars,
-            })
-          }).then(() => logger.log(`✅ Customer WhatsApp sent (${templateKey}) to`, custPhone))
-            .catch(err => console.error('⚠️ Customer WhatsApp failed:', err))
+          if (templateKey) {
+            const finalTemplateKey = templateKey
+            fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customPhone: custPhone,
+                templateKey: finalTemplateKey,
+                templateVars,
+              })
+            }).then(() => logger.log(`✅ Customer WhatsApp sent (${finalTemplateKey}) to`, custPhone))
+              .catch(err => console.error('⚠️ Customer WhatsApp failed:', err))
+          }
         }
       } catch (whatsappError) {
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)
