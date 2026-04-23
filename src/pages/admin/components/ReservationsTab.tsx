@@ -2007,34 +2007,57 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     try {
       toast.loading('Rinvio contratto...', { id: 'resend-contract' })
 
-      // Find the contract
-      const { data: contract } = await supabase
-        .from('contracts')
-        .select('id, pdf_url, signed_pdf_url')
-        .eq('booking_id', booking.id)
-        .single()
-
-      if (!contract) {
-        toast.dismiss('resend-contract')
-        toast.error('Contratto non trovato. Genera prima il contratto.')
-        return
-      }
-
-      // Send signing link via signature-init
+      // signature-init can resolve the contract itself by booking_id using
+      // service-role — bypasses any frontend RLS read issues. Just call it.
+      // If no contract exists yet, it'll return 404 and we'll generate first.
       const sigRes = await fetch('/.netlify/functions/signature-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contractId: contract.id, bookingId: booking.id })
+        body: JSON.stringify({ bookingId: booking.id })
       })
-      const sigData = await sigRes.json()
+      const sigData = await sigRes.json().catch(() => ({} as any))
+
+      if (sigRes.ok) {
+        toast.dismiss('resend-contract')
+        toast.success('Link firma contratto inviato via WhatsApp!')
+        logAdminAction('resend_contract', 'booking', booking.id, buildBookingContext(booking))
+        return
+      }
+
+      // 404 means no contract exists yet — try to generate it and retry once.
+      if (sigRes.status === 404 || /non trovato/i.test(sigData?.error || '')) {
+        toast.loading('Contratto non trovato — lo genero ora...', { id: 'resend-contract' })
+        const genRes = await authFetch('/.netlify/functions/generate-contract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: booking.id })
+        })
+        const genData = await genRes.json().catch(() => ({} as any))
+        if (!genRes.ok) {
+          toast.dismiss('resend-contract')
+          toast.error('Contratto non generato: ' + (genData?.error || `HTTP ${genRes.status}`), { duration: 12000 })
+          return
+        }
+
+        // Retry signature-init
+        const retryRes = await fetch('/.netlify/functions/signature-init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: booking.id })
+        })
+        const retryData = await retryRes.json().catch(() => ({} as any))
+        toast.dismiss('resend-contract')
+        if (retryRes.ok) {
+          toast.success('Link firma contratto inviato via WhatsApp!')
+          logAdminAction('resend_contract', 'booking', booking.id, buildBookingContext(booking))
+        } else {
+          toast.error('Errore invio: ' + (retryData?.error || `HTTP ${retryRes.status}`), { duration: 10000 })
+        }
+        return
+      }
 
       toast.dismiss('resend-contract')
-      if (sigRes.ok) {
-        toast.success('Link firma contratto rinviato via WhatsApp!')
-        logAdminAction('resend_contract', 'booking', booking.id, buildBookingContext(booking))
-      } else {
-        toast.error('Errore rinvio: ' + (sigData.error || 'Errore'))
-      }
+      toast.error('Errore invio: ' + (sigData?.error || `HTTP ${sigRes.status}`), { duration: 10000 })
     } catch (err: any) {
       toast.dismiss('resend-contract')
       toast.error('Errore: ' + err.message)
