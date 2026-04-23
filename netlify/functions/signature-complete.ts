@@ -67,6 +67,7 @@ export const handler: Handler = async (event) => {
             contract = contractData
             pdfUrl = contract?.pdf_url
             docIdentifier = contract?.contract_number || sigRequest.contract_id
+            console.log(`[signature-complete] contract_id=${sigRequest.contract_id} pdf_url=${pdfUrl} signed_pdf_url(before)=${contract?.signed_pdf_url}`)
         } else {
             // Standalone document
             pdfUrl = sigRequest.document_url
@@ -77,8 +78,12 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Documento PDF non trovato' }) }
         }
 
+        // Cache-bust the source fetch too: if for any reason the storage CDN
+        // has a stale response cached at the pdf_url, force a fresh read so we
+        // definitely sign the CURRENT uploaded file, not a cached old version.
+        const pdfUrlNoCache = pdfUrl + (pdfUrl.includes('?') ? '&' : '?') + '__nocache=' + Date.now()
         // Download original PDF
-        const pdfResponse = await fetch(pdfUrl)
+        const pdfResponse = await fetch(pdfUrlNoCache, { cache: 'no-store' })
         if (!pdfResponse.ok) {
             return { statusCode: 500, body: JSON.stringify({ error: 'Impossibile scaricare il PDF' }) }
         }
@@ -298,6 +303,7 @@ export const handler: Handler = async (event) => {
 
         const { data: publicUrl } = supabase.storage.from('contracts').getPublicUrl(fileName)
         const signedPdfUrl = publicUrl.publicUrl
+        console.log(`[signature-complete] UPLOADED signed PDF: fileName=${fileName} signedPdfUrl=${signedPdfUrl} hash=${signedPdfHash.substring(0, 16)}`)
 
         // Update signature request as signed
         await supabase
@@ -435,6 +441,7 @@ export const handler: Handler = async (event) => {
                     const sigDateStr = signedAt.toISOString().slice(0, 10)
                     const whatsappFileName = `${docIdentifier}_firmato_${sigDateStr}.pdf`
                     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    console.log(`[signature-complete] SENDING WhatsApp file: urlFile=${cacheBustedUrl} fileName=${whatsappFileName} phone=${cleanPhone}`)
                     const waResponse = await fetch(greenApiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -442,7 +449,10 @@ export const handler: Handler = async (event) => {
                             chatId: `${cleanPhone}@c.us`,
                             urlFile: cacheBustedUrl,
                             fileName: whatsappFileName,
-                            caption: `${contract ? 'Contratto' : 'Documento'} ${docIdentifier} firmato - DR7 Empire`
+                            // Caption includes booking ref + signing timestamp so the
+                            // customer (and the admin reviewing the chat) can visually
+                            // distinguish a re-signed contract from a previous one.
+                            caption: `${contract ? 'Contratto' : 'Documento'} ${docIdentifier} firmato il ${signedAtRome} - DR7 Empire`
                         })
                     })
 
