@@ -1188,71 +1188,70 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             .getPublicUrl(fileName)
 
         // 8. Save/Update Contracts Table
-        // When re-generating a contract (e.g. after a booking modification),
-        // clear any PREVIOUS signed_pdf_url. Otherwise the OLD signed PDF
-        // stays in the row and downstream flows that read contracts.
-        // signed_pdf_url deliver the stale signed copy to the customer —
-        // visible bug: "after signing the customer receives the older contract".
-        // NOTE: signed_at is intentionally NOT included here. That column does
-        // not exist on the contracts table in this project (only
-        // signature_requests carries signing timestamps). Including it causes
-        // PostgREST to fail the upsert with PGRST204 "column not in schema".
-        const { data: upsertedRow, error: dbError } = await supabase
-            .from('contracts')
-            .upsert({
-                booking_id: bookingId,
-                contract_number: contractNumber,
-                contract_date: new Date().toISOString().split('T')[0],
-                customer_name: clientName || resolvedName || '',
-                customer_email: customer?.email || resolvedEmail || '',
-                customer_phone: customer?.telefono || resolvedPhone || '',
-                customer_address: clientAddress,
-                customer_tax_code: clientVat,
-                customer_license_number: driverLicense,
-                vehicle_name: vehicleName,
-                rental_start_date: pickupDate.toISOString().split('T')[0],
-                rental_end_date: dropoffDate.toISOString().split('T')[0],
-                daily_rate: 0, // We rely on total amount mostly
-                total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
-                total_amount: booking.price_total / 100,
-                status: 'active',
-                pdf_url: publicUrl,
-                // Null the signed PDF so a regenerated contract never serves
-                // its previous signed version by accident. The signing
-                // timestamp itself lives in signature_requests.signed_at,
-                // which the supersede step below handles separately.
-                signed_pdf_url: null,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'booking_id' })
-            .select('id')
-            .single()
+        //
+        // We intentionally avoid .upsert({onConflict:'booking_id'}): contracts.booking_id
+        // has an index but NO unique constraint, so PostgREST rejects the upsert and the
+        // code used to log-and-continue, leaving contracts.pdf_url stale. Result: after
+        // an admin edited a paid booking, the next signing flow delivered the OLD PDF.
+        // Do explicit "update latest-if-exists else insert" so it works regardless of
+        // DB constraints, and also clear signed_pdf_url so a regenerated row never
+        // serves its previous signed copy.
+        const contractFields = {
+            contract_number: contractNumber,
+            contract_date: new Date().toISOString().split('T')[0],
+            customer_name: clientName || resolvedName || '',
+            customer_email: customer?.email || resolvedEmail || '',
+            customer_phone: customer?.telefono || resolvedPhone || '',
+            customer_address: clientAddress,
+            customer_tax_code: clientVat,
+            customer_license_number: driverLicense,
+            vehicle_name: vehicleName,
+            rental_start_date: pickupDate.toISOString().split('T')[0],
+            rental_end_date: dropoffDate.toISOString().split('T')[0],
+            daily_rate: 0, // We rely on total amount mostly
+            total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
+            total_amount: booking.price_total / 100,
+            status: 'active',
+            pdf_url: publicUrl,
+            signed_pdf_url: null,
+            updated_at: new Date().toISOString()
+        }
 
-        console.log('[generate-contract] upsert result:', { id: upsertedRow?.id, error: dbError })
+        const { data: existingContracts } = await supabase
+            .from('contracts')
+            .select('id')
+            .eq('booking_id', bookingId)
+            .order('created_at', { ascending: false })
+
+        let dbError: any = null
+        if (existingContracts && existingContracts.length > 0) {
+            const latestId = existingContracts[0].id
+            const res = await supabase
+                .from('contracts')
+                .update(contractFields)
+                .eq('id', latestId)
+            dbError = res.error
+        } else {
+            const res = await supabase
+                .from('contracts')
+                .insert({ booking_id: bookingId, ...contractFields })
+            dbError = res.error
+        }
 
         if (dbError) {
             console.error('[generate-contract] Failed to sync with contracts table:', dbError)
-            return {
-                statusCode: 500,
-                body: JSON.stringify({ error: `contracts upsert failed: ${dbError.message}`, details: dbError })
-            }
+            return { statusCode: 500, body: JSON.stringify({ error: 'Failed to persist contract: ' + dbError.message }) }
         }
 
         // 8a. Mark any previous signature_requests for this booking as superseded
-        // so the customer can't open a stale signing link and sign an outdated
-        // PDF. signature-init will create a fresh request pointing at the new hash.
+        // so the customer can't open a stale signing link and sign an outdated PDF.
+        // Match by booking_id to cover legacy duplicate contract rows too.
         try {
-            const { data: contractRow } = await supabase
-                .from('contracts')
-                .select('id')
+            await supabase
+                .from('signature_requests')
+                .update({ status: 'superseded', updated_at: new Date().toISOString() })
                 .eq('booking_id', bookingId)
-                .maybeSingle()
-            if (contractRow?.id) {
-                await supabase
-                    .from('signature_requests')
-                    .update({ status: 'superseded', updated_at: new Date().toISOString() })
-                    .eq('contract_id', contractRow.id)
-                    .in('status', ['pending', 'otp_sent', 'otp_verified', 'signed'])
-            }
+                .in('status', ['pending', 'otp_sent', 'otp_verified', 'signed'])
         } catch (cleanupErr) {
             console.warn('[generate-contract] Failed to supersede old signature_requests:', cleanupErr)
         }

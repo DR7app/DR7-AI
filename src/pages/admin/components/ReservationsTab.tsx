@@ -261,9 +261,7 @@ interface Booking {
   pickup_fee?: number
   notes?: string | null
   contracts?: {
-    yousign_status: string | null
     signed_pdf_url: string | null
-    yousign_signature_request_id: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } | any
 }
@@ -1385,7 +1383,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Fetch contracts separately to avoid join issues
       const { data: contractsData, error: contractsError } = await supabase
         .from('contracts')
-        .select('booking_id, yousign_status, signed_pdf_url, yousign_signature_request_id')
+        .select('booking_id, signed_pdf_url')
 
       const contractsMap = new Map()
       if (contractsData) {
@@ -1991,7 +1989,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       logAdminAction('generate_contract', 'booking', booking.id, buildBookingContext(booking))
 
-      // Reload data to show the contract link and Yousign button in the UI
+      // Reload data to show the contract link in the UI
       await loadData()
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
