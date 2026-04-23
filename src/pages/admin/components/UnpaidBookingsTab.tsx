@@ -434,32 +434,37 @@ export default function UnpaidBookingsTab() {
         // 2. Generate contract + send signing link (ONLY for car rentals)
         if (isCarRental) {
           try {
-            await authFetch('/.netlify/functions/generate-contract', {
+            const genRes = await authFetch('/.netlify/functions/generate-contract', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ bookingId, silent: true })
             })
-
-            const { data: contractForSig } = await supabase
-              .from('contracts')
-              .select('id, pdf_url')
-              .eq('booking_id', bookingId)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle()
-
-            if (contractForSig?.id && contractForSig?.pdf_url) {
-              await fetch('/.netlify/functions/signature-init', {
+            if (!genRes.ok) {
+              const genErr = await genRes.json().catch(() => ({} as any))
+              logger.warn('[Segna Pagato] generate-contract failed:', genErr)
+              toast.error(`Contratto non generato: ${genErr.error || `HTTP ${genRes.status}`}`, { duration: 8000 })
+            } else {
+              // Delegate the contract lookup to signature-init (service-role
+              // backend bypasses RLS). Skips the frontend SELECT that could
+              // silently return null when the admin JWT isn't allowed to read
+              // contracts — which was the exact reason "Segna pagato" wasn't
+              // triggering the signing link before.
+              const sigRes = await fetch('/.netlify/functions/signature-init', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contractId: contractForSig.id, bookingId })
+                body: JSON.stringify({ bookingId })
               })
-              toast.success('Contratto e link firma inviati al cliente')
-            } else {
-              logger.warn('No contract found for booking — skipping signing link')
+              if (sigRes.ok) {
+                toast.success('Contratto e link firma inviati al cliente')
+              } else {
+                const sigErr = await sigRes.json().catch(() => ({} as any))
+                logger.warn('[Segna Pagato] signature-init failed:', sigErr)
+                toast.error(`Link firma non inviato: ${sigErr.error || `HTTP ${sigRes.status}`}`, { duration: 8000 })
+              }
             }
           } catch (sigErr) {
             logger.warn('Contract/signing link generation failed:', sigErr)
+            toast.error(`Errore contratto: ${sigErr instanceof Error ? sigErr.message : 'sconosciuto'}`, { duration: 8000 })
           }
 
           // 3. Send "Conferma Noleggio (cliente)" confirmation via rental_new_customer template
