@@ -242,11 +242,18 @@ export const handler: Handler = async (event) => {
     const horizon30Ms = dropoffMs + 30 * 24 * 60 * 60 * 1000
     const horizon30Iso = new Date(horizon30Ms).toISOString()
 
+    // Match per vehicle_id O vehicle_plate: alcune prenotazioni legacy non
+    // hanno vehicle_id popolato → senza l'OR la query perde quei record e
+    // il gap non verrebbe conteggiato correttamente per quella targa.
+    const vehicleMatch = vehicle.plate
+      ? `vehicle_id.eq.${vehicle.id},vehicle_plate.eq.${vehicle.plate}`
+      : `vehicle_id.eq.${vehicle.id}`
+
     const [{ data: priorBookings }, { data: nextBookings }] = await Promise.all([
       supabase
         .from('bookings')
         .select('dropoff_date')
-        .eq('vehicle_id', vehicle.id)
+        .or(vehicleMatch)
         .not('status', 'in', '(cancelled,annullata)')
         .lt('dropoff_date', pickup_date)
         .order('dropoff_date', { ascending: false })
@@ -254,7 +261,7 @@ export const handler: Handler = async (event) => {
       supabase
         .from('bookings')
         .select('pickup_date')
-        .eq('vehicle_id', vehicle.id)
+        .or(vehicleMatch)
         .not('status', 'in', '(cancelled,annullata)')
         .gte('pickup_date', dropoff_date)
         .lte('pickup_date', horizon30Iso)
@@ -269,18 +276,21 @@ export const handler: Handler = async (event) => {
       const nextPickMs = new Date(nextBookings![0].pickup_date).getTime()
       let windowMs: number
       if (hasPrior) {
-        // Sandwich: gap = dimensione TOTALE della finestra libera tra prior e next.
-        // Se il quote riempie perfettamente (prior.drop = new.pickup = new.drop = next.pick),
-        // la finestra è comunque 1 giorno → sconto massimo.
+        // Sandwich: finestra totale tra prior.drop e next.pick.
         const prevDropMs = new Date(priorBookings![0].dropoff_date).getTime()
         windowMs = nextPickMs - prevDropMs
       } else {
-        // Solo next: gap = giorni dal dropoff del quote al prossimo pickup.
+        // Solo next: finestra dal dropoff del quote al prossimo pickup.
         windowMs = nextPickMs - dropoffMs
       }
-      // Math.ceil per catturare anche gap frazionari (es. 16h = 1 giorno, non 0).
-      // Clamp min 1 perché la presenza di hasNext significa che un gap esiste.
-      calendarGapDays = Math.max(1, Math.ceil(windowMs / (1000 * 60 * 60 * 24)))
+      // "Gap giorni" = giorni interi LIBERI tra le due prenotazioni. Esempio:
+      // prior.drop 22/04, next.pick 24/04 → finestra 48h → 1 giorno libero
+      // (il 23/04). I giorni di dropoff precedente e pickup successivo NON
+      // contano come "liberi" perché sono occupati dalle prenotazioni.
+      // Math.round gestisce finestre non esattamente a 24h (es. 46h → 2 → -1 = 1).
+      const windowDays = Math.round(windowMs / (1000 * 60 * 60 * 24))
+      const freeDays = Math.max(0, windowDays - 1)
+      if (freeDays > 0) calendarGapDays = freeDays
     }
     // else: niente booking successivo entro 30gg → calendario aperto → no gap
 
