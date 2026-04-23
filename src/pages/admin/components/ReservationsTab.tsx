@@ -1933,14 +1933,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
-  // Returns true when the contract was generated + stored; false otherwise.
-  // The `silent` flag suppresses the window.open preview (useful during
-  // auto-gen after save, when we don't want to pop a tab).
-  async function handleGenerateContract(booking: Booking, silent?: boolean): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function handleGenerateContract(booking: Booking, _silent?: boolean) {
     logger.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
-      return false
+      return
     }
 
     // Skip contract for non-rental bookings
@@ -1948,7 +1946,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const svcType = booking.service_type || (booking as any).booking_details?.service_type || ''
     if (svcType === 'car_wash' || svcType === 'mechanical_service' || svcType === 'mechanical') {
       logger.log(`[handleGenerateContract] Skipping — service_type=${svcType} is not a rental`)
-      return false
+      return
     }
 
     // 1. Validate Data
@@ -1958,11 +1956,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[handleGenerateContract] Validation error:', error)
-      if (!silent) alert(_errMsg)
-      return false
+      alert(_errMsg)
+      return
     }
 
-    if (missing.includes('__limitation_override_requested__')) return false
+    if (missing.includes('__limitation_override_requested__')) return
 
     if (missing.length > 0) {
       logger.warn('⚠️ Missing fields for contract:', missing)
@@ -1986,10 +1984,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         throw new Error(data.error || 'Failed to generate contract')
       }
 
-      // Open PDF in new tab (skip when called silently from the save flow —
-      // mobile Safari blocks post-await window.open and we don't want an
-      // intrusive preview every time a booking is created).
-      if (data.url && !silent) {
+      // Open PDF in new tab
+      if (data.url) {
         window.open(data.url, '_blank')
       }
 
@@ -1997,15 +1993,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // Reload data to show the contract link and Yousign button in the UI
       await loadData()
-      return true
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error generating contract:', error)
-      // Always surface the failure — previously used alert() which mobile
-      // admins often dismiss without reading. Toast stays visible longer
-      // and works even when the save flow is running silently.
-      toast.error(`Contratto non generato: ${_errMsg}`, { duration: 10000 })
-      return false
+      alert('Errore nella generazione del contratto: ' + _errMsg + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
     } finally {
       setGeneratingContract(false)
     }
@@ -4583,23 +4574,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         .catch(err => console.error('⚠️ Failed to sync cauzione:', err))
 
-      // Generate Contract PDF — AWAIT so signing link below finds the contract.
-      // Pass silent:true so we don't pop a new tab on every save; admin can
-      // open it from the booking row afterwards. The return value tells us
-      // whether the contract actually made it into the DB — if false, the
-      // later signature-init will silently skip and we need to warn.
+      // Generate Contract PDF — AWAIT so signing link below finds the contract
       logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)')
-      let contractGenerated = false
       try {
-        contractGenerated = await handleGenerateContract(insertedBooking, true)
-        if (contractGenerated) {
-          logger.log('[Auto-Gen] ✅ Contract generated successfully')
-        } else {
-          logger.warn('[Auto-Gen] ⚠️ Contract generation returned false')
-        }
+        await handleGenerateContract(insertedBooking, false)
+        logger.log('[Auto-Gen] ✅ Contract generated successfully')
       } catch (err) {
         console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
-        contractGenerated = false
       }
 
       // Detect if payment status just changed from unpaid → paid (on edit)
@@ -4826,24 +4807,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               toast.error(`Link firma non inviato: ${sigErr.error || 'Errore sconosciuto'}`, { duration: 8000 })
             }
           } else {
-            // Surface this to the admin whether it's a new booking or an edit —
-            // if the contract row isn't in the DB, signature-init can't run,
-            // and the customer gets no signing link. Before this always-toast
-            // change, new-booking failures were silent.
-            logger.warn('[Auto-Gen] ⚠️ No contract found for booking, skipping signature-init', {
-              contractGenerated,
-              bookingId: insertedBooking.id,
-              contractForSigExists: !!contractForSig,
-              contractForSigPdfUrl: contractForSig?.pdf_url,
-            })
-            const why = !contractGenerated
-              ? 'generazione contratto fallita — vedi errore sopra'
-              : 'il contratto non è stato trovato nel database dopo la generazione'
-            toast.error(`Contratto non inviato per firma: ${why}. Usa "Rigenera contratto" + "Invia contratto" sulla riga della prenotazione.`, { duration: 12000 })
+            // Surface this to the admin on edit — the expectation is that saving a
+            // modification regenerates and resends the contract. If the contract
+            // row isn't available yet (generate-contract above failed or returned
+            // empty), the admin needs to know so they can retry manually.
+            logger.warn('[Auto-Gen] ⚠️ No contract found for booking, skipping signature-init')
+            if (editingId) {
+              toast.error('Contratto modificato non trovato — usa il tasto "Rigenera contratto" e poi "Invia contratto" per rispedirlo.', { duration: 10000 })
+            }
           }
         } catch (sigError) {
           console.error('[Auto-Gen] ⚠️ Failed to send signing link:', sigError)
-          toast.error(`Errore invio contratto: ${sigError instanceof Error ? sigError.message : 'sconosciuto'}`, { duration: 8000 })
+          if (editingId) {
+            toast.error(`Errore invio contratto: ${sigError instanceof Error ? sigError.message : 'sconosciuto'}`, { duration: 8000 })
+          }
         }
       }
 
