@@ -4648,22 +4648,45 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // ── Edit flow: price increased on a PAID booking → send pay-by-link for the delta ──
-      // When the admin edits an already-paid booking and raises the price
-      // (e.g. extension, add-on), generate a Nexi Pay by Link for the
-      // difference (new total − already paid) and send it to the customer
-      // so they can settle the extra amount online.
-      const wasOriginallyPaid = editingOriginalPaymentStatus === 'paid'
-        || editingOriginalPaymentStatus === 'succeeded'
-        || editingOriginalPaymentStatus === 'completed'
-      if (editingId && wasOriginallyPaid && insertedBooking) {
+      // ── Edit flow: send pay-by-link for any remaining balance ──
+      // Covers every "customer still owes something" case after an edit:
+      //   • Originally fully PAID + price went up     → link for (new - old)
+      //   • Originally PARTIAL, admin left paid the   → link for (new - amount_paid)
+      //     same 155 but raised total to 250             link for 95
+      //   • Originally pending + still pending          → handled by the
+      //     earlier "new booking pending" branch (not this one)
+      // In short: owedCents = newTotal − alreadyPaid.
+      // If owed > 0, fire a Nexi Pay by Link for owedCents.
+      if (editingId && insertedBooking) {
         try {
           const originalBooking = bookings.find(b => b.id === editingId)
-          const originalTotalCents = originalBooking?.price_total || 0
           const newTotalCents = insertedBooking?.price_total || eurToCents(formData.total_amount || '0')
-          const diffCents = newTotalCents - originalTotalCents
+
+          // Determine the "already paid" amount:
+          //   1. form amount_paid when status is partial/paid (admin just set it)
+          //   2. original booking's amount_paid from booking_details
+          //   3. original booking's price_total if original status was paid
+          //   4. 0 fallback
+          const origStatus = editingOriginalPaymentStatus
+          const origWasPaid = origStatus === 'paid' || origStatus === 'succeeded' || origStatus === 'completed'
+          const formPaidCents = formData.amount_paid ? eurToCents(formData.amount_paid) : 0
+          const origBdPaidCents = Number((originalBooking?.booking_details as Record<string, unknown> | undefined)?.amount_paid) || 0
+          const origTotalCents = originalBooking?.price_total || 0
+          const alreadyPaidCents = formPaidCents > 0
+            ? formPaidCents
+            : (origBdPaidCents > 0 ? origBdPaidCents : (origWasPaid ? origTotalCents : 0))
+
+          // Skip entirely if the admin has now marked the booking as fully paid
+          // (no balance outstanding even if total went up — admin recorded the
+          // extra as paid, so no link needed).
+          if (formData.payment_status === 'paid') {
+            logger.log('[EditDiffLink] Booking marked fully paid — skip pay-by-link')
+          } else {
+
+          const diffCents = newTotalCents - alreadyPaidCents
           const diffEur = diffCents / 100
           if (diffCents > 0) {
+            logger.log(`[EditDiffLink] Owed €${diffEur.toFixed(2)} (new total €${(newTotalCents/100).toFixed(2)} − already paid €${(alreadyPaidCents/100).toFixed(2)}) — creating pay-by-link`)
             logger.log('[EditDiffLink] Price increased by €' + diffEur.toFixed(2) + ' — creating pay-by-link for the delta')
             const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
               method: 'POST',
@@ -4718,8 +4741,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               toast.error(`Errore creazione link integrazione: ${linkData.error || `HTTP ${linkRes.status}`}`, { duration: 10000 })
             }
           } else if (diffCents < 0) {
-            logger.log('[EditDiffLink] Price decreased by €' + Math.abs(diffEur).toFixed(2) + ' — no auto-refund; admin must handle manually')
+            logger.log('[EditDiffLink] Already paid > new total (€' + Math.abs(diffEur).toFixed(2) + ' overpaid) — no auto-refund; admin must handle manually')
+          } else {
+            logger.log('[EditDiffLink] No balance outstanding after edit — no link needed')
           }
+          } // end else (not fully paid)
         } catch (err) {
           console.error('[EditDiffLink] Failed:', err)
           toast.error(`Errore link integrazione: ${err instanceof Error ? err.message : 'sconosciuto'}`, { duration: 8000 })
