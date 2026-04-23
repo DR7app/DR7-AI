@@ -1933,13 +1933,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
   }
 
-  // Tracks the latest contract row's id + pdf_url returned by the
-  // generate-contract Netlify function. The frontend's own RLS-limited
-  // SELECT on `contracts` sometimes returns null even when the row has
-  // been inserted by the service-role backend; this cache lets the save
-  // flow and "Rinvia contratto" bypass that SELECT entirely.
-  const lastGeneratedContractRef = useRef<{ bookingId: string; contractId: string; pdfUrl: string } | null>(null)
-
   // Returns true when the contract was generated + stored; false otherwise.
   // The `silent` flag suppresses the window.open preview (useful during
   // auto-gen after save, when we don't want to pop a tab).
@@ -2006,17 +1999,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         throw new Error(data.error || 'Failed to generate contract')
       }
 
-      // Cache the id+url the server just returned. Downstream flows use this
-      // instead of re-SELECTing contracts (which can hit RLS and return null
-      // for non-service-role reads).
-      if (data.contractId && data.url) {
-        lastGeneratedContractRef.current = {
-          bookingId: booking.id,
-          contractId: data.contractId,
-          pdfUrl: data.url,
-        }
-      }
-
       // Open PDF in new tab (skip when called silently from the save flow —
       // mobile Safari blocks post-await window.open and we don't want an
       // intrusive preview every time a booking is created).
@@ -2047,59 +2029,48 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     try {
       toast.loading('Rinvio contratto...', { id: 'resend-contract' })
 
-      // Resolve the contract id WITHOUT depending on a direct SELECT from
-      // the frontend — that can be RLS-blocked and return null for
-      // contracts the service-role Netlify function just inserted. Strategy:
-      //
-      //   1. If we have a cached id from a previous handleGenerateContract
-      //      call in this session for this booking, use it.
-      //   2. Otherwise, regenerate the contract now (authoritative — the
-      //      Netlify function returns the id directly).
-      //   3. Only as a last resort fall back to a SELECT.
-      let contractId: string | null = null
-      const cached = lastGeneratedContractRef.current
-      if (cached && cached.bookingId === booking.id) {
-        contractId = cached.contractId
-      }
+      // Find the contract — use maybeSingle() so we don't throw when the row
+      // doesn't exist (common right after a booking was just created and the
+      // auto-gen in the save flow failed silently).
+      let { data: contract } = await supabase
+        .from('contracts')
+        .select('id, pdf_url, signed_pdf_url')
+        .eq('booking_id', booking.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-      if (!contractId) {
-        toast.loading('Rigenero il contratto...', { id: 'resend-contract' })
+      // No contract row yet? Generate one on the fly and retry the lookup,
+      // so "Rinvia contratto" always works even for bookings whose auto-gen
+      // failed (validation, network blip, etc.).
+      if (!contract) {
+        toast.loading('Contratto non trovato — lo genero ora...', { id: 'resend-contract' })
         const ok = await handleGenerateContract(booking, true)
         if (!ok) {
           toast.dismiss('resend-contract')
           // handleGenerateContract already showed a specific error toast
           return
         }
-        const cachedAfter = lastGeneratedContractRef.current
-        if (cachedAfter && cachedAfter.bookingId === booking.id) {
-          contractId = cachedAfter.contractId
-        }
-      }
-
-      // Final fallback — try the SELECT (may fail under RLS)
-      if (!contractId) {
-        const { data: contract } = await supabase
+        const retry = await supabase
           .from('contracts')
-          .select('id')
+          .select('id, pdf_url, signed_pdf_url')
           .eq('booking_id', booking.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
-        contractId = contract?.id || null
+        contract = retry.data
+        if (!contract) {
+          toast.dismiss('resend-contract')
+          toast.error('Contratto generato ma non trovato nel DB — riprova tra qualche secondo.', { duration: 10000 })
+          return
+        }
       }
 
-      if (!contractId) {
-        toast.dismiss('resend-contract')
-        toast.error('Contratto non risolto. Verifica nel log della funzione generate-contract se l\'insert ha restituito un errore.', { duration: 12000 })
-        return
-      }
-
-      // Send signing link via signature-init (service-role backend can read
-      // the contract regardless of RLS).
+      // Send signing link via signature-init
       const sigRes = await fetch('/.netlify/functions/signature-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contractId, bookingId: booking.id })
+        body: JSON.stringify({ contractId: contract.id, bookingId: booking.id })
       })
       const sigData = await sigRes.json()
 
@@ -2108,7 +2079,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         toast.success('Link firma contratto inviato via WhatsApp!')
         logAdminAction('resend_contract', 'booking', booking.id, buildBookingContext(booking))
       } else {
-        toast.error('Errore invio: ' + (sigData.error || `HTTP ${sigRes.status}`))
+        toast.error('Errore invio: ' + (sigData.error || 'Errore'))
       }
     } catch (err: any) {
       toast.dismiss('resend-contract')
@@ -4866,53 +4837,41 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       )
       if (shouldSendSigningLink) {
         try {
-          // Prefer the contract id that generate-contract JUST returned —
-          // that's authoritative and can't hit RLS (the Netlify function
-          // inserted it with service-role). Fall back to a SELECT only if
-          // handleGenerateContract didn't run (e.g. contract already existed).
-          let contractId: string | null = null
-          let pdfUrl: string | null = null
-          const cached = lastGeneratedContractRef.current
-          if (cached && cached.bookingId === insertedBooking.id) {
-            contractId = cached.contractId
-            pdfUrl = cached.pdfUrl
-            logger.log('[Auto-Gen] Using cached contract id from generate-contract response:', contractId)
-          } else {
-            const { data: contractForSig } = await supabase
-              .from('contracts')
-              .select('id, pdf_url, customer_email, booking_id')
-              .eq('booking_id', insertedBooking.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle()
-            contractId = contractForSig?.id || null
-            pdfUrl = contractForSig?.pdf_url || null
-          }
+          // Fetch the contract that was just generated for this booking
+          const { data: contractForSig } = await supabase
+            .from('contracts')
+            .select('id, pdf_url, customer_email, booking_id')
+            .eq('booking_id', insertedBooking.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
 
-          if (contractId && pdfUrl) {
-            logger.log('[Auto-Gen] Sending contract for signature via WhatsApp:', contractId)
+          if (contractForSig?.id && contractForSig?.pdf_url) {
+            logger.log('[Auto-Gen] Sending contract for signature via WhatsApp:', contractForSig.id)
             const sigRes = await fetch('/.netlify/functions/signature-init', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contractId, bookingId: insertedBooking.id })
+              body: JSON.stringify({ contractId: contractForSig.id, bookingId: insertedBooking.id })
             })
             if (sigRes.ok) {
               logger.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
-              toast.success(editingId ? 'Nuovo contratto inviato per firma' : 'Contratto inviato per firma', { duration: 4000 })
+              if (editingId) toast.success('Nuovo contratto inviato per firma', { duration: 4000 })
               // Garante signing link is now handled by signature-init (multi-signer support)
             } else {
-              const sigErr = await sigRes.json().catch(() => ({}))
+              const sigErr = await sigRes.json()
               logger.warn('[Auto-Gen] ⚠️ Signature init failed:', sigErr.error || sigErr)
-              toast.error(`Link firma non inviato: ${sigErr.error || `HTTP ${sigRes.status}`}`, { duration: 8000 })
+              toast.error(`Link firma non inviato: ${sigErr.error || 'Errore sconosciuto'}`, { duration: 8000 })
             }
           } else {
-            // Surface this to the admin — if we can't resolve a contract id,
-            // signature-init has nothing to work with. Often means
-            // generate-contract silently failed upstream.
+            // Surface this to the admin whether it's a new booking or an edit —
+            // if the contract row isn't in the DB, signature-init can't run,
+            // and the customer gets no signing link. Before this always-toast
+            // change, new-booking failures were silent.
             logger.warn('[Auto-Gen] ⚠️ No contract found for booking, skipping signature-init', {
               contractGenerated,
               bookingId: insertedBooking.id,
-              cachedBookingId: cached?.bookingId,
+              contractForSigExists: !!contractForSig,
+              contractForSigPdfUrl: contractForSig?.pdf_url,
             })
             const why = !contractGenerated
               ? 'generazione contratto fallita — vedi errore sopra'

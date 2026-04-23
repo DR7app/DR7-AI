@@ -1219,11 +1219,9 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         }
 
         let dbError: any = null
-        let contractId: string | null = null
         if (existingContracts && existingContracts.length > 0) {
             // Update the MOST RECENT one with the new PDF + cleared signed fields.
             const latest = existingContracts[0]
-            contractId = latest.id
             const { error } = await supabase
                 .from('contracts')
                 .update(contractPayload)
@@ -1246,17 +1244,12 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 else console.log(`[generate-contract] Deleted ${idsToDelete.length} duplicate contract(s):`, idsToDelete)
             }
         } else {
-            // No existing contract — insert a new row and capture the id so the
-            // caller can use it directly without a follow-up SELECT (which may
-            // be blocked by RLS for non-service-role clients).
-            const { data: inserted, error } = await supabase
+            // No existing contract — insert a new row.
+            const { error } = await supabase
                 .from('contracts')
                 .insert({ ...contractPayload, booking_id: bookingId })
-                .select('id')
-                .single()
             dbError = error
-            contractId = inserted?.id || null
-            console.log(`[generate-contract] INSERTED new contract id=${contractId} for booking_id=${bookingId} pdf_url=${publicUrl}`)
+            console.log(`[generate-contract] INSERTED new contract for booking_id=${bookingId} pdf_url=${publicUrl}`)
         }
 
         if (dbError) {
@@ -1298,7 +1291,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         console.log('[generate-contract] Success:', publicUrl)
         return {
             statusCode: 200,
-            body: JSON.stringify({ success: true, url: publicUrl, contractId, contract_id: contractId })
+            body: JSON.stringify({ success: true, url: publicUrl })
         }
 
     } catch (error: any) {
