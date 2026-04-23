@@ -4792,16 +4792,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } else {
 
           const diffCents = newTotalCents - alreadyPaidCents
-          const diffNetEur = diffCents / 100
-          // The admin-typed modification delta is treated as the NET (taxable)
-          // base. IVA (22%) is added on top for the pay-by-link so the customer
-          // pays the gross amount. The fattura then shows a clean breakdown:
-          // net = admin-typed value, IVA = 22%, total = gross (what customer paid).
-          const IVA_RATE = 0.22
-          const diffEur = Math.round(diffNetEur * (1 + IVA_RATE) * 100) / 100
+          const diffEur = diffCents / 100
           if (diffCents > 0) {
-            logger.log(`[EditDiffLink] Admin delta €${diffNetEur.toFixed(2)} net → charging gross €${diffEur.toFixed(2)} (IVA ${(IVA_RATE*100)}%)`)
-            logger.log(`[EditDiffLink] Owed (gross) €${diffEur.toFixed(2)} (new total €${(newTotalCents/100).toFixed(2)} − already paid €${(alreadyPaidCents/100).toFixed(2)}) — creating pay-by-link`)
+            logger.log(`[EditDiffLink] Owed €${diffEur.toFixed(2)} (new total €${(newTotalCents/100).toFixed(2)} − already paid €${(alreadyPaidCents/100).toFixed(2)}) — creating pay-by-link`)
+            logger.log('[EditDiffLink] Price increased by €' + diffEur.toFixed(2) + ' — creating pay-by-link for the delta')
             const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
