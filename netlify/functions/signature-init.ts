@@ -153,11 +153,26 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il contratto non ha un PDF generato' }) }
         }
 
-        // Cancel any existing active signature requests for this contract
+        // Cancel any existing active signature requests for this booking.
+        // Use booking_id (via joined contract_id list) so that legacy duplicate
+        // contract rows for the same booking also get their pending signatures
+        // cancelled — otherwise a customer clicks the old WhatsApp link, signs
+        // the old contract row, and receives an OUT-OF-DATE signed PDF.
+        const bookingIdForCancel = contract.booking_id || bookingId
+        let pendingContractIds: string[] = [contract.id]
+        if (bookingIdForCancel) {
+            const { data: allContractRows } = await supabase
+                .from('contracts')
+                .select('id')
+                .eq('booking_id', bookingIdForCancel)
+            if (allContractRows && allContractRows.length > 0) {
+                pendingContractIds = Array.from(new Set([contract.id, ...allContractRows.map(r => r.id)]))
+            }
+        }
         const { data: existingRequests } = await supabase
             .from('signature_requests')
-            .select('id, status')
-            .eq('contract_id', contract.id)
+            .select('id, status, contract_id')
+            .in('contract_id', pendingContractIds)
             .in('status', ['pending', 'otp_sent', 'otp_verified'])
 
         if (existingRequests && existingRequests.length > 0) {
