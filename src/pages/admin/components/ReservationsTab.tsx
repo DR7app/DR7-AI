@@ -4846,13 +4846,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Auto-send contract for signature via WhatsApp
-      // Send when: editing (always — new contract with updated data), OR new paid booking, OR payment just marked paid
-      const shouldSendSigningLink = !!insertedBooking?.id && (
-        !!editingId ||                             // ANY edit — resend updated contract
-        formData.payment_status === 'paid' ||      // New paid booking
-        justMarkedPaid                             // Payment just transitioned to paid
-      )
+      // Auto-send contract for signature via WhatsApp.
+      // Require payment_status = 'paid'. Previously this fired on any edit,
+      // which pushed a signing link to the customer even when the admin saved
+      // the booking as "Da Saldare" (unpaid). The contract must not leave
+      // admin hands until the customer has actually paid; for pay-by-link
+      // topups the nexi-payment-callback re-sends the link after payment.
+      const shouldSendSigningLink = !!insertedBooking?.id
+        && formData.payment_status === 'paid'
       if (shouldSendSigningLink) {
         try {
           // Fetch the contract that was just generated for this booking

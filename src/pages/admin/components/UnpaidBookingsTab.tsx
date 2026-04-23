@@ -428,12 +428,22 @@ export default function UnpaidBookingsTab() {
             .maybeSingle()
 
           const bookingTotalCents = bk?.price_total || 0
+          // booking.price_total is GROSS (IVA-included) — admin-typed amounts
+          // are always gross in this project. Fattura items however are stored
+          // as NET (unit_price / total divided by 1.22). We MUST convert items
+          // to gross before comparing, otherwise the "delta" equals roughly
+          // the IVA of the existing invoice and "Segna Pagato" emits a bogus
+          // extra fattura for an amount the admin never typed.
           let alreadyInvoicedCents = 0
           for (const f of (fatture || [])) {
             if (!Array.isArray(f.items)) continue
             for (const item of f.items) {
-              const line = (item.total != null ? Number(item.total) : (Number(item.unit_price || 0) * Number(item.quantity || 1))) * 100
-              if (Number.isFinite(line)) alreadyInvoicedCents += Math.round(line)
+              const netEur = item.total != null
+                ? Number(item.total)
+                : Number(item.unit_price || 0) * Number(item.quantity || 1)
+              const vatRate = Number(item.vat_rate || 0)
+              const grossCents = netEur * (1 + vatRate / 100) * 100
+              if (Number.isFinite(grossCents)) alreadyInvoicedCents += Math.round(grossCents)
             }
           }
           const deltaCents = Math.max(0, bookingTotalCents - alreadyInvoicedCents)
