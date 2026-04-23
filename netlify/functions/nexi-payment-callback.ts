@@ -642,7 +642,13 @@ const handler: Handler = async (event) => {
                     console.error('[nexi-payment-callback] Contract regen/send failed:', ctrErr);
                 }
 
-                // Customer confirmation WhatsApp
+                // Customer WhatsApps:
+                //   1. Payment received (extension-style receipt).
+                //   2. If the topup made the booking FULLY PAID → conferma
+                //      noleggio (rental_new_customer). Previously only the
+                //      receipt was sent — the admin had asked for the
+                //      conferma to arrive only AFTER payment, which is now
+                //      honoured here at the moment the balance is cleared.
                 const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
                 if (custPhone) {
                     const custName = booking.customer_name || 'Cliente';
@@ -654,6 +660,35 @@ const handler: Handler = async (event) => {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ customPhone: custPhone, customMessage: customerMsg })
                         });
+                    }
+
+                    // Final conferma noleggio — only when payment makes the
+                    // booking fully paid.
+                    if (fullyPaid) {
+                        // Re-fetch the booking to get the fresh status we just
+                        // wrote, then pass it to send-whatsapp-notification so
+                        // the legacy booking branch picks rental_new_customer.
+                        const { data: fullBooking } = await supabase
+                            .from('bookings')
+                            .select('*')
+                            .eq('id', booking.id)
+                            .single();
+                        if (fullBooking) {
+                            await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    customPhone: custPhone,
+                                    booking: {
+                                        ...fullBooking,
+                                        service_type: 'car_rental',
+                                        payment_status: 'paid',
+                                        isEdit: false,
+                                    }
+                                })
+                            });
+                            console.log('[nexi-payment-callback] Topup → fully paid → conferma noleggio sent');
+                        }
                     }
                 }
 

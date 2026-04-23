@@ -4578,21 +4578,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // - Paid (fresh booking) → rental_new_customer (normal confirmation)
           let templateKey: string
           if (editingId) {
-            // Edit flow: send the SAME template as the initial booking
-            // confirmation so the customer receives the identical message
-            // format they already know, just with the updated values
-            // (new dates, new total, etc.). Admin used to use a separate
-            // "modifica" body, but that diverged from the original — which
-            // confused customers. Single source of truth: rental_new_customer
-            // (→ pro_conferma_noleggio in Messaggi di Sistema Pro).
+            // Edit flow:
+            //   • If the booking is now FULLY PAID → send conferma noleggio
+            //     (rental_new_customer) with the updated values.
+            //   • If there's a BALANCE OWED (pending/partial/unpaid) → do NOT
+            //     send the confirmation. The diff-link block above has
+            //     already sent the pay-by-link. The customer will receive the
+            //     final confirmation only once the callback marks the booking
+            //     fully paid (nexi-payment-callback handles that).
+            if (isPending) {
+              logger.log('[Save] Edit with remaining balance — skipping conferma-noleggio until fully paid')
+              return
+            }
             templateKey = 'rental_new_customer'
           } else if (confirmBooking) {
             // Manually confirmed booking — always send full confirmation, regardless of payment status
             templateKey = 'rental_new_customer'
           } else if (isPending) {
-            // Any pending booking — the payment-link block above has already
-            // created a Nexi link and sent payment_link_customer with the URL.
-            // Skip here to avoid a duplicate WhatsApp.
+            // Any pending new booking — the payment-link block above has
+            // already created a Nexi link and sent payment_link_customer.
+            // Skip here to avoid a duplicate WhatsApp. The final conferma
+            // will be sent by the Nexi callback once payment lands.
             return
           } else {
             templateKey = 'rental_new_customer'

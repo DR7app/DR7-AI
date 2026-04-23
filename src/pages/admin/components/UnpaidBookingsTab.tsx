@@ -406,17 +406,40 @@ export default function UnpaidBookingsTab() {
           (st !== 'car_wash' && st !== 'mechanical' && st !== 'mechanical_service')
         logger.log('[updatePaymentStatus] service_type:', st, 'isCarRental:', isCarRental)
 
-        // 1. Generate fattura
+        // 1. Generate fattura.
+        // Logic:
+        //   • If NO fattura exists yet → full fattura on the booking total.
+        //   • If a fattura ALREADY exists and the booking was previously
+        //     modified upward (price_total > sum of fatture items for this
+        //     booking), generate a DELTA fattura for just the new amount
+        //     that's being paid now. Prevents the "Fattura già esistente"
+        //     blocker when an admin raises the price by e.g. 5 € and marks
+        //     the extra paid.
         try {
-          const { data: existingFattura } = await supabase
+          const { data: fatture } = await supabase
             .from('fatture')
-            .select('id, numero_fattura')
+            .select('id, numero_fattura, items')
             .eq('booking_id', bookingId)
+
+          const { data: bk } = await supabase
+            .from('bookings')
+            .select('price_total, booking_details')
+            .eq('id', bookingId)
             .maybeSingle()
 
-          if (existingFattura) {
-            toast.success(`Fattura ${existingFattura.numero_fattura} già esistente`)
-          } else {
+          const bookingTotalCents = bk?.price_total || 0
+          let alreadyInvoicedCents = 0
+          for (const f of (fatture || [])) {
+            if (!Array.isArray(f.items)) continue
+            for (const item of f.items) {
+              const line = (item.total != null ? Number(item.total) : (Number(item.unit_price || 0) * Number(item.quantity || 1))) * 100
+              if (Number.isFinite(line)) alreadyInvoicedCents += Math.round(line)
+            }
+          }
+          const deltaCents = Math.max(0, bookingTotalCents - alreadyInvoicedCents)
+
+          if ((fatture || []).length === 0) {
+            // First fattura for this booking — full amount.
             const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -426,6 +449,27 @@ export default function UnpaidBookingsTab() {
               const invoiceData = await invoiceRes.json()
               toast.success(`Fattura ${invoiceData.invoice?.numero_fattura || ''} generata`)
             }
+          } else if (deltaCents > 0) {
+            // Previously invoiced, but there's a new positive delta — emit a
+            // delta invoice for just the new amount.
+            const deltaEur = deltaCents / 100
+            const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId, includeIVA: true, extensionAmount: deltaEur })
+            })
+            if (invoiceRes.ok) {
+              const invoiceData = await invoiceRes.json()
+              toast.success(`Fattura integrativa €${deltaEur.toFixed(2)} generata (${invoiceData.invoice?.numero_fattura || ''})`)
+            } else {
+              const err = await invoiceRes.json().catch(() => ({} as any))
+              toast.error(`Fattura integrativa non generata: ${err.error || `HTTP ${invoiceRes.status}`}`, { duration: 8000 })
+            }
+          } else {
+            // Fattura exists and covers the full booking total — nothing new
+            // to invoice. Silent log, no user-facing "gia' esistente" toast
+            // which historically confused admins.
+            logger.log('[Segna Pagato] Fattura already covers booking total — nothing to invoice')
           }
         } catch (invoiceErr) {
           logger.warn('Auto-invoice generation failed:', invoiceErr)
