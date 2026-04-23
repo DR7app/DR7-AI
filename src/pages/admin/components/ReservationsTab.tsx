@@ -1958,11 +1958,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[handleGenerateContract] Validation error:', error)
-      if (!silent) alert(_errMsg)
+      // Surface the validation error even in silent mode so the admin knows
+      // why the contract didn't get generated during the auto-gen flow.
+      if (silent) {
+        toast.error(`Validazione cliente fallita, contratto non generato: ${_errMsg}`, { duration: 10000 })
+      } else {
+        alert(_errMsg)
+      }
       return false
     }
 
-    if (missing.includes('__limitation_override_requested__')) return false
+    if (missing.includes('__limitation_override_requested__')) {
+      // A limitation override modal has been opened for the admin. The
+      // contract will not proceed until the override is resolved — surface
+      // that clearly so the admin doesn't silently end up with no contract.
+      logger.warn('[handleGenerateContract] Limitation override requested — contract generation paused')
+      toast('Completa la finestra di autorizzazione per generare il contratto.', { icon: '⚠️', duration: 8000 })
+      return false
+    }
 
     if (missing.length > 0) {
       logger.warn('⚠️ Missing fields for contract:', missing)
@@ -2016,17 +2029,41 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     try {
       toast.loading('Rinvio contratto...', { id: 'resend-contract' })
 
-      // Find the contract
-      const { data: contract } = await supabase
+      // Find the contract — use maybeSingle() so we don't throw when the row
+      // doesn't exist (common right after a booking was just created and the
+      // auto-gen in the save flow failed silently).
+      let { data: contract } = await supabase
         .from('contracts')
         .select('id, pdf_url, signed_pdf_url')
         .eq('booking_id', booking.id)
-        .single()
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
+      // No contract row yet? Generate one on the fly and retry the lookup,
+      // so "Rinvia contratto" always works even for bookings whose auto-gen
+      // failed (validation, network blip, etc.).
       if (!contract) {
-        toast.dismiss('resend-contract')
-        toast.error('Contratto non trovato. Genera prima il contratto.')
-        return
+        toast.loading('Contratto non trovato — lo genero ora...', { id: 'resend-contract' })
+        const ok = await handleGenerateContract(booking, true)
+        if (!ok) {
+          toast.dismiss('resend-contract')
+          // handleGenerateContract already showed a specific error toast
+          return
+        }
+        const retry = await supabase
+          .from('contracts')
+          .select('id, pdf_url, signed_pdf_url')
+          .eq('booking_id', booking.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        contract = retry.data
+        if (!contract) {
+          toast.dismiss('resend-contract')
+          toast.error('Contratto generato ma non trovato nel DB — riprova tra qualche secondo.', { duration: 10000 })
+          return
+        }
       }
 
       // Send signing link via signature-init
@@ -2039,10 +2076,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       toast.dismiss('resend-contract')
       if (sigRes.ok) {
-        toast.success('Link firma contratto rinviato via WhatsApp!')
+        toast.success('Link firma contratto inviato via WhatsApp!')
         logAdminAction('resend_contract', 'booking', booking.id, buildBookingContext(booking))
       } else {
-        toast.error('Errore rinvio: ' + (sigData.error || 'Errore'))
+        toast.error('Errore invio: ' + (sigData.error || 'Errore'))
       }
     } catch (err: any) {
       toast.dismiss('resend-contract')
