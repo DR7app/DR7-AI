@@ -1152,16 +1152,29 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           }).eq('id', data.id)
 
           if (customerPhone) {
+            const amountStr = totalPrice.toFixed(2)
+            const bookingRef = (data?.id || '').substring(0, 8).toUpperCase() || 'N/A'
+            const firstName = customerName?.split(' ')[0] || 'Cliente'
             const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: customerPhone,
                 templateKey: 'pro_richiesta_pagamento',
+                // Alias every placeholder the Pro template might use so
+                // nothing leaks as raw "{...}" text to the customer.
                 templateVars: {
-                  customer_name: customerName,
-                  amount: totalPrice.toFixed(2),
+                  customer_name: customerName || firstName,
+                  nome: firstName,
+                  amount: amountStr,
+                  total: amountStr,
+                  importo: amountStr,
+                  totale: amountStr,
                   link: linkData.paymentUrl,
+                  payment_link: linkData.paymentUrl,
+                  booking_id: bookingRef,
+                  booking_ref: bookingRef,
+                  expiry: '1 ora',
                 },
                 skipHeader: true,
               })
