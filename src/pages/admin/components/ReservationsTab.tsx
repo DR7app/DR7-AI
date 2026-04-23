@@ -4467,8 +4467,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // - Paid (fresh booking) → rental_new_customer (normal confirmation)
           let templateKey: string
           if (editingId) {
-            // Edit flow: send the "modifica" template, never the full new-booking confirmation
-            templateKey = 'rental_modified'
+            // Edit flow: send the SAME template as the initial booking
+            // confirmation so the customer receives the identical message
+            // format they already know, just with the updated values
+            // (new dates, new total, etc.). Admin used to use a separate
+            // "modifica" body, but that diverged from the original — which
+            // confused customers. Single source of truth: rental_new_customer
+            // (→ pro_conferma_noleggio in Messaggi di Sistema Pro).
+            templateKey = 'rental_new_customer'
           } else if (confirmBooking) {
             // Manually confirmed booking — always send full confirmation, regardless of payment status
             templateKey = 'rental_new_customer'
