@@ -154,8 +154,9 @@ const handler: Handler = async (event) => {
             || 'booking';
         const isDanniPenali = paymentPurpose === 'danni' || paymentPurpose === 'penali' || paymentPurpose === 'danni_penali';
         const isExtension = paymentPurpose === 'extension';
+        const isTopup = paymentPurpose === 'booking_topup';
 
-        console.log(`[nexi-payment-callback] Payment purpose: ${paymentPurpose}, isDanniPenali: ${isDanniPenali}, isExtension: ${isExtension}`);
+        console.log(`[nexi-payment-callback] Payment purpose: ${paymentPurpose}, isDanniPenali: ${isDanniPenali}, isExtension: ${isExtension}, isTopup: ${isTopup}`);
 
         // Update transaction status (preserve original metadata)
         await supabase.from('nexi_transactions').update({
@@ -556,6 +557,108 @@ const handler: Handler = async (event) => {
 
             // NO contract, NO booking re-confirmation — just extension
             return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: 'extension_paid' }) };
+        }
+
+        // ── BOOKING TOP-UP PAYMENT ───────────────────────────────────────
+        // Fired when the customer pays the delta pay-by-link the admin
+        // generated after modifying a partial/paid booking upwards.
+        //   - ADDS this amount to the booking's amount_paid (not overwrites)
+        //   - marks status=paid if the total is now fully covered
+        //   - generates a fattura for JUST this payment (delta invoice)
+        //   - regenerates + sends the updated contract via WhatsApp
+        if (isSuccess && isTopup && transaction.booking_id) {
+            const { data: booking } = await supabase
+                .from('bookings')
+                .select('id, customer_name, customer_phone, customer_email, vehicle_name, price_total, booking_details, payment_status')
+                .eq('id', transaction.booking_id)
+                .single();
+
+            if (booking) {
+                const topupAmountEur = transaction.amount_cents / 100;
+                const priorPaidCents = Number(booking.booking_details?.amountPaid ?? booking.booking_details?.amount_paid ?? 0) || 0;
+                const newPaidCents = priorPaidCents + transaction.amount_cents;
+                const fullyPaid = booking.price_total ? newPaidCents >= (booking.price_total - 1) : false;
+                console.log(`[nexi-payment-callback] TOPUP €${topupAmountEur.toFixed(2)} for booking ${booking.id} — prior paid €${(priorPaidCents/100).toFixed(2)}, new paid €${(newPaidCents/100).toFixed(2)}, fully=${fullyPaid}`);
+
+                // Update booking: status + accumulated amount_paid
+                await supabase.from('bookings').update({
+                    payment_status: fullyPaid ? 'paid' : 'partial',
+                    amount_paid: newPaidCents,
+                    status: fullyPaid ? 'confirmed' : booking.payment_status,
+                    booking_details: {
+                        ...booking.booking_details,
+                        amountPaid: newPaidCents,
+                        last_topup_amount_cents: transaction.amount_cents,
+                        last_topup_at: new Date().toISOString(),
+                        topup_history: [
+                            ...(Array.isArray(booking.booking_details?.topup_history) ? booking.booking_details.topup_history : []),
+                            { amount_cents: transaction.amount_cents, paid_at: new Date().toISOString(), nexi_order_id: transaction.order_id }
+                        ],
+                    }
+                }).eq('id', booking.id);
+
+                // Fattura for the topup amount only (delta invoice)
+                try {
+                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-invoice-from-booking`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
+                        body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: topupAmountEur })
+                    });
+                    console.log(`[nexi-payment-callback] Topup fattura generated — €${topupAmountEur.toFixed(2)}`);
+                } catch (invErr) {
+                    console.error('[nexi-payment-callback] Topup fattura failed:', invErr);
+                }
+
+                // Regenerate the contract so it reflects the modified booking
+                // and re-send the signing link (old signed version was already
+                // cleared by generate-contract).
+                try {
+                    const contractRes = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-contract`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
+                        body: JSON.stringify({ bookingId: booking.id })
+                    });
+                    if (contractRes.ok) {
+                        console.log('[nexi-payment-callback] Contract regenerated after topup');
+                        // Fire signature-init so the customer gets a fresh signing link
+                        // on the updated contract.
+                        const { data: contractRow } = await supabase
+                            .from('contracts')
+                            .select('id')
+                            .eq('booking_id', booking.id)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        if (contractRow?.id) {
+                            await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/signature-init`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ contractId: contractRow.id, bookingId: booking.id })
+                            });
+                            console.log('[nexi-payment-callback] Signature-init fired for updated contract');
+                        }
+                    }
+                } catch (ctrErr) {
+                    console.error('[nexi-payment-callback] Contract regen/send failed:', ctrErr);
+                }
+
+                // Customer confirmation WhatsApp
+                const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
+                if (custPhone) {
+                    const custName = booking.customer_name || 'Cliente';
+                    const amountEur = topupAmountEur.toFixed(2);
+                    const customerMsg = await renderTemplate('payment_received_extension', { custName, amountEur });
+                    if (customerMsg) {
+                        await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ customPhone: custPhone, customMessage: customerMsg })
+                        });
+                    }
+                }
+
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: 'topup_paid', fullyPaid }) };
+            }
         }
 
         // ── REGULAR BOOKING PAYMENT ───────────────────────────────────────

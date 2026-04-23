@@ -4711,6 +4711,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 customerName: customerInfo?.full_name || 'Cliente',
                 description: `Integrazione noleggio DR7 - ${vehicle?.display_name || ''} - ${customerInfo?.full_name || ''}`,
                 expirationHours: 1,
+                // Flag this link so the Nexi callback knows to treat the
+                // payment as an INTEGRATION of an existing booking
+                // (not a first-time payment). It will then:
+                //   - add this amount to booking.amount_paid (not overwrite)
+                //   - generate a fattura for just this amount (delta invoice)
+                //   - regenerate + send the updated contract
+                paymentPurpose: 'booking_topup',
               }),
             })
             const linkData = await linkRes.json().catch(() => ({} as any))
