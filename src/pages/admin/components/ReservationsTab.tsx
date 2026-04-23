@@ -4190,8 +4190,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
       }
 
-      // Generate Nexi Pay by Link if payment method is Nexi AND not already paid
-      if (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid' && insertedBooking) {
+      // Generate Nexi Pay by Link for any pending (non-paid) new booking.
+      // Previously this only fired when the admin explicitly chose "Nexi Pay
+      // by Link" — so bookings saved as "da saldare" with Bonifico / Carta /
+      // etc. ended up with no link to pay online. Now the link is always
+      // generated so the customer receives a working payment URL in the
+      // WhatsApp message regardless of the chosen method.
+      const isPendingForLink = formData.payment_status === 'pending' || formData.payment_status === 'unpaid' || formData.payment_status === 'partial'
+      if (!editingId && isPendingForLink && insertedBooking) {
         try {
           // Use cents-based addition to avoid float drift, then convert to EUR
           // Subtract already paid amount for partial payments
@@ -4393,7 +4399,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const custPhone = customerInfo?.phone
         if (custPhone) {
           const isPending = paymentStatus === 'pending' || paymentStatus === 'unpaid'
-          const isNexi = (formData.payment_method || '').includes('Nexi Pay by Link')
+          // `isNexi` used to branch between two pending sub-cases. Now any
+          // pending booking goes through the unified payment-link flow above,
+          // so we only need the single `isPending` flag here.
 
           // Build template vars
           const pickupD = new Date(pickupDateTime)
@@ -4478,10 +4486,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } else if (confirmBooking) {
             // Manually confirmed booking — always send full confirmation, regardless of payment status
             templateKey = 'rental_new_customer'
-          } else if (isPending && !isNexi) {
-            templateKey = 'rental_da_saldare_customer'
-          } else if (isPending && isNexi) {
-            // Nexi link message is handled elsewhere — skip here
+          } else if (isPending) {
+            // Any pending booking — the payment-link block above has already
+            // created a Nexi link and sent payment_link_customer with the URL.
+            // Skip here to avoid a duplicate WhatsApp.
             return
           } else {
             templateKey = 'rental_new_customer'
