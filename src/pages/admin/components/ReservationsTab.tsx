@@ -4648,6 +4648,84 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
+      // ── Edit flow: price increased on a PAID booking → send pay-by-link for the delta ──
+      // When the admin edits an already-paid booking and raises the price
+      // (e.g. extension, add-on), generate a Nexi Pay by Link for the
+      // difference (new total − already paid) and send it to the customer
+      // so they can settle the extra amount online.
+      const wasOriginallyPaid = editingOriginalPaymentStatus === 'paid'
+        || editingOriginalPaymentStatus === 'succeeded'
+        || editingOriginalPaymentStatus === 'completed'
+      if (editingId && wasOriginallyPaid && insertedBooking) {
+        try {
+          const originalBooking = bookings.find(b => b.id === editingId)
+          const originalTotalCents = originalBooking?.price_total || 0
+          const newTotalCents = insertedBooking?.price_total || eurToCents(formData.total_amount || '0')
+          const diffCents = newTotalCents - originalTotalCents
+          const diffEur = diffCents / 100
+          if (diffCents > 0) {
+            logger.log('[EditDiffLink] Price increased by €' + diffEur.toFixed(2) + ' — creating pay-by-link for the delta')
+            const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookingId: insertedBooking.id,
+                amount: diffEur,
+                customerEmail: customerInfo?.email || '',
+                customerName: customerInfo?.full_name || 'Cliente',
+                description: `Integrazione noleggio DR7 - ${vehicle?.display_name || ''} - ${customerInfo?.full_name || ''}`,
+                expirationHours: 1,
+              }),
+            })
+            const linkData = await linkRes.json().catch(() => ({} as any))
+            if (linkRes.ok && linkData.paymentUrl) {
+              const custPhone = customerInfo?.phone
+              if (custPhone) {
+                const bookingRef = insertedBooking.id.substring(0, 8).toUpperCase()
+                const firstName = (customerInfo?.full_name || 'Cliente').split(' ')[0] || 'Cliente'
+                const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    customPhone: custPhone,
+                    templateKey: 'payment_link_customer',
+                    templateVars: {
+                      '{customer_name}': customerInfo?.full_name || firstName,
+                      '{nome}': firstName,
+                      '{booking_id}': bookingRef,
+                      '{booking_ref}': bookingRef,
+                      '{amount}': diffEur.toFixed(2),
+                      '{total}': diffEur.toFixed(2),
+                      '{importo}': diffEur.toFixed(2),
+                      '{payment_link}': linkData.paymentUrl,
+                      '{link}': linkData.paymentUrl,
+                      '{expiry}': '1 ora',
+                    },
+                  }),
+                })
+                const waJson = await waRes.json().catch(() => ({} as any))
+                if (waJson?.skipped) {
+                  toast.error('Link integrazione creato ma template "pro_richiesta_pagamento" mancante — messaggio NON inviato.', { duration: 10000 })
+                } else if (!waRes.ok) {
+                  toast.error(`Link integrazione creato ma invio WhatsApp fallito: ${waJson?.message || waRes.status}`, { duration: 10000 })
+                } else {
+                  toast.success(`Link di integrazione per €${diffEur.toFixed(2)} inviato al cliente`)
+                }
+              } else {
+                toast(`Link integrazione €${diffEur.toFixed(2)} creato ma cliente senza telefono: ${linkData.paymentUrl}`, { duration: 12000 })
+              }
+            } else {
+              toast.error(`Errore creazione link integrazione: ${linkData.error || `HTTP ${linkRes.status}`}`, { duration: 10000 })
+            }
+          } else if (diffCents < 0) {
+            logger.log('[EditDiffLink] Price decreased by €' + Math.abs(diffEur).toFixed(2) + ' — no auto-refund; admin must handle manually')
+          }
+        } catch (err) {
+          console.error('[EditDiffLink] Failed:', err)
+          toast.error(`Errore link integrazione: ${err instanceof Error ? err.message : 'sconosciuto'}`, { duration: 8000 })
+        }
+      }
+
       // Auto-send contract for signature via WhatsApp
       // Send when: editing (always — new contract with updated data), OR new paid booking, OR payment just marked paid
       const shouldSendSigningLink = !!insertedBooking?.id && (

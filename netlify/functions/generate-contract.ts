@@ -1175,6 +1175,12 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             .getPublicUrl(fileName)
 
         // 8. Save/Update Contracts Table
+        // When re-generating a contract (e.g. after a booking modification),
+        // clear any PREVIOUS signed_pdf_url / signed_at. Otherwise the OLD
+        // signed PDF stays in the row and downstream flows that read
+        // contracts.signed_pdf_url deliver the stale signed copy to the
+        // customer — visible bug: "after signing the customer receives
+        // the older contract".
         const { error: dbError } = await supabase
             .from('contracts')
             .upsert({
@@ -1195,11 +1201,35 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 total_amount: booking.price_total / 100,
                 status: 'active',
                 pdf_url: publicUrl,
+                // Explicitly null the signed fields so a regenerated contract
+                // never serves its previous signed version by accident.
+                signed_pdf_url: null,
+                signed_at: null,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'booking_id' })
 
         if (dbError) {
             console.error('[generate-contract] Failed to sync with contracts table:', dbError)
+        }
+
+        // 8a. Mark any previous signature_requests for this booking as superseded
+        // so the customer can't open a stale signing link and sign an outdated
+        // PDF. signature-init will create a fresh request pointing at the new hash.
+        try {
+            const { data: contractRow } = await supabase
+                .from('contracts')
+                .select('id')
+                .eq('booking_id', bookingId)
+                .maybeSingle()
+            if (contractRow?.id) {
+                await supabase
+                    .from('signature_requests')
+                    .update({ status: 'superseded', updated_at: new Date().toISOString() })
+                    .eq('contract_id', contractRow.id)
+                    .in('status', ['pending', 'otp_sent', 'otp_verified', 'signed'])
+            }
+        } catch (cleanupErr) {
+            console.warn('[generate-contract] Failed to supersede old signature_requests:', cleanupErr)
         }
 
         // 8b. Update Booking with contract URL (optional but good for direct access)
