@@ -1992,6 +1992,20 @@ export default function UnpaidBookingsTab() {
                 )}
               </div>
 
+              {/* "In attesa di pagamento" badge — shown on the main booking
+                  whenever a Nexi Pay by Link has been created and not yet paid.
+                  Mirrors the badge the extensions row already had. */}
+              {isPending && (booking.booking_details?.nexi_payment_link || booking.payment_method === 'Nexi Pay by Link') && (() => {
+                const expiresAt = booking.booking_details?.payment_link_expires_at
+                const isExpired = expiresAt ? new Date(expiresAt).getTime() < Date.now() : false
+                return (
+                  <div className={`text-[10px] inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded border ${isExpired ? 'bg-red-500/15 text-red-300 border-red-500/30' : 'bg-orange-500/15 text-orange-300 border-orange-500/30'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isExpired ? 'bg-red-400' : 'bg-orange-400 animate-pulse'}`} />
+                    {isExpired ? 'Link pagamento scaduto' : 'In attesa di pagamento (Nexi Pay by Link inviato)'}
+                  </div>
+                )
+              })()}
+
               {/* Pending extensions */}
               {pendingExts.length > 0 && (
                 <div className="mt-1.5 space-y-1.5">
