@@ -421,14 +421,27 @@ export const handler: Handler = async (event) => {
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                     if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
+                    // Cache-buster on the signed URL: some CDNs / WhatsApp
+                    // preview caches can hold onto an older file served at the
+                    // same URL. The filename already has Date.now(), but the
+                    // query param guarantees Green API / WhatsApp don't reuse
+                    // a cached response for this request.
+                    const cacheBustedUrl = `${signedPdfUrl}${signedPdfUrl.includes('?') ? '&' : '?'}v=${Date.now()}`
+                    // Timestamp the customer-visible filename too so each
+                    // signed PDF is obviously a distinct attachment in the
+                    // WhatsApp chat — avoids the "two same-named files"
+                    // confusion when a contract is re-signed after a booking
+                    // modification.
+                    const sigDateStr = signedAt.toISOString().slice(0, 10)
+                    const whatsappFileName = `${docIdentifier}_firmato_${sigDateStr}.pdf`
                     const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
                     const waResponse = await fetch(greenApiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             chatId: `${cleanPhone}@c.us`,
-                            urlFile: signedPdfUrl,
-                            fileName: `${docIdentifier}_firmato.pdf`,
+                            urlFile: cacheBustedUrl,
+                            fileName: whatsappFileName,
                             caption: `${contract ? 'Contratto' : 'Documento'} ${docIdentifier} firmato - DR7 Empire`
                         })
                     })
