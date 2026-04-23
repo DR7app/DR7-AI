@@ -261,7 +261,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     pickup_date: '',
     pickup_time: '10:30',
     return_date: '',
-    return_time: '10:00',
+    return_time: '09:00', // default: pickup 10:30 − 1h30 = 09:00
     driver_tier: 'TIER_2' as DriverTier,
     residente_sardegna: true,
     maggiorazione_pct: String(configOverlay.maggiorazionePct),
@@ -1077,7 +1077,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       pickup_date: '',
       pickup_time: '10:30',
       return_date: '',
-      return_time: '10:00',
+      return_time: '09:00', // default: pickup 10:30 − 1h30 = 09:00
       driver_tier: 'TIER_2',
       residente_sardegna: true,
       maggiorazione_pct: String(configOverlay.maggiorazionePct),
