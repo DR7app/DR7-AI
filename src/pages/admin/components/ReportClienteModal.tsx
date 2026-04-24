@@ -265,16 +265,16 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     const rechargeSpend = rechargeEur
     const computed = cardBookingSpend + rechargeSpend
 
-    // Per-user grandfathered override — some customers saw a pre-fix figure
-    // on their profile that we lock in as a floor so they don't appear
-    // demoted after the tier rules were tightened. Keyed by auth user_id.
-    //   Massimo Runchina — pre-fix display €2155.20 + €1000 card recharge
+    // Per-user grandfathered override — absolute value, replaces the
+    // computed figure entirely. Customers in this map display a specific
+    // locked spend regardless of real activity.
+    //   Massimo Runchina — locked to €3155.20 (pre-fix €2155.20 + €1000 card recharge)
     const TIER_SPEND_OVERRIDES: Record<string, number> = {
       '3b896d05-3d65-4819-a46a-ea9894343935': 3155.20,
     }
     const authUserId = customer?.user_id
     const override = authUserId ? TIER_SPEND_OVERRIDES[authUserId] : undefined
-    const annualSpend = (typeof override === 'number' && override > computed) ? override : computed
+    const annualSpend = (typeof override === 'number') ? override : computed
 
     if (annualSpend >= 10000) {
       return { tier: 'signature', label: 'Signature', reward: 4, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: null, badge: 'bg-amber-500/20 text-amber-400 border-amber-500/50' }
