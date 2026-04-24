@@ -413,6 +413,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Pre-auth disabled — Nexi capture not supported via Pay by Link API
 
   const isInitialEditLoad = useRef(false)
+  // Contatore di richieste per la classificazione Fascia: impedisce alle fetch
+  // lente di sovrascrivere il tier del cliente attualmente selezionato.
+  const customerTierRequestRef = useRef(0)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
   const [newSecondDriverMode, setNewSecondDriverMode] = useState(false)
   const [newGaranteMode, setNewGaranteMode] = useState(false)
@@ -695,7 +698,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       .finally(() => { if (!cancelled) setRevenueLoading(false) })
 
     return () => { cancelled = true }
-  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time])
+    // customerTier incluso nei deps: cambiando cliente (Fascia A ↔ B) il totale
+    // deve ricalcolarsi perché i prezzi di km-illimitati, secondo guidatore e
+    // dr7 flex dipendono dalla fascia.
+  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, customerTier])
 
   // Recalculate total when insurance, delivery fees, or payment method change
   useEffect(() => {
@@ -5441,6 +5447,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         setCustomerTier(null) // Reset tier while loading
                         if (!customerId) return
 
+                        // Incrementa l'ID di richiesta: qualunque fetch in volo dal
+                        // customer precedente scarterà la sua risposta se trova un ID
+                        // diverso. Previene la race: A selezionato → fetch lento → B
+                        // selezionato → fetch B veloce → fetch A torna e sovrascrive.
+                        customerTierRequestRef.current += 1
+                        const requestId = customerTierRequestRef.current
+
                         // Primo tentativo: dati dal customers array locale (stessa
                         // fonte di PreventiviTab). Se i campi sono già lì, classifica
                         // subito senza HTTP. Niente più customerTier undefined quando
@@ -5454,14 +5467,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             const age = calculateAge(localBirth)
                             const licYears = calculateLicenseYears(localPatente)
                             const tier = classifyDriverTier(age, licYears)
-                            setCustomerTier(tier)
+                            if (customerTierRequestRef.current === requestId) setCustomerTier(tier)
                           } catch (e) { console.warn('[ReservationsTab] local tier classify failed:', e) }
                         }
 
                         try {
                           const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
+                          if (customerTierRequestRef.current !== requestId) return // stale
                           if (!resp.ok) return
                           const { customer: cust } = await resp.json()
+                          if (customerTierRequestRef.current !== requestId) return // stale dopo parse
                           const birthDate = cust?.data_nascita
                           const patenteDate = cust?.data_rilascio_patente || cust?.metadata?.patente?.rilascio
 
@@ -5575,6 +5590,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         </span>
                       </div>
                     )}
+
+                    {/* Manual Fascia Selector — come PreventiviTab. Forza la fascia
+                        usata per pricing (km illimitati, secondo guidatore, DR7 Flex,
+                        insurance). Override su customerTier auto-classificato. */}
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Fascia Cliente</label>
+                      <select
+                        value={customerTier?.tier === 'TIER_1' || customerTier?.tier === 'TIER_2' ? customerTier.tier : ''}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          if (v === 'TIER_1' || v === 'TIER_2') {
+                            setCustomerTier({
+                              tier: v,
+                              reason: 'Fascia impostata manualmente',
+                              driverAge: customerTier?.driverAge || 0,
+                              licenseYears: customerTier?.licenseYears || 0,
+                            })
+                            // Reset insurance option (come PreventiviTab line 2034)
+                            setFormData(prev => ({ ...prev, insurance_option: 'KASKO_BASE' as KaskoTier }))
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                      >
+                        <option value="">-- Seleziona Fascia --</option>
+                        <option value="TIER_2">Fascia A (26-69, patente 5+ anni)</option>
+                        <option value="TIER_1">Fascia B (21-25 o patente 3-4 anni)</option>
+                      </select>
+                    </div>
 
                     {customers.length === 0 && (
                       <p className="text-sm text-yellow-400 mt-2">
