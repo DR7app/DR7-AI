@@ -569,12 +569,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const CFG_LAVAGGIO_FEE = configOverlay.lavaggioFee
   const CFG_NO_CAUZIONE_PER_DAY = configOverlay.noCauzionePerDay
   const CFG_UNLIMITED_KM = { TIER_1: configOverlay.unlimitedKmTier1, TIER_2: configOverlay.unlimitedKmTier2 }
-  // Unlimited KM prices — read from Centralina Pro config by vehicle category
+  // Unlimited KM prices — read from Centralina Pro config by vehicle category.
+  // Quando tier è sconosciuto (customer senza data_nascita/patente → classifier
+  // non può determinare Fascia), preferisci TIER_1 (Fascia B, prezzo maggiore).
+  // Meglio sovra-quotare che sotto-quotare: se poi il cliente risulta Fascia A,
+  // customerTier si classifica correttamente e scende a TIER_2.
   function getUnlimitedKmPriceRes(vehicle?: Vehicle, tier?: string): number {
     if (!vehicle) return tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
     const category = vehicle.category || 'exotic'
     if (rentalConfig) {
-      const t = (tier === 'TIER_1' || tier === 'TIER_2') ? tier : 'TIER_2'
+      // Default TIER_1 (Fascia B, 289 per supercar) quando tier sconosciuto,
+      // invece di TIER_2 (Fascia A, 189) — sovra-quota invece di sotto-quotare.
+      const t = (tier === 'TIER_1' || tier === 'TIER_2') ? tier : 'TIER_1'
       return getUnlimitedKmPriceFromConfig(rentalConfig, category, t as import('../../../types/rentalConfig').DriverTier)
     }
     return tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1
@@ -1583,8 +1589,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             notes: c.note || null,
             created_at: c.created_at,
             updated_at: c.updated_at || c.created_at,
-            scadenza_patente: c.scadenza_patente || c.data_scadenza_patente || c.metadata?.patente?.scadenza || null
-          }
+            scadenza_patente: c.scadenza_patente || c.data_scadenza_patente || c.metadata?.patente?.scadenza || null,
+            // Dati necessari per auto-classificare la Fascia (come PreventiviTab).
+            // Senza questi, customerTier resta undefined e il prezzo km illimitati
+            // cade sul default Fascia A invece della fascia reale del cliente.
+            data_nascita: c.data_nascita || null,
+            data_rilascio_patente: c.data_rilascio_patente || c.metadata?.patente?.rilascio || c.patente_data_rilascio || null,
+          } as Customer
 
           // ✅ FIX: ALWAYS use customer ID as the Map key
           // This is the authoritative source - it will overwrite any booking-derived data
@@ -5429,6 +5440,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         setFormData(prev => ({ ...prev, customer_id: customerId }))
                         setCustomerTier(null) // Reset tier while loading
                         if (!customerId) return
+
+                        // Primo tentativo: dati dal customers array locale (stessa
+                        // fonte di PreventiviTab). Se i campi sono già lì, classifica
+                        // subito senza HTTP. Niente più customerTier undefined quando
+                        // il cliente è in list-customers.
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const localCust = customers.find((c: any) => c.id === customerId) as any
+                        const localBirth = localCust?.data_nascita
+                        const localPatente = localCust?.data_rilascio_patente
+                        if (localBirth && localPatente) {
+                          try {
+                            const age = calculateAge(localBirth)
+                            const licYears = calculateLicenseYears(localPatente)
+                            const tier = classifyDriverTier(age, licYears)
+                            setCustomerTier(tier)
+                          } catch (e) { console.warn('[ReservationsTab] local tier classify failed:', e) }
+                        }
+
                         try {
                           const resp = await authFetch(`/.netlify/functions/get-customer?id=${customerId}`)
                           if (!resp.ok) return
