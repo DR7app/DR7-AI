@@ -37,7 +37,7 @@ interface CustomerData {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface BookingRecord { id: string; vehicle_name: string; vehicle_plate?: string; pickup_date: string; dropoff_date: string; status: string; payment_status: string; payment_method?: string; price_total: number; service_type?: string; booking_details?: any; created_at: string; appointment_date?: string }
+interface BookingRecord { id: string; vehicle_name: string; vehicle_plate?: string; pickup_date: string; dropoff_date: string; status: string; payment_status: string; payment_method?: string; price_total: number; service_type?: string; booking_details?: any; created_at: string; booked_at?: string; appointment_date?: string }
 
 interface WalletTx { id: string; amount: number; type?: string; transaction_type?: string; description: string; created_at: string; balance_after?: number }
 
