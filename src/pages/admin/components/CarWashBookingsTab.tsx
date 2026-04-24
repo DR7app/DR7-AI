@@ -2775,7 +2775,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data</label>
                     <input
                       type="date"
-                      value={editingBooking.appointment_date}
+                      value={(editingBooking.appointment_date || '').slice(0, 10)}
                       onChange={(e) => setEditingBooking({ ...editingBooking, appointment_date: e.target.value })}
                       className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
@@ -2784,7 +2784,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora</label>
                     <input
                       type="time"
-                      value={editingBooking.appointment_time}
+                      value={editingBooking.appointment_time || ''}
                       onChange={(e) => setEditingBooking({ ...editingBooking, appointment_time: e.target.value })}
                       className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
@@ -2894,6 +2894,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     </div>
                   </div>
                 </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Note</label>
+                  <textarea
+                    value={editingBooking.booking_details?.notes || ''}
+                    onChange={(e) => setEditingBooking({
+                      ...editingBooking,
+                      booking_details: { ...(editingBooking.booking_details || {}), notes: e.target.value }
+                    })}
+                    rows={3}
+                    placeholder="Note aggiuntive (es. TRATTAMENTO AZOTO IN OMAGGIO)"
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm resize-y"
+                  />
+                </div>
               </div>
 
               <div className="p-6 border-t border-theme-border flex gap-3">
@@ -2943,6 +2958,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         ? 'confirmed'
                         : editingBooking.status
 
+                      // Rebuild appointment_date as a FULL ISO timestamp from the edited
+                      // date + time (Rome local → UTC). Prima: il date input settava solo
+                      // "YYYY-MM-DD" → Supabase lo parsava come mezzanotte UTC → in Rome
+                      // mostrava 02:00 (DST). Ora combiniamo date+time correttamente.
+                      const _dateStr = (editingBooking.appointment_date || '').slice(0, 10)
+                      const _timeStr = editingBooking.appointment_time || '00:00'
+                      let _apptIso: string | null = null
+                      if (_dateStr) {
+                        const [_y, _m, _d] = _dateStr.split('-').map(Number)
+                        const [_hh, _mm] = _timeStr.split(':').map(Number)
+                        const _combined = new Date(_y, (_m || 1) - 1, _d || 1, _hh || 0, _mm || 0, 0)
+                        if (!isNaN(_combined.getTime())) _apptIso = _combined.toISOString()
+                      }
+
                       const { error } = await supabase
                         .from('bookings')
                         .update({
@@ -2950,8 +2979,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           customer_email: editingBooking.customer_email,
                           customer_phone: editingBooking.customer_phone,
                           service_name: updatedServiceName,
-                          appointment_date: editingBooking.appointment_date,
+                          appointment_date: _apptIso || editingBooking.appointment_date,
                           appointment_time: editingBooking.appointment_time,
+                          pickup_date: _apptIso || editingBooking.appointment_date,
+                          dropoff_date: _apptIso || editingBooking.appointment_date,
                           price_total: updatedPrice,
                           status: finalStatus,
                           payment_status: editingBooking.payment_status,
