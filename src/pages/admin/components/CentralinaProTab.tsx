@@ -452,6 +452,11 @@ type KmConfig = {
   extraPerDay: number | ''
   sforo: number | ''
   unlimitedPerDay: number | ''
+  // Optional per-fascia pricing for Km illimitati. When unlimitedMode='per_fascia'
+  // the engine prefers unlimitedByFascia[driverTier] over unlimitedPerDay.
+  // Backward-compatible default: 'all_tiers' → use the single unlimitedPerDay.
+  unlimitedMode?: 'all_tiers' | 'per_fascia'
+  unlimitedByFascia?: Record<string, number | ''>
 }
 
 const INITIAL_KM: KmConfig[] = [
@@ -462,6 +467,8 @@ const INITIAL_KM: KmConfig[] = [
     extraPerDay: 60,
     sforo: 0.89,
     unlimitedPerDay: 189,
+    unlimitedMode: 'per_fascia',
+    unlimitedByFascia: { A: 189, B: 289 },
   },
   {
     id: 'urban',
@@ -470,6 +477,8 @@ const INITIAL_KM: KmConfig[] = [
     extraPerDay: 0,
     sforo: 0.30,
     unlimitedPerDay: 0,
+    unlimitedMode: 'all_tiers',
+    unlimitedByFascia: { A: 0, B: 0 },
   },
   {
     id: 'aziendali',
@@ -478,6 +487,8 @@ const INITIAL_KM: KmConfig[] = [
     extraPerDay: 100,
     sforo: 0.49,
     unlimitedPerDay: 0,
+    unlimitedMode: 'all_tiers',
+    unlimitedByFascia: { A: 0, B: 0 },
   },
 ]
 
@@ -1149,6 +1160,15 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     if (prev.extraPerDay !== k.extraPerDay) out.push(`Km & Sforo / ${k.label}: extra/giorno ${prev.extraPerDay} → ${k.extraPerDay} km`)
     if (prev.sforo !== k.sforo) out.push(`Km & Sforo / ${k.label}: sforo €${prev.sforo} → €${k.sforo}/km`)
     if (prev.unlimitedPerDay !== k.unlimitedPerDay) out.push(`Km & Sforo / ${k.label}: km illimitati €${prev.unlimitedPerDay} → €${k.unlimitedPerDay}/giorno`)
+    const prevMode = prev.unlimitedMode || 'all_tiers'
+    const curMode = k.unlimitedMode || 'all_tiers'
+    if (prevMode !== curMode) out.push(`Km & Sforo / ${k.label}: modalità illimitati ${prevMode === 'per_fascia' ? 'per fascia' : 'tutte le fasce'} → ${curMode === 'per_fascia' ? 'per fascia' : 'tutte le fasce'}`)
+    const fIds = new Set([...Object.keys(prev.unlimitedByFascia || {}), ...Object.keys(k.unlimitedByFascia || {})])
+    fIds.forEach((fid) => {
+      const p = prev.unlimitedByFascia?.[fid] ?? ''
+      const c = k.unlimitedByFascia?.[fid] ?? ''
+      if (p !== c) out.push(`Km & Sforo / ${k.label} / Fascia ${fid}: illimitati €${p || 0} → €${c || 0}/giorno`)
+    })
   })
 
   // Servizi
@@ -1991,15 +2011,36 @@ function KmSforoSection({
               </label>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] mt-auto">
-              <label className="block">
-                <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">
+            <div className="px-5 py-4 border-t border-black/[0.06] mt-auto space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">
                   Km illimitati — prezzo al giorno
                 </span>
+                <div className="inline-flex bg-gray-100 rounded-lg p-0.5 text-[11px] font-medium">
+                  <button
+                    type="button"
+                    onClick={() => patch(cat.id, { unlimitedMode: 'all_tiers' })}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      (cat.unlimitedMode || 'all_tiers') === 'all_tiers'
+                        ? 'bg-white shadow-sm text-[#1d1d1f]'
+                        : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                    }`}
+                  >Tutte le fasce</button>
+                  <button
+                    type="button"
+                    onClick={() => patch(cat.id, { unlimitedMode: 'per_fascia' })}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      cat.unlimitedMode === 'per_fascia'
+                        ? 'bg-white shadow-sm text-[#1d1d1f]'
+                        : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                    }`}
+                  >Per fascia</button>
+                </div>
+              </div>
+
+              {(cat.unlimitedMode || 'all_tiers') === 'all_tiers' ? (
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[#a1a1a6] pointer-events-none">
-                    €
-                  </span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[#a1a1a6] pointer-events-none">€</span>
                   <input
                     type="number"
                     min={0}
@@ -2011,11 +2052,40 @@ function KmSforoSection({
                     }}
                     className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
-                    /giorno
-                  </span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">/giorno</span>
                 </div>
-              </label>
+              ) : (
+                <div className="space-y-2">
+                  {['A', 'B'].map((fid) => {
+                    const val = cat.unlimitedByFascia?.[fid] ?? ''
+                    return (
+                      <label key={fid} className="flex items-center gap-2">
+                        <span className="w-20 shrink-0 text-[12px] font-semibold text-[#1d1d1f]">Fascia {fid}</span>
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[#a1a1a6] pointer-events-none">€</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={val}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              patch(cat.id, {
+                                unlimitedByFascia: {
+                                  ...(cat.unlimitedByFascia || {}),
+                                  [fid]: v === '' ? '' : Number(v),
+                                },
+                              })
+                            }}
+                            className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">/giorno</span>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </section>
         ))}

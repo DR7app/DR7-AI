@@ -93,7 +93,24 @@ export function convertProToLegacy(pro: any): any {
       }
 
       if (num(kmCfg.sforo) > 0) config.sforo_km.category[dbCat] = num(kmCfg.sforo)
-      if (num(kmCfg.unlimitedPerDay) > 0) config.unlimited_km[dbCat] = { _all_tiers: { per_day: num(kmCfg.unlimitedPerDay) } }
+
+      // Km illimitati pricing. Two modes:
+      //   - per_fascia: byFascia { A, B } → TIER_1 / TIER_2 specific per_day
+      //   - all_tiers (default): single unlimitedPerDay applies to everyone
+      // Engine lookup tries TIER_X first, then _all_tiers, then 0.
+      const unlMode = kmCfg.unlimitedMode || 'all_tiers'
+      if (unlMode === 'per_fascia' && kmCfg.unlimitedByFascia) {
+        const faA = num(kmCfg.unlimitedByFascia.A)
+        const faB = num(kmCfg.unlimitedByFascia.B)
+        const entry: Record<string, { per_day: number }> = {}
+        if (faA > 0) entry.TIER_2 = { per_day: faA }
+        if (faB > 0) entry.TIER_1 = { per_day: faB }
+        if (Object.keys(entry).length > 0) {
+          config.unlimited_km[dbCat] = entry
+        }
+      } else if (num(kmCfg.unlimitedPerDay) > 0) {
+        config.unlimited_km[dbCat] = { _all_tiers: { per_day: num(kmCfg.unlimitedPerDay) } }
+      }
     }
   }
 
