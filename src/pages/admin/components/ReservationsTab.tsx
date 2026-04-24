@@ -4100,7 +4100,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // getUnlimitedKmPriceRes(vehicle, tier) legge rental_config.unlimited_km[category][tier]
           // invece del fallback globale CFG_UNLIMITED_KM (che ignora la categoria).
           unlimited_km_price_per_day: formData.unlimited_km
-            ? getUnlimitedKmPriceRes(selectedVehicle, customerTier?.tier)
+            ? getUnlimitedKmPriceRes(vehicles.find(v => v.id === formData.vehicle_id), customerTier?.tier)
             : null,
           // Second driver
           second_driver_fee_per_day: formData.has_second_driver && customerTier?.tier
