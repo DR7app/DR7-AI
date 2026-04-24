@@ -2775,7 +2775,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data</label>
                     <input
                       type="date"
-                      value={(editingBooking.appointment_date || '').slice(0, 10)}
+                      value={(() => {
+                        // Normalizza a YYYY-MM-DD in Rome TZ, così la data visibile
+                        // coincide con quella nel messaggio al cliente (UTC midnight
+                        // stantio non deve "scivolare" al giorno prima).
+                        const raw = editingBooking.appointment_date || ''
+                        if (!raw) return ''
+                        // Se è già solo YYYY-MM-DD, usa così.
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+                        try {
+                          const d = new Date(raw)
+                          if (!isNaN(d.getTime())) {
+                            return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+                          }
+                        } catch { /* blank */ }
+                        return raw.slice(0, 10)
+                      })()}
                       onChange={(e) => setEditingBooking({ ...editingBooking, appointment_date: e.target.value })}
                       className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
@@ -2784,7 +2799,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora</label>
                     <input
                       type="time"
-                      value={editingBooking.appointment_time || ''}
+                      value={(() => {
+                        // Prefer appointment_time (TIME col "HH:MM:SS") sliced to HH:MM.
+                        // Fallback: estrai HH:MM dall'appointment_date ISO (formattato in
+                        // Europe/Rome, non UTC), così l'ora visibile coincide con quella
+                        // che il cliente riceverà nel messaggio.
+                        const raw = editingBooking.appointment_time || ''
+                        if (raw) return raw.slice(0, 5)
+                        if (editingBooking.appointment_date) {
+                          try {
+                            const d = new Date(editingBooking.appointment_date)
+                            if (!isNaN(d.getTime())) {
+                              return d.toLocaleTimeString('it-IT', {
+                                hour: '2-digit', minute: '2-digit', hour12: false,
+                                timeZone: 'Europe/Rome',
+                              })
+                            }
+                          } catch { /* blank */ }
+                        }
+                        return ''
+                      })()}
                       onChange={(e) => setEditingBooking({ ...editingBooking, appointment_time: e.target.value })}
                       className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
