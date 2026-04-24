@@ -934,6 +934,63 @@ async function handleWalletPurchaseFattura(
             }
         }
 
+        // 6b. Generate PDF, upload to storage, send via WhatsApp to customer.
+        // Mirrors the booking-flow handler so every wallet recharge gets the
+        // same fattura PDF delivered to the phone number on file.
+        let walletPdfUrl: string | null = null
+        try {
+            const pdfBytes = await generateInvoicePDF(invoice as any)
+            const pdfFileName = `fattura_${invoice.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
+
+            const { error: uploadError } = await supabase.storage
+                .from('invoices')
+                .upload(pdfFileName, pdfBytes, { contentType: 'application/pdf', upsert: true })
+
+            if (uploadError) {
+                console.error('[Wallet Fattura] PDF storage upload failed:', uploadError.message)
+            } else {
+                const { data: { publicUrl } } = supabase.storage
+                    .from('invoices')
+                    .getPublicUrl(pdfFileName)
+
+                walletPdfUrl = publicUrl
+                console.log('[Wallet Fattura] PDF uploaded:', walletPdfUrl)
+
+                await supabase.from('fatture').update({ pdf_url: walletPdfUrl }).eq('id', invoice.id)
+
+                const customerPhone = invoice.customer_phone || customerData?.telefono || customerData?.phone || ''
+                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    let cleanPhone = String(customerPhone).replace(/[\s\-\+\(\)]/g, '')
+                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+
+                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    const waResponse = await fetch(greenApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${cleanPhone}@c.us`,
+                            urlFile: walletPdfUrl,
+                            fileName: `Fattura_${invoice.numero_fattura}.pdf`,
+                            caption: (await renderTemplate('invoice_pdf_whatsapp', { numero_fattura: invoice.numero_fattura })) ?? ''
+                        })
+                    })
+
+                    const waResult = await waResponse.json()
+                    if (waResponse.ok && !waResult.error) {
+                        console.log('[Wallet Fattura] PDF sent via WhatsApp:', waResult.idMessage)
+                    } else {
+                        console.error('[Wallet Fattura] WhatsApp send failed:', waResult)
+                    }
+                } else {
+                    if (!customerPhone) console.log('[Wallet Fattura] No customer phone — skipping WhatsApp send')
+                    if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) console.log('[Wallet Fattura] Green API not configured — skipping WhatsApp send')
+                }
+            }
+        } catch (pdfError: any) {
+            console.error('[Wallet Fattura] PDF generation/send failed (fattura still saved):', pdfError.message)
+        }
+
         // 7. Attempt SDI send (best-effort — fattura stays as draft if it fails)
         if (invoice.customer_tax_code) {
             try {
@@ -957,7 +1014,7 @@ async function handleWalletPurchaseFattura(
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ success: true, invoice, message: 'Wallet purchase fattura generated' })
+            body: JSON.stringify({ success: true, invoice, pdfUrl: walletPdfUrl, message: 'Wallet purchase fattura generated' })
         }
     } catch (error: any) {
         console.error('[Wallet Fattura] Unexpected error:', error)
