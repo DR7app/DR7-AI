@@ -10,6 +10,7 @@ type StatusCliente = 'standard' | 'member' | 'elite' | 'blacklist'
 
 interface Customer {
   id: string
+  user_id?: string | null
   tipo_cliente: 'azienda' | 'persona_fisica' | 'pubblica_amministrazione'
   nazione: string
   created_at: string
@@ -36,6 +37,19 @@ interface Customer {
   status_cliente?: StatusCliente
 }
 
+// DR7 Club tier — same thresholds the website uses in utils/dr7club.ts.
+type ClubTier = 'access' | 'black' | 'signature'
+function tierFromSpend(annualSpendEur: number): ClubTier {
+  if (annualSpendEur >= 10000) return 'signature'
+  if (annualSpendEur >= 3000) return 'black'
+  return 'access'
+}
+const tierMeta: Record<ClubTier, { label: string; reward: string; badge: string }> = {
+  access:    { label: 'Access',    reward: '2%', badge: 'bg-gray-500/20 text-gray-300 border border-gray-500/40' },
+  black:     { label: 'Black',     reward: '3%', badge: 'bg-purple-500/20 text-purple-300 border border-purple-500/50' },
+  signature: { label: 'Signature', reward: '4%', badge: 'bg-amber-500/20 text-amber-300 border border-amber-500/50' },
+}
+
 export default function ClientiTab() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,9 +57,13 @@ export default function ClientiTab() {
   const [filter, setFilter] = useState<'all' | 'azienda' | 'persona_fisica' | 'pubblica_amministrazione'>('all')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [reportCustomerId, setReportCustomerId] = useState<string | null>(null)
+  // Annual spend per auth user_id (last 12 months, paid bookings only).
+  // Drives the Livello DR7 Club badge on each row.
+  const [annualSpendByUserId, setAnnualSpendByUserId] = useState<Map<string, number>>(new Map())
 
   useEffect(() => {
     loadCustomers()
+    loadAnnualSpend()
   }, [])
 
   async function loadCustomers() {
@@ -64,6 +82,37 @@ export default function ClientiTab() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadAnnualSpend() {
+    try {
+      const oneYearAgo = new Date()
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('user_id, price_total')
+        .not('user_id', 'is', null)
+        .in('status', ['completed', 'completata', 'confirmed', 'active'])
+        .in('payment_status', ['paid', 'completed', 'succeeded'])
+        .gte('booked_at', oneYearAgo.toISOString())
+      if (error) throw error
+      const map = new Map<string, number>()
+      for (const b of (data || [])) {
+        if (!b.user_id) continue
+        map.set(b.user_id, (map.get(b.user_id) || 0) + (b.price_total || 0))
+      }
+      // Convert cents → euros on the way out.
+      const eurMap = new Map<string, number>()
+      for (const [uid, cents] of map) eurMap.set(uid, cents / 100)
+      setAnnualSpendByUserId(eurMap)
+    } catch (err) {
+      console.error('Failed to load annual spend:', err)
+    }
+  }
+
+  const livelloFor = (c: Customer): { tier: ClubTier; annualSpend: number } => {
+    const annualSpend = c.user_id ? (annualSpendByUserId.get(c.user_id) || 0) : 0
+    return { tier: tierFromSpend(annualSpend), annualSpend }
   }
 
   const getDisplayName = (customer: Customer) => {
@@ -227,6 +276,7 @@ export default function ClientiTab() {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tipo</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome/Denominazione</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Livello DR7</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Codice Fiscale</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Contatto</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data</th>
@@ -262,6 +312,24 @@ export default function ClientiTab() {
                         <option value="elite">Elite</option>
                         <option value="blacklist">Black List</option>
                       </select>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {(() => {
+                        const { tier, annualSpend } = livelloFor(customer)
+                        const meta = tierMeta[tier]
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${meta.badge} w-fit`}>
+                              {meta.label} · {meta.reward}
+                            </span>
+                            {customer.user_id && (
+                              <span className="text-[10px] text-theme-text-muted tabular-nums">
+                                €{annualSpend.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/anno
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary">
                       {customer.codice_fiscale || '-'}
