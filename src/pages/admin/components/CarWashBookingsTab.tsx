@@ -3040,33 +3040,48 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         }
                       }
 
-                      // Send WhatsApp modification notification
-                      try {
-                        await fetch('/.netlify/functions/send-whatsapp-notification', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            booking: {
-                              id: editingBooking.id,
-                              service_type: 'car_wash',
-                              isEdit: true,
-                              service_name: updatedServiceName,
-                              customer_name: editingBooking.customer_name,
-                              customer_email: editingBooking.customer_email,
-                              customer_phone: editingBooking.customer_phone,
-                              appointment_date: editingBooking.appointment_date,
-                              price_total: updatedPrice,
-                              payment_status: editingBooking.payment_status,
-                              booking_details: {
-                                serviceName: updatedServiceName,
-                                amountPaid: updatedDetails.amountPaid || 0,
-                                notes: updatedDetails.notes || ''
+                      // Send WhatsApp modification notification AL CLIENTE (non all'admin).
+                      // Senza customPhone il sender cadeva su NOTIFICATION_PHONE env (admin).
+                      // Skip se il cliente non ha un telefono registrato.
+                      const _customerPhoneForNotify = editingBooking.customer_phone
+                        || editingBooking.booking_details?.customer?.phone
+                        || ''
+                      if (_customerPhoneForNotify) {
+                        try {
+                          await fetch('/.netlify/functions/send-whatsapp-notification', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              customPhone: _customerPhoneForNotify,
+                              isCustomerMessage: true,
+                              booking: {
+                                id: editingBooking.id,
+                                service_type: 'car_wash',
+                                isEdit: true,
+                                service_name: updatedServiceName,
+                                customer_name: editingBooking.customer_name,
+                                customer_email: editingBooking.customer_email,
+                                customer_phone: _customerPhoneForNotify,
+                                appointment_date: _apptIso || editingBooking.appointment_date,
+                                pickup_date: _apptIso || editingBooking.appointment_date,
+                                dropoff_date: _apptIso || editingBooking.appointment_date,
+                                vehicle_plate: editingBooking.vehicle_plate || editingBooking.booking_details?.vehicle?.plate || '',
+                                price_total: updatedPrice,
+                                payment_status: editingBooking.payment_status,
+                                booking_details: {
+                                  ...(editingBooking.booking_details || {}),
+                                  serviceName: updatedServiceName,
+                                  amountPaid: updatedDetails.amountPaid || 0,
+                                  notes: updatedDetails.notes || ''
+                                }
                               }
-                            }
+                            })
                           })
-                        })
-                      } catch (whatsappError) {
-                        console.error('WhatsApp notification failed:', whatsappError)
+                        } catch (whatsappError) {
+                          console.error('WhatsApp notification failed:', whatsappError)
+                        }
+                      } else {
+                        console.warn('[CarWash Edit] Skip invio modifica: cliente senza telefono')
                       }
 
                       toast.success('Prenotazione aggiornata')
