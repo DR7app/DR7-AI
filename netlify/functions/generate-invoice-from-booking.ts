@@ -25,12 +25,36 @@ export const handler: Handler = async (event) => {
         }
     }
 
-    // Require authentication
+    // Parse body FIRST so wallet/membership purchase callbacks (server-to-server
+    // from the website after a Nexi success) can take a capability-based path
+    // without a Supabase JWT / admin token. Booking flow still requires auth.
+    let body: Record<string, any> = {}
+    try { body = JSON.parse(event.body || '{}') } catch { /* keep {} */ }
+    const {
+        bookingId,
+        includeIVA = true,
+        extensionAmount,
+        includePenalties = false,
+        includeExtensions,
+        purchaseType,
+        purchaseId,
+        purchaseData,
+    } = body
+
+    // ── WALLET / CREDIT RECHARGE FATTURA (no auth required) ───────────────
+    // Fired by website/generate-fattura.ts as a proxy from nexi-callback.js
+    // when a wallet recharge payment succeeds. The purchaseId uuid + the
+    // payment_status='succeeded' row in credit_wallet_purchases act as the
+    // capability — no admin token needed (and website doesn't have one set).
+    if (purchaseType === 'wallet_purchase' && purchaseId) {
+        return handleWalletPurchaseFattura(purchaseId, purchaseData, !!includeIVA)
+    }
+
+    // Booking flow — require admin auth
     const { error: authErr } = await requireAuth(event)
     if (authErr) return authErr
 
     try {
-        const { bookingId, includeIVA = true, extensionAmount, includePenalties = false, includeExtensions } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return {
@@ -721,3 +745,203 @@ export const handler: Handler = async (event) => {
 }
 
 // Address parsing moved to xml-utils.ts
+
+// ── Wallet recharge fattura ──────────────────────────────────────────────
+// Separate code path from the booking flow. Called server-to-server from the
+// website's nexi-callback after a successful wallet top-up payment. Validates
+// the purchase by uuid + payment_status, idempotent via the 'booking_id'-less
+// row match on notes, creates a fattura with a single "Ricarica Credit Wallet"
+// line item, then attempts the SDI send.
+async function handleWalletPurchaseFattura(
+    purchaseId: string,
+    purchaseData: Record<string, any> | null | undefined,
+    includeIVA: boolean,
+): Promise<{ statusCode: number; body: string }> {
+    try {
+        // 1. Validate purchase + succeeded status
+        const { data: purchase, error: purchErr } = await supabase
+            .from('credit_wallet_purchases')
+            .select('*')
+            .eq('id', purchaseId)
+            .single()
+
+        if (purchErr || !purchase) {
+            return {
+                statusCode: 404,
+                body: JSON.stringify({ error: 'Wallet purchase not found', purchaseId })
+            }
+        }
+        if (purchase.payment_status !== 'succeeded') {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: `Purchase not paid (status: ${purchase.payment_status})` })
+            }
+        }
+
+        // 2. Idempotency: skip if a fattura already exists for this purchase
+        const notesMarker = `wallet_purchase:${purchaseId}`
+        const { data: existingFattura } = await supabase
+            .from('fatture')
+            .select('id, numero_fattura, sdi_status, aruba_invoice_id')
+            .eq('notes', notesMarker)
+            .maybeSingle()
+        if (existingFattura) {
+            console.log(`[Wallet Fattura] Already generated for ${purchaseId}: ${existingFattura.numero_fattura}`)
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ message: 'Fattura already exists', invoice: existingFattura, skipped: true })
+            }
+        }
+
+        // 3. Look up customer (fiscal data) — try id, user_id in customers_extended
+        const userId = purchase.user_id
+        let customerData: any = null
+        if (userId) {
+            const { data: byId } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .eq('id', userId)
+                .maybeSingle()
+            customerData = byId
+            if (!customerData) {
+                const { data: byUserId } = await supabase
+                    .from('customers_extended')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .maybeSingle()
+                customerData = byUserId
+            }
+        }
+
+        // 4. Amount (the customer paid `amount`, received credits including bonus)
+        const paidAmount = Number(purchase.amount ?? purchaseData?.amount ?? 0)
+        if (!(paidAmount > 0)) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'Invalid purchase amount (0 or missing)' })
+            }
+        }
+
+        // Admin-typed amounts in this project are GROSS (IVA included) per memory
+        const vatRate = includeIVA ? 22 : 0
+        const vatDivisor = includeIVA ? 1.22 : 1
+        const netUnit = Number((paidAmount / vatDivisor).toFixed(2))
+        const packageName = purchase.package_name || purchaseData?.packageName || 'Ricarica'
+        const bonusPct = Number(purchase.bonus_percentage ?? purchaseData?.bonusPercentage ?? 0)
+        const receivedAmount = Number(purchase.received_amount ?? purchaseData?.receivedAmount ?? paidAmount)
+
+        const descr = bonusPct > 0
+            ? `Ricarica Credit Wallet — ${packageName} (bonus ${bonusPct}% → €${receivedAmount.toFixed(2)} accreditati)`
+            : `Ricarica Credit Wallet — ${packageName}`
+
+        const items = [{
+            description: descr,
+            unit_price: netUnit,
+            quantity: 1,
+            vat_rate: vatRate,
+            total: netUnit,
+        }]
+        const subtotal = netUnit
+        const vatAmount = Number((netUnit * (vatRate / 100)).toFixed(2))
+        const exemptAmount = 0
+        const total = Number((subtotal + vatAmount).toFixed(2))
+
+        // 5. Generate unique invoice number (atomic RPC + retry loop, like booking flow)
+        const currentYear = new Date().getFullYear()
+        let invoiceNumber = ''
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const { data: seqResult, error: seqError } = await supabase.rpc('next_invoice_number', { p_year: currentYear })
+            if (seqError || seqResult == null) {
+                console.error('[Wallet Fattura] Sequence error:', seqError)
+                return { statusCode: 500, body: JSON.stringify({ error: 'Failed to generate invoice number' }) }
+            }
+            const candidate = `DR7-${currentYear}-${String(seqResult).padStart(4, '0')}`
+            const { data: exist } = await supabase.from('fatture').select('id').eq('numero_fattura', candidate).maybeSingle()
+            if (!exist) { invoiceNumber = candidate; break }
+        }
+        if (!invoiceNumber) {
+            return { statusCode: 500, body: JSON.stringify({ error: 'Failed to generate unique invoice number' }) }
+        }
+
+        // 6. Build customer address block
+        const addressParts = [
+            customerData?.indirizzo,
+            customerData?.codice_postale || customerData?.cap,
+            customerData?.citta,
+            customerData?.provincia,
+        ].filter(Boolean)
+        const fullAddress = addressParts.join(' ')
+
+        const customerName = customerData?.nome
+            ? `${customerData.nome} ${customerData.cognome || ''}`.trim()
+            : (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || 'Cliente')
+
+        const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+        const invoiceData: Record<string, any> = {
+            numero_fattura: invoiceNumber,
+            data_emissione: italyDate,
+            importo_totale: total,
+            stato: 'paid',
+            customer_name: customerName,
+            customer_address: fullAddress,
+            customer_phone: customerData?.telefono || customerData?.phone || '',
+            customer_email: customerData?.email || '',
+            customer_tax_code: customerData?.codice_fiscale || '',
+            customer_vat: customerData?.partita_iva || '',
+            booking_id: null,
+            items,
+            subtotal,
+            vat_amount: vatAmount,
+            exempt_amount: exemptAmount,
+            sdi_status: 'draft',
+            notes: notesMarker,
+            updated_at: new Date().toISOString(),
+        }
+
+        const { data: invoice, error: insertError } = await supabase
+            .from('fatture')
+            .insert([invoiceData])
+            .select()
+            .single()
+
+        if (insertError || !invoice) {
+            console.error('[Wallet Fattura] Insert failed:', insertError)
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ error: 'Failed to insert fattura', details: insertError?.message })
+            }
+        }
+
+        // 7. Attempt SDI send (best-effort — fattura stays as draft if it fails)
+        if (invoice.customer_tax_code) {
+            try {
+                const xmlContent = generateFatturaXML(invoice as any)
+                const filename = generateInvoiceFilename(invoice as any)
+                const arubaResult = await uploadInvoiceToAruba(xmlContent, filename)
+                await supabase.from('fatture').update({
+                    sdi_status: 'sending',
+                    aruba_invoice_id: arubaResult.id,
+                    xml_filename: filename,
+                    aruba_upload_filename: arubaResult.filename,
+                    sdi_sent_at: new Date().toISOString(),
+                }).eq('id', invoice.id)
+                console.log('[Wallet Fattura] Sent to SDI:', arubaResult.id)
+            } catch (sdiErr: any) {
+                console.error('[Wallet Fattura] SDI send failed (fattura saved as draft):', sdiErr?.message)
+            }
+        } else {
+            console.log('[Wallet Fattura] No customer tax code — skipping SDI')
+        }
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ success: true, invoice, message: 'Wallet purchase fattura generated' })
+        }
+    } catch (error: any) {
+        console.error('[Wallet Fattura] Unexpected error:', error)
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: error.message || 'Unexpected error', stack: error.stack })
+        }
+    }
+}
