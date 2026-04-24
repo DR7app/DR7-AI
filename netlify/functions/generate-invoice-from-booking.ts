@@ -828,8 +828,15 @@ async function handleWalletPurchaseFattura(
             }
         }
 
-        // 4. Amount (the customer paid `amount`, received credits including bonus)
-        const paidAmount = Number(purchase.amount ?? purchaseData?.amount ?? 0)
+        // 4. Amount — customer paid `recharge_amount` on card (GROSS, IVA included).
+        // `received_amount` is the credited total (recharge + package bonus) and is
+        // NOT what the customer paid, so it must not be used for the invoice.
+        const paidAmount = Number(
+            purchase.recharge_amount
+            ?? purchaseData?.amount
+            ?? purchaseData?.rechargeAmount
+            ?? 0
+        )
         if (!(paidAmount > 0)) {
             return {
                 statusCode: 400,
