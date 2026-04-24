@@ -71,24 +71,50 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       const { data: cust } = await supabase.from('customers_extended').select('*').eq('id', customerId).single()
       setCustomer(cust)
 
-      // Bookings — match by user_id, email, or customer name
+      // Bookings — UNION across all three linkage paths (user_id, email,
+      // booking_details.customer.customerId) and name fallback. Previously
+      // the code used sequential fallback which silently dropped bookings
+      // linked via email when the customer had a user_id set. For customers
+      // with activity across multiple channels (website + admin-created),
+      // that meant the Totale Speso / Noleggi / tier all under-reported.
       const userId = cust?.user_id
       const email = cust?.email
       const name = cust?.denominazione || (cust?.nome && cust?.cognome ? `${cust.nome} ${cust.cognome}` : null)
 
-      let allBookings: BookingRecord[] = []
+      const bookingQueries: Promise<{ data: BookingRecord[] | null }>[] = []
       if (userId) {
-        const { data } = await supabase.from('bookings').select('*').eq('user_id', userId).order('created_at', { ascending: false })
-        allBookings = data || []
+        bookingQueries.push(
+          supabase.from('bookings').select('*').eq('user_id', userId).order('created_at', { ascending: false }) as unknown as Promise<{ data: BookingRecord[] | null }>
+        )
+        bookingQueries.push(
+          supabase.from('bookings').select('*').eq('booking_details->customer->>customerId', userId).order('created_at', { ascending: false }) as unknown as Promise<{ data: BookingRecord[] | null }>
+        )
       }
-      if (allBookings.length === 0 && email) {
-        const { data } = await supabase.from('bookings').select('*').eq('customer_email', email).order('created_at', { ascending: false })
-        allBookings = data || []
+      if (email) {
+        bookingQueries.push(
+          supabase.from('bookings').select('*').ilike('customer_email', email).order('created_at', { ascending: false }) as unknown as Promise<{ data: BookingRecord[] | null }>
+        )
       }
-      if (allBookings.length === 0 && name) {
-        const { data } = await supabase.from('bookings').select('*').eq('customer_name', name).order('created_at', { ascending: false })
-        allBookings = data || []
+      // Only fall back to name match when we have no other identifier — name
+      // matching is noisy and can pick up unrelated bookings with the same
+      // customer_name string.
+      if (!userId && !email && name) {
+        bookingQueries.push(
+          supabase.from('bookings').select('*').eq('customer_name', name).order('created_at', { ascending: false }) as unknown as Promise<{ data: BookingRecord[] | null }>
+        )
       }
+
+      const results = await Promise.all(bookingQueries)
+      const seen = new Set<string>()
+      const allBookings: BookingRecord[] = []
+      for (const { data } of results) {
+        for (const b of (data || [])) {
+          if (!b.id || seen.has(b.id)) continue
+          seen.add(b.id)
+          allBookings.push(b)
+        }
+      }
+      allBookings.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       setBookings(allBookings)
 
       // Wallet — check by user_id first, fallback to email lookup
