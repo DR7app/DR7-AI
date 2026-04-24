@@ -798,7 +798,7 @@ async function handleWalletPurchaseFattura(
         const { data: existingFattura } = await supabase
             .from('fatture')
             .select('id, numero_fattura, sdi_status, aruba_invoice_id')
-            .eq('notes', notesMarker)
+            .eq('note', notesMarker)
             .maybeSingle()
         if (existingFattura) {
             console.log(`[Wallet Fattura] Already generated for ${purchaseId}: ${existingFattura.numero_fattura}`)
@@ -916,7 +916,7 @@ async function handleWalletPurchaseFattura(
             vat_amount: vatAmount,
             exempt_amount: exemptAmount,
             sdi_status: 'draft',
-            notes: notesMarker,
+            note: notesMarker,
             updated_at: new Date().toISOString(),
         }
 
