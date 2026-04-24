@@ -4096,8 +4096,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
+          // Centralina Pro: prezzo per-veicolo-categoria + per-fascia.
+          // getUnlimitedKmPriceRes(vehicle, tier) legge rental_config.unlimited_km[category][tier]
+          // invece del fallback globale CFG_UNLIMITED_KM (che ignora la categoria).
           unlimited_km_price_per_day: formData.unlimited_km
-            ? (customerTier?.tier === 'TIER_2' ? CFG_UNLIMITED_KM.TIER_2 : CFG_UNLIMITED_KM.TIER_1)
+            ? getUnlimitedKmPriceRes(selectedVehicle, customerTier?.tier)
             : null,
           // Second driver
           second_driver_fee_per_day: formData.has_second_driver && customerTier?.tier
