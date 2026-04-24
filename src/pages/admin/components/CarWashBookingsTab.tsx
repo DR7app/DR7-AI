@@ -2996,8 +2996,42 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       // date + time (Rome local → UTC). Prima: il date input settava solo
                       // "YYYY-MM-DD" → Supabase lo parsava come mezzanotte UTC → in Rome
                       // mostrava 02:00 (DST). Ora combiniamo date+time correttamente.
-                      const _dateStr = (editingBooking.appointment_date || '').slice(0, 10)
-                      const _timeStr = editingBooking.appointment_time || '00:00'
+                      //
+                      // Se l'admin apre il modale e salva senza toccare i campi, la data
+                      // può essere YYYY-MM-DD o un ISO completo, e l'ora può essere:
+                      //   - "HH:MM" (dal form)
+                      //   - "HH:MM:SS" (dalla colonna TIME di PG)
+                      //   - vuota/null → fallback: estrai ora dall'ISO appointment_date in Rome
+                      let _dateStr = (editingBooking.appointment_date || '').trim()
+                      if (/^\d{4}-\d{2}-\d{2}T/.test(_dateStr)) {
+                        // Se l'ISO ha un timestamp, normalizza la data a Rome TZ per non
+                        // "scivolare" al giorno prima/dopo per via del fuso orario.
+                        try {
+                          const _tmp = new Date(_dateStr)
+                          if (!isNaN(_tmp.getTime())) {
+                            _dateStr = _tmp.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+                          } else {
+                            _dateStr = _dateStr.slice(0, 10)
+                          }
+                        } catch { _dateStr = _dateStr.slice(0, 10) }
+                      } else {
+                        _dateStr = _dateStr.slice(0, 10)
+                      }
+
+                      let _timeStr = (editingBooking.appointment_time || '').trim()
+                      if (!_timeStr && editingBooking.appointment_date) {
+                        try {
+                          const _t = new Date(editingBooking.appointment_date)
+                          if (!isNaN(_t.getTime())) {
+                            _timeStr = _t.toLocaleTimeString('it-IT', {
+                              hour: '2-digit', minute: '2-digit', hour12: false,
+                              timeZone: 'Europe/Rome',
+                            })
+                          }
+                        } catch { /* leave empty */ }
+                      }
+                      if (!_timeStr) _timeStr = '00:00'
+
                       let _apptIso: string | null = null
                       if (_dateStr) {
                         const [_y, _m, _d] = _dateStr.split('-').map(Number)
