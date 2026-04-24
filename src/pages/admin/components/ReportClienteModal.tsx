@@ -41,6 +41,8 @@ interface BookingRecord { id: string; vehicle_name: string; vehicle_plate?: stri
 
 interface WalletTx { id: string; amount: number; type?: string; transaction_type?: string; description: string; created_at: string; balance_after?: number }
 
+interface WalletRecharge { id: string; amount: number; payment_status: string; created_at: string; completed_at?: string }
+
 interface DocRecord { id: string; document_type: string; status: string; uploaded_at: string }
 
 type TabId = 'stato' | 'anagrafica' | 'storico' | 'economica'
@@ -50,6 +52,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [bookings, setBookings] = useState<BookingRecord[]>([])
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
+  const [walletRecharges, setWalletRecharges] = useState<WalletRecharge[]>([])
   const [documents, setDocuments] = useState<DocRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabId>('stato')
@@ -103,6 +106,18 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
         setWalletBalance(bal?.balance || 0)
         const { data: txs } = await supabase.from('credit_transactions').select('*').eq('user_id', walletUserId).order('created_at', { ascending: false }).limit(50)
         setWalletTxs(txs || [])
+
+        // Wallet recharges (card-paid wallet top-ups). These — NOT the
+        // booking payments made FROM the wallet — are what counts toward
+        // DR7 Club tier, otherwise reward-funded bookings would compound
+        // the tier.
+        const { data: purchases } = await supabase
+          .from('credit_wallet_purchases')
+          .select('id, amount, payment_status, created_at, completed_at')
+          .eq('user_id', walletUserId)
+          .order('created_at', { ascending: false })
+          .limit(200)
+        setWalletRecharges(purchases || [])
       }
 
       // DR7 Club membership check
@@ -168,27 +183,56 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   }, [bookings])
 
   // DR7 Club tier — same thresholds used by website (utils/dr7club.ts).
-  // Computed from paid bookings in the last 12 months.
+  // Counts real CARD money entering DR7: card-paid bookings + card-paid
+  // wallet recharges. Bookings paid from the wallet must NOT be counted,
+  // otherwise the recharge that funded them would compound the tier.
   const clubTier = useMemo(() => {
     const oneYearAgo = new Date()
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-    const annualSpend = bookings
+    const validStatuses = new Set(['succeeded', 'paid', 'completed'])
+
+    // Recharges (credit_wallet_purchases) — by definition card-paid.
+    const recentRecharges = walletRecharges.filter(r => {
+      if (!validStatuses.has(r.payment_status)) return false
+      const when = r.completed_at || r.created_at
+      return when ? new Date(when) >= oneYearAgo : false
+    })
+    const rechargeCents = recentRecharges.reduce((s, r) => s + (r.amount || 0), 0)
+    const rechargeCount = recentRecharges.length
+
+    // Card-paid bookings only (exclude wallet / cash / bonifico / gift).
+    const isCardPayment = (pm?: string) => {
+      const m = (pm || '').toLowerCase()
+      if (!m) return false
+      if (m.includes('wallet') || m.includes('credito') || m.includes('credit_wallet')) return false
+      if (m.includes('contanti') || m.includes('cash')) return false
+      if (m.includes('bonifico') || m.includes('wire') || m.includes('bank')) return false
+      if (m.includes('gift')) return false
+      return m.includes('card') || m.includes('carta') || m.includes('nexi')
+        || m.includes('stripe') || m.includes('pos') || m.includes('pay by link')
+        || m.includes('bancomat') || m.includes('debit')
+    }
+    const cardBookingCents = bookings
       .filter(b => {
-        const ps = b.payment_status
-        if (ps !== 'paid' && ps !== 'succeeded' && ps !== 'completed') return false
-        const bookedAt = b.booked_at || b.created_at
-        return bookedAt ? new Date(bookedAt) >= oneYearAgo : false
+        if (!validStatuses.has(b.payment_status)) return false
+        if (!isCardPayment(b.payment_method)) return false
+        const when = b.booked_at || b.created_at
+        return when ? new Date(when) >= oneYearAgo : false
       })
-      .reduce((s, b) => s + (b.price_total || 0), 0) / 100
+      .reduce((s, b) => s + (b.price_total || 0), 0)
+
+    const annualSpend = (cardBookingCents + rechargeCents) / 100
+    const cardBookingSpend = cardBookingCents / 100
+    const rechargeSpend = rechargeCents / 100
 
     if (annualSpend >= 10000) {
-      return { tier: 'signature', label: 'Signature', reward: 4, annualSpend, nextThreshold: null, badge: 'bg-amber-500/20 text-amber-400 border-amber-500/50' }
+      return { tier: 'signature', label: 'Signature', reward: 4, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: null, badge: 'bg-amber-500/20 text-amber-400 border-amber-500/50' }
     }
     if (annualSpend >= 3000) {
-      return { tier: 'black', label: 'Black', reward: 3, annualSpend, nextThreshold: 10000, badge: 'bg-purple-500/20 text-purple-400 border-purple-500/50' }
+      return { tier: 'black', label: 'Black', reward: 3, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 10000, badge: 'bg-purple-500/20 text-purple-400 border-purple-500/50' }
     }
-    return { tier: 'access', label: 'Access', reward: 2, annualSpend, nextThreshold: 3000, badge: 'bg-gray-500/20 text-gray-300 border-gray-500/50' }
-  }, [bookings])
+    return { tier: 'access', label: 'Access', reward: 2, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 3000, badge: 'bg-gray-500/20 text-gray-300 border-gray-500/50' }
+  }, [bookings, walletRecharges])
 
   // Risk / reliability score (0-10)
   const riskScore = useMemo(() => {
@@ -295,7 +339,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 {isDR7Club && <span className="px-2 py-1 rounded-full text-xs font-bold bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/50">DR7 Club</span>}
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-bold border ${clubTier.badge}`}
-                  title={`Spesa ultimi 12 mesi: ${fmtEur(clubTier.annualSpend)}${clubTier.nextThreshold ? ` · ${fmtEur(clubTier.nextThreshold - clubTier.annualSpend)} al livello successivo` : ''}`}
+                  title={`Pagato con carta ultimi 12 mesi: ${fmtEur(clubTier.annualSpend)} (prenotazioni ${fmtEur(clubTier.cardBookingSpend)} + ricariche ${fmtEur(clubTier.rechargeSpend)} × ${clubTier.rechargeCount})${clubTier.nextThreshold ? ` · ${fmtEur(clubTier.nextThreshold - clubTier.annualSpend)} al livello successivo` : ''}`}
                 >
                   Livello {clubTier.label} · {clubTier.reward}%
                 </span>
@@ -342,8 +386,11 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[11px] uppercase tracking-wider text-theme-text-muted">Spesa annuale</div>
+                    <div className="text-[11px] uppercase tracking-wider text-theme-text-muted">Pagato con carta · 12m</div>
                     <div className="text-lg font-bold text-theme-text-primary tabular-nums">{fmtEur(clubTier.annualSpend)}</div>
+                    <div className="text-[11px] text-theme-text-muted tabular-nums">
+                      Prenotazioni {fmtEur(clubTier.cardBookingSpend)} · Ricariche {fmtEur(clubTier.rechargeSpend)} ({clubTier.rechargeCount})
+                    </div>
                   </div>
                 </div>
                 {nextThr ? (

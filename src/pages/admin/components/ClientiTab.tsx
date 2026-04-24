@@ -88,19 +88,50 @@ export default function ClientiTab() {
     try {
       const oneYearAgo = new Date()
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-      const { data, error } = await supabase
+      // DR7 Club tier = real CARD money into DR7 over last 12 months:
+      // card-paid bookings + card-paid wallet recharges. Wallet-paid
+      // bookings are excluded (the recharge that funded them already
+      // counted).
+      const map = new Map<string, number>()
+
+      const isCardPayment = (pm?: string | null) => {
+        const m = (pm || '').toLowerCase()
+        if (!m) return false
+        if (m.includes('wallet') || m.includes('credito') || m.includes('credit_wallet')) return false
+        if (m.includes('contanti') || m.includes('cash')) return false
+        if (m.includes('bonifico') || m.includes('wire') || m.includes('bank')) return false
+        if (m.includes('gift')) return false
+        return m.includes('card') || m.includes('carta') || m.includes('nexi')
+          || m.includes('stripe') || m.includes('pos') || m.includes('pay by link')
+          || m.includes('bancomat') || m.includes('debit')
+      }
+
+      const { data: bkRows, error: bkErr } = await supabase
         .from('bookings')
-        .select('user_id, price_total')
+        .select('user_id, price_total, payment_method')
         .not('user_id', 'is', null)
         .in('status', ['completed', 'completata', 'confirmed', 'active'])
         .in('payment_status', ['paid', 'completed', 'succeeded'])
         .gte('booked_at', oneYearAgo.toISOString())
-      if (error) throw error
-      const map = new Map<string, number>()
-      for (const b of (data || [])) {
+      if (bkErr) throw bkErr
+      for (const b of (bkRows || [])) {
         if (!b.user_id) continue
+        if (!isCardPayment(b.payment_method)) continue
         map.set(b.user_id, (map.get(b.user_id) || 0) + (b.price_total || 0))
       }
+
+      const { data: rcRows, error: rcErr } = await supabase
+        .from('credit_wallet_purchases')
+        .select('user_id, amount, payment_status, created_at')
+        .not('user_id', 'is', null)
+        .in('payment_status', ['succeeded', 'paid', 'completed'])
+        .gte('created_at', oneYearAgo.toISOString())
+      if (rcErr) throw rcErr
+      for (const r of (rcRows || [])) {
+        if (!r.user_id) continue
+        map.set(r.user_id, (map.get(r.user_id) || 0) + (r.amount || 0))
+      }
+
       // Convert cents → euros on the way out.
       const eurMap = new Map<string, number>()
       for (const [uid, cents] of map) eurMap.set(uid, cents / 100)
