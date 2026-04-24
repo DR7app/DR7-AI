@@ -4648,13 +4648,37 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         .catch(err => console.error('⚠️ Failed to sync cauzione:', err))
 
-      // Generate Contract PDF — AWAIT so signing link below finds the contract
-      logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)')
-      try {
-        await handleGenerateContract(insertedBooking, false)
-        logger.log('[Auto-Gen] ✅ Contract generated successfully')
-      } catch (err) {
-        console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
+      // When MODIFYING a booking and the new totals leave a balance owed
+      // (pending / unpaid / partial-with-remainder), DEFER contract regeneration
+      // and the signing link until AFTER the customer pays the delta. The
+      // nexi-payment-callback booking_topup branch regenerates the contract
+      // and fires signature-init once payment lands. Previously the edit
+      // immediately sent the updated contract for signing even though the
+      // customer still owed money — the admin's ask was to wait for payment.
+      //
+      // Scope is deliberately narrow: only the edit-with-balance case defers.
+      // Every other flow (new paid booking, new pending booking, edit that
+      // is already fully paid, Segna Pagato) keeps its original behaviour so
+      // yesterday's broader rework cannot reintroduce regressions.
+      const editTotalCentsForGate = insertedBooking?.price_total || eurToCents(formData.total_amount || '0')
+      const editPaidCentsForGate = formData.amount_paid ? eurToCents(formData.amount_paid) : 0
+      const editHasBalanceOwed = !!editingId && (
+        formData.payment_status === 'pending'
+        || formData.payment_status === 'unpaid'
+        || (formData.payment_status === 'partial' && editPaidCentsForGate < editTotalCentsForGate)
+      )
+
+      if (editHasBalanceOwed) {
+        logger.log('[Auto-Gen] Edit leaves balance owed — deferring contract regen + signing link until payment callback')
+      } else {
+        // Generate Contract PDF — AWAIT so signing link below finds the contract
+        logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)')
+        try {
+          await handleGenerateContract(insertedBooking, false)
+          logger.log('[Auto-Gen] ✅ Contract generated successfully')
+        } catch (err) {
+          console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
+        }
       }
 
       // Detect if payment status just changed from unpaid → paid (on edit)
@@ -4865,6 +4889,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const wasOriginallyPaid = !!editingId
         && PAID_STATUSES.includes(editingOriginalPaymentStatus || '')
       const shouldSendSigningLink = !!insertedBooking?.id
+        && !editHasBalanceOwed  // defer signing link until after payment on edits with balance
         && (currentlyPaid || wasOriginallyPaid)
       if (shouldSendSigningLink) {
         try {
