@@ -140,12 +140,21 @@ function calculateExperienceCost(services: Record<string, number>, rentalDays: n
   return Math.round(total * 100) / 100
 }
 
-function getSforoForVehicle(vehicleName: string): string {
+function getSforoForVehicle(vehicleName: string, overlay?: ReturnType<typeof buildConfigOverlay>): string {
   const lower = (vehicleName || '').toLowerCase()
+  // Preferenza 1: regole sforo da Centralina Pro (overlay.sforoDefaults costruito
+  // da rental_config.sforo_km.category — es. supercars 0.89, urban 0.30, aziendali 0.49).
+  if (overlay?.sforoDefaults) {
+    for (const rule of overlay.sforoDefaults) {
+      if (rule.match(lower)) return rule.sforo
+    }
+  }
+  // Preferenza 2: regole hardcoded (attualmente vuote; mantenute per compat future).
   for (const rule of SFORO_DEFAULTS) {
     if (rule.match(lower)) return rule.sforo
   }
-  return DEFAULT_SFORO
+  // Fallback finale: _global da Centralina, poi hardcoded.
+  return overlay?.defaultSforo || DEFAULT_SFORO
 }
 
 
@@ -1363,7 +1372,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!formData.unlimited_km) {
         // Priority: config vehicle override > config category > old name-matching fallback
         const vehicleOverride = getVehicleSforoOverride(rentalConfig, formData.vehicle_id)
-        const newSforo = vehicleOverride || getSforoForVehicle(selectedVehicle.display_name)
+        const newSforo = vehicleOverride || getSforoForVehicle(selectedVehicle.display_name, configOverlay)
         setFormData(prev => ({ ...prev, km_overage_fee: newSforo }))
       }
     }
@@ -6786,7 +6795,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   onChange={(e) => {
                     const checked = e.target.checked
                     const vehicleName = vehicles.find(v => v.id === formData.vehicle_id)?.display_name || ''
-                    const sforo = getVehicleSforoOverride(rentalConfig, formData.vehicle_id) || getSforoForVehicle(vehicleName)
+                    const sforo = getVehicleSforoOverride(rentalConfig, formData.vehicle_id) || getSforoForVehicle(vehicleName, configOverlay)
                     setFormData(prev => ({ ...prev, unlimited_km: checked, km_overage_fee: checked ? '0' : sforo }))
                   }}
                   className="w-4 h-4 text-blue-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-blue-500"
@@ -6798,6 +6807,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     if (selectedVehicle) {
                       const tier = customerTier?.tier
                       const price = getUnlimitedKmPriceRes(selectedVehicle, tier)
+                      // Diagnostic log — verifica quale prezzo stiamo leggendo da Centralina
+                      console.log('[ReservationsTab] KM Illimitati lookup', {
+                        vehicleName: selectedVehicle.display_name,
+                        category: selectedVehicle.category,
+                        customerTier: tier,
+                        priceReturned: price,
+                        rentalConfigUnlimitedExotic: rentalConfig?.unlimited_km?.exotic,
+                      })
                       if (price === 0) return null // Urban: KM already unlimited
                       return ` (+€${price}/giorno)`
                     }
