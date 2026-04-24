@@ -227,7 +227,7 @@ export default function AdminDashboard() {
         {/* Logo + Close */}
         <div className="px-5 py-4 bg-white flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/rentora-logo.jpeg" alt="Rentora" className="h-10 w-auto" />
+            <img src="/rentora-logo.jpeg" alt="Rentora" className="h-10 w-auto" style={{ mixBlendMode: 'multiply' }} />
             <div>
               <h1 className="text-[#1a2332] font-semibold text-sm tracking-wide">Operating Platform</h1>
               <p className="text-[#1a2332]/50 text-[10px] tracking-widest">A.I.</p>

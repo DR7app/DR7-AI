@@ -67,7 +67,12 @@ export default function Login() {
 
           <div className="relative">
             <div className="flex justify-center mb-4">
-              <img src="/rentora-logo.jpeg" alt="Rentora" className="h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain" />
+              <img
+                src="/rentora-logo.jpeg"
+                alt="Rentora"
+                className="h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain"
+                style={{ mixBlendMode: 'multiply' }}
+              />
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
