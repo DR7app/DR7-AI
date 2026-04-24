@@ -14,7 +14,18 @@ interface ProCategory { id: string; label: string }
 interface ProFascia { id: string; label: string; description: string; min_age: number | ''; max_age: number | ''; min_license_years: number | '' }
 interface ProInsuranceOption { id: string; name: string; daily_price: number | ''; mandatory_deposit: number | ''; deductible_fixed: number | ''; deductible_percent: number | '' }
 interface ProInsuranceCategoryConfig { id: string; label: string; mode: 'per_fascia' | 'all_tiers'; byFascia: Record<string, ProInsuranceOption[]>; all: ProInsuranceOption[] }
-interface ProKmConfig { id: string; label: string; table: Record<string, number | ''>; extraPerDay: number | ''; sforo: number | ''; unlimitedPerDay: number | '' }
+interface ProKmConfig {
+  id: string;
+  label: string;
+  table: Record<string, number | ''>;
+  extraPerDay: number | '';
+  sforo: number | '';
+  unlimitedPerDay: number | '';
+  // Per-fascia unlimited KM pricing (A = TIER_2 / Fascia A, B = TIER_1 / Fascia B).
+  // Present when admin sets "Per fascia" mode in Centralina Pro.
+  unlimitedMode?: 'all_tiers' | 'per_fascia';
+  unlimitedByFascia?: Record<string, number | ''>;
+}
 interface ProDepositOption { id: string; label: string; amount: number | ''; surcharge_per_day: number | '' }
 interface ProDepositFasciaConfig { residente: ProDepositOption[]; non_residente: ProDepositOption[] }
 interface ProExperienceService { id: string; name: string; price: number | ''; unit: 'per_day' | 'per_hour' | 'per_item' | 'flat'; is_active: boolean; tier_only: string }
@@ -157,8 +168,21 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
         sforoCat[dbCat] = num(kmCfg.sforo)
       }
 
-      // Unlimited KM price
-      if (num(kmCfg.unlimitedPerDay) > 0) {
+      // Unlimited KM price: per-fascia (A=TIER_2, B=TIER_1) oppure tutte le fasce.
+      // Fix: prima leggeva solo unlimitedPerDay, ignorando unlimitedByFascia — il
+      // risultato era che la modalità "Per fascia" in Centralina Pro non arrivava
+      // al booking admin (supercar Fascia B sempre 189 invece di 289).
+      const unlMode = kmCfg.unlimitedMode || 'all_tiers'
+      if (unlMode === 'per_fascia' && kmCfg.unlimitedByFascia) {
+        const faA = num(kmCfg.unlimitedByFascia.A)
+        const faB = num(kmCfg.unlimitedByFascia.B)
+        const entry: Record<string, { per_day: number }> = {}
+        if (faA > 0) entry.TIER_2 = { per_day: faA }
+        if (faB > 0) entry.TIER_1 = { per_day: faB }
+        if (Object.keys(entry).length > 0) {
+          unlimitedKm[dbCat] = entry as (typeof unlimitedKm)[string]
+        }
+      } else if (num(kmCfg.unlimitedPerDay) > 0) {
         unlimitedKm[dbCat] = { _all_tiers: { per_day: num(kmCfg.unlimitedPerDay) } }
       }
     }
