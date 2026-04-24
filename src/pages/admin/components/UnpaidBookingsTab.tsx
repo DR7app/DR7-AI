@@ -268,11 +268,31 @@ export default function UnpaidBookingsTab() {
         .or('booking_details->penalties.neq.[],booking_details->danni.neq.[]')
         .order('created_at', { ascending: false })
 
+      // Tertiary fetch: completed/completata bookings where the booking
+      // itself is STILL UNPAID. Car wash bookings get auto-flagged
+      // 'completed' once the appointment time passes; if the customer paid
+      // cash on-site and the admin hasn't clicked "Segna Pagato" yet, the
+      // row has status='completed' + payment_status='pending' — and
+      // without this fetch it disappears from "In attesa di pagamento"
+      // because the primary query excludes completed statuses.
+      const { data: terminalUnpaid } = await supabase
+        .from('bookings')
+        .select('*')
+        .in('status', ['completed', 'completata'])
+        .not('payment_status', 'in', '(paid,completed,succeeded)')
+        .neq('customer_name', 'Lavaggio Rientro')
+        .order('created_at', { ascending: false })
+
       const seen = new Set((activeData || []).map(b => b.id))
       const merged = [
         ...(activeData || []),
         ...((terminalWithItems || []).filter(b => !seen.has(b.id))),
       ]
+      for (const b of (terminalUnpaid || [])) {
+        if (!seen.has(b.id) && !merged.some(m => m.id === b.id)) {
+          merged.push(b)
+        }
+      }
       const data = merged
       const error = null as null | { message: string }
 
