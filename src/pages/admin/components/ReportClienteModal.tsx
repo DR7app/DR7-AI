@@ -280,7 +280,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       return { tier: 'signature', label: 'Signature', reward: 4, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: null, badge: 'bg-amber-500/20 text-amber-400 border-amber-500/50' }
     }
     if (annualSpend >= 3000) {
-      return { tier: 'black', label: 'Black', reward: 3, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 10000, badge: 'bg-purple-500/20 text-purple-400 border-purple-500/50' }
+      return { tier: 'black', label: 'Black', reward: 3, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 10000, badge: 'bg-zinc-900 text-white border-zinc-900' }
     }
     return { tier: 'access', label: 'Access', reward: 2, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 3000, badge: 'bg-gray-500/20 text-gray-300 border-gray-500/50' }
   }, [bookings, walletRecharges, customer?.user_id])
@@ -422,7 +422,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
             : 100
           const progressColor =
             clubTier.tier === 'signature' ? 'bg-amber-400' :
-            clubTier.tier === 'black' ? 'bg-purple-400' : 'bg-dr7-gold'
+            clubTier.tier === 'black' ? 'bg-zinc-900' : 'bg-dr7-gold'
           return (
             <div className="px-6 py-4 border-b border-theme-border shrink-0">
               <div className="rounded-xl border border-theme-border bg-theme-bg-secondary p-4">
@@ -468,7 +468,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     <div className="text-[10px] text-theme-text-muted">€0 – €2.999</div>
                     <div className="text-[10px] text-theme-text-muted">2% reward</div>
                   </div>
-                  <div className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === 'black' ? 'border-purple-400/60 bg-purple-500/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
+                  <div className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === 'black' ? 'border-zinc-900/70 bg-zinc-900/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
                     <div className="text-[11px] font-semibold text-theme-text-primary">Black</div>
                     <div className="text-[10px] text-theme-text-muted">€3.000 – €9.999</div>
                     <div className="text-[10px] text-theme-text-muted">3% reward</div>
