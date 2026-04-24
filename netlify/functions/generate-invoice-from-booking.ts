@@ -50,9 +50,24 @@ export const handler: Handler = async (event) => {
         return handleWalletPurchaseFattura(purchaseId, purchaseData, !!includeIVA)
     }
 
-    // Booking flow — require admin auth
-    const { error: authErr } = await requireAuth(event)
-    if (authErr) return authErr
+    // Booking flow — require admin auth UNLESS this is a server-to-server
+    // callback from the website's nexi-callback.js. The website doesn't have
+    // ADMIN_API_TOKEN set in its Netlify env, so every booking fattura call
+    // from there was failing 401 — silently — and no website Nexi booking
+    // was getting a fattura. Capability check: a real bookingId whose row
+    // has payment_status IN (paid/completed/succeeded) IS a valid caller.
+    // The endpoint still rejects unpaid bookings below (line ~57) and is
+    // idempotent against existing invoices, so this can't double-charge.
+    const hasAuthHeader = !!(event.headers?.authorization || event.headers?.Authorization)
+    if (hasAuthHeader) {
+        const { error: authErr } = await requireAuth(event)
+        if (authErr) return authErr
+    } else if (!bookingId) {
+        // No auth and no bookingId — reject (no legitimate use case)
+        return { statusCode: 401, body: JSON.stringify({ error: 'Missing Authorization header' }) }
+    }
+    // else: no auth but has bookingId → proceed; the payment_status guard
+    // below (line ~57) is the capability check.
 
     try {
 
