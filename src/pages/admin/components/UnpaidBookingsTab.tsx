@@ -338,7 +338,11 @@ export default function UnpaidBookingsTab() {
       const isPaid = (s: string) => s === 'paid' || s === 'completed' || s === 'succeeded'
 
       const unpaidBookings = (data || []).filter(booking => {
-        if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') return true
+        // Any non-paid status means the booking is unpaid. Previously the
+        // filter only matched 'pending'/'unpaid', so Prime Wash rows with
+        // 'partial', 'nexi_pay_by_link', empty string or NULL were invisible
+        // even though they still owe money.
+        if (!isPaid(booking.payment_status)) return true
 
         const extensions = booking.booking_details?.extension_history || []
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1755,8 +1759,12 @@ export default function UnpaidBookingsTab() {
 
       // Only show in Noleggio/PW column if the main booking payment is unpaid
       // (or has unpaid extensions). If the booking is paid but has only unpaid
-      // danni/penali, it belongs ONLY in those columns.
-      const mainIsUnpaid = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
+      // danni/penali, it belongs ONLY in those columns. "Unpaid" = anything
+      // not in (paid, completed, succeeded) so partial / nexi_pay_by_link /
+      // empty status all surface correctly.
+      const mainIsUnpaid = !(booking.payment_status === 'paid'
+        || booking.payment_status === 'completed'
+        || booking.payment_status === 'succeeded')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
 
