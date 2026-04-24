@@ -317,6 +317,75 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
           </button>
         </div>
 
+        {/* DR7 Club tier progress — same panel as the customer sees on website */}
+        {(() => {
+          const nextLabel = clubTier.nextThreshold === 10000 ? 'Signature' : 'Black'
+          const nextThr = clubTier.nextThreshold
+          const prevThr = clubTier.tier === 'access' ? 0 : clubTier.tier === 'black' ? 3000 : 10000
+          const progress = nextThr
+            ? Math.min(100, Math.max(0, Math.round(((clubTier.annualSpend - prevThr) / (nextThr - prevThr)) * 100)))
+            : 100
+          const progressColor =
+            clubTier.tier === 'signature' ? 'bg-amber-400' :
+            clubTier.tier === 'black' ? 'bg-purple-400' : 'bg-dr7-gold'
+          return (
+            <div className="px-6 py-4 border-b border-theme-border shrink-0">
+              <div className="rounded-xl border border-theme-border bg-theme-bg-secondary p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${clubTier.badge}`}>
+                      {clubTier.label}
+                    </span>
+                    <div>
+                      <div className="text-sm font-semibold text-theme-text-primary">Livello {clubTier.label}</div>
+                      <div className="text-xs text-theme-text-muted">Reward: {clubTier.reward}% su ogni noleggio</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[11px] uppercase tracking-wider text-theme-text-muted">Spesa annuale</div>
+                    <div className="text-lg font-bold text-theme-text-primary tabular-nums">{fmtEur(clubTier.annualSpend)}</div>
+                  </div>
+                </div>
+                {nextThr ? (
+                  <>
+                    <div className="flex justify-between text-[11px] text-theme-text-muted mb-1">
+                      <span>Livello {clubTier.label}</span>
+                      <span>Livello {nextLabel} ({fmtEur(nextThr)})</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-theme-bg-tertiary overflow-hidden">
+                      <div className={`h-full ${progressColor} transition-all`} style={{ width: `${progress}%` }} />
+                    </div>
+                    <div className="text-xs text-theme-text-muted mt-2 text-center">
+                      Mancano <span className="font-semibold text-theme-text-primary">{fmtEur(Math.max(0, nextThr - clubTier.annualSpend))}</span> per il livello successivo
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-amber-400 text-center font-medium">
+                    🏆 Livello massimo raggiunto
+                  </div>
+                )}
+                <div className="grid grid-cols-3 gap-2 mt-4">
+                  <div className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === 'access' ? 'border-gray-400/60 bg-gray-500/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
+                    <div className="text-[11px] font-semibold text-theme-text-primary">Access</div>
+                    <div className="text-[10px] text-theme-text-muted">€0 – €2.999</div>
+                    <div className="text-[10px] text-theme-text-muted">2% reward</div>
+                  </div>
+                  <div className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === 'black' ? 'border-purple-400/60 bg-purple-500/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
+                    <div className="text-[11px] font-semibold text-theme-text-primary">Black</div>
+                    <div className="text-[10px] text-theme-text-muted">€3.000 – €9.999</div>
+                    <div className="text-[10px] text-theme-text-muted">3% reward</div>
+                  </div>
+                  <div className={`rounded-lg border px-2 py-1.5 text-center ${clubTier.tier === 'signature' ? 'border-amber-400/60 bg-amber-500/10' : 'border-theme-border bg-theme-bg-tertiary/40'}`}>
+                    <div className="text-[11px] font-semibold text-theme-text-primary">Signature</div>
+                    <div className="text-[10px] text-theme-text-muted">da €10.000</div>
+                    <div className="text-[10px] text-theme-text-muted">4% reward</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 px-6 py-4 border-b border-theme-border shrink-0">
           <div className="bg-theme-bg-secondary rounded-xl p-3 border border-theme-border">
