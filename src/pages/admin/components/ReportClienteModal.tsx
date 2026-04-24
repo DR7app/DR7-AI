@@ -57,7 +57,6 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabId>('stato')
   const [isDR7Club, setIsDR7Club] = useState(false)
-  const [clubSignupAt, setClubSignupAt] = useState<string | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -147,17 +146,6 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
           .order('created_at', { ascending: false })
           .limit(200)
         setWalletRecharges(purchases || [])
-
-        // DR7 Club signup date — drives the tier window (tier counts spend
-        // only from the day the customer joined the club, not rolling 12mo).
-        const { data: firstSub } = await supabase
-          .from('dr7_club_subscriptions')
-          .select('started_at, created_at')
-          .eq('user_id', walletUserId)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle()
-        setClubSignupAt(firstSub?.started_at || firstSub?.created_at || null)
       }
 
       // DR7 Club membership check
@@ -223,21 +211,12 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   }, [bookings])
 
   // DR7 Club tier — same thresholds used by website (utils/dr7club.ts).
-  // Counts real CARD money entering DR7 SINCE the customer joined DR7 Club
-  // (NOT a rolling 12-month window). Bookings paid from the wallet must
-  // NOT be counted, otherwise the recharge that funded them would compound
-  // the tier.
+  // Counts real CARD money entering DR7 in the rolling last 12 months.
+  // Bookings paid from the wallet must NOT be counted, otherwise the
+  // recharge that funded them would compound the tier.
   const clubTier = useMemo(() => {
-    // Window = from DR7 Club signup to now. If no signup recorded, fall back
-    // to rolling 12 months so non-club customers still see some activity —
-    // but for club members it uses their real signup date.
-    let cutoff: Date
-    if (clubSignupAt) {
-      cutoff = new Date(clubSignupAt)
-    } else {
-      cutoff = new Date()
-      cutoff.setFullYear(cutoff.getFullYear() - 1)
-    }
+    const cutoff = new Date()
+    cutoff.setFullYear(cutoff.getFullYear() - 1)
     const validStatuses = new Set(['succeeded', 'paid', 'completed'])
 
     // Recharges (credit_wallet_purchases.recharge_amount = euros paid on card)
@@ -293,7 +272,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       return { tier: 'black', label: 'Black', reward: 3, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 10000, badge: 'bg-purple-500/20 text-purple-400 border-purple-500/50' }
     }
     return { tier: 'access', label: 'Access', reward: 2, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 3000, badge: 'bg-gray-500/20 text-gray-300 border-gray-500/50' }
-  }, [bookings, walletRecharges, clubSignupAt])
+  }, [bookings, walletRecharges])
 
   // Risk / reliability score (0-10)
   const riskScore = useMemo(() => {
@@ -400,7 +379,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 {isDR7Club && <span className="px-2 py-1 rounded-full text-xs font-bold bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/50">DR7 Club</span>}
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-bold border ${clubTier.badge}`}
-                  title={`Pagato con carta ${clubSignupAt ? `da iscrizione DR7 Club (${new Date(clubSignupAt).toLocaleDateString('it-IT')})` : 'ultimi 12 mesi'}: ${fmtEur(clubTier.annualSpend)} (prenotazioni ${fmtEur(clubTier.cardBookingSpend)} + ricariche ${fmtEur(clubTier.rechargeSpend)} × ${clubTier.rechargeCount})${clubTier.nextThreshold ? ` · ${fmtEur(clubTier.nextThreshold - clubTier.annualSpend)} al livello successivo` : ''}`}
+                  title={`Pagato con carta ultimi 12 mesi: ${fmtEur(clubTier.annualSpend)} (prenotazioni ${fmtEur(clubTier.cardBookingSpend)} + ricariche ${fmtEur(clubTier.rechargeSpend)} × ${clubTier.rechargeCount})${clubTier.nextThreshold ? ` · ${fmtEur(clubTier.nextThreshold - clubTier.annualSpend)} al livello successivo` : ''}`}
                 >
                   Livello {clubTier.label} · {clubTier.reward}%
                 </span>
@@ -447,9 +426,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[11px] uppercase tracking-wider text-theme-text-muted">
-                      Pagato con carta · {clubSignupAt ? `da iscrizione (${new Date(clubSignupAt).toLocaleDateString('it-IT')})` : '12m'}
-                    </div>
+                    <div className="text-[11px] uppercase tracking-wider text-theme-text-muted">Pagato con carta · 12m</div>
                     <div className="text-lg font-bold text-theme-text-primary tabular-nums">{fmtEur(clubTier.annualSpend)}</div>
                     <div className="text-[11px] text-theme-text-muted tabular-nums">
                       Prenotazioni {fmtEur(clubTier.cardBookingSpend)} · Ricariche {fmtEur(clubTier.rechargeSpend)} ({clubTier.rechargeCount})
