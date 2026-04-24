@@ -167,6 +167,29 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     }
   }, [bookings])
 
+  // DR7 Club tier — same thresholds used by website (utils/dr7club.ts).
+  // Computed from paid bookings in the last 12 months.
+  const clubTier = useMemo(() => {
+    const oneYearAgo = new Date()
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+    const annualSpend = bookings
+      .filter(b => {
+        const ps = b.payment_status
+        if (ps !== 'paid' && ps !== 'succeeded' && ps !== 'completed') return false
+        const bookedAt = b.booked_at || b.created_at
+        return bookedAt ? new Date(bookedAt) >= oneYearAgo : false
+      })
+      .reduce((s, b) => s + (b.price_total || 0), 0) / 100
+
+    if (annualSpend >= 10000) {
+      return { tier: 'signature', label: 'Signature', reward: 4, annualSpend, nextThreshold: null, badge: 'bg-amber-500/20 text-amber-400 border-amber-500/50' }
+    }
+    if (annualSpend >= 3000) {
+      return { tier: 'black', label: 'Black', reward: 3, annualSpend, nextThreshold: 10000, badge: 'bg-purple-500/20 text-purple-400 border-purple-500/50' }
+    }
+    return { tier: 'access', label: 'Access', reward: 2, annualSpend, nextThreshold: 3000, badge: 'bg-gray-500/20 text-gray-300 border-gray-500/50' }
+  }, [bookings])
+
   // Risk / reliability score (0-10)
   const riskScore = useMemo(() => {
     let score = 10
@@ -266,10 +289,16 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
               {(customer.nome?.[0] || customer.denominazione?.[0] || '?').toUpperCase()}
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xl font-bold text-theme-text-primary">{customerName}</h2>
                 {statusBadge(customer.status_cliente)}
                 {isDR7Club && <span className="px-2 py-1 rounded-full text-xs font-bold bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/50">DR7 Club</span>}
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-bold border ${clubTier.badge}`}
+                  title={`Spesa ultimi 12 mesi: ${fmtEur(clubTier.annualSpend)}${clubTier.nextThreshold ? ` · ${fmtEur(clubTier.nextThreshold - clubTier.annualSpend)} al livello successivo` : ''}`}
+                >
+                  Livello {clubTier.label} · {clubTier.reward}%
+                </span>
               </div>
               {customer.tipo_cliente === 'azienda' && customer.denominazione && (
                 <div className="text-sm text-theme-text-muted">{customer.denominazione}</div>
