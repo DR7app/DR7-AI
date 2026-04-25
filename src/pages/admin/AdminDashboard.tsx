@@ -241,10 +241,10 @@ export default function AdminDashboard() {
         {/* Logo + Close */}
         <div className="px-5 py-4 flex items-center justify-between" style={{ backgroundColor: '#FCFCFC' }}>
           <div className="flex items-center gap-3">
-            <img src="/rentora-logo.jpeg" alt="Rentora" className="h-10 w-auto" />
+            <img src="/rentora-logo.jpeg" alt="Rentora" className="h-16 w-auto" />
             <div>
-              <h1 className="text-[#1a2332] font-semibold text-sm tracking-wide">Operating Platform</h1>
-              <p className="text-[#1a2332]/50 text-[10px] tracking-widest">A.I.</p>
+              <h1 className="text-[#1a2332] font-semibold text-[10px] tracking-wide">Operating Platform</h1>
+              <p className="text-[#1a2332]/50 text-[8px] tracking-widest">A.I.</p>
             </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="text-[#1a2332]/40 hover:text-[#1a2332] min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg -mr-2">
