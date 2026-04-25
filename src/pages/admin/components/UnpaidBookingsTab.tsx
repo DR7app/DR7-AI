@@ -394,13 +394,35 @@ export default function UnpaidBookingsTab() {
 
   async function updatePaymentStatus(bookingId: string, newStatus: string) {
     try {
+      // When marking paid, also set amount_paid = price_total so the calendar
+      // detail panel (and any other consumer that computes remaining as
+      // total - amount_paid) shows zero owed. Without this, "segna pagato"
+      // left amount_paid stale and the panel kept showing the gap as
+      // "da saldare".
+      const updatePayload: Record<string, unknown> = {
+        payment_status: newStatus,
+        status: newStatus === 'paid' ? 'confirmed' : 'pending',
+        updated_at: new Date().toISOString()
+      }
+      if (newStatus === 'paid') {
+        const { data: bookingRow } = await supabase
+          .from('bookings')
+          .select('price_total, booking_details')
+          .eq('id', bookingId)
+          .maybeSingle()
+        const totalCents = Number(bookingRow?.price_total || 0)
+        if (totalCents > 0) {
+          updatePayload.amount_paid = totalCents
+          const newDetails = {
+            ...(bookingRow?.booking_details || {}),
+            amountPaid: totalCents,
+          }
+          updatePayload.booking_details = newDetails
+        }
+      }
       const { error } = await supabase
         .from('bookings')
-        .update({
-          payment_status: newStatus,
-          status: newStatus === 'paid' ? 'confirmed' : 'pending',
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', bookingId)
 
       if (error) throw error

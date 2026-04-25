@@ -52,12 +52,18 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
 
   // Raw values (in cents)
   const totalCents = booking.price_total || 0
-  // If payment_status indicates paid but amount_paid is missing, treat total as paid
+  // payment_status='paid' is authoritative — when set, treat the booking as
+  // fully paid even if amount_paid lags behind price_total (e.g. admin used
+  // "segna pagato" which only flips the status, or the total grew via an
+  // edit after segna pagato). Without this, the panel falsely shows a
+  // residual "€X da saldare" on a booking the admin already settled.
   const bookingPaidStatus = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
-  const paidCents = booking.amount_paid ||
-    booking.booking_details?.amount_paid ||
-    booking.booking_details?.amountPaid ||
-    (bookingPaidStatus ? totalCents : 0)
+  const paidCents = bookingPaidStatus
+    ? totalCents
+    : (booking.amount_paid ||
+       booking.booking_details?.amount_paid ||
+       booking.booking_details?.amountPaid ||
+       0)
 
   // Convert to euros for calculations
   const totalEur = centsToEuros(totalCents)
