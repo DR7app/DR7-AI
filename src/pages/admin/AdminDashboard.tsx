@@ -178,8 +178,64 @@ export default function AdminDashboard() {
 
   // Reusable style helpers for nav
   const sidebarItemClass = (isActive: boolean) =>
-    `w-full text-left px-3 py-1.5 flex items-center rounded-lg text-[11px] font-medium transition-colors select-none touch-manipulation ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044] active:bg-[#243044]'}`
-  const sidebarSectionClass = 'px-3 pt-3 pb-0.5 text-[9px] font-bold text-white/30 uppercase tracking-wider'
+    `w-full text-left pl-6 pr-3 py-1.5 flex items-center rounded-lg text-[11px] font-medium transition-colors select-none touch-manipulation ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044] active:bg-[#243044]'}`
+
+  // Collapsible section state — clicking a section header opens/closes its
+  // sub-tabs accordion-style. The section containing the current activeTab
+  // is auto-expanded so the user can always see where they are.
+  const SECTION_TABS: Record<string, string[]> = {
+    'Noleggio': ['reservations', 'calendar', 'cauzioni', 'contratto', 'gestione-danni', 'gestione-multe', 'cargos', 'trustera'],
+    'Prime Wash': ['carwash', 'carwash-calendar', 'carwash-catalog'],
+    'Flotta': ['vehicles', 'fleet', 'gps-keyless'],
+    'Clienti': ['customers', 'unpaid', 'customer-wallet', 'site-users'],
+    'Marketing': ['birthdays', 'reviews', 'marketing-pro', 'referral', 'codice-sconto'],
+    'Strumenti': ['scanner', 'bulk-import', 'nexi'],
+    'Report': ['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-penali-danni', 'report-preventivi', 'operatori', 'dashboard-kpi'],
+    'Comunicazione': ['com-email', 'com-pec', 'com-whatsapp', 'com-sms', 'com-chiamate', 'com-chatgpt', 'com-aruba'],
+    'Altro': ['scadenze', 'fattura'],
+  }
+  const sectionForTab = (tab: string): string | null => {
+    for (const [section, tabs] of Object.entries(SECTION_TABS)) {
+      if (tabs.includes(tab)) return section
+    }
+    return null
+  }
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
+    const initial = new Set<string>()
+    const s = sectionForTab(activeTab)
+    if (s) initial.add(s)
+    return initial
+  })
+  useEffect(() => {
+    const s = sectionForTab(activeTab)
+    if (s) {
+      setExpandedSections(prev => prev.has(s) ? prev : new Set([...prev, s]))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev)
+      if (next.has(section)) next.delete(section)
+      else next.add(section)
+      return next
+    })
+  }
+  const renderSectionHeader = (name: string) => {
+    const isOpen = expandedSections.has(name)
+    return (
+      <button
+        type="button"
+        onClick={() => toggleSection(name)}
+        className="w-full flex items-center justify-between px-3 pt-3 pb-0.5 text-[10px] font-bold text-white/40 hover:text-white/70 uppercase tracking-wider transition-colors"
+      >
+        <span>{name}</span>
+        <svg className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+    )
+  }
 
   // Mobile tab labels
   const tabLabels: Record<string, string> = {
@@ -253,74 +309,110 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {/* Navigation */}
+        {/* Navigation — collapsible sections (accordion) */}
         <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto scrollbar-thin">
-          <div className={sidebarSectionClass}>Noleggio</div>
-          <button onClick={() => { setActiveTab('reservations'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reservations')}>Prenotazioni</button>
-          <button onClick={() => { setActiveTab('calendar'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'calendar')}>Calendario</button>
-          <button onClick={() => { setActiveTab('cauzioni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
-          <button onClick={() => { setActiveTab('contratto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'contratto')}>Contratti</button>
-          <button onClick={() => { setActiveTab('gestione-danni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gestione-danni')}>Danni & Penali</button>
-          <button onClick={() => { setActiveTab('gestione-multe'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gestione-multe')}>Multe</button>
-          <button onClick={() => { setActiveTab('cargos'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'cargos')}>Cargos</button>
-          <button onClick={() => { setActiveTab('trustera'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'trustera')}>Trustera</button>
-
-          <div className={sidebarSectionClass}>Prime Wash</div>
-          <button onClick={() => { setActiveTab('carwash'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash')}>Prenotazioni</button>
-          <button onClick={() => { setActiveTab('carwash-calendar'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
-          <button onClick={() => { setActiveTab('carwash-catalog'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash-catalog')}>Catalogo</button>
-
-          <div className={sidebarSectionClass}>Flotta</div>
-          <button onClick={() => { setActiveTab('vehicles'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'vehicles')}>Veicoli</button>
-          <button onClick={() => { setActiveTab('fleet'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
-          <button onClick={() => { setActiveTab('gps-keyless'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
-
-          <div className={sidebarSectionClass}>Clienti</div>
-          <button onClick={() => { setActiveTab('customers'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customers')}>Lead</button>
-          <button onClick={() => { setActiveTab('unpaid'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
-          <button onClick={() => { setActiveTab('customer-wallet'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customer-wallet')}>Credit Wallet</button>
-          <button onClick={() => { setActiveTab('site-users'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'site-users')}>Iscritti al Sito</button>
-
-          <div className={sidebarSectionClass}>Marketing</div>
-          <button onClick={() => { setActiveTab('birthdays'); setSidebarOpen(false); }} className={`${sidebarItemClass(activeTab === 'birthdays')} flex items-center justify-between`}>
-            <span>Compleanni</span>
-            {birthdayCount > 0 && (
-              <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{birthdayCount}</span>
-            )}
-          </button>
-          <button onClick={() => { setActiveTab('reviews'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reviews')}>Recensioni</button>
-          <button onClick={() => { setActiveTab('marketing-pro'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'marketing-pro')}>Messaggi di Sistema Pro</button>
-          <button onClick={() => { setActiveTab('referral'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'referral')}>Referral</button>
-          <button onClick={() => { setActiveTab('codice-sconto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
-
-          <div className={sidebarSectionClass}>Strumenti</div>
-          <button onClick={() => { setActiveTab('scanner'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scanner')}>Scanner</button>
-          <button onClick={() => { setActiveTab('bulk-import'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
-          <button onClick={() => { setActiveTab('nexi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'nexi')}>Nexi</button>
-
-          <div className={sidebarSectionClass}>Report</div>
-          <button onClick={() => { setActiveTab('report-noleggio'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
-          <button onClick={() => { setActiveTab('report-lavaggio'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
-          <button onClick={() => { setActiveTab('report-clienti'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-clienti')}>Clienti</button>
-          <button onClick={() => { setActiveTab('report-penali-danni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-penali-danni')}>Penali & Danni</button>
-          <button onClick={() => { setActiveTab('report-preventivi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-preventivi')}>Preventivi</button>
-          {adminRole === 'superadmin' && (
-            <button onClick={() => { setActiveTab('operatori'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'operatori')}>Operatori</button>
+          {renderSectionHeader('Noleggio')}
+          {expandedSections.has('Noleggio') && (
+            <>
+              <button onClick={() => { setActiveTab('reservations'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reservations')}>Prenotazioni</button>
+              <button onClick={() => { setActiveTab('calendar'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'calendar')}>Calendario</button>
+              <button onClick={() => { setActiveTab('cauzioni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
+              <button onClick={() => { setActiveTab('contratto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'contratto')}>Contratti</button>
+              <button onClick={() => { setActiveTab('gestione-danni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gestione-danni')}>Danni & Penali</button>
+              <button onClick={() => { setActiveTab('gestione-multe'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gestione-multe')}>Multe</button>
+              <button onClick={() => { setActiveTab('cargos'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'cargos')}>Cargos</button>
+              <button onClick={() => { setActiveTab('trustera'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'trustera')}>Trustera</button>
+            </>
           )}
-          <button onClick={() => { setActiveTab('dashboard-kpi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
 
-          <div className={sidebarSectionClass}>Comunicazione</div>
-          <button onClick={() => { setActiveTab('com-email'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-email')}>E-mail</button>
-          <button onClick={() => { setActiveTab('com-pec'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-pec')}>PEC</button>
-          <button onClick={() => { setActiveTab('com-whatsapp'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-whatsapp')}>WhatsApp</button>
-          <button onClick={() => { setActiveTab('com-sms'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-sms')}>SMS</button>
-          <button onClick={() => { setActiveTab('com-chiamate'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
-          <button onClick={() => { setActiveTab('com-chatgpt'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
-          <button onClick={() => { setActiveTab('com-aruba'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-aruba')}>Aruba</button>
+          {renderSectionHeader('Prime Wash')}
+          {expandedSections.has('Prime Wash') && (
+            <>
+              <button onClick={() => { setActiveTab('carwash'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash')}>Prenotazioni</button>
+              <button onClick={() => { setActiveTab('carwash-calendar'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
+              <button onClick={() => { setActiveTab('carwash-catalog'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash-catalog')}>Catalogo</button>
+            </>
+          )}
 
-          <div className={sidebarSectionClass}>Altro</div>
-          <button onClick={() => { setActiveTab('scadenze'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scadenze')}>Scadenze</button>
-          <button onClick={() => { setActiveTab('fattura'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fattura')}>Fattura</button>
+          {renderSectionHeader('Flotta')}
+          {expandedSections.has('Flotta') && (
+            <>
+              <button onClick={() => { setActiveTab('vehicles'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'vehicles')}>Veicoli</button>
+              <button onClick={() => { setActiveTab('fleet'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
+              <button onClick={() => { setActiveTab('gps-keyless'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
+            </>
+          )}
+
+          {renderSectionHeader('Clienti')}
+          {expandedSections.has('Clienti') && (
+            <>
+              <button onClick={() => { setActiveTab('customers'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customers')}>Lead</button>
+              <button onClick={() => { setActiveTab('unpaid'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
+              <button onClick={() => { setActiveTab('customer-wallet'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customer-wallet')}>Credit Wallet</button>
+              <button onClick={() => { setActiveTab('site-users'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'site-users')}>Iscritti al Sito</button>
+            </>
+          )}
+
+          {renderSectionHeader('Marketing')}
+          {expandedSections.has('Marketing') && (
+            <>
+              <button onClick={() => { setActiveTab('birthdays'); setSidebarOpen(false); }} className={`${sidebarItemClass(activeTab === 'birthdays')} flex items-center justify-between`}>
+                <span>Compleanni</span>
+                {birthdayCount > 0 && (
+                  <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{birthdayCount}</span>
+                )}
+              </button>
+              <button onClick={() => { setActiveTab('reviews'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reviews')}>Recensioni</button>
+              <button onClick={() => { setActiveTab('marketing-pro'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'marketing-pro')}>Messaggi di Sistema Pro</button>
+              <button onClick={() => { setActiveTab('referral'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'referral')}>Referral</button>
+              <button onClick={() => { setActiveTab('codice-sconto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
+            </>
+          )}
+
+          {renderSectionHeader('Strumenti')}
+          {expandedSections.has('Strumenti') && (
+            <>
+              <button onClick={() => { setActiveTab('scanner'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scanner')}>Scanner</button>
+              <button onClick={() => { setActiveTab('bulk-import'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
+              <button onClick={() => { setActiveTab('nexi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'nexi')}>Nexi</button>
+            </>
+          )}
+
+          {renderSectionHeader('Report')}
+          {expandedSections.has('Report') && (
+            <>
+              <button onClick={() => { setActiveTab('report-noleggio'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
+              <button onClick={() => { setActiveTab('report-lavaggio'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
+              <button onClick={() => { setActiveTab('report-clienti'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-clienti')}>Clienti</button>
+              <button onClick={() => { setActiveTab('report-penali-danni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-penali-danni')}>Penali & Danni</button>
+              <button onClick={() => { setActiveTab('report-preventivi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-preventivi')}>Preventivi</button>
+              {adminRole === 'superadmin' && (
+                <button onClick={() => { setActiveTab('operatori'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'operatori')}>Operatori</button>
+              )}
+              <button onClick={() => { setActiveTab('dashboard-kpi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
+            </>
+          )}
+
+          {renderSectionHeader('Comunicazione')}
+          {expandedSections.has('Comunicazione') && (
+            <>
+              <button onClick={() => { setActiveTab('com-email'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-email')}>E-mail</button>
+              <button onClick={() => { setActiveTab('com-pec'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-pec')}>PEC</button>
+              <button onClick={() => { setActiveTab('com-whatsapp'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-whatsapp')}>WhatsApp</button>
+              <button onClick={() => { setActiveTab('com-sms'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-sms')}>SMS</button>
+              <button onClick={() => { setActiveTab('com-chiamate'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
+              <button onClick={() => { setActiveTab('com-chatgpt'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
+              <button onClick={() => { setActiveTab('com-aruba'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-aruba')}>Aruba</button>
+            </>
+          )}
+
+          {renderSectionHeader('Altro')}
+          {expandedSections.has('Altro') && (
+            <>
+              <button onClick={() => { setActiveTab('scadenze'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scadenze')}>Scadenze</button>
+              <button onClick={() => { setActiveTab('fattura'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fattura')}>Fattura</button>
+            </>
+          )}
         </nav>
 
         {/* Bottom actions */}
