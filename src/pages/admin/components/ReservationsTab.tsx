@@ -4544,9 +4544,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const dropoffD = new Date(returnDateTime)
           // Resolve insurance display name from Centralina Pro options instead
           // of leaking the raw ID (e.g. "xtfcs9w3") into the customer message.
+          // InsuranceOpt shape is { id, label, pricePerDay }.
           const insuranceKaskoOpts = vehicle ? getInsuranceOptions(vehicle, customerTier?.tier, configOverlay, rentalConfig) : []
           const insuranceMatch = insuranceKaskoOpts.find(k => k.id === formData.insurance_option)
-          const insuranceDisplayName = insuranceMatch?.name || formData.insurance_option || 'Kasko Base'
+          const insuranceDisplayName = insuranceMatch?.label || formData.insurance_option || 'Kasko Base'
           const templateVars = {
             '{customer_name}': customerInfo?.full_name || 'Cliente',
             '{nome}': (customerInfo?.full_name || 'Cliente').split(' ')[0],
