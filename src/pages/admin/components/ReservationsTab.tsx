@@ -5667,7 +5667,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     required
                     min={editingId ? undefined : new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })}
                     value={formData.pickup_date}
-                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, pickup_date: v })) }}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setFormData(prev => {
+                        // Default Data Riconsegna to pickup + 1 day when it is
+                        // empty or no longer ≥ pickup. Leave it alone if the
+                        // admin already chose a later date.
+                        let nextReturn = prev.return_date
+                        if (v) {
+                          const needsAuto = !prev.return_date || prev.return_date <= v
+                          if (needsAuto) {
+                            const d = new Date(`${v}T00:00:00`)
+                            d.setDate(d.getDate() + 1)
+                            nextReturn = d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+                          }
+                        }
+                        return { ...prev, pickup_date: v, return_date: nextReturn }
+                      })
+                    }}
                   />
                   <Select
                     label="Ora Ritiro"
