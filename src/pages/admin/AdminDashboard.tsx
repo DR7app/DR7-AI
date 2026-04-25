@@ -301,7 +301,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Sidebar — max-w-[280px] on mobile to leave space for closing */}
-      <aside className={`fixed inset-y-0 left-0 z-[70] w-[85vw] max-w-[280px] bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-[70] w-[60vw] max-w-[180px] bg-[#1a2332] flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo + Close */}
         <div className="px-5 py-4 flex items-center justify-between" style={{ backgroundColor: '#FCFCFC' }}>
           <div className="flex items-center gap-3">
