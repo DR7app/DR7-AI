@@ -240,6 +240,8 @@ export default function AdminDashboard() {
       { tab: 'scadenze', label: 'Scadenze' },
       { tab: 'fattura', label: 'Fattura' },
       { tab: 'nexi', label: 'Nexi' },
+    ] },
+    { name: 'Centralina Pro', tabs: [
       { tab: 'centralina-pro', label: 'Centralina Pro' },
     ] },
   ]
