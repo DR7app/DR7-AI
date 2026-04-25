@@ -174,65 +174,75 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Reusable style helpers for nav
+  // Sidebar item style — used for both per-section sidebar buttons and the
+  // in-page horizontal sub-tab bar.
   const sidebarItemClass = (isActive: boolean) =>
-    `w-full text-left pl-6 pr-3 py-1.5 flex items-center rounded-lg text-[11px] font-medium transition-colors select-none touch-manipulation ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044] active:bg-[#243044]'}`
+    `w-full text-left px-3 py-2 flex items-center justify-between rounded-lg text-[12px] font-semibold transition-colors select-none touch-manipulation ${isActive ? 'bg-dr7-gold text-white' : 'text-white/70 hover:text-white hover:bg-[#243044] active:bg-[#243044]'}`
 
-  // Collapsible section state — clicking a section header opens/closes its
-  // sub-tabs accordion-style. The section containing the current activeTab
-  // is auto-expanded so the user can always see where they are.
-  const SECTION_TABS: Record<string, string[]> = {
-    'Noleggio': ['reservations', 'calendar', 'cauzioni', 'contratto', 'gestione-danni', 'gestione-multe', 'cargos', 'trustera'],
-    'Prime Wash': ['carwash', 'carwash-calendar', 'carwash-catalog'],
-    'Flotta': ['vehicles', 'fleet', 'gps-keyless'],
-    'Clienti': ['customers', 'unpaid', 'customer-wallet', 'site-users'],
-    'Marketing': ['birthdays', 'reviews', 'marketing-pro', 'referral', 'codice-sconto'],
-    'Report': ['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-penali-danni', 'report-preventivi', 'operatori', 'dashboard-kpi'],
-    'Comunicazione': ['com-email', 'com-pec', 'com-whatsapp', 'com-sms', 'com-chiamate', 'com-chatgpt', 'com-aruba'],
-    'Amministrazione': ['scadenze', 'fattura', 'nexi'],
-  }
-  const sectionForTab = (tab: string): string | null => {
-    for (const [section, tabs] of Object.entries(SECTION_TABS)) {
-      if (tabs.includes(tab)) return section
-    }
-    return null
-  }
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
-    const initial = new Set<string>()
-    const s = sectionForTab(activeTab)
-    if (s) initial.add(s)
-    return initial
-  })
-  useEffect(() => {
-    const s = sectionForTab(activeTab)
-    if (s) {
-      setExpandedSections(prev => prev.has(s) ? prev : new Set([...prev, s]))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => {
-      const next = new Set(prev)
-      if (next.has(section)) next.delete(section)
-      else next.add(section)
-      return next
-    })
-  }
-  const renderSectionHeader = (name: string) => {
-    const isOpen = expandedSections.has(name)
-    return (
-      <button
-        type="button"
-        onClick={() => toggleSection(name)}
-        className="w-full flex items-center justify-between px-3 pt-3 pb-0.5 text-[10px] font-bold text-white/40 hover:text-white/70 uppercase tracking-wider transition-colors"
-      >
-        <span>{name}</span>
-        <svg className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-    )
-  }
+  // Section structure. Each section's first tab is the default landing page
+  // when the user clicks the section in the sidebar. Sub-tabs render as a
+  // horizontal pill bar at the top of the content area.
+  type SubTab = { tab: TabType; label: string; superadminOnly?: boolean }
+  const SECTIONS: { name: string; tabs: SubTab[] }[] = [
+    { name: 'Noleggio', tabs: [
+      { tab: 'reservations', label: 'Prenotazioni' },
+      { tab: 'report-preventivi', label: 'Preventivi' },
+      { tab: 'calendar', label: 'Calendario' },
+      { tab: 'cauzioni', label: 'Cauzioni' },
+      { tab: 'contratto', label: 'Contratti' },
+      { tab: 'gestione-danni', label: 'Danni & Penali' },
+      { tab: 'gestione-multe', label: 'Multe' },
+      { tab: 'cargos', label: 'Cargos' },
+      { tab: 'trustera', label: 'Trustera' },
+    ] },
+    { name: 'Prime Wash', tabs: [
+      { tab: 'carwash', label: 'Prenotazioni' },
+      { tab: 'carwash-calendar', label: 'Calendario' },
+      { tab: 'carwash-catalog', label: 'Catalogo' },
+    ] },
+    { name: 'Flotta', tabs: [
+      { tab: 'vehicles', label: 'Veicoli' },
+      { tab: 'fleet', label: 'Gestione Flotta' },
+      { tab: 'gps-keyless', label: 'GPS & Keyless' },
+    ] },
+    { name: 'Clienti', tabs: [
+      { tab: 'customers', label: 'Lead' },
+      { tab: 'unpaid', label: 'In attesa di pagamento' },
+      { tab: 'customer-wallet', label: 'Credit Wallet' },
+      { tab: 'site-users', label: 'Iscritti al Sito' },
+    ] },
+    { name: 'Marketing', tabs: [
+      { tab: 'birthdays', label: 'Compleanni' },
+      { tab: 'reviews', label: 'Recensioni' },
+      { tab: 'marketing-pro', label: 'Messaggi di Sistema Pro' },
+      { tab: 'referral', label: 'Referral' },
+      { tab: 'codice-sconto', label: 'Codice Sconto' },
+    ] },
+    { name: 'Report', tabs: [
+      { tab: 'report-noleggio', label: 'Noleggio' },
+      { tab: 'report-lavaggio', label: 'Lavaggio' },
+      { tab: 'report-clienti', label: 'Clienti' },
+      { tab: 'report-penali-danni', label: 'Penali & Danni' },
+      { tab: 'operatori', label: 'Operatori', superadminOnly: true },
+      { tab: 'dashboard-kpi', label: 'Dashboard' },
+    ] },
+    { name: 'Comunicazione', tabs: [
+      { tab: 'com-email', label: 'E-mail' },
+      { tab: 'com-pec', label: 'PEC' },
+      { tab: 'com-whatsapp', label: 'WhatsApp' },
+      { tab: 'com-sms', label: 'SMS' },
+      { tab: 'com-chiamate', label: 'Chiamate' },
+      { tab: 'com-chatgpt', label: 'Chat GPT' },
+      { tab: 'com-aruba', label: 'Aruba' },
+    ] },
+    { name: 'Amministrazione', tabs: [
+      { tab: 'scadenze', label: 'Scadenze' },
+      { tab: 'fattura', label: 'Fattura' },
+      { tab: 'nexi', label: 'Nexi' },
+    ] },
+  ]
+  const sectionForActiveTab = SECTIONS.find(s => s.tabs.some(t => t.tab === activeTab)) || null
+  const isSectionActive = (sectionName: string) => sectionForActiveTab?.name === sectionName
 
   // Mobile tab labels
   const tabLabels: Record<string, string> = {
@@ -304,102 +314,38 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {/* Navigation — collapsible sections (accordion) */}
-        <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto scrollbar-thin">
-          {renderSectionHeader('Noleggio')}
-          {expandedSections.has('Noleggio') && (
-            <>
-              <button onClick={() => { setActiveTab('reservations'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reservations')}>Prenotazioni</button>
-              <button onClick={() => { setActiveTab('calendar'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'calendar')}>Calendario</button>
-              <button onClick={() => { setActiveTab('cauzioni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'cauzioni')}>Cauzioni</button>
-              <button onClick={() => { setActiveTab('contratto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'contratto')}>Contratti</button>
-              <button onClick={() => { setActiveTab('gestione-danni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gestione-danni')}>Danni & Penali</button>
-              <button onClick={() => { setActiveTab('gestione-multe'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gestione-multe')}>Multe</button>
-              <button onClick={() => { setActiveTab('cargos'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'cargos')}>Cargos</button>
-              <button onClick={() => { setActiveTab('trustera'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'trustera')}>Trustera</button>
-            </>
-          )}
-
-          {renderSectionHeader('Prime Wash')}
-          {expandedSections.has('Prime Wash') && (
-            <>
-              <button onClick={() => { setActiveTab('carwash'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash')}>Prenotazioni</button>
-              <button onClick={() => { setActiveTab('carwash-calendar'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash-calendar')}>Calendario</button>
-              <button onClick={() => { setActiveTab('carwash-catalog'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'carwash-catalog')}>Catalogo</button>
-            </>
-          )}
-
-          {renderSectionHeader('Flotta')}
-          {expandedSections.has('Flotta') && (
-            <>
-              <button onClick={() => { setActiveTab('vehicles'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'vehicles')}>Veicoli</button>
-              <button onClick={() => { setActiveTab('fleet'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fleet')}>Gestione Flotta</button>
-              <button onClick={() => { setActiveTab('gps-keyless'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'gps-keyless')}>GPS & Keyless</button>
-            </>
-          )}
-
-          {renderSectionHeader('Clienti')}
-          {expandedSections.has('Clienti') && (
-            <>
-              <button onClick={() => { setActiveTab('customers'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customers')}>Lead</button>
-              <button onClick={() => { setActiveTab('unpaid'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'unpaid')}>In attesa di pagamento</button>
-              <button onClick={() => { setActiveTab('customer-wallet'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'customer-wallet')}>Credit Wallet</button>
-              <button onClick={() => { setActiveTab('site-users'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'site-users')}>Iscritti al Sito</button>
-            </>
-          )}
-
-          {renderSectionHeader('Marketing')}
-          {expandedSections.has('Marketing') && (
-            <>
-              <button onClick={() => { setActiveTab('birthdays'); setSidebarOpen(false); }} className={`${sidebarItemClass(activeTab === 'birthdays')} flex items-center justify-between`}>
-                <span>Compleanni</span>
-                {birthdayCount > 0 && (
+        {/* Navigation — one entry per section. Click switches activeTab to
+            the first sub-tab of that section. The in-page horizontal tab
+            bar (rendered above the content) lets the user pick a sub-tab. */}
+        <nav className="flex-1 py-3 px-3 space-y-1 overflow-y-auto scrollbar-thin">
+          {SECTIONS.map(section => {
+            // Skip whole sections whose only tab is superadmin-restricted and
+            // the current admin isn't superadmin.
+            const visibleTabs = section.tabs.filter(t => !t.superadminOnly || adminRole === 'superadmin')
+            if (visibleTabs.length === 0) return null
+            const firstTab = visibleTabs[0].tab
+            const sectionActive = isSectionActive(section.name)
+            const showBirthdayBadge = section.name === 'Marketing' && birthdayCount > 0
+            return (
+              <button
+                key={section.name}
+                onClick={() => {
+                  // Switching sections lands the user on the first tab. If
+                  // they're already inside this section, keep their current
+                  // sub-tab so the click is a no-op (the in-page tab bar is
+                  // how they navigate within the section).
+                  if (!sectionActive) setActiveTab(firstTab)
+                  setSidebarOpen(false)
+                }}
+                className={sidebarItemClass(sectionActive)}
+              >
+                <span>{section.name}</span>
+                {showBirthdayBadge && (
                   <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{birthdayCount}</span>
                 )}
               </button>
-              <button onClick={() => { setActiveTab('reviews'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'reviews')}>Recensioni</button>
-              <button onClick={() => { setActiveTab('marketing-pro'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'marketing-pro')}>Messaggi di Sistema Pro</button>
-              <button onClick={() => { setActiveTab('referral'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'referral')}>Referral</button>
-              <button onClick={() => { setActiveTab('codice-sconto'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'codice-sconto')}>Codice Sconto</button>
-            </>
-          )}
-
-          {renderSectionHeader('Report')}
-          {expandedSections.has('Report') && (
-            <>
-              <button onClick={() => { setActiveTab('report-noleggio'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-noleggio')}>Noleggio</button>
-              <button onClick={() => { setActiveTab('report-lavaggio'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-lavaggio')}>Lavaggio</button>
-              <button onClick={() => { setActiveTab('report-clienti'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-clienti')}>Clienti</button>
-              <button onClick={() => { setActiveTab('report-penali-danni'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-penali-danni')}>Penali & Danni</button>
-              <button onClick={() => { setActiveTab('report-preventivi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'report-preventivi')}>Preventivi</button>
-              {adminRole === 'superadmin' && (
-                <button onClick={() => { setActiveTab('operatori'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'operatori')}>Operatori</button>
-              )}
-              <button onClick={() => { setActiveTab('dashboard-kpi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'dashboard-kpi')}>Dashboard</button>
-            </>
-          )}
-
-          {renderSectionHeader('Comunicazione')}
-          {expandedSections.has('Comunicazione') && (
-            <>
-              <button onClick={() => { setActiveTab('com-email'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-email')}>E-mail</button>
-              <button onClick={() => { setActiveTab('com-pec'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-pec')}>PEC</button>
-              <button onClick={() => { setActiveTab('com-whatsapp'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-whatsapp')}>WhatsApp</button>
-              <button onClick={() => { setActiveTab('com-sms'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-sms')}>SMS</button>
-              <button onClick={() => { setActiveTab('com-chiamate'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-chiamate')}>Chiamate</button>
-              <button onClick={() => { setActiveTab('com-chatgpt'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-chatgpt')}>Chat GPT</button>
-              <button onClick={() => { setActiveTab('com-aruba'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'com-aruba')}>Aruba</button>
-            </>
-          )}
-
-          {renderSectionHeader('Amministrazione')}
-          {expandedSections.has('Amministrazione') && (
-            <>
-              <button onClick={() => { setActiveTab('scadenze'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scadenze')}>Scadenze</button>
-              <button onClick={() => { setActiveTab('fattura'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fattura')}>Fattura</button>
-              <button onClick={() => { setActiveTab('nexi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'nexi')}>Nexi</button>
-            </>
-          )}
+            )
+          })}
         </nav>
 
         {/* Bottom actions */}
@@ -475,7 +421,13 @@ export default function AdminDashboard() {
               </button>
             )}
             <h2 className="text-lg sm:text-xl font-bold text-theme-text-primary truncate">
-              {tabLabels[activeTab] || activeTab}
+              {(() => {
+                const subTab = sectionForActiveTab?.tabs.find(t => t.tab === activeTab)
+                if (sectionForActiveTab && subTab) {
+                  return `${subTab.label} ${sectionForActiveTab.name}`
+                }
+                return tabLabels[activeTab] || activeTab
+              })()}
             </h2>
           </div>
           <div className="flex items-center gap-4">
@@ -484,6 +436,37 @@ export default function AdminDashboard() {
             </span>
           </div>
         </header>
+
+        {/* In-page horizontal sub-tab bar — lists all sub-tabs of the
+            active section. Renders only if the section has more than one
+            sub-tab so single-tab sections don't get a one-button bar. */}
+        {sectionForActiveTab && sectionForActiveTab.tabs.filter(t => !t.superadminOnly || adminRole === 'superadmin').length > 1 && (
+          <div className="bg-theme-bg-primary border-b border-theme-border overflow-x-auto scrollbar-thin">
+            <div className="flex items-center gap-1 px-3 sm:px-6 lg:px-8">
+              {sectionForActiveTab.tabs
+                .filter(t => !t.superadminOnly || adminRole === 'superadmin')
+                .map(t => {
+                  const isActive = activeTab === t.tab
+                  return (
+                    <button
+                      key={t.tab}
+                      onClick={() => setActiveTab(t.tab)}
+                      className={`relative px-3 sm:px-4 py-3 text-[13px] font-medium whitespace-nowrap transition-colors ${
+                        isActive
+                          ? 'text-theme-text-primary'
+                          : 'text-theme-text-muted hover:text-theme-text-primary'
+                      }`}
+                    >
+                      {t.label}
+                      {isActive && (
+                        <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-theme-text-primary rounded-full" />
+                      )}
+                    </button>
+                  )
+                })}
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <main className="flex-1 p-3 sm:p-6 lg:p-8 bg-theme-bg-secondary">
