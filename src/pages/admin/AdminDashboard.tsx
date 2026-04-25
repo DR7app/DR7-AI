@@ -24,7 +24,6 @@ const FatturaTab = lazyWithRetry(() => import('./components/FatturaTab'))
 const ContrattoTab = lazyWithRetry(() => import('./components/ContrattoTab'))
 const GestioneMulteTab = lazyWithRetry(() => import('./components/GestioneMulteTab'))
 const DailyCalendarModal = lazyWithRetry(() => import('./components/DailyCalendarModal'))
-const ScannerTab = lazyWithRetry(() => import('./components/ScannerTab'))
 const CauzioniTab = lazyWithRetry(() => import('./components/CauzioniTab'))
 const NexiTab = lazyWithRetry(() => import('./components/NexiTab'))
 const BirthdaysTab = lazyWithRetry(() => import('./components/BirthdaysTab'))
@@ -34,7 +33,6 @@ const ReportsTab = lazyWithRetry(() => import('./components/ReportsTab'))
 const ReportLavaggioTab = lazyWithRetry(() => import('./components/ReportLavaggioTab'))
 const ReportClientiTab = lazyWithRetry(() => import('./components/ReportClientiTab'))
 const ReportPenaliDanniTab = lazyWithRetry(() => import('./components/ReportPenaliDanniTab'))
-const BulkImportTab = lazyWithRetry(() => import('./components/BulkImportTab'))
 const ReferralProgramTab = lazyWithRetry(() => import('./components/ReferralProgramTab'))
 const CodiciScontoTab = lazyWithRetry(() => import('./components/CodiciScontoTab'))
 const GestioneDanniTab = lazyWithRetry(() => import('./components/GestioneDanniTab'))
@@ -102,7 +100,7 @@ export default function AdminDashboard() {
 
   // RBAC: tabs restricted to superadmin
   const financialTabs: TabType[] = ['fattura', 'nexi', 'unpaid', 'cauzioni']
-  const adminOnlyTabs: TabType[] = ['bulk-import', 'reports', 'report-noleggio', 'report-lavaggio', 'report-clienti']
+  const adminOnlyTabs: TabType[] = ['reports', 'report-noleggio', 'report-lavaggio', 'report-clienti']
   const isTabRestricted = (tab: TabType) => {
     if (adminRole === 'superadmin') return false
     if (financialTabs.includes(tab) && !canViewFinancials) return true
@@ -189,10 +187,9 @@ export default function AdminDashboard() {
     'Flotta': ['vehicles', 'fleet', 'gps-keyless'],
     'Clienti': ['customers', 'unpaid', 'customer-wallet', 'site-users'],
     'Marketing': ['birthdays', 'reviews', 'marketing-pro', 'referral', 'codice-sconto'],
-    'Strumenti': ['scanner', 'bulk-import', 'nexi'],
     'Report': ['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-penali-danni', 'report-preventivi', 'operatori', 'dashboard-kpi'],
     'Comunicazione': ['com-email', 'com-pec', 'com-whatsapp', 'com-sms', 'com-chiamate', 'com-chatgpt', 'com-aruba'],
-    'Amministrazione': ['scadenze', 'fattura'],
+    'Amministrazione': ['scadenze', 'fattura', 'nexi'],
   }
   const sectionForTab = (tab: string): string | null => {
     for (const [section, tabs] of Object.entries(SECTION_TABS)) {
@@ -261,8 +258,6 @@ export default function AdminDashboard() {
     'marketing-pro': 'Messaggi di Sistema Pro',
     'referral': 'Referral',
     'codice-sconto': 'Codice Sconto',
-    'bulk-import': 'Import Clienti',
-    'scanner': 'Scanner',
     'nexi': 'Nexi',
     'report-noleggio': 'Report Noleggio',
     'report-lavaggio': 'Report Lavaggio',
@@ -369,15 +364,6 @@ export default function AdminDashboard() {
             </>
           )}
 
-          {renderSectionHeader('Strumenti')}
-          {expandedSections.has('Strumenti') && (
-            <>
-              <button onClick={() => { setActiveTab('scanner'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scanner')}>Scanner</button>
-              <button onClick={() => { setActiveTab('bulk-import'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'bulk-import')}>Import Clienti</button>
-              <button onClick={() => { setActiveTab('nexi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'nexi')}>Nexi</button>
-            </>
-          )}
-
           {renderSectionHeader('Report')}
           {expandedSections.has('Report') && (
             <>
@@ -411,6 +397,7 @@ export default function AdminDashboard() {
             <>
               <button onClick={() => { setActiveTab('scadenze'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scadenze')}>Scadenze</button>
               <button onClick={() => { setActiveTab('fattura'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fattura')}>Fattura</button>
+              <button onClick={() => { setActiveTab('nexi'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'nexi')}>Nexi</button>
             </>
           )}
         </nav>
@@ -547,12 +534,10 @@ export default function AdminDashboard() {
           {activeTab === 'reviews' && <ReviewManagementTab />}
           {activeTab === 'marketing-pro' && <MessaggiSistemaProTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
-          {activeTab === 'scanner' && <ScannerTab />}
           {activeTab === 'nexi' && (isTabRestricted('nexi') ? <PlaceholderTab title="Accesso non autorizzato" /> : <NexiTab />)}
           {activeTab === 'scadenze' && <ScadenzeTab />}
           {activeTab === 'reports' && (isTabRestricted('reports') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab />)}
           {activeTab === 'report-noleggio' && (isTabRestricted('report-noleggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab />)}
-          {activeTab === 'bulk-import' && (isTabRestricted('bulk-import') ? <PlaceholderTab title="Accesso non autorizzato" /> : <BulkImportTab />)}
           {activeTab === 'referral' && <ReferralProgramTab />}
           {/* Placeholder tabs for new features */}
           {activeTab === 'gestione-danni' && <GestioneDanniTab />}
