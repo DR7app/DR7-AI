@@ -267,6 +267,83 @@ export default function ReviewsTab() {
         await executeSend([booking])
     }
 
+    // Generate two preset codes (€100 supercar + €10 lavaggio) for a customer
+    // who left a review, then offer to send them via WhatsApp.
+    // Codes land in `discount_codes` so they're tracked in the Codice Sconto tab.
+    const [generatingCodesFor, setGeneratingCodesFor] = useState<string | null>(null)
+    const handleGenerateReviewCodes = async (booking: CompletedBooking) => {
+        if (!booking.customer_email && !booking.customer_phone) {
+            toast.error('Email o telefono cliente mancanti')
+            return
+        }
+        setGeneratingCodesFor(booking.id)
+        try {
+            const res = await fetch('/.netlify/functions/generate-review-codes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customerEmail: booking.customer_email || null,
+                    customerPhone: booking.customer_phone || null,
+                    customerName: booking.customer_name || '',
+                    source: 'review',
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                toast.error('Errore generazione codici: ' + (data.error || res.status))
+                return
+            }
+            const rentalCode = data.rentalCode as string
+            const carwashCode = data.carwashCode as string
+
+            const firstName = (booking.customer_name || '').split(' ')[0] || 'Cliente'
+            const messageBody = `Grazie Mille per la recensione☺️\n\n` +
+                `In qualità di nostro cliente, abbiamo il piacere di riservarti un pensiero dedicato, in linea con il tuo stile 🎁\n\n` +
+                `Per questo ti abbiamo riservato:\n\n` +
+                `Credito personale di *€100* utilizzabile per un noleggio Supercar DR7\n\n` +
+                `Buono sconto di *€10* per un lavaggio auto DR7\n\n` +
+                `CODICE SCONTO NOLEGGIO: *${rentalCode}*\n` +
+                `CODICE SCONTO LAVAGGIO: *${carwashCode}*\n\n` +
+                `(I codici sono validi 10 giorni. Spesa minima: €400 per il codice noleggio Supercar, €40 per il codice lavaggio. Validi esclusivamente per prenotazioni effettuate tramite www.dr7empire.com)\n\n` +
+                `Ti basterà inserire il codice al check-out della prenotazione per attivare il tuo credito. Saremo lieti di accompagnarti nella scelta 👇🏻\n\n` +
+                `www.dr7empire.com\n\n` +
+                `Con Stima\n*DR7*`
+
+            // Try copy to clipboard for the admin
+            try { await navigator.clipboard.writeText(messageBody) } catch { /* ignore */ }
+
+            // Offer to send via WhatsApp
+            if (booking.customer_phone) {
+                const send = window.confirm(
+                    `Codici generati e copiati negli appunti:\n\n` +
+                    `Noleggio: ${rentalCode}\nLavaggio: ${carwashCode}\n\n` +
+                    `Vuoi inviarli adesso via WhatsApp a ${firstName} (${booking.customer_phone})?`
+                )
+                if (send) {
+                    const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customPhone: booking.customer_phone,
+                            customMessage: messageBody,
+                        }),
+                    })
+                    if (waRes.ok) toast.success('Codici inviati via WhatsApp')
+                    else toast.error('WhatsApp send fallito — codici comunque salvati')
+                } else {
+                    toast.success('Codici generati (testo copiato negli appunti)')
+                }
+            } else {
+                toast.success(`Codici generati: ${rentalCode} / ${carwashCode}`)
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + msg)
+        } finally {
+            setGeneratingCodesFor(null)
+        }
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -467,19 +544,29 @@ export default function ReviewsTab() {
                                             €{(b.price_total / 100).toFixed(2)}
                                         </td>
                                         <td className="p-4 text-right">
-                                            {!b.review_sent_at && (
+                                            <div className="flex items-center justify-end gap-2 flex-wrap">
+                                                {!b.review_sent_at && (
+                                                    <Button
+                                                        onClick={() => handleSendSingle(b)}
+                                                        variant="secondary"
+                                                        className="text-xs py-1 px-3 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold border-dr7-gold/30"
+                                                        disabled={sending}
+                                                    >
+                                                        {sending ? '...' : 'Invia'}
+                                                    </Button>
+                                                )}
+                                                {b.review_sent_at && (
+                                                    <span className="text-xs text-green-500 font-medium border border-green-500/30 px-2 py-1 rounded-full bg-green-500/10">Inviata</span>
+                                                )}
                                                 <Button
-                                                    onClick={() => handleSendSingle(b)}
+                                                    onClick={() => handleGenerateReviewCodes(b)}
                                                     variant="secondary"
-                                                    className="text-xs py-1 px-3 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold border-dr7-gold/30"
-                                                    disabled={sending}
+                                                    className="text-xs py-1 px-3 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border-purple-400/30"
+                                                    disabled={generatingCodesFor === b.id}
                                                 >
-                                                    {sending ? '...' : 'Invia'}
+                                                    {generatingCodesFor === b.id ? '...' : '🎁 Codici'}
                                                 </Button>
-                                            )}
-                                            {b.review_sent_at && (
-                                                <span className="text-xs text-green-500 font-medium border border-green-500/30 px-2 py-1 rounded-full bg-green-500/10">Inviata</span>
-                                            )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
