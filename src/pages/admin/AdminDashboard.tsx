@@ -324,8 +324,6 @@ export default function AdminDashboard() {
             bar (rendered above the content) lets the user pick a sub-tab. */}
         <nav className="flex-1 py-3 px-3 space-y-1 overflow-y-auto scrollbar-thin">
           {SECTIONS.map(section => {
-            // Skip whole sections whose only tab is superadmin-restricted and
-            // the current admin isn't superadmin.
             const visibleTabs = section.tabs.filter(t => !t.superadminOnly || adminRole === 'superadmin')
             if (visibleTabs.length === 0) return null
             const firstTab = visibleTabs[0].tab
@@ -335,18 +333,19 @@ export default function AdminDashboard() {
               <button
                 key={section.name}
                 onClick={() => {
-                  // Switching sections lands the user on the first tab. If
-                  // they're already inside this section, keep their current
-                  // sub-tab so the click is a no-op (the in-page tab bar is
-                  // how they navigate within the section).
                   if (!sectionActive) setActiveTab(firstTab)
                   setSidebarOpen(false)
                 }}
-                className={sidebarItemClass(sectionActive)}
+                // Full-width clickable row, but the active highlight only
+                // wraps the text — not the entire row. Text-only pill avoids
+                // the oversized green block that spanned the full sidebar.
+                className="w-full text-left flex items-center justify-between py-1 px-1 transition-colors group"
               >
-                <span>{section.name}</span>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${sectionActive ? 'bg-dr7-gold text-white' : 'text-white/70 group-hover:text-white'}`}>
+                  {section.name}
+                </span>
                 {showBirthdayBadge && (
-                  <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{birthdayCount}</span>
+                  <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2">{birthdayCount}</span>
                 )}
               </button>
             )
@@ -449,7 +448,17 @@ export default function AdminDashboard() {
               })()}
             </h2>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsCalendarModalOpen(true)}
+              title="Calendario Giornaliero"
+              className="flex items-center gap-2 px-3 py-2 rounded-full bg-dr7-gold text-white text-[12px] font-semibold hover:bg-dr7-gold/90 active:scale-95 transition-all"
+            >
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="hidden sm:inline">Calendario Giornaliero</span>
+            </button>
             <span className="text-sm text-theme-text-muted hidden sm:block">
               {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
@@ -572,21 +581,6 @@ export default function AdminDashboard() {
           </Suspense>
         </main>
       </div>
-
-      {/* Floating right-side button: always visible on every page,
-          opens the Calendario Giornaliero modal. Sits above bottom-right
-          so it doesn't collide with toast / Intercom-style widgets. */}
-      <button
-        onClick={() => setIsCalendarModalOpen(true)}
-        title="Calendario Giornaliero"
-        aria-label="Apri Calendario Giornaliero"
-        className="fixed right-4 bottom-6 z-[80] flex items-center gap-2 px-4 py-3 rounded-full bg-dr7-gold text-white shadow-lg shadow-black/40 hover:bg-dr7-gold/90 active:scale-95 transition-all text-[12px] font-semibold"
-      >
-        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        <span className="hidden sm:inline">Calendario Giornaliero</span>
-      </button>
 
       {/* Daily Calendar Modal */}
       <Suspense fallback={null}>
