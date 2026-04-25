@@ -182,11 +182,15 @@ export default function AdminDashboard() {
   // Section structure. Each section's first tab is the default landing page
   // when the user clicks the section in the sidebar. Sub-tabs render as a
   // horizontal pill bar at the top of the content area.
-  type SubTab = { tab: TabType; label: string; superadminOnly?: boolean }
+  // `subView` (optional) lets a sub-tab redirect to the same admin tab as
+  // another entry but switch an internal sub-view (used to expose
+  // RentalTabs' Noleggio / Preventivi as separate section sub-tabs).
+  type SubTab = { tab: TabType; label: string; superadminOnly?: boolean; subView?: 'bookings' | 'preventivi' }
+  const [rentalSubView, setRentalSubView] = useState<'bookings' | 'preventivi'>('bookings')
   const SECTIONS: { name: string; tabs: SubTab[] }[] = [
     { name: 'Noleggio', tabs: [
-      { tab: 'reservations', label: 'Prenotazioni' },
-      { tab: 'report-preventivi', label: 'Preventivi' },
+      { tab: 'reservations', label: 'Noleggio', subView: 'bookings' },
+      { tab: 'reservations', label: 'Preventivi', subView: 'preventivi' },
       { tab: 'calendar', label: 'Calendario' },
       { tab: 'cauzioni', label: 'Cauzioni' },
       { tab: 'contratto', label: 'Contratti' },
@@ -223,6 +227,7 @@ export default function AdminDashboard() {
       { tab: 'report-lavaggio', label: 'Lavaggio' },
       { tab: 'report-clienti', label: 'Clienti' },
       { tab: 'report-penali-danni', label: 'Penali & Danni' },
+      { tab: 'report-preventivi', label: 'Preventivi' },
       { tab: 'operatori', label: 'Operatori', superadminOnly: true },
       { tab: 'dashboard-kpi', label: 'Dashboard' },
     ] },
@@ -422,10 +427,13 @@ export default function AdminDashboard() {
             )}
             <h2 className="text-lg sm:text-xl font-bold text-theme-text-primary truncate">
               {(() => {
-                const subTab = sectionForActiveTab?.tabs.find(t => t.tab === activeTab)
-                if (sectionForActiveTab && subTab) {
-                  return `${subTab.label} ${sectionForActiveTab.name}`
-                }
+                if (!sectionForActiveTab) return tabLabels[activeTab] || activeTab
+                // Match by tab AND subView when multiple entries point at the same tab.
+                const sameTabEntries = sectionForActiveTab.tabs.filter(t => t.tab === activeTab)
+                const subTab = sameTabEntries.length > 1
+                  ? sameTabEntries.find(t => t.subView === rentalSubView)
+                  : sameTabEntries[0]
+                if (subTab) return `${subTab.label} ${sectionForActiveTab.name}`
                 return tabLabels[activeTab] || activeTab
               })()}
             </h2>
@@ -445,12 +453,26 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-1 px-3 sm:px-6 lg:px-8">
               {sectionForActiveTab.tabs
                 .filter(t => !t.superadminOnly || adminRole === 'superadmin')
-                .map(t => {
-                  const isActive = activeTab === t.tab
+                .map((t, idx) => {
+                  // A tab is active if its `tab` matches activeTab AND, when
+                  // `subView` is declared, the rentalSubView also matches.
+                  // For tabs without subView, ignore rentalSubView.
+                  const tabMatch = activeTab === t.tab
+                  const subMatch = t.subView ? rentalSubView === t.subView : (t.tab !== 'reservations' || true)
+                  // Special: if there are multiple entries pointing to the
+                  // same `tab` (Noleggio/Preventivi both → reservations), only
+                  // ONE should appear active — the one whose subView matches.
+                  const sameTabEntries = sectionForActiveTab.tabs.filter(x => x.tab === t.tab)
+                  const isActive = sameTabEntries.length > 1
+                    ? (tabMatch && t.subView === rentalSubView)
+                    : tabMatch && subMatch
                   return (
                     <button
-                      key={t.tab}
-                      onClick={() => setActiveTab(t.tab)}
+                      key={`${t.tab}-${t.subView || 'main'}-${idx}`}
+                      onClick={() => {
+                        setActiveTab(t.tab)
+                        if (t.subView) setRentalSubView(t.subView)
+                      }}
                       className={`relative px-3 sm:px-4 py-3 text-[13px] font-medium whitespace-nowrap transition-colors ${
                         isActive
                           ? 'text-theme-text-primary'
@@ -476,6 +498,8 @@ export default function AdminDashboard() {
             <RentalTabs
               initialData={initialReservationData}
               onDataConsumed={() => setInitialReservationData(null)}
+              activeSubView={rentalSubView}
+              onSubViewChange={setRentalSubView}
             />
           )}
           {activeTab === 'report-preventivi' && <ReportPreventiviTab />}
