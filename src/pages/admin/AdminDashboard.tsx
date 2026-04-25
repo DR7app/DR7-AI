@@ -404,15 +404,6 @@ export default function AdminDashboard() {
 
         {/* Bottom actions */}
         <div className="px-3 py-3 border-t border-white/10 space-y-1">
-          <button
-            onClick={() => setIsCalendarModalOpen(true)}
-            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
-          >
-            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Calendario Giornaliero
-          </button>
           {!alarmState.audioEnabled && (
             <button
               onClick={enableAudio}
@@ -563,6 +554,21 @@ export default function AdminDashboard() {
           </Suspense>
         </main>
       </div>
+
+      {/* Floating right-side button: always visible on every page,
+          opens the Calendario Giornaliero modal. Sits above bottom-right
+          so it doesn't collide with toast / Intercom-style widgets. */}
+      <button
+        onClick={() => setIsCalendarModalOpen(true)}
+        title="Calendario Giornaliero"
+        aria-label="Apri Calendario Giornaliero"
+        className="fixed right-4 bottom-6 z-[80] flex items-center gap-2 px-4 py-3 rounded-full bg-dr7-gold text-white shadow-lg shadow-black/40 hover:bg-dr7-gold/90 active:scale-95 transition-all text-[12px] font-semibold"
+      >
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span className="hidden sm:inline">Calendario Giornaliero</span>
+      </button>
 
       {/* Daily Calendar Modal */}
       <Suspense fallback={null}>
