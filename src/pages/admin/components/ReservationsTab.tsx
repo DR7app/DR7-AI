@@ -4542,12 +4542,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // Build template vars
           const pickupD = new Date(pickupDateTime)
           const dropoffD = new Date(returnDateTime)
-          // Resolve insurance display name from Centralina Pro options instead
-          // of leaking the raw ID (e.g. "xtfcs9w3") into the customer message.
-          // InsuranceOpt shape is { id, label, pricePerDay }.
+          // Resolve insurance display name. Two ID formats live in this codebase:
+          //   - Centralina Pro UIDs (random 8-char hash, e.g. "xtfcs9w3")
+          //   - Legacy enums ("KASKO_BASE", "KASKO_BLACK", "KASKO_SIGNATURE",
+          //     "KASKO_DR7", "DR7", "RCA")
+          // Try Pro first; if that misses, map known legacy IDs; if even that
+          // misses, humanize the raw value (KASKO_BASE → "Kasko Base").
           const insuranceKaskoOpts = vehicle ? getInsuranceOptions(vehicle, customerTier?.tier, configOverlay, rentalConfig) : []
           const insuranceMatch = insuranceKaskoOpts.find(k => k.id === formData.insurance_option)
-          const insuranceDisplayName = insuranceMatch?.label || formData.insurance_option || 'Kasko Base'
+          const legacyInsuranceMap: Record<string, string> = {
+            RCA: 'RCA',
+            KASKO_BASE: 'Kasko Base',
+            KASKO_BLACK: 'Kasko Black',
+            KASKO_SIGNATURE: 'Kasko Signature',
+            KASKO_DR7: 'Kasko DR7',
+            DR7: 'Kasko DR7',
+          }
+          const rawInsuranceId = formData.insurance_option || ''
+          const insuranceDisplayName =
+            insuranceMatch?.label
+            || legacyInsuranceMap[rawInsuranceId]
+            || rawInsuranceId
+                .replace(/_/g, ' ')
+                .toLowerCase()
+                .replace(/\b\w/g, (c: string) => c.toUpperCase())
+            || 'Kasko Base'
           const templateVars = {
             '{customer_name}': customerInfo?.full_name || 'Cliente',
             '{nome}': (customerInfo?.full_name || 'Cliente').split(' ')[0],
