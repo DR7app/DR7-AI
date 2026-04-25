@@ -185,11 +185,11 @@ export default function AdminDashboard() {
   // `subView` (optional) lets a sub-tab redirect to the same admin tab as
   // another entry but switch an internal sub-view (used to expose
   // RentalTabs' Noleggio / Preventivi as separate section sub-tabs).
-  type SubTab = { tab: TabType; label: string; superadminOnly?: boolean; subView?: 'bookings' | 'preventivi' }
+  type SubTab = { tab: TabType; label: string; titleLabel?: string; superadminOnly?: boolean; subView?: 'bookings' | 'preventivi' }
   const [rentalSubView, setRentalSubView] = useState<'bookings' | 'preventivi'>('bookings')
   const SECTIONS: { name: string; tabs: SubTab[] }[] = [
     { name: 'Noleggio', tabs: [
-      { tab: 'reservations', label: 'Noleggio', subView: 'bookings' },
+      { tab: 'reservations', label: 'Noleggio', titleLabel: 'Prenotazioni', subView: 'bookings' },
       { tab: 'reservations', label: 'Preventivi', subView: 'preventivi' },
       { tab: 'calendar', label: 'Calendario' },
       { tab: 'cauzioni', label: 'Cauzioni' },
@@ -433,7 +433,18 @@ export default function AdminDashboard() {
                 const subTab = sameTabEntries.length > 1
                   ? sameTabEntries.find(t => t.subView === rentalSubView)
                   : sameTabEntries[0]
-                if (subTab) return `${subTab.label} ${sectionForActiveTab.name}`
+                if (subTab) {
+                  // Prefer the explicit titleLabel (e.g. Noleggio's bookings
+                  // sub-view shows "Noleggio" in the bar but "Prenotazioni"
+                  // in the title), then fall back to the bar label. Avoid
+                  // "Noleggio Noleggio" by collapsing to the section name
+                  // alone when the chosen label equals it.
+                  const titleSub = subTab.titleLabel || subTab.label
+                  if (titleSub.toLowerCase() === sectionForActiveTab.name.toLowerCase()) {
+                    return sectionForActiveTab.name
+                  }
+                  return `${titleSub} ${sectionForActiveTab.name}`
+                }
                 return tabLabels[activeTab] || activeTab
               })()}
             </h2>
