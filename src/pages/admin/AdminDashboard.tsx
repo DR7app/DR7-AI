@@ -174,10 +174,6 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Sidebar item style — used for both per-section sidebar buttons and the
-  // in-page horizontal sub-tab bar.
-  const sidebarItemClass = (isActive: boolean) =>
-    `w-full text-left px-3 py-2 flex items-center justify-between rounded-lg text-[12px] font-semibold transition-colors select-none touch-manipulation ${isActive ? 'bg-dr7-gold text-white' : 'text-white/70 hover:text-white hover:bg-[#243044] active:bg-[#243044]'}`
 
   // Section structure. Each section's first tab is the default landing page
   // when the user clicks the section in the sidebar. Sub-tabs render as a
