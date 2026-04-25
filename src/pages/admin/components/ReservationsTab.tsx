@@ -4542,10 +4542,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // Build template vars
           const pickupD = new Date(pickupDateTime)
           const dropoffD = new Date(returnDateTime)
+          // Resolve insurance display name from Centralina Pro options instead
+          // of leaking the raw ID (e.g. "xtfcs9w3") into the customer message.
+          const insuranceKaskoOpts = vehicle ? getInsuranceOptions(vehicle, customerTier?.tier, configOverlay, rentalConfig) : []
+          const insuranceMatch = insuranceKaskoOpts.find(k => k.id === formData.insurance_option)
+          const insuranceDisplayName = insuranceMatch?.name || formData.insurance_option || 'Kasko Base'
           const templateVars = {
             '{customer_name}': customerInfo?.full_name || 'Cliente',
             '{nome}': (customerInfo?.full_name || 'Cliente').split(' ')[0],
-            '{booking_id}': 'DR7-' + (insertedBooking?.id?.substring(0, 8).toUpperCase() || ''),
+            '{booking_id}': insertedBooking?.id?.substring(0, 8).toUpperCase() || '',
             '{vehicle_name}': vehicle?.display_name || '',
             '{plate}': vehicle?.plate || '',
             '{pickup_date}': pickupD.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
@@ -4553,7 +4558,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '{dropoff_date}': dropoffD.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
             '{dropoff_time}': dropoffD.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }),
             '{pickup_location}': pickupLocationLabel || '',
-            '{insurance}': formData.insurance_option || 'KASKO_BASE',
+            '{insurance}': insuranceDisplayName,
             '{deposit}': parseFloat(formData.deposit) > 0 ? `€${parseFloat(formData.deposit).toFixed(2)}` : '€0',
             '{km_info}': (() => {
               // 1. Form says unlimited → Illimitati
