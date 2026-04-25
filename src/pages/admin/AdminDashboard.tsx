@@ -178,8 +178,8 @@ export default function AdminDashboard() {
 
   // Reusable style helpers for nav
   const sidebarItemClass = (isActive: boolean) =>
-    `w-full text-left px-3 py-2 min-h-[44px] flex items-center rounded-lg text-sm font-medium transition-colors select-none touch-manipulation ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044] active:bg-[#243044]'}`
-  const sidebarSectionClass = 'px-3 pt-4 pb-1 text-[10px] font-bold text-white/30 uppercase tracking-wider'
+    `w-full text-left px-3 py-2 min-h-[44px] flex items-center rounded-lg text-[11px] font-medium transition-colors select-none touch-manipulation ${isActive ? 'bg-dr7-gold text-white' : 'text-white/60 hover:text-white hover:bg-[#243044] active:bg-[#243044]'}`
+  const sidebarSectionClass = 'px-3 pt-4 pb-1 text-[9px] font-bold text-white/30 uppercase tracking-wider'
 
   // Mobile tab labels
   const tabLabels: Record<string, string> = {
@@ -361,21 +361,23 @@ export default function AdminDashboard() {
             </svg>
             Centralina Pro
           </button>
-          <button
-            onClick={() => { setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); }}
-            className="w-full flex items-center gap-2 px-3 min-h-[44px] rounded-lg text-sm text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
-          >
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            Cambia Password
-          </button>
-          <button
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-2 px-3 min-h-[44px] rounded-lg text-sm text-white/40 hover:text-red-400 hover:bg-[#243044] transition-colors"
-          >
-            Esci
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); }}
+              className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Cambia Password
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="flex items-center justify-center px-3 min-h-[36px] rounded-lg text-[10px] text-white/40 hover:text-red-400 hover:bg-[#243044] transition-colors"
+            >
+              Esci
+            </button>
+          </div>
         </div>
       </aside>
 
