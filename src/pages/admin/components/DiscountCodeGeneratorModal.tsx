@@ -15,6 +15,7 @@ const SCOPE_OPTIONS = [
     { value: 'lavaggi', label: 'Lavaggi' },
     { value: 'supercar', label: 'Supercar' },
     { value: 'utilitarie', label: 'Utilitarie' },
+    { value: 'aziendali', label: 'Aziendali' },
     { value: 'tutti_i_servizi', label: 'Tutti i servizi' },
 ]
 
