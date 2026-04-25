@@ -4291,14 +4291,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
       }
 
-      // Generate Nexi Pay by Link for any pending (non-paid) new booking.
-      // Previously this only fired when the admin explicitly chose "Nexi Pay
-      // by Link" — so bookings saved as "da saldare" with Bonifico / Carta /
-      // etc. ended up with no link to pay online. Now the link is always
-      // generated so the customer receives a working payment URL in the
-      // WhatsApp message regardless of the chosen method.
+      // Generate Nexi Pay by Link only when the admin actually chose "Nexi Pay
+      // by Link" as the payment method. For Contanti / Bonifico / Carta etc.
+      // the customer will pay in person — sending a payment URL is wrong and
+      // confusing.
       const isPendingForLink = formData.payment_status === 'pending' || formData.payment_status === 'unpaid' || formData.payment_status === 'partial'
-      if (!editingId && isPendingForLink && insertedBooking) {
+      const isPayByLinkMethod = formData.payment_method === 'Nexi Pay by Link'
+      if (!editingId && isPendingForLink && isPayByLinkMethod && insertedBooking) {
         try {
           // Use cents-based addition to avoid float drift, then convert to EUR
           // Subtract already paid amount for partial payments
