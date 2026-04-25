@@ -16,21 +16,99 @@ import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../.
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
+import { getHolidayForDate, isSunday as isSundayDate } from '../../../data/italianHolidays'
 
-// ─── Time slots (office hours, 30-min intervals) ────────────────────────────
-function genSlots(ranges: [number, number][]): { value: string; label: string }[] {
+// ─── Time slots ─────────────────────────────────────────────────────────────
+//
+// Preventivi historically only offered office-hour slots (pickup 10:30-12:30 +
+// 15:30-18:30, return 09:00-12:30 + 14:00-17:30). The picker now exposes the
+// FULL day in 15-minute steps so the admin can choose any time, but slots
+// that fall outside office hours, on a Sunday, on an Italian holiday, or
+// that conflict with another booking on the same vehicle are flagged red.
+// Selecting a flagged slot triggers the existing OTP override modal.
+//
+// Office windows are kept here (single source of truth) so future tweaks
+// don't have to chase multiple files.
+
+const PICKUP_HOURS_RANGES: [number, number][] = [[10*60+30, 12*60+30], [15*60+30, 18*60+30]]
+const RETURN_HOURS_RANGES: [number, number][] = [[9*60, 12*60+30], [14*60, 17*60+30]]
+
+function genAllDaySlots(): { value: string; label: string }[] {
   const s: { value: string; label: string }[] = []
-  for (const [a, b] of ranges) {
-    // 15-minute granularity (was 30). Gives 10:30, 10:45, 11:00, 11:15 ...
-    for (let m = a; m <= b; m += 15) {
-      const t = `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`
-      s.push({ value: t, label: t })
-    }
+  for (let m = 0; m < 24*60; m += 15) {
+    const t = `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`
+    s.push({ value: t, label: t })
   }
   return s
 }
-const PICKUP_SLOTS = genSlots([[10*60+30, 12*60+30], [15*60+30, 18*60+30]])
-const RETURN_SLOTS = genSlots([[9*60, 12*60+30], [14*60, 17*60+30]])
+const ALL_DAY_SLOTS = genAllDaySlots()
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
+
+function isInRanges(t: string, ranges: [number, number][]): boolean {
+  const m = timeToMinutes(t)
+  return ranges.some(([a, b]) => m >= a && m <= b)
+}
+
+const isWithinPickupHours = (t: string) => isInRanges(t, PICKUP_HOURS_RANGES)
+const isWithinReturnHours = (t: string) => isInRanges(t, RETURN_HOURS_RANGES)
+
+// Style applied to flagged (exceptional) <option> entries. Native <option>
+// styling is limited but color/backgroundColor are honored on Chrome/Edge/
+// Firefox desktop. Safari/iOS fall back to plain text — UX still works
+// because the OTP modal triggers on selection regardless.
+const FLAGGED_OPTION_STYLE: React.CSSProperties = { color: 'white', backgroundColor: '#dc2626', fontWeight: 600 }
+const NORMAL_OPTION_STYLE: React.CSSProperties = { color: 'black', backgroundColor: 'white' }
+
+interface DayClassification {
+  type: 'open' | 'sunday' | 'holiday'
+  label?: string
+}
+function classifyDay(dateStr: string): DayClassification {
+  if (!dateStr) return { type: 'open' }
+  // Parse YYYY-MM-DD as a local date (avoid UTC offset off-by-one)
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  if (!y || !mo || !d) return { type: 'open' }
+  const date = new Date(y, mo - 1, d)
+  if (isSundayDate(date)) return { type: 'sunday', label: 'Domenica (chiusura)' }
+  const holiday = getHolidayForDate(date)
+  if (holiday) return { type: 'holiday', label: `Festività: ${holiday.name}` }
+  return { type: 'open' }
+}
+
+function buildTimeOptions(
+  dateStr: string,
+  kind: 'pickup' | 'return',
+): { value: string; label: string; style: React.CSSProperties; flagged: boolean }[] {
+  const day = classifyDay(dateStr)
+  const isClosedDay = day.type !== 'open'
+  return ALL_DAY_SLOTS.map(s => {
+    const inHours = kind === 'pickup' ? isWithinPickupHours(s.value) : isWithinReturnHours(s.value)
+    const flagged = isClosedDay || !inHours
+    return {
+      value: s.value,
+      label: flagged ? `${s.label} ⚠` : s.label,
+      style: flagged ? FLAGGED_OPTION_STYLE : NORMAL_OPTION_STYLE,
+      flagged,
+    }
+  })
+}
+
+function describeException(dateStr: string, time: string, kind: 'pickup' | 'return'): string | null {
+  const day = classifyDay(dateStr)
+  if (day.type === 'sunday') return 'Domenica — sede chiusa'
+  if (day.type === 'holiday') return day.label || 'Giorno festivo'
+  if (kind === 'pickup' && !isWithinPickupHours(time)) {
+    return 'Orario di ritiro fuori dagli orari ufficio (10:30–12:30 / 15:30–18:30)'
+  }
+  if (kind === 'return' && !isWithinReturnHours(time)) {
+    return 'Orario di riconsegna fuori dagli orari ufficio (09:00–12:30 / 14:00–17:30)'
+  }
+  return null
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -334,6 +412,23 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     }
     // Debounce so the modal doesn't open mid-typing
     slotCheckTimerRef.current = window.setTimeout(async () => {
+      // Day/hour exception checks run BEFORE the vehicle availability lookup —
+      // they don't need the booking window data. Out-of-hours / Sunday /
+      // holiday on either pickup or return triggers the same OTP modal that
+      // a vehicle conflict does.
+      const pickupExc = describeException(form.pickup_date, form.pickup_time, 'pickup')
+      const returnExc = describeException(form.return_date, form.return_time, 'return')
+      if (pickupExc || returnExc) {
+        const reason = [
+          pickupExc ? `Ritiro: ${pickupExc}` : null,
+          returnExc ? `Riconsegna: ${returnExc}` : null,
+        ].filter(Boolean).join(' · ')
+        setSlotUnavailableWarning(reason)
+        setSlotOverrideReason(reason)
+        if (!slotOverrideModalOpen) setSlotOverrideModalOpen(true)
+        return
+      }
+
       if (!selectedVehicle) return
       const windowStart = new Date(`${form.pickup_date}T00:00:00+02:00`)
       const windowEnd = new Date(`${form.return_date}T23:59:59+02:00`)
@@ -2113,9 +2208,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           const d = new Date(); d.setHours(h, m, 0); d.setMinutes(d.getMinutes() - 90)
           const autoReturn = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
           setForm(prev => ({ ...prev, pickup_time: newPickupTime, return_time: autoReturn }))
-        }} options={PICKUP_SLOTS} />
+        }} options={buildTimeOptions(form.pickup_date, 'pickup')} />
         <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
-        <Select label="Ora Riconsegna (auto: ritiro -1h30)" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} options={RETURN_SLOTS} />
+        <Select label="Ora Riconsegna (auto: ritiro -1h30)" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} options={buildTimeOptions(form.return_date, 'return')} />
       </div>
 
       {slotUnavailableWarning && (

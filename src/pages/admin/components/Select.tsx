@@ -1,8 +1,17 @@
 import { logger } from '../../../utils/logger'
 
+export interface SelectOption {
+  value: string
+  label: string
+  style?: React.CSSProperties
+  // Marker for callers that want to detect "exceptional" selections
+  // post-render without re-deriving the rule.
+  flagged?: boolean
+}
+
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label?: string
-  options: { value: string; label: string }[]
+  options: SelectOption[]
 }
 
 export default function Select({ label, options, className = '', ...props }: SelectProps) {
@@ -20,7 +29,11 @@ export default function Select({ label, options, className = '', ...props }: Sel
         {...props}
       >
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value} style={{ color: 'black', backgroundColor: 'white' }}>
+          <option
+            key={opt.value}
+            value={opt.value}
+            style={opt.style ?? { color: 'black', backgroundColor: 'white' }}
+          >
             {opt.label}
           </option>
         ))}
