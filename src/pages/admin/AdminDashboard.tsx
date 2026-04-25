@@ -192,7 +192,7 @@ export default function AdminDashboard() {
     'Strumenti': ['scanner', 'bulk-import', 'nexi'],
     'Report': ['report-noleggio', 'report-lavaggio', 'report-clienti', 'report-penali-danni', 'report-preventivi', 'operatori', 'dashboard-kpi'],
     'Comunicazione': ['com-email', 'com-pec', 'com-whatsapp', 'com-sms', 'com-chiamate', 'com-chatgpt', 'com-aruba'],
-    'Altro': ['scadenze', 'fattura'],
+    'Amministrazione': ['scadenze', 'fattura'],
   }
   const sectionForTab = (tab: string): string | null => {
     for (const [section, tabs] of Object.entries(SECTION_TABS)) {
@@ -406,8 +406,8 @@ export default function AdminDashboard() {
             </>
           )}
 
-          {renderSectionHeader('Altro')}
-          {expandedSections.has('Altro') && (
+          {renderSectionHeader('Amministrazione')}
+          {expandedSections.has('Amministrazione') && (
             <>
               <button onClick={() => { setActiveTab('scadenze'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'scadenze')}>Scadenze</button>
               <button onClick={() => { setActiveTab('fattura'); setSidebarOpen(false); }} className={sidebarItemClass(activeTab === 'fattura')}>Fattura</button>
