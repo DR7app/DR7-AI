@@ -56,11 +56,24 @@ const TabLoader = () => (
 type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro'
 
 export default function AdminDashboard() {
-  const [activeTab, _setActiveTab] = useState<TabType>('reservations')
+  // Persist the active tab to sessionStorage so a chunk-load failure
+  // (which triggers window.location.reload() in lazyWithRetry) does not
+  // dump the user back to 'reservations'. After the reload the saved tab
+  // is read here and rendered transparently.
+  const ACTIVE_TAB_KEY = 'dr7_admin_active_tab'
+  const readSavedTab = (): TabType => {
+    try {
+      const saved = sessionStorage.getItem(ACTIVE_TAB_KEY)
+      if (saved) return saved as TabType
+    } catch { /* sessionStorage may be blocked */ }
+    return 'reservations'
+  }
+  const [activeTab, _setActiveTab] = useState<TabType>(readSavedTab)
   const [tabHistory, setTabHistory] = useState<TabType[]>([])
   const setActiveTab = (tab: TabType) => {
     setTabHistory(prev => [...prev.slice(-19), activeTab])
     _setActiveTab(tab)
+    try { sessionStorage.setItem(ACTIVE_TAB_KEY, tab) } catch { /* ignore */ }
   }
   const goBack = () => {
     if (tabHistory.length > 0) {
@@ -99,6 +112,7 @@ export default function AdminDashboard() {
 
   async function handleSignOut() {
     clearAdminCache()
+    try { sessionStorage.removeItem(ACTIVE_TAB_KEY) } catch { /* ignore */ }
     await supabase.auth.signOut()
     navigate('/login')
   }
