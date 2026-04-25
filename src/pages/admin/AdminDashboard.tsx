@@ -341,7 +341,7 @@ export default function AdminDashboard() {
                 // the oversized green block that spanned the full sidebar.
                 className="w-full text-left flex items-center justify-between py-1 px-1 transition-colors group"
               >
-                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${sectionActive ? 'bg-dr7-gold text-white' : 'text-white/70 group-hover:text-white'}`}>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${sectionActive ? 'bg-dr7-gold text-white' : 'text-white/70 group-hover:text-white group-hover:bg-[#243044]'}`}>
                   {section.name}
                 </span>
                 {showBirthdayBadge && (
