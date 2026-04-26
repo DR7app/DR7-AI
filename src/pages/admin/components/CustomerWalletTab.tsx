@@ -311,30 +311,6 @@ export default function CustomerWalletTab() {
     setOtpDigits(['', '', '', '', '', ''])
   }
 
-  // OTP digit input handling
-  function handleOtpDigit(index: number, value: string) {
-    if (value.length > 1) value = value.slice(-1)
-    if (value && !/^\d$/.test(value)) return
-
-    const newDigits = [...otpDigits]
-    newDigits[index] = value
-    setOtpDigits(newDigits)
-
-    // Auto-focus next
-    if (value && index < 5) {
-      otpRefs.current[index + 1]?.focus()
-    }
-  }
-
-  function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus()
-    }
-    if (e.key === 'Enter') {
-      verifyOtp()
-    }
-  }
-
   async function sendOtp() {
     const parsedAmount = parseFloat(amount)
     if (!parsedAmount || parsedAmount <= 0) {
@@ -776,39 +752,32 @@ export default function CustomerWalletTab() {
                   </button>
                 </div>
 
-                {/* OTP Digit Boxes */}
-                <div className="flex gap-2 mb-3">
-                  {otpDigits.map((digit, i) => (
-                    <input
-                      key={i}
-                      ref={el => { otpRefs.current[i] = el }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpDigit(i, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                      onPaste={(e) => {
-                        const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-                        if (text.length > 0) {
-                          e.preventDefault()
-                          const newDigits = [...otpDigits]
-                          for (let j = 0; j < 6; j++) newDigits[j] = text[j] || ''
-                          setOtpDigits(newDigits)
-                          const focusIdx = Math.min(text.length, 5)
-                          otpRefs.current[focusIdx]?.focus()
-                        }
-                      }}
-                      className={`w-full aspect-square max-w-[52px] text-center text-xl font-bold border-2 rounded-xl outline-none transition-all ${
-                        otpVerified
-                          ? 'border-green-400 bg-green-50 text-green-700'
-                          : digit
-                            ? 'border-[#3a6a6a] bg-white text-gray-900'
-                            : 'border-gray-200 bg-gray-50 text-gray-900'
-                      } focus:border-[#3a6a6a] focus:ring-1 focus:ring-[#3a6a6a]`}
-                      disabled={otpVerified}
-                    />
-                  ))}
+                {/* OTP Input — single rectangle */}
+                <div className="mb-3">
+                  <input
+                    ref={el => { otpRefs.current[0] = el }}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={otpDigits.join('')}
+                    onChange={(e) => {
+                      const cleaned = e.target.value.replace(/\D/g, '').slice(0, 6)
+                      const next = ['', '', '', '', '', '']
+                      for (let i = 0; i < cleaned.length; i++) next[i] = cleaned[i]
+                      setOtpDigits(next)
+                    }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') verifyOtp() }}
+                    placeholder="------"
+                    className={`w-full h-14 text-center text-2xl font-bold tracking-[0.5em] border-2 rounded-xl outline-none transition-all ${
+                      otpVerified
+                        ? 'border-green-400 bg-green-50 text-green-700'
+                        : otpDigits.some(d => d)
+                          ? 'border-[#3a6a6a] bg-white text-gray-900'
+                          : 'border-gray-200 bg-gray-50 text-gray-900'
+                    } focus:border-[#3a6a6a] focus:ring-1 focus:ring-[#3a6a6a]`}
+                    disabled={otpVerified}
+                  />
                 </div>
 
                 {otpVerified && (

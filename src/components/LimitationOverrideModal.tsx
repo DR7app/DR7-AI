@@ -31,9 +31,9 @@ export default function LimitationOverrideModal({
   const [sending, setSending] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [overrideId, setOverrideId] = useState<string | null>(null)
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', ''])
+  const [otpCode, setOtpCode] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([])
+  const otpInputRef = useRef<HTMLInputElement | null>(null)
 
   // Keep _onClose to satisfy prop interface but modal is not dismissible
   void _onClose
@@ -44,7 +44,7 @@ export default function LimitationOverrideModal({
     if (!isOpen) {
       setStep('blocked')
       setOverrideId(null)
-      setOtpDigits(['', '', '', '', '', ''])
+      setOtpCode('')
       setError(null)
       setSending(false)
       setVerifying(false)
@@ -75,7 +75,7 @@ export default function LimitationOverrideModal({
       setOverrideId(data.overrideId)
       setStep('otp-sent')
       toast.success('Codice inviato alla direzione')
-      setTimeout(() => otpRefs.current[0]?.focus(), 100)
+      setTimeout(() => otpInputRef.current?.focus(), 100)
     } catch {
       setError('Invio OTP non riuscito, riprova')
     } finally {
@@ -84,8 +84,7 @@ export default function LimitationOverrideModal({
   }
 
   async function verifyCode() {
-    const code = otpDigits.join('')
-    if (code.length < 6) return
+    if (otpCode.length < 6) return
 
     setVerifying(true)
     setError(null)
@@ -93,7 +92,7 @@ export default function LimitationOverrideModal({
       const res = await authFetch('/.netlify/functions/limitation-override-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify', overrideId, code })
+        body: JSON.stringify({ action: 'verify', overrideId, code: otpCode })
       })
       const data = await res.json()
       if (!res.ok) {
@@ -114,37 +113,20 @@ export default function LimitationOverrideModal({
   }
 
   async function resendOtp() {
-    setOtpDigits(['', '', '', '', '', ''])
+    setOtpCode('')
     setError(null)
     await sendOtp()
   }
 
-  function handleOtpDigit(index: number, value: string) {
-    if (value.length > 1) value = value.slice(-1)
-    if (value && !/^\d$/.test(value)) return
-    const newDigits = [...otpDigits]
-    newDigits[index] = value
-    setOtpDigits(newDigits)
-    if (value && index < 5) {
-      otpRefs.current[index + 1]?.focus()
-    }
+  function handleOtpChange(value: string) {
+    // Numeric only, max 6 digits
+    const cleaned = value.replace(/\D/g, '').slice(0, 6)
+    setOtpCode(cleaned)
   }
 
-  function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus()
-    }
+  function handleOtpKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') {
       verifyCode()
-    }
-  }
-
-  function handleOtpPaste(e: React.ClipboardEvent) {
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-    if (pasted.length === 6) {
-      e.preventDefault()
-      setOtpDigits(pasted.split(''))
-      otpRefs.current[5]?.focus()
     }
   }
 
@@ -180,22 +162,20 @@ export default function LimitationOverrideModal({
                 Il codice è stato inviato al numero autorizzativo configurato per le ricariche wallet. Inserisci il codice per autorizzare questa specifica operazione.
               </p>
 
-              {/* OTP Input */}
-              <div className="flex justify-center gap-2 mb-4">
-                {otpDigits.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={el => { otpRefs.current[i] = el }}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleOtpDigit(i, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                    onPaste={i === 0 ? handleOtpPaste : undefined}
-                    className="w-11 h-13 text-center text-xl font-bold rounded-lg border-2 border-theme-border bg-theme-bg-secondary text-theme-text-primary focus:border-dr7-gold focus:outline-none transition-colors"
-                  />
-                ))}
+              {/* OTP Input — single rectangle */}
+              <div className="mb-4">
+                <input
+                  ref={otpInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => handleOtpChange(e.target.value)}
+                  onKeyDown={handleOtpKeyDown}
+                  placeholder="------"
+                  className="w-full h-14 text-center text-2xl font-bold tracking-[0.5em] rounded-lg border-2 border-theme-border bg-theme-bg-secondary text-theme-text-primary focus:border-dr7-gold focus:outline-none transition-colors"
+                />
               </div>
             </>
           )}
@@ -247,7 +227,7 @@ export default function LimitationOverrideModal({
               </button>
               <button
                 onClick={verifyCode}
-                disabled={otpDigits.join('').length < 6 || verifying}
+                disabled={otpCode.length < 6 || verifying}
                 className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium"
               >
                 {verifying ? 'Verifica...' : 'Verifica'}

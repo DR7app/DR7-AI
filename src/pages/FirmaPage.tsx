@@ -199,34 +199,6 @@ export default function FirmaPage() {
         }
     }
 
-    function handleOtpChange(index: number, value: string) {
-        if (!/^\d*$/.test(value)) return
-        const newOtp = [...otp]
-        newOtp[index] = value.slice(-1)
-        setOtp(newOtp)
-        if (value && index < 5) {
-            otpRefs.current[index + 1]?.focus()
-        }
-    }
-
-    function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
-        if (e.key === 'Backspace' && !otp[index] && index > 0) {
-            otpRefs.current[index - 1]?.focus()
-        }
-    }
-
-    function handleOtpPaste(e: React.ClipboardEvent) {
-        e.preventDefault()
-        const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-        const newOtp = [...otp]
-        for (let i = 0; i < pasted.length; i++) {
-            newOtp[i] = pasted[i]
-        }
-        setOtp(newOtp)
-        const nextEmpty = newOtp.findIndex(d => !d)
-        otpRefs.current[nextEmpty === -1 ? 5 : nextEmpty]?.focus()
-    }
-
     if (status === 'loading') {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -366,21 +338,24 @@ export default function FirmaPage() {
                                 : `Abbiamo inviato un codice a 6 cifre a ${signerEmail}`}
                         </p>
 
-                        <div className="flex justify-center gap-2 mb-6" onPaste={handleOtpPaste}>
-                            {otp.map((digit, i) => (
-                                <input
-                                    key={i}
-                                    ref={el => { otpRefs.current[i] = el }}
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={1}
-                                    value={digit}
-                                    onChange={e => handleOtpChange(i, e.target.value)}
-                                    onKeyDown={e => handleOtpKeyDown(i, e)}
-                                    className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-[#2d8a7e] focus:outline-none transition-colors"
-                                    disabled={status === 'otp_verifying'}
-                                />
-                            ))}
+                        <div className="mb-6">
+                            <input
+                                ref={el => { otpRefs.current[0] = el }}
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                maxLength={6}
+                                value={otp.join('')}
+                                onChange={e => {
+                                    const cleaned = e.target.value.replace(/\D/g, '').slice(0, 6)
+                                    const next = ['', '', '', '', '', '']
+                                    for (let i = 0; i < cleaned.length; i++) next[i] = cleaned[i]
+                                    setOtp(next)
+                                }}
+                                placeholder="------"
+                                className="w-full h-14 text-center text-2xl font-bold tracking-[0.5em] border-2 border-gray-300 rounded-lg focus:border-[#2d8a7e] focus:outline-none transition-colors"
+                                disabled={status === 'otp_verifying'}
+                            />
                         </div>
 
                         {remainingAttempts < 5 && (
