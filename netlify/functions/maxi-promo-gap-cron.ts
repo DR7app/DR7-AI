@@ -170,9 +170,11 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   const nowMs = now.getTime()
 
   // Per-vehicle gap detection (matches maxi-promo-gap-test.ts).
-  // A gap exists when the vehicle has an upcoming booking starting
-  // anywhere in the next 365 days AND has a free window of [4h, 48h]
-  // before it. Outside that band we don't send.
+  // Emit ONE candidate per qualifying gap (4h-48h):
+  //   (a) Imminent gap from now to the next upcoming booking
+  //   (b) Every gap between consecutive future bookings within 365 days
+  // A vehicle with N future qualifying gaps produces N candidates;
+  // dedup on (vehicle, gap_date, recipient) prevents double-sending.
   const MIN_GAP_MS = 4 * 3600 * 1000
   const MAX_GAP_MS = 48 * 3600 * 1000
   const candidates: Array<{
@@ -185,6 +187,22 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     gapHours: number;
   }> = []
 
+  const considerGap = (vehicle: Vehicle, freeFromMs: number, nextStartMs: number) => {
+    const gapMs = nextStartMs - freeFromMs
+    if (gapMs < MIN_GAP_MS) return
+    if (gapMs > MAX_GAP_MS) return
+    const gapDate = new Date(nextStartMs - 1)
+    candidates.push({
+      vehicle,
+      reason: 'detected',
+      gapDate,
+      gapDateDb: romeYMD(gapDate),
+      gapStartDate: new Date(freeFromMs),
+      gapEndDate: gapDate,
+      gapHours: Math.round(gapMs / 3600 / 1000),
+    })
+  }
+
   for (const v of vehicles) {
     const vBookings = bookings
       .filter(b => (b.vehicle_id && b.vehicle_id === v.id)
@@ -192,26 +210,22 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       .map(b => ({ ...b, _start: new Date(b.pickup_date).getTime(), _end: new Date(b.dropoff_date).getTime() }))
       .sort((a, b) => a._start - b._start)
 
-    const nextBooking = vBookings.find(b => b._start > nowMs && b._start <= horizonEnd.getTime())
-    if (!nextBooking) continue
+    // (a) Imminent gap.
+    const nextUpcoming = vBookings.find(b => b._start > nowMs && b._start <= horizonEnd.getTime())
+    if (nextUpcoming) {
+      const currentOrPrev = vBookings.filter(b => b._end <= nextUpcoming._start && b._start <= nowMs).pop()
+      const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
+      considerGap(v, freeFromMs, nextUpcoming._start)
+    }
 
-    const currentOrPrev = vBookings.filter(b => b._end <= nextBooking._start && b._start <= nowMs).pop()
-    const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
-    const gapMs = nextBooking._start - freeFromMs
-    if (gapMs < MIN_GAP_MS) continue
-    if (gapMs > MAX_GAP_MS) continue
-
-    const gapDate = new Date(nextBooking._start - 1) // day before pickup
-    const gapStartDate = new Date(freeFromMs)
-    candidates.push({
-      vehicle: v,
-      reason: 'detected',
-      gapDate,
-      gapDateDb: romeYMD(gapDate),
-      gapStartDate,
-      gapEndDate: gapDate,
-      gapHours: Math.round(gapMs / 3600 / 1000),
-    })
+    // (b) Gaps between consecutive future bookings.
+    const futureSorted = vBookings.filter(b => b._start <= horizonEnd.getTime())
+    for (let i = 0; i + 1 < futureSorted.length; i++) {
+      const a = futureSorted[i]
+      const b = futureSorted[i + 1]
+      if (a._end <= nowMs) continue // covered by branch (a)
+      considerGap(v, a._end, b._start)
+    }
   }
 
   if (candidates.length === 0) {

@@ -1026,14 +1026,16 @@ export default function MessaggiSistemaProTab() {
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <pre className="px-4 py-3 rounded-lg bg-theme-bg-primary text-xs text-theme-text-secondary whitespace-pre-wrap max-h-72 overflow-y-auto border border-theme-border">
-                                                        {template.message_body}
-                                                    </pre>
-                                                    {template.include_header === true && (
-                                                        <p className="text-[11px] text-amber-400 mt-1">
-                                                            Wrapper attivo: header/footer da “Intestazione/Piè di pagina” verranno aggiunti automaticamente.
-                                                        </p>
-                                                    )}
+                                                    <>
+                                                        <pre className="px-4 py-3 rounded-lg bg-theme-bg-primary text-xs text-theme-text-secondary whitespace-pre-wrap max-h-72 overflow-y-auto border border-theme-border">
+                                                            {template.message_body}
+                                                        </pre>
+                                                        {template.include_header === true && (
+                                                            <p className="text-[11px] text-amber-400 mt-1">
+                                                                Wrapper attivo: header/footer da “Intestazione/Piè di pagina” verranno aggiunti automaticamente.
+                                                            </p>
+                                                        )}
+                                                    </>
                                                 )}
 
                                                 <div className="flex gap-2 justify-end">

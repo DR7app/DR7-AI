@@ -126,11 +126,12 @@ export const handler: Handler = async (event) => {
   const bookings: Booking[] = bookingsData || []
 
   // Per-vehicle gap detection.
-  // A gap exists when the vehicle has an upcoming booking starting in
-  // the next 48h AND there is a free window before it whose duration
-  // falls within [MIN_GAP_HOURS, MAX_GAP_HOURS]. Outside that band:
-  //   - <4h:  too short to be a useful rental (no 1-day promo)
-  //   - >48h: not a "1-day gap" — different promo flow, skip here
+  // A gap exists when there is a free window of [4h, 48h] either:
+  //   (a) Between now and the FIRST upcoming booking (the imminent gap), or
+  //   (b) Between any two CONSECUTIVE bookings within the 365-day horizon.
+  // We emit ONE candidate per qualifying gap. A vehicle with multiple
+  // future qualifying gaps gets multiple candidates and (after dedup) one
+  // WhatsApp per gap_date.
   type GapHit = {
     vehicle: Vehicle;
     nextPickup: Date;
@@ -144,6 +145,21 @@ export const handler: Handler = async (event) => {
   const MIN_GAP_MS = 4 * 3600 * 1000
   const MAX_GAP_MS = 48 * 3600 * 1000
 
+  const considerGap = (vehicle: Vehicle, freeFromMs: number, nextStartMs: number) => {
+    const gapMs = nextStartMs - freeFromMs
+    if (gapMs < MIN_GAP_MS) return
+    if (gapMs > MAX_GAP_MS) return
+    const gapDate = new Date(nextStartMs - 1)
+    gapHits.push({
+      vehicle,
+      nextPickup: new Date(nextStartMs),
+      gapDate,
+      gapStartDate: new Date(freeFromMs),
+      gapEndDate: gapDate,
+      gapHours: Math.round((gapMs / 3600 / 1000) * 10) / 10,
+    })
+  }
+
   for (const v of vehicles) {
     const vBookings = bookings
       .filter(b => (b.vehicle_id && b.vehicle_id === v.id)
@@ -151,33 +167,25 @@ export const handler: Handler = async (event) => {
       .map(b => ({ ...b, _start: new Date(b.pickup_date).getTime(), _end: new Date(b.dropoff_date).getTime() }))
       .sort((a, b) => a._start - b._start)
 
-    // The next booking that starts AFTER now and within the 48h horizon.
-    const nextBooking = vBookings.find(b => b._start > nowMs && b._start <= horizonEnd.getTime())
-    if (!nextBooking) continue
+    // (a) Imminent gap: from now (or current booking's dropoff) to the next pickup.
+    const nextUpcoming = vBookings.find(b => b._start > nowMs && b._start <= horizonEnd.getTime())
+    if (nextUpcoming) {
+      const currentOrPrev = vBookings.filter(b => b._end <= nextUpcoming._start && b._start <= nowMs).pop()
+      const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
+      considerGap(v, freeFromMs, nextUpcoming._start)
+    }
 
-    // Latest booking that's still active at "now" (or has just ended).
-    const currentOrPrev = vBookings.filter(b => b._end <= nextBooking._start && b._start <= nowMs).pop()
-    const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
-    const gapMs = nextBooking._start - freeFromMs
-    if (gapMs < MIN_GAP_MS) continue   // too short
-    if (gapMs > MAX_GAP_MS) continue   // too long
-
-    // gap_date (legacy) = the calendar day (Europe/Rome) just before
-    // nextBooking.pickup_date. Subtract 1ms so a pickup at 00:00 still
-    // resolves to the previous day.
-    const gapDate = new Date(nextBooking._start - 1)
-    // For multi-day gaps we also expose the FIRST day of the free window
-    // so the template can render "dal X al Y".
-    const gapStartDate = new Date(freeFromMs)
-    const gapEndDate = gapDate
-    gapHits.push({
-      vehicle: v,
-      nextPickup: new Date(nextBooking._start),
-      gapDate,
-      gapStartDate,
-      gapEndDate,
-      gapHours: Math.round(gapMs / 3600 / 1000 * 10) / 10,
-    })
+    // (b) Gaps between consecutive future bookings (skip the back-to-back
+    //     case, the [4h,48h] band already excludes <4h).
+    const futureSorted = vBookings.filter(b => b._start <= horizonEnd.getTime())
+    for (let i = 0; i + 1 < futureSorted.length; i++) {
+      const a = futureSorted[i]
+      const b = futureSorted[i + 1]
+      // Skip if the "before" booking already ended in the past — that
+      // case is covered by branch (a) above with the imminent gap.
+      if (a._end <= nowMs) continue
+      considerGap(v, a._end, b._start)
+    }
   }
 
   const gapVehicles: Vehicle[] = gapHits.map(h => h.vehicle)
