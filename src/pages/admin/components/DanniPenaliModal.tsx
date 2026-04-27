@@ -39,50 +39,12 @@ interface PenaltyPreset {
     description: string
 }
 
-const SUPERCAR_PENALTIES: PenaltyPreset[] = [
-    { id: 'fermo_incidente', label: 'Fermo veicolo incidente/danni', amount: 350, description: '€350/giorno' },
-    { id: 'fermo_alto_valore', label: 'Fermo veicolo (auto > €200k)', amount: 700, description: '€700/giorno' },
-    { id: 'fumo', label: 'Fumo nell\'auto', amount: 50, description: 'Odore/cenere' },
-    { id: 'foro_sigaretta', label: 'Foro da sigaretta', amount: 50, description: 'Per foro' },
-    { id: 'guidatore_non_indicato', label: 'Guidatore non nel contratto', amount: 200, description: 'Violazione contratto' },
-    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 25, description: 'Quadro 8 tacche' },
-    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 50, description: 'Quadro 4 tacche' },
-    { id: 'gonfia_ripara', label: 'Bomboletta gonfia e ripara', amount: 100, description: 'Per pneumatico' },
-    { id: 'sporco', label: 'Veicolo sporco', amount: 30, description: 'Interni/rifiuti' },
-    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'Pulizia profonda' },
-    { id: 'controlli_elettronici', label: 'Controlli elettronici disattivati', amount: 100, description: 'ESP/stabilita' },
-    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico cliente' },
-    { id: 'assenza_intestatario', label: 'Assenza intestatario', amount: 150, description: 'Consegna/ritiro' },
-    { id: 'ritardo_checkout_base', label: 'Ritardo check-out (> 30 min)', amount: 50, description: 'Base minima' },
-    { id: 'ritardo_checkout_minuto', label: 'Ritardo check-out (per min)', amount: 0.5, description: 'Oltre i 30 min' },
-    { id: 'pista', label: 'Utilizzo in pista', amount: 5000, description: 'Kasko non attiva' },
-    { id: 'cani', label: 'Cani / pelo di cane', amount: 100, description: 'Non tollerato' },
-    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave' },
-    { id: 'neopatentati', label: 'Guida neopatentati', amount: 0, description: 'Responsabilita TOTALE' },
-    { id: 'patente_mancante', label: 'Mancata esibizione patente', amount: 0, description: 'Perdita prenotazione' },
-    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (> 22h30)', amount: 0, description: 'Max = tariffa giornaliera' },
-]
-
-const URBAN_PENALTIES: PenaltyPreset[] = [
-    { id: 'fermo_utilitarie', label: 'Fermo veicolo (Utilitarie)', amount: 30, description: '€30/giorno' },
-    { id: 'fermo_furgoni', label: 'Fermo veicolo (Furgoni/NCC)', amount: 100, description: '€100/giorno' },
-    { id: 'fumo', label: 'Fumo nell\'auto', amount: 50, description: 'Odore/cenere' },
-    { id: 'foro_sigaretta', label: 'Foro da sigaretta', amount: 50, description: 'Per foro' },
-    { id: 'guidatore_non_indicato', label: 'Guidatore non nel contratto', amount: 200, description: 'Violazione contratto' },
-    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 15, description: 'Quadro 8 tacche' },
-    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 30, description: 'Quadro 4 tacche' },
-    { id: 'gonfia_ripara', label: 'Bomboletta gonfia e ripara', amount: 100, description: 'Per pneumatico' },
-    { id: 'sporco', label: 'Veicolo sporco', amount: 30, description: 'Interni/rifiuti' },
-    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'Pulizia profonda' },
-    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico cliente' },
-    { id: 'assenza_intestatario', label: 'Assenza intestatario', amount: 150, description: 'Consegna/ritiro' },
-    { id: 'ritardo_checkout_base', label: 'Ritardo check-out (> 30 min)', amount: 20, description: 'Base minima' },
-    { id: 'ritardo_checkout_minuto', label: 'Ritardo check-out (per min)', amount: 0.5, description: 'Oltre i 30 min' },
-    { id: 'neopatentati', label: 'Guida neopatentati', amount: 0, description: 'Responsabilita TOTALE' },
-    { id: 'cani', label: 'Cani / pelo di cane', amount: 100, description: 'Non tollerato' },
-    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave' },
-    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (> 22h30)', amount: 0, description: 'Max = tariffa giornaliera' },
-]
+// Penalty + danno presets are now sourced ONLY from Centralina Pro
+// (centralina_pro_config.config.penali / .danni). The previous hardcoded
+// SUPERCAR_PENALTIES / URBAN_PENALTIES arrays are removed so a price change
+// in Centralina is reflected here without code edits. If a category isn't
+// configured, the modal shows an empty-state with a pointer back to
+// Centralina Pro.
 
 export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, onEditCustomer, initialTab = 'danni' }: DanniPenaliModalProps) {
     const [activeTab, setActiveTab] = useState<'danni' | 'penali'>(initialTab)
@@ -150,23 +112,29 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         return () => { cancelled = true }
     }, [isOpen])
 
-    const vehicleCategory = booking.booking_details?.vehicle?.category ||
+    const rawCategory = booking.booking_details?.vehicle?.category ||
         booking.booking_details?.vehicleCategory ||
         booking.booking_details?.category || ''
-    const isSupercar = vehicleCategory === 'exotic'
+    // Normalise legacy category strings to the keys Centralina Pro uses.
+    // exotic/supercar → 'exotic', furgone → 'aziendali', everything else stays.
+    const vehicleCategory = (() => {
+        const c = String(rawCategory || '').toLowerCase().trim()
+        if (c === 'supercar' || c === 'supercars' || c === 'exotic') return 'exotic'
+        if (c === 'furgone' || c === 'aziendali' || c === 'furgoni' || c === 'ncc') return 'aziendali'
+        if (c === 'urban' || c === 'utilitaria' || c === 'utilitarie') return 'urban'
+        return c
+    })()
+    // Single source of truth: Centralina Pro. No hardcoded fallback.
+    // If the admin hasn't configured a list for this category, the modal
+    // shows the empty-state below so the operator knows where to fix it.
     const penaltyList: PenaltyPreset[] = useMemo(() => {
-        if (penaliFromCfg) {
-            const fromCfg = penaliFromCfg[vehicleCategory] || penaliFromCfg[isSupercar ? 'exotic' : 'urban']
-            if (Array.isArray(fromCfg) && fromCfg.length > 0) return fromCfg
-        }
-        return isSupercar ? SUPERCAR_PENALTIES : URBAN_PENALTIES
-    }, [penaliFromCfg, vehicleCategory, isSupercar])
+        if (!penaliFromCfg) return []
+        return penaliFromCfg[vehicleCategory] || []
+    }, [penaliFromCfg, vehicleCategory])
     const danniPresetList: PenaltyPreset[] = useMemo(() => {
         if (!danniFromCfg) return []
-        return danniFromCfg[vehicleCategory]
-            || danniFromCfg[isSupercar ? 'exotic' : 'urban']
-            || []
-    }, [danniFromCfg, vehicleCategory, isSupercar])
+        return danniFromCfg[vehicleCategory] || []
+    }, [danniFromCfg, vehicleCategory])
 
     if (!isOpen) return null
 
@@ -682,7 +650,14 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         </>
                     ) : (
                         <>
-                            {/* Preset penalties */}
+                            {/* Preset penalties — empty state when nothing
+                                configured for this vehicle's category. */}
+                            {penaltyList.length === 0 && (
+                                <div className="rounded-2xl bg-amber-500/[0.08] border border-amber-500/30 p-4 mb-3 text-[13px] text-amber-300">
+                                    Nessuna penale configurata per la categoria <strong>{vehicleCategory || 'sconosciuta'}</strong>.
+                                    Apri <strong>Centralina Pro → Danni &amp; Penali → Penali → tab {vehicleCategory || 'corretto'}</strong> e aggiungi le voci.
+                                </div>
+                            )}
                             <div className="rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
                                 {penaltyList.map((penalty, idx) => {
                                     const qty = getCartQty(penalty.id)
