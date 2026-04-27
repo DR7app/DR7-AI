@@ -320,16 +320,23 @@ const handler: Handler = async (event) => {
                 const amountEur = (transaction.amount_cents / 100).toFixed(2);
                 const details = booking.booking_details || {};
 
-                // Mark matching danni/penali entries as paid
+                // Mark matching danni/penali entries as paid.
+                // amountPaid must equal what the CUSTOMER actually paid =
+                // total − discount (DanniPenaliModal stores `discount` per item
+                // when admin used "Prezzo finale desiderato"). Setting it to
+                // the raw total leaves the booking looking under-paid forever.
                 let updated = false;
                 const arrayKeys = paymentPurpose === 'danni' ? ['danni'] : paymentPurpose === 'penali' ? ['penalties'] : ['danni', 'penalties'];
                 for (const key of arrayKeys) {
                     const items = details[key] || [];
                     for (const item of items) {
                         if (item.paymentStatus === 'nexi_pay_by_link' || item.paymentStatus === 'pending' || !item.paymentStatus) {
+                            const itemTotal = item.total || (item.amount || 0) * (item.quantity || 1);
+                            const itemDiscount = Number(item.discount) || 0;
+                            const itemEffective = Math.round((itemTotal - itemDiscount) * 100) / 100;
                             item.paymentStatus = 'paid';
                             item.paymentMethod = 'Nexi Pay by Link';
-                            item.amountPaid = item.total || (item.amount || 0) * (item.quantity || 1);
+                            item.amountPaid = itemEffective;
                             item.paidAt = new Date().toISOString();
                             updated = true;
                         }
@@ -347,14 +354,26 @@ const handler: Handler = async (event) => {
                     console.log(`[nexi-payment-callback] Marked ${paymentPurpose} as paid in booking_details`);
                 }
 
-                // Generate penalty/danni fattura
+                // Generate penalty/danni fattura.
+                // Items are passed at FULL price (so the fattura subtotale
+                // matches what the customer originally saw). The aggregate
+                // `discount` (set by DanniPenaliModal) is sent as
+                // discountAmount — generate-penalty-invoice appends a Sconto
+                // line so Subtotal − Sconto = Totale renders correctly.
                 try {
                     const custId = details.customer?.customerId || details.customer?.id || details.customer_id;
                     const allItems: { label: string; amount: number; quantity: number }[] = [];
+                    let aggregateDiscount = 0;
                     for (const key of arrayKeys) {
                         for (const item of (details[key] || [])) {
                             if (item.paidAt === new Date().toISOString().split('T')[0] || item.paymentMethod === 'Nexi Pay by Link') {
-                                allItems.push({ label: item.label || (key === 'danni' ? 'Danno' : 'Penale'), amount: item.amount || item.total || 0, quantity: item.quantity || 1 });
+                                const itemTotal = item.total || (item.amount || 0) * (item.quantity || 1);
+                                allItems.push({
+                                    label: item.label || (key === 'danni' ? 'Danno' : 'Penale'),
+                                    amount: itemTotal,
+                                    quantity: 1, // already aggregated into amount
+                                });
+                                aggregateDiscount += Number(item.discount) || 0;
                             }
                         }
                     }
@@ -371,6 +390,7 @@ const handler: Handler = async (event) => {
                             bookingId: booking.id,
                             customerId: custId,
                             items: allItems,
+                            discountAmount: aggregateDiscount > 0 ? Math.round(aggregateDiscount * 100) / 100 : undefined,
                             type: paymentPurpose,
                             paymentStatus: 'paid'
                         })

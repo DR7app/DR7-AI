@@ -1087,6 +1087,11 @@ export default function UnpaidBookingsTab() {
 
       // 2. THEN: Try to generate fattura (non-blocking — payment is already marked)
       if (pending.length > 0) {
+        // Carry the per-item discount that DanniPenaliModal stored when the
+        // admin set "Prezzo finale desiderato". Items go to the fattura at
+        // their FULL price (so the subtotale matches what the customer
+        // initially saw); the sum of discounts is sent as discountAmount and
+        // the fattura renders Subtotal / Sconto / Totale correctly.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const invoiceItems = pending.map((item: any) => {
           const total = item.total || (item.amount || 0) * (item.quantity || 1)
@@ -1094,6 +1099,9 @@ export default function UnpaidBookingsTab() {
           return { label: item.label, amount: remaining, quantity: 1 }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         }).filter((i: any) => i.amount > 0)
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const totalDiscount = pending.reduce((sum: number, item: any) => sum + (Number(item.discount) || 0), 0)
 
         if (invoiceItems.length > 0) {
           try {
@@ -1104,6 +1112,7 @@ export default function UnpaidBookingsTab() {
                 bookingId: booking.id,
                 customerId: booking.customer_id || booking.user_id,
                 items: invoiceItems,
+                discountAmount: totalDiscount > 0 ? totalDiscount : undefined,
                 type: type === 'danni' ? 'danni' : undefined,
                 paymentStatus: 'paid'
               })
@@ -1723,8 +1732,11 @@ export default function UnpaidBookingsTab() {
     penalties.forEach((p: any) => {
       if (!p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link') {
         const total = p.total || (p.amount || 0) * (p.quantity || 1)
+        // `discount` is set by DanniPenaliModal when the admin used
+        // "Prezzo finale desiderato". Owed = total − discount − paid.
+        const discount = p.discount || 0
         const paid = p.amountPaid || 0
-        remaining += Math.round((total - paid) * 100)
+        remaining += Math.round((total - discount - paid) * 100)
       }
     })
 
@@ -1733,8 +1745,9 @@ export default function UnpaidBookingsTab() {
     danni.forEach((d: any) => {
       if (!d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link') {
         const total = d.total || (d.amount || 0) * (d.quantity || 1)
+        const discount = d.discount || 0
         const paid = d.amountPaid || 0
-        remaining += Math.round((total - paid) * 100)
+        remaining += Math.round((total - discount - paid) * 100)
       }
     })
 

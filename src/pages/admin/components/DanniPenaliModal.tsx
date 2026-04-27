@@ -396,20 +396,31 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             const paidAmount = amountPaid ? parseFloat(amountPaid) : cartTotal
             const isPartial = paymentStatus === 'paid' && paidAmount < cartTotal
 
+            // When the admin set "Prezzo finale desiderato" lower than the cart
+            // subtotal, distribute the difference proportionally across items.
+            // Saving a per-item `discount` lets every consumer (UnpaidBookingsTab,
+            // generate-penalty-invoice, nexi-payment-callback) know the actual
+            // amount owed = total - discount, without losing the subtotal/sconto
+            // breakdown the fattura needs to display.
+            const discountRatio = cartDiscount > 0 && cartSubtotal > 0 ? (cartDiscount / cartSubtotal) : 0
+
             // Build danni entries
             const existingDanni = details.danni || []
             const newDanniEntries = danniItems.map(c => {
                 const itemTotal = Math.round(c.unitPrice * c.quantity * 100) / 100
+                const itemDiscount = Math.round(itemTotal * discountRatio * 100) / 100
+                const itemEffective = Math.round((itemTotal - itemDiscount) * 100) / 100
                 let itemPaid = 0
                 if (paymentStatus === 'paid') {
                     if (isPartial) {
-                        itemPaid = Math.round((itemTotal / cartTotal) * paidAmount * 100) / 100
+                        itemPaid = Math.round((itemEffective / cartTotal) * paidAmount * 100) / 100
                     } else {
-                        itemPaid = itemTotal
+                        itemPaid = itemEffective
                     }
                 }
                 return {
                     label: c.label, amount: c.unitPrice, quantity: c.quantity, total: itemTotal,
+                    discount: itemDiscount,
                     note: note || '', date: italyDate,
                     paymentStatus: isPartial ? 'partial' : paymentStatus,
                     paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
@@ -421,16 +432,19 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             const existingPenalties = details.penalties || []
             const newPenaltyEntries = penaliItems.map(c => {
                 const itemTotal = Math.round(c.unitPrice * c.quantity * 100) / 100
+                const itemDiscount = Math.round(itemTotal * discountRatio * 100) / 100
+                const itemEffective = Math.round((itemTotal - itemDiscount) * 100) / 100
                 let itemPaid = 0
                 if (paymentStatus === 'paid') {
                     if (isPartial) {
-                        itemPaid = Math.round((itemTotal / cartTotal) * paidAmount * 100) / 100
+                        itemPaid = Math.round((itemEffective / cartTotal) * paidAmount * 100) / 100
                     } else {
-                        itemPaid = itemTotal
+                        itemPaid = itemEffective
                     }
                 }
                 return {
                     label: c.label, amount: c.unitPrice, quantity: c.quantity, total: itemTotal,
+                    discount: itemDiscount,
                     note: note || '', date: italyDate,
                     paymentStatus: isPartial ? 'partial' : paymentStatus,
                     paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
