@@ -156,6 +156,11 @@ const OLD_TO_PRO: Record<string, string> = {
   birthday_message: 'pro_marketing_compleanno',
   wallet_bonus_credit: 'pro_richiesta_documenti',
 
+  // Fidelity Card — voucher message fired at 250 punti.
+  // Body lives in `pro_fidelity_voucher` so admin can edit it from
+  // Messaggi di Sistema Pro without redeploying.
+  fidelity_voucher_whatsapp: 'pro_fidelity_voucher',
+
   // Website customer actions
   website_booking_cancelled_customer: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
 }
