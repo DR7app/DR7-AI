@@ -163,8 +163,8 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   // so customers don't get marketing pings overnight. Outside that window,
   // every detected new gap gets sent immediately — no 18:00 gate, no
   // recent-booking requirement.
-  const QUIET_START_HOUR = 20 // 8 PM
-  const QUIET_END_HOUR = 8    // 8 AM
+  const QUIET_START_HOUR = 22 // 10 PM
+  const QUIET_END_HOUR = 7    // 7 AM
   const isQuietHour = hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR
   if (isQuietHour) return skip(`quiet hours ${QUIET_START_HOUR}:00–${QUIET_END_HOUR}:00 (current Rome hour: ${hour})`)
   const nowMs = now.getTime()
