@@ -303,15 +303,12 @@ export default function AdminDashboard() {
       {/* Sidebar — max-w-[280px] on mobile to leave space for closing */}
       <aside className={`fixed inset-y-3 left-3 z-[70] w-[60vw] max-w-[180px] bg-[#1a2332] flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
         {/* Logo + Close */}
-        <div className="px-5 py-4 flex items-center justify-between" style={{ backgroundColor: '#FCFCFC' }}>
-          <div className="flex items-center gap-3">
-            <img src="/rentora-logo.jpeg" alt="Rentora" className="h-16 w-auto" />
-            <div>
-              <h1 className="text-[#1a2332] font-semibold text-[10px] tracking-wide">Operating Platform</h1>
-              <p className="text-[#1a2332]/50 text-[8px] tracking-widest">A.I.</p>
-            </div>
-          </div>
-          <button onClick={() => setSidebarOpen(false)} className="text-[#1a2332]/40 hover:text-[#1a2332] min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg -mr-2">
+        <div className="relative px-5 py-4 flex items-center justify-center" style={{ backgroundColor: '#FCFCFC' }}>
+          <img src="/rentora-logo.jpeg" alt="Rentora" className="h-16 w-auto" />
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-[#1a2332]/40 hover:text-[#1a2332] min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg"
+          >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -320,8 +317,11 @@ export default function AdminDashboard() {
 
         {/* Navigation — one entry per section. Click switches activeTab to
             the first sub-tab of that section. The in-page horizontal tab
-            bar (rendered above the content) lets the user pick a sub-tab. */}
-        <nav className="flex-1 py-3 px-3 space-y-1 overflow-y-auto scrollbar-thin">
+            bar (rendered above the content) lets the user pick a sub-tab.
+            Spacing: flex-col + justify-evenly distribuisce le sezioni in
+            modo uniforme su tutta l'altezza disponibile, eliminando il
+            grosso vuoto sotto l'ultima voce. */}
+        <nav className="flex-1 flex flex-col justify-evenly py-2 px-3 overflow-y-auto scrollbar-thin">
           {SECTIONS.map(section => {
             const visibleTabs = section.tabs.filter(t => !t.superadminOnly || adminRole === 'superadmin')
             if (visibleTabs.length === 0) return null
@@ -338,9 +338,9 @@ export default function AdminDashboard() {
                 // Full-width clickable row, but the active highlight only
                 // wraps the text — not the entire row. Text-only pill avoids
                 // the oversized green block that spanned the full sidebar.
-                className="w-full text-left flex items-center justify-between py-1 px-1 transition-colors group"
+                className="w-full text-left flex items-center justify-between px-1 transition-colors group"
               >
-                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${sectionActive ? 'bg-dr7-gold text-white' : 'text-white/70 group-hover:text-white group-hover:bg-[#243044]'}`}>
+                <span className={`inline-flex items-center px-3 py-2 rounded-lg text-[13px] font-semibold transition-colors ${sectionActive ? 'bg-dr7-gold text-white' : 'text-white/70 group-hover:text-white group-hover:bg-[#243044]'}`}>
                   {section.name}
                 </span>
                 {showBirthdayBadge && (
