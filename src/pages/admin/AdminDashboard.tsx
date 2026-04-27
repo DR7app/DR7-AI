@@ -308,14 +308,22 @@ export default function AdminDashboard() {
 
       {/* Sidebar — max-w-[280px] on mobile to leave space for closing */}
       <aside className={`fixed inset-y-3 left-3 z-[70] w-[60vw] max-w-[180px] bg-[#1a2332] flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
-        {/* Logo + Close */}
-        <div className="relative px-5 py-4 flex items-center justify-center" style={{ backgroundColor: '#FCFCFC' }}>
-          <img src="/rentora-logo.jpeg" alt="Rentora" className="h-16 w-auto" />
+        {/* Logo + Close.
+            The logo (2048×632, ratio ≈ 3.24:1) must NEVER be compressed
+            horizontally. object-contain + matched max-width/max-height
+            lets the browser preserve aspect ratio inside the sidebar's
+            narrow ~140px inner panel without flex shrinking it. */}
+        <div className="relative px-3 py-3 flex items-center justify-center" style={{ backgroundColor: '#FCFCFC' }}>
+          <img
+            src="/rentora-logo.jpeg"
+            alt="Rentora"
+            className="max-h-10 max-w-[120px] w-auto h-auto object-contain"
+          />
           <button
             onClick={() => setSidebarOpen(false)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-[#1a2332]/40 hover:text-[#1a2332] min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg"
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-[#1a2332]/40 hover:text-[#1a2332] min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
