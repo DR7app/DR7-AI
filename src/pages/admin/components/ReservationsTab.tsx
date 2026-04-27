@@ -571,9 +571,107 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const { config: rentalConfig } = useRentalConfig()
   const configOverlay = useMemo(() => buildConfigOverlay(rentalConfig), [rentalConfig])
 
+  // ── Centralina Pro live read for No-Cauzione surcharge ────────────────
+  // Mirrors the lookup added to PreventiviTab. Reads
+  //   centralina_pro_config.deposits[category][fascia][residente|non_residente]
+  // matches a "Nessuna cauzione" option by id OR by label, and falls back
+  // to configOverlay.noCauzionePerDay if Pro doesn't have it set. Subscribes
+  // to realtime updates so a price edit in CentralinaProTab live-updates
+  // the booking form without a reload.
+  const SARDEGNA_PROVINCES = useMemo(() => new Set(['CA', 'NU', 'OR', 'SS', 'SU', 'OG', 'OT', 'CI', 'VS']), [])
+
+  const [customerProvincia, setCustomerProvincia] = useState<string>('')
+  useEffect(() => {
+    if (!formData.customer_id) {
+      setCustomerProvincia('')
+      return
+    }
+    let cancelled = false
+    fetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled) return
+        const cust = data?.customer
+        const prov = String(cust?.provincia_residenza || cust?.provincia || '').toUpperCase().trim()
+        setCustomerProvincia(prov)
+      })
+      .catch(() => { if (!cancelled) setCustomerProvincia('') })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.customer_id])
+
+  // Default to "residente" if no provincia is known yet — matches PreventiviTab default.
+  const isResidenteSardegna = customerProvincia ? SARDEGNA_PROVINCES.has(customerProvincia) : true
+
+  const [proDeposits, setProDeposits] = useState<Record<string, unknown> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      if (cancelled) return
+      const cfg = (data?.config as { deposits?: Record<string, unknown> } | undefined) || {}
+      setProDeposits(cfg.deposits || null)
+    })()
+    const channel = supabase
+      .channel('reservations-deposits')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
+        const cfg = (payload.new as { config?: { deposits?: Record<string, unknown> } } | undefined)?.config
+        if (cfg && typeof cfg === 'object') setProDeposits(cfg.deposits || null)
+      })
+      .subscribe()
+    return () => { cancelled = true; supabase.removeChannel(channel) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const noCauzioneResolvedDaily = useMemo(() => {
+    const fallback = configOverlay.noCauzionePerDay || 0
+    if (!proDeposits) return fallback
+
+    // Detect new (per-category) vs old (per-fascia at root) shape.
+    const firstVal = Object.values(proDeposits)[0] as Record<string, unknown> | undefined
+    const isOld = !!firstVal && typeof firstVal === 'object'
+      && ('residente' in firstVal || 'non_residente' in firstVal)
+
+    const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
+    const vehCat = String(selectedVeh?.category || '').toLowerCase().trim()
+    const proCategory = vehCat === 'supercar' || vehCat === 'supercars' || vehCat === 'exotic'
+      ? 'supercars'
+      : vehCat === 'furgone' || vehCat === 'furgoni' || vehCat === 'aziendali' || vehCat === 'ncc'
+      ? 'aziendali'
+      : 'urban'
+
+    const fasciaKey = customerTier?.tier === 'TIER_1' ? 'B' : 'A'
+    const residencyKey = isResidenteSardegna ? 'residente' : 'non_residente'
+
+    let opts: { id?: string; label?: string; surcharge_per_day?: number | string }[] = []
+    if (isOld) {
+      const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
+      opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
+    } else {
+      const catCfg = proDeposits[proCategory] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+      const fasciaCfg = catCfg?.[fasciaKey]
+      opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
+    }
+
+    const isNoDepositOpt = (o: { id?: string; label?: string }) => {
+      if (o.id === 'no_deposit') return true
+      const label = String(o.label || '').toLowerCase().trim()
+      return /nessuna\s+cauzione|no\s+cauzione|^no_deposit$/i.test(label)
+    }
+    const fromPro = opts.find(isNoDepositOpt)?.surcharge_per_day
+    const num = Number(fromPro)
+    if (Number.isFinite(num) && num > 0) return num
+    return fallback
+  }, [proDeposits, vehicles, formData.vehicle_id, customerTier, isResidenteSardegna, configOverlay.noCauzionePerDay])
+
   // Config-driven price aliases (used throughout the form instead of hardcoded constants)
   const CFG_LAVAGGIO_FEE = configOverlay.lavaggioFee
-  const CFG_NO_CAUZIONE_PER_DAY = configOverlay.noCauzionePerDay
+  // Bound to the live Pro-resolved daily so edits in CentralinaProTab flow through.
+  const CFG_NO_CAUZIONE_PER_DAY = noCauzioneResolvedDaily
   const CFG_UNLIMITED_KM = { TIER_1: configOverlay.unlimitedKmTier1, TIER_2: configOverlay.unlimitedKmTier2 }
   // Unlimited KM prices — read from Centralina Pro config by vehicle category.
   // Quando tier è sconosciuto (customer senza data_nascita/patente → classifier
@@ -704,7 +802,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // customerTier incluso nei deps: cambiando cliente (Fascia A ↔ B) il totale
     // deve ricalcolarsi perché i prezzi di km-illimitati, secondo guidatore e
     // dr7 flex dipendono dalla fascia.
-  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, customerTier])
+  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, customerTier, noCauzioneResolvedDaily])
 
   // Recalculate total when insurance, delivery fees, or payment method change
   useEffect(() => {
@@ -757,7 +855,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       setFormData(prev => ({ ...prev, ...updates }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier, noCauzioneResolvedDaily])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
