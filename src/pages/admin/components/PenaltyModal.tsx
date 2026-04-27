@@ -13,6 +13,7 @@ interface PenaltyModalProps {
         customer_id?: string
         user_id?: string
         vehicle_name?: string
+        km_overage_fee?: number
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         booking_details?: any
     }

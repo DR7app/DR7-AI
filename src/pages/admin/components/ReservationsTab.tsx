@@ -5216,7 +5216,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               id: selectedBookingForPenalty.id,
               customer_name: selectedBookingForPenalty.customer_name || 'Cliente',
               customer_id: selectedBookingForPenalty.booking_details?.customer?.customerId || undefined,
-              user_id: selectedBookingForPenalty.user_id || undefined
+              user_id: selectedBookingForPenalty.user_id || undefined,
+              km_overage_fee: selectedBookingForPenalty.km_overage_fee,
+              booking_details: selectedBookingForPenalty.booking_details || undefined,
             }}
             onClose={() => {
               setPenaltyModalOpen(false)
@@ -5271,6 +5273,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               customer_email: selectedBookingForDanniPenali.customer_email || selectedBookingForDanniPenali.booking_details?.customer?.email || undefined,
               customer_phone: selectedBookingForDanniPenali.customer_phone || selectedBookingForDanniPenali.booking_details?.customer?.phone || undefined,
               vehicle_name: selectedBookingForDanniPenali.vehicle_name || undefined,
+              km_overage_fee: selectedBookingForDanniPenali.km_overage_fee,
               booking_details: selectedBookingForDanniPenali.booking_details || undefined,
             }}
             onClose={() => {

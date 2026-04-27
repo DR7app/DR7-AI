@@ -15,6 +15,7 @@ interface DanniPenaliModalProps {
         customer_email?: string
         customer_phone?: string
         vehicle_name?: string
+        km_overage_fee?: number
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         booking_details?: any
     }
