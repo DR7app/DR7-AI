@@ -1,6 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+
+interface CustomerOption {
+    id: string
+    nome: string | null
+    cognome: string | null
+    denominazione: string | null
+    email: string | null
+    telefono: string | null
+}
 
 interface DiscountCodeGeneratorModalProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,6 +62,75 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateField = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }))
+    }
+
+    // Picker "cliente esistente": carica i clienti con email o telefono e
+    // permette di selezionarli per pre-compilare i campi customer_email /
+    // customer_phone. La logica di restrizione lato sito (validate /
+    // redeem) usa esattamente quei due campi, quindi qui ci limitiamo a
+    // riempirli — niente legame esplicito al customer_id (serve un cliente
+    // con account auth, non un anagrafica admin).
+    const [customers, setCustomers] = useState<CustomerOption[]>([])
+    const [customerSearch, setCustomerSearch] = useState('')
+    const [showCustomerList, setShowCustomerList] = useState(false)
+    const [selectedCustomerLabel, setSelectedCustomerLabel] = useState<string>('')
+    const customerBoxRef = useRef<HTMLDivElement | null>(null)
+
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            const { data } = await supabase
+                .from('customers_extended')
+                .select('id, nome, cognome, denominazione, email, telefono')
+                .or('email.not.is.null,telefono.not.is.null')
+                .order('updated_at', { ascending: false })
+                .limit(1000)
+            if (!cancelled) setCustomers((data as CustomerOption[]) || [])
+        })()
+        return () => { cancelled = true }
+    }, [])
+
+    // Hide the suggestion list when clicking outside it.
+    useEffect(() => {
+        const onDocClick = (e: MouseEvent) => {
+            if (!customerBoxRef.current) return
+            if (!customerBoxRef.current.contains(e.target as Node)) setShowCustomerList(false)
+        }
+        document.addEventListener('mousedown', onDocClick)
+        return () => document.removeEventListener('mousedown', onDocClick)
+    }, [])
+
+    const customerName = (c: CustomerOption) =>
+        c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || c.email || c.telefono || 'Cliente'
+
+    const filteredCustomers = useMemo(() => {
+        const q = customerSearch.trim().toLowerCase()
+        if (!q) return customers.slice(0, 20)
+        return customers
+            .filter(c => {
+                const name = customerName(c).toLowerCase()
+                const email = (c.email || '').toLowerCase()
+                const phone = (c.telefono || '').toLowerCase()
+                return name.includes(q) || email.includes(q) || phone.includes(q)
+            })
+            .slice(0, 20)
+    }, [customers, customerSearch])
+
+    const pickCustomer = (c: CustomerOption) => {
+        setFormData(prev => ({
+            ...prev,
+            customer_email: c.email || '',
+            customer_phone: c.telefono || '',
+        }))
+        setSelectedCustomerLabel(`${customerName(c)}${c.email ? ` · ${c.email}` : ''}${c.telefono ? ` · ${c.telefono}` : ''}`)
+        setCustomerSearch('')
+        setShowCustomerList(false)
+    }
+
+    const clearCustomer = () => {
+        setFormData(prev => ({ ...prev, customer_email: '', customer_phone: '' }))
+        setSelectedCustomerLabel('')
+        setCustomerSearch('')
     }
 
     const handleCodeTypeChange = (type: 'codice_sconto' | 'gift_card') => {
@@ -359,8 +437,57 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                             Limita a cliente specifico (opzionale)
                         </label>
                         <p className="text-xs text-theme-text-muted mb-2">
-                            Compila almeno un campo per legare il codice a un solo cliente. Lascia vuoto per renderlo pubblico.
+                            Seleziona un cliente esistente oppure compila Email/Telefono manualmente. Lascia vuoto per rendere il codice pubblico.
                         </p>
+
+                        {/* Picker cliente esistente */}
+                        <div className="mb-3 relative" ref={customerBoxRef}>
+                            <label className="block text-xs text-theme-text-muted mb-1">Cliente esistente</label>
+                            {selectedCustomerLabel ? (
+                                <div className="flex items-center justify-between gap-2 px-4 py-3 bg-theme-bg-tertiary border border-dr7-gold/40 rounded-lg">
+                                    <div className="text-sm text-theme-text-primary truncate">
+                                        <span className="text-dr7-gold mr-2">●</span>{selectedCustomerLabel}
+                                    </div>
+                                    <button type="button" onClick={clearCustomer} className="text-xs text-theme-text-muted hover:text-red-400 underline shrink-0">
+                                        Rimuovi
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <input
+                                        type="text"
+                                        value={customerSearch}
+                                        onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerList(true) }}
+                                        onFocus={() => setShowCustomerList(true)}
+                                        placeholder="Cerca per nome, email o telefono..."
+                                        className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                    />
+                                    {showCustomerList && filteredCustomers.length > 0 && (
+                                        <div className="absolute z-10 left-0 right-0 mt-1 max-h-64 overflow-y-auto bg-theme-bg-secondary border border-theme-border rounded-lg shadow-2xl">
+                                            {filteredCustomers.map(c => (
+                                                <button
+                                                    type="button"
+                                                    key={c.id}
+                                                    onClick={() => pickCustomer(c)}
+                                                    className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover border-b border-theme-border/50 last:border-b-0"
+                                                >
+                                                    <div className="text-sm text-theme-text-primary font-medium truncate">{customerName(c)}</div>
+                                                    <div className="text-xs text-theme-text-muted truncate">
+                                                        {c.email || '—'}{c.telefono ? ` · ${c.telefono}` : ''}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {showCustomerList && customerSearch.trim() && filteredCustomers.length === 0 && (
+                                        <div className="absolute z-10 left-0 right-0 mt-1 px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-xs text-theme-text-muted">
+                                            Nessun cliente trovato
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs text-theme-text-muted mb-1">Email cliente</label>

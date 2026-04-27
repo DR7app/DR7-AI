@@ -52,6 +52,16 @@ export default function CodiciScontoTab() {
     const [detailCode, setDetailCode] = useState<DiscountCode | null>(null)
     const [detailUsages, setDetailUsages] = useState<DiscountCodeUsage[]>([])
     const [detailLoading, setDetailLoading] = useState(false)
+    // Invia modal state
+    const [sendModalCode, setSendModalCode] = useState<DiscountCode | null>(null)
+    const [sendTarget, setSendTarget] = useState<'cliente' | 'numero'>('cliente')
+    const [sendCustomers, setSendCustomers] = useState<Array<{ id: string; nome: string | null; cognome: string | null; denominazione: string | null; email: string | null; telefono: string | null }>>([])
+    const [sendCustomerSearch, setSendCustomerSearch] = useState('')
+    const [sendSelectedPhone, setSendSelectedPhone] = useState('')
+    const [sendSelectedLabel, setSendSelectedLabel] = useState('')
+    const [sendManualPhone, setSendManualPhone] = useState('')
+    const [sendMessage, setSendMessage] = useState('')
+    const [sending, setSending] = useState(false)
 
     useEffect(() => {
         loadDiscountCodes()
@@ -194,6 +204,104 @@ export default function CodiciScontoTab() {
             toast.success('Codice copiato!')
         })
     }
+
+    // ── Invia codice via WhatsApp ──────────────────────────────────────────
+    async function openSendModal(code: DiscountCode) {
+        setSendModalCode(code)
+        setSendTarget('cliente')
+        setSendCustomerSearch('')
+        setSendSelectedPhone('')
+        setSendSelectedLabel('')
+        setSendManualPhone('')
+        // Pre-compila un messaggio di default sensato. L'admin può modificarlo
+        // prima dell'invio. Niente template Pro hardcoded — usiamo customMessage.
+        const scope = (code.scope || []).join(', ') || 'tutti i servizi'
+        const valido = code.valid_until ? new Date(code.valid_until).toLocaleDateString('it-IT') : ''
+        const valore = code.value_type === 'percentage'
+            ? `${code.value_amount}%`
+            : `€${Number(code.value_amount).toFixed(2)}`
+        const minSpend = code.minimum_spend ? `\nSpesa minima: €${Number(code.minimum_spend).toFixed(2)}` : ''
+        setSendMessage(
+            `Ciao! 🎁\n\nEcco il tuo codice sconto DR7 di ${valore} su ${scope}:\n\n*${code.code}*\n\nValido fino al ${valido}.${minSpend}\n\nLo puoi usare al check-out su www.dr7empire.com\n\nGrazie,\nDR7 Empire`
+        )
+        // Carica clienti se non già pronti
+        if (sendCustomers.length === 0) {
+            const { data } = await supabase
+                .from('customers_extended')
+                .select('id, nome, cognome, denominazione, email, telefono')
+                .not('telefono', 'is', null)
+                .order('updated_at', { ascending: false })
+                .limit(1000)
+            setSendCustomers(data || [])
+        }
+    }
+
+    function pickSendCustomer(c: { id: string; nome: string | null; cognome: string | null; denominazione: string | null; email: string | null; telefono: string | null }) {
+        const name = c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || c.telefono || 'Cliente'
+        setSendSelectedPhone(c.telefono || '')
+        setSendSelectedLabel(`${name}${c.telefono ? ` · ${c.telefono}` : ''}`)
+        setSendCustomerSearch('')
+    }
+
+    async function confirmSend() {
+        if (!sendModalCode) return
+        const phoneRaw = sendTarget === 'cliente' ? sendSelectedPhone : sendManualPhone
+        const phone = (phoneRaw || '').trim()
+        if (!phone) {
+            toast.error(sendTarget === 'cliente' ? 'Seleziona un cliente con telefono' : 'Inserisci un numero di telefono')
+            return
+        }
+        if (!sendMessage.trim()) {
+            toast.error('Il messaggio non può essere vuoto')
+            return
+        }
+        // Normalise phone — strip non-digits, default Italy +39 if no prefix
+        let clean = phone.replace(/[^\d]/g, '')
+        if (clean.startsWith('00')) clean = clean.slice(2)
+        if (clean.startsWith('0')) clean = '39' + clean.slice(1)
+        if (!clean.startsWith('39') && clean.length === 10) clean = '39' + clean
+        if (clean.length < 11) {
+            toast.error('Numero di telefono non valido')
+            return
+        }
+
+        setSending(true)
+        try {
+            const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customMessage: sendMessage,
+                    customPhone: clean,
+                }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                throw new Error(data.message || `HTTP ${res.status}`)
+            }
+            toast.success(`Codice ${sendModalCode.code} inviato a ${clean}`)
+            setSendModalCode(null)
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Invio fallito: ${msg}`)
+        } finally {
+            setSending(false)
+        }
+    }
+
+    const filteredSendCustomers = (() => {
+        const q = sendCustomerSearch.trim().toLowerCase()
+        const list = sendCustomers
+        if (!q) return list.slice(0, 20)
+        return list
+            .filter(c => {
+                const name = (c.denominazione || `${c.nome || ''} ${c.cognome || ''}`).toLowerCase()
+                return name.includes(q)
+                    || (c.email || '').toLowerCase().includes(q)
+                    || (c.telefono || '').toLowerCase().includes(q)
+            })
+            .slice(0, 20)
+    })()
 
     function formatScopeBadges(scope: string[]) {
         const labels: Record<string, string> = {
@@ -391,6 +499,13 @@ export default function CodiciScontoTab() {
                                                     {code.status === 'active' ? 'Disattiva' :
                                                      code.status === 'deactivated' ? 'Riattiva' :
                                                      'Scaduto'}
+                                                </button>
+                                                <button
+                                                    onClick={() => openSendModal(code)}
+                                                    title="Invia codice via WhatsApp"
+                                                    className="px-3 py-1 rounded-full text-xs font-medium bg-green-600/80 text-white hover:bg-green-600 transition-colors"
+                                                >
+                                                    Invia
                                                 </button>
                                                 <button
                                                     onClick={() => setSelectedCodeForQR(code)}
@@ -605,6 +720,133 @@ export default function CodiciScontoTab() {
                                 className="px-6 py-2 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors"
                             >
                                 Copia Codice
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {sendModalCode && (
+                <div className="fixed inset-0 bg-theme-overlay flex items-center justify-center z-50 p-4" onClick={() => !sending && setSendModalCode(null)}>
+                    <div className="bg-theme-bg-secondary rounded-3xl shadow-xl max-w-2xl w-full p-6 md:p-8 max-h-[95vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-start mb-5">
+                            <div>
+                                <h3 className="text-xl font-bold text-theme-text-primary">Invia codice via WhatsApp</h3>
+                                <p className="text-sm text-theme-text-muted mt-1 font-mono">{sendModalCode.code}</p>
+                            </div>
+                            <button
+                                onClick={() => !sending && setSendModalCode(null)}
+                                className="text-theme-text-muted hover:text-theme-text-primary text-3xl leading-none"
+                            >×</button>
+                        </div>
+
+                        {/* Destinatario: cliente esistente vs numero manuale */}
+                        <div className="mb-4">
+                            <label className="block text-sm font-semibold text-theme-text-primary mb-2">Destinatario</label>
+                            <div className="flex gap-2 mb-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setSendTarget('cliente')}
+                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${sendTarget === 'cliente' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                                >
+                                    Cliente esistente
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSendTarget('numero')}
+                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${sendTarget === 'numero' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                                >
+                                    Numero manuale
+                                </button>
+                            </div>
+
+                            {sendTarget === 'cliente' && (
+                                <div>
+                                    {sendSelectedLabel ? (
+                                        <div className="flex items-center justify-between gap-2 px-4 py-3 bg-theme-bg-tertiary border border-dr7-gold/40 rounded-lg">
+                                            <div className="text-sm text-theme-text-primary truncate">
+                                                <span className="text-dr7-gold mr-2">●</span>{sendSelectedLabel}
+                                            </div>
+                                            <button type="button" onClick={() => { setSendSelectedLabel(''); setSendSelectedPhone('') }} className="text-xs text-theme-text-muted hover:text-red-400 underline shrink-0">
+                                                Cambia
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <input
+                                                type="text"
+                                                value={sendCustomerSearch}
+                                                onChange={(e) => setSendCustomerSearch(e.target.value)}
+                                                placeholder="Cerca per nome, email o telefono..."
+                                                className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                            />
+                                            {filteredSendCustomers.length > 0 && (
+                                                <div className="mt-1 max-h-56 overflow-y-auto bg-theme-bg-primary border border-theme-border rounded-lg">
+                                                    {filteredSendCustomers.map(c => {
+                                                        const name = c.denominazione || `${c.nome || ''} ${c.cognome || ''}`.trim() || c.telefono || 'Cliente'
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                key={c.id}
+                                                                onClick={() => pickSendCustomer(c)}
+                                                                className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover border-b border-theme-border/50 last:border-b-0"
+                                                            >
+                                                                <div className="text-sm text-theme-text-primary font-medium truncate">{name}</div>
+                                                                <div className="text-xs text-theme-text-muted truncate">
+                                                                    {c.telefono || 'No phone'}{c.email ? ` · ${c.email}` : ''}
+                                                                </div>
+                                                            </button>
+                                                        )
+                                                    })}
+                                                </div>
+                                            )}
+                                            {sendCustomerSearch.trim() && filteredSendCustomers.length === 0 && (
+                                                <p className="text-xs text-theme-text-muted mt-2">Nessun cliente trovato.</p>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
+                            {sendTarget === 'numero' && (
+                                <input
+                                    type="tel"
+                                    value={sendManualPhone}
+                                    onChange={(e) => setSendManualPhone(e.target.value)}
+                                    placeholder="es. +39 345 790 5205"
+                                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                />
+                            )}
+                        </div>
+
+                        {/* Messaggio */}
+                        <div className="mb-4">
+                            <label className="block text-sm font-semibold text-theme-text-primary mb-2">Messaggio</label>
+                            <textarea
+                                value={sendMessage}
+                                onChange={(e) => setSendMessage(e.target.value)}
+                                rows={10}
+                                className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm font-mono focus:outline-none focus:border-dr7-gold transition-colors resize-y"
+                            />
+                            <p className="text-xs text-theme-text-muted mt-1">
+                                Modificabile prima dell'invio. Il codice viene inviato come messaggio WhatsApp testuale.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setSendModalCode(null)}
+                                disabled={sending}
+                                className="px-5 py-2 bg-theme-bg-tertiary text-theme-text-secondary rounded-full hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+                            >
+                                Annulla
+                            </button>
+                            <button
+                                onClick={confirmSend}
+                                disabled={sending}
+                                className="px-6 py-2 bg-green-600 text-white font-semibold rounded-full hover:bg-green-700 transition-colors disabled:opacity-50"
+                            >
+                                {sending ? 'Invio...' : 'Invia WhatsApp'}
                             </button>
                         </div>
                     </div>
