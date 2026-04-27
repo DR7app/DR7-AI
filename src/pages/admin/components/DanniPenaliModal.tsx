@@ -68,15 +68,20 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     const [penaleAmount, setPenaleAmount] = useState('')
 
     // Per-category penali / danni pulled from Centralina Pro at open time.
-    // Falls back to the hardcoded SUPERCAR_PENALTIES / URBAN_PENALTIES below
-    // when the config row is missing or empty for the active vehicle category.
+    // The modal renders an empty-state when nothing is configured for the
+    // booking's vehicle category — single source of truth, no fallback.
     const [penaliFromCfg, setPenaliFromCfg] = useState<Record<string, PenaltyPreset[]> | null>(null)
     const [danniFromCfg, setDanniFromCfg] = useState<Record<string, PenaltyPreset[]> | null>(null)
+    // Vehicle category resolved at open time. Bookings often don't carry the
+    // category in booking_details, so we look it up via vehicle_id when missing.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [resolvedCategory, setResolvedCategory] = useState<string>('')
 
     useEffect(() => {
         if (!isOpen) return
         let cancelled = false
         ;(async () => {
+            // 1. Centralina Pro penali + danni
             try {
                 const { data } = await supabase
                     .from('centralina_pro_config')
@@ -84,35 +89,68 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     .eq('id', 'main')
                     .maybeSingle()
                 const cfg = data?.config as { penali?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>; danni?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> } | undefined
-                if (cancelled || !cfg) return
-                const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
-                const mapList = (raw?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>) => {
-                    const out: Record<string, PenaltyPreset[]> = {}
-                    if (!raw) return out
-                    for (const [proCat, items] of Object.entries(raw)) {
-                        if (!Array.isArray(items)) continue
-                        const dbCat = PRO_TO_DB[proCat] || proCat
-                        out[dbCat] = items
-                            .filter(it => it && it.enabled !== false)
-                            .map(it => ({
-                                id: String(it.id || ''),
-                                label: String(it.label || ''),
-                                amount: typeof it.amount === 'number' ? it.amount : Number(it.amount) || 0,
-                                description: String(it.description || ''),
-                            }))
+                if (!cancelled && cfg) {
+                    const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
+                    const mapList = (raw?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>) => {
+                        const out: Record<string, PenaltyPreset[]> = {}
+                        if (!raw) return out
+                        for (const [proCat, items] of Object.entries(raw)) {
+                            if (!Array.isArray(items)) continue
+                            const dbCat = PRO_TO_DB[proCat] || proCat
+                            out[dbCat] = items
+                                .filter(it => it && it.enabled !== false)
+                                .map(it => ({
+                                    id: String(it.id || ''),
+                                    label: String(it.label || ''),
+                                    amount: typeof it.amount === 'number' ? it.amount : Number(it.amount) || 0,
+                                    description: String(it.description || ''),
+                                }))
+                        }
+                        return out
                     }
-                    return out
+                    if (cfg.penali) setPenaliFromCfg(mapList(cfg.penali))
+                    if (cfg.danni) setDanniFromCfg(mapList(cfg.danni))
                 }
-                if (cfg.penali) setPenaliFromCfg(mapList(cfg.penali))
-                if (cfg.danni) setDanniFromCfg(mapList(cfg.danni))
             } catch {
-                // ignore — fall back to hardcoded lists
+                // ignore
             }
+
+            // 2. Resolve vehicle category. Try booking_details first, otherwise
+            //    look up the vehicle row via the booking's vehicle_id / plate.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const bd = (booking as { booking_details?: any }).booking_details
+            let cat = String(bd?.vehicle?.category || bd?.vehicleCategory || bd?.category || '').toLowerCase().trim()
+            if (!cat) {
+                try {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const vid = (booking as any).vehicle_id || bd?.vehicle?.id || bd?.vehicle_id
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const plate = (booking as any).vehicle_plate || bd?.vehicle?.plate || bd?.vehicle_plate
+                    if (vid) {
+                        const { data: v } = await supabase
+                            .from('vehicles')
+                            .select('category')
+                            .eq('id', vid)
+                            .maybeSingle()
+                        if (v?.category) cat = String(v.category).toLowerCase().trim()
+                    }
+                    if (!cat && plate) {
+                        const { data: v } = await supabase
+                            .from('vehicles')
+                            .select('category')
+                            .eq('plate', plate)
+                            .maybeSingle()
+                        if (v?.category) cat = String(v.category).toLowerCase().trim()
+                    }
+                } catch { /* ignore */ }
+            }
+            if (!cancelled) setResolvedCategory(cat)
         })()
         return () => { cancelled = true }
-    }, [isOpen])
+    }, [isOpen, booking])
 
-    const rawCategory = booking.booking_details?.vehicle?.category ||
+    const rawCategory = resolvedCategory ||
+        booking.booking_details?.vehicle?.category ||
         booking.booking_details?.vehicleCategory ||
         booking.booking_details?.category || ''
     // Normalise legacy category strings to the keys Centralina Pro uses.
