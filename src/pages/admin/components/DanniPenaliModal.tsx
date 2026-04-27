@@ -177,8 +177,14 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ?? (booking as { booking_details?: any }).booking_details?.km_overage_fee
         ?? 0)
-    const applyKmSforoOverride = (items: PenaltyPreset[]): PenaltyPreset[] =>
-        items.map(it => {
+
+    const penaltyList: PenaltyPreset[] = useMemo(() => {
+        const base = penaliFromCfg ? (penaliFromCfg[vehicleCategory] || []) : []
+        // Apply Km Sforo override on any matching row in Centralina (uses
+        // contract rate, not Pro current). Then inject the synthetic
+        // 'km_sforo' row at the top if Centralina didn't include one,
+        // so the operator always has it available without configuring it.
+        const overridden = base.map(it => {
             if (KM_SFORO_IDS.has(it.id) && bookingSforoRate > 0) {
                 return {
                     ...it,
@@ -188,10 +194,17 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             }
             return it
         })
-
-    const penaltyList: PenaltyPreset[] = useMemo(() => {
-        if (!penaliFromCfg) return []
-        return applyKmSforoOverride(penaliFromCfg[vehicleCategory] || [])
+        const hasKmSforoRow = overridden.some(it => KM_SFORO_IDS.has(it.id))
+        if (hasKmSforoRow || bookingSforoRate <= 0) return overridden
+        return [
+            {
+                id: 'km_sforo',
+                label: 'Sforo Km',
+                amount: bookingSforoRate,
+                description: `€${bookingSforoRate.toFixed(2)}/km — tariffa contratto`,
+            },
+            ...overridden,
+        ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [penaliFromCfg, vehicleCategory, bookingSforoRate])
     const danniPresetList: PenaltyPreset[] = useMemo(() => {
