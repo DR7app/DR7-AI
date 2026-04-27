@@ -52,7 +52,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p5', title: 'Servizi' },
   { id: 'p6', title: 'Prezzo Dinamico' },
   { id: 'p7', title: 'Preventivi' },
-  { id: 'p8', title: 'Penali' },
+  { id: 'p8', title: 'Danni & Penali' },
 ]
 
 const INITIAL_CATEGORIES: Category[] = [
