@@ -191,11 +191,22 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     gapSignature: string;
   }> = []
 
-  const considerGap = (vehicle: Vehicle, freeFromMs: number, nextStartMs: number) => {
+  // prevEndMs is the structural boundary of the gap (= previous booking's
+  // dropoff timestamp, or null if no preceding booking). The signature is
+  // built from prevEndMs + nextStartMs and stays STABLE across cron ticks
+  // as long as the underlying bookings don't change. The 4h–48h duration
+  // check still uses "free from now" (so we don't claim past hours), but
+  // dedup is anchored to booking edges only.
+  const considerGap = (vehicle: Vehicle, prevEndMs: number | null, nextStartMs: number) => {
+    const freeFromMs = prevEndMs != null ? Math.max(prevEndMs, nowMs) : nowMs
     const gapMs = nextStartMs - freeFromMs
     if (gapMs < MIN_GAP_MS) return
     if (gapMs > MAX_GAP_MS) return
     const gapDate = new Date(nextStartMs - 1)
+    // Signature uses the BOOKING boundaries (or 0 if no preceding booking),
+    // not nowMs — otherwise every cron run would create a fresh signature
+    // and the dedup would never match.
+    const sigFromMs = prevEndMs ?? 0
     candidates.push({
       vehicle,
       reason: 'detected',
@@ -204,7 +215,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       gapStartDate: new Date(freeFromMs),
       gapEndDate: gapDate,
       gapHours: Math.round(gapMs / 3600 / 1000),
-      gapSignature: `${freeFromMs}|${nextStartMs}`,
+      gapSignature: `${sigFromMs}|${nextStartMs}`,
     })
   }
 
@@ -215,15 +226,15 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       .map(b => ({ ...b, _start: new Date(b.pickup_date).getTime(), _end: new Date(b.dropoff_date).getTime() }))
       .sort((a, b) => a._start - b._start)
 
-    // (a) Imminent gap.
+    // (a) Imminent gap (= the gap before the next upcoming booking).
     const nextUpcoming = vBookings.find(b => b._start > nowMs && b._start <= horizonEnd.getTime())
     if (nextUpcoming) {
       const currentOrPrev = vBookings.filter(b => b._end <= nextUpcoming._start && b._start <= nowMs).pop()
-      const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
-      considerGap(v, freeFromMs, nextUpcoming._start)
+      considerGap(v, currentOrPrev ? currentOrPrev._end : null, nextUpcoming._start)
     }
 
-    // (b) Gaps between consecutive future bookings.
+    // (b) Gaps between consecutive future bookings (signature uses both
+    // booking timestamps → naturally stable).
     const futureSorted = vBookings.filter(b => b._start <= horizonEnd.getTime())
     for (let i = 0; i + 1 < futureSorted.length; i++) {
       const a = futureSorted[i]

@@ -145,7 +145,8 @@ export const handler: Handler = async (event) => {
   const MIN_GAP_MS = 4 * 3600 * 1000
   const MAX_GAP_MS = 48 * 3600 * 1000
 
-  const considerGap = (vehicle: Vehicle, freeFromMs: number, nextStartMs: number) => {
+  const considerGap = (vehicle: Vehicle, prevEndMs: number | null, nextStartMs: number) => {
+    const freeFromMs = prevEndMs != null ? Math.max(prevEndMs, nowMs) : nowMs
     const gapMs = nextStartMs - freeFromMs
     if (gapMs < MIN_GAP_MS) return
     if (gapMs > MAX_GAP_MS) return
@@ -171,8 +172,7 @@ export const handler: Handler = async (event) => {
     const nextUpcoming = vBookings.find(b => b._start > nowMs && b._start <= horizonEnd.getTime())
     if (nextUpcoming) {
       const currentOrPrev = vBookings.filter(b => b._end <= nextUpcoming._start && b._start <= nowMs).pop()
-      const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
-      considerGap(v, freeFromMs, nextUpcoming._start)
+      considerGap(v, currentOrPrev ? currentOrPrev._end : null, nextUpcoming._start)
     }
 
     // (b) Gaps between consecutive future bookings (skip the back-to-back
