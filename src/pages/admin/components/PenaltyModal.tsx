@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -91,16 +91,66 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     const [paymentMethod, setPaymentMethod] = useState('Contanti')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
+    // Per-category penalty list from Centralina Pro. Falls back to the
+    // hardcoded SUPERCAR_PENALTIES / URBAN_UTILITAIRE_PENALTIES below when
+    // the config row is missing or empty for the active vehicle category.
+    const [penaliFromCfg, setPenaliFromCfg] = useState<Record<string, PenaltyItem[]> | null>(null)
 
-    if (!isOpen) return null
+    useEffect(() => {
+        if (!isOpen) return
+        let cancelled = false
+        ;(async () => {
+            try {
+                const { data } = await supabase
+                    .from('centralina_pro_config')
+                    .select('config')
+                    .eq('id', 'main')
+                    .maybeSingle()
+                const proPenali = data?.config?.penali as Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> | undefined
+                if (cancelled || !proPenali) return
+                // Map admin Pro categories → DB categories used here
+                // (vehicle.category typically 'exotic' / 'urban' / 'aziendali')
+                const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
+                const out: Record<string, PenaltyItem[]> = {}
+                for (const [proCat, items] of Object.entries(proPenali)) {
+                    if (!Array.isArray(items)) continue
+                    const dbCat = PRO_TO_DB[proCat] || proCat
+                    out[dbCat] = items
+                        .filter(it => it && it.enabled !== false)
+                        .map(it => ({
+                            id: String(it.id || ''),
+                            label: String(it.label || ''),
+                            amount: typeof it.amount === 'number' ? it.amount : Number(it.amount) || 0,
+                            description: String(it.description || ''),
+                        }))
+                }
+                setPenaliFromCfg(out)
+            } catch {
+                // ignore — fall back to hardcoded lists
+            }
+        })()
+        return () => { cancelled = true }
+    }, [isOpen])
 
     const vehicleCategory = booking.booking_details?.vehicle?.category ||
         booking.booking_details?.vehicleCategory ||
         booking.booking_details?.category || ''
 
     const isSupercar = vehicleCategory === 'exotic'
-    const penaltyList = isSupercar ? SUPERCAR_PENALTIES : URBAN_UTILITAIRE_PENALTIES
+    // Prefer Centralina Pro list for this exact category. Fall back to the
+    // historical hardcoded supercars / urban-utilitaire arrays so the modal
+    // never goes empty if the config is missing.
+    const penaltyList: PenaltyItem[] = useMemo(() => {
+        if (penaliFromCfg) {
+            const fromCfg = penaliFromCfg[vehicleCategory] || penaliFromCfg[isSupercar ? 'exotic' : 'urban']
+            if (Array.isArray(fromCfg) && fromCfg.length > 0) return fromCfg
+        }
+        return isSupercar ? SUPERCAR_PENALTIES : URBAN_UTILITAIRE_PENALTIES
+    }, [penaliFromCfg, vehicleCategory, isSupercar])
+
     const vehicleTypeLabel = isSupercar ? 'Supercar' : 'Urban / Utilitarie'
+
+    if (!isOpen) return null
 
     function getCartQty(penaltyId: string): number {
         return cart.find(c => c.penaltyId === penaltyId)?.quantity || 0

@@ -32,7 +32,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8'
 
 type Category = { id: string; label: string }
 type Fascia = {
@@ -52,6 +52,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p5', title: 'Servizi' },
   { id: 'p6', title: 'Prezzo Dinamico' },
   { id: 'p7', title: 'Preventivi' },
+  { id: 'p8', title: 'Penali' },
 ]
 
 const INITIAL_CATEGORIES: Category[] = [
@@ -582,6 +583,100 @@ const INITIAL_KM: KmConfig[] = [
   },
 ]
 
+// ─── Penali (Punto 8) ─────────────────────────────────────────────────────
+// One list per vehicle category. Each item has a stable `id` that the
+// PenaltyModal already uses (e.g. 'fermo_incidente', 'fumo'). The initial
+// values mirror the hardcoded arrays previously baked into PenaltyModal.tsx
+// so existing behaviour is preserved on first load.
+type PenaliCategoryKey = 'supercars' | 'urban' | 'aziendali'
+type PenaliItem = {
+  id: string
+  label: string
+  amount: number | ''
+  description: string
+  enabled?: boolean
+}
+type PenaliConfig = Record<PenaliCategoryKey, PenaliItem[]>
+
+const PENALI_CATEGORIES: { id: PenaliCategoryKey; label: string }[] = [
+  { id: 'supercars', label: 'Supercars' },
+  { id: 'urban', label: 'Urban' },
+  { id: 'aziendali', label: 'Aziendali' },
+]
+
+const INITIAL_PENALI: PenaliConfig = {
+  supercars: [
+    { id: 'fermo_incidente', label: 'Fermo veicolo incidente/danni', amount: 350, description: '€/giorno', enabled: true },
+    { id: 'fermo_alto_valore', label: 'Fermo veicolo (auto > €200k)', amount: 700, description: '€/giorno', enabled: true },
+    { id: 'fumo', label: "Fumo nell'auto", amount: 50, description: 'Odore/cenere', enabled: true },
+    { id: 'foro_sigaretta', label: 'Foro da sigaretta', amount: 50, description: 'Per foro', enabled: true },
+    { id: 'guidatore_non_indicato', label: 'Guidatore non nel contratto', amount: 200, description: 'Violazione contratto', enabled: true },
+    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 25, description: 'Quadro 8 tacche', enabled: true },
+    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 50, description: 'Quadro 4 tacche', enabled: true },
+    { id: 'gonfia_ripara', label: 'Bomboletta gonfia e ripara', amount: 100, description: 'Per pneumatico', enabled: true },
+    { id: 'sporco', label: 'Veicolo sporco', amount: 30, description: 'Interni/rifiuti', enabled: true },
+    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'Pulizia profonda', enabled: true },
+    { id: 'controlli_elettronici', label: 'Controlli elettronici disattivati', amount: 100, description: 'ESP/stabilita', enabled: true },
+    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico cliente', enabled: true },
+    { id: 'assenza_intestatario', label: 'Assenza intestatario', amount: 150, description: 'Consegna/ritiro', enabled: true },
+    { id: 'ritardo_checkout_base', label: 'Ritardo check-out (> 30 min)', amount: 50, description: 'Base minima', enabled: true },
+    { id: 'ritardo_checkout_minuto', label: 'Ritardo check-out (per min)', amount: 0.5, description: 'Oltre i 30 min', enabled: true },
+    { id: 'pista', label: 'Utilizzo in pista', amount: 5000, description: 'Kasko non attiva', enabled: true },
+    { id: 'cani', label: 'Cani / pelo di cane', amount: 100, description: 'Non tollerato', enabled: true },
+    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave', enabled: true },
+    { id: 'neopatentati', label: 'Guida neopatentati', amount: 0, description: 'Responsabilita TOTALE', enabled: true },
+    { id: 'patente_mancante', label: 'Mancata esibizione patente', amount: 0, description: 'Perdita prenotazione', enabled: true },
+    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (> 22h30)', amount: 0, description: 'Max = tariffa giornaliera', enabled: true },
+  ],
+  urban: [
+    { id: 'fermo_utilitarie', label: 'Fermo veicolo (Utilitarie)', amount: 30, description: '€/giorno', enabled: true },
+    { id: 'fumo', label: "Fumo nell'auto", amount: 50, description: 'Odore/cenere', enabled: true },
+    { id: 'foro_sigaretta', label: 'Foro da sigaretta', amount: 50, description: 'Per foro', enabled: true },
+    { id: 'guidatore_non_indicato', label: 'Guidatore non nel contratto', amount: 200, description: 'Violazione contratto', enabled: true },
+    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 15, description: 'Quadro 8 tacche', enabled: true },
+    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 30, description: 'Quadro 4 tacche', enabled: true },
+    { id: 'gonfia_ripara', label: 'Bomboletta gonfia e ripara', amount: 100, description: 'Per pneumatico', enabled: true },
+    { id: 'sporco', label: 'Veicolo sporco', amount: 30, description: 'Interni/rifiuti', enabled: true },
+    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'Pulizia profonda', enabled: true },
+    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico cliente', enabled: true },
+    { id: 'assenza_intestatario', label: 'Assenza intestatario', amount: 150, description: 'Consegna/ritiro', enabled: true },
+    { id: 'ritardo_checkout_base', label: 'Ritardo check-out (> 30 min)', amount: 20, description: 'Base minima', enabled: true },
+    { id: 'ritardo_checkout_minuto', label: 'Ritardo check-out (per min)', amount: 0.5, description: 'Oltre i 30 min', enabled: true },
+    { id: 'neopatentati', label: 'Guida neopatentati', amount: 0, description: 'Responsabilita TOTALE', enabled: true },
+    { id: 'cani', label: 'Cani / pelo di cane', amount: 100, description: 'Non tollerato', enabled: true },
+    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave', enabled: true },
+    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (> 22h30)', amount: 0, description: 'Max = tariffa giornaliera', enabled: true },
+  ],
+  aziendali: [
+    { id: 'fermo_furgoni', label: 'Fermo veicolo (Furgoni/NCC)', amount: 100, description: '€/giorno', enabled: true },
+    { id: 'fumo', label: "Fumo nell'auto", amount: 50, description: 'Odore/cenere', enabled: true },
+    { id: 'foro_sigaretta', label: 'Foro da sigaretta', amount: 50, description: 'Per foro', enabled: true },
+    { id: 'guidatore_non_indicato', label: 'Guidatore non nel contratto', amount: 200, description: 'Violazione contratto', enabled: true },
+    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 15, description: 'Quadro 8 tacche', enabled: true },
+    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 30, description: 'Quadro 4 tacche', enabled: true },
+    { id: 'gonfia_ripara', label: 'Bomboletta gonfia e ripara', amount: 100, description: 'Per pneumatico', enabled: true },
+    { id: 'sporco', label: 'Veicolo sporco', amount: 30, description: 'Interni/rifiuti', enabled: true },
+    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'Pulizia profonda', enabled: true },
+    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico cliente', enabled: true },
+    { id: 'assenza_intestatario', label: 'Assenza intestatario', amount: 150, description: 'Consegna/ritiro', enabled: true },
+    { id: 'ritardo_checkout_base', label: 'Ritardo check-out (> 30 min)', amount: 20, description: 'Base minima', enabled: true },
+    { id: 'ritardo_checkout_minuto', label: 'Ritardo check-out (per min)', amount: 0.5, description: 'Oltre i 30 min', enabled: true },
+    { id: 'cani', label: 'Cani / pelo di cane', amount: 100, description: 'Non tollerato', enabled: true },
+    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave', enabled: true },
+    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (> 22h30)', amount: 0, description: 'Max = tariffa giornaliera', enabled: true },
+  ],
+}
+
+function migratePenali(raw: unknown): PenaliConfig {
+  if (!raw || typeof raw !== 'object') return INITIAL_PENALI
+  const obj = raw as Record<string, unknown>
+  return {
+    supercars: Array.isArray(obj.supercars) ? (obj.supercars as PenaliItem[]) : INITIAL_PENALI.supercars,
+    urban: Array.isArray(obj.urban) ? (obj.urban as PenaliItem[]) : INITIAL_PENALI.urban,
+    aziendali: Array.isArray(obj.aziendali) ? (obj.aziendali as PenaliItem[]) : INITIAL_PENALI.aziendali,
+  }
+}
+
 const INITIAL_FASCE: Fascia[] = [
   {
     id: 'A',
@@ -671,6 +766,7 @@ type PersistedSnapshot = {
   servizi: ServiziConfig
   prezzoDinamico: PrezzoDinamicoConfig
   preventivi: PreventiviConfig
+  penali?: PenaliConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -842,6 +938,7 @@ export default function CentralinaProTab() {
   const initialServizi = pick(persisted, 'servizi', INITIAL_SERVIZI)
   const initialPrezzoDinamico = mergePrezzoDinamico(pick(persisted, 'prezzoDinamico', INITIAL_PREZZO_DINAMICO))
   const initialPreventivi = pick(persisted, 'preventivi', INITIAL_PREVENTIVI)
+  const initialPenali = migratePenali(pick(persisted, 'penali', INITIAL_PENALI))
 
   // Current (working) state
   const [categories, setCategories] = useState<Category[]>(initialCategories)
@@ -852,6 +949,7 @@ export default function CentralinaProTab() {
   const [servizi, setServizi] = useState<ServiziConfig>(initialServizi)
   const [prezzoDinamico, setPrezzoDinamico] = useState<PrezzoDinamicoConfig>(initialPrezzoDinamico)
   const [preventivi, setPreventivi] = useState<PreventiviConfig>(initialPreventivi)
+  const [penali, setPenali] = useState<PenaliConfig>(initialPenali)
 
   // Saved (committed) snapshot — what was last persisted
   const [savedCategories, setSavedCategories] = useState<Category[]>(initialCategories)
@@ -862,6 +960,7 @@ export default function CentralinaProTab() {
   const [savedServizi, setSavedServizi] = useState<ServiziConfig>(initialServizi)
   const [savedPrezzoDinamico, setSavedPrezzoDinamico] = useState<PrezzoDinamicoConfig>(initialPrezzoDinamico)
   const [savedPreventivi, setSavedPreventivi] = useState<PreventiviConfig>(initialPreventivi)
+  const [savedPenali, setSavedPenali] = useState<PenaliConfig>(initialPenali)
 
   const [justSaved, setJustSaved] = useState(false)
 
@@ -891,11 +990,15 @@ export default function CentralinaProTab() {
           setSavedPrezzoDinamico(merged)
         }
         if (remote.preventivi) { setPreventivi(remote.preventivi); setSavedPreventivi(remote.preventivi) }
+        if (remote.penali !== undefined) {
+          const migrated = migratePenali(remote.penali)
+          setPenali(migrated); setSavedPenali(migrated)
+        }
         // Refresh local cache with the authoritative copy
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
       } else {
         // Supabase is empty — seed with initial/localStorage values
-        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi }
+        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali }
         savePersisted(seed)
         console.log('[CentralinaPro] Seeded Pro config to Supabase')
       }
@@ -957,7 +1060,7 @@ export default function CentralinaProTab() {
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi },
+        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali },
         {
           categories: savedCategories,
           fasce: savedFasce,
@@ -967,11 +1070,12 @@ export default function CentralinaProTab() {
           servizi: savedServizi,
           prezzoDinamico: savedPrezzoDinamico,
           preventivi: savedPreventivi,
+          penali: savedPenali,
         }
       ),
     [
-      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi,
-      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi,
+      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali,
+      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali,
     ]
   )
 
@@ -985,7 +1089,8 @@ export default function CentralinaProTab() {
     setSavedServizi(servizi)
     setSavedPrezzoDinamico(prezzoDinamico)
     setSavedPreventivi(preventivi)
-    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi })
+    setSavedPenali(penali)
+    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali })
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
 
@@ -1004,6 +1109,7 @@ export default function CentralinaProTab() {
     setServizi(savedServizi)
     setPrezzoDinamico(savedPrezzoDinamico)
     setPreventivi(savedPreventivi)
+    setPenali(savedPenali)
   }
 
   void changes.length // SaveBar always visible
@@ -1084,7 +1190,10 @@ export default function CentralinaProTab() {
             {section === 'p7' && (
               <PreventiviSection preventivi={preventivi} setPreventivi={setPreventivi} />
             )}
-            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && section !== 'p5' && section !== 'p6' && section !== 'p7' && (
+            {section === 'p8' && (
+              <PenaliSection penali={penali} setPenali={setPenali} />
+            )}
+            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && section !== 'p5' && section !== 'p6' && section !== 'p7' && section !== 'p8' && (
               <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-12 text-center">
                 <p className="text-[15px] text-[#6e6e73]">
                   Sezione in arrivo — da definire
@@ -1210,6 +1319,7 @@ type Snapshot = {
   servizi: ServiziConfig
   prezzoDinamico: PrezzoDinamicoConfig
   preventivi: PreventiviConfig
+  penali: PenaliConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -3923,6 +4033,159 @@ function PreventiviSection({
             )
           })}
         </ul>
+      </section>
+    </div>
+  )
+}
+
+// ========== PENALI (Punto 8) ==========
+
+function PenaliSection({
+  penali,
+  setPenali,
+}: {
+  penali: PenaliConfig
+  setPenali: (next: PenaliConfig) => void
+}) {
+  const [activeCategory, setActiveCategory] = useState<PenaliCategoryKey>('supercars')
+  const items = penali[activeCategory] || []
+
+  function patchItem(idx: number, p: Partial<PenaliItem>) {
+    const next = items.map((it, i) => (i === idx ? { ...it, ...p } : it))
+    setPenali({ ...penali, [activeCategory]: next })
+  }
+  function removeItem(idx: number) {
+    const next = items.filter((_, i) => i !== idx)
+    setPenali({ ...penali, [activeCategory]: next })
+  }
+  function addItem() {
+    setPenali({
+      ...penali,
+      [activeCategory]: [
+        ...items,
+        { id: uid(), label: 'Nuova penale', amount: 0, description: '', enabled: true },
+      ],
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+          Penali per Categoria
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] mt-1">
+          Listino penali applicate alle prenotazioni. Quando l&apos;admin aggiunge una penale a una
+          prenotazione, il modale legge questi importi in base alla categoria del veicolo.
+        </p>
+      </div>
+
+      {/* Category tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-black/5 -mb-px">
+        {PENALI_CATEGORIES.map((c) => {
+          const isActive = c.id === activeCategory
+          return (
+            <button
+              key={c.id}
+              onClick={() => setActiveCategory(c.id)}
+              className={`px-4 py-2 text-[14px] font-medium rounded-t-lg transition-colors ${
+                isActive
+                  ? 'bg-white border border-black/10 border-b-white text-[#1d1d1f]'
+                  : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+              }`}
+            >
+              {c.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <ul className="divide-y divide-black/5">
+          {items.map((it, idx) => (
+            <li key={`${it.id}-${idx}`} className="px-5 py-4 group">
+              <div className="flex items-start gap-3 mb-3">
+                <label className="inline-flex items-center cursor-pointer pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={it.enabled !== false}
+                    onChange={(e) => patchItem(idx, { enabled: e.target.checked })}
+                    className="w-4 h-4 accent-[#007aff]"
+                  />
+                </label>
+                <input
+                  value={it.label}
+                  onChange={(e) => patchItem(idx, { label: e.target.value })}
+                  placeholder="Etichetta penale"
+                  className="flex-1 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] rounded-lg px-2 py-1 -mx-2 transition-colors"
+                />
+                <button
+                  onClick={() => removeItem(idx)}
+                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-7 h-7 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                  aria-label="Rimuovi"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 ml-7">
+                <label className="block">
+                  <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">ID</span>
+                  <input
+                    value={it.id}
+                    onChange={(e) => patchItem(idx, { id: e.target.value })}
+                    className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[13px] font-mono text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Importo</span>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={it.amount}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        patchItem(idx, { amount: v === '' ? '' : Number(v) })
+                      }}
+                      className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Descrizione</span>
+                  <input
+                    value={it.description}
+                    onChange={(e) => patchItem(idx, { description: e.target.value })}
+                    placeholder="Es. €/giorno, Per pneumatico…"
+                    className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  />
+                </label>
+              </div>
+            </li>
+          ))}
+          {items.length === 0 && (
+            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+              Nessuna penale per questa categoria
+            </li>
+          )}
+        </ul>
+
+        <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa]">
+          <button
+            onClick={addItem}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+            Aggiungi penale
+          </button>
+        </footer>
       </section>
     </div>
   )
