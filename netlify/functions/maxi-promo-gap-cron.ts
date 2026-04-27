@@ -28,7 +28,6 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL |
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
-const PILOT_PHONE_RAW = process.env.MAXI_PROMO_PILOT_PHONE || ''
 
 interface Vehicle {
   id: string
@@ -100,12 +99,41 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return skip('missing supabase env')
   if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) return skip('missing green api env')
 
-  const recipient = normalisePhone(PILOT_PHONE_RAW)
-  if (!recipient) return skip('MAXI_PROMO_PILOT_PHONE not set or invalid')
-
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
+
+  // Read the runtime setting from DB (no env vars). Mode = off | pilot | broadcast.
+  const { data: settings } = await supabase
+    .from('maxi_promo_settings')
+    .select('mode, pilot_phone')
+    .eq('id', 1)
+    .maybeSingle()
+
+  const mode = (settings?.mode || 'off') as 'off' | 'pilot' | 'broadcast'
+  if (mode === 'off') return skip('mode=off')
+
+  // Build the recipient list.
+  // - pilot     → 1 number from settings.pilot_phone
+  // - broadcast → every customers_extended row with telefono not null/blacklist
+  let recipients: string[] = []
+  if (mode === 'pilot') {
+    const r = normalisePhone(settings?.pilot_phone || '')
+    if (!r) return skip('mode=pilot but pilot_phone empty/invalid')
+    recipients = [r]
+  } else {
+    const { data: custRows } = await supabase
+      .from('customers_extended')
+      .select('telefono, status_cliente')
+      .not('telefono', 'is', null)
+    const seen = new Set<string>()
+    for (const row of (custRows || [])) {
+      if (row.status_cliente === 'blacklist') continue
+      const n = normalisePhone(row.telefono || '')
+      if (n && !seen.has(n)) { seen.add(n); recipients.push(n) }
+    }
+    if (recipients.length === 0) return skip('mode=broadcast but no customers with phone')
+  }
 
   const tomorrowStart = romeMidnightOffset(1)
   const tomorrowEnd   = romeMidnightOffset(2)
@@ -171,88 +199,87 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     return { statusCode: 200, body: JSON.stringify({ ok: true, gaps: 0, sent: 0, hour, eveningTriggerActive }) }
   }
 
-  // Filter out anything already sent for this (vehicle, gap_date, recipient).
+  // Pull existing dedup rows for these vehicles + this gap_date (any recipient).
   const candidateIds = candidates.map(c => c.vehicle.id)
   const { data: sentRows } = await supabase
     .from('maxi_promo_sent_log')
     .select('vehicle_id, gap_date, recipient')
     .in('vehicle_id', candidateIds)
     .eq('gap_date', gapDateDb)
-    .eq('recipient', recipient)
   const sentSet = new Set((sentRows || []).map(r => `${r.vehicle_id}|${r.gap_date}|${r.recipient}`))
 
   const siteUrl = process.env.URL || process.env.DEPLOY_URL || ''
-  if (!siteUrl) {
-    console.warn('[maxi-promo-cron] siteUrl unknown — using relative call')
-  }
 
   let sent = 0
   let skipped = 0
   let failed = 0
-  const results: Array<{ vehicle: string; reason: string; ok: boolean; detail?: string }> = []
+  const results: Array<{ vehicle: string; recipient: string; reason: string; ok: boolean; detail?: string }> = []
 
   for (const c of candidates) {
     const v = c.vehicle
-    const dedupKey = `${v.id}|${gapDateDb}|${recipient}`
-    if (sentSet.has(dedupKey)) {
-      skipped++
-      results.push({ vehicle: v.display_name, reason: c.reason, ok: false, detail: 'already_sent' })
-      continue
+    const templateVars = {
+      vehicle_specs: v.display_name,
+      vehicle: v.display_name,
+      veicolo: v.display_name,
+      date_gap: gapDateShort,
+      data_gap: gapDateShort,
+      gap_date: gapDateShort,
+      date_gap_long: gapDateLong,
+      data_gap_long: gapDateLong,
+      date_gap_short: gapDateMedium,
+      data: gapDateShort,
     }
 
-    try {
-      const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateKey: 'pro_maxi_promo_gap_1gg',
-          templateVars: {
-            vehicle_specs: v.display_name,
-            vehicle: v.display_name,
-            veicolo: v.display_name,
-            date_gap: gapDateShort,
-            data_gap: gapDateShort,
-            gap_date: gapDateShort,
-            date_gap_long: gapDateLong,
-            data_gap_long: gapDateLong,
-            date_gap_short: gapDateMedium,
-            data: gapDateShort,
-          },
-          customPhone: recipient,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        failed++
-        results.push({ vehicle: v.display_name, reason: c.reason, ok: false, detail: json.message || `HTTP ${res.status}` })
+    for (const phone of recipients) {
+      const dedupKey = `${v.id}|${gapDateDb}|${phone}`
+      if (sentSet.has(dedupKey)) {
+        skipped++
+        results.push({ vehicle: v.display_name, recipient: phone, reason: c.reason, ok: false, detail: 'already_sent' })
         continue
       }
-      if (json.skipped) {
+      try {
+        const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            templateKey: 'pro_maxi_promo_gap_1gg',
+            templateVars,
+            customPhone: phone,
+          }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          failed++
+          results.push({ vehicle: v.display_name, recipient: phone, reason: c.reason, ok: false, detail: json.message || `HTTP ${res.status}` })
+          continue
+        }
+        if (json.skipped) {
+          failed++
+          results.push({ vehicle: v.display_name, recipient: phone, reason: c.reason, ok: false, detail: json.reason || 'template skipped' })
+          continue
+        }
+        await supabase.from('maxi_promo_sent_log').insert({
+          vehicle_id: v.id,
+          gap_date: gapDateDb,
+          recipient: phone,
+          template_key: 'pro_maxi_promo_gap_1gg',
+        })
+        sent++
+        results.push({ vehicle: v.display_name, recipient: phone, reason: c.reason, ok: true })
+      } catch (err) {
         failed++
-        results.push({ vehicle: v.display_name, reason: c.reason, ok: false, detail: json.reason || 'template skipped' })
-        continue
+        results.push({ vehicle: v.display_name, recipient: phone, reason: c.reason, ok: false, detail: err instanceof Error ? err.message : String(err) })
       }
-
-      // Record in dedup table so subsequent runs don't double-fire.
-      await supabase.from('maxi_promo_sent_log').insert({
-        vehicle_id: v.id,
-        gap_date: gapDateDb,
-        recipient,
-        template_key: 'pro_maxi_promo_gap_1gg',
-      })
-      sent++
-      results.push({ vehicle: v.display_name, reason: c.reason, ok: true })
-    } catch (err) {
-      failed++
-      results.push({ vehicle: v.display_name, reason: c.reason, ok: false, detail: err instanceof Error ? err.message : String(err) })
+      await new Promise(r => setTimeout(r, 800))
     }
-    await new Promise(r => setTimeout(r, 800))
   }
 
   return {
     statusCode: 200,
     body: JSON.stringify({
       ok: true,
+      mode,
+      recipients: recipients.length,
       hour,
       eveningTriggerActive,
       candidates: candidates.length,
