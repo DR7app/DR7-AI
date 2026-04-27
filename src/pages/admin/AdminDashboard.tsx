@@ -51,7 +51,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -246,6 +246,9 @@ export default function AdminDashboard() {
     { name: 'Trustera', tabs: [
       { tab: 'trustera', label: 'Trustera' },
     ] },
+    { name: 'E.M.T.N.', tabs: [
+      { tab: 'emtn', label: 'E.M.T.N.' },
+    ] },
   ]
   const sectionForActiveTab = SECTIONS.find(s => s.tabs.some(t => t.tab === activeTab)) || null
   const isSectionActive = (sectionName: string) => sectionForActiveTab?.name === sectionName
@@ -261,6 +264,7 @@ export default function AdminDashboard() {
     'gestione-multe': 'Gestione Multe',
     'cargos': 'Cargos',
     'trustera': 'Trustera',
+    'emtn': 'E.M.T.N.',
     'carwash': 'Prenotazioni Prime Wash',
     'carwash-calendar': 'Calendario Prime Wash',
     'carwash-catalog': 'Catalogo Prime Wash',
@@ -342,7 +346,7 @@ export default function AdminDashboard() {
                 // the oversized green block that spanned the full sidebar.
                 className="w-full text-left flex items-center justify-between px-1 transition-colors group"
               >
-                <span className={`inline-flex items-center px-3 py-2 rounded-lg text-[13px] font-semibold transition-colors ${sectionActive ? 'bg-dr7-gold text-white' : 'text-white/70 group-hover:text-white group-hover:bg-[#243044]'}`}>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${sectionActive ? 'bg-dr7-gold text-white' : 'text-white/70 group-hover:text-white group-hover:bg-[#243044]'}`}>
                   {section.name}
                 </span>
                 {showBirthdayBadge && (
@@ -549,6 +553,7 @@ export default function AdminDashboard() {
           {activeTab === 'gestione-multe' && <GestioneMulteTab />}
           {activeTab === 'cargos' && <CargosTab />}
           {activeTab === 'trustera' && <TrusteraTab />}
+          {activeTab === 'emtn' && <PlaceholderTab title="E.M.T.N." subtitle="In Lavorazione" />}
           {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && (isTabRestricted('report-lavaggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportLavaggioTab />)}
