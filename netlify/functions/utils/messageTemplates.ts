@@ -101,6 +101,17 @@ const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['codice', 'sconto'],
     ['discount', 'review'],
   ],
+  // Maxi Promo Gap 1GG — message #21 in Messaggi di Sistema Pro, body fully
+  // editable by admin. Match by a few plausible label spellings so the
+  // template resolves even when the admin-created row has a custom key.
+  pro_maxi_promo_gap_1gg: [
+    ['maxi', 'promo', 'gap', '1gg'],
+    ['maxi', 'promo', 'gap'],
+    ['maxi', 'promo'],
+    ['gap', '1gg'],
+    ['gap', '1', 'giorno'],
+    ['promo', 'gap'],
+  ],
 }
 
 /**
