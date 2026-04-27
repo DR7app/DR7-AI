@@ -36,8 +36,8 @@ import { getHolidayForDate, isSunday as isSundayDate } from '../../../data/itali
 //   Sunday: closed (handled by classifyDay)
 
 const OFFICE_HOURS_WEEKDAY: [number, number][] = [[9*60, 13*60], [15*60, 19*60]]
-// TODO_SATURDAY: replace with the Saturday-specific window when known.
-const OFFICE_HOURS_SATURDAY: [number, number][] = OFFICE_HOURS_WEEKDAY
+// Saturday: 09:00-17:00 continuous (no lunch break).
+const OFFICE_HOURS_SATURDAY: [number, number][] = [[9*60, 17*60]]
 
 function getOfficeHoursForDate(dateStr: string): [number, number][] | null {
   if (!dateStr) return OFFICE_HOURS_WEEKDAY
