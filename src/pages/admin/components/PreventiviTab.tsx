@@ -501,16 +501,70 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.vehicle_id, form.pickup_date, form.return_date, form.pickup_time, form.return_time, slotOverrideId])
 
-  // Per-day surcharge for "No Cauzione" — reads tier+residency from Centralina PRO
-  // (rentalConfig.deposits[TIER_X_RESIDENT|NON_RESIDENT]), falls back to overlay.
+  // ── Direct read of Centralina Pro deposits (per-category × per-fascia × residency) ──
+  // The legacy converter (convertProConfig) flattens all categories into a
+  // single deposits[TIER_X_RESIDENT] list, which loses category-specific
+  // surcharges. Read the Pro shape ourselves so a Supercar's "no_deposit"
+  // surcharge differs from an Aziendali one as the operator configured.
+  const [proDeposits, setProDeposits] = useState<Record<string, unknown> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      if (cancelled) return
+      const cfg = (data?.config as { deposits?: Record<string, unknown> } | undefined) || {}
+      setProDeposits(cfg.deposits || null)
+    })()
+    const channel = supabase
+      .channel('preventivi-deposits')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
+        const cfg = (payload.new as { config?: { deposits?: Record<string, unknown> } } | undefined)?.config
+        if (cfg && typeof cfg === 'object') setProDeposits(cfg.deposits || null)
+      })
+      .subscribe()
+    return () => { cancelled = true; supabase.removeChannel(channel) }
+  }, [])
+
   const noCauzioneResolvedDaily = useMemo(() => {
-    const key = `${form.driver_tier}_${form.residente_sardegna ? 'RESIDENT' : 'NON_RESIDENT'}` as
-      'TIER_1_RESIDENT' | 'TIER_2_RESIDENT' | 'TIER_1_NON_RESIDENT' | 'TIER_2_NON_RESIDENT'
-    const opts = (rentalConfig?.deposits?.[key] as { id: string; surcharge_per_day?: number }[] | undefined) || []
+    const fallback = configOverlay.noCauzionePerDay || 0
+    if (!proDeposits) return fallback
+
+    // Detect new (per-category) vs old (per-fascia at root) shape.
+    const firstVal = Object.values(proDeposits)[0] as Record<string, unknown> | undefined
+    const isOld = !!firstVal && typeof firstVal === 'object'
+      && ('residente' in firstVal || 'non_residente' in firstVal)
+
+    // Map vehicle DB category → Pro deposits category key.
+    const vehCat = String(selectedVehicle?.category || '').toLowerCase().trim()
+    const proCategory = vehCat === 'supercar' || vehCat === 'supercars' || vehCat === 'exotic'
+      ? 'supercars'
+      : vehCat === 'furgone' || vehCat === 'furgoni' || vehCat === 'aziendali' || vehCat === 'ncc'
+      ? 'aziendali'
+      : 'urban'
+
+    // TIER_1 = Fascia B (younger / less experienced), TIER_2 = Fascia A.
+    const fasciaKey = form.driver_tier === 'TIER_1' ? 'B' : 'A'
+    const residencyKey = form.residente_sardegna ? 'residente' : 'non_residente'
+
+    let opts: { id?: string; surcharge_per_day?: number | string }[] = []
+    if (isOld) {
+      const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
+      opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
+    } else {
+      const catCfg = proDeposits[proCategory] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+      const fasciaCfg = catCfg?.[fasciaKey]
+      opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
+    }
+
     const fromPro = opts.find(o => o.id === 'no_deposit')?.surcharge_per_day
-    if (fromPro && fromPro > 0) return fromPro
-    return configOverlay.noCauzionePerDay || 0
-  }, [rentalConfig, form.driver_tier, form.residente_sardegna, configOverlay.noCauzionePerDay])
+    const num = Number(fromPro)
+    if (Number.isFinite(num) && num > 0) return num
+    return fallback
+  }, [proDeposits, selectedVehicle, form.driver_tier, form.residente_sardegna, configOverlay.noCauzionePerDay])
 
   // Revenue pricing
   const [revenueData, setRevenueData] = useState<{
