@@ -550,7 +550,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const fasciaKey = form.driver_tier === 'TIER_1' ? 'B' : 'A'
     const residencyKey = form.residente_sardegna ? 'residente' : 'non_residente'
 
-    let opts: { id?: string; surcharge_per_day?: number | string }[] = []
+    let opts: { id?: string; label?: string; surcharge_per_day?: number | string }[] = []
     if (isOld) {
       const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
       opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
@@ -560,7 +560,19 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
     }
 
-    const fromPro = opts.find(o => o.id === 'no_deposit')?.surcharge_per_day
+    // Match the "no cauzione" option in either of two ways:
+    //   1. id === 'no_deposit' — the canonical key set by the seed configs
+    //   2. label matches /nessuna cauzione|no cauzione/i — covers options
+    //      the operator added via "Aggiungi opzione" in Centralina Pro
+    //      (those get a random uid() as id, NOT 'no_deposit', so id-only
+    //      matching silently falls through to 0 even when the surcharge
+    //      is configured).
+    const isNoDepositOpt = (o: { id?: string; label?: string }) => {
+      if (o.id === 'no_deposit') return true
+      const label = String(o.label || '').toLowerCase().trim()
+      return /nessuna\s+cauzione|no\s+cauzione|^no_deposit$/i.test(label)
+    }
+    const fromPro = opts.find(isNoDepositOpt)?.surcharge_per_day
     const num = Number(fromPro)
     if (Number.isFinite(num) && num > 0) return num
     return fallback
