@@ -188,6 +188,23 @@ export const handler: Handler = async (event) => {
     }
   }
 
+  // Deduplicate hits by (vehicle, gap-shape). When a vehicle has a
+  // currently-active booking, branches (a) and (b) produce the same
+  // gap; without this dedup the test endpoint would send two identical
+  // WhatsApps to the recipient.
+  {
+    const seen = new Set<string>()
+    const unique: typeof gapHits = []
+    for (const h of gapHits) {
+      const k = `${h.vehicle.id}|${h.nextPickup.getTime()}|${h.gapStartDate.getTime()}`
+      if (seen.has(k)) continue
+      seen.add(k)
+      unique.push(h)
+    }
+    gapHits.length = 0
+    gapHits.push(...unique)
+  }
+
   const gapVehicles: Vehicle[] = gapHits.map(h => h.vehicle)
 
   // For dry-run / single-template formatting we use the FIRST gap's date.

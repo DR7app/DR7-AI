@@ -244,6 +244,24 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     }
   }
 
+  // Deduplicate candidates by (vehicle, signature). When a vehicle has a
+  // CURRENTLY-active booking that will end before the next upcoming one,
+  // both branches (a) and (b) produce the same gap (current.end →
+  // next.start) with the same signature. Without this filter the cron
+  // would send two WhatsApps with identical body to the same recipient.
+  {
+    const seen = new Set<string>()
+    const unique: typeof candidates = []
+    for (const c of candidates) {
+      const k = `${c.vehicle.id}|${c.gapSignature}`
+      if (seen.has(k)) continue
+      seen.add(k)
+      unique.push(c)
+    }
+    candidates.length = 0
+    candidates.push(...unique)
+  }
+
   if (candidates.length === 0) {
     return { statusCode: 200, body: JSON.stringify({ ok: true, gaps: 0, sent: 0, hour }) }
   }
