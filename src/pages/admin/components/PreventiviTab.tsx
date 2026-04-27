@@ -501,14 +501,40 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.vehicle_id, form.pickup_date, form.return_date, form.pickup_time, form.return_time, slotOverrideId])
 
-  // ── Direct read of Centralina Pro deposits (per-category × per-fascia × residency) ──
-  // The legacy converter (convertProConfig) flattens all categories into a
-  // single deposits[TIER_X_RESIDENT] list, which loses category-specific
-  // surcharges. Read the Pro shape ourselves so a Supercar's "no_deposit"
-  // surcharge differs from an Aziendali one as the operator configured.
+  // ── Direct read of Centralina Pro (deposits + servizi + km) ──
+  // Centralina Pro is the source of truth for all extras: noCauzione
+  // surcharge, Lavaggio fee, Secondo Guidatore, DR7 FLEX, Km Illimitati.
+  // The legacy `rental_config` (Centralina Unica) is kept only as a
+  // fallback for installations that haven't migrated yet. Subscribe to
+  // realtime updates so a price change in CentralinaProTab propagates
+  // into open Preventivi forms without a reload.
   const [proDeposits, setProDeposits] = useState<Record<string, unknown> | null>(null)
+  const [proServizi, setProServizi] = useState<{
+    lavaggio?: { fee?: number | string; mandatory?: boolean }
+    second_driver?: Record<string, number | string>
+    dr7_flex?: { daily_price?: number | string; refund_percent?: number | string; tier_restriction?: string }
+  } | null>(null)
+  const [proKm, setProKm] = useState<Array<{
+    id?: string
+    label?: string
+    extraPerDay?: number | string
+    sforo?: number | string
+    unlimitedPerDay?: number | string
+    unlimitedMode?: 'all_tiers' | 'per_fascia'
+    unlimitedByFascia?: Record<string, number | string>
+  }> | null>(null)
   useEffect(() => {
     let cancelled = false
+    const applyConfig = (cfg: Record<string, unknown> | undefined) => {
+      const c = (cfg || {}) as {
+        deposits?: Record<string, unknown>
+        servizi?: typeof proServizi
+        km?: typeof proKm
+      }
+      setProDeposits(c.deposits || null)
+      setProServizi(c.servizi || null)
+      setProKm(c.km || null)
+    }
     ;(async () => {
       const { data } = await supabase
         .from('centralina_pro_config')
@@ -516,18 +542,64 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         .eq('id', 'main')
         .maybeSingle()
       if (cancelled) return
-      const cfg = (data?.config as { deposits?: Record<string, unknown> } | undefined) || {}
-      setProDeposits(cfg.deposits || null)
+      applyConfig(data?.config as Record<string, unknown> | undefined)
     })()
     const channel = supabase
-      .channel('preventivi-deposits')
+      .channel('preventivi-pro-config')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
-        const cfg = (payload.new as { config?: { deposits?: Record<string, unknown> } } | undefined)?.config
-        if (cfg && typeof cfg === 'object') setProDeposits(cfg.deposits || null)
+        const cfg = (payload.new as { config?: Record<string, unknown> } | undefined)?.config
+        if (cfg && typeof cfg === 'object') applyConfig(cfg)
       })
       .subscribe()
     return () => { cancelled = true; supabase.removeChannel(channel) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Map vehicle DB category → Pro km/deposits category key. Reused by
+  // both the deposits lookup and the km-unlimited lookup so they stay in
+  // lockstep.
+  const proCategoryKey = useMemo(() => {
+    const vehCat = String(selectedVehicle?.category || '').toLowerCase().trim()
+    if (vehCat === 'supercar' || vehCat === 'supercars' || vehCat === 'exotic') return 'supercars'
+    if (vehCat === 'furgone' || vehCat === 'furgoni' || vehCat === 'aziendali' || vehCat === 'ncc') return 'aziendali'
+    return 'urban'
+  }, [selectedVehicle])
+
+  // Pro-resolved extras with safe fallbacks. Each falls back to the
+  // legacy Centralina Unica overlay (keeps the form working until the
+  // operator finishes migrating). When the operator changes a price
+  // in Centralina Pro the realtime subscription fires applyConfig and
+  // these useMemos recompute automatically.
+  const proLavaggioFee = useMemo(() => {
+    const v = Number(proServizi?.lavaggio?.fee)
+    return Number.isFinite(v) && v > 0 ? v : (configOverlay.lavaggioFee || 0)
+  }, [proServizi, configOverlay.lavaggioFee])
+
+  const proSecondDriverDaily = useMemo(() => {
+    const fascia = form.driver_tier === 'TIER_1' ? 'B' : 'A'
+    const v = Number(proServizi?.second_driver?.[fascia])
+    if (Number.isFinite(v) && v > 0) return v
+    return form.driver_tier === 'TIER_2' ? configOverlay.secondDriverTier2 : configOverlay.secondDriverTier1
+  }, [proServizi, form.driver_tier, configOverlay.secondDriverTier1, configOverlay.secondDriverTier2])
+
+  const proDr7FlexDaily = useMemo(() => {
+    const v = Number(proServizi?.dr7_flex?.daily_price)
+    return Number.isFinite(v) && v > 0 ? v : (configOverlay.dr7FlexPerDay || 0)
+  }, [proServizi, configOverlay.dr7FlexPerDay])
+
+  const proUnlimitedKmDaily = useMemo(() => {
+    const fascia = form.driver_tier === 'TIER_1' ? 'B' : 'A'
+    const entry = (proKm || []).find(k => k.id === proCategoryKey)
+    if (entry) {
+      if (entry.unlimitedMode === 'per_fascia') {
+        const v = Number(entry.unlimitedByFascia?.[fascia])
+        if (Number.isFinite(v) && v > 0) return v
+      }
+      const v = Number(entry.unlimitedPerDay)
+      if (Number.isFinite(v) && v > 0) return v
+    }
+    return getUnlimitedKmPriceForVehicle(selectedVehicle, form.driver_tier, rentalConfig, configOverlay)
+  }, [proKm, proCategoryKey, form.driver_tier, selectedVehicle, rentalConfig, configOverlay])
 
   const noCauzioneResolvedDaily = useMemo(() => {
     const fallback = configOverlay.noCauzionePerDay || 0
@@ -679,22 +751,18 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     const insuranceDailyPrice = selectedIns?.pricePerDay ?? 0
     const insuranceTotal = Math.round(insuranceDailyPrice * rentalDays * 100) / 100
 
-    const lavaggioFee = form.include_lavaggio ? configOverlay.lavaggioFee : 0
+    const lavaggioFee = form.include_lavaggio ? proLavaggioFee : 0
 
     const noCauzioneDaily = form.include_no_cauzione ? noCauzioneResolvedDaily : 0
     const noCauzioneTotal = Math.round(noCauzioneDaily * rentalDays * 100) / 100
 
-    const unlimitedKmDaily = form.include_unlimited_km
-      ? getUnlimitedKmPriceForVehicle(selectedVehicle, form.driver_tier, rentalConfig, configOverlay)
-      : 0
+    const unlimitedKmDaily = form.include_unlimited_km ? proUnlimitedKmDaily : 0
     const unlimitedKmTotal = Math.round(unlimitedKmDaily * rentalDays * 100) / 100
 
-    const secondDriverDaily = form.include_second_driver
-      ? (form.driver_tier === 'TIER_2' ? configOverlay.secondDriverTier2 : configOverlay.secondDriverTier1)
-      : 0
+    const secondDriverDaily = form.include_second_driver ? proSecondDriverDaily : 0
     const secondDriverTotal = Math.round(secondDriverDaily * rentalDays * 100) / 100
 
-    const dr7FlexDaily = form.include_dr7_flex ? configOverlay.dr7FlexPerDay : 0
+    const dr7FlexDaily = form.include_dr7_flex ? proDr7FlexDaily : 0
     const dr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
 
     // Cauzione veicoli: €20/giorno (override possibile via configOverlay se impostato)
@@ -805,7 +873,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       kmIncluded: rentalConfig ? getKmIncluded(rentalConfig, rentalDays, selectedVehicle?.category || 'exotic') : 0,
       sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 0,
     }
-  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig, noCauzioneResolvedDaily])
+  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig, noCauzioneResolvedDaily, proLavaggioFee, proSecondDriverDaily, proDr7FlexDaily, proUnlimitedKmDaily])
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
 
@@ -2420,7 +2488,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_lavaggio} onChange={(e) => setForm(prev => ({ ...prev, include_lavaggio: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
-            <span className="text-sm text-theme-text-primary">Lavaggio ({formatEur(configOverlay.lavaggioFee)})</span>
+            <span className="text-sm text-theme-text-primary">Lavaggio ({formatEur(proLavaggioFee)})</span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_no_cauzione} onChange={(e) => handleNoCauzioneToggle(e.target.checked)} className="w-4 h-4 accent-dr7-gold" />
@@ -2440,19 +2508,19 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_unlimited_km} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
-              Km Illimitati ({formatEur(getUnlimitedKmPriceForVehicle(selectedVehicle, form.driver_tier, rentalConfig, configOverlay))}/giorno)
+              Km Illimitati ({formatEur(proUnlimitedKmDaily)}/giorno)
             </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_second_driver} onChange={(e) => setForm(prev => ({ ...prev, include_second_driver: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
-              Secondo Guidatore ({formatEur(form.driver_tier === 'TIER_2' ? configOverlay.secondDriverTier2 : configOverlay.secondDriverTier1)}/giorno)
+              Secondo Guidatore ({formatEur(proSecondDriverDaily)}/giorno)
             </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_dr7_flex} onChange={(e) => setForm(prev => ({ ...prev, include_dr7_flex: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
-              DR7 FLEX — Cancellazione Premium ({formatEur(configOverlay.dr7FlexPerDay)}/giorno)
+              DR7 FLEX — Cancellazione Premium ({formatEur(proDr7FlexDaily)}/giorno)
             </span>
           </label>
         </div>
