@@ -135,9 +135,8 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     if (recipients.length === 0) return skip('mode=broadcast but no customers with phone')
   }
 
-  const tomorrowStart = romeMidnightOffset(1)
-  const tomorrowEnd   = romeMidnightOffset(2)
-  const dayAfterEnd   = romeMidnightOffset(3)
+  const now = new Date()
+  const horizonEnd = new Date(now.getTime() + 48 * 3600 * 1000) // upcoming bookings within 48h
 
   const { data: vehiclesData } = await supabase
     .from('vehicles')
@@ -145,70 +144,91 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     .neq('status', 'retired')
   const vehicles: Vehicle[] = (vehiclesData || []).filter(v => v.display_name !== 'Test')
 
-  const windowStart = tomorrowStart.toISOString()
-  const windowEnd   = dayAfterEnd.toISOString()
+  // Pull every active rental booking that could be relevant: any booking
+  // whose dropoff is after now AND pickup is before the 48h horizon.
   const { data: bookingsData } = await supabase
     .from('bookings')
     .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, status, service_type, created_at')
     .not('status', 'in', '(cancelled,annullata)')
     .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
-    .lt('pickup_date', windowEnd)
-    .gt('dropoff_date', windowStart)
+    .lt('pickup_date', horizonEnd.toISOString())
+    .gt('dropoff_date', now.toISOString())
   const bookings: Booking[] = bookingsData || []
 
-  const tStart = tomorrowStart.getTime()
-  const tEnd   = tomorrowEnd.getTime()
-  const dStart = tomorrowEnd.getTime()
-  const dEnd   = dayAfterEnd.getTime()
   const RECENT_WINDOW_MS = 20 * 60 * 1000 // 20 minutes
   const recentSince = Date.now() - RECENT_WINDOW_MS
   const hour = romeHour()
   const eveningTriggerActive = hour >= 18
+  const nowMs = now.getTime()
 
-  // Format gap date (tomorrow) in Italian.
-  const gapDateShort  = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' }).format(tomorrowStart)
-  const gapDateLong   = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(tomorrowStart)
-  const gapDateMedium = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'long' }).format(tomorrowStart)
-  const gapDateDb = romeYMD(tomorrowStart) // YYYY-MM-DD for the dedup table
+  // Per-vehicle gap detection (matches maxi-promo-gap-test.ts).
+  // A gap exists if the vehicle has an upcoming booking starting in the
+  // next 48h AND has at least SOME free time before it — even a few
+  // hours. DR7 charges any partial day as a full day, so a sub-24h gap
+  // is still a real rental opportunity.
+  const candidates: Array<{
+    vehicle: Vehicle;
+    reason: 'evening' | 'recent_booking';
+    gapDate: Date;
+    gapDateDb: string;
+  }> = []
 
-  const overlaps = (b: Booking, s: number, e: number) => {
-    const start = new Date(b.pickup_date).getTime()
-    const end   = new Date(b.dropoff_date).getTime()
-    return start < e && end > s
-  }
-
-  const candidates: Array<{ vehicle: Vehicle; reason: 'evening' | 'recent_booking' }> = []
   for (const v of vehicles) {
-    const vBookings = bookings.filter(b => (b.vehicle_id && b.vehicle_id === v.id)
-      || (b.vehicle_plate && v.plate && b.vehicle_plate === v.plate))
+    const vBookings = bookings
+      .filter(b => (b.vehicle_id && b.vehicle_id === v.id)
+        || (b.vehicle_plate && v.plate && b.vehicle_plate === v.plate))
+      .map(b => ({ ...b, _start: new Date(b.pickup_date).getTime(), _end: new Date(b.dropoff_date).getTime() }))
+      .sort((a, b) => a._start - b._start)
 
-    const tomorrowBooked = vBookings.some(b => overlaps(b, tStart, tEnd))
-    if (tomorrowBooked) continue
+    const nextBooking = vBookings.find(b => b._start > nowMs && b._start <= horizonEnd.getTime())
+    if (!nextBooking) continue
 
-    const dayAfterBooked = vBookings.some(b => overlaps(b, dStart, dEnd))
-    if (!dayAfterBooked) continue
+    const currentOrPrev = vBookings.filter(b => b._end <= nextBooking._start && b._start <= nowMs).pop()
+    const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
+    if (freeFromMs >= nextBooking._start) continue // no free window
 
-    // Decide whether THIS run should fire for this vehicle.
+    // Trigger gating: same as before — fire either at evening hour OR
+    // when a NEW booking landed in the last 20 min (so a customer who
+    // just created the gap-causing booking gets the broadcast quickly).
     const hasRecentBooking = vBookings.some(b => new Date(b.created_at).getTime() >= recentSince)
     if (!eveningTriggerActive && !hasRecentBooking) continue
 
-    candidates.push({ vehicle: v, reason: hasRecentBooking ? 'recent_booking' : 'evening' })
+    const gapDate = new Date(nextBooking._start - 1) // day before pickup
+    candidates.push({
+      vehicle: v,
+      reason: hasRecentBooking ? 'recent_booking' : 'evening',
+      gapDate,
+      gapDateDb: romeYMD(gapDate),
+    })
   }
 
   if (candidates.length === 0) {
     return { statusCode: 200, body: JSON.stringify({ ok: true, gaps: 0, sent: 0, hour, eveningTriggerActive }) }
   }
 
-  // Pull existing dedup rows for these vehicles + this gap_date (any recipient).
-  const candidateIds = candidates.map(c => c.vehicle.id)
+  // Pull existing dedup rows for the (vehicle, gap_date) pairs we're about
+  // to consider — any recipient. Each candidate has its OWN gap_date now,
+  // so we query the union of all distinct (vehicle_id, gap_date) pairs.
+  const distinctPairs = Array.from(new Set(candidates.map(c => `${c.vehicle.id}|${c.gapDateDb}`)))
+  const candidateIds = Array.from(new Set(candidates.map(c => c.vehicle.id)))
+  const distinctGapDates = Array.from(new Set(candidates.map(c => c.gapDateDb)))
   const { data: sentRows } = await supabase
     .from('maxi_promo_sent_log')
     .select('vehicle_id, gap_date, recipient')
     .in('vehicle_id', candidateIds)
-    .eq('gap_date', gapDateDb)
-  const sentSet = new Set((sentRows || []).map(r => `${r.vehicle_id}|${r.gap_date}|${r.recipient}`))
+    .in('gap_date', distinctGapDates)
+  // Filter to only the (vehicle, date) pairs we care about, then index by full key.
+  const validPairSet = new Set(distinctPairs)
+  const sentSet = new Set((sentRows || [])
+    .filter(r => validPairSet.has(`${r.vehicle_id}|${r.gap_date}`))
+    .map(r => `${r.vehicle_id}|${r.gap_date}|${r.recipient}`))
 
   const siteUrl = process.env.URL || process.env.DEPLOY_URL || ''
+
+  // Reusable formatters (Europe/Rome).
+  const fmtShort = (d: Date) => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' }).format(d)
+  const fmtLong = (d: Date) => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(d)
+  const fmtMedium = (d: Date) => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'long' }).format(d)
 
   let sent = 0
   let skipped = 0
@@ -217,21 +237,24 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
 
   for (const c of candidates) {
     const v = c.vehicle
+    const gShort = fmtShort(c.gapDate)
+    const gLong = fmtLong(c.gapDate)
+    const gMedium = fmtMedium(c.gapDate)
     const templateVars = {
       vehicle_specs: v.display_name,
       vehicle: v.display_name,
       veicolo: v.display_name,
-      date_gap: gapDateShort,
-      data_gap: gapDateShort,
-      gap_date: gapDateShort,
-      date_gap_long: gapDateLong,
-      data_gap_long: gapDateLong,
-      date_gap_short: gapDateMedium,
-      data: gapDateShort,
+      date_gap: gShort,
+      data_gap: gShort,
+      gap_date: gShort,
+      date_gap_long: gLong,
+      data_gap_long: gLong,
+      date_gap_short: gMedium,
+      data: gShort,
     }
 
     for (const phone of recipients) {
-      const dedupKey = `${v.id}|${gapDateDb}|${phone}`
+      const dedupKey = `${v.id}|${c.gapDateDb}|${phone}`
       if (sentSet.has(dedupKey)) {
         skipped++
         results.push({ vehicle: v.display_name, recipient: phone, reason: c.reason, ok: false, detail: 'already_sent' })
@@ -260,7 +283,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
         }
         await supabase.from('maxi_promo_sent_log').insert({
           vehicle_id: v.id,
-          gap_date: gapDateDb,
+          gap_date: c.gapDateDb,
           recipient: phone,
           template_key: 'pro_maxi_promo_gap_1gg',
         })

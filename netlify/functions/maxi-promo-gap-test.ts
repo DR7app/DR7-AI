@@ -99,9 +99,8 @@ export const handler: Handler = async (event) => {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const tomorrowStart = romeMidnightOffset(1)
-  const tomorrowEnd   = romeMidnightOffset(2)
-  const dayAfterEnd   = romeMidnightOffset(3)
+  const now = new Date()
+  const horizonEnd = new Date(now.getTime() + 48 * 3600 * 1000) // next 48h
 
   const { data: vehiclesData } = await supabase
     .from('vehicles')
@@ -109,56 +108,69 @@ export const handler: Handler = async (event) => {
     .neq('status', 'retired')
   const vehicles: Vehicle[] = (vehiclesData || []).filter(v => v.display_name !== 'Test')
 
-  // Load any rental booking that could overlap with tomorrow → day-after window.
-  const windowStart = tomorrowStart.toISOString()
-  const windowEnd   = dayAfterEnd.toISOString()
+  // Load every upcoming rental booking starting in the next 48h, plus any
+  // currently active booking (dropoff still in the future) so we can decide
+  // if the vehicle is busy right now.
   const { data: bookingsData } = await supabase
     .from('bookings')
     .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, status, service_type')
     .not('status', 'in', '(cancelled,annullata)')
     .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
-    .lt('pickup_date', windowEnd)
-    .gt('dropoff_date', windowStart)
+    .lt('pickup_date', horizonEnd.toISOString())
+    .gt('dropoff_date', now.toISOString())
   const bookings: Booking[] = bookingsData || []
 
-  const tStart = tomorrowStart.getTime()
-  const tEnd   = tomorrowEnd.getTime()
-  const dStart = tomorrowEnd.getTime()
-  const dEnd   = dayAfterEnd.getTime()
+  // Per-vehicle gap detection.
+  // A gap exists if the vehicle has an upcoming booking starting within
+  // the next 48h AND there is at least some free time before that booking
+  // — even if the free window is less than 24h. DR7 bills any partial day
+  // as one full day, so a 12h or 18h gap is still a real rental
+  // opportunity worth promoting.
+  type GapHit = { vehicle: Vehicle; nextPickup: Date; gapDate: Date }
+  const gapHits: GapHit[] = []
+  const nowMs = now.getTime()
 
-  const gapVehicles: Vehicle[] = []
   for (const v of vehicles) {
-    const vBookings = bookings.filter(b => (b.vehicle_id && b.vehicle_id === v.id)
-      || (b.vehicle_plate && v.plate && b.vehicle_plate === v.plate))
+    const vBookings = bookings
+      .filter(b => (b.vehicle_id && b.vehicle_id === v.id)
+        || (b.vehicle_plate && v.plate && b.vehicle_plate === v.plate))
+      .map(b => ({ ...b, _start: new Date(b.pickup_date).getTime(), _end: new Date(b.dropoff_date).getTime() }))
+      .sort((a, b) => a._start - b._start)
 
-    const overlaps = (b: Booking, s: number, e: number) => {
-      const start = new Date(b.pickup_date).getTime()
-      const end   = new Date(b.dropoff_date).getTime()
-      return start < e && end > s
-    }
+    // The next booking that starts AFTER now and within the 48h horizon.
+    const nextBooking = vBookings.find(b => b._start > nowMs && b._start <= horizonEnd.getTime())
+    if (!nextBooking) continue
 
-    const tomorrowBooked = vBookings.some(b => overlaps(b, tStart, tEnd))
-    if (tomorrowBooked) continue
+    // Latest booking that's still active at "now" (or has just ended).
+    const currentOrPrev = vBookings.filter(b => b._end <= nextBooking._start && b._start <= nowMs).pop()
+    const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
+    if (freeFromMs >= nextBooking._start) continue // no free window — back-to-back
 
-    const dayAfterBooked = vBookings.some(b => overlaps(b, dStart, dEnd))
-    if (!dayAfterBooked) continue // no follow-up booking → not a "1-day gap"
-
-    gapVehicles.push(v)
+    // gap_date = the calendar day (Europe/Rome) just before nextBooking.pickup_date.
+    // Subtract 1ms from the pickup so a pickup at 00:00 still resolves to
+    // the previous day rather than the day of pickup itself.
+    const gapDate = new Date(nextBooking._start - 1)
+    gapHits.push({ vehicle: v, nextPickup: new Date(nextBooking._start), gapDate })
   }
 
-  // Format the gap date (= tomorrow, in Europe/Rome) in Italian.
-  const gapDateShort = new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  }).format(tomorrowStart) // es. "28/04/2026"
-  const gapDateLong = new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  }).format(tomorrowStart) // es. "lunedì 28 aprile 2026"
-  const gapDateMedium = new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    day: 'numeric', month: 'long',
-  }).format(tomorrowStart) // es. "28 aprile"
+  const gapVehicles: Vehicle[] = gapHits.map(h => h.vehicle)
+
+  // For dry-run / single-template formatting we use the FIRST gap's date.
+  // When there are multiple vehicles with different gap dates, each
+  // outgoing WhatsApp gets its own gap_date (computed inline below).
+  const referenceGapDate = gapHits[0]?.gapDate || now
+  const fmtShort = (d: Date) => new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric',
+  }).format(d)
+  const fmtLong = (d: Date) => new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(d)
+  const fmtMedium = (d: Date) => new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome', day: 'numeric', month: 'long',
+  }).format(d)
+  const gapDateShort = fmtShort(referenceGapDate)
+  const gapDateLong = fmtLong(referenceGapDate)
+  const gapDateMedium = fmtMedium(referenceGapDate)
 
   if (dryRun || !recipient) {
     return {
@@ -168,7 +180,14 @@ export const handler: Handler = async (event) => {
         dryRun: true,
         count: gapVehicles.length,
         gap_date: gapDateShort,
-        vehicles: gapVehicles.map(v => ({ id: v.id, name: v.display_name, plate: v.plate, category: v.category })),
+        vehicles: gapHits.map(h => ({
+          id: h.vehicle.id,
+          name: h.vehicle.display_name,
+          plate: h.vehicle.plate,
+          category: h.vehicle.category,
+          gap_date: fmtShort(h.gapDate),
+          next_pickup: h.nextPickup.toISOString(),
+        })),
       }),
     }
   }
@@ -181,7 +200,14 @@ export const handler: Handler = async (event) => {
   let failed = 0
   const results: Array<{ vehicle: string; ok: boolean; reason?: string }> = []
 
-  for (const v of gapVehicles) {
+  for (const hit of gapHits) {
+    const v = hit.vehicle
+    // Each vehicle gets its OWN gap_date (the day before the next booking
+    // for that specific car). Different vehicles in the same run can have
+    // different gap_dates depending on when each one's next booking falls.
+    const hitShort = fmtShort(hit.gapDate)
+    const hitLong = fmtLong(hit.gapDate)
+    const hitMedium = fmtMedium(hit.gapDate)
     try {
       const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
         method: 'POST',
@@ -192,16 +218,16 @@ export const handler: Handler = async (event) => {
             vehicle_specs: v.display_name,
             vehicle: v.display_name,
             veicolo: v.display_name,
-            // Data del buco di 1 giorno (= domani, fuso Europe/Rome).
-            // Forniamo più alias così l'admin può scegliere il formato
-            // direttamente nel template Pro senza modifiche al codice.
-            date_gap: gapDateShort,        // "28/04/2026"
-            data_gap: gapDateShort,
-            gap_date: gapDateShort,
-            date_gap_long: gapDateLong,    // "lunedì 28 aprile 2026"
-            data_gap_long: gapDateLong,
-            date_gap_short: gapDateMedium, // "28 aprile"
-            data: gapDateShort,
+            // Data del buco di 1 giorno per QUESTO veicolo (Europe/Rome).
+            // Più alias così l'admin può scegliere il formato direttamente
+            // nel template Pro senza modifiche al codice.
+            date_gap: hitShort,        // "28/04/2026"
+            data_gap: hitShort,
+            gap_date: hitShort,
+            date_gap_long: hitLong,    // "lunedì 28 aprile 2026"
+            data_gap_long: hitLong,
+            date_gap_short: hitMedium, // "28 aprile"
+            data: hitShort,
           },
           customPhone: recipient,
         }),
