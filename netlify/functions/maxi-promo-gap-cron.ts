@@ -185,6 +185,10 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     gapStartDate: Date;   // first calendar day of free window
     gapEndDate: Date;     // last calendar day before pickup (= gapDate)
     gapHours: number;
+    // Fingerprint of the gap shape — `${freeFromMs}|${nextStartMs}`.
+    // Booking edits that move either edge change the signature, which
+    // makes dedup treat the new shape as a new gap and resend the promo.
+    gapSignature: string;
   }> = []
 
   const considerGap = (vehicle: Vehicle, freeFromMs: number, nextStartMs: number) => {
@@ -200,6 +204,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       gapStartDate: new Date(freeFromMs),
       gapEndDate: gapDate,
       gapHours: Math.round(gapMs / 3600 / 1000),
+      gapSignature: `${freeFromMs}|${nextStartMs}`,
     })
   }
 
@@ -232,22 +237,20 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     return { statusCode: 200, body: JSON.stringify({ ok: true, gaps: 0, sent: 0, hour }) }
   }
 
-  // Pull existing dedup rows for the (vehicle, gap_date) pairs we're about
-  // to consider — any recipient. Each candidate has its OWN gap_date now,
-  // so we query the union of all distinct (vehicle_id, gap_date) pairs.
-  const distinctPairs = Array.from(new Set(candidates.map(c => `${c.vehicle.id}|${c.gapDateDb}`)))
+  // Dedup is keyed on the gap SIGNATURE (free-from timestamp + next-pickup
+  // timestamp). If the operator edits a booking and the gap shape moves —
+  // even by a few minutes — the signature changes and the cron re-sends
+  // the promo with the updated dates/hours.
   const candidateIds = Array.from(new Set(candidates.map(c => c.vehicle.id)))
-  const distinctGapDates = Array.from(new Set(candidates.map(c => c.gapDateDb)))
+  const distinctSignatures = Array.from(new Set(candidates.map(c => c.gapSignature)))
   const { data: sentRows } = await supabase
     .from('maxi_promo_sent_log')
-    .select('vehicle_id, gap_date, recipient')
+    .select('vehicle_id, gap_signature, recipient')
     .in('vehicle_id', candidateIds)
-    .in('gap_date', distinctGapDates)
-  // Filter to only the (vehicle, date) pairs we care about, then index by full key.
-  const validPairSet = new Set(distinctPairs)
+    .in('gap_signature', distinctSignatures)
   const sentSet = new Set((sentRows || [])
-    .filter(r => validPairSet.has(`${r.vehicle_id}|${r.gap_date}`))
-    .map(r => `${r.vehicle_id}|${r.gap_date}|${r.recipient}`))
+    .filter(r => r.gap_signature) // ignore legacy rows with NULL signature
+    .map(r => `${r.vehicle_id}|${r.gap_signature}|${r.recipient}`))
 
   const siteUrl = process.env.URL || process.env.DEPLOY_URL || ''
 
@@ -308,7 +311,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     }
 
     for (const phone of recipients) {
-      const dedupKey = `${v.id}|${c.gapDateDb}|${phone}`
+      const dedupKey = `${v.id}|${c.gapSignature}|${phone}`
       if (sentSet.has(dedupKey)) {
         skipped++
         results.push({ vehicle: v.display_name, recipient: phone, reason: c.reason, ok: false, detail: 'already_sent' })
@@ -338,6 +341,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
         await supabase.from('maxi_promo_sent_log').insert({
           vehicle_id: v.id,
           gap_date: c.gapDateDb,
+          gap_signature: c.gapSignature,
           recipient: phone,
           template_key: 'pro_maxi_promo_gap_1gg',
         })
