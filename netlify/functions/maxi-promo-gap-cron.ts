@@ -157,22 +157,27 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     .gt('dropoff_date', now.toISOString())
   const bookings: Booking[] = bookingsData || []
 
-  const RECENT_WINDOW_MS = 20 * 60 * 1000 // 20 minutes
-  const recentSince = Date.now() - RECENT_WINDOW_MS
   const hour = romeHour()
-  const eveningTriggerActive = hour >= 18
+  // Quiet hours: don't send WhatsApp between 20:00 and 08:00 (Europe/Rome).
+  // The cron still runs every 10 min, but exits early during quiet hours
+  // so customers don't get marketing pings overnight. Outside that window,
+  // every detected new gap gets sent immediately — no 18:00 gate, no
+  // recent-booking requirement.
+  const QUIET_START_HOUR = 20 // 8 PM
+  const QUIET_END_HOUR = 8    // 8 AM
+  const isQuietHour = hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR
+  if (isQuietHour) return skip(`quiet hours ${QUIET_START_HOUR}:00–${QUIET_END_HOUR}:00 (current Rome hour: ${hour})`)
   const nowMs = now.getTime()
 
   // Per-vehicle gap detection (matches maxi-promo-gap-test.ts).
-  // A gap exists when the vehicle has an upcoming booking starting in
-  // the next 48h AND has a free window of [4h, 48h] before it. Outside
-  // that band we don't send: <4h is too short for a useful rental,
-  // >48h belongs to a different promo flow.
+  // A gap exists when the vehicle has an upcoming booking starting
+  // anywhere in the next 365 days AND has a free window of [4h, 48h]
+  // before it. Outside that band we don't send.
   const MIN_GAP_MS = 4 * 3600 * 1000
   const MAX_GAP_MS = 48 * 3600 * 1000
   const candidates: Array<{
     vehicle: Vehicle;
-    reason: 'evening' | 'recent_booking';
+    reason: 'detected';
     gapDate: Date;        // legacy single-date (= day before pickup)
     gapDateDb: string;
     gapStartDate: Date;   // first calendar day of free window
@@ -196,17 +201,11 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     if (gapMs < MIN_GAP_MS) continue
     if (gapMs > MAX_GAP_MS) continue
 
-    // Trigger gating: same as before — fire either at evening hour OR
-    // when a NEW booking landed in the last 20 min (so a customer who
-    // just created the gap-causing booking gets the broadcast quickly).
-    const hasRecentBooking = vBookings.some(b => new Date(b.created_at).getTime() >= recentSince)
-    if (!eveningTriggerActive && !hasRecentBooking) continue
-
     const gapDate = new Date(nextBooking._start - 1) // day before pickup
     const gapStartDate = new Date(freeFromMs)
     candidates.push({
       vehicle: v,
-      reason: hasRecentBooking ? 'recent_booking' : 'evening',
+      reason: 'detected',
       gapDate,
       gapDateDb: romeYMD(gapDate),
       gapStartDate,
@@ -216,7 +215,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   }
 
   if (candidates.length === 0) {
-    return { statusCode: 200, body: JSON.stringify({ ok: true, gaps: 0, sent: 0, hour, eveningTriggerActive }) }
+    return { statusCode: 200, body: JSON.stringify({ ok: true, gaps: 0, sent: 0, hour }) }
   }
 
   // Pull existing dedup rows for the (vehicle, gap_date) pairs we're about
@@ -345,7 +344,6 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       mode,
       recipients: recipients.length,
       hour,
-      eveningTriggerActive,
       candidates: candidates.length,
       sent, skipped, failed,
       results,
@@ -353,7 +351,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   }
 }
 
-// Scheduled every 10 minutes (UTC). The function itself decides which gaps
-// to fire on based on Rome local hour + recent-booking window, so we don't
-// need a Rome-local schedule.
+// Scheduled every 10 minutes (UTC). The function checks Rome-local hour
+// internally and exits early during quiet hours (20:00–08:00). Outside
+// the quiet window every detected new gap is sent immediately.
 export const handler = schedule('*/10 * * * *', cronHandler)
