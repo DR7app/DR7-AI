@@ -192,7 +192,6 @@ export default function AdminDashboard() {
       { tab: 'gestione-danni', label: 'Danni & Penali' },
       { tab: 'gestione-multe', label: 'Multe' },
       { tab: 'cargos', label: 'Cargos' },
-      { tab: 'trustera', label: 'Trustera' },
     ] },
     { name: 'Prime Wash', tabs: [
       { tab: 'carwash', label: 'Prenotazioni' },
@@ -243,6 +242,7 @@ export default function AdminDashboard() {
     ] },
     { name: 'Centralina Pro', tabs: [
       { tab: 'centralina-pro', label: 'Centralina Pro' },
+      { tab: 'trustera', label: 'Trustera' },
     ] },
   ]
   const sectionForActiveTab = SECTIONS.find(s => s.tabs.some(t => t.tab === activeTab)) || null
