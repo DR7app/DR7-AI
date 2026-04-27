@@ -242,6 +242,8 @@ export default function AdminDashboard() {
     ] },
     { name: 'Centralina Pro', tabs: [
       { tab: 'centralina-pro', label: 'Centralina Pro' },
+    ] },
+    { name: 'Trustera', tabs: [
       { tab: 'trustera', label: 'Trustera' },
     ] },
   ]
