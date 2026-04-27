@@ -35,52 +35,10 @@ interface CartItem {
     quantity: number
 }
 
-// Supercar Penalties
-const SUPERCAR_PENALTIES: PenaltyItem[] = [
-    { id: 'fermo_incidente', label: 'Fermo veicolo incidente/danni', amount: 350, description: '€350/giorno' },
-    { id: 'fermo_alto_valore', label: 'Fermo veicolo (auto > €200k)', amount: 700, description: '€700/giorno' },
-    { id: 'fumo', label: 'Fumo nell\'auto', amount: 50, description: 'Odore/cenere' },
-    { id: 'foro_sigaretta', label: 'Foro da sigaretta', amount: 50, description: 'Per foro' },
-    { id: 'guidatore_non_indicato', label: 'Guidatore non nel contratto', amount: 200, description: 'Violazione contratto' },
-    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 25, description: 'Quadro 8 tacche' },
-    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 50, description: 'Quadro 4 tacche' },
-    { id: 'gonfia_ripara', label: 'Bomboletta gonfia e ripara', amount: 100, description: 'Per pneumatico' },
-    { id: 'sporco', label: 'Veicolo sporco', amount: 30, description: 'Interni/rifiuti' },
-    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'Pulizia profonda' },
-    { id: 'controlli_elettronici', label: 'Controlli elettronici disattivati', amount: 100, description: 'ESP/stabilita' },
-    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico cliente' },
-    { id: 'assenza_intestatario', label: 'Assenza intestatario', amount: 150, description: 'Consegna/ritiro' },
-    { id: 'ritardo_checkout_base', label: 'Ritardo check-out (> 30 min)', amount: 50, description: 'Base minima' },
-    { id: 'ritardo_checkout_minuto', label: 'Ritardo check-out (per min)', amount: 0.5, description: 'Oltre i 30 min' },
-    { id: 'pista', label: 'Utilizzo in pista', amount: 5000, description: 'Kasko non attiva' },
-    { id: 'cani', label: 'Cani / pelo di cane', amount: 100, description: 'Non tollerato' },
-    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave' },
-    { id: 'neopatentati', label: 'Guida neopatentati', amount: 0, description: 'Responsabilita TOTALE' },
-    { id: 'patente_mancante', label: 'Mancata esibizione patente', amount: 0, description: 'Perdita prenotazione' },
-    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (> 22h30)', amount: 0, description: 'Max = tariffa giornaliera' },
-]
-
-// Urban/Utilitarie/Furgone/NCC Penalties
-const URBAN_UTILITAIRE_PENALTIES: PenaltyItem[] = [
-    { id: 'fermo_utilitarie', label: 'Fermo veicolo (Utilitarie)', amount: 30, description: '€30/giorno' },
-    { id: 'fermo_furgoni', label: 'Fermo veicolo (Furgoni/NCC)', amount: 100, description: '€100/giorno' },
-    { id: 'fumo', label: 'Fumo nell\'auto', amount: 50, description: 'Odore/cenere' },
-    { id: 'foro_sigaretta', label: 'Foro da sigaretta', amount: 50, description: 'Per foro' },
-    { id: 'guidatore_non_indicato', label: 'Guidatore non nel contratto', amount: 200, description: 'Violazione contratto' },
-    { id: 'carburante_8', label: 'Carburante mancante (8 tacche)', amount: 15, description: 'Quadro 8 tacche' },
-    { id: 'carburante_4', label: 'Carburante mancante (4 tacche)', amount: 30, description: 'Quadro 4 tacche' },
-    { id: 'gonfia_ripara', label: 'Bomboletta gonfia e ripara', amount: 100, description: 'Per pneumatico' },
-    { id: 'sporco', label: 'Veicolo sporco', amount: 30, description: 'Interni/rifiuti' },
-    { id: 'igienizzazione', label: 'Igienizzazione straordinaria', amount: 100, description: 'Pulizia profonda' },
-    { id: 'multe', label: 'Multe e sanzioni', amount: 0, description: '100% a carico cliente' },
-    { id: 'assenza_intestatario', label: 'Assenza intestatario', amount: 150, description: 'Consegna/ritiro' },
-    { id: 'ritardo_checkout_base', label: 'Ritardo check-out (> 30 min)', amount: 20, description: 'Base minima' },
-    { id: 'ritardo_checkout_minuto', label: 'Ritardo check-out (per min)', amount: 0.5, description: 'Oltre i 30 min' },
-    { id: 'neopatentati', label: 'Guida neopatentati', amount: 0, description: 'Responsabilita TOTALE' },
-    { id: 'cani', label: 'Cani / pelo di cane', amount: 100, description: 'Non tollerato' },
-    { id: 'subnoleggio', label: 'Subnoleggio non autorizzato', amount: 1000, description: 'Violazione grave' },
-    { id: 'ritardo_riconsegna', label: 'Ritardo riconsegna (> 22h30)', amount: 0, description: 'Max = tariffa giornaliera' },
-]
+// Penalty presets are now sourced ONLY from Centralina Pro
+// (centralina_pro_config.config.penali). Removed the hardcoded
+// SUPERCAR_PENALTIES / URBAN_UTILITAIRE_PENALTIES arrays so a price change
+// in Centralina is reflected here without code edits.
 
 export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEditCustomer }: PenaltyModalProps) {
     const [cart, setCart] = useState<CartItem[]>([])
@@ -91,15 +49,15 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     const [paymentMethod, setPaymentMethod] = useState('Contanti')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
-    // Per-category penalty list from Centralina Pro. Falls back to the
-    // hardcoded SUPERCAR_PENALTIES / URBAN_UTILITAIRE_PENALTIES below when
-    // the config row is missing or empty for the active vehicle category.
+    // Per-category penalty list from Centralina Pro — single source of truth.
     const [penaliFromCfg, setPenaliFromCfg] = useState<Record<string, PenaltyItem[]> | null>(null)
+    const [resolvedCategory, setResolvedCategory] = useState<string>('')
 
     useEffect(() => {
         if (!isOpen) return
         let cancelled = false
         ;(async () => {
+            // 1. Pro penali
             try {
                 const { data } = await supabase
                     .from('centralina_pro_config')
@@ -107,48 +65,69 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                     .eq('id', 'main')
                     .maybeSingle()
                 const proPenali = data?.config?.penali as Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> | undefined
-                if (cancelled || !proPenali) return
-                // Map admin Pro categories → DB categories used here
-                // (vehicle.category typically 'exotic' / 'urban' / 'aziendali')
-                const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
-                const out: Record<string, PenaltyItem[]> = {}
-                for (const [proCat, items] of Object.entries(proPenali)) {
-                    if (!Array.isArray(items)) continue
-                    const dbCat = PRO_TO_DB[proCat] || proCat
-                    out[dbCat] = items
-                        .filter(it => it && it.enabled !== false)
-                        .map(it => ({
-                            id: String(it.id || ''),
-                            label: String(it.label || ''),
-                            amount: typeof it.amount === 'number' ? it.amount : Number(it.amount) || 0,
-                            description: String(it.description || ''),
-                        }))
+                if (!cancelled && proPenali) {
+                    const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
+                    const out: Record<string, PenaltyItem[]> = {}
+                    for (const [proCat, items] of Object.entries(proPenali)) {
+                        if (!Array.isArray(items)) continue
+                        const dbCat = PRO_TO_DB[proCat] || proCat
+                        out[dbCat] = items
+                            .filter(it => it && it.enabled !== false)
+                            .map(it => ({
+                                id: String(it.id || ''),
+                                label: String(it.label || ''),
+                                amount: typeof it.amount === 'number' ? it.amount : Number(it.amount) || 0,
+                                description: String(it.description || ''),
+                            }))
+                    }
+                    setPenaliFromCfg(out)
                 }
-                setPenaliFromCfg(out)
-            } catch {
-                // ignore — fall back to hardcoded lists
+            } catch { /* ignore */ }
+
+            // 2. Resolve vehicle category — try booking_details, fall back to
+            //    vehicles table by id/plate.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const bd = (booking as { booking_details?: any }).booking_details
+            let cat = String(bd?.vehicle?.category || bd?.vehicleCategory || bd?.category || '').toLowerCase().trim()
+            if (!cat) {
+                try {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const vid = (booking as any).vehicle_id || bd?.vehicle?.id || bd?.vehicle_id
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const plate = (booking as any).vehicle_plate || bd?.vehicle?.plate || bd?.vehicle_plate
+                    if (vid) {
+                        const { data: v } = await supabase.from('vehicles').select('category').eq('id', vid).maybeSingle()
+                        if (v?.category) cat = String(v.category).toLowerCase().trim()
+                    }
+                    if (!cat && plate) {
+                        const { data: v } = await supabase.from('vehicles').select('category').eq('plate', plate).maybeSingle()
+                        if (v?.category) cat = String(v.category).toLowerCase().trim()
+                    }
+                } catch { /* ignore */ }
             }
+            // Normalise common aliases
+            if (cat === 'supercar' || cat === 'supercars') cat = 'exotic'
+            if (cat === 'furgone' || cat === 'furgoni' || cat === 'ncc') cat = 'aziendali'
+            if (cat === 'utilitaria' || cat === 'utilitarie') cat = 'urban'
+            if (!cancelled) setResolvedCategory(cat)
         })()
         return () => { cancelled = true }
-    }, [isOpen])
+    }, [isOpen, booking])
 
-    const vehicleCategory = booking.booking_details?.vehicle?.category ||
+    const vehicleCategory = resolvedCategory ||
+        booking.booking_details?.vehicle?.category ||
         booking.booking_details?.vehicleCategory ||
         booking.booking_details?.category || ''
 
     const isSupercar = vehicleCategory === 'exotic'
-    // Prefer Centralina Pro list for this exact category. Fall back to the
-    // historical hardcoded supercars / urban-utilitaire arrays so the modal
-    // never goes empty if the config is missing.
+    // Single source of truth: Centralina Pro. Empty state shown when the
+    // category isn't configured.
     const penaltyList: PenaltyItem[] = useMemo(() => {
-        if (penaliFromCfg) {
-            const fromCfg = penaliFromCfg[vehicleCategory] || penaliFromCfg[isSupercar ? 'exotic' : 'urban']
-            if (Array.isArray(fromCfg) && fromCfg.length > 0) return fromCfg
-        }
-        return isSupercar ? SUPERCAR_PENALTIES : URBAN_UTILITAIRE_PENALTIES
-    }, [penaliFromCfg, vehicleCategory, isSupercar])
+        if (!penaliFromCfg) return []
+        return penaliFromCfg[vehicleCategory] || []
+    }, [penaliFromCfg, vehicleCategory])
 
-    const vehicleTypeLabel = isSupercar ? 'Supercar' : 'Urban / Utilitarie'
+    const vehicleTypeLabel = isSupercar ? 'Supercar' : vehicleCategory === 'aziendali' ? 'Aziendali' : 'Urban / Utilitarie'
 
     if (!isOpen) return null
 
@@ -463,6 +442,12 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
                 {/* Scrollable items */}
                 <div className="flex-1 overflow-y-auto px-4 pb-4">
+                    {penaltyList.length === 0 && (
+                        <div className="rounded-2xl bg-amber-500/[0.08] border border-amber-500/30 p-4 mb-3 text-[13px] text-amber-300">
+                            Nessuna penale configurata per la categoria <strong>{vehicleCategory || 'sconosciuta'}</strong>.
+                            Apri <strong>Centralina Pro → Danni &amp; Penali → Penali → tab {vehicleCategory || 'corretto'}</strong> e aggiungi le voci.
+                        </div>
+                    )}
                     {/* Grouped list — iOS Settings style */}
                     <div className="rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
                         {penaltyList.map((penalty, idx) => {

@@ -52,11 +52,15 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
     // Danni preset list pulled from Centralina Pro at open time, keyed by
     // Pro category (supercars/urban/aziendali). Empty arrays when not configured.
     const [danniByCategory, setDanniByCategory] = useState<Record<string, DanniPreset[]> | null>(null)
+    // Vehicle category resolved at open time. Bookings often don't carry the
+    // category in booking_details, so we look it up via vehicle_id when missing.
+    const [resolvedCategory, setResolvedCategory] = useState<string>('')
 
     useEffect(() => {
         if (!isOpen) return
         let cancelled = false
         ;(async () => {
+            // 1. Pro danni
             try {
                 const { data } = await supabase
                     .from('centralina_pro_config')
@@ -64,42 +68,62 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     .eq('id', 'main')
                     .maybeSingle()
                 const proDanni = data?.config?.danni as Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> | undefined
-                if (cancelled || !proDanni) return
-                const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
-                const out: Record<string, DanniPreset[]> = {}
-                for (const [proCat, items] of Object.entries(proDanni)) {
-                    if (!Array.isArray(items)) continue
-                    const dbCat = PRO_TO_DB[proCat] || proCat
-                    out[dbCat] = items
-                        .filter(it => it && it.enabled !== false)
-                        .map(it => ({
-                            id: String(it.id || ''),
-                            label: String(it.label || ''),
-                            amount: typeof it.amount === 'number' ? it.amount : Number(it.amount) || 0,
-                            description: String(it.description || ''),
-                        }))
+                if (!cancelled && proDanni) {
+                    const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
+                    const out: Record<string, DanniPreset[]> = {}
+                    for (const [proCat, items] of Object.entries(proDanni)) {
+                        if (!Array.isArray(items)) continue
+                        const dbCat = PRO_TO_DB[proCat] || proCat
+                        out[dbCat] = items
+                            .filter(it => it && it.enabled !== false)
+                            .map(it => ({
+                                id: String(it.id || ''),
+                                label: String(it.label || ''),
+                                amount: typeof it.amount === 'number' ? it.amount : Number(it.amount) || 0,
+                                description: String(it.description || ''),
+                            }))
+                    }
+                    setDanniByCategory(out)
                 }
-                setDanniByCategory(out)
-            } catch {
-                // ignore — modal still works with custom-only input
+            } catch { /* ignore */ }
+
+            // 2. Resolve vehicle category — try booking_details, fall back to
+            //    vehicles table by id/plate.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const bd = (booking as { booking_details?: any }).booking_details
+            let cat = String(bd?.vehicle?.category || bd?.vehicleCategory || bd?.category || '').toLowerCase().trim()
+            if (!cat) {
+                try {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const vid = (booking as any).vehicle_id || bd?.vehicle?.id || bd?.vehicle_id
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const plate = (booking as any).vehicle_plate || bd?.vehicle?.plate || bd?.vehicle_plate
+                    if (vid) {
+                        const { data: v } = await supabase.from('vehicles').select('category').eq('id', vid).maybeSingle()
+                        if (v?.category) cat = String(v.category).toLowerCase().trim()
+                    }
+                    if (!cat && plate) {
+                        const { data: v } = await supabase.from('vehicles').select('category').eq('plate', plate).maybeSingle()
+                        if (v?.category) cat = String(v.category).toLowerCase().trim()
+                    }
+                } catch { /* ignore */ }
             }
+            if (cat === 'supercar' || cat === 'supercars') cat = 'exotic'
+            if (cat === 'furgone' || cat === 'furgoni' || cat === 'ncc') cat = 'aziendali'
+            if (cat === 'utilitaria' || cat === 'utilitarie') cat = 'urban'
+            if (!cancelled) setResolvedCategory(cat)
         })()
         return () => { cancelled = true }
-    }, [isOpen])
+    }, [isOpen, booking])
 
-    const vehicleCategory = booking.booking_details?.vehicle?.category
+    const vehicleCategory = resolvedCategory
+        || booking.booking_details?.vehicle?.category
         || booking.booking_details?.vehicleCategory
         || booking.booking_details?.category
         || ''
     const presetList: DanniPreset[] = useMemo(() => {
         if (!danniByCategory) return []
-        const direct = danniByCategory[vehicleCategory]
-        if (Array.isArray(direct) && direct.length > 0) return direct
-        // Fallback: if vehicle category unknown, prefer 'exotic' then any other non-empty list
-        return danniByCategory.exotic
-            || danniByCategory.urban
-            || danniByCategory.aziendali
-            || []
+        return danniByCategory[vehicleCategory] || []
     }, [danniByCategory, vehicleCategory])
 
     if (!isOpen) return null
