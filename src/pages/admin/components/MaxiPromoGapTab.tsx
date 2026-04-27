@@ -86,7 +86,11 @@ export default function MaxiPromoGapTab() {
           prenotazioni) e invia il messaggio promozionale. Il body del messaggio si gestisce
           in <span className="text-dr7-gold font-medium">Messaggi di Sistema Pro</span> →
           template <span className="text-dr7-gold font-medium">MAXI PROMO GAP 1GG</span>.
-          Variabili: <code className="px-1.5 py-0.5 bg-theme-bg-tertiary rounded text-dr7-gold">{'{vehicle_specs}'}</code>.
+          Variabili supportate:&nbsp;
+          <code className="px-1.5 py-0.5 bg-theme-bg-tertiary rounded text-dr7-gold">{'{vehicle_specs}'}</code>,&nbsp;
+          <code className="px-1.5 py-0.5 bg-theme-bg-tertiary rounded text-dr7-gold">{'{date_gap}'}</code> (es. 28/04/2026),&nbsp;
+          <code className="px-1.5 py-0.5 bg-theme-bg-tertiary rounded text-dr7-gold">{'{date_gap_long}'}</code> (es. lunedì 28 aprile 2026),&nbsp;
+          <code className="px-1.5 py-0.5 bg-theme-bg-tertiary rounded text-dr7-gold">{'{date_gap_short}'}</code> (es. 28 aprile).
         </p>
       </div>
 

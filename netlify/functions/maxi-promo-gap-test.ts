@@ -146,6 +146,20 @@ export const handler: Handler = async (event) => {
     gapVehicles.push(v)
   }
 
+  // Format the gap date (= tomorrow, in Europe/Rome) in Italian.
+  const gapDateShort = new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  }).format(tomorrowStart) // es. "28/04/2026"
+  const gapDateLong = new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(tomorrowStart) // es. "lunedì 28 aprile 2026"
+  const gapDateMedium = new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome',
+    day: 'numeric', month: 'long',
+  }).format(tomorrowStart) // es. "28 aprile"
+
   if (dryRun || !recipient) {
     return {
       statusCode: 200,
@@ -153,6 +167,7 @@ export const handler: Handler = async (event) => {
         success: true,
         dryRun: true,
         count: gapVehicles.length,
+        gap_date: gapDateShort,
         vehicles: gapVehicles.map(v => ({ id: v.id, name: v.display_name, plate: v.plate, category: v.category })),
       }),
     }
@@ -177,6 +192,16 @@ export const handler: Handler = async (event) => {
             vehicle_specs: v.display_name,
             vehicle: v.display_name,
             veicolo: v.display_name,
+            // Data del buco di 1 giorno (= domani, fuso Europe/Rome).
+            // Forniamo più alias così l'admin può scegliere il formato
+            // direttamente nel template Pro senza modifiche al codice.
+            date_gap: gapDateShort,        // "28/04/2026"
+            data_gap: gapDateShort,
+            gap_date: gapDateShort,
+            date_gap_long: gapDateLong,    // "lunedì 28 aprile 2026"
+            data_gap_long: gapDateLong,
+            date_gap_short: gapDateMedium, // "28 aprile"
+            data: gapDateShort,
           },
           customPhone: recipient,
         }),
