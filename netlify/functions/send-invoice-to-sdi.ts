@@ -31,6 +31,36 @@ export const handler: Handler = async (event) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Invoice not found' }) }
         }
 
+        // Test-vehicle guard: if the linked booking is on a test vehicle
+        // (vehicle_name 'test' OR plate starting with 'TEST', e.g. TEST000,
+        // TEST002), refuse to push to SDI — danni/penali fatture for test
+        // bookings must stay local (PDF-only via WhatsApp). Mirrors the
+        // auto-skip already in generate-invoice-from-booking.ts and
+        // generate-penalty-invoice.ts.
+        if (invoice.booking_id) {
+            const { data: testBooking } = await supabase
+                .from('bookings')
+                .select('vehicle_name, vehicle_plate, booking_details')
+                .eq('id', invoice.booking_id)
+                .maybeSingle()
+            if (testBooking) {
+                const tName = String(testBooking.vehicle_name || testBooking.booking_details?.vehicle?.name || '').toLowerCase()
+                const tPlate = String(testBooking.vehicle_plate || testBooking.booking_details?.vehicle_plate || testBooking.booking_details?.vehicle?.plate || '').toUpperCase()
+                if (tName === 'test' || tPlate.startsWith('TEST')) {
+                    console.log(`[SDI] Test vehicle (plate=${tPlate}) — refusing manual SDI dispatch for invoice ${invoice.numero_fattura}`)
+                    return {
+                        statusCode: 200,
+                        body: JSON.stringify({
+                            success: false,
+                            skipped: true,
+                            reason: 'test_vehicle',
+                            message: 'Veicolo di test: invio SDI bloccato. La fattura resta in bozza locale.'
+                        })
+                    }
+                }
+            }
+        }
+
         // If invoice was previously sent/uploaded, ALWAYS assign a NEW number
         // This prevents SDI error 00404 (fattura duplicata) when retrying
         const needsNewNumber = invoice.sdi_status === 'rejected' ||
