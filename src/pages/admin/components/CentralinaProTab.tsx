@@ -417,32 +417,116 @@ type DepositFasciaConfig = {
   non_residente: DepositOption[]
 }
 
-type DepositsConfig = Record<string, DepositFasciaConfig> // keyed by fascia.id
+// New shape: deposits[category][fascia] = { residente, non_residente }
+// Categories match the KM/pricing categories: supercars, urban, aziendali.
+// Old shape (deposits[fascia] = ...) is auto-migrated by migrateDeposits()
+// at load time so existing saved configs keep working.
+type DepositsCategoryKey = 'supercars' | 'urban' | 'aziendali'
+type DepositsByFascia = Record<string, DepositFasciaConfig> // keyed by fascia.id
+type DepositsConfig = Record<DepositsCategoryKey, DepositsByFascia>
+
+const DEPOSIT_CATEGORIES: { id: DepositsCategoryKey; label: string }[] = [
+  { id: 'supercars', label: 'Supercars' },
+  { id: 'urban', label: 'Urban' },
+  { id: 'aziendali', label: 'Aziendali' },
+]
 
 const INITIAL_DEPOSITS: DepositsConfig = {
-  B: {
-    residente: [
-      { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
-      { id: 'credit_card', label: 'Carta di credito', amount: 2000, surcharge_per_day: 0 },
-      { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
-    ],
-    non_residente: [
-      { id: 'credit_card', label: 'Carta di credito', amount: 5000, surcharge_per_day: 0 },
-      { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
-    ],
+  // High-value supercars — keep the historical config the business has
+  // been using since this section was first introduced.
+  supercars: {
+    B: {
+      residente: [
+        { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+        { id: 'credit_card', label: 'Carta di credito', amount: 2000, surcharge_per_day: 0 },
+        { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
+      ],
+      non_residente: [
+        { id: 'credit_card', label: 'Carta di credito', amount: 5000, surcharge_per_day: 0 },
+        { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+      ],
+    },
+    A: {
+      residente: [
+        { id: 'no_deposit', label: 'Nessuna cauzione', amount: 0, surcharge_per_day: 49 },
+        { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+        { id: 'credit_card', label: 'Carta di credito', amount: 1000, surcharge_per_day: 0 },
+        { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
+      ],
+      non_residente: [
+        { id: 'credit_card', label: 'Carta di credito', amount: 3500, surcharge_per_day: 0 },
+        { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+      ],
+    },
   },
-  A: {
-    residente: [
-      { id: 'no_deposit', label: 'Nessuna cauzione', amount: 0, surcharge_per_day: 49 },
-      { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
-      { id: 'credit_card', label: 'Carta di credito', amount: 1000, surcharge_per_day: 0 },
-      { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 4999, surcharge_per_day: 0 },
-    ],
-    non_residente: [
-      { id: 'credit_card', label: 'Carta di credito', amount: 3500, surcharge_per_day: 0 },
-      { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
-    ],
+  // Low-value city cars (Fiat Panda etc.) — smaller deposits, simpler set.
+  urban: {
+    B: {
+      residente: [
+        { id: 'credit_card', label: 'Carta di credito', amount: 500, surcharge_per_day: 0 },
+        { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 800, surcharge_per_day: 0 },
+      ],
+      non_residente: [
+        { id: 'credit_card', label: 'Carta di credito', amount: 800, surcharge_per_day: 0 },
+      ],
+    },
+    A: {
+      residente: [
+        { id: 'credit_card', label: 'Carta di credito', amount: 300, surcharge_per_day: 0 },
+        { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 500, surcharge_per_day: 0 },
+      ],
+      non_residente: [
+        { id: 'credit_card', label: 'Carta di credito', amount: 500, surcharge_per_day: 0 },
+      ],
+    },
   },
+  // Commercial vehicles (Fiat Ducato Maxi etc.) — mid-tier.
+  aziendali: {
+    B: {
+      residente: [
+        { id: 'credit_card', label: 'Carta di credito', amount: 1500, surcharge_per_day: 0 },
+        { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 2000, surcharge_per_day: 0 },
+      ],
+      non_residente: [
+        { id: 'credit_card', label: 'Carta di credito', amount: 2000, surcharge_per_day: 0 },
+        { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+      ],
+    },
+    A: {
+      residente: [
+        { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+        { id: 'credit_card', label: 'Carta di credito', amount: 800, surcharge_per_day: 0 },
+        { id: 'cash_prepaid', label: 'Contanti o prepagata', amount: 1500, surcharge_per_day: 0 },
+      ],
+      non_residente: [
+        { id: 'credit_card', label: 'Carta di credito', amount: 1500, surcharge_per_day: 0 },
+        { id: 'vehicle_deposit', label: 'Cauzione con veicolo', amount: 0, surcharge_per_day: 20 },
+      ],
+    },
+  },
+}
+
+// Convert legacy single-fascia-keyed deposits to the new category-keyed shape.
+// Detection: old shape's outer values have `residente`/`non_residente`;
+// new shape's outer values are themselves objects whose values have those keys.
+function migrateDeposits(raw: unknown): DepositsConfig {
+  if (!raw || typeof raw !== 'object') return INITIAL_DEPOSITS
+  const obj = raw as Record<string, unknown>
+  const firstVal = Object.values(obj)[0] as Record<string, unknown> | undefined
+  const isOld = !!firstVal && typeof firstVal === 'object'
+    && ('residente' in firstVal || 'non_residente' in firstVal)
+  if (isOld) {
+    // Old shape: copy the same per-fascia config under every category so
+    // existing customers see no behaviour change until they edit.
+    const old = obj as DepositsByFascia
+    return { supercars: old, urban: old, aziendali: old }
+  }
+  // Already new shape — fill any missing category from the initials.
+  return {
+    supercars: (obj.supercars as DepositsByFascia) || INITIAL_DEPOSITS.supercars,
+    urban: (obj.urban as DepositsByFascia) || INITIAL_DEPOSITS.urban,
+    aziendali: (obj.aziendali as DepositsByFascia) || INITIAL_DEPOSITS.aziendali,
+  }
 }
 
 type KmConfig = {
@@ -748,7 +832,7 @@ export default function CentralinaProTab() {
   const initialFasce = pick(persisted, 'fasce', INITIAL_FASCE)
   const initialInsurance = pick(persisted, 'insurance', INITIAL_INSURANCE)
   const initialKm = pick(persisted, 'km', INITIAL_KM)
-  const initialDeposits = pick(persisted, 'deposits', INITIAL_DEPOSITS)
+  const initialDeposits = migrateDeposits(pick(persisted, 'deposits', INITIAL_DEPOSITS))
   const initialServizi = pick(persisted, 'servizi', INITIAL_SERVIZI)
   const initialPrezzoDinamico = mergePrezzoDinamico(pick(persisted, 'prezzoDinamico', INITIAL_PREZZO_DINAMICO))
   const initialPreventivi = pick(persisted, 'preventivi', INITIAL_PREVENTIVI)
@@ -790,7 +874,10 @@ export default function CentralinaProTab() {
         if (remote.fasce) { setFasce(remote.fasce); setSavedFasce(remote.fasce) }
         if (remote.insurance) { setInsurance(remote.insurance); setSavedInsurance(remote.insurance) }
         if (remote.km) { setKm(remote.km); setSavedKm(remote.km) }
-        if (remote.deposits) { setDeposits(remote.deposits); setSavedDeposits(remote.deposits) }
+        if (remote.deposits) {
+          const migrated = migrateDeposits(remote.deposits)
+          setDeposits(migrated); setSavedDeposits(migrated)
+        }
         if (remote.servizi) { setServizi(remote.servizi); setSavedServizi(remote.servizi) }
         if (remote.prezzoDinamico) {
           const merged = mergePrezzoDinamico(remote.prezzoDinamico)
@@ -834,7 +921,15 @@ export default function CentralinaProTab() {
         byFascia: syncRecord(cat.byFascia, fasciaIds, [] as InsuranceOption[]),
       }))
     )
-    setDeposits((prev) => syncRecord(prev, fasciaIds, { residente: [], non_residente: [] } as DepositFasciaConfig))
+    // Deposits is now category → fascia → scope. Sync each category map.
+    setDeposits((prev) => {
+      const next = { ...prev }
+      for (const cat of DEPOSIT_CATEGORIES) {
+        const cur = next[cat.id] || {}
+        next[cat.id] = syncRecord(cur, fasciaIds, { residente: [], non_residente: [] } as DepositFasciaConfig)
+      }
+      return next
+    })
     setServizi((prev) => ({
       ...prev,
       second_driver: syncRecord(prev.second_driver, fasciaIds, '' as number | ''),
@@ -1320,27 +1415,36 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     })
   }
 
-  // Cauzioni
-  const allFasciaIds = new Set([...Object.keys(current.deposits), ...Object.keys(saved.deposits)])
-  allFasciaIds.forEach((fid) => {
-    ;(['residente', 'non_residente'] as const).forEach((scope) => {
-      const cur = current.deposits[fid]?.[scope] ?? []
-      const prev = saved.deposits[fid]?.[scope] ?? []
-      const prefix = `Cauzioni / Fascia ${fid} ${scope === 'residente' ? 'Residente' : 'Non Residente'}`
-      const savedIds = new Set(prev.map((o) => o.id))
-      const curIds = new Set(cur.map((o) => o.id))
-      cur.forEach((o) => {
-        if (!savedIds.has(o.id)) out.push(`${prefix}: aggiunta "${o.label || 'Nuova opzione'}"`)
-      })
-      prev.forEach((o) => {
-        if (!curIds.has(o.id)) out.push(`${prefix}: rimossa "${o.label}"`)
-      })
-      cur.forEach((o) => {
-        const p = prev.find((x) => x.id === o.id)
-        if (!p) return
-        if (p.label !== o.label) out.push(`${prefix}: "${p.label}" rinominata in "${o.label}"`)
-        if (p.amount !== o.amount) out.push(`${prefix} / ${o.label}: importo €${p.amount} → €${o.amount}`)
-        if (p.surcharge_per_day !== o.surcharge_per_day) out.push(`${prefix} / ${o.label}: sovrapprezzo €${p.surcharge_per_day}/g → €${o.surcharge_per_day}/g`)
+  // Cauzioni — now per (category × fascia × scope)
+  const allCategoryIds = new Set<string>([
+    ...Object.keys(current.deposits || {}),
+    ...Object.keys(saved.deposits || {}),
+  ])
+  allCategoryIds.forEach((catId) => {
+    const curCat = (current.deposits as Record<string, DepositsByFascia>)[catId] || {}
+    const savedCat = (saved.deposits as Record<string, DepositsByFascia>)[catId] || {}
+    const catLabel = DEPOSIT_CATEGORIES.find(c => c.id === catId)?.label || catId
+    const allFasciaIds = new Set([...Object.keys(curCat), ...Object.keys(savedCat)])
+    allFasciaIds.forEach((fid) => {
+      ;(['residente', 'non_residente'] as const).forEach((scope) => {
+        const cur = curCat[fid]?.[scope] ?? []
+        const prev = savedCat[fid]?.[scope] ?? []
+        const prefix = `Cauzioni / ${catLabel} / Fascia ${fid} ${scope === 'residente' ? 'Residente' : 'Non Residente'}`
+        const savedIds = new Set(prev.map((o) => o.id))
+        const curIds = new Set(cur.map((o) => o.id))
+        cur.forEach((o) => {
+          if (!savedIds.has(o.id)) out.push(`${prefix}: aggiunta "${o.label || 'Nuova opzione'}"`)
+        })
+        prev.forEach((o) => {
+          if (!curIds.has(o.id)) out.push(`${prefix}: rimossa "${o.label}"`)
+        })
+        cur.forEach((o) => {
+          const p = prev.find((x) => x.id === o.id)
+          if (!p) return
+          if (p.label !== o.label) out.push(`${prefix}: "${p.label}" rinominata in "${o.label}"`)
+          if (p.amount !== o.amount) out.push(`${prefix} / ${o.label}: importo €${p.amount} → €${o.amount}`)
+          if (p.surcharge_per_day !== o.surcharge_per_day) out.push(`${prefix} / ${o.label}: sovrapprezzo €${p.surcharge_per_day}/g → €${o.surcharge_per_day}/g`)
+        })
       })
     })
   })
@@ -2111,24 +2215,36 @@ function CauzioniSection({
   fasce: Fascia[]
 }) {
   type Scope = 'residente' | 'non_residente'
+  const [activeCategory, setActiveCategory] = useState<DepositsCategoryKey>('supercars')
+
+  function getCategoryConfig(cat: DepositsCategoryKey): DepositsByFascia {
+    return deposits[cat] || {}
+  }
+  function setCategoryConfig(cat: DepositsCategoryKey, next: DepositsByFascia) {
+    setDeposits({ ...deposits, [cat]: next })
+  }
+
   function patchOption(fid: string, scope: Scope, optId: string, p: Partial<DepositOption>) {
-    const cur = deposits[fid] ?? { residente: [], non_residente: [] }
-    setDeposits({
-      ...deposits,
+    const catCfg = getCategoryConfig(activeCategory)
+    const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
+    setCategoryConfig(activeCategory, {
+      ...catCfg,
       [fid]: { ...cur, [scope]: cur[scope].map((o) => (o.id === optId ? { ...o, ...p } : o)) },
     })
   }
   function removeOption(fid: string, scope: Scope, optId: string) {
-    const cur = deposits[fid] ?? { residente: [], non_residente: [] }
-    setDeposits({
-      ...deposits,
+    const catCfg = getCategoryConfig(activeCategory)
+    const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
+    setCategoryConfig(activeCategory, {
+      ...catCfg,
       [fid]: { ...cur, [scope]: cur[scope].filter((o) => o.id !== optId) },
     })
   }
   function addOption(fid: string, scope: Scope) {
-    const cur = deposits[fid] ?? { residente: [], non_residente: [] }
-    setDeposits({
-      ...deposits,
+    const catCfg = getCategoryConfig(activeCategory)
+    const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
+    setCategoryConfig(activeCategory, {
+      ...catCfg,
       [fid]: {
         ...cur,
         [scope]: [...cur[scope], { id: uid(), label: 'Nuova opzione', amount: 0, surcharge_per_day: 0 }],
@@ -2136,15 +2252,38 @@ function CauzioniSection({
     })
   }
 
+  const activeDeposits = getCategoryConfig(activeCategory)
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
-          Opzioni Cauzione per Fascia
+          Opzioni Cauzione per Categoria
         </h2>
         <p className="text-[14px] text-[#6e6e73] mt-1">
-          Opzioni cauzione per fascia conducente e residenza
+          Opzioni cauzione per categoria veicolo, fascia conducente e residenza.
+          Il sito e l'admin scelgono il set giusto in base alla categoria del veicolo prenotato.
         </p>
+      </div>
+
+      {/* Category tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-black/5 -mb-px">
+        {DEPOSIT_CATEGORIES.map((c) => {
+          const isActive = c.id === activeCategory
+          return (
+            <button
+              key={c.id}
+              onClick={() => setActiveCategory(c.id)}
+              className={`px-4 py-2 text-[14px] font-medium rounded-t-lg transition-colors ${
+                isActive
+                  ? 'bg-white border border-black/10 border-b-white text-[#1d1d1f]'
+                  : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+              }`}
+            >
+              {c.label}
+            </button>
+          )
+        })}
       </div>
 
       {fasce.length === 0 && (
@@ -2157,7 +2296,7 @@ function CauzioniSection({
         {fasce.flatMap((f) =>
           (['residente', 'non_residente'] as Scope[]).map((scope) => {
             const groupLabel = `${f.label} — ${scope === 'residente' ? 'Residente' : 'Non Residente'}`
-            const items = deposits[f.id]?.[scope] ?? []
+            const items = activeDeposits[f.id]?.[scope] ?? []
             return (
               <section
                 key={`${f.id}_${scope}`}
