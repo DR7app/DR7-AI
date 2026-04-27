@@ -419,14 +419,19 @@ type DepositFasciaConfig = {
 }
 
 // New shape: deposits[category][fascia] = { residente, non_residente }
-// Categories match the KM/pricing categories: supercars, urban, aziendali.
+// Categories are dynamic: keyed by Category.id (any string). When the admin
+// adds a new category in "Categorie & Fascia", deposits/penali/danni get
+// an empty entry for it automatically — see the categories useEffect.
 // Old shape (deposits[fascia] = ...) is auto-migrated by migrateDeposits()
 // at load time so existing saved configs keep working.
-type DepositsCategoryKey = 'supercars' | 'urban' | 'aziendali'
+type DepositsCategoryKey = string
 type DepositsByFascia = Record<string, DepositFasciaConfig> // keyed by fascia.id
 type DepositsConfig = Record<DepositsCategoryKey, DepositsByFascia>
 
-const DEPOSIT_CATEGORIES: { id: DepositsCategoryKey; label: string }[] = [
+// Default seed for sections that need a starting tab when no categories
+// exist yet. The actual list of categories shown in the UI comes from the
+// live `categories` array (CentralinaProTab state).
+const DEFAULT_DEPOSIT_CATEGORIES: { id: DepositsCategoryKey; label: string }[] = [
   { id: 'supercars', label: 'Supercars' },
   { id: 'urban', label: 'Urban' },
   { id: 'aziendali', label: 'Aziendali' },
@@ -615,7 +620,7 @@ const INITIAL_KM: KmConfig[] = [
 // PenaltyModal already uses (e.g. 'fermo_incidente', 'fumo'). The initial
 // values mirror the hardcoded arrays previously baked into PenaltyModal.tsx
 // so existing behaviour is preserved on first load.
-type PenaliCategoryKey = 'supercars' | 'urban' | 'aziendali'
+type PenaliCategoryKey = string
 type PenaliItem = {
   id: string
   label: string
@@ -625,7 +630,9 @@ type PenaliItem = {
 }
 type PenaliConfig = Record<PenaliCategoryKey, PenaliItem[]>
 
-const PENALI_CATEGORIES: { id: PenaliCategoryKey; label: string }[] = [
+// Default seed only — the active list comes from the live `categories` array
+// passed to PenaliSection / DanniSection.
+const DEFAULT_PENALI_CATEGORIES: { id: PenaliCategoryKey; label: string }[] = [
   { id: 'supercars', label: 'Supercars' },
   { id: 'urban', label: 'Urban' },
   { id: 'aziendali', label: 'Aziendali' },
@@ -1061,7 +1068,10 @@ export default function CentralinaProTab() {
   }, [])
 
   // ─── SYNC EFFECTS ───
-  // When categories change, ensure dependent configs (insurance, km, tariffe) have entries.
+  // When categories change, ensure dependent configs have entries.
+  // Adding a new category in "Categorie & Fascia" automatically creates an
+  // empty (editable) entry in: insurance, km, tariffe, deposits, penali, danni.
+  // Removing a category drops the entry.
   // NOTE: base_prices/min_prices/max_prices are NOT synced here — they're keyed by vehicle.id (from Supabase),
   // not category.id. Syncing them with category ids would wipe all per-vehicle prices on every mount.
   useEffect(() => {
@@ -1071,6 +1081,30 @@ export default function CentralinaProTab() {
       ...pd,
       tariffe: syncByCategory(pd.tariffe, categories, blankTariffa),
     }))
+    // Deposits is keyed by category → fascia → scope. Build empty fascia map
+    // for any new category and drop entries for removed categories.
+    setDeposits((prev) => {
+      const next: DepositsConfig = {}
+      for (const c of categories) {
+        next[c.id] = prev[c.id] || {}
+      }
+      return next
+    })
+    // Penali and Danni are arrays per category.
+    setPenali((prev) => {
+      const next: PenaliConfig = {}
+      for (const c of categories) {
+        next[c.id] = prev[c.id] || []
+      }
+      return next
+    })
+    setDanni((prev) => {
+      const next: DanniConfig = {}
+      for (const c of categories) {
+        next[c.id] = prev[c.id] || []
+      }
+      return next
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories])
 
@@ -1083,11 +1117,13 @@ export default function CentralinaProTab() {
         byFascia: syncRecord(cat.byFascia, fasciaIds, [] as InsuranceOption[]),
       }))
     )
-    // Deposits is now category → fascia → scope. Sync each category map.
+    // Deposits is now category → fascia → scope. Sync each category map
+    // using the LIVE categories list (so newly-added categories also get
+    // a populated fascia structure).
     setDeposits((prev) => {
-      const next = { ...prev }
-      for (const cat of DEPOSIT_CATEGORIES) {
-        const cur = next[cat.id] || {}
+      const next: DepositsConfig = {}
+      for (const cat of categories) {
+        const cur = prev[cat.id] || {}
         next[cat.id] = syncRecord(cur, fasciaIds, { residente: [], non_residente: [] } as DepositFasciaConfig)
       }
       return next
@@ -1238,7 +1274,7 @@ export default function CentralinaProTab() {
               <AssicurazioniSection insurance={insurance} setInsurance={setInsurance} fasce={fasce} />
             )}
             {section === 'p3' && <KmSforoSection km={km} setKm={setKm} />}
-            {section === 'p4' && <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} />}
+            {section === 'p4' && <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />}
             {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} />}
             {section === 'p6' && (
               <PrezzoDinamicoSection config={prezzoDinamico} setConfig={setPrezzoDinamico} />
@@ -1252,6 +1288,7 @@ export default function CentralinaProTab() {
                 setPenali={setPenali}
                 danni={danni}
                 setDanni={setDanni}
+                categories={categories}
               />
             )}
             {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && section !== 'p5' && section !== 'p6' && section !== 'p7' && section !== 'p8' && (
@@ -1601,7 +1638,9 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   allCategoryIds.forEach((catId) => {
     const curCat = (current.deposits as Record<string, DepositsByFascia>)[catId] || {}
     const savedCat = (saved.deposits as Record<string, DepositsByFascia>)[catId] || {}
-    const catLabel = DEPOSIT_CATEGORIES.find(c => c.id === catId)?.label || catId
+    const catLabel = current.categories.find(c => c.id === catId)?.label
+      || saved.categories.find(c => c.id === catId)?.label
+      || catId
     const allFasciaIds = new Set([...Object.keys(curCat), ...Object.keys(savedCat)])
     allFasciaIds.forEach((fid) => {
       ;(['residente', 'non_residente'] as const).forEach((scope) => {
@@ -2387,13 +2426,28 @@ function CauzioniSection({
   deposits,
   setDeposits,
   fasce,
+  categories,
 }: {
   deposits: DepositsConfig
   setDeposits: (next: DepositsConfig) => void
   fasce: Fascia[]
+  categories: Category[]
 }) {
   type Scope = 'residente' | 'non_residente'
-  const [activeCategory, setActiveCategory] = useState<DepositsCategoryKey>('supercars')
+  // Categories list is dynamic — fall back to the seed list only if no
+  // categories have been defined yet.
+  const categoryList = categories.length > 0
+    ? categories.map(c => ({ id: c.id, label: c.label }))
+    : DEFAULT_DEPOSIT_CATEGORIES
+  const [activeCategory, setActiveCategory] = useState<DepositsCategoryKey>(categoryList[0]?.id || 'supercars')
+
+  // If the active category has been removed (or none yet selected), snap to first.
+  useEffect(() => {
+    if (!categoryList.some(c => c.id === activeCategory) && categoryList[0]) {
+      setActiveCategory(categoryList[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories])
 
   function getCategoryConfig(cat: DepositsCategoryKey): DepositsByFascia {
     return deposits[cat] || {}
@@ -2456,7 +2510,7 @@ function CauzioniSection({
 
       {/* Category tabs */}
       <div className="flex flex-wrap gap-2 border-b border-black/5 -mb-px">
-        {DEPOSIT_CATEGORIES.map((c) => {
+        {categoryList.map((c) => {
           const isActive = c.id === activeCategory
           return (
             <button
@@ -4117,11 +4171,13 @@ function DanniPenaliSection({
   setPenali,
   danni,
   setDanni,
+  categories,
 }: {
   penali: PenaliConfig
   setPenali: (next: PenaliConfig) => void
   danni: DanniConfig
   setDanni: (next: DanniConfig) => void
+  categories: Category[]
 }) {
   const [kind, setKind] = useState<'penali' | 'danni'>('penali')
   const config = kind === 'penali' ? penali : danni
@@ -4166,6 +4222,7 @@ function DanniPenaliSection({
         setConfig={setConfig as (next: PenaliConfig) => void}
         titleNoun={titleNoun}
         itemNoun={itemNoun}
+        categories={categories}
       />
     </div>
   )
@@ -4176,13 +4233,25 @@ function FeeListEditor({
   setConfig,
   titleNoun,
   itemNoun,
+  categories,
 }: {
   config: PenaliConfig
   setConfig: (next: PenaliConfig) => void
   titleNoun: string
   itemNoun: string
+  categories: Category[]
 }) {
-  const [activeCategory, setActiveCategory] = useState<PenaliCategoryKey>('supercars')
+  const categoryList = categories.length > 0
+    ? categories.map(c => ({ id: c.id, label: c.label }))
+    : DEFAULT_PENALI_CATEGORIES
+  const [activeCategory, setActiveCategory] = useState<PenaliCategoryKey>(categoryList[0]?.id || 'supercars')
+
+  useEffect(() => {
+    if (!categoryList.some(c => c.id === activeCategory) && categoryList[0]) {
+      setActiveCategory(categoryList[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories])
   const items = config[activeCategory] || []
 
   function patchItem(idx: number, p: Partial<PenaliItem>) {
@@ -4213,7 +4282,7 @@ function FeeListEditor({
 
       {/* Category tabs */}
       <div className="flex flex-wrap gap-2 border-b border-black/5 -mb-px">
-        {PENALI_CATEGORIES.map((c) => {
+        {categoryList.map((c) => {
           const isActive = c.id === activeCategory
           return (
             <button
