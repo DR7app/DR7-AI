@@ -267,6 +267,32 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         })
     }
 
+    // Same +/stepper behaviour as the penalty list, applied to danni presets
+    // so the Danni tab matches Penali visually (iOS-Settings list).
+    function addDannoPreset(d: PenaltyPreset) {
+        const cartId = `danno_${d.id}`
+        setCart(prev => {
+            const existing = prev.find(c => c.id === cartId)
+            if (existing) {
+                return prev.map(c => c.id === cartId ? { ...c, quantity: c.quantity + 1 } : c)
+            }
+            return [...prev, { id: cartId, type: 'danno' as const, label: d.label, unitPrice: d.amount, quantity: 1 }]
+        })
+    }
+    function removeDannoPreset(d: PenaltyPreset) {
+        const cartId = `danno_${d.id}`
+        setCart(prev => {
+            const existing = prev.find(c => c.id === cartId)
+            if (existing && existing.quantity > 1) {
+                return prev.map(c => c.id === cartId ? { ...c, quantity: c.quantity - 1 } : c)
+            }
+            return prev.filter(c => c.id !== cartId)
+        })
+    }
+    function getDannoCartQty(d: PenaltyPreset): number {
+        return cart.find(c => c.id === `danno_${d.id}`)?.quantity || 0
+    }
+
     function updateCartPrice(itemId: string, newPrice: number) {
         setCart(prev => prev.map(c => c.id === itemId ? { ...c, unitPrice: newPrice } : c))
     }
@@ -599,30 +625,47 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                 <div className="flex-1 overflow-y-auto px-4 pb-4">
                     {activeTab === 'danni' ? (
                         <>
-                            {/* Preset danni from Centralina Pro (only when configured for this category) */}
+                            {/* Preset danni from Centralina Pro — iOS Settings
+                                style list, same shape as the Penali tab. */}
+                            {danniPresetList.length === 0 && (
+                                <div className="rounded-2xl bg-amber-500/[0.08] border border-amber-500/30 p-4 mb-3 text-[13px] text-amber-300">
+                                    Nessun danno configurato per la categoria <strong>{vehicleCategory || 'sconosciuta'}</strong>.
+                                    Apri <strong>Centralina Pro → Danni &amp; Penali → Danni → tab {vehicleCategory || 'corretto'}</strong> e aggiungi le voci.
+                                </div>
+                            )}
                             {danniPresetList.length > 0 && (
-                                <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 mb-3">
-                                    <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-3">Listino Danni</p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        {danniPresetList.map(p => (
-                                            <button
-                                                key={p.id}
-                                                type="button"
-                                                onClick={() => setCart(prev => [...prev, { id: `danno_${p.id}_${Date.now()}`, type: 'danno', label: p.label, unitPrice: p.amount, quantity: 1 }])}
-                                                className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-red-500/[0.12] border border-white/[0.08] hover:border-red-500/40 transition-all text-left"
-                                            >
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-[13px] text-theme-text-primary leading-tight truncate">{p.label}</p>
-                                                    {p.description && (
-                                                        <p className="text-[11px] text-theme-text-muted leading-tight mt-0.5 truncate">{p.description}</p>
-                                                    )}
+                                <div className="rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06] mb-3">
+                                    {danniPresetList.map((d, idx) => {
+                                        const qty = getDannoCartQty(d)
+                                        const isVariable = d.amount === 0
+                                        const isLast = idx === danniPresetList.length - 1
+                                        return (
+                                            <div key={d.id} className={`flex items-center gap-3 px-4 py-3 ${!isLast ? 'border-b border-white/[0.06]' : ''} ${qty > 0 ? 'bg-red-500/[0.06]' : ''}`}>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-[13px] leading-tight ${qty > 0 ? 'text-theme-text-primary font-medium' : 'text-theme-text-primary'}`}>{d.label}</p>
+                                                    <p className="text-[11px] text-theme-text-muted leading-tight mt-0.5">{d.description}</p>
                                                 </div>
-                                                <span className="text-[12px] font-semibold text-red-400 tabular-nums shrink-0">
-                                                    €{p.amount % 1 === 0 ? p.amount : p.amount.toFixed(2)}
+                                                <span className={`text-[13px] font-medium shrink-0 ${qty > 0 ? 'text-red-400' : 'text-theme-text-muted'}`}>
+                                                    {isVariable ? 'Var.' : `€${d.amount % 1 === 0 ? d.amount : d.amount.toFixed(2)}`}
                                                 </span>
-                                            </button>
-                                        ))}
-                                    </div>
+                                                {qty === 0 ? (
+                                                    <button type="button" onClick={() => addDannoPreset(d)} className="w-7 h-7 rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 flex items-center justify-center transition-all shrink-0">
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                                    </button>
+                                                ) : (
+                                                    <div className="flex items-center rounded-full bg-white/[0.06] border border-white/[0.08] shrink-0">
+                                                        <button type="button" onClick={() => removeDannoPreset(d)} className="w-8 h-8 flex items-center justify-center text-theme-text-muted hover:text-red-400 transition-colors rounded-l-full">
+                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M5 12h14" /></svg>
+                                                        </button>
+                                                        <span className="w-7 text-center text-[13px] font-semibold text-theme-text-primary tabular-nums">{qty}</span>
+                                                        <button type="button" onClick={() => addDannoPreset(d)} className="w-8 h-8 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors rounded-r-full">
+                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
                                 </div>
                             )}
 
