@@ -516,10 +516,16 @@ function migrateDeposits(raw: unknown): DepositsConfig {
   const isOld = !!firstVal && typeof firstVal === 'object'
     && ('residente' in firstVal || 'non_residente' in firstVal)
   if (isOld) {
-    // Old shape: copy the same per-fascia config under every category so
-    // existing customers see no behaviour change until they edit.
+    // Old shape: preserve the existing config under SUPERCARS (the most
+    // common use case it was built around) and use the distinct INITIAL
+    // defaults for urban + aziendali — otherwise all three tabs would
+    // show identical content and the admin couldn't tell them apart.
     const old = obj as DepositsByFascia
-    return { supercars: old, urban: old, aziendali: old }
+    return {
+      supercars: old,
+      urban: INITIAL_DEPOSITS.urban,
+      aziendali: INITIAL_DEPOSITS.aziendali,
+    }
   }
   // Already new shape — fill any missing category from the initials.
   return {
