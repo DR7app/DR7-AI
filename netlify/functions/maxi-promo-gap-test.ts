@@ -121,14 +121,16 @@ export const handler: Handler = async (event) => {
   const bookings: Booking[] = bookingsData || []
 
   // Per-vehicle gap detection.
-  // A gap exists if the vehicle has an upcoming booking starting within
-  // the next 48h AND there is at least some free time before that booking
-  // — even if the free window is less than 24h. DR7 bills any partial day
-  // as one full day, so a 12h or 18h gap is still a real rental
-  // opportunity worth promoting.
-  type GapHit = { vehicle: Vehicle; nextPickup: Date; gapDate: Date }
+  // A gap exists when the vehicle has an upcoming booking starting in
+  // the next 48h AND there is a free window before it whose duration
+  // falls within [MIN_GAP_HOURS, MAX_GAP_HOURS]. Outside that band:
+  //   - <4h:  too short to be a useful rental (no 1-day promo)
+  //   - >48h: not a "1-day gap" — different promo flow, skip here
+  type GapHit = { vehicle: Vehicle; nextPickup: Date; gapDate: Date; gapHours: number }
   const gapHits: GapHit[] = []
   const nowMs = now.getTime()
+  const MIN_GAP_MS = 4 * 3600 * 1000
+  const MAX_GAP_MS = 48 * 3600 * 1000
 
   for (const v of vehicles) {
     const vBookings = bookings
@@ -144,13 +146,20 @@ export const handler: Handler = async (event) => {
     // Latest booking that's still active at "now" (or has just ended).
     const currentOrPrev = vBookings.filter(b => b._end <= nextBooking._start && b._start <= nowMs).pop()
     const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
-    if (freeFromMs >= nextBooking._start) continue // no free window — back-to-back
+    const gapMs = nextBooking._start - freeFromMs
+    if (gapMs < MIN_GAP_MS) continue   // too short
+    if (gapMs > MAX_GAP_MS) continue   // too long
 
     // gap_date = the calendar day (Europe/Rome) just before nextBooking.pickup_date.
     // Subtract 1ms from the pickup so a pickup at 00:00 still resolves to
     // the previous day rather than the day of pickup itself.
     const gapDate = new Date(nextBooking._start - 1)
-    gapHits.push({ vehicle: v, nextPickup: new Date(nextBooking._start), gapDate })
+    gapHits.push({
+      vehicle: v,
+      nextPickup: new Date(nextBooking._start),
+      gapDate,
+      gapHours: Math.round(gapMs / 3600 / 1000 * 10) / 10,
+    })
   }
 
   const gapVehicles: Vehicle[] = gapHits.map(h => h.vehicle)
@@ -186,6 +195,7 @@ export const handler: Handler = async (event) => {
           plate: h.vehicle.plate,
           category: h.vehicle.category,
           gap_date: fmtShort(h.gapDate),
+          gap_hours: h.gapHours,
           next_pickup: h.nextPickup.toISOString(),
         })),
       }),

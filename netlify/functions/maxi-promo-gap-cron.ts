@@ -162,10 +162,12 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   const nowMs = now.getTime()
 
   // Per-vehicle gap detection (matches maxi-promo-gap-test.ts).
-  // A gap exists if the vehicle has an upcoming booking starting in the
-  // next 48h AND has at least SOME free time before it — even a few
-  // hours. DR7 charges any partial day as a full day, so a sub-24h gap
-  // is still a real rental opportunity.
+  // A gap exists when the vehicle has an upcoming booking starting in
+  // the next 48h AND has a free window of [4h, 48h] before it. Outside
+  // that band we don't send: <4h is too short for a useful rental,
+  // >48h belongs to a different promo flow.
+  const MIN_GAP_MS = 4 * 3600 * 1000
+  const MAX_GAP_MS = 48 * 3600 * 1000
   const candidates: Array<{
     vehicle: Vehicle;
     reason: 'evening' | 'recent_booking';
@@ -185,7 +187,9 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
 
     const currentOrPrev = vBookings.filter(b => b._end <= nextBooking._start && b._start <= nowMs).pop()
     const freeFromMs = currentOrPrev ? Math.max(currentOrPrev._end, nowMs) : nowMs
-    if (freeFromMs >= nextBooking._start) continue // no free window
+    const gapMs = nextBooking._start - freeFromMs
+    if (gapMs < MIN_GAP_MS) continue
+    if (gapMs > MAX_GAP_MS) continue
 
     // Trigger gating: same as before — fire either at evening hour OR
     // when a NEW booking landed in the last 20 min (so a customer who
