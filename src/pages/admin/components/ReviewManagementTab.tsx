@@ -394,15 +394,27 @@ export default function ReviewManagementTab() {
       }
 
       const firstName = (candidate.customer_name || '').trim().split(/\s+/)[0] || ''
+      // Forniamo TUTTE le varianti di nome variabile che l'admin potrebbe usare
+      // nel template Pro (noleggio / supercar / rental). Il template è la
+      // sorgente di verità: qualunque modifica al body fatta in Messaggi di
+      // Sistema Pro viene applicata al prossimo invio senza toccare il codice.
       const templateVars: Record<string, string> = {
         nome: firstName,
         customer_name: candidate.customer_name || firstName,
+        // Codice noleggio (Supercar) — alias per supportare diverse stesure del template
+        codice_noleggio: gen.rental.code,
         codice_supercar: gen.rental.code,
+        codice_rental: gen.rental.code,
+        importo_noleggio: String(gen.rental.amount),
         importo_supercar: String(gen.rental.amount),
+        spesa_min_noleggio: String(gen.rental.minimum_spend),
         spesa_min_supercar: String(gen.rental.minimum_spend),
+        // Codice lavaggio
         codice_lavaggio: gen.carwash.code,
+        codice_wash: gen.carwash.code,
         importo_lavaggio: String(gen.carwash.amount),
         spesa_min_lavaggio: String(gen.carwash.minimum_spend),
+        // Validità (stessa per entrambi i codici)
         validita_giorni: String(gen.rental.valid_days),
       }
 
