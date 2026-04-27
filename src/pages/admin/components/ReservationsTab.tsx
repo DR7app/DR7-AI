@@ -7359,7 +7359,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                   onClick={(e) => { e.stopPropagation(); handleResendContract(booking) }}
                                   className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
                                 >
-                                  Rinvia Contratto
+                                  Invia Contratto
                                 </button>
                               )}
                               {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
@@ -7582,7 +7582,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       onClick={() => handleResendContract(selectedBooking)}
                       className="flex-1 px-4 py-3 bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary transition-colors font-medium"
                     >
-                      Rinvia Contratto
+                      Invia Contratto
                     </button>
                   )}
                   {/* Pre-Auth Cauzione disabled — Nexi capture not reliable via API */}
