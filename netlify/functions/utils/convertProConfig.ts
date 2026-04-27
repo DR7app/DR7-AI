@@ -203,15 +203,17 @@ export function convertProToLegacy(pro: any): any {
     config.preventivi.default_expiry_hours = num(pro.preventivi.scadenza_default_ore)
   }
 
-  // Penali — pass through per-category lists. Pro keys are
+  // Penali & Danni — pass through per-category lists. Pro keys are
   // 'supercars'/'urban'/'aziendali'; we mirror them under DB category names
-  // (exotic/urban/aziendali) so the PenaltyModal can look up by vehicle.category.
-  if (pro.penali && typeof pro.penali === 'object') {
-    config.penali = { by_category: {} }
-    for (const [proCat, items] of Object.entries(pro.penali as Record<string, any>)) {
+  // (exotic/urban/aziendali) so PenaltyModal / DanniModal can look up by
+  // vehicle.category.
+  const passthroughFeeList = (raw: unknown) => {
+    const out: Record<string, Array<{ id: string; label: string; amount: number; description: string }>> = {}
+    if (!raw || typeof raw !== 'object') return out
+    for (const [proCat, items] of Object.entries(raw as Record<string, any>)) {
       if (!Array.isArray(items)) continue
       const dbCat = PRO_TO_DB[proCat] || proCat
-      config.penali.by_category[dbCat] = items
+      out[dbCat] = items
         .filter((it: any) => it && it.enabled !== false)
         .map((it: any) => ({
           id: String(it.id || ''),
@@ -220,6 +222,13 @@ export function convertProToLegacy(pro: any): any {
           description: String(it.description || ''),
         }))
     }
+    return out
+  }
+  if (pro.penali) {
+    config.penali = { by_category: passthroughFeeList(pro.penali) }
+  }
+  if (pro.danni) {
+    config.danni = { by_category: passthroughFeeList(pro.danni) }
   }
 
   return config

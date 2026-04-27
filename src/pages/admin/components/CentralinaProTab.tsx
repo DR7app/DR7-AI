@@ -677,6 +677,24 @@ function migratePenali(raw: unknown): PenaliConfig {
   }
 }
 
+// Danni use the same per-category list shape as Penali. No defaults shipped —
+// admins populate this from scratch with the damage types they bill most often.
+type DanniConfig = PenaliConfig
+const INITIAL_DANNI: DanniConfig = {
+  supercars: [],
+  urban: [],
+  aziendali: [],
+}
+function migrateDanni(raw: unknown): DanniConfig {
+  if (!raw || typeof raw !== 'object') return INITIAL_DANNI
+  const obj = raw as Record<string, unknown>
+  return {
+    supercars: Array.isArray(obj.supercars) ? (obj.supercars as PenaliItem[]) : [],
+    urban: Array.isArray(obj.urban) ? (obj.urban as PenaliItem[]) : [],
+    aziendali: Array.isArray(obj.aziendali) ? (obj.aziendali as PenaliItem[]) : [],
+  }
+}
+
 const INITIAL_FASCE: Fascia[] = [
   {
     id: 'A',
@@ -767,6 +785,7 @@ type PersistedSnapshot = {
   prezzoDinamico: PrezzoDinamicoConfig
   preventivi: PreventiviConfig
   penali?: PenaliConfig
+  danni?: DanniConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -939,6 +958,7 @@ export default function CentralinaProTab() {
   const initialPrezzoDinamico = mergePrezzoDinamico(pick(persisted, 'prezzoDinamico', INITIAL_PREZZO_DINAMICO))
   const initialPreventivi = pick(persisted, 'preventivi', INITIAL_PREVENTIVI)
   const initialPenali = migratePenali(pick(persisted, 'penali', INITIAL_PENALI))
+  const initialDanni = migrateDanni(pick(persisted, 'danni', INITIAL_DANNI))
 
   // Current (working) state
   const [categories, setCategories] = useState<Category[]>(initialCategories)
@@ -950,6 +970,7 @@ export default function CentralinaProTab() {
   const [prezzoDinamico, setPrezzoDinamico] = useState<PrezzoDinamicoConfig>(initialPrezzoDinamico)
   const [preventivi, setPreventivi] = useState<PreventiviConfig>(initialPreventivi)
   const [penali, setPenali] = useState<PenaliConfig>(initialPenali)
+  const [danni, setDanni] = useState<DanniConfig>(initialDanni)
 
   // Saved (committed) snapshot — what was last persisted
   const [savedCategories, setSavedCategories] = useState<Category[]>(initialCategories)
@@ -961,6 +982,7 @@ export default function CentralinaProTab() {
   const [savedPrezzoDinamico, setSavedPrezzoDinamico] = useState<PrezzoDinamicoConfig>(initialPrezzoDinamico)
   const [savedPreventivi, setSavedPreventivi] = useState<PreventiviConfig>(initialPreventivi)
   const [savedPenali, setSavedPenali] = useState<PenaliConfig>(initialPenali)
+  const [savedDanni, setSavedDanni] = useState<DanniConfig>(initialDanni)
 
   const [justSaved, setJustSaved] = useState(false)
 
@@ -994,11 +1016,15 @@ export default function CentralinaProTab() {
           const migrated = migratePenali(remote.penali)
           setPenali(migrated); setSavedPenali(migrated)
         }
+        if (remote.danni !== undefined) {
+          const migrated = migrateDanni(remote.danni)
+          setDanni(migrated); setSavedDanni(migrated)
+        }
         // Refresh local cache with the authoritative copy
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
       } else {
         // Supabase is empty — seed with initial/localStorage values
-        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali }
+        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni }
         savePersisted(seed)
         console.log('[CentralinaPro] Seeded Pro config to Supabase')
       }
@@ -1060,7 +1086,7 @@ export default function CentralinaProTab() {
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali },
+        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni },
         {
           categories: savedCategories,
           fasce: savedFasce,
@@ -1071,11 +1097,12 @@ export default function CentralinaProTab() {
           prezzoDinamico: savedPrezzoDinamico,
           preventivi: savedPreventivi,
           penali: savedPenali,
+          danni: savedDanni,
         }
       ),
     [
-      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali,
-      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali,
+      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni,
+      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni,
     ]
   )
 
@@ -1090,7 +1117,8 @@ export default function CentralinaProTab() {
     setSavedPrezzoDinamico(prezzoDinamico)
     setSavedPreventivi(preventivi)
     setSavedPenali(penali)
-    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali })
+    setSavedDanni(danni)
+    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni })
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
 
@@ -1110,6 +1138,7 @@ export default function CentralinaProTab() {
     setPrezzoDinamico(savedPrezzoDinamico)
     setPreventivi(savedPreventivi)
     setPenali(savedPenali)
+    setDanni(savedDanni)
   }
 
   void changes.length // SaveBar always visible
@@ -1191,7 +1220,12 @@ export default function CentralinaProTab() {
               <PreventiviSection preventivi={preventivi} setPreventivi={setPreventivi} />
             )}
             {section === 'p8' && (
-              <PenaliSection penali={penali} setPenali={setPenali} />
+              <DanniPenaliSection
+                penali={penali}
+                setPenali={setPenali}
+                danni={danni}
+                setDanni={setDanni}
+              />
             )}
             {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && section !== 'p5' && section !== 'p6' && section !== 'p7' && section !== 'p8' && (
               <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-12 text-center">
@@ -1320,6 +1354,7 @@ type Snapshot = {
   prezzoDinamico: PrezzoDinamicoConfig
   preventivi: PreventiviConfig
   penali: PenaliConfig
+  danni: DanniConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -4038,32 +4073,95 @@ function PreventiviSection({
   )
 }
 
-// ========== PENALI (Punto 8) ==========
+// ========== DANNI & PENALI (Punto 8) ==========
 
-function PenaliSection({
+function DanniPenaliSection({
   penali,
   setPenali,
+  danni,
+  setDanni,
 }: {
   penali: PenaliConfig
   setPenali: (next: PenaliConfig) => void
+  danni: DanniConfig
+  setDanni: (next: DanniConfig) => void
+}) {
+  const [kind, setKind] = useState<'penali' | 'danni'>('penali')
+  const config = kind === 'penali' ? penali : danni
+  const setConfig = kind === 'penali' ? setPenali : setDanni
+  const itemNoun = kind === 'penali' ? 'penale' : 'danno'
+  const titleNoun = kind === 'penali' ? 'Penali' : 'Danni'
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+          Danni &amp; Penali
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] mt-1">
+          Listino di Danni e Penali per categoria veicolo. Quando l&apos;admin apre il modale
+          di addebito su una prenotazione, le voci abilitate qui vengono proposte automaticamente
+          con prezzi e descrizione.
+        </p>
+      </div>
+
+      {/* Kind toggle (Penali / Danni) */}
+      <div className="inline-flex rounded-full bg-[#f5f5f7] p-1 gap-1">
+        {(['penali', 'danni'] as const).map((k) => {
+          const active = k === kind
+          return (
+            <button
+              key={k}
+              onClick={() => setKind(k)}
+              className={`px-4 py-1.5 text-[13px] font-medium rounded-full transition-colors ${
+                active
+                  ? 'bg-white text-[#1d1d1f] shadow-sm'
+                  : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+              }`}
+            >
+              {k === 'penali' ? 'Penali' : 'Danni'}
+            </button>
+          )
+        })}
+      </div>
+
+      <FeeListEditor
+        config={config}
+        setConfig={setConfig as (next: PenaliConfig) => void}
+        titleNoun={titleNoun}
+        itemNoun={itemNoun}
+      />
+    </div>
+  )
+}
+
+function FeeListEditor({
+  config,
+  setConfig,
+  titleNoun,
+  itemNoun,
+}: {
+  config: PenaliConfig
+  setConfig: (next: PenaliConfig) => void
+  titleNoun: string
+  itemNoun: string
 }) {
   const [activeCategory, setActiveCategory] = useState<PenaliCategoryKey>('supercars')
-  const items = penali[activeCategory] || []
+  const items = config[activeCategory] || []
 
   function patchItem(idx: number, p: Partial<PenaliItem>) {
     const next = items.map((it, i) => (i === idx ? { ...it, ...p } : it))
-    setPenali({ ...penali, [activeCategory]: next })
+    setConfig({ ...config, [activeCategory]: next })
   }
   function removeItem(idx: number) {
     const next = items.filter((_, i) => i !== idx)
-    setPenali({ ...penali, [activeCategory]: next })
+    setConfig({ ...config, [activeCategory]: next })
   }
   function addItem() {
-    setPenali({
-      ...penali,
+    setConfig({
+      ...config,
       [activeCategory]: [
         ...items,
-        { id: uid(), label: 'Nuova penale', amount: 0, description: '', enabled: true },
+        { id: uid(), label: `Nuovo ${itemNoun}`, amount: 0, description: '', enabled: true },
       ],
     })
   }
@@ -4071,13 +4169,9 @@ function PenaliSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
-          Penali per Categoria
-        </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
-          Listino penali applicate alle prenotazioni. Quando l&apos;admin aggiunge una penale a una
-          prenotazione, il modale legge questi importi in base alla categoria del veicolo.
-        </p>
+        <h3 className="text-[16px] font-semibold tracking-tight text-[#1d1d1f]">
+          {titleNoun} per Categoria
+        </h3>
       </div>
 
       {/* Category tabs */}
@@ -4170,7 +4264,7 @@ function PenaliSection({
           ))}
           {items.length === 0 && (
             <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
-              Nessuna penale per questa categoria
+              Nessun {itemNoun} per questa categoria
             </li>
           )}
         </ul>
@@ -4183,7 +4277,7 @@ function PenaliSection({
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            Aggiungi penale
+            Aggiungi {itemNoun}
           </button>
         </footer>
       </section>

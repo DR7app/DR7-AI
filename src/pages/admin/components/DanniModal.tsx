@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -14,10 +14,19 @@ interface DanniModalProps {
         user_id?: string
         customer_email?: string
         customer_phone?: string
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        booking_details?: any
     }
     onClose: () => void
     onSuccess: () => void
     onEditCustomer?: (customerId: string) => void
+}
+
+interface DanniPreset {
+    id: string
+    label: string
+    amount: number
+    description: string
 }
 
 interface CartItem {
@@ -40,6 +49,58 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
     const [photos, setPhotos] = useState<File[]>([])
     const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([])
     const fileInputRef = useRef<HTMLInputElement>(null)
+    // Danni preset list pulled from Centralina Pro at open time, keyed by
+    // Pro category (supercars/urban/aziendali). Empty arrays when not configured.
+    const [danniByCategory, setDanniByCategory] = useState<Record<string, DanniPreset[]> | null>(null)
+
+    useEffect(() => {
+        if (!isOpen) return
+        let cancelled = false
+        ;(async () => {
+            try {
+                const { data } = await supabase
+                    .from('centralina_pro_config')
+                    .select('config')
+                    .eq('id', 'main')
+                    .maybeSingle()
+                const proDanni = data?.config?.danni as Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> | undefined
+                if (cancelled || !proDanni) return
+                const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
+                const out: Record<string, DanniPreset[]> = {}
+                for (const [proCat, items] of Object.entries(proDanni)) {
+                    if (!Array.isArray(items)) continue
+                    const dbCat = PRO_TO_DB[proCat] || proCat
+                    out[dbCat] = items
+                        .filter(it => it && it.enabled !== false)
+                        .map(it => ({
+                            id: String(it.id || ''),
+                            label: String(it.label || ''),
+                            amount: typeof it.amount === 'number' ? it.amount : Number(it.amount) || 0,
+                            description: String(it.description || ''),
+                        }))
+                }
+                setDanniByCategory(out)
+            } catch {
+                // ignore — modal still works with custom-only input
+            }
+        })()
+        return () => { cancelled = true }
+    }, [isOpen])
+
+    const vehicleCategory = booking.booking_details?.vehicle?.category
+        || booking.booking_details?.vehicleCategory
+        || booking.booking_details?.category
+        || ''
+    const presetList: DanniPreset[] = useMemo(() => {
+        if (!danniByCategory) return []
+        const direct = danniByCategory[vehicleCategory]
+        if (Array.isArray(direct) && direct.length > 0) return direct
+        // Fallback: if vehicle category unknown, prefer 'exotic' then any other non-empty list
+        return danniByCategory.exotic
+            || danniByCategory.urban
+            || danniByCategory.aziendali
+            || []
+    }, [danniByCategory, vehicleCategory])
 
     if (!isOpen) return null
 
@@ -360,9 +421,36 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
 
                 {/* Scrollable content */}
                 <div className="flex-1 overflow-y-auto px-4 pb-4">
+                    {/* Preset list from Centralina Pro */}
+                    {presetList.length > 0 && (
+                        <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 mb-3">
+                            <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-3">Listino Danni — {vehicleCategory || 'preset'}</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {presetList.map(p => (
+                                    <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => setCart(prev => [...prev, { id: `danno_${p.id}_${Date.now()}`, label: p.label, unitPrice: p.amount, quantity: 1 }])}
+                                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-red-500/[0.12] border border-white/[0.08] hover:border-red-500/40 transition-all text-left"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[13px] text-theme-text-primary leading-tight truncate">{p.label}</p>
+                                            {p.description && (
+                                                <p className="text-[11px] text-theme-text-muted leading-tight mt-0.5 truncate">{p.description}</p>
+                                            )}
+                                        </div>
+                                        <span className="text-[12px] font-semibold text-red-400 tabular-nums shrink-0">
+                                            €{p.amount % 1 === 0 ? p.amount : p.amount.toFixed(2)}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Add damage entry */}
                     <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
-                        <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-3">Aggiungi danno</p>
+                        <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-3">Aggiungi danno personalizzato</p>
                         <div className="space-y-2">
                             <input
                                 type="text"
