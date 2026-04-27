@@ -80,6 +80,17 @@ const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['estension'],
     ['link pagamento'],
   ],
+  // Fidelity Card voucher — admin creates this template manually in Pro
+  // with whatever name they prefer. We match by label keywords so the
+  // exact name/key doesn't matter.
+  pro_fidelity_voucher: [
+    ['fidelity', 'voucher'],
+    ['fidelity'],
+    ['fedeltà'],
+    ['buono', 'fidelity'],
+    ['250', 'punti'],
+    ['buono', 'prime', 'wash'],
+  ],
   // Codice sconto post-recensione — admin generates real DR7-XXXX codes from
   // ReviewManagementTab and sends this template with the codes filled in.
   // Match a few plausible label spellings the admin may use.
