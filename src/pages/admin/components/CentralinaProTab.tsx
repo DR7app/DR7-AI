@@ -510,6 +510,33 @@ const INITIAL_DEPOSITS: DepositsConfig = {
 // Convert legacy single-fascia-keyed deposits to the new category-keyed shape.
 // Detection: old shape's outer values have `residente`/`non_residente`;
 // new shape's outer values are themselves objects whose values have those keys.
+// Map a free-form deposit option label to its canonical id. Returns null when
+// the label doesn't match any known type (custom options keep their uid).
+function canonicalDepositId(label?: string): string | null {
+  const l = String(label || '').toLowerCase().trim()
+  if (!l) return null
+  if (l === 'nessuna cauzione' || l === 'no cauzione' || l === 'senza cauzione' || l === 'no deposit') return 'no_deposit'
+  if (l === 'cauzione con veicolo' || l === 'cauzione veicolo' || l === 'vehicle deposit') return 'vehicle_deposit'
+  if (l === 'carta di credito' || l === 'carta di debito o credito' || l === 'carta di debito' || l === 'credit card') return 'credit_card'
+  if (l === 'contanti o prepagata' || l === 'contanti' || l === 'prepagata' || l === 'cash' || l === 'cash prepaid') return 'cash_prepaid'
+  return null
+}
+
+// Walk every deposit option and re-canonicalize its id from its label, so
+// admin-added entries (which start with a random uid()) become recognizable
+// to the website and Preventivi code as soon as they're saved.
+function canonicalizeDepositIds(byFascia: DepositsByFascia): DepositsByFascia {
+  const out: DepositsByFascia = {}
+  for (const [fid, fcfg] of Object.entries(byFascia || {})) {
+    const fix = (arr?: DepositOption[]) => (arr || []).map(o => {
+      const c = canonicalDepositId(o.label)
+      return c ? { ...o, id: c } : o
+    })
+    out[fid] = { residente: fix(fcfg?.residente), non_residente: fix(fcfg?.non_residente) }
+  }
+  return out
+}
+
 function migrateDeposits(raw: unknown): DepositsConfig {
   if (!raw || typeof raw !== 'object') return INITIAL_DEPOSITS
   const obj = raw as Record<string, unknown>
@@ -523,16 +550,16 @@ function migrateDeposits(raw: unknown): DepositsConfig {
     // show identical content and the admin couldn't tell them apart.
     const old = obj as DepositsByFascia
     return {
-      supercars: old,
+      supercars: canonicalizeDepositIds(old),
       urban: INITIAL_DEPOSITS.urban,
       aziendali: INITIAL_DEPOSITS.aziendali,
     }
   }
   // Already new shape — fill any missing category from the initials.
   return {
-    supercars: (obj.supercars as DepositsByFascia) || INITIAL_DEPOSITS.supercars,
-    urban: (obj.urban as DepositsByFascia) || INITIAL_DEPOSITS.urban,
-    aziendali: (obj.aziendali as DepositsByFascia) || INITIAL_DEPOSITS.aziendali,
+    supercars: canonicalizeDepositIds((obj.supercars as DepositsByFascia) || INITIAL_DEPOSITS.supercars),
+    urban: canonicalizeDepositIds((obj.urban as DepositsByFascia) || INITIAL_DEPOSITS.urban),
+    aziendali: canonicalizeDepositIds((obj.aziendali as DepositsByFascia) || INITIAL_DEPOSITS.aziendali),
   }
 }
 
@@ -2380,7 +2407,17 @@ function CauzioniSection({
     const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
     setCategoryConfig(activeCategory, {
       ...catCfg,
-      [fid]: { ...cur, [scope]: cur[scope].map((o) => (o.id === optId ? { ...o, ...p } : o)) },
+      [fid]: { ...cur, [scope]: cur[scope].map((o) => {
+        if (o.id !== optId) return o
+        const merged = { ...o, ...p }
+        // If the label was edited, upgrade the id to its canonical form
+        // so the rest of the system recognizes the option.
+        if (p.label !== undefined) {
+          const canonical = canonicalDepositId(merged.label)
+          if (canonical) merged.id = canonical
+        }
+        return merged
+      }) },
     })
   }
   function removeOption(fid: string, scope: Scope, optId: string) {
