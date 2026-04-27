@@ -296,6 +296,19 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         })
     }
 
+    // Sforo Km row: operator types the kilometers; total = km × contract rate.
+    function setSforoKm(penalty: PenaltyPreset, km: number) {
+        const safeKm = Number.isFinite(km) && km > 0 ? Math.floor(km) : 0
+        setCart(prev => {
+            const existing = prev.find(c => c.id === penalty.id)
+            if (safeKm <= 0) return prev.filter(c => c.id !== penalty.id)
+            if (existing) {
+                return prev.map(c => c.id === penalty.id ? { ...c, unitPrice: penalty.amount, quantity: safeKm } : c)
+            }
+            return [...prev, { id: penalty.id, type: 'penale' as const, label: penalty.label, unitPrice: penalty.amount, quantity: safeKm }]
+        })
+    }
+
     // Same +/stepper behaviour as the penalty list, applied to danni presets
     // so the Danni tab matches Penali visually (iOS-Settings list).
     function addDannoPreset(d: PenaltyPreset) {
@@ -798,29 +811,54 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                     const qty = getCartQty(penalty.id)
                                     const isVariable = penalty.amount === 0
                                     const isLast = idx === penaltyList.length - 1
+                                    const isSforo = isSforoRow(penalty)
                                     return (
                                         <div key={penalty.id} className={`flex items-center gap-3 px-4 py-3 ${!isLast ? 'border-b border-white/[0.06]' : ''} ${qty > 0 ? 'bg-dr7-gold/[0.06]' : ''}`}>
                                             <div className="flex-1 min-w-0">
                                                 <p className={`text-[13px] leading-tight ${qty > 0 ? 'text-theme-text-primary font-medium' : 'text-theme-text-primary'}`}>{penalty.label}</p>
                                                 <p className="text-[11px] text-theme-text-muted leading-tight mt-0.5">{penalty.description}</p>
                                             </div>
-                                            <span className={`text-[13px] font-medium shrink-0 ${qty > 0 ? 'text-dr7-gold' : 'text-theme-text-muted'}`}>
-                                                {isVariable ? 'Var.' : `€${penalty.amount % 1 === 0 ? penalty.amount : penalty.amount.toFixed(2)}`}
-                                            </span>
-                                            {qty === 0 ? (
-                                                <button type="button" onClick={() => addPenaltyPreset(penalty)} className="w-7 h-7 rounded-full bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 flex items-center justify-center transition-all shrink-0">
-                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
-                                                </button>
+                                            {isSforo ? (
+                                                <>
+                                                    <span className={`text-[11px] shrink-0 ${qty > 0 ? 'text-dr7-gold' : 'text-theme-text-muted'}`}>
+                                                        {penalty.amount > 0 ? `€${penalty.amount.toFixed(2)}/km` : '—'}
+                                                    </span>
+                                                    <div className="relative shrink-0">
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            step={1}
+                                                            inputMode="numeric"
+                                                            value={qty || ''}
+                                                            onChange={e => setSforoKm(penalty, parseInt(e.target.value, 10) || 0)}
+                                                            placeholder="0"
+                                                            disabled={penalty.amount <= 0}
+                                                            className="w-20 pl-2 pr-7 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-lg text-theme-text-primary text-[13px] text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-dr7-gold/50 disabled:opacity-40"
+                                                        />
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-theme-text-muted pointer-events-none">km</span>
+                                                    </div>
+                                                </>
                                             ) : (
-                                                <div className="flex items-center rounded-full bg-white/[0.06] border border-white/[0.08] shrink-0">
-                                                    <button type="button" onClick={() => removePenaltyPreset(penalty.id)} className="w-8 h-8 flex items-center justify-center text-theme-text-muted hover:text-red-400 transition-colors rounded-l-full">
-                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M5 12h14" /></svg>
-                                                    </button>
-                                                    <span className="w-7 text-center text-[13px] font-semibold text-theme-text-primary tabular-nums">{qty}</span>
-                                                    <button type="button" onClick={() => addPenaltyPreset(penalty)} className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-[#247a6f] transition-colors rounded-r-full">
-                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
-                                                    </button>
-                                                </div>
+                                                <>
+                                                    <span className={`text-[13px] font-medium shrink-0 ${qty > 0 ? 'text-dr7-gold' : 'text-theme-text-muted'}`}>
+                                                        {isVariable ? 'Var.' : `€${penalty.amount % 1 === 0 ? penalty.amount : penalty.amount.toFixed(2)}`}
+                                                    </span>
+                                                    {qty === 0 ? (
+                                                        <button type="button" onClick={() => addPenaltyPreset(penalty)} className="w-7 h-7 rounded-full bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 flex items-center justify-center transition-all shrink-0">
+                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                                        </button>
+                                                    ) : (
+                                                        <div className="flex items-center rounded-full bg-white/[0.06] border border-white/[0.08] shrink-0">
+                                                            <button type="button" onClick={() => removePenaltyPreset(penalty.id)} className="w-8 h-8 flex items-center justify-center text-theme-text-muted hover:text-red-400 transition-colors rounded-l-full">
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M5 12h14" /></svg>
+                                                            </button>
+                                                            <span className="w-7 text-center text-[13px] font-semibold text-theme-text-primary tabular-nums">{qty}</span>
+                                                            <button type="button" onClick={() => addPenaltyPreset(penalty)} className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-[#247a6f] transition-colors rounded-r-full">
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     )
