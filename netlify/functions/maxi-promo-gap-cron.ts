@@ -173,6 +173,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     reason: 'evening' | 'recent_booking';
     gapDate: Date;
     gapDateDb: string;
+    gapHours: number;
   }> = []
 
   for (const v of vehicles) {
@@ -203,6 +204,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       reason: hasRecentBooking ? 'recent_booking' : 'evening',
       gapDate,
       gapDateDb: romeYMD(gapDate),
+      gapHours: Math.round(gapMs / 3600 / 1000),
     })
   }
 
@@ -255,6 +257,11 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       data_gap_long: gLong,
       date_gap_short: gMedium,
       data: gShort,
+      // Durata del buco in ore (intero) — disponibile per il template Pro.
+      gap_hours: String(c.gapHours),
+      ore: String(c.gapHours),
+      ore_disponibili: String(c.gapHours),
+      durata_ore: String(c.gapHours),
     }
 
     for (const phone of recipients) {

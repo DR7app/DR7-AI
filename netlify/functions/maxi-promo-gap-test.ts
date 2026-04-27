@@ -218,6 +218,8 @@ export const handler: Handler = async (event) => {
     const hitShort = fmtShort(hit.gapDate)
     const hitLong = fmtLong(hit.gapDate)
     const hitMedium = fmtMedium(hit.gapDate)
+    // Round gap to a whole number for display ("18 ore" reads cleaner than "18.4 ore").
+    const hitHours = Math.round(hit.gapHours)
     try {
       const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
         method: 'POST',
@@ -238,6 +240,12 @@ export const handler: Handler = async (event) => {
             data_gap_long: hitLong,
             date_gap_short: hitMedium, // "28 aprile"
             data: hitShort,
+            // Durata del buco in ore (intero). Il template può scriverlo come
+            // "{gap_hours} ore" / "circa {gap_hours}h disponibili".
+            gap_hours: String(hitHours),
+            ore: String(hitHours),
+            ore_disponibili: String(hitHours),
+            durata_ore: String(hitHours),
           },
           customPhone: recipient,
         }),
