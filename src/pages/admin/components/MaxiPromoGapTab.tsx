@@ -322,12 +322,25 @@ export default function MaxiPromoGapTab() {
             <div>
               <h4 className="text-sm font-semibold text-theme-text-primary mb-2">Veicoli con gap</h4>
               <ul className="text-sm space-y-1">
-                {lastResult.vehicles.map((v: { id?: string; name?: string; plate?: string } | string, i: number) => (
-                  <li key={i} className="px-3 py-1.5 rounded-lg bg-theme-bg-tertiary text-theme-text-primary">
-                    {typeof v === 'string'
-                      ? v
-                      : <>{v.name || '—'}{v.plate ? <span className="text-theme-text-muted ml-2">{v.plate}</span> : null}</>
-                    }
+                {lastResult.vehicles.map((v: { id?: string; name?: string; plate?: string; gap_date?: string; gap_hours?: number } | string, i: number) => (
+                  <li key={i} className="px-3 py-1.5 rounded-lg bg-theme-bg-tertiary text-theme-text-primary flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+                    {typeof v === 'string' ? (
+                      <span>{v}</span>
+                    ) : (
+                      <>
+                        <span className="font-medium">{v.name || '—'}</span>
+                        {v.plate && <span className="text-theme-text-muted text-xs">{v.plate}</span>}
+                        {v.gap_date && (
+                          <span className="ml-auto inline-flex items-center gap-2 text-xs">
+                            <span className="text-theme-text-muted">Gap:</span>
+                            <span className="text-dr7-gold font-medium tabular-nums">{v.gap_date}</span>
+                            {typeof v.gap_hours === 'number' && (
+                              <span className="text-theme-text-muted">· {v.gap_hours}h</span>
+                            )}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>
