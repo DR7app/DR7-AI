@@ -50,6 +50,9 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     const [paymentMethod, setPaymentMethod] = useState('Contanti')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
+    // Final desired price — when set & < subtotal, the difference becomes a
+    // "Sconto" line on the fattura while the original items stay intact.
+    const [finalPriceInput, setFinalPriceInput] = useState('')
     // Per-category penalty list from Centralina Pro — single source of truth.
     const [penaliFromCfg, setPenaliFromCfg] = useState<Record<string, PenaltyItem[]> | null>(null)
     const [resolvedCategory, setResolvedCategory] = useState<string>('')
@@ -222,8 +225,12 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
         setCustomLabel('')
     }
 
-    const cartTotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0)
+    const cartSubtotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0)
     const cartItemCount = cart.reduce((sum, c) => sum + c.quantity, 0)
+    const finalPriceParsed = parseFloat(finalPriceInput)
+    const hasFinalPrice = Number.isFinite(finalPriceParsed) && finalPriceParsed > 0 && finalPriceParsed < cartSubtotal
+    const cartDiscount = hasFinalPrice ? Math.round((cartSubtotal - finalPriceParsed) * 100) / 100 : 0
+    const cartTotal = hasFinalPrice ? finalPriceParsed : cartSubtotal
 
     const handleSubmit = async () => {
         setError('')
@@ -241,6 +248,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                         bookingId: booking.id,
                         customerId: booking.customer_id || booking.user_id,
                         items: cart.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
+                        discountAmount: cartDiscount > 0 ? cartDiscount : undefined,
                         note: note || undefined,
                         paymentStatus
                     })
@@ -676,6 +684,40 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                     </button>
                                 </div>
                             ))}
+                        </div>
+                    )}
+
+                    {/* Prezzo finale desiderato (sconto auto-calcolato) */}
+                    {cart.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <label className="text-[12px] text-theme-text-muted shrink-0">Prezzo Finale (€)</label>
+                            <div className="relative flex-1">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[12px]">&euro;</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min={0}
+                                    value={finalPriceInput}
+                                    onChange={e => setFinalPriceInput(e.target.value)}
+                                    placeholder={`Lascia vuoto per ${cartSubtotal.toFixed(2)}`}
+                                    disabled={isGenerating}
+                                    className="w-full pl-6 pr-2 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-lg text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Subtotale + Sconto */}
+                    {hasFinalPrice && (
+                        <div className="space-y-0.5">
+                            <div className="flex items-center justify-between text-[12px] text-theme-text-muted">
+                                <span>Subtotale</span>
+                                <span className="tabular-nums">€{cartSubtotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[12px] text-dr7-gold">
+                                <span>Sconto</span>
+                                <span className="tabular-nums">-€{cartDiscount.toFixed(2)}</span>
+                            </div>
                         </div>
                     )}
 

@@ -54,6 +54,9 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'nexi_pay_by_link'>('pending')
     const [paymentMethod, setPaymentMethod] = useState('Contanti')
     const [amountPaid, setAmountPaid] = useState('')
+    // Final desired price — when set & < subtotal, the difference becomes a
+    // "Sconto" line on the fattura while the original items stay intact.
+    const [finalPriceInput, setFinalPriceInput] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
 
@@ -232,8 +235,12 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
 
     const danniItems = cart.filter(c => c.type === 'danno')
     const penaliItems = cart.filter(c => c.type === 'penale')
-    const cartTotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0)
+    const cartSubtotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0)
     const cartItemCount = cart.reduce((sum, c) => sum + c.quantity, 0)
+    const finalPriceParsed = parseFloat(finalPriceInput)
+    const hasFinalPrice = Number.isFinite(finalPriceParsed) && finalPriceParsed > 0 && finalPriceParsed < cartSubtotal
+    const cartDiscount = hasFinalPrice ? Math.round((cartSubtotal - finalPriceParsed) * 100) / 100 : 0
+    const cartTotal = hasFinalPrice ? finalPriceParsed : cartSubtotal
 
     // ── Danni helpers ──
     function addDanno() {
@@ -471,6 +478,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         bookingId: booking.id,
                         customerId: booking.customer_id || booking.user_id,
                         items: allItems,
+                        discountAmount: cartDiscount > 0 ? cartDiscount : undefined,
                         note: note || undefined,
                         type: paymentPurpose,
                         paymentStatus
@@ -930,6 +938,40 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                     </button>
                                 </div>
                             ))}
+                        </div>
+                    )}
+
+                    {/* Prezzo finale desiderato (sconto auto-calcolato) */}
+                    {cart.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <label className="text-[12px] text-theme-text-muted shrink-0">Prezzo Finale (€)</label>
+                            <div className="relative flex-1">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[12px]">&euro;</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min={0}
+                                    value={finalPriceInput}
+                                    onChange={e => setFinalPriceInput(e.target.value)}
+                                    placeholder={`Lascia vuoto per ${cartSubtotal.toFixed(2)}`}
+                                    disabled={isGenerating}
+                                    className="w-full pl-6 pr-2 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-lg text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Subtotale + Sconto (visibili solo se applicato) */}
+                    {hasFinalPrice && (
+                        <div className="space-y-0.5">
+                            <div className="flex items-center justify-between text-[12px] text-theme-text-muted">
+                                <span>Subtotale</span>
+                                <span className="tabular-nums">€{cartSubtotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[12px] text-dr7-gold">
+                                <span>Sconto</span>
+                                <span className="tabular-nums">-€{cartDiscount.toFixed(2)}</span>
+                            </div>
                         </div>
                     )}
 

@@ -22,7 +22,10 @@ export const handler: Handler = async (event) => {
 
     try {
         const body = JSON.parse(event.body || '{}')
-        const { bookingId, customerId, note, type, paymentStatus, rawDescriptions } = body
+        const { bookingId, customerId, note, type, paymentStatus, rawDescriptions, discountAmount } = body
+        const discount = Number.isFinite(Number(discountAmount)) && Number(discountAmount) > 0
+            ? Math.round(Number(discountAmount) * 100) / 100
+            : 0
 
         // Validation
         if (!bookingId) {
@@ -49,7 +52,9 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        const totalAmount = cartItems.reduce((sum, item) => sum + item.amount * item.quantity, 0)
+        const subtotalBeforeDiscount = cartItems.reduce((sum, item) => sum + item.amount * item.quantity, 0)
+        const effectiveDiscount = discount > 0 && discount < subtotalBeforeDiscount ? discount : 0
+        const totalAmount = Math.round((subtotalBeforeDiscount - effectiveDiscount) * 100) / 100
 
         if (totalAmount <= 0) {
             return {
@@ -218,6 +223,20 @@ export const handler: Handler = async (event) => {
                 ...(paymentStatus === 'paid' ? { paymentStatus: 'paid', amountPaid: itemTotal } : {})
             }
         })
+
+        // Sconto: original lines stay intact, append a negative-priced row so
+        // the PDF renders subtotal then the discount as its own line and the
+        // total matches the operator's desired final price.
+        if (effectiveDiscount > 0) {
+            items.push({
+                description: 'Sconto',
+                unit_price: -effectiveDiscount,
+                quantity: 1,
+                vat_rate: 0,
+                total: -effectiveDiscount,
+                ...(paymentStatus === 'paid' ? { paymentStatus: 'paid', amountPaid: -effectiveDiscount } : {})
+            })
+        }
 
         // Calculate totals (penalties are exempt from VAT)
         const subtotal = 0
