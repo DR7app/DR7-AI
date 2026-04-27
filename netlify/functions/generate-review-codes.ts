@@ -71,19 +71,26 @@ export const handler: Handler = async (event) => {
     const supercarCode = await generateUniqueCode()
     const lavaggioCode = await generateUniqueCode()
 
+    // Codici review: NON sono legati al destinatario. Single-use globale
+    // (validate-discount-code conta in discount_code_usages — la prima
+     // redemption deattiva il codice). Il nome del cliente viene salvato
+    // solo nei campi message/usage_conditions per tracciabilità in
+    // CodiciScontoTab, NON in customer_email/customer_phone (che
+    // attiverebbero la restrizione "Limita a cliente specifico").
+    const traceLine = source === "review"
+      ? `Codice recensione${customerName ? ` — generato per ${customerName}` : ""}${customerEmail ? ` (${customerEmail})` : ""}`
+      : "Codice generato automaticamente"
     const baseRow = {
       code_type: "codice_sconto" as const,
       value_type: "fixed" as const,
       single_use: true,
       status: "active",
-      customer_email: customerEmail ? String(customerEmail).toLowerCase().trim() : null,
-      customer_phone: customerPhone ? String(customerPhone).trim() : null,
+      customer_email: null,
+      customer_phone: null,
       valid_from: now.toISOString(),
-      message: source === "review"
-        ? "Codice generato automaticamente per recensione"
-        : "Codice generato automaticamente",
+      message: traceLine,
       usage_conditions: source === "review"
-        ? `Codice riservato a ${customerName || "cliente"}. Valido 10 giorni.`
+        ? "Utilizzabile una sola volta. Valido 10 giorni."
         : null,
       qr_url: null,
     }

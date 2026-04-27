@@ -116,35 +116,72 @@ const birthdayHandler: Handler = async (event) => {
         const firstName = customer.nome || customer.cognome || 'Cliente';
         const fullName = `${customer.nome || ''} ${customer.cognome || ''}`.trim() || 'Cliente';
 
-        // Generate unique discount code
-        let discountCode = generateDiscountCode();
-
-        // Ensure code is unique (retry if exists)
-        let attempts = 0;
-        while (attempts < 5) {
-          const { data: existingCode } = await supabase
-            .from('birthday_discount_codes')
-            .select('code')
-            .eq('code', discountCode)
-            .single();
-
-          if (!existingCode) break;
-          discountCode = generateDiscountCode();
-          attempts++;
+        // Generate TWO unique codes (Supercar €100 + Lavaggio €10) into the
+        // unified discount_codes table — the SAME pipeline review codes use.
+        // This way:
+        //  - the website's validate-discount-code finds them (it queries
+        //    discount_codes only),
+        //  - they appear in CodiciScontoTab,
+        //  - they are single-use globally, NOT bound to a specific customer
+        //    (per product decision: anyone receiving the code can use it once).
+        const ensureUnique = async (): Promise<string> => {
+          for (let i = 0; i < 5; i++) {
+            const candidate = generateDiscountCode()
+            const { data: existing } = await supabase
+              .from('discount_codes')
+              .select('id')
+              .eq('code', candidate)
+              .maybeSingle()
+            if (!existing) return candidate
+          }
+          return generateDiscountCode() + '-' + Date.now().toString(36).toUpperCase()
         }
 
-        // Save discount code to database
+        const supercarCode = await ensureUnique()
+        const lavaggioCode = await ensureUnique()
+
+        const now = new Date()
+        const expires = new Date(now); expires.setDate(expires.getDate() + 30); expires.setHours(23, 59, 59, 999)
+        const traceMsg = `Codice compleanno — generato per ${fullName}`
+
         const { error: codeError } = await supabase
-          .from('birthday_discount_codes')
-          .insert({
-            code: discountCode,
-            customer_id: customer.id,
-            customer_name: fullName,
-            customer_phone: customer.telefono,
-            rental_credit: 100.00,
-            car_wash_discount: 10.00,
-            sent_via: 'whatsapp_auto'
-          });
+          .from('discount_codes')
+          .insert([
+            {
+              code: supercarCode,
+              code_type: 'codice_sconto',
+              value_type: 'fixed',
+              value_amount: 100,
+              scope: ['supercar'],
+              minimum_spend: 400,
+              single_use: true,
+              status: 'active',
+              customer_email: null,
+              customer_phone: null,
+              valid_from: now.toISOString(),
+              valid_until: expires.toISOString(),
+              message: traceMsg,
+              usage_conditions: 'Utilizzabile una sola volta. Valido 30 giorni.',
+              qr_url: null,
+            },
+            {
+              code: lavaggioCode,
+              code_type: 'codice_sconto',
+              value_type: 'fixed',
+              value_amount: 10,
+              scope: ['lavaggi'],
+              minimum_spend: 40,
+              single_use: true,
+              status: 'active',
+              customer_email: null,
+              customer_phone: null,
+              valid_from: now.toISOString(),
+              valid_until: expires.toISOString(),
+              message: traceMsg,
+              usage_conditions: 'Utilizzabile una sola volta. Valido 30 giorni.',
+              qr_url: null,
+            },
+          ])
 
         if (codeError) {
           console.error(`[Birthday Auto] Failed to save discount code for ${customer.nome}:`, codeError);
@@ -152,10 +189,27 @@ const birthdayHandler: Handler = async (event) => {
           continue;
         }
 
-        console.log(`[Birthday Auto] Generated code ${discountCode} for ${fullName}`);
+        // Use rental code as the single {codice} variable so existing Pro
+        // templates that reference {codice} keep working. Also expose the
+        // explicit aliases for templates that want to show both codes.
+        const discountCode = supercarCode
+        console.log(`[Birthday Auto] Generated codes Supercar=${supercarCode}, Lavaggio=${lavaggioCode} for ${fullName}`);
 
         // Render the Pro template for this customer (no hardcoded fallback)
-        const personalizedMessage = await renderTemplate('birthday_message', { nome: firstName, codice: discountCode });
+        const personalizedMessage = await renderTemplate('birthday_message', {
+          nome: firstName,
+          codice: discountCode,
+          codice_supercar: supercarCode,
+          codice_noleggio: supercarCode,
+          codice_lavaggio: lavaggioCode,
+          importo_noleggio: '100',
+          importo_supercar: '100',
+          importo_lavaggio: '10',
+          spesa_min_noleggio: '400',
+          spesa_min_supercar: '400',
+          spesa_min_lavaggio: '40',
+          validita_giorni: '30',
+        });
         if (!personalizedMessage) {
           console.warn(`[Birthday Auto] Pro template disappeared mid-run for ${fullName} — skipping`);
           errors++;
