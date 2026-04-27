@@ -1819,7 +1819,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                           </>
                         ) : (
                           <>
-                            {(p.status === 'bozza' || p.status === 'inviato') && (
+                            {(p.status === 'bozza' || p.status === 'inviato' || p.status === 'accettato') && (
                               <button
                                 onClick={() => handleEdit(p)}
                                 className="px-2 py-1 text-xs bg-blue-700 hover:bg-blue-600 text-white rounded"
@@ -1889,7 +1889,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                 rifiutato: 'bg-red-500/15 text-red-400',
                 scaduto: 'bg-amber-500/15 text-amber-500',
               }
-              const canEdit = p.status === 'bozza' || p.status === 'inviato'
+              const canEdit = p.status === 'bozza' || p.status === 'inviato' || p.status === 'accettato'
               const canSend = p.status === 'bozza' || p.status === 'inviato'
               const canConvert = p.status === 'bozza' || p.status === 'inviato'
               const canReject = p.status === 'inviato'
