@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -105,13 +105,70 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     const [penaleLabel, setPenaleLabel] = useState('')
     const [penaleAmount, setPenaleAmount] = useState('')
 
-    if (!isOpen) return null
+    // Per-category penali / danni pulled from Centralina Pro at open time.
+    // Falls back to the hardcoded SUPERCAR_PENALTIES / URBAN_PENALTIES below
+    // when the config row is missing or empty for the active vehicle category.
+    const [penaliFromCfg, setPenaliFromCfg] = useState<Record<string, PenaltyPreset[]> | null>(null)
+    const [danniFromCfg, setDanniFromCfg] = useState<Record<string, PenaltyPreset[]> | null>(null)
+
+    useEffect(() => {
+        if (!isOpen) return
+        let cancelled = false
+        ;(async () => {
+            try {
+                const { data } = await supabase
+                    .from('centralina_pro_config')
+                    .select('config')
+                    .eq('id', 'main')
+                    .maybeSingle()
+                const cfg = data?.config as { penali?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>; danni?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> } | undefined
+                if (cancelled || !cfg) return
+                const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
+                const mapList = (raw?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>) => {
+                    const out: Record<string, PenaltyPreset[]> = {}
+                    if (!raw) return out
+                    for (const [proCat, items] of Object.entries(raw)) {
+                        if (!Array.isArray(items)) continue
+                        const dbCat = PRO_TO_DB[proCat] || proCat
+                        out[dbCat] = items
+                            .filter(it => it && it.enabled !== false)
+                            .map(it => ({
+                                id: String(it.id || ''),
+                                label: String(it.label || ''),
+                                amount: typeof it.amount === 'number' ? it.amount : Number(it.amount) || 0,
+                                description: String(it.description || ''),
+                            }))
+                    }
+                    return out
+                }
+                if (cfg.penali) setPenaliFromCfg(mapList(cfg.penali))
+                if (cfg.danni) setDanniFromCfg(mapList(cfg.danni))
+            } catch {
+                // ignore — fall back to hardcoded lists
+            }
+        })()
+        return () => { cancelled = true }
+    }, [isOpen])
 
     const vehicleCategory = booking.booking_details?.vehicle?.category ||
         booking.booking_details?.vehicleCategory ||
         booking.booking_details?.category || ''
     const isSupercar = vehicleCategory === 'exotic'
-    const penaltyList = isSupercar ? SUPERCAR_PENALTIES : URBAN_PENALTIES
+    const penaltyList: PenaltyPreset[] = useMemo(() => {
+        if (penaliFromCfg) {
+            const fromCfg = penaliFromCfg[vehicleCategory] || penaliFromCfg[isSupercar ? 'exotic' : 'urban']
+            if (Array.isArray(fromCfg) && fromCfg.length > 0) return fromCfg
+        }
+        return isSupercar ? SUPERCAR_PENALTIES : URBAN_PENALTIES
+    }, [penaliFromCfg, vehicleCategory, isSupercar])
+    const danniPresetList: PenaltyPreset[] = useMemo(() => {
+        if (!danniFromCfg) return []
+        return danniFromCfg[vehicleCategory]
+            || danniFromCfg[isSupercar ? 'exotic' : 'urban']
+            || []
+    }, [danniFromCfg, vehicleCategory, isSupercar])
+
+    if (!isOpen) return null
 
     const danniItems = cart.filter(c => c.type === 'danno')
     const penaliItems = cart.filter(c => c.type === 'penale')
@@ -511,9 +568,36 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                 <div className="flex-1 overflow-y-auto px-4 pb-4">
                     {activeTab === 'danni' ? (
                         <>
+                            {/* Preset danni from Centralina Pro (only when configured for this category) */}
+                            {danniPresetList.length > 0 && (
+                                <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 mb-3">
+                                    <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-3">Listino Danni</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {danniPresetList.map(p => (
+                                            <button
+                                                key={p.id}
+                                                type="button"
+                                                onClick={() => setCart(prev => [...prev, { id: `danno_${p.id}_${Date.now()}`, type: 'danno', label: p.label, unitPrice: p.amount, quantity: 1 }])}
+                                                className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-red-500/[0.12] border border-white/[0.08] hover:border-red-500/40 transition-all text-left"
+                                            >
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-[13px] text-theme-text-primary leading-tight truncate">{p.label}</p>
+                                                    {p.description && (
+                                                        <p className="text-[11px] text-theme-text-muted leading-tight mt-0.5 truncate">{p.description}</p>
+                                                    )}
+                                                </div>
+                                                <span className="text-[12px] font-semibold text-red-400 tabular-nums shrink-0">
+                                                    €{p.amount % 1 === 0 ? p.amount : p.amount.toFixed(2)}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Add danno */}
                             <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
-                                <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-3">Aggiungi danno</p>
+                                <p className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-widest mb-3">Aggiungi danno personalizzato</p>
                                 <div className="space-y-2">
                                     <input
                                         type="text" value={dannoLabel} onChange={e => setDannoLabel(e.target.value)}
