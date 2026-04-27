@@ -96,8 +96,9 @@ const handler: Handler = async (event) => {
             rendered = rendered.replace(new RegExp(`\\{\\{\\s*${escRx(cleanKey)}\\s*\\}\\}`, 'g'), String(val ?? ''));
           }
         }
-        // Pull header/footer from Messaggi di Sistema Pro — no hardcoded fallback.
-        if (tpl.include_header && !skipHeader) {
+        // OPT-IN wrapper: only attach header/footer when this specific
+        // template's include_header is explicitly TRUE (no implicit default).
+        if (tpl.include_header === true && !skipHeader) {
           const { data: wrapRows } = await sb
             .from('system_messages')
             .select('message_key, message_body, is_enabled')
@@ -160,11 +161,18 @@ const handler: Handler = async (event) => {
     }
   }
 
-  // If a template exists in DB, use it (admin may have edited it)
+  // If a template exists in DB, use it (admin may have edited it).
+  // Header/footer wrapper policy: OPT-IN ONLY. Default off. The wrapper
+  // is applied only when:
+  //   - the template row has include_header === true, OR
+  //   - the global global_header_footer row has include_header === true
+  // AND the caller hasn't passed skipHeader=true. This way nothing gets
+  // a hardcoded auto-wrapper "MESSAGGIO AUTOMATICO GENERATO DA RENTORA"
+  // unless the operator explicitly enables it per-template.
   let finalMessage = message;
-  let useHeader = !skipHeader; // Default: use header unless skipHeader passed
+  let useHeader = false; // OPT-IN: caller / template must explicitly enable
 
-  // For custom messages (no template), check global header setting
+  // For custom messages (no template), check the global include_header flag.
   if (!messageKey && customMessage) {
     try {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -173,10 +181,8 @@ const handler: Handler = async (event) => {
         .select('include_header')
         .eq('message_key', 'global_header_footer')
         .single();
-      if (globalSetting) {
-        useHeader = globalSetting.include_header !== false && !skipHeader;
-      }
-    } catch { /* use default */ }
+      useHeader = globalSetting?.include_header === true && !skipHeader;
+    } catch { /* keep default off */ }
   }
 
   if (messageKey) {
@@ -234,7 +240,9 @@ const handler: Handler = async (event) => {
       if (tpl && tpl.message_body) {
         // Use the DB template — it's the source of truth
         finalMessage = tpl.message_body;
-        useHeader = tpl.include_header !== false;
+        // Opt-in wrapper: only apply when this specific template has
+        // include_header === true (and the caller didn't pass skipHeader).
+        useHeader = tpl.include_header === true && !skipHeader;
 
         // Substitute all known variables
         const customerName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';

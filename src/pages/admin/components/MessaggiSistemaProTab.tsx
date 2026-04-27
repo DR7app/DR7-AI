@@ -1027,10 +1027,13 @@ export default function MessaggiSistemaProTab() {
                                                     </div>
                                                 ) : (
                                                     <pre className="px-4 py-3 rounded-lg bg-theme-bg-primary text-xs text-theme-text-secondary whitespace-pre-wrap max-h-72 overflow-y-auto border border-theme-border">
-                                                        {template.include_header !== false
-                                                            ? `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n${template.message_body}\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
-                                                            : template.message_body}
+                                                        {template.message_body}
                                                     </pre>
+                                                    {template.include_header === true && (
+                                                        <p className="text-[11px] text-amber-400 mt-1">
+                                                            Wrapper attivo: header/footer da “Intestazione/Piè di pagina” verranno aggiunti automaticamente.
+                                                        </p>
+                                                    )}
                                                 )}
 
                                                 <div className="flex gap-2 justify-end">
