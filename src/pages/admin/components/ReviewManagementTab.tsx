@@ -91,6 +91,7 @@ export default function ReviewManagementTab() {
   const [settingsDraft, setSettingsDraft] = useState<ReviewSettings>(DEFAULT_SETTINGS)
   const [templatesDraft, setTemplatesDraft] = useState<ReviewTemplate[]>([])
   const [sendingId, setSendingId] = useState<string | null>(null)
+  const [generatingCodeId, setGeneratingCodeId] = useState<string | null>(null)
   const [bulkSending, setBulkSending] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
@@ -349,6 +350,87 @@ export default function ReviewManagementTab() {
       toast.error(_errMsg)
     } finally {
       setSendingId(null)
+    }
+  }
+
+  // Genera due codici sconto reali (supercar €100 + lavaggio €10) tramite
+  // generate-review-codes (li scrive in discount_codes con restrizione email/
+  // telefono) e invia un WhatsApp usando il template Pro
+  // pro_marketing_codice_sconto. Il template lo gestisce l'admin in
+  // Messaggi di Sistema Pro — qui passiamo le variabili reali, niente codici
+  // inventati.
+  async function handleGenerateAndSendCode(candidate: ReviewCandidate) {
+    if (!candidate.customer_phone && !candidate.customer_email) {
+      toast.error('Nessun contatto disponibile per inviare il codice')
+      return
+    }
+    if (!confirm(`Generare e inviare un codice sconto a ${candidate.customer_name || 'questo cliente'}?`)) return
+
+    setGeneratingCodeId(candidate.id)
+    const toastId = toast.loading('Generazione codici...')
+    try {
+      const genRes = await fetch(`${NETLIFY_BASE}/generate-review-codes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerEmail: candidate.customer_email || undefined,
+          customerPhone: candidate.customer_phone || undefined,
+          customerName: candidate.customer_name || undefined,
+          source: 'review',
+        }),
+      })
+      const gen = await genRes.json()
+      if (!genRes.ok || !gen.success) {
+        throw new Error(gen.error || 'Errore generazione codici')
+      }
+
+      // Send WhatsApp only if we have a phone — the codes are already
+      // saved either way, so the admin can copy them from discount_codes
+      // if no phone is on file.
+      if (!candidate.customer_phone) {
+        toast.dismiss(toastId)
+        toast.success(`Codici creati (Supercar ${gen.rentalCode}, Lavaggio ${gen.carwashCode}) — nessun WhatsApp inviato (telefono mancante)`)
+        return
+      }
+
+      const firstName = (candidate.customer_name || '').trim().split(/\s+/)[0] || ''
+      const templateVars: Record<string, string> = {
+        nome: firstName,
+        customer_name: candidate.customer_name || firstName,
+        codice_supercar: gen.rental.code,
+        importo_supercar: String(gen.rental.amount),
+        spesa_min_supercar: String(gen.rental.minimum_spend),
+        codice_lavaggio: gen.carwash.code,
+        importo_lavaggio: String(gen.carwash.amount),
+        spesa_min_lavaggio: String(gen.carwash.minimum_spend),
+        validita_giorni: String(gen.rental.valid_days),
+      }
+
+      const sendRes = await fetch(`${NETLIFY_BASE}/send-whatsapp-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateKey: 'pro_marketing_codice_sconto',
+          templateVars,
+          customPhone: candidate.customer_phone,
+        }),
+      })
+      const sendData = await sendRes.json().catch(() => ({}))
+
+      toast.dismiss(toastId)
+      if (sendData.skipped) {
+        toast.error(`Codici creati (${gen.rentalCode} / ${gen.carwashCode}) ma template Pro "pro_marketing_codice_sconto" non configurato in Messaggi di Sistema Pro.`, { duration: 8000 })
+      } else if (!sendRes.ok) {
+        toast.error(`Codici creati ma WhatsApp fallito: ${sendData.message || sendRes.statusText}`)
+      } else {
+        toast.success(`Codici inviati: ${gen.rentalCode} (Supercar) + ${gen.carwashCode} (Lavaggio)`)
+      }
+    } catch (err: unknown) {
+      toast.dismiss(toastId)
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error(msg || 'Errore durante la generazione del codice')
+    } finally {
+      setGeneratingCodeId(null)
     }
   }
 
@@ -1109,6 +1191,16 @@ export default function ReviewManagementTab() {
                                 className="px-3 py-1 bg-purple-600 text-white text-xs font-semibold rounded-full hover:bg-purple-700 transition-colors disabled:opacity-50"
                               >
                                 Invia Entrambi
+                              </button>
+                            )}
+                            {(candidate.customer_email || candidate.customer_phone) && (
+                              <button
+                                onClick={() => handleGenerateAndSendCode(candidate)}
+                                disabled={generatingCodeId === candidate.id}
+                                title="Genera codice sconto reale (Supercar €100 + Lavaggio €10) e invialo via WhatsApp"
+                                className="px-3 py-1 bg-dr7-gold text-white text-xs font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
+                              >
+                                {generatingCodeId === candidate.id ? 'Generazione...' : 'Genera Codice'}
                               </button>
                             )}
                           </>
