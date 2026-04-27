@@ -120,12 +120,32 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
         booking.booking_details?.category || ''
 
     const isSupercar = vehicleCategory === 'exotic'
+    // SPECIAL CASE — Km Sforo: per-km rate comes from the BOOKING's locked-in
+    // rate (booking.km_overage_fee), NOT current Centralina. All other
+    // penalties read from Centralina Pro normally.
+    const KM_SFORO_IDS = new Set(['km_sforo', 'sforo_km', 'km_eccesso', 'sforo'])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bookingSforoRate = Number((booking as any).km_overage_fee
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ?? (booking as { booking_details?: any }).booking_details?.km_overage_fee
+        ?? 0)
     // Single source of truth: Centralina Pro. Empty state shown when the
     // category isn't configured.
     const penaltyList: PenaltyItem[] = useMemo(() => {
         if (!penaliFromCfg) return []
-        return penaliFromCfg[vehicleCategory] || []
-    }, [penaliFromCfg, vehicleCategory])
+        const list = penaliFromCfg[vehicleCategory] || []
+        return list.map(it => {
+            if (KM_SFORO_IDS.has(it.id) && bookingSforoRate > 0) {
+                return {
+                    ...it,
+                    amount: bookingSforoRate,
+                    description: `€${bookingSforoRate.toFixed(2)}/km — tariffa contratto`,
+                }
+            }
+            return it
+        })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [penaliFromCfg, vehicleCategory, bookingSforoRate])
 
     const vehicleTypeLabel = isSupercar ? 'Supercar' : vehicleCategory === 'aziendali' ? 'Aziendali' : 'Urban / Utilitarie'
 

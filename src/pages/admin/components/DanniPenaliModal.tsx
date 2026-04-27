@@ -165,10 +165,35 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     // Single source of truth: Centralina Pro. No hardcoded fallback.
     // If the admin hasn't configured a list for this category, the modal
     // shows the empty-state below so the operator knows where to fix it.
+    //
+    // SPECIAL CASE — Km Sforo: when a penalty has id 'km_sforo' (or
+    // 'sforo_km' / 'km_eccesso'), its per-km amount is taken from the
+    // BOOKING's locked-in rate (booking.km_overage_fee) — what was agreed
+    // in the contract at booking time — NOT the current Centralina Pro
+    // price. All other penalties continue to read from Centralina.
+    const KM_SFORO_IDS = new Set(['km_sforo', 'sforo_km', 'km_eccesso', 'sforo'])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bookingSforoRate = Number((booking as any).km_overage_fee
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ?? (booking as { booking_details?: any }).booking_details?.km_overage_fee
+        ?? 0)
+    const applyKmSforoOverride = (items: PenaltyPreset[]): PenaltyPreset[] =>
+        items.map(it => {
+            if (KM_SFORO_IDS.has(it.id) && bookingSforoRate > 0) {
+                return {
+                    ...it,
+                    amount: bookingSforoRate,
+                    description: `€${bookingSforoRate.toFixed(2)}/km — tariffa contratto`,
+                }
+            }
+            return it
+        })
+
     const penaltyList: PenaltyPreset[] = useMemo(() => {
         if (!penaliFromCfg) return []
-        return penaliFromCfg[vehicleCategory] || []
-    }, [penaliFromCfg, vehicleCategory])
+        return applyKmSforoOverride(penaliFromCfg[vehicleCategory] || [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [penaliFromCfg, vehicleCategory, bookingSforoRate])
     const danniPresetList: PenaltyPreset[] = useMemo(() => {
         if (!danniFromCfg) return []
         return danniFromCfg[vehicleCategory] || []
