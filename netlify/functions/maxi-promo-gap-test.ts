@@ -100,7 +100,12 @@ export const handler: Handler = async (event) => {
   })
 
   const now = new Date()
-  const horizonEnd = new Date(now.getTime() + 48 * 3600 * 1000) // next 48h
+  // Horizon: scan the next 365 days. Any gap of [4h, 48h] anywhere in the
+  // coming year qualifies — the gap doesn't have to be tomorrow. Each
+  // qualifying vehicle still produces a single candidate (the gap before
+  // its NEXT upcoming booking) to avoid spamming about future gaps that
+  // are already on the calendar but haven't materialised yet.
+  const horizonEnd = new Date(now.getTime() + 365 * 24 * 3600 * 1000)
 
   const { data: vehiclesData } = await supabase
     .from('vehicles')
@@ -126,7 +131,14 @@ export const handler: Handler = async (event) => {
   // falls within [MIN_GAP_HOURS, MAX_GAP_HOURS]. Outside that band:
   //   - <4h:  too short to be a useful rental (no 1-day promo)
   //   - >48h: not a "1-day gap" — different promo flow, skip here
-  type GapHit = { vehicle: Vehicle; nextPickup: Date; gapDate: Date; gapHours: number }
+  type GapHit = {
+    vehicle: Vehicle;
+    nextPickup: Date;
+    gapDate: Date;        // legacy single-date (= day before pickup)
+    gapStartDate: Date;   // first calendar day of free window
+    gapEndDate: Date;     // last calendar day before pickup
+    gapHours: number;
+  }
   const gapHits: GapHit[] = []
   const nowMs = now.getTime()
   const MIN_GAP_MS = 4 * 3600 * 1000
@@ -150,14 +162,20 @@ export const handler: Handler = async (event) => {
     if (gapMs < MIN_GAP_MS) continue   // too short
     if (gapMs > MAX_GAP_MS) continue   // too long
 
-    // gap_date = the calendar day (Europe/Rome) just before nextBooking.pickup_date.
-    // Subtract 1ms from the pickup so a pickup at 00:00 still resolves to
-    // the previous day rather than the day of pickup itself.
+    // gap_date (legacy) = the calendar day (Europe/Rome) just before
+    // nextBooking.pickup_date. Subtract 1ms so a pickup at 00:00 still
+    // resolves to the previous day.
     const gapDate = new Date(nextBooking._start - 1)
+    // For multi-day gaps we also expose the FIRST day of the free window
+    // so the template can render "dal X al Y".
+    const gapStartDate = new Date(freeFromMs)
+    const gapEndDate = gapDate
     gapHits.push({
       vehicle: v,
       nextPickup: new Date(nextBooking._start),
       gapDate,
+      gapStartDate,
+      gapEndDate,
       gapHours: Math.round(gapMs / 3600 / 1000 * 10) / 10,
     })
   }
@@ -220,6 +238,20 @@ export const handler: Handler = async (event) => {
     const hitMedium = fmtMedium(hit.gapDate)
     // Round gap to a whole number for display ("18 ore" reads cleaner than "18.4 ore").
     const hitHours = Math.round(hit.gapHours)
+    // Multi-day gap support: when the free window straddles two
+    // calendar days (Europe/Rome), expose both. {gap_dates_range}
+    // auto-formats: "28/04/2026" for same-day OR "27/04/2026 → 28/04/2026"
+    // for multi-day. Templates that only use {gap_date} still work.
+    const startShort = fmtShort(hit.gapStartDate)
+    const startLong = fmtLong(hit.gapStartDate)
+    const startMedium = fmtMedium(hit.gapStartDate)
+    const endShort = hitShort
+    const endLong = hitLong
+    const endMedium = hitMedium
+    const isMultiDay = startShort !== endShort
+    const datesRangeShort = isMultiDay ? `${startShort} → ${endShort}` : endShort
+    const datesRangeLong = isMultiDay ? `da ${startLong} a ${endLong}` : endLong
+    const datesRangeMedium = isMultiDay ? `${startMedium} – ${endMedium}` : endMedium
     try {
       const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
         method: 'POST',
@@ -230,18 +262,31 @@ export const handler: Handler = async (event) => {
             vehicle_specs: v.display_name,
             vehicle: v.display_name,
             veicolo: v.display_name,
-            // Data del buco di 1 giorno per QUESTO veicolo (Europe/Rome).
-            // Più alias così l'admin può scegliere il formato direttamente
-            // nel template Pro senza modifiche al codice.
-            date_gap: hitShort,        // "28/04/2026"
-            data_gap: hitShort,
-            gap_date: hitShort,
-            date_gap_long: hitLong,    // "lunedì 28 aprile 2026"
-            data_gap_long: hitLong,
-            date_gap_short: hitMedium, // "28 aprile"
-            data: hitShort,
-            // Durata del buco in ore (intero). Il template può scriverlo come
-            // "{gap_hours} ore" / "circa {gap_hours}h disponibili".
+            // Single-date placeholders (= last day of the gap window).
+            // Backwards compatible with templates that only know {gap_date}.
+            date_gap: endShort,
+            data_gap: endShort,
+            gap_date: endShort,
+            date_gap_long: endLong,
+            data_gap_long: endLong,
+            date_gap_short: endMedium,
+            data: endShort,
+            // First / last day of the gap (always set, even on single-day gaps).
+            gap_date_start: startShort,
+            data_gap_start: startShort,
+            gap_date_start_long: startLong,
+            gap_date_end: endShort,
+            data_gap_end: endShort,
+            gap_date_end_long: endLong,
+            // Auto-formatted range. Renders ONE date when start == end,
+            // TWO dates ("dal … al …") when the gap spans two days.
+            gap_dates_range: datesRangeShort,
+            date_gap_range: datesRangeShort,
+            data_gap_range: datesRangeShort,
+            gap_dates_range_long: datesRangeLong,
+            data_gap_range_long: datesRangeLong,
+            gap_dates_range_short: datesRangeMedium,
+            // Durata del buco in ore (intero).
             gap_hours: String(hitHours),
             ore: String(hitHours),
             ore_disponibili: String(hitHours),

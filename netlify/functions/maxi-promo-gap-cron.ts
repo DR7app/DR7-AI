@@ -136,7 +136,9 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   }
 
   const now = new Date()
-  const horizonEnd = new Date(now.getTime() + 48 * 3600 * 1000) // upcoming bookings within 48h
+  // Horizon: scan the next 365 days. Any gap of [4h, 48h] anywhere in the
+  // coming year qualifies — the gap doesn't have to be tomorrow.
+  const horizonEnd = new Date(now.getTime() + 365 * 24 * 3600 * 1000)
 
   const { data: vehiclesData } = await supabase
     .from('vehicles')
@@ -171,8 +173,10 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   const candidates: Array<{
     vehicle: Vehicle;
     reason: 'evening' | 'recent_booking';
-    gapDate: Date;
+    gapDate: Date;        // legacy single-date (= day before pickup)
     gapDateDb: string;
+    gapStartDate: Date;   // first calendar day of free window
+    gapEndDate: Date;     // last calendar day before pickup (= gapDate)
     gapHours: number;
   }> = []
 
@@ -199,11 +203,14 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     if (!eveningTriggerActive && !hasRecentBooking) continue
 
     const gapDate = new Date(nextBooking._start - 1) // day before pickup
+    const gapStartDate = new Date(freeFromMs)
     candidates.push({
       vehicle: v,
       reason: hasRecentBooking ? 'recent_booking' : 'evening',
       gapDate,
       gapDateDb: romeYMD(gapDate),
+      gapStartDate,
+      gapEndDate: gapDate,
       gapHours: Math.round(gapMs / 3600 / 1000),
     })
   }
@@ -246,10 +253,19 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     const gShort = fmtShort(c.gapDate)
     const gLong = fmtLong(c.gapDate)
     const gMedium = fmtMedium(c.gapDate)
+    const startShort = fmtShort(c.gapStartDate)
+    const startLong = fmtLong(c.gapStartDate)
+    const startMedium = fmtMedium(c.gapStartDate)
+    const isMultiDay = startShort !== gShort
+    const datesRangeShort = isMultiDay ? `${startShort} → ${gShort}` : gShort
+    const datesRangeLong = isMultiDay ? `da ${startLong} a ${gLong}` : gLong
+    const datesRangeMedium = isMultiDay ? `${startMedium} – ${gMedium}` : gMedium
     const templateVars = {
       vehicle_specs: v.display_name,
       vehicle: v.display_name,
       veicolo: v.display_name,
+      // Single-date placeholders (= last day of the gap window). Backwards
+      // compatible with templates that only reference {gap_date}.
       date_gap: gShort,
       data_gap: gShort,
       gap_date: gShort,
@@ -257,7 +273,21 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       data_gap_long: gLong,
       date_gap_short: gMedium,
       data: gShort,
-      // Durata del buco in ore (intero) — disponibile per il template Pro.
+      // Start / end dates (always set, even on single-day gaps).
+      gap_date_start: startShort,
+      data_gap_start: startShort,
+      gap_date_start_long: startLong,
+      gap_date_end: gShort,
+      data_gap_end: gShort,
+      gap_date_end_long: gLong,
+      // Auto-formatted range. Renders ONE date for same-day, TWO for multi-day.
+      gap_dates_range: datesRangeShort,
+      date_gap_range: datesRangeShort,
+      data_gap_range: datesRangeShort,
+      gap_dates_range_long: datesRangeLong,
+      data_gap_range_long: datesRangeLong,
+      gap_dates_range_short: datesRangeMedium,
+      // Durata del buco in ore (intero).
       gap_hours: String(c.gapHours),
       ore: String(c.gapHours),
       ore_disponibili: String(c.gapHours),
