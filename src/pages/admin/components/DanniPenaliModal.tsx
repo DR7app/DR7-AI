@@ -171,31 +171,46 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     // BOOKING's locked-in rate (booking.km_overage_fee) — what was agreed
     // in the contract at booking time — NOT the current Centralina Pro
     // price. All other penalties continue to read from Centralina.
-    const KM_SFORO_IDS = new Set(['km_sforo', 'sforo_km', 'km_eccesso', 'sforo'])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bookingSforoRate = Number((booking as any).km_overage_fee
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ?? (booking as { booking_details?: any }).booking_details?.km_overage_fee
         ?? 0)
 
+    // Match Sforo Km rows liberally — by id OR by label keyword. Admins might
+    // have used different ids in Centralina (sforo_kilometri, km_extra, ecc.)
+    // so we don't want a strict id whitelist.
+    const isSforoRow = (it: { id?: string; label?: string }): boolean => {
+        const id = String(it.id || '').toLowerCase()
+        const label = String(it.label || '').toLowerCase()
+        if (id.includes('sforo') || id.includes('eccesso')) return true
+        if (label.includes('sforo')) return true
+        if (label.includes('km extra') || label.includes('km eccesso')) return true
+        if (label.includes('eccesso km')) return true
+        return false
+    }
+
     const penaltyList: PenaltyPreset[] = useMemo(() => {
         const base = penaliFromCfg ? (penaliFromCfg[vehicleCategory] || []) : []
         // Apply Km Sforo override on any matching row in Centralina (uses
-        // contract rate, not Pro current). Then inject the synthetic
-        // 'km_sforo' row at the top if Centralina didn't include one,
-        // so the operator always has it available without configuring it.
+        // contract rate, not Pro current). Then inject the synthetic row at
+        // the top if Centralina didn't include one, so the operator always
+        // has it available without configuring it.
         const overridden = base.map(it => {
-            if (KM_SFORO_IDS.has(it.id) && bookingSforoRate > 0) {
+            if (isSforoRow(it)) {
                 return {
                     ...it,
                     amount: bookingSforoRate,
-                    description: `€${bookingSforoRate.toFixed(2)}/km — tariffa contratto`,
+                    description: bookingSforoRate > 0
+                        ? `€${bookingSforoRate.toFixed(2)}/km — tariffa contratto`
+                        : 'Tariffa contratto non disponibile',
                 }
             }
             return it
         })
-        const hasKmSforoRow = overridden.some(it => KM_SFORO_IDS.has(it.id))
-        if (hasKmSforoRow || bookingSforoRate <= 0) return overridden
+        const hasSforoRow = overridden.some(isSforoRow)
+        if (hasSforoRow) return overridden
+        if (bookingSforoRate <= 0) return overridden
         return [
             {
                 id: 'km_sforo',

@@ -123,27 +123,39 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     // SPECIAL CASE — Km Sforo: per-km rate comes from the BOOKING's locked-in
     // rate (booking.km_overage_fee), NOT current Centralina. Always injected
     // as a synthetic row at the top so the operator doesn't have to add it
-    // to Centralina Pro manually for every category.
-    const KM_SFORO_IDS = new Set(['km_sforo', 'sforo_km', 'km_eccesso', 'sforo'])
+    // to Centralina Pro manually for every category. Match liberally by id
+    // OR label keyword so any "sforo" / "eccesso" entry triggers the override.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bookingSforoRate = Number((booking as any).km_overage_fee
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ?? (booking as { booking_details?: any }).booking_details?.km_overage_fee
         ?? 0)
+    const isSforoRow = (it: { id?: string; label?: string }): boolean => {
+        const id = String(it.id || '').toLowerCase()
+        const label = String(it.label || '').toLowerCase()
+        if (id.includes('sforo') || id.includes('eccesso')) return true
+        if (label.includes('sforo')) return true
+        if (label.includes('km extra') || label.includes('km eccesso')) return true
+        if (label.includes('eccesso km')) return true
+        return false
+    }
     const penaltyList: PenaltyItem[] = useMemo(() => {
         const base = penaliFromCfg ? (penaliFromCfg[vehicleCategory] || []) : []
         const overridden = base.map(it => {
-            if (KM_SFORO_IDS.has(it.id) && bookingSforoRate > 0) {
+            if (isSforoRow(it)) {
                 return {
                     ...it,
                     amount: bookingSforoRate,
-                    description: `€${bookingSforoRate.toFixed(2)}/km — tariffa contratto`,
+                    description: bookingSforoRate > 0
+                        ? `€${bookingSforoRate.toFixed(2)}/km — tariffa contratto`
+                        : 'Tariffa contratto non disponibile',
                 }
             }
             return it
         })
-        const hasKmSforoRow = overridden.some(it => KM_SFORO_IDS.has(it.id))
-        if (hasKmSforoRow || bookingSforoRate <= 0) return overridden
+        const hasSforoRow = overridden.some(isSforoRow)
+        if (hasSforoRow) return overridden
+        if (bookingSforoRate <= 0) return overridden
         return [
             {
                 id: 'km_sforo',
