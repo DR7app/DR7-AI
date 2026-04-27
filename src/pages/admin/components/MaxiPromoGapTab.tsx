@@ -79,7 +79,19 @@ export default function MaxiPromoGapTab() {
       toast.success('Impostazioni salvate')
       await loadSettings()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err))
+      // PostgREST errors are plain objects (`{message, code, details, hint}`)
+      // not Error instances. String(err) on those returns "[object Object]".
+      // Pull a useful field by hand so the toast shows the actual reason.
+      const msg = err instanceof Error
+        ? err.message
+        : (err && typeof err === 'object'
+          ? ((err as { message?: string; error?: string; details?: string; hint?: string }).message
+             || (err as { error?: string }).error
+             || (err as { details?: string }).details
+             || (err as { hint?: string }).hint
+             || JSON.stringify(err))
+          : String(err))
+      toast.error(msg)
     } finally {
       setSavingSettings(false)
     }
@@ -99,7 +111,19 @@ export default function MaxiPromoGapTab() {
       setLastResult(data)
       toast.success(`Rilevati ${data.count} veicoli con buco di 1 giorno domani`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err))
+      // PostgREST errors are plain objects (`{message, code, details, hint}`)
+      // not Error instances. String(err) on those returns "[object Object]".
+      // Pull a useful field by hand so the toast shows the actual reason.
+      const msg = err instanceof Error
+        ? err.message
+        : (err && typeof err === 'object'
+          ? ((err as { message?: string; error?: string; details?: string; hint?: string }).message
+             || (err as { error?: string }).error
+             || (err as { details?: string }).details
+             || (err as { hint?: string }).hint
+             || JSON.stringify(err))
+          : String(err))
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
