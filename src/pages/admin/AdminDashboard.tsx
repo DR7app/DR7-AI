@@ -188,7 +188,6 @@ export default function AdminDashboard() {
       { tab: 'reservations', label: 'Noleggio', titleLabel: 'Prenotazioni', subView: 'bookings' },
       { tab: 'reservations', label: 'Preventivi', subView: 'preventivi' },
       { tab: 'calendar', label: 'Calendario' },
-      { tab: 'cauzioni', label: 'Cauzioni' },
       { tab: 'contratto', label: 'Contratti' },
       { tab: 'gestione-danni', label: 'Danni & Penali' },
       { tab: 'gestione-multe', label: 'Multe' },
@@ -207,7 +206,6 @@ export default function AdminDashboard() {
     ] },
     { name: 'Clienti', tabs: [
       { tab: 'customers', label: 'Lead' },
-      { tab: 'unpaid', label: 'In attesa di pagamento' },
       { tab: 'customer-wallet', label: 'Credit Wallet' },
       { tab: 'site-users', label: 'Iscritti al Sito' },
     ] },
@@ -237,6 +235,8 @@ export default function AdminDashboard() {
       { tab: 'com-aruba', label: 'Aruba' },
     ] },
     { name: 'Amministrazione', tabs: [
+      { tab: 'unpaid', label: 'In attesa di pagamento' },
+      { tab: 'cauzioni', label: 'Cauzioni' },
       { tab: 'scadenze', label: 'Scadenze' },
       { tab: 'fattura', label: 'Fattura' },
       { tab: 'nexi', label: 'Nexi' },
