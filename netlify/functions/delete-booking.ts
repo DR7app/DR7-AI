@@ -64,21 +64,22 @@ export const handler: Handler = async (event) => {
             .eq('booking_id', bookingId)
         if (buonoError) console.warn('[delete-booking] Buono restore warning:', buonoError.message)
 
-        // Drop any pending cauzioni ("da incassare") linked to this booking.
-        // We only delete rows that haven't been collected yet (data_incasso IS NULL)
-        // and aren't already in a closed state — keeping financial records intact
-        // for cauzioni that have already been Incassata/Restituita/Sbloccata/Bloccata.
+        // Drop ALL cauzioni linked to this booking. Deleting a booking is
+        // a destructive admin action; the associated cauzione must follow
+        // (otherwise it dangles in the Cauzioni tab pointing at a deleted
+        // rental). Matches the unconditional-delete pattern already used
+        // by CarWashBookingsTab and MechanicalBookingTab. Deleted rows
+        // are logged so the admin can recover the values from the
+        // function logs if needed.
         const { data: deletedCauzioni, error: cauzErr } = await supabase
             .from('cauzioni')
             .delete()
             .eq('riferimento_contratto_id', bookingId)
-            .is('data_incasso', null)
-            .not('stato', 'in', '("Incassata","Restituita","Sbloccata","Bloccata","Danno")')
-            .select('id, stato, importo')
+            .select('id, stato, importo, data_incasso')
         if (cauzErr) {
             console.warn('[delete-booking] Cauzioni cleanup warning:', cauzErr.message)
         } else if (deletedCauzioni && deletedCauzioni.length > 0) {
-            console.log(`[delete-booking] Removed ${deletedCauzioni.length} pending cauzione(i) linked to booking ${bookingId}`)
+            console.log(`[delete-booking] Removed ${deletedCauzioni.length} cauzione(i) linked to booking ${bookingId}:`, deletedCauzioni.map(c => `${c.id} (${c.stato}, EUR ${c.importo})`).join(', '))
         }
 
         if (error) {
