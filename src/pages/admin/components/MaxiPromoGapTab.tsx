@@ -13,7 +13,7 @@ import { supabase } from '../../../supabaseClient'
  *   - off       → il cron non invia nulla
  *   - pilot     → invia SOLO al numero pilota indicato qui
  *   - broadcast → invia a tutti i clienti con telefono in customers_extended
- *                 (escluso status=blacklist) — il cron li carica in automatico,
+ *                 (blacklist inclusa) — il cron li carica in automatico,
  *                 nessuna lista da inserire a mano.
  *
  * Trigger del cron: ogni 10 min, fa partire l'invio quando
@@ -221,7 +221,7 @@ export default function MaxiPromoGapTab() {
             <p className="text-xs text-theme-text-muted mt-2">
               {draftMode === 'off' && 'Il cron non invia nulla. Usa questa modalità per mettere in pausa.'}
               {draftMode === 'pilot' && 'Invia SOLO al numero pilota qui sotto. Niente broadcast.'}
-              {draftMode === 'broadcast' && 'Invia a tutti i clienti con telefono in customers_extended (esclusa la blacklist). Lista caricata automaticamente, NON serve inserirli a mano.'}
+              {draftMode === 'broadcast' && 'Invia a tutti i clienti con telefono in customers_extended (blacklist inclusa). Lista caricata automaticamente, NON serve inserirli a mano.'}
             </p>
           </div>
 

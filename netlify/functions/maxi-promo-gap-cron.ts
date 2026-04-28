@@ -115,7 +115,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
 
   // Build the recipient list.
   // - pilot     → 1 number from settings.pilot_phone
-  // - broadcast → every customers_extended row with telefono not null/blacklist
+  // - broadcast → every customers_extended row with telefono not null (blacklist included)
   let recipients: string[] = []
   if (mode === 'pilot') {
     const r = normalisePhone(settings?.pilot_phone || '')
@@ -124,11 +124,10 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
   } else {
     const { data: custRows } = await supabase
       .from('customers_extended')
-      .select('telefono, status_cliente')
+      .select('telefono')
       .not('telefono', 'is', null)
     const seen = new Set<string>()
     for (const row of (custRows || [])) {
-      if (row.status_cliente === 'blacklist') continue
       const n = normalisePhone(row.telefono || '')
       if (n && !seen.has(n)) { seen.add(n); recipients.push(n) }
     }

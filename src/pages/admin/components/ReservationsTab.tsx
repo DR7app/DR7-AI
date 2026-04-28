@@ -7313,7 +7313,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
             const bookingId = String(booking.id || '').toLowerCase()
             const bookingCode = bookingId.substring(0, 8)
-            const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode}`
+            const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
             return words.every(word => searchText.includes(word))
           }).length === 0 && (
               <div className="rounded-lg border border-theme-border/30 p-8 text-center text-theme-text-muted">
@@ -7331,7 +7331,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
             const bookingId = String(booking.id || '').toLowerCase()
             const bookingCode = bookingId.substring(0, 8)
-            const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode}`
+            const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
             return words.every(word => searchText.includes(word))
           }).map((booking) => {
             const isCarWash = booking.service_type === 'car_wash'
@@ -7512,7 +7512,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
                   const bookingId = String(booking.id || '').toLowerCase()
                   const bookingCode = bookingId.substring(0, 8)
-                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode}`
+                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
                   return words.every(word => searchText.includes(word))
                 }).map((booking) => {
                   const isCarWash = booking.service_type === 'car_wash'
@@ -7660,7 +7660,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
                   const bookingId = String(booking.id || '').toLowerCase()
                   const bookingCode = bookingId.substring(0, 8)
-                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode}`
+                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
                   return words.every(word => searchText.includes(word))
                 }).length === 0 && (
                     <tr>
@@ -7680,7 +7680,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             <div className="w-full sm:max-w-2xl bg-theme-bg-secondary sm:rounded-lg max-h-[90vh] flex flex-col overflow-hidden border border-theme-border/30">
               {/* Modal Header */}
               <div className="flex-shrink-0  p-4 border-b border-theme-border flex justify-between items-center">
-                <h3 className="text-lg sm:text-xl font-bold text-dr7-gold">Dettagli Prenotazione</h3>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-bold text-dr7-gold">Dettagli Prenotazione</h3>
+                  <p className="text-xs text-theme-text-muted mt-0.5 font-mono tracking-wide">
+                    Codice: DR7-{String(selectedBooking.id || '').substring(0, 8).toUpperCase()}
+                  </p>
+                </div>
                 <button
                   onClick={() => setSelectedBooking(null)}
                   className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none min-w-[44px] min-h-[44px] flex items-center justify-center"

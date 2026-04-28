@@ -115,7 +115,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
       >
         {/* Header */}
         <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-4 sm:p-6 flex justify-between items-center z-10">
-          <h2 className="text-xl sm:text-2xl font-bold text-theme-text-primary">Dettagli Prenotazione</h2>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-theme-text-primary">Dettagli Prenotazione</h2>
+            <p className="text-xs text-theme-text-muted mt-0.5 font-mono tracking-wide">
+              Codice: DR7-{String(booking.id || '').substring(0, 8).toUpperCase()}
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-3 hover:bg-theme-text-primary/5 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
