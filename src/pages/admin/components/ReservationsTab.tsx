@@ -5361,8 +5361,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* Search Bar */}
         <div className="mb-4">
           <Input
-            label="Cerca per codice, targa, veicolo o cliente"
-            placeholder="Cerca per codice prenotazione, targa, nome veicolo o nome cliente..."
+            label="Cerca per codice, nome, email, telefono, targa o veicolo"
+            placeholder="Cerca per codice prenotazione, nome, email, telefono, targa o veicolo..."
             value={bookingSearchQuery}
             onChange={(e) => setBookingSearchQuery(e.target.value)}
           />
@@ -7309,12 +7309,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (!bookingSearchQuery) return true
             const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
+            const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
+            const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase().replace(/[\s\-\+\(\)]/g, '')
             const vehicleName = (booking.vehicle_name || '').toLowerCase()
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
             const bookingId = String(booking.id || '').toLowerCase()
             const bookingCode = bookingId.substring(0, 8)
-            const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
-            return words.every(word => searchText.includes(word))
+            const searchText = `${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
+            return words.every(word => searchText.includes(word.replace(/[\s\-\+\(\)]/g, '')))
           }).length === 0 && (
               <div className="rounded-lg border border-theme-border/30 p-8 text-center text-theme-text-muted">
                 {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
@@ -7327,12 +7329,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (!bookingSearchQuery) return true
             const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
+            const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
+            const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase().replace(/[\s\-\+\(\)]/g, '')
             const vehicleName = (booking.vehicle_name || '').toLowerCase()
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
             const bookingId = String(booking.id || '').toLowerCase()
             const bookingCode = bookingId.substring(0, 8)
-            const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
-            return words.every(word => searchText.includes(word))
+            const searchText = `${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
+            return words.every(word => searchText.includes(word.replace(/[\s\-\+\(\)]/g, '')))
           }).map((booking) => {
             const isCarWash = booking.service_type === 'car_wash'
             return (
@@ -7508,12 +7512,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   if (!bookingSearchQuery) return true
                   const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
                   const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
+                  const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
+                  const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase().replace(/[\s\-\+\(\)]/g, '')
                   const vehicleName = (booking.vehicle_name || '').toLowerCase()
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
                   const bookingId = String(booking.id || '').toLowerCase()
                   const bookingCode = bookingId.substring(0, 8)
-                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
-                  return words.every(word => searchText.includes(word))
+                  const searchText = `${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
+                  return words.every(word => searchText.includes(word.replace(/[\s\-\+\(\)]/g, '')))
                 }).map((booking) => {
                   const isCarWash = booking.service_type === 'car_wash'
                   return (
@@ -7656,12 +7662,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   if (!bookingSearchQuery) return true
                   const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
                   const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
+                  const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
+                  const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase().replace(/[\s\-\+\(\)]/g, '')
                   const vehicleName = (booking.vehicle_name || '').toLowerCase()
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
                   const bookingId = String(booking.id || '').toLowerCase()
                   const bookingCode = bookingId.substring(0, 8)
-                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
-                  return words.every(word => searchText.includes(word))
+                  const searchText = `${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
+                  return words.every(word => searchText.includes(word.replace(/[\s\-\+\(\)]/g, '')))
                 }).length === 0 && (
                     <tr>
                       <td colSpan={8} className="px-4 py-8 text-center text-theme-text-muted">

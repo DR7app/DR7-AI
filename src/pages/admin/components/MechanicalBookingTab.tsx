@@ -267,7 +267,7 @@ export default function MechanicalBookingTab() {
       <div className="mb-4">
         <input
           type="text"
-          placeholder="Cerca prenotazione per nome cliente..."
+          placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
           value={bookingSearchQuery}
           onChange={(e) => setBookingSearchQuery(e.target.value)}
           className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
@@ -328,8 +328,17 @@ export default function MechanicalBookingTab() {
               // Search filter
               if (!bookingSearchQuery) return true
               const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-              const customerName = (booking.customer_name || '').toLowerCase()
-              return words.every(word => customerName.includes(word))
+              const customerName = (booking.customer_name || booking.booking_details?.customer?.fullName || '').toLowerCase()
+              const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
+              const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase().replace(/[\s\-\+\(\)]/g, '')
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const anyBooking = booking as any
+              const vehicleName = String(anyBooking.vehicle_name || '').toLowerCase()
+              const vehiclePlate = String(anyBooking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
+              const bookingId = String(booking.id || '').toLowerCase()
+              const bookingCode = bookingId.substring(0, 8)
+              const searchText = `${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
+              return words.every(word => searchText.includes(word.replace(/[\s\-\+\(\)]/g, '')))
             }).map(booking => (
               <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary/50">
                 <td className="px-4 py-3 text-sm text-theme-text-primary">
