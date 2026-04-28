@@ -69,8 +69,16 @@ export const handler: Handler = async (event) => {
         .select('config')
         .eq('id', 'main')
         .maybeSingle()
-    const targets = (cfgRow?.config as { vehicle_revenue_targets?: Record<string, { tiers?: RevenueTier[] }> } | undefined)
-        ?.vehicle_revenue_targets || {}
+    // Targets live under prezzoDinamico.dynamic.vehicle_revenue_targets — the
+    // same path calculate-dynamic-price.ts reads. Top-level fallback covers
+    // any tenant that may have stored them at the root historically.
+    const cfg = (cfgRow?.config || {}) as {
+        prezzoDinamico?: { dynamic?: { vehicle_revenue_targets?: Record<string, { tiers?: RevenueTier[] }> } };
+        vehicle_revenue_targets?: Record<string, { tiers?: RevenueTier[] }>;
+    }
+    const targets = cfg.prezzoDinamico?.dynamic?.vehicle_revenue_targets
+        || cfg.vehicle_revenue_targets
+        || {}
 
     const vehicleIdsWithTarget = Object.keys(targets).filter(vid => {
         const tiers = targets[vid]?.tiers || []
