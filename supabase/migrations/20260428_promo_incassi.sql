@@ -17,10 +17,10 @@ CREATE TABLE IF NOT EXISTS public.promo_incassi_settings (
     id           integer PRIMARY KEY DEFAULT 1,
     mode         text NOT NULL DEFAULT 'off' CHECK (mode IN ('off', 'pilot', 'broadcast')),
     pilot_phone  text,
-    -- Trigger threshold. Default 0.7: fire when the vehicle's active
-    -- monthly target coefficient drops to 0.7 or below for the first time
+    -- Trigger threshold. Default 0.8: fire when the vehicle's active
+    -- monthly target coefficient drops to 0.8 or below for the first time
     -- this month.
-    threshold_coeff numeric NOT NULL DEFAULT 0.7,
+    threshold_coeff numeric NOT NULL DEFAULT 0.8,
     updated_at   timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT singleton CHECK (id = 1)
 );

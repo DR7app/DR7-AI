@@ -3,7 +3,7 @@
  *
  * Runs at 09:00 and 17:00 Europe/Rome every day. For each vehicle whose
  * monthly revenue target has its ACTIVE coefficient at or below the
- * configured threshold (default 0.7), sends the Pro template "PROMO
+ * configured threshold (default 0.8), sends the Pro template "PROMO
  * INCASSI" once per (vehicle, year_month, threshold_coeff, recipient).
  *
  *   - Mode + pilot phone come from public.promo_incassi_settings.
@@ -98,7 +98,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
 
     const mode = (settings?.mode || 'off') as 'off' | 'pilot' | 'broadcast'
     if (mode === 'off') return skip('mode=off')
-    const thresholdCoeff = Number(settings?.threshold_coeff ?? 0.7)
+    const thresholdCoeff = Number(settings?.threshold_coeff ?? 0.8)
     if (!Number.isFinite(thresholdCoeff) || thresholdCoeff <= 0) {
         return skip(`invalid threshold_coeff: ${settings?.threshold_coeff}`)
     }
