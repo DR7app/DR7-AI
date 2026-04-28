@@ -325,20 +325,23 @@ export default function MechanicalBookingTab() {
           <tbody>
             {bookings.filter(booking => {
 
-              // Search filter
+              // Search filter — normalise BOTH the query AND the haystack the
+              // same way (strip spaces, hyphens, plus, parentheses) so users
+              // typing "DR7-2A37CACB" match the stored "dr72a37cacb" form.
               if (!bookingSearchQuery) return true
-              const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
+              const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
+              const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean).map(norm)
               const customerName = (booking.customer_name || booking.booking_details?.customer?.fullName || '').toLowerCase()
               const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
-              const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase().replace(/[\s\-\+\(\)]/g, '')
+              const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const anyBooking = booking as any
               const vehicleName = String(anyBooking.vehicle_name || '').toLowerCase()
-              const vehiclePlate = String(anyBooking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
+              const vehiclePlate = String(anyBooking.vehicle_plate || '').toLowerCase()
               const bookingId = String(booking.id || '').toLowerCase()
               const bookingCode = bookingId.substring(0, 8)
-              const searchText = `${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
-              return words.every(word => searchText.includes(word.replace(/[\s\-\+\(\)]/g, '')))
+              const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
+              return words.every(word => searchText.includes(word))
             }).map(booking => (
               <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary/50">
                 <td className="px-4 py-3 text-sm text-theme-text-primary">
