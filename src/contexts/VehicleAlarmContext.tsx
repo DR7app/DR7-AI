@@ -359,7 +359,6 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             const returnAfterMs   = cfgReturnAfter.threshold_value * 60000
             const tenMinutesAgo = new Date(now.getTime() - returnAfterMs)
             const tenMinutesAgoISO = tenMinutesAgo.toISOString()
-            const tenMinutesAgoPlusOne = new Date(tenMinutesAgo.getTime() + 60000).toISOString()
 
             // "Future" window is per-alarm (each can have its own lead time).
             // Default fallback: cfgReturnBefore.threshold_value.
@@ -370,7 +369,6 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // Pre-compute the most common (return) future window for the SQL queries below.
             const tenMinutesFuture = new Date(now.getTime() + futureLeadMinReturn * 60000)
             const tenMinutesFutureISO = tenMinutesFuture.toISOString()
-            const tenMinutesFuturePlusOne = new Date(tenMinutesFuture.getTime() + 60000).toISOString()
 
             // --- 0. CHECK CAR WASH (lead-time mins BEFORE appointment) ---
             // ONLY for external client washes, NOT rientro/internal washes
