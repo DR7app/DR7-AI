@@ -204,15 +204,19 @@ export const handler: Handler = async (event) => {
             throw new Error('Failed to generate unique invoice number after 5 attempts')
         }
 
-        // Create invoice items from cart
-        // IMPORTANT: Amount is NET (without IVA), VAT rate is 0
+        // Create invoice items from cart.
+        // Description is the penale's NAME (item.label), not the booking ID.
+        // The booking is already linked via booking_id on the fattura row, so
+        // including the DR7-XXXXXXXX prefix in every line item is redundant
+        // and clutters the fattura PDF. We keep just "Penale - <nome>" /
+        // "Danno - <nome>" so each line reads as the penale type and name.
         const isDanni = type === 'danni'
-        const bookingPrefix = `${isDanni ? 'Danno' : 'Penale'} prenotazione ${booking.id.substring(0, 8).toUpperCase()}`
+        const typeLabel = isDanni ? 'Danno' : 'Penale'
 
         const items = cartItems.map(item => {
             const description = rawDescriptions
                 ? (item.label || 'Servizio')
-                : (item.label ? `${bookingPrefix} - ${item.label}` : bookingPrefix)
+                : (item.label ? `${typeLabel} - ${item.label}` : typeLabel)
             const itemTotal = Math.round(item.amount * item.quantity * 100) / 100
             return {
                 description,
