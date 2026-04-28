@@ -112,6 +112,13 @@ const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['gap', '1', 'giorno'],
     ['promo', 'gap'],
   ],
+  // Promo Incassi — sent when a vehicle's monthly revenue target hits its
+  // 0.7-or-lower coefficient threshold. Body editable in Messaggi di Sistema Pro.
+  promo_incassi: [
+    ['promo', 'incassi'],
+    ['promo', 'incasso'],
+    ['incassi', 'promo'],
+  ],
 }
 
 /**
