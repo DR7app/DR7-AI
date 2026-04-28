@@ -504,6 +504,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     insurance_option: 'KASKO_BASE' as KaskoTier,
     deposit: '0',
     deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
+    // Canonical id of the Centralina Pro option chosen by the admin. Drives
+    // the deposit amount + per-day surcharge that go into the booking total.
+    deposit_option_id: '' as string,
     // KM Overage Fee
     km_overage_fee: '', // si popola da Centralina quando si seleziona il veicolo
     unlimited_km: false,
@@ -627,11 +630,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const noCauzioneResolvedDaily = useMemo(() => {
-    const fallback = configOverlay.noCauzionePerDay || 0
-    if (!proDeposits) return fallback
-
-    // Detect new (per-category) vs old (per-fascia at root) shape.
+  // Full list of cauzione options for the current (vehicle category × fascia × residenza)
+  // pulled live from Centralina Pro. Drives the new "Opzione Cauzione" dropdown
+  // so the admin sees the exact options Preventivi/Centralina knows about
+  // — no more typing the amount blind.
+  type ProDepositOption = { id?: string; label?: string; amount?: number | string; surcharge_per_day?: number | string }
+  const depositOptionsForCurrentBooking = useMemo<ProDepositOption[]>(() => {
+    if (!proDeposits) return []
     const firstVal = Object.values(proDeposits)[0] as Record<string, unknown> | undefined
     const isOld = !!firstVal && typeof firstVal === 'object'
       && ('residente' in firstVal || 'non_residente' in firstVal)
@@ -647,26 +652,42 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const fasciaKey = customerTier?.tier === 'TIER_1' ? 'B' : 'A'
     const residencyKey = isResidenteSardegna ? 'residente' : 'non_residente'
 
-    let opts: { id?: string; label?: string; surcharge_per_day?: number | string }[] = []
     if (isOld) {
       const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
-      opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
-    } else {
-      const catCfg = proDeposits[proCategory] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
-      const fasciaCfg = catCfg?.[fasciaKey]
-      opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
+      return ((fasciaCfg?.[residencyKey] as ProDepositOption[]) || [])
     }
+    const catCfg = proDeposits[proCategory] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+    const fasciaCfg = catCfg?.[fasciaKey]
+    return ((fasciaCfg?.[residencyKey] as ProDepositOption[]) || [])
+  }, [proDeposits, vehicles, formData.vehicle_id, customerTier, isResidenteSardegna])
 
-    const isNoDepositOpt = (o: { id?: string; label?: string }) => {
-      if (o.id === 'no_deposit') return true
-      const label = String(o.label || '').toLowerCase().trim()
-      return /nessuna\s+cauzione|no\s+cauzione|^no_deposit$/i.test(label)
-    }
-    const fromPro = opts.find(isNoDepositOpt)?.surcharge_per_day
+  const isNoDepositOpt = (o: ProDepositOption) => {
+    if (o.id === 'no_deposit') return true
+    const label = String(o.label || '').toLowerCase().trim()
+    return /nessuna\s+cauzione|no\s+cauzione|^no_deposit$/i.test(label)
+  }
+
+  const noCauzioneResolvedDaily = useMemo(() => {
+    const fallback = configOverlay.noCauzionePerDay || 0
+    const fromPro = depositOptionsForCurrentBooking.find(isNoDepositOpt)?.surcharge_per_day
     const num = Number(fromPro)
     if (Number.isFinite(num) && num > 0) return num
     return fallback
-  }, [proDeposits, vehicles, formData.vehicle_id, customerTier, isResidenteSardegna, configOverlay.noCauzionePerDay])
+  }, [depositOptionsForCurrentBooking, configOverlay.noCauzionePerDay])
+
+  // Currently-selected option (from formData.deposit_option_id). Drives the
+  // surcharge_per_day applied to the booking total — replaces the previous
+  // "only fire when status=no_cauzione" behaviour.
+  const selectedDepositOption = useMemo<ProDepositOption | null>(() => {
+    const id = formData.deposit_option_id
+    if (!id) return null
+    return depositOptionsForCurrentBooking.find(o => o.id === id) || null
+  }, [depositOptionsForCurrentBooking, formData.deposit_option_id])
+
+  const selectedDepositSurchargePerDay = useMemo(() => {
+    const v = Number(selectedDepositOption?.surcharge_per_day)
+    return Number.isFinite(v) && v > 0 ? v : 0
+  }, [selectedDepositOption])
 
   // Config-driven price aliases (used throughout the form instead of hardcoded constants)
   const CFG_LAVAGGIO_FEE = configOverlay.lavaggioFee
@@ -742,7 +763,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
               const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
                 + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
-              const noCauzioneSurcharge = prev.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * data.rentalDays : 0
+              // Surcharge per day comes from the Pro option the admin picked.
+              // For backwards compat, when status='no_cauzione' but no specific
+              // option was chosen, fall back to the configured no-cauzione daily.
+              const surchargePerDay = selectedDepositSurchargePerDay
+                || (prev.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0)
+              const noCauzioneSurcharge = surchargePerDay * data.rentalDays
               let unlimitedKmSurcharge = 0
               if (prev.unlimited_km) {
                 unlimitedKmSurcharge = getUnlimitedKmPriceRes(selectedVehicle, activeTier) * data.rentalDays
@@ -814,7 +840,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
       const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
         + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-      const noCauzioneSurcharge = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
+      // Surcharge from the Pro option the admin picked, falling back to the
+      // legacy no-cauzione daily for older records.
+      const surchargePerDay = selectedDepositSurchargePerDay
+        || (formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0)
+      const noCauzioneSurcharge = surchargePerDay * revenueSuggestion.rentalDays
       let unlimitedKmSurcharge = 0
       if (formData.unlimited_km) {
         unlimitedKmSurcharge = getUnlimitedKmPriceRes(selectedVehicle, activeTier) * revenueSuggestion.rentalDays
@@ -855,7 +885,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       setFormData(prev => ({ ...prev, ...updates }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier, noCauzioneResolvedDaily])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -6258,11 +6288,63 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 </div>
                 {!formData.cauzione_auto && (
                   <>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                        Opzione Cauzione · {customerTier?.tier === 'TIER_1' ? 'Fascia B' : 'Fascia A'} · {isResidenteSardegna ? 'Residente' : 'Non residente'}
+                      </label>
+                      {depositOptionsForCurrentBooking.length === 0 ? (
+                        <p className="text-xs text-amber-400 mb-2">
+                          Nessuna opzione configurata in Centralina Pro per questa combinazione.
+                          Configurale in Centralina Pro → Cauzioni o inserisci manualmente l'importo.
+                        </p>
+                      ) : (
+                        <select
+                          value={formData.deposit_option_id}
+                          onChange={(e) => {
+                            const optId = e.target.value
+                            const opt = depositOptionsForCurrentBooking.find(o => o.id === optId)
+                            const amount = Number(opt?.amount)
+                            const isNoDep = opt ? isNoDepositOpt(opt) : false
+                            setFormData(prev => ({
+                              ...prev,
+                              deposit_option_id: optId,
+                              deposit: optId
+                                ? (Number.isFinite(amount) ? String(amount) : '0')
+                                : prev.deposit,
+                              // Sync legacy deposit_status to keep downstream
+                              // logic (ConfirmationSuccess, contract gen) working.
+                              deposit_status: isNoDep ? 'no_cauzione' : (prev.deposit_status === 'no_cauzione' ? 'da_incassare' : prev.deposit_status),
+                            }))
+                          }}
+                          className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
+                        >
+                          <option value="">— Seleziona opzione —</option>
+                          {depositOptionsForCurrentBooking.map((o, i) => {
+                            const amt = Number(o.amount) || 0
+                            const surcharge = Number(o.surcharge_per_day) || 0
+                            const parts: string[] = []
+                            if (amt > 0) parts.push(`€${amt.toLocaleString('it-IT')}`)
+                            if (surcharge > 0) parts.push(`+ €${surcharge}/giorno`)
+                            return (
+                              <option key={(o.id || '') + ':' + i} value={o.id || ''}>
+                                {o.label || o.id} {parts.length > 0 ? `(${parts.join(' ')})` : ''}
+                              </option>
+                            )
+                          })}
+                        </select>
+                      )}
+                      {selectedDepositOption && (
+                        <p className="text-xs text-blue-400 mt-1">
+                          Importo: €{Number(selectedDepositOption.amount || 0).toLocaleString('it-IT')}
+                          {selectedDepositSurchargePerDay > 0 && ` · Supplemento €${selectedDepositSurchargePerDay}/giorno aggiunto al totale`}
+                        </p>
+                      )}
+                    </div>
                     <Input
                       label="Cauzione (€)"
                       type="number"
                       value={formData.deposit}
-                      onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, deposit: v })) }}
+                      onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, deposit: v, deposit_option_id: '' })) }}
                     />
                     <div>
                       <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato Cauzione</label>
@@ -6273,7 +6355,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           setFormData(prev => ({
                             ...prev,
                             deposit_status: val,
-                            // When no_cauzione selected, clear deposit amount
                             ...(val === 'no_cauzione' ? { deposit: '0' } : {}),
                           }));
                         }}
@@ -6281,12 +6362,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       >
                         <option value="da_incassare">Da incassare</option>
                         <option value="incassata">Incassata</option>
-                        {/* No Cauzione: only for Fascia A (TIER_2) AND only with Kasko (not RCA) */}
                         {(!customerTier || customerTier.tier === 'TIER_2') && formData.insurance_option !== 'RCA' && (
                           <option value="no_cauzione">No Cauzione (+€{CFG_NO_CAUZIONE_PER_DAY}/giorno)</option>
                         )}
                       </select>
-                      {formData.deposit_status === 'no_cauzione' && (
+                      {formData.deposit_status === 'no_cauzione' && !selectedDepositOption && (
                         <p className="text-xs text-blue-400 mt-1">Supplemento €{CFG_NO_CAUZIONE_PER_DAY}/giorno aggiunto al totale</p>
                       )}
                       {customerTier?.tier === 'TIER_1' && (
