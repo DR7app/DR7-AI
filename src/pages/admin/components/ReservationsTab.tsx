@@ -635,6 +635,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // so the admin sees the exact options Preventivi/Centralina knows about
   // — no more typing the amount blind.
   type ProDepositOption = { id?: string; label?: string; amount?: number | string; surcharge_per_day?: number | string }
+  const isNoDepositOpt = (o: ProDepositOption) => {
+    if (o.id === 'no_deposit') return true
+    const label = String(o.label || '').toLowerCase().trim()
+    return /nessuna\s+cauzione|no\s+cauzione|^no_deposit$/i.test(label)
+  }
+
   const depositOptionsForCurrentBooking = useMemo<ProDepositOption[]>(() => {
     if (!proDeposits) return []
     const firstVal = Object.values(proDeposits)[0] as Record<string, unknown> | undefined
@@ -656,16 +662,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
       return ((fasciaCfg?.[residencyKey] as ProDepositOption[]) || [])
     }
+
     const catCfg = proDeposits[proCategory] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
     const fasciaCfg = catCfg?.[fasciaKey]
-    return ((fasciaCfg?.[residencyKey] as ProDepositOption[]) || [])
-  }, [proDeposits, vehicles, formData.vehicle_id, customerTier, isResidenteSardegna])
+    const ownOpts = ((fasciaCfg?.[residencyKey] as ProDepositOption[]) || []).slice()
 
-  const isNoDepositOpt = (o: ProDepositOption) => {
-    if (o.id === 'no_deposit') return true
-    const label = String(o.label || '').toLowerCase().trim()
-    return /nessuna\s+cauzione|no\s+cauzione|^no_deposit$/i.test(label)
-  }
+    // Fallback: if THIS category doesn't have a "Nessuna cauzione" entry, look
+    // in the other categories for the same fascia × residency combo and pull
+    // it in. The operator only needs to configure the option once, in any
+    // category, and it stays available across the whole admin.
+    if (!ownOpts.some(isNoDepositOpt)) {
+      const otherCats = (['supercars', 'aziendali', 'urban'] as const).filter(c => c !== proCategory)
+      for (const c of otherCats) {
+        const otherCatCfg = proDeposits[c] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+        const otherFasciaCfg = otherCatCfg?.[fasciaKey]
+        const otherOpts = (otherFasciaCfg?.[residencyKey] as ProDepositOption[]) || []
+        const noDep = otherOpts.find(isNoDepositOpt)
+        if (noDep) {
+          ownOpts.push(noDep)
+          break
+        }
+      }
+    }
+
+    return ownOpts
+  }, [proDeposits, vehicles, formData.vehicle_id, customerTier, isResidenteSardegna])
 
   const noCauzioneResolvedDaily = useMemo(() => {
     const fallback = configOverlay.noCauzionePerDay || 0
