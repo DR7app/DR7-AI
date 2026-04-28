@@ -57,6 +57,20 @@ export const handler: Handler = async (event) => {
             .update({ status: 'cancelled' })
             .eq('id', bookingId)
 
+        // Cancel any active signature_requests for this booking so the
+        // 30-min reminder cron stops chasing the customer with "Firma il
+        // contratto" messages for a rental that no longer exists.
+        const { error: sigErr } = await supabase
+            .from('signature_requests')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('booking_id', bookingId)
+            .in('status', ['pending', 'otp_sent', 'otp_verified'])
+        if (sigErr) {
+            console.warn('[delete-booking] Signature request cleanup warning:', sigErr.message)
+        } else {
+            console.log(`[delete-booking] Cancelled pending signature requests for booking ${bookingId}`)
+        }
+
         // Restore any buono sconto linked to this booking
         const { error: buonoError } = await supabase
             .from('referral_discount_codes')

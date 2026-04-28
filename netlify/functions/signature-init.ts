@@ -148,6 +148,34 @@ export const handler: Handler = async (event) => {
 
         console.log(`[signature-init] Using contract id=${contract.id} number="${contract.contract_number}" booking_id="${contract.booking_id}"`)
 
+        // Refuse to send a signing link for a cancelled booking. Otherwise the
+        // customer keeps receiving "Firma il contratto" WhatsApp messages for a
+        // rental that no longer exists. This is the single bottleneck — every
+        // signing send (manual resend, auto-trigger from payment callback,
+        // post-booking webhook) flows through here.
+        const guardBookingId = bookingId || contract.booking_id
+        if (guardBookingId) {
+            const { data: bookingRow } = await supabase
+                .from('bookings')
+                .select('status')
+                .eq('id', guardBookingId)
+                .maybeSingle()
+            const status = String(bookingRow?.status || '').toLowerCase()
+            if (status === 'cancelled' || status === 'annullata') {
+                console.log(`[signature-init] Booking ${guardBookingId} is ${status} — refusing to send signing link`)
+                // Also cancel any pending signature_requests for this booking so the
+                // 30-min reminder cron doesn't pick them up later.
+                await supabase
+                    .from('signature_requests')
+                    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                    .eq('booking_id', guardBookingId)
+                    .in('status', ['pending', 'otp_sent', 'otp_verified'])
+                return {
+                    statusCode: 409,
+                    body: JSON.stringify({ error: 'Prenotazione annullata — il link di firma non viene inviato.' })
+                }
+            }
+        }
 
         if (!contract.pdf_url) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Il contratto non ha un PDF generato' }) }
