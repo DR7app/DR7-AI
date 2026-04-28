@@ -5951,8 +5951,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const pickupTime = e.target.value
                       const returnTime = calculateReturnTime(pickupTime)
                       setFormData(prev => ({ ...prev, pickup_time: pickupTime, return_time: returnTime }))
-                      if (!isInRentalHours(formData.pickup_date, pickupTime, 'pickup')) {
-                        toast(`⚠️ Ritiro alle ${pickupTime} è FUORI ORARIO standard`, { icon: '⚠️', duration: 4000, style: { background: '#7f1d1d', color: '#fff' } })
+                      if (!isInRentalHours(formData.pickup_date, pickupTime, 'pickup') && !hasOverride('out_of_office_hours')) {
+                        const r = rentalHoursFor(formData.pickup_date, 'pickup')
+                        const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
+                        const hoursLabel = r ? r.map(([a,b]) => `${fmt(a)}-${fmt(b)}`).join(' / ') : 'Domenica chiusa'
+                        requestOverride('out_of_office_hours', `Ritiro alle ${pickupTime} fuori orario standard (orari: ${hoursLabel}).`)
                       }
                     }}
                     options={buildRentalTimeOptions(formData.pickup_date, 'pickup')}
@@ -6038,8 +6041,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     onChange={(e) => {
                       const v = e.target.value
                       setFormData(prev => ({ ...prev, return_time: v }))
-                      if (!isInRentalHours(formData.return_date, v, 'return')) {
-                        toast(`⚠️ Riconsegna alle ${v} è FUORI ORARIO standard`, { icon: '⚠️', duration: 4000, style: { background: '#7f1d1d', color: '#fff' } })
+                      if (!isInRentalHours(formData.return_date, v, 'return') && !hasOverride('out_of_office_hours')) {
+                        const r = rentalHoursFor(formData.return_date, 'return')
+                        const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
+                        const hoursLabel = r ? r.map(([a,b]) => `${fmt(a)}-${fmt(b)}`).join(' / ') : 'Domenica chiusa'
+                        requestOverride('out_of_office_hours', `Riconsegna alle ${v} fuori orario standard (orari: ${hoursLabel}).`)
                       }
                     }}
                     options={buildRentalTimeOptions(formData.return_date, 'return')}

@@ -361,6 +361,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [slotOverrideReason, setSlotOverrideReason] = useState<string>('')
   const [pendingSendAfterSave, setPendingSendAfterSave] = useState(false)
   const [slotUnavailableWarning, setSlotUnavailableWarning] = useState<string>('')
+
+  // Out-of-office-hours OTP override (admin picked a slot outside the
+  // rental schedule). One approval per draft session — flipping back
+  // and forth between flagged/in-window slots doesn't re-prompt.
+  const [outOfHoursOverrideId, setOutOfHoursOverrideId] = useState<string | null>(null)
+  const [outOfHoursModalOpen, setOutOfHoursModalOpen] = useState(false)
+  const [outOfHoursReason, setOutOfHoursReason] = useState<string>('')
   const slotCheckTimerRef = useRef<number | null>(null)
 
   // Centralina config
@@ -2397,9 +2404,26 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           const d = new Date(); d.setHours(h, m, 0); d.setMinutes(d.getMinutes() - 90)
           const autoReturn = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
           setForm(prev => ({ ...prev, pickup_time: newPickupTime, return_time: autoReturn }))
+          if (!isWithinOfficeHoursForDate(form.pickup_date, newPickupTime, 'pickup') && !outOfHoursOverrideId) {
+            const reason = describeException(form.pickup_date, newPickupTime, 'pickup')
+            if (reason) {
+              setOutOfHoursReason(`Ritiro: ${reason}`)
+              setOutOfHoursModalOpen(true)
+            }
+          }
         }} options={buildTimeOptions(form.pickup_date, 'pickup')} />
         <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
-        <Select label="Ora Riconsegna (auto: ritiro -1h30)" value={form.return_time} onChange={(e) => setForm(prev => ({ ...prev, return_time: e.target.value }))} options={buildTimeOptions(form.return_date, 'return')} />
+        <Select label="Ora Riconsegna (auto: ritiro -1h30)" value={form.return_time} onChange={(e) => {
+          const v = e.target.value
+          setForm(prev => ({ ...prev, return_time: v }))
+          if (!isWithinOfficeHoursForDate(form.return_date, v, 'return') && !outOfHoursOverrideId) {
+            const reason = describeException(form.return_date, v, 'return')
+            if (reason) {
+              setOutOfHoursReason(`Riconsegna: ${reason}`)
+              setOutOfHoursModalOpen(true)
+            }
+          }
+        }} options={buildTimeOptions(form.return_date, 'return')} />
       </div>
 
       {slotUnavailableWarning && (
@@ -2841,6 +2865,22 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           if (pendingSendAfterSave !== null && pendingSendAfterSave !== undefined) {
             // handleSave re-entered — it will now skip the availability check because slotOverrideId is set
           }
+        }}
+      />
+
+      {/* Out-of-office-hours OTP — admin picked a slot outside the rental schedule */}
+      <LimitationOverrideModal
+        isOpen={outOfHoursModalOpen}
+        limitationCode="out_of_office_hours"
+        limitationMessage={outOfHoursReason || 'Orario fuori dagli orari di apertura'}
+        draftSessionId={draftSessionIdRef.current}
+        flowType="preventivo"
+        onCancel={() => {
+          setOutOfHoursModalOpen(false)
+        }}
+        onOverrideApproved={(overrideId) => {
+          setOutOfHoursOverrideId(overrideId)
+          setOutOfHoursModalOpen(false)
         }}
       />
     </div>
