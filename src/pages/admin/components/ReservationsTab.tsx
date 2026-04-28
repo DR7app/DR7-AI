@@ -4856,25 +4856,40 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
       } // end WhatsApp block
 
-      // Sync cauzione (security deposit) record — fire and forget
+      // Sync cauzione (security deposit) record. Fire-and-forget but
+      // surface failures: previously HTTP 4xx/5xx from the sync function
+      // were swallowed because `.catch` only catches network errors, so
+      // a missing customer_id / vehicle_id silently dropped the cauzione
+      // and admin had no idea why "Da Incassare" stayed empty.
       const depositAmount = parseFloat(formData.deposit) || 0
       const depositPaid = formData.deposit_status === 'incassata'
-      fetch('/.netlify/functions/sync-booking-cauzione', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId: insertedBooking.id,
-          customerId: insertedBooking.user_id || formData.customer_id,
-          vehicleId: insertedBooking.vehicle_id || formData.vehicle_id,
-          returnDate: insertedBooking.dropoff_date || formData.return_date,
-          depositAmount: depositAmount,
-          paymentMethod: formData.payment_method || 'carta',
-          depositPaid: depositPaid,
-          depositStatus: formData.deposit_status
-        })
-      })
-        .then(async () => {
-          // data_incasso update needs to run AFTER sync completes to avoid race condition
+      const isNoCauzione = formData.deposit_status === 'no_cauzione'
+      ;(async () => {
+        try {
+          const syncRes = await fetch('/.netlify/functions/sync-booking-cauzione', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: insertedBooking.id,
+              customerId: insertedBooking.user_id || formData.customer_id,
+              vehicleId: insertedBooking.vehicle_id || formData.vehicle_id,
+              returnDate: insertedBooking.dropoff_date || formData.return_date,
+              depositAmount: depositAmount,
+              paymentMethod: formData.payment_method || 'carta',
+              depositPaid: depositPaid,
+              depositStatus: formData.deposit_status
+            })
+          })
+          if (!syncRes.ok) {
+            const err = await syncRes.json().catch(() => ({} as any))
+            console.error('⚠️ Cauzione sync HTTP error:', syncRes.status, err)
+            // Only toast when admin actually expected a cauzione — staying
+            // silent for no_cauzione bookings or zero-amount edits.
+            if (depositAmount > 0 && !isNoCauzione) {
+              toast.error(`Cauzione non creata: ${err.error || `HTTP ${syncRes.status}`}`, { duration: 8000 })
+            }
+            return
+          }
           if (editingId) {
             const dataIncasso = formData.deposit_status === 'incassata' ? new Date().toISOString() : null
             await supabase
@@ -4882,9 +4897,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               .update({ data_incasso: dataIncasso, updated_at: new Date().toISOString() })
               .eq('riferimento_contratto_id', insertedBooking.id)
           }
+          if (depositAmount > 0 && !isNoCauzione && !editingId) {
+            toast.success(`Cauzione €${depositAmount} creata in Da Incassare`, { duration: 4000 })
+          }
           logger.log('✅ Cauzione synced successfully')
-        })
-        .catch(err => console.error('⚠️ Failed to sync cauzione:', err))
+        } catch (err) {
+          console.error('⚠️ Failed to sync cauzione:', err)
+          if (depositAmount > 0 && !isNoCauzione) {
+            toast.error('Errore di rete durante creazione cauzione — controlla la console', { duration: 8000 })
+          }
+        }
+      })()
 
       // When MODIFYING a booking and the new totals leave a balance owed
       // (pending / unpaid / partial-with-remainder), DEFER contract regeneration
