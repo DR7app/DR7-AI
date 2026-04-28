@@ -2774,8 +2774,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       second_driver_license_issue_date: booking.booking_details?.second_driver?.license_issue_date || '',
       second_driver_license_expiry: booking.booking_details?.second_driver?.license_expiry || '',
       insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
-      deposit: booking.booking_details?.deposit || '0',
-      deposit_status: booking.booking_details?.deposit_status || 'da_incassare',
+      // Cauzione amount + status — read in TWO shapes:
+      //  • admin-shape (created via this form): booking_details.deposit + booking_details.deposit_status
+      //  • website-shape (CarBookingWizard): top-level booking.deposit_amount
+      //    + booking_details.depositOption ('no_deposit' / 'vehicle_deposit' / 'card_deposit_*')
+      // Without the second branch, every website booking opened in admin showed
+      // deposit=0 and status='da_incassare' regardless of what the customer chose.
+      deposit: (() => {
+        const adminShape = booking.booking_details?.deposit
+        if (adminShape != null && String(adminShape) !== '') return String(adminShape)
+        const topLevel = (booking as { deposit_amount?: number | null }).deposit_amount
+        if (topLevel != null && Number(topLevel) > 0) return String(topLevel)
+        return '0'
+      })(),
+      deposit_status: (() => {
+        const explicit = booking.booking_details?.deposit_status
+        if (explicit) return explicit as 'da_incassare' | 'incassata' | 'no_cauzione'
+        // Website bookings: depositOption='no_deposit' → no_cauzione status.
+        const opt = booking.booking_details?.depositOption
+        if (opt === 'no_deposit') return 'no_cauzione' as const
+        return 'da_incassare' as const
+      })(),
+      // Carry the website's option id so the admin form's deposit_option_id
+      // dropdown can preselect it. Otherwise the operator has to pick again.
+      deposit_option_id: booking.booking_details?.depositOption || booking.booking_details?.deposit_option_id || '',
       // Cauzione Auto
       cauzione_auto: !!booking.booking_details?.cauzione_auto,
       cauzione_targa: booking.booking_details?.cauzione_targa || '',
