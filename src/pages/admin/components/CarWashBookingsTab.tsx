@@ -576,7 +576,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         .from('bookings')
         .select('*')
         .eq('service_type', 'car_wash')
-        .not('status', 'in', '(cancelled,annullata,expired)')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
 

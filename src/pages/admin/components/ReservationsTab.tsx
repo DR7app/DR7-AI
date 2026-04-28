@@ -7422,23 +7422,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             return normalisedWords.every(word => searchText.includes(word))
           }).map((booking) => {
             const isCarWash = booking.service_type === 'car_wash'
-            const isCancelled = booking.status === 'cancelled'
             return (
               <div
                 key={`booking-card-${booking.id}`}
-                className={`rounded-lg p-4 cursor-pointer hover:bg-theme-text-primary/5 transition-colors border border-theme-border/30 ${isCancelled ? 'opacity-60' : ''}`}
+                className="rounded-lg p-4 cursor-pointer hover:bg-theme-text-primary/5 transition-colors border border-theme-border/30"
                 onClick={() => setSelectedBooking(booking)}
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <div className={`font-semibold text-theme-text-primary mb-1 flex items-center flex-wrap gap-1.5 ${isCancelled ? 'line-through' : ''}`}>
-                      <span>{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
-                      {isCancelled && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-600/20 text-red-300 border border-red-500/50 no-underline">ANNULLATA</span>
-                      )}
+                    <div className="font-semibold text-theme-text-primary mb-1 flex items-center">
+                      {booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}
                       <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
                       {((booking.user_id && clubMembers.has(booking.user_id)) || (booking.customer_email && clubEmails.has(booking.customer_email.toLowerCase()))) && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50 no-underline">DR7 Club</span>
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50">DR7 Club</span>
                       )}
                     </div>
                     <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
@@ -7611,18 +7607,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   return normalisedWords.every(word => searchText.includes(word))
                 }).map((booking) => {
                   const isCarWash = booking.service_type === 'car_wash'
-                  const isCancelled = booking.status === 'cancelled'
                   return (
-                    <tr key={`booking-${booking.id}`} className={`border-t border-theme-border hover:/50 cursor-pointer ${isCancelled ? 'opacity-60 line-through' : ''}`} onClick={() => setSelectedBooking(booking)}>
+                    <tr key={`booking-${booking.id}`} className="border-t border-theme-border hover:/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
                       <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
                         <span className="flex items-center">
                           <span className="truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
-                          {isCancelled && (
-                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-600/20 text-red-300 border border-red-500/50 no-underline">ANNULLATA</span>
-                          )}
                           <CustomerStatusBadge email={booking.customer_email || booking.booking_details?.customer?.email} statusMap={customerStatuses} />
                       {((booking.user_id && clubMembers.has(booking.user_id)) || (booking.customer_email && clubEmails.has(booking.customer_email.toLowerCase()))) && (
-                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50 no-underline">DR7 Club</span>
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50">DR7 Club</span>
                       )}
                         </span>
                       </td>
