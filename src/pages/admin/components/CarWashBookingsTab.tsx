@@ -2494,8 +2494,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {bookings.filter(booking => {
                 if (!bookingSearchQuery) return true
                 const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-                const customerName = (booking.customer_name || '').toLowerCase()
-                return words.every(word => customerName.includes(word))
+                const customerName = (booking.customer_name || booking.booking_details?.customer?.fullName || '').toLowerCase()
+                const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
+                const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase().replace(/[\s\-\+\(\)]/g, '')
+                const vehicleName = (booking.vehicle_name || '').toLowerCase()
+                const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
+                const bookingId = String(booking.id || '').toLowerCase()
+                const bookingCode = bookingId.substring(0, 8)
+                const searchText = `${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7-${bookingCode}`
+                return words.every(word => searchText.includes(word.replace(/[\s\-\+\(\)]/g, '')))
               }).map((booking) => {
                 const bPaid = booking.payment_status === 'completed' || booking.payment_status === 'paid' || booking.payment_status === 'succeeded'
                 const bPending = booking.payment_status === 'pending'
