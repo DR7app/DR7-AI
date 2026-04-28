@@ -1738,7 +1738,21 @@ function EditableList<T extends ListItem>({
   function add() {
     const label = newLabel.trim()
     if (!label) return
-    onChange([...items, { id: uid(), label } as T])
+    // Genera id leggibile dallo slug del label (es. "Hypercar" → "hypercar"),
+    // così il sito usa il NOME inserito dall'admin e non un id random come
+    // "kwtcdhvs". Con suffisso numerico se collide con uno esistente.
+    const baseSlug = label.toLowerCase().trim()
+      .replace(/[^a-z0-9\s-_]/g, '')
+      .replace(/[\s-]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .substring(0, 40) || 'cat'
+    let id = baseSlug
+    let counter = 1
+    while (items.some((i) => i.id === id)) {
+      id = `${baseSlug}_${counter++}`
+    }
+    onChange([...items, { id, label } as T])
     setNewLabel('')
   }
 
