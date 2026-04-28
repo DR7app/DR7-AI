@@ -2411,6 +2411,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         ) : (
                           <>
                             <div className="font-medium">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
+                            <div className="text-xs text-dr7-gold font-mono">DR7-{String(booking.id || '').substring(0, 8).toUpperCase()}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_email || booking.booking_details?.customer?.email || '-'}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                             {(booking.booking_details?.vehicleMakeModel || (booking.vehicle_name && booking.vehicle_name !== 'Car Wash Service')) && (
@@ -2521,9 +2522,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           {isRientro ? 'Lavaggio Rientro' : (booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A')}
                         </div>
                         {!isRientro && (
-                          <div className="text-xs text-theme-text-muted mt-0.5">
-                            {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
-                          </div>
+                          <>
+                            <div className="text-[11px] text-dr7-gold font-mono mt-0.5">
+                              DR7-{String(booking.id || '').substring(0, 8).toUpperCase()}
+                            </div>
+                            <div className="text-xs text-theme-text-muted mt-0.5">
+                              {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
+                            </div>
+                          </>
                         )}
                       </div>
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0 ml-2 ${
