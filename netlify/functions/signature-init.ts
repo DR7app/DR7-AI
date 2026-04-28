@@ -209,10 +209,6 @@ export const handler: Handler = async (event) => {
 
         // 1st driver (main customer) — always present
         const signerName = contract.customer_name || 'Cliente'
-        const signerEmail = contract.customer_email
-        if (!signerEmail) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'Email cliente mancante nel contratto' }) }
-        }
 
         let customerPhone = contract.customer_phone || ''
 
@@ -230,14 +226,25 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        if (!customerPhone && signerEmail) {
+        if (!customerPhone && contract.customer_email) {
             const { data: customer } = await supabase
                 .from('customers_extended')
                 .select('telefono')
-                .eq('email', signerEmail)
+                .eq('email', contract.customer_email)
                 .maybeSingle()
             if (customer?.telefono) customerPhone = customer.telefono
         }
+
+        // Contracts are delivered exclusively via WhatsApp — phone is the
+        // channel that matters. If we have no phone AND no email there is
+        // literally nowhere to send the link, so we reject. But missing
+        // ONLY the email is fine: synthesize a placeholder so the
+        // signer_email NOT-NULL constraint is satisfied.
+        if (!contract.customer_email && !customerPhone) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Cliente senza email né telefono — impossibile inviare il contratto' }) }
+        }
+        const signerEmail = contract.customer_email
+            || `noemail.${(customerPhone || effectiveBookingId || 'unknown').replace(/[^0-9a-zA-Z]/g, '')}@dr7-empire.local`
 
         signers.push({ name: signerName, email: signerEmail, phone: customerPhone, role: '1_guidatore' })
 
