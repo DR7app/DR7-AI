@@ -45,7 +45,7 @@ const handler: Handler = async () => {
 
     // 1. Get every active DR7 Club user.
     const { data: clubRows, error: clubErr } = await supabase
-        .from('club_subscriptions')
+        .from('dr7_club_subscriptions')
         .select('user_id')
         .eq('status', 'active')
     if (clubErr) {
