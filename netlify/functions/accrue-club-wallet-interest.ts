@@ -12,7 +12,7 @@
  *
  * Idempotent via UNIQUE (user_id, accrual_date) — safe to retry.
  */
-import { Handler, schedule } from '@netlify/functions'
+import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
@@ -118,7 +118,6 @@ const handler: Handler = async () => {
     }
 }
 
-// Run every day at 02:30 Rome time (00:30 UTC during DST, 01:30 UTC otherwise —
-// schedule uses UTC; pick a time that's reliably after midnight in Italy).
-export const handler_scheduled = schedule('30 1 * * *', handler)
+// Cron registered via netlify.toml [functions."accrue-club-wallet-interest"]
+// schedule = "30 1 * * *" — runs daily at 01:30 UTC (~02:30/03:30 Rome).
 export { handler }

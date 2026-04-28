@@ -11,7 +11,7 @@
  *
  * Future re-runs are no-ops because paid_out_at IS NULL is the gate.
  */
-import { Handler, schedule } from '@netlify/functions'
+import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
@@ -128,6 +128,6 @@ const handler: Handler = async () => {
     }
 }
 
-// 1st of each month at 02:00 UTC (~03:00 / 04:00 Rome depending on DST).
-export const handler_scheduled = schedule('0 2 1 * *', handler)
+// Cron registered via netlify.toml [functions."payout-club-wallet-interest"]
+// schedule = "0 2 1 * *" — 1st of each month at 02:00 UTC.
 export { handler }
