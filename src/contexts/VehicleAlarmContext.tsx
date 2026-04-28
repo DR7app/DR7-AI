@@ -20,6 +20,13 @@ interface AlarmBooking {
     urgent?: boolean
 }
 
+interface AlarmConfigRow {
+    id: string
+    is_enabled: boolean
+    threshold_value: number
+    threshold_unit: 'minutes_before' | 'minutes_after' | 'km' | 'days'
+}
+
 interface AlarmState {
     activeAlarm: AlarmBooking | null
     isPlaying: boolean
@@ -54,6 +61,16 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const [session, setSession] = useState<Session | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const audioContextRef = useRef<AudioContext | null>(null)
+
+    // Live admin-editable alarm config from public.system_alarms.
+    // Falls back to hardcoded defaults (10 min / 1000 km / 7 days) if the
+    // table is empty or unreachable so the alarm system always works.
+    const alarmConfigRef = useRef<Map<string, AlarmConfigRow>>(new Map())
+    const getAlarmCfg = (id: string, defaultValue: number, defaultUnit: AlarmConfigRow['threshold_unit']): AlarmConfigRow => {
+        const fromDb = alarmConfigRef.current.get(id)
+        if (fromDb) return fromDb
+        return { id, is_enabled: true, threshold_value: defaultValue, threshold_unit: defaultUnit }
+    }
     const triggeredAlarmsRef = useRef<Set<string>>((() => {
         try {
             const stored = JSON.parse(localStorage.getItem('triggered_alarms') || '[]')
@@ -101,6 +118,39 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         })
         return () => subscription.unsubscribe()
     }, [])
+
+    // Load alarm config + subscribe to changes. Admin edits in
+    // AlarmInventoryModal flow through this realtime channel so the
+    // next polling tick uses the new thresholds without a reload.
+    useEffect(() => {
+        if (!session) return
+        let cancelled = false
+        const apply = (rows: AlarmConfigRow[] | null | undefined) => {
+            const map = new Map<string, AlarmConfigRow>()
+            for (const r of rows || []) map.set(r.id, r)
+            alarmConfigRef.current = map
+        }
+        ;(async () => {
+            const { data } = await supabase
+                .from('system_alarms')
+                .select('id, is_enabled, threshold_value, threshold_unit')
+            if (cancelled) return
+            apply(data as AlarmConfigRow[] | null)
+        })()
+        const channel = supabase
+            .channel('system-alarms-config')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'system_alarms' }, async () => {
+                const { data } = await supabase
+                    .from('system_alarms')
+                    .select('id, is_enabled, threshold_value, threshold_unit')
+                if (!cancelled) apply(data as AlarmConfigRow[] | null)
+            })
+            .subscribe()
+        return () => {
+            cancelled = true
+            supabase.removeChannel(channel)
+        }
+    }, [session])
 
     // Enable audio alerts
     const enableAudio = async () => {
@@ -273,20 +323,34 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             const now = new Date()
             now.setSeconds(0, 0)
 
-            // --- 1. CHECK RETURNS (10 mins AFTER due time) ---
-            // Triggers if return_date was 10 mins ago
-            // --- TIME CALCULATIONS ---
-            const tenMinutesAgo = new Date(now.getTime() - 10 * 60000)
+            // Per-alarm thresholds come from public.system_alarms (admin
+            // editable). Fall back to the historical defaults if the
+            // table hasn't been seeded yet.
+            const cfgCarWash       = getAlarmCfg('car_wash',       10, 'minutes_before')
+            const cfgReturnBefore  = getAlarmCfg('return_before',  10, 'minutes_before')
+            const cfgReturnAfter   = getAlarmCfg('return_after',   10, 'minutes_after')
+            const cfgDeposit       = getAlarmCfg('deposit',        10, 'minutes_before')
+            const cfgUnpaidPickup  = getAlarmCfg('unpaid_pickup',  10, 'minutes_before')
+
+            const returnAfterMs   = cfgReturnAfter.threshold_value * 60000
+            const tenMinutesAgo = new Date(now.getTime() - returnAfterMs)
             const tenMinutesAgoISO = tenMinutesAgo.toISOString()
             const tenMinutesAgoPlusOne = new Date(tenMinutesAgo.getTime() + 60000).toISOString()
 
-            const tenMinutesFuture = new Date(now.getTime() + 10 * 60000)
+            // "Future" window is per-alarm (each can have its own lead time).
+            // Default fallback: cfgReturnBefore.threshold_value.
+            const futureLeadMinReturn = cfgReturnBefore.threshold_value
+            const futureLeadMinDeposit = cfgDeposit.threshold_value
+            const futureLeadMinUnpaid = cfgUnpaidPickup.threshold_value
+            const futureLeadMinCarWash = cfgCarWash.threshold_value
+            // Pre-compute the most common (return) future window for the SQL queries below.
+            const tenMinutesFuture = new Date(now.getTime() + futureLeadMinReturn * 60000)
             const tenMinutesFutureISO = tenMinutesFuture.toISOString()
             const tenMinutesFuturePlusOne = new Date(tenMinutesFuture.getTime() + 60000).toISOString()
 
-            // --- 0. CHECK CAR WASH (10 mins BEFORE appointment) ---
+            // --- 0. CHECK CAR WASH (lead-time mins BEFORE appointment) ---
             // ONLY for external client washes, NOT rientro/internal washes
-
+            if (!cfgCarWash.is_enabled) { /* skip */ } else {
             const todayISO = now.toISOString().split('T')[0]
             const { data: carWash, error: carWashError } = await supabase
                 .from('bookings')
@@ -324,7 +388,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     if (triggeredAlarmsRef.current.has(trackingId)) continue
 
                     const diff = appointmentDateTime.getTime() - now.getTime()
-                    if (diff >= 600000 && diff < 660000) {
+                    const leadMs = futureLeadMinCarWash * 60000
+                    if (diff >= leadMs && diff < leadMs + 60000) {
                         markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
@@ -338,10 +403,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     }
                 }
             }
+            } /* end if cfgCarWash.is_enabled */
 
-            // --- 1A. CHECK RETURNS - 10 mins BEFORE return (pre-return warning) ---
+            // --- 1A. CHECK RETURNS - lead-time mins BEFORE return ---
             // Only active rentals (not completed, not car wash), and only if
             // alarm_triggered_at is null — ie. no admin has dismissed it yet.
+            if (!cfgReturnBefore.is_enabled) { /* skip */ } else {
             const { data: returnsBefore, error: returnsBeforeError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
@@ -376,10 +443,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     }
                 }
             }
+            } /* end if cfgReturnBefore.is_enabled */
 
-            // --- 1B. CHECK RETURNS - 10 mins AFTER return (second alarm, independent of before-alarm) ---
+            // --- 1B. CHECK RETURNS - lead-time mins AFTER return ---
             // Only active rentals (not completed, not car wash), and only if
             // alarm_triggered_at is null (same gating as §1A).
+            if (!cfgReturnAfter.is_enabled) { /* skip */ } else {
             const { data: returnsAfter, error: returnsAfterError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
@@ -414,9 +483,14 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     }
                 }
             }
+            } /* end if cfgReturnAfter.is_enabled */
 
-            // --- 2. CHECK DEPOSITS (10 mins BEFORE pickup time) ---
-            // Triggers if pickup_date is 10 mins in FUTURE
+            // --- 2. CHECK DEPOSITS (lead-time mins BEFORE pickup time) ---
+            if (!cfgDeposit.is_enabled) { /* skip */ } else {
+            // Per-alarm lead time may differ from return-before; recompute the window.
+            const depositFuture = new Date(now.getTime() + futureLeadMinDeposit * 60000)
+            const depositFutureISO = depositFuture.toISOString()
+            const depositFuturePlusOne = new Date(depositFuture.getTime() + 60000).toISOString()
 
             // We need to fetch bookings starting soon and check deposit in JS/JSON field
             const { data: pickups, error: pickupsError } = await supabase
@@ -424,8 +498,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 .select('id, customer_name, vehicle_name, pickup_date, status, booking_details, service_type')
                 .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
                 .not('service_type', 'eq', 'car_wash')
-                .gte('pickup_date', tenMinutesFutureISO)
-                .lt('pickup_date', tenMinutesFuturePlusOne)
+                .gte('pickup_date', depositFutureISO)
+                .lt('pickup_date', depositFuturePlusOne)
 
             if (!pickupsError && pickups && pickups.length > 0) {
                 for (const booking of pickups) {
@@ -443,7 +517,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     const pickupTime = new Date(booking.pickup_date)
                     pickupTime.setSeconds(0, 0)
 
-                    if (pickupTime.getTime() === tenMinutesFuture.getTime()) {
+                    if (pickupTime.getTime() === depositFuture.getTime()) {
                         markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
@@ -458,8 +532,14 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     }
                 }
             }
+            } /* end if cfgDeposit.is_enabled */
 
-            // --- 3. CHECK UNPAID PICKUP (10 mins BEFORE pickup) ---
+            // --- 3. CHECK UNPAID PICKUP (lead-time mins BEFORE pickup) ---
+            if (!cfgUnpaidPickup.is_enabled) { /* skip */ } else {
+            const unpaidFuture = new Date(now.getTime() + futureLeadMinUnpaid * 60000)
+            const unpaidFutureISO = unpaidFuture.toISOString()
+            const unpaidFuturePlusOne = new Date(unpaidFuture.getTime() + 60000).toISOString()
+
             // Per project rule, three payment values count as paid: paid, completed, succeeded.
             const { data: unpaidPickups, error: unpaidError } = await supabase
                 .from('bookings')
@@ -467,8 +547,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
                 .not('payment_status', 'in', '("paid","completed","succeeded")')
                 .not('service_type', 'eq', 'car_wash')
-                .gte('pickup_date', tenMinutesFutureISO)
-                .lt('pickup_date', tenMinutesFuturePlusOne)
+                .gte('pickup_date', unpaidFutureISO)
+                .lt('pickup_date', unpaidFuturePlusOne)
 
             if (!unpaidError && unpaidPickups && unpaidPickups.length > 0) {
                 for (const booking of unpaidPickups) {
@@ -479,7 +559,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     pickupTime.setSeconds(0, 0)
 
                     // Double check time match just in case
-                    if (pickupTime.getTime() === tenMinutesFuture.getTime()) {
+                    if (pickupTime.getTime() === unpaidFuture.getTime()) {
                         markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
@@ -494,6 +574,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     }
                 }
             }
+            } /* end if cfgUnpaidPickup.is_enabled */
 
         } catch (error) {
             console.error('Error checking alarms:', error)
@@ -510,8 +591,16 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
             if (error || !vehicles) return
 
-            const ALERT_THRESHOLD_KM = 1000
-            const ALERT_THRESHOLD_DAYS = 7
+            // Per-alarm config (admin editable). Falls back to historical
+            // defaults (1000 km / 7 days) if a row is missing.
+            const cfgService     = getAlarmCfg('fleet_service',      1000, 'km')
+            const cfgTiresFront  = getAlarmCfg('fleet_tires_front',  1000, 'km')
+            const cfgTiresRear   = getAlarmCfg('fleet_tires_rear',   1000, 'km')
+            const cfgBrakesFront = getAlarmCfg('fleet_brakes_front', 1000, 'km')
+            const cfgBrakesRear  = getAlarmCfg('fleet_brakes_rear',  1000, 'km')
+            const cfgInsurance   = getAlarmCfg('fleet_insurance',    7,    'days')
+            const cfgTax         = getAlarmCfg('fleet_tax',          7,    'days')
+            const cfgInspection  = getAlarmCfg('fleet_inspection',   7,    'days')
             const now = new Date()
 
             for (const vehicle of vehicles) {
@@ -519,12 +608,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 const vehicleId = vehicle.id
 
                 // Check Service (Tagliando)
-                if (vehicle.maintenance_service_interval_km) {
+                if (cfgService.is_enabled && vehicle.maintenance_service_interval_km) {
                     const lastService = vehicle.last_service_km || 0
                     const nextService = lastService + vehicle.maintenance_service_interval_km
                     const remaining = nextService - currentKm
 
-                    if (remaining <= ALERT_THRESHOLD_KM) {
+                    if (remaining <= cfgService.threshold_value) {
                         const trackingId = `fleet_service_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
@@ -548,12 +637,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 }
 
                 // Check Front Tires
-                if (vehicle.maintenance_tires_interval_km) {
+                if (cfgTiresFront.is_enabled && vehicle.maintenance_tires_interval_km) {
                     const lastTiresFront = vehicle.last_tire_change_front_km || vehicle.last_tire_change_km || 0
                     const nextTiresFront = lastTiresFront + vehicle.maintenance_tires_interval_km
                     const remainingFront = nextTiresFront - currentKm
 
-                    if (remainingFront <= ALERT_THRESHOLD_KM) {
+                    if (remainingFront <= cfgTiresFront.threshold_value) {
                         const trackingId = `fleet_tires_front_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
@@ -577,12 +666,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 }
 
                 // Check Rear Tires
-                if (vehicle.maintenance_tires_interval_km) {
+                if (cfgTiresRear.is_enabled && vehicle.maintenance_tires_interval_km) {
                     const lastTiresRear = vehicle.last_tire_change_rear_km || vehicle.last_tire_change_km || 0
                     const nextTiresRear = lastTiresRear + vehicle.maintenance_tires_interval_km
                     const remainingRear = nextTiresRear - currentKm
 
-                    if (remainingRear <= ALERT_THRESHOLD_KM) {
+                    if (remainingRear <= cfgTiresRear.threshold_value) {
                         const trackingId = `fleet_tires_rear_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
@@ -606,12 +695,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 }
 
                 // Check Front Brakes
-                if (vehicle.maintenance_brake_interval_km) {
+                if (cfgBrakesFront.is_enabled && vehicle.maintenance_brake_interval_km) {
                     const lastBrakesFront = vehicle.last_brake_change_front_km || vehicle.last_brake_change_km || 0
                     const nextBrakesFront = lastBrakesFront + vehicle.maintenance_brake_interval_km
                     const remainingFront = nextBrakesFront - currentKm
 
-                    if (remainingFront <= ALERT_THRESHOLD_KM) {
+                    if (remainingFront <= cfgBrakesFront.threshold_value) {
                         const trackingId = `fleet_brakes_front_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
@@ -635,12 +724,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 }
 
                 // Check Rear Brakes
-                if (vehicle.maintenance_brake_interval_km) {
+                if (cfgBrakesRear.is_enabled && vehicle.maintenance_brake_interval_km) {
                     const lastBrakesRear = vehicle.last_brake_change_rear_km || vehicle.last_brake_change_km || 0
                     const nextBrakesRear = lastBrakesRear + vehicle.maintenance_brake_interval_km
                     const remainingRear = nextBrakesRear - currentKm
 
-                    if (remainingRear <= ALERT_THRESHOLD_KM) {
+                    if (remainingRear <= cfgBrakesRear.threshold_value) {
                         const trackingId = `fleet_brakes_rear_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
@@ -664,11 +753,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 }
 
                 // Check Insurance
-                if (vehicle.insurance_expiry) {
+                if (cfgInsurance.is_enabled && vehicle.insurance_expiry) {
                     const expiryDate = new Date(vehicle.insurance_expiry)
                     const daysRemaining = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
-                    if (daysRemaining <= ALERT_THRESHOLD_DAYS) {
+                    if (daysRemaining <= cfgInsurance.threshold_value) {
                         const trackingId = `fleet_insurance_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
@@ -692,11 +781,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 }
 
                 // Check Tax (Bollo)
-                if (vehicle.tax_expiry) {
+                if (cfgTax.is_enabled && vehicle.tax_expiry) {
                     const expiryDate = new Date(vehicle.tax_expiry)
                     const daysRemaining = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
-                    if (daysRemaining <= ALERT_THRESHOLD_DAYS) {
+                    if (daysRemaining <= cfgTax.threshold_value) {
                         const trackingId = `fleet_tax_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
@@ -720,11 +809,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 }
 
                 // Check Inspection (Revisione)
-                if (vehicle.inspection_expiry) {
+                if (cfgInspection.is_enabled && vehicle.inspection_expiry) {
                     const expiryDate = new Date(vehicle.inspection_expiry)
                     const daysRemaining = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
-                    if (daysRemaining <= ALERT_THRESHOLD_DAYS) {
+                    if (daysRemaining <= cfgInspection.threshold_value) {
                         const trackingId = `fleet_inspection_${vehicleId}`
                         if (triggeredAlarmsRef.current.has(trackingId)) continue
 
