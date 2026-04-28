@@ -191,14 +191,11 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // 3. Calculate fleet occupation for this category over the BOOKING'S
-    //    MONTH(s), not just the exact pickup→dropoff window. Otherwise a
-    //    preventivo made today for August (when no future August bookings
-    //    exist yet) returns occupancyPct = 0% — and the coefficient brackets
-    //    treat August as low-occupancy when in reality it's high season.
-    //    Widening to the calendar month captures the period's real demand
-    //    pattern (and across multiple months for long bookings, takes the
-    //    union of busy vehicles in any of them).
+    // 3. Calculate fleet occupation for this category over the calendar
+    //    month CONTAINING THE PICKUP DATE. Even if the booking spans into
+    //    the next month, we measure the pickup month's occupancy — the
+    //    coefficient is meant to reflect "how booked is this period" and
+    //    the period the customer cares about is when they're starting.
     const vehicleCategory = vehicle.category || 'urban'
 
     const { data: categoryVehicles } = await supabase
@@ -209,17 +206,16 @@ export const handler: Handler = async (event) => {
 
     const totalInCategory = categoryVehicles?.length || 1
 
-    // Expand the window to cover every calendar month touched by the booking.
+    // Window = first day of pickup month → last day of pickup month.
     const pickupForMonth = new Date(pickup_date)
-    const dropoffForMonth = new Date(dropoff_date)
     const monthStart = new Date(Date.UTC(
       pickupForMonth.getUTCFullYear(),
       pickupForMonth.getUTCMonth(),
       1, 0, 0, 0, 0
     )).toISOString()
     const monthEnd = new Date(Date.UTC(
-      dropoffForMonth.getUTCFullYear(),
-      dropoffForMonth.getUTCMonth() + 1,
+      pickupForMonth.getUTCFullYear(),
+      pickupForMonth.getUTCMonth() + 1,
       0, 23, 59, 59, 999
     )).toISOString()
 
