@@ -5951,9 +5951,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const pickupTime = e.target.value
                       const returnTime = calculateReturnTime(pickupTime)
                       setFormData(prev => ({ ...prev, pickup_time: pickupTime, return_time: returnTime }))
+                      if (!isInRentalHours(formData.pickup_date, pickupTime, 'pickup')) {
+                        toast(`⚠️ Ritiro alle ${pickupTime} è FUORI ORARIO standard`, { icon: '⚠️', duration: 4000, style: { background: '#7f1d1d', color: '#fff' } })
+                      }
                     }}
                     options={buildRentalTimeOptions(formData.pickup_date, 'pickup')}
                   />
+                  {!isInRentalHours(formData.pickup_date, formData.pickup_time, 'pickup') && formData.pickup_time && formData.pickup_date && (
+                    <p className="text-xs text-red-400 mt-1 font-semibold">
+                      ⚠️ FUORI ORARIO — il ritiro alle {formData.pickup_time} non è in orario di apertura
+                      {(() => {
+                        const r = rentalHoursFor(formData.pickup_date, 'pickup')
+                        if (!r) return ' (Domenica chiuso)'
+                        const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
+                        return ` (orari: ${r.map(([a,b]) => `${fmt(a)}-${fmt(b)}`).join(' / ')})`
+                      })()}
+                    </p>
+                  )}
                   <p className="text-xs text-green-400 mt-1">Admin: Qualsiasi orario disponibile · 🔴 = fuori orario standard</p>
                 </div>
                 <Select
@@ -6021,9 +6035,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     label="Ora Riconsegna"
                     required
                     value={formData.return_time}
-                    onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, return_time: v })) }}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setFormData(prev => ({ ...prev, return_time: v }))
+                      if (!isInRentalHours(formData.return_date, v, 'return')) {
+                        toast(`⚠️ Riconsegna alle ${v} è FUORI ORARIO standard`, { icon: '⚠️', duration: 4000, style: { background: '#7f1d1d', color: '#fff' } })
+                      }
+                    }}
                     options={buildRentalTimeOptions(formData.return_date, 'return')}
                   />
+                  {!isInRentalHours(formData.return_date, formData.return_time, 'return') && formData.return_time && formData.return_date && (
+                    <p className="text-xs text-red-400 mt-1 font-semibold">
+                      ⚠️ FUORI ORARIO — la riconsegna alle {formData.return_time} non è in orario di apertura
+                      {(() => {
+                        const r = rentalHoursFor(formData.return_date, 'return')
+                        if (!r) return ' (Domenica chiuso)'
+                        const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
+                        return ` (orari: ${r.map(([a,b]) => `${fmt(a)}-${fmt(b)}`).join(' / ')})`
+                      })()}
+                    </p>
+                  )}
                   <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
                   <p className="text-xs text-green-400">Admin: Qualsiasi orario disponibile · 🔴 = fuori orario standard</p>
                 </div>
