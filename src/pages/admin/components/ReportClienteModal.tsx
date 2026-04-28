@@ -163,19 +163,31 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
         setWalletRecharges(purchases || [])
       }
 
-      // DR7 Club membership check
+      // DR7 CLUB PRIVILEGE membership check — try the function first, then
+      // fall back to a direct dr7_club_subscriptions query so the gate
+      // resolves even when the list function is unreachable / RLS-blocked.
+      let resolvedIsClub = false
       try {
         const clubRes = await fetch('/.netlify/functions/list-club-members')
         if (clubRes.ok) {
           const clubData = await clubRes.json()
           const members = clubData.members || []
-          const isClub = members.some((m: { user_id?: string; email?: string }) =>
+          resolvedIsClub = members.some((m: { user_id?: string; email?: string }) =>
             (walletUserId && m.user_id === walletUserId) ||
             (email && m.email?.toLowerCase() === email.toLowerCase())
           )
-          setIsDR7Club(isClub)
         }
-      } catch { /* club check failed */ }
+      } catch { /* function unreachable — fall through to direct query */ }
+      if (!resolvedIsClub && walletUserId) {
+        const { data: directSub } = await supabase
+          .from('dr7_club_subscriptions')
+          .select('id, status')
+          .eq('user_id', walletUserId)
+          .eq('status', 'active')
+          .maybeSingle()
+        if (directSub?.id) resolvedIsClub = true
+      }
+      setIsDR7Club(resolvedIsClub)
 
       // Documents
       const { data: docs } = await supabase.from('customer_documents').select('*').eq('customer_id', customerId)
@@ -402,7 +414,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xl font-bold text-theme-text-primary">{customerName}</h2>
                 {statusBadge(customer.status_cliente)}
-                {isDR7Club && <span className="px-2 py-1 rounded-full text-xs font-bold bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/50">DR7 Club</span>}
+                {isDR7Club && <span className="px-2 py-1 rounded-full text-xs font-bold bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/50">DR7 CLUB PRIVILEGE</span>}
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-bold border ${clubTier.badge}`}
                   title={`Pagato con carta ultimi 12 mesi: ${fmtEur(clubTier.annualSpend)} (prenotazioni ${fmtEur(clubTier.cardBookingSpend)} + ricariche ${fmtEur(clubTier.rechargeSpend)} × ${clubTier.rechargeCount})${clubTier.nextThreshold ? ` · ${fmtEur(clubTier.nextThreshold - clubTier.annualSpend)} al livello successivo` : ''}`}
@@ -579,7 +591,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     <div className="rounded-xl border border-dr7-gold/40 bg-dr7-gold/5 p-4">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-bold text-dr7-gold uppercase tracking-wider">
-                          DR7 Club — Interesse Wallet (0,1%/giorno)
+                          DR7 CLUB PRIVILEGE — Interesse Wallet (0,1%/giorno)
                         </h3>
                         <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">
                           Pagamento il 1° del mese
@@ -782,7 +794,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 return (
                   <div>
                     <h3 className="text-sm font-bold text-dr7-gold uppercase tracking-wider mb-3">
-                      DR7 Club — Interesse Wallet (0.1%/giorno)
+                      DR7 CLUB PRIVILEGE — Interesse Wallet (0,1%/giorno)
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                       <div className="rounded-lg border border-dr7-gold/40 bg-dr7-gold/5 p-3">

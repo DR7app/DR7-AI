@@ -99,7 +99,7 @@ const handler: Handler = async () => {
                     transaction_type: 'credit',
                     amount: payoutEur,
                     balance_after: newBalance,
-                    description: `DR7 Club — interesse mensile ${label} (0.1%/giorno)`,
+                    description: `DR7 CLUB PRIVILEGE — interesse mensile ${label} (0,1%/giorno)`,
                     reference_type: 'club_interest_payout',
                 })
                 .select('id')
