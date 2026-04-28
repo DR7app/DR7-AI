@@ -100,12 +100,17 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
-  const { role: adminRole, canViewFinancials } = useAdminRole()
+  const { role: adminRole, canViewFinancials, loading: roleLoading } = useAdminRole()
 
   // RBAC: tabs restricted to superadmin
   const financialTabs: TabType[] = ['fattura', 'nexi', 'unpaid', 'cauzioni']
   const adminOnlyTabs: TabType[] = ['reports', 'report-noleggio', 'report-lavaggio', 'report-clienti']
   const isTabRestricted = (tab: TabType) => {
+    // Don't lock the user out while the role is still loading — defaults
+    // are role='admin', canViewFinancials=false, which would briefly flash
+    // "Accesso non autorizzato" on every page load before useAdminRole's
+    // useEffect resolves the actual permissions from the DB.
+    if (roleLoading) return false
     if (adminRole === 'superadmin') return false
     if (financialTabs.includes(tab) && !canViewFinancials) return true
     if (adminOnlyTabs.includes(tab)) return true
