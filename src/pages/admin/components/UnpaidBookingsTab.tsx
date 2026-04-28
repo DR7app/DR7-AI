@@ -377,13 +377,6 @@ export default function UnpaidBookingsTab() {
         // even though they still owe money.
         if (!isPaid(booking.payment_status)) return true
 
-        // Cauzione still to collect counts as unpaid even when the rental
-        // itself has been paid — otherwise a booking with deposit_status
-        // 'da_incassare' would silently drop out of "In attesa di pagamento".
-        const depositAmount = Number(booking.deposit ?? booking.booking_details?.deposit ?? 0) || 0
-        const depositStatus = String(booking.deposit_status ?? booking.booking_details?.deposit_status ?? '').toLowerCase()
-        if (depositStatus === 'da_incassare' && depositAmount > 0) return true
-
         const extensions = booking.booking_details?.extension_history || []
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')) return true
