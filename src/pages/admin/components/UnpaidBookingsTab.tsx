@@ -112,6 +112,19 @@ export default function UnpaidBookingsTab() {
   const [partialLinkKey, setPartialLinkKey] = useState<string | null>(null)
   const [partialLinkValue, setPartialLinkValue] = useState('')
 
+  // Payment-method picker (asked before any "Segna Pagato" / "Salda Tutto"
+  // path so the booking row is stamped with HOW the customer paid).
+  const [payMethodPicker, setPayMethodPicker] = useState<{
+    description: string
+    onConfirm: (method: string) => void | Promise<void>
+  } | null>(null)
+  const [selectedPayMethod, setSelectedPayMethod] = useState<string>('Contanti')
+
+  function askPaymentMethod(description: string, onConfirm: (method: string) => void | Promise<void>) {
+    setSelectedPayMethod('Contanti')
+    setPayMethodPicker({ description, onConfirm })
+  }
+
   useEffect(() => {
     loadUnpaidBookings()
 
@@ -392,7 +405,7 @@ export default function UnpaidBookingsTab() {
 
   // ── Payment & Delete functions (preserved) ─────────────────────────────────
 
-  async function updatePaymentStatus(bookingId: string, newStatus: string) {
+  async function updatePaymentStatus(bookingId: string, newStatus: string, paymentMethod?: string) {
     try {
       // When marking paid, also set amount_paid = price_total so the calendar
       // detail panel (and any other consumer that computes remaining as
@@ -403,6 +416,9 @@ export default function UnpaidBookingsTab() {
         payment_status: newStatus,
         status: newStatus === 'paid' ? 'confirmed' : 'pending',
         updated_at: new Date().toISOString()
+      }
+      if (paymentMethod) {
+        updatePayload.payment_method = paymentMethod
       }
       if (newStatus === 'paid') {
         const { data: bookingRow } = await supabase
@@ -1385,7 +1401,7 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  async function markAllCustomerPaid(group: CustomerGroup) {
+  async function markAllCustomerPaid(group: CustomerGroup, paymentMethod?: string) {
     const key = `allcustomer:${group.customerKey}`
     if (processingKey) return
     setProcessingKey(key)
@@ -1517,10 +1533,12 @@ export default function UnpaidBookingsTab() {
 
       // 6. Fattura succeeded (or no items) — NOW mark everything as paid in DB
       for (const { bookingId, extensions, booking } of noleggioUpdates) {
-        await supabase.from('bookings').update({
+        const noleggioUpdate: Record<string, unknown> = {
           payment_status: 'paid', status: 'confirmed',
           booking_details: { ...booking.booking_details, extension_history: extensions }
-        }).eq('id', bookingId)
+        }
+        if (paymentMethod) noleggioUpdate.payment_method = paymentMethod
+        await supabase.from('bookings').update(noleggioUpdate).eq('id', bookingId)
 
         // Each newly-paid rental needs its contract regenerated and the firma
         // link re-sent to the customer. Same pipeline used by the single-booking
@@ -1552,9 +1570,9 @@ export default function UnpaidBookingsTab() {
       }
 
       for (const pwId of primeWashBookingIds) {
-        await supabase.from('bookings').update({
-          payment_status: 'paid', status: 'confirmed'
-        }).eq('id', pwId)
+        const pwUpdate: Record<string, unknown> = { payment_status: 'paid', status: 'confirmed' }
+        if (paymentMethod) pwUpdate.payment_method = paymentMethod
+        await supabase.from('bookings').update(pwUpdate).eq('id', pwId)
       }
 
       for (const [bookingId, { booking, indices }] of penaliBookingUpdates) {
@@ -2217,7 +2235,10 @@ export default function UnpaidBookingsTab() {
               <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-blue-500/10">
                 {isPending && (
                   <button
-                    onClick={() => updatePaymentStatus(booking.id, 'paid')}
+                    onClick={() => askPaymentMethod(
+                      `Pagato — €${(remainingCents / 100).toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
+                      (method) => updatePaymentStatus(booking.id, 'paid', method)
+                    )}
                     className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                   >Pagato</button>
                 )}
@@ -2324,7 +2345,10 @@ export default function UnpaidBookingsTab() {
 
               <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-cyan-500/10">
                 <button
-                  onClick={() => updatePaymentStatus(booking.id, 'paid')}
+                  onClick={() => askPaymentMethod(
+                    `Pagato — €${(remainingCents / 100).toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
+                    (method) => updatePaymentStatus(booking.id, 'paid', method)
+                  )}
                   className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                 >Pagato</button>
                 <button
@@ -2729,7 +2753,10 @@ export default function UnpaidBookingsTab() {
                   {/* Salda Tutto button */}
                   {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 ? (
                     <button
-                      onClick={() => markAllCustomerPaid(group)}
+                      onClick={() => askPaymentMethod(
+                        `Salda Tutto — €${(group.totalRemaining / 100).toFixed(2)} per ${group.customerName}`,
+                        (method) => markAllCustomerPaid(group, method)
+                      )}
                       disabled={!!processingKey}
                       className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >{processingKey ? 'Elaborazione...' : 'Salda Tutto — Fattura Unica'}</button>
@@ -2737,7 +2764,10 @@ export default function UnpaidBookingsTab() {
                     /* Single booking: Segna Pagato (car rental triggers fattura + contract + signing link) */
                     group.noleggioBookings[0] && (
                       <button
-                        onClick={() => updatePaymentStatus(group.noleggioBookings[0].id, 'paid')}
+                        onClick={() => askPaymentMethod(
+                          `Segna Pagato — €${(group.totalRemaining / 100).toFixed(2)} per ${group.customerName}`,
+                          (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method)
+                        )}
                         className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
                       >Segna Pagato</button>
                     )
@@ -2843,7 +2873,10 @@ export default function UnpaidBookingsTab() {
                     )}
                     {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 ? (
                       <button
-                        onClick={() => markAllCustomerPaid(group)}
+                        onClick={() => askPaymentMethod(
+                          `Salda Tutto — €${(group.totalRemaining / 100).toFixed(2)} per ${group.customerName}`,
+                          (method) => markAllCustomerPaid(group, method)
+                        )}
                         disabled={!!processingKey}
                         className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
@@ -2851,7 +2884,10 @@ export default function UnpaidBookingsTab() {
                       /* Single booking: show direct "Segna Pagato" button */
                       group.noleggioBookings[0] && (
                         <button
-                          onClick={() => updatePaymentStatus(group.noleggioBookings[0].id, 'paid')}
+                          onClick={() => askPaymentMethod(
+                            `Segna Pagato — €${(group.totalRemaining / 100).toFixed(2)} per ${group.customerName}`,
+                            (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method)
+                          )}
                           className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
                         >Segna Pagato</button>
                       )
@@ -2904,6 +2940,46 @@ export default function UnpaidBookingsTab() {
           </table>
         </div>
       </div>
+
+      {/* Payment-method picker — opens before any "Segna Pagato" / "Salda Tutto"
+          path so the booking row is stamped with HOW the customer paid. */}
+      {payMethodPicker && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-6 w-full max-w-sm space-y-4">
+            <h3 className="text-lg font-bold text-theme-text-primary">Come è stato pagato?</h3>
+            <p className="text-sm text-theme-text-muted">{payMethodPicker.description}</p>
+            <div>
+              <label className="block text-xs text-theme-text-muted mb-1">Metodo di pagamento</label>
+              <select
+                value={selectedPayMethod}
+                onChange={e => setSelectedPayMethod(e.target.value)}
+                className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-green-500"
+              >
+                <option value="Contanti">Contanti</option>
+                <option value="Bonifico">Bonifico</option>
+                <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
+                <option value="Credit Wallet">Credit Wallet</option>
+                <option value="Paypal">Paypal</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setPayMethodPicker(null)}
+                className="px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-primary text-theme-text-primary rounded-lg text-sm font-medium transition-colors"
+              >Annulla</button>
+              <button
+                onClick={async () => {
+                  const method = selectedPayMethod
+                  const onConfirm = payMethodPicker.onConfirm
+                  setPayMethodPicker(null)
+                  await onConfirm(method)
+                }}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
+              >Conferma</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Addebito Modal */}
       {showAddebitoModal && addebitoGroup && (
