@@ -25,6 +25,11 @@ export default function GestioneOtpTab() {
     const [loading, setLoading] = useState(true)
     const [savingId, setSavingId] = useState<string | null>(null)
     const [editing, setEditing] = useState<Record<string, Partial<OtpRow>>>({})
+    const [showCreate, setShowCreate] = useState(false)
+    const [creating, setCreating] = useState(false)
+    const [newRow, setNewRow] = useState<{ id: string; label: string; used_in: string; reason: string }>({
+        id: '', label: '', used_in: '', reason: '',
+    })
 
     useEffect(() => {
         let cancelled = false
@@ -104,6 +109,54 @@ export default function GestioneOtpTab() {
         await reloadOtpConfig()
     }
 
+    const slugifyId = (raw: string) =>
+        raw.toLowerCase().trim().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80)
+
+    const createNew = async () => {
+        const id = slugifyId(newRow.id || newRow.label)
+        if (!id) { toast.error('Inserisci un ID o una label'); return }
+        if (!newRow.label.trim()) { toast.error('Inserisci una label'); return }
+        if (rows.some(r => r.id === id)) { toast.error(`OTP con id "${id}" esiste già`); return }
+        setCreating(true)
+        const maxOrder = rows.reduce((m, r) => Math.max(m, r.sort_order || 0), 0)
+        const { error } = await supabase
+            .from('system_otp_overrides')
+            .insert({
+                id,
+                label: newRow.label.trim(),
+                used_in: newRow.used_in.trim() || '—',
+                reason: newRow.reason.trim() || '—',
+                is_required: true,
+                sort_order: maxOrder + 10,
+            })
+        setCreating(false)
+        if (error) {
+            toast.error('Creazione fallita: ' + error.message)
+            return
+        }
+        toast.success(`OTP "${id}" creato`)
+        setNewRow({ id: '', label: '', used_in: '', reason: '' })
+        setShowCreate(false)
+        await reloadOtpConfig()
+    }
+
+    const removeRow = async (row: OtpRow) => {
+        if (!confirm(`Eliminare l'OTP "${row.label}" (${row.id})?\n\nLa limitazione corrispondente non verrà più protetta da OTP nel codice che la richiede.`)) return
+        setSavingId(row.id)
+        const { error } = await supabase
+            .from('system_otp_overrides')
+            .delete()
+            .eq('id', row.id)
+        setSavingId(null)
+        if (error) {
+            toast.error('Eliminazione fallita: ' + error.message)
+            return
+        }
+        toast.success('Eliminato')
+        setRows(prev => prev.filter(r => r.id !== row.id))
+        await reloadOtpConfig()
+    }
+
     const requiredCount = rows.filter(r => r.is_required).length
     const disabledCount = rows.length - requiredCount
 
@@ -120,8 +173,83 @@ export default function GestioneOtpTab() {
                 <div className="flex items-center gap-3 text-xs">
                     <span className="px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30 text-green-400">{requiredCount} OTP attivi</span>
                     <span className="px-3 py-1.5 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-muted">{disabledCount} disattivati</span>
+                    <button
+                        type="button"
+                        onClick={() => setShowCreate(v => !v)}
+                        className="px-3 py-1.5 rounded-full bg-dr7-gold text-white font-semibold hover:opacity-90"
+                    >
+                        {showCreate ? 'Annulla' : '+ Aggiungi OTP'}
+                    </button>
                 </div>
             </div>
+
+            {showCreate && (
+                <div className="rounded-lg border border-dr7-gold/30 bg-dr7-gold/5 p-4 space-y-3">
+                    <h3 className="text-sm font-semibold text-theme-text-primary">Nuovo OTP</h3>
+                    <p className="text-xs text-theme-text-muted">
+                        L'OTP viene salvato come riga in <code className="bg-theme-bg-tertiary px-1 rounded">system_otp_overrides</code>.
+                        Per attivarsi su un'azione admin il codice deve chiamare <code className="bg-theme-bg-tertiary px-1 rounded">requestOverride('{newRow.id || 'tuo_id'}', '...')</code> nel relativo punto del frontend.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label className="text-xs text-theme-text-muted">
+                            ID univoco (snake_case)
+                            <input
+                                type="text"
+                                value={newRow.id}
+                                onChange={e => setNewRow(r => ({ ...r, id: e.target.value }))}
+                                placeholder="es. blocca_modifica_dopo_pagamento"
+                                className="mt-1 w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
+                            />
+                        </label>
+                        <label className="text-xs text-theme-text-muted">
+                            Label (mostrata nel modal OTP)
+                            <input
+                                type="text"
+                                value={newRow.label}
+                                onChange={e => setNewRow(r => ({ ...r, label: e.target.value }))}
+                                placeholder="es. Modifica dopo pagamento"
+                                className="mt-1 w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
+                            />
+                        </label>
+                        <label className="text-xs text-theme-text-muted sm:col-span-2">
+                            Dove suona
+                            <input
+                                type="text"
+                                value={newRow.used_in}
+                                onChange={e => setNewRow(r => ({ ...r, used_in: e.target.value }))}
+                                placeholder="es. Tab Prenotazioni > tasto Modifica"
+                                className="mt-1 w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
+                            />
+                        </label>
+                        <label className="text-xs text-theme-text-muted sm:col-span-2">
+                            Motivo (mostrato all'admin che chiede l'OTP)
+                            <textarea
+                                rows={2}
+                                value={newRow.reason}
+                                onChange={e => setNewRow(r => ({ ...r, reason: e.target.value }))}
+                                placeholder="es. Modificare un noleggio dopo l'incasso richiede approvazione direzionale."
+                                className="mt-1 w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-secondary text-sm"
+                            />
+                        </label>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <button
+                            onClick={() => { setShowCreate(false); setNewRow({ id: '', label: '', used_in: '', reason: '' }) }}
+                            disabled={creating}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary"
+                        >
+                            Annulla
+                        </button>
+                        <button
+                            onClick={createNew}
+                            disabled={creating}
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                            {creating ? 'Creazione…' : 'Crea OTP'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-300">
                 ⚠ Disattivare un OTP riduce la sicurezza: la limitazione corrispondente verrà bypassata silenziosamente.
@@ -182,24 +310,33 @@ export default function GestioneOtpTab() {
                                     />
                                 </div>
 
-                                {dirty && (
-                                    <div className="mt-3 flex items-center justify-end gap-2">
-                                        <button
-                                            onClick={() => setEditing(prev => { const n = { ...prev }; delete n[row.id]; return n })}
-                                            disabled={saving}
-                                            className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary"
-                                        >
-                                            Annulla
-                                        </button>
-                                        <button
-                                            onClick={() => save(row)}
-                                            disabled={saving}
-                                            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50"
-                                        >
-                                            {saving ? 'Salvataggio…' : 'Salva'}
-                                        </button>
-                                    </div>
-                                )}
+                                <div className="mt-3 flex items-center justify-between gap-2">
+                                    <button
+                                        onClick={() => removeRow(row)}
+                                        disabled={saving}
+                                        className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 disabled:opacity-50"
+                                    >
+                                        Elimina
+                                    </button>
+                                    {dirty && (
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setEditing(prev => { const n = { ...prev }; delete n[row.id]; return n })}
+                                                disabled={saving}
+                                                className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary"
+                                            >
+                                                Annulla
+                                            </button>
+                                            <button
+                                                onClick={() => save(row)}
+                                                disabled={saving}
+                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50"
+                                            >
+                                                {saving ? 'Salvataggio…' : 'Salva'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </li>
                         )
                     })}
