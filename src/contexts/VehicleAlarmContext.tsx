@@ -36,6 +36,7 @@ interface AlarmState {
 interface VehicleAlarmContextType {
     alarmState: AlarmState
     enableAudio: () => void
+    disableAudio: () => void
     stopAlarm: (bookingId: string) => void
     markReturned: (bookingId: string) => Promise<{ ok: boolean; error?: string }>
 }
@@ -61,6 +62,13 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const [session, setSession] = useState<Session | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const audioContextRef = useRef<AudioContext | null>(null)
+
+    // Mirror audioEnabled in a ref so the polling closure (frozen at
+    // session-set time) sees the current value when the user toggles it
+    // mid-session. Without this, clicking "Attiva audio" silently does
+    // nothing for the running interval.
+    const audioEnabledRef = useRef<boolean>(alarmState.audioEnabled)
+    useEffect(() => { audioEnabledRef.current = alarmState.audioEnabled }, [alarmState.audioEnabled])
 
     // Live admin-editable alarm config from public.system_alarms.
     // Falls back to hardcoded defaults (10 min / 1000 km / 7 days) if the
@@ -195,6 +203,19 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
     }
 
+    // Disable audio entirely (counterpart to enableAudio).
+    // Stops any current alarm sound and clears the localStorage flag so
+    // future browser sessions also start with audio off.
+    const disableAudio = () => {
+        if (audioRef.current) {
+            audioRef.current.pause()
+            audioRef.current.currentTime = 0
+        }
+        localStorage.setItem('audioAlertsEnabled', 'false')
+        setAlarmState(prev => ({ ...prev, audioEnabled: false, isPlaying: false }))
+        toast.success('Allarmi audio disattivati. Le notifiche visive restano attive.')
+    }
+
     // Stop alarm
     const stopAlarm = async (bookingId: string) => {
         // Stop audio
@@ -274,7 +295,10 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const playAlarm = (booking: AlarmBooking) => {
         // Triggering alarm
 
-        if (!alarmState.audioEnabled) {
+        // Read from ref — `alarmState.audioEnabled` is a stale closure
+        // when this is invoked from the polling interval set up at
+        // session-establishment time.
+        if (!audioEnabledRef.current) {
             // Audio not enabled, visual notification only
         } else {
             try {
@@ -904,7 +928,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     }, [])
 
     return (
-        <VehicleAlarmContext.Provider value={{ alarmState, enableAudio, stopAlarm, markReturned }}>
+        <VehicleAlarmContext.Provider value={{ alarmState, enableAudio, disableAudio, stopAlarm, markReturned }}>
             {children}
         </VehicleAlarmContext.Provider>
     )
