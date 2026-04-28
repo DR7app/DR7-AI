@@ -2360,7 +2360,27 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
 
       {/* Dates */}
       <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 ${slotUnavailableWarning ? 'p-3 rounded-lg border-2 border-red-500/60 bg-red-500/5' : ''}`}>
-        <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => setForm(prev => ({ ...prev, pickup_date: e.target.value }))} />
+        <Input label="Data Ritiro *" type="date" value={form.pickup_date} onChange={(e) => {
+          const newPickup = e.target.value
+          // Auto-advance return date to the day after pickup unless the
+          // admin already configured a longer rental (return strictly
+          // after the new pickup date).
+          let nextReturn = ''
+          if (newPickup) {
+            const d = new Date(newPickup + 'T12:00:00')
+            d.setDate(d.getDate() + 1)
+            nextReturn = d.toISOString().split('T')[0]
+          }
+          setForm(prev => {
+            const currentReturn = prev.return_date
+            const keepCurrent = currentReturn && currentReturn > newPickup
+            return {
+              ...prev,
+              pickup_date: newPickup,
+              return_date: keepCurrent ? currentReturn : nextReturn,
+            }
+          })
+        }} />
         <Select label="Ora Ritiro" value={form.pickup_time} onChange={(e) => {
           const newPickupTime = e.target.value
           const [h, m] = newPickupTime.split(':').map(Number)
