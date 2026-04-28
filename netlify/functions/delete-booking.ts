@@ -64,6 +64,23 @@ export const handler: Handler = async (event) => {
             .eq('booking_id', bookingId)
         if (buonoError) console.warn('[delete-booking] Buono restore warning:', buonoError.message)
 
+        // Drop any pending cauzioni ("da incassare") linked to this booking.
+        // We only delete rows that haven't been collected yet (data_incasso IS NULL)
+        // and aren't already in a closed state — keeping financial records intact
+        // for cauzioni that have already been Incassata/Restituita/Sbloccata/Bloccata.
+        const { data: deletedCauzioni, error: cauzErr } = await supabase
+            .from('cauzioni')
+            .delete()
+            .eq('riferimento_contratto_id', bookingId)
+            .is('data_incasso', null)
+            .not('stato', 'in', '("Incassata","Restituita","Sbloccata","Bloccata","Danno")')
+            .select('id, stato, importo')
+        if (cauzErr) {
+            console.warn('[delete-booking] Cauzioni cleanup warning:', cauzErr.message)
+        } else if (deletedCauzioni && deletedCauzioni.length > 0) {
+            console.log(`[delete-booking] Removed ${deletedCauzioni.length} pending cauzione(i) linked to booking ${bookingId}`)
+        }
+
         if (error) {
             console.error('[delete-booking] Supabase error:', error)
             return {
