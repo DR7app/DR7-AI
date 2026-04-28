@@ -5225,6 +5225,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       insurance_option: 'KASKO_BASE',
       deposit: '0',
       deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
+      deposit_option_id: '',
       unlimited_km: false,
       km_limit: DEFAULT_KM_LIMIT,
       // Home Delivery & Pickup
