@@ -73,24 +73,58 @@ const reminderHandler: Handler = async () => {
                 continue
             }
 
-            // Check if contract already has a signed request (avoid reminding after signature)
+            // Check if the BOOKING already has a signed request anywhere
+            // (not just the same contract_id). A booking modification creates
+            // a NEW contract row + new signature_request and supersedes the
+            // old one — but if the supersede write silently failed (e.g.
+            // missing CHECK constraint allowing 'superseded' status), the old
+            // row would still be 'pending' here and the customer would get a
+            // reminder despite having already signed the new contract.
+            //
+            // Real-world example: Campagnola signed the regenerated contract,
+            // the previous pending request was never marked superseded, so
+            // the cron found it still 'pending' and sent the stale reminder.
+            //
+            // Cover three "already done" signals so the reminder never fires
+            // again after the customer has signed:
+            //   1. Any signed signature on this contract_id (original logic)
+            //   2. Any signed signature on the same booking_id (covers
+            //      contract regeneration → new contract row)
+            //   3. The booking itself is already in a final state
+            //      (status='confirmed' or fully paid) — extra belt-and-braces
+            const checks: Array<Promise<{ data: { id: string } | null }>> = []
             if (req.contract_id) {
-                const { data: signedReq } = await supabase
-                    .from('signature_requests')
-                    .select('id')
-                    .eq('contract_id', req.contract_id)
-                    .eq('status', 'signed')
-                    .limit(1)
-                    .maybeSingle()
-
-                if (signedReq) {
-                    console.log(`[signature-reminder] Contract already signed (request ${signedReq.id}), cancelling stale request ${req.id}`)
-                    await supabase
+                checks.push(
+                    supabase
                         .from('signature_requests')
-                        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-                        .eq('id', req.id)
-                    continue
-                }
+                        .select('id')
+                        .eq('contract_id', req.contract_id)
+                        .eq('status', 'signed')
+                        .limit(1)
+                        .maybeSingle() as unknown as Promise<{ data: { id: string } | null }>
+                )
+            }
+            if (req.booking_id) {
+                checks.push(
+                    supabase
+                        .from('signature_requests')
+                        .select('id')
+                        .eq('booking_id', req.booking_id)
+                        .eq('status', 'signed')
+                        .limit(1)
+                        .maybeSingle() as unknown as Promise<{ data: { id: string } | null }>
+                )
+            }
+
+            const results = checks.length > 0 ? await Promise.all(checks) : []
+            const alreadySigned = results.find(r => r.data?.id)
+            if (alreadySigned?.data?.id) {
+                console.log(`[signature-reminder] Already-signed signature found (${alreadySigned.data.id}) for booking_id=${req.booking_id} — cancelling stale request ${req.id}`)
+                await supabase
+                    .from('signature_requests')
+                    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                    .eq('id', req.id)
+                continue
             }
 
             // Get contract number
