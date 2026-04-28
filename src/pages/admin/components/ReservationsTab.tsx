@@ -114,6 +114,54 @@ export const TIME_OPTIONS = Array.from({ length: 96 }).map((_, i) => {
   return { value: time, label: time }
 })
 
+// Rental schedule (per-kind) used to flag out-of-hours slots in the booking
+// form. Admin can still pick any slot — flagged ones just get a loud label
+// + red styling so the choice is deliberate.
+//   PICKUP  Mon-Fri: 10:30-12:30 / 16:30-18:30
+//   PICKUP  Sat:     10:30-16:30
+//   RETURN  Mon-Fri: 09:00-11:00 / 15:00-17:00
+//   RETURN  Sat:     09:00-15:00
+const PICKUP_HOURS_WEEKDAY: [number, number][] = [[10*60+30, 12*60+30], [16*60+30, 18*60+30]]
+const PICKUP_HOURS_SATURDAY: [number, number][] = [[10*60+30, 16*60+30]]
+const RETURN_HOURS_WEEKDAY: [number, number][] = [[9*60, 11*60], [15*60, 17*60]]
+const RETURN_HOURS_SATURDAY: [number, number][] = [[9*60, 15*60]]
+
+function rentalHoursFor(dateStr: string | undefined, kind: 'pickup' | 'return'): [number, number][] | null {
+  const weekday = kind === 'return' ? RETURN_HOURS_WEEKDAY : PICKUP_HOURS_WEEKDAY
+  const saturday = kind === 'return' ? RETURN_HOURS_SATURDAY : PICKUP_HOURS_SATURDAY
+  if (!dateStr) return weekday
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  if (!y || !mo || !d) return weekday
+  const dow = new Date(y, mo - 1, d).getDay()
+  if (dow === 0) return null               // Sunday — closed
+  if (dow === 6) return saturday
+  return weekday
+}
+
+function isInRentalHours(dateStr: string | undefined, time: string, kind: 'pickup' | 'return'): boolean {
+  const ranges = rentalHoursFor(dateStr, kind)
+  if (!ranges) return false
+  const [h, m] = time.split(':').map(Number)
+  const total = (h || 0) * 60 + (m || 0)
+  return ranges.some(([a, b]) => total >= a && total <= b)
+}
+
+const FLAGGED_TIME_STYLE: React.CSSProperties = { color: 'white', backgroundColor: '#dc2626', fontWeight: 600 }
+const NORMAL_TIME_STYLE: React.CSSProperties = { color: 'black', backgroundColor: 'white' }
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function buildRentalTimeOptions(dateStr: string | undefined, kind: 'pickup' | 'return') {
+  return TIME_OPTIONS.map(o => {
+    const ok = isInRentalHours(dateStr, o.value, kind)
+    return {
+      value: o.value,
+      label: ok ? o.value : `🔴 ${o.value}  FUORI ORARIO`,
+      style: ok ? NORMAL_TIME_STYLE : FLAGGED_TIME_STYLE,
+      flagged: !ok,
+    }
+  })
+}
+
 // Vehicle category is now read from DB (exotic/urban/aziendali) — no name-based detection needed
 
 // Sforo defaults — now read from Centralina Pro config via configOverlay.sforoDefaults
@@ -5904,9 +5952,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const returnTime = calculateReturnTime(pickupTime)
                       setFormData(prev => ({ ...prev, pickup_time: pickupTime, return_time: returnTime }))
                     }}
-                    options={TIME_OPTIONS}
+                    options={buildRentalTimeOptions(formData.pickup_date, 'pickup')}
                   />
-                  <p className="text-xs text-green-400 mt-1">Admin: Qualsiasi orario disponibile</p>
+                  <p className="text-xs text-green-400 mt-1">Admin: Qualsiasi orario disponibile · 🔴 = fuori orario standard</p>
                 </div>
                 <Select
                   label="Luogo Ritiro"
@@ -5974,10 +6022,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     required
                     value={formData.return_time}
                     onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, return_time: v })) }}
-                    options={TIME_OPTIONS}
+                    options={buildRentalTimeOptions(formData.return_date, 'return')}
                   />
                   <p className="text-xs text-blue-400 mt-1">Suggerito: Ritiro - 1h30</p>
-                  <p className="text-xs text-green-400">Admin: Qualsiasi orario disponibile</p>
+                  <p className="text-xs text-green-400">Admin: Qualsiasi orario disponibile · 🔴 = fuori orario standard</p>
                 </div>
                 <Select
                   label="Luogo Riconsegna"

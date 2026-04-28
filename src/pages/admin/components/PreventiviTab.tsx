@@ -35,18 +35,26 @@ import { getHolidayForDate, isSunday as isSundayDate } from '../../../data/itali
 //             customer-supplied window arrives
 //   Sunday: closed (handled by classifyDay)
 
-const OFFICE_HOURS_WEEKDAY: [number, number][] = [[9*60, 13*60], [15*60, 19*60]]
-// Saturday: 09:00-17:00 continuous (no lunch break).
-const OFFICE_HOURS_SATURDAY: [number, number][] = [[9*60, 17*60]]
+// Rental schedule (NOT generic office hours). Differs per kind:
+//   PICKUP  Mon-Fri: 10:30-12:30 / 16:30-18:30
+//   PICKUP  Sat:     10:30-16:30  (single window)
+//   RETURN  Mon-Fri: 09:00-11:00 / 15:00-17:00
+//   RETURN  Sat:     09:00-15:00  (single window)
+const PICKUP_HOURS_WEEKDAY: [number, number][] = [[10*60+30, 12*60+30], [16*60+30, 18*60+30]]
+const PICKUP_HOURS_SATURDAY: [number, number][] = [[10*60+30, 16*60+30]]
+const RETURN_HOURS_WEEKDAY: [number, number][] = [[9*60, 11*60], [15*60, 17*60]]
+const RETURN_HOURS_SATURDAY: [number, number][] = [[9*60, 15*60]]
 
-function getOfficeHoursForDate(dateStr: string): [number, number][] | null {
-  if (!dateStr) return OFFICE_HOURS_WEEKDAY
+function getOfficeHoursForDate(dateStr: string, kind: 'pickup' | 'return' = 'pickup'): [number, number][] | null {
+  const weekday = kind === 'return' ? RETURN_HOURS_WEEKDAY : PICKUP_HOURS_WEEKDAY
+  const saturday = kind === 'return' ? RETURN_HOURS_SATURDAY : PICKUP_HOURS_SATURDAY
+  if (!dateStr) return weekday
   const [y, mo, d] = dateStr.split('-').map(Number)
-  if (!y || !mo || !d) return OFFICE_HOURS_WEEKDAY
+  if (!y || !mo || !d) return weekday
   const dow = new Date(y, mo - 1, d).getDay() // 0 Sun, 6 Sat
   if (dow === 0) return null               // Sunday — closed
-  if (dow === 6) return OFFICE_HOURS_SATURDAY
-  return OFFICE_HOURS_WEEKDAY
+  if (dow === 6) return saturday
+  return weekday
 }
 
 function genAllDaySlots(): { value: string; label: string }[] {
@@ -69,8 +77,8 @@ function isInRanges(t: string, ranges: [number, number][]): boolean {
   return ranges.some(([a, b]) => m >= a && m <= b)
 }
 
-function isWithinOfficeHoursForDate(dateStr: string, t: string): boolean {
-  const ranges = getOfficeHoursForDate(dateStr)
+function isWithinOfficeHoursForDate(dateStr: string, t: string, kind: 'pickup' | 'return' = 'pickup'): boolean {
+  const ranges = getOfficeHoursForDate(dateStr, kind)
   if (!ranges) return false // Sunday: closed entirely
   return isInRanges(t, ranges)
 }
@@ -100,16 +108,18 @@ function classifyDay(dateStr: string): DayClassification {
 
 function buildTimeOptions(
   dateStr: string,
-  _kind: 'pickup' | 'return',
+  kind: 'pickup' | 'return',
 ): { value: string; label: string; style: React.CSSProperties; flagged: boolean }[] {
   const day = classifyDay(dateStr)
   const isClosedDay = day.type !== 'open'
   return ALL_DAY_SLOTS.map(s => {
-    const inHours = isWithinOfficeHoursForDate(dateStr, s.value)
+    const inHours = isWithinOfficeHoursForDate(dateStr, s.value, kind)
     const flagged = isClosedDay || !inHours
     return {
       value: s.value,
-      label: flagged ? `${s.label} ⚠` : s.label,
+      // Loud label so admins notice even when browsers strip <option>
+      // CSS (Safari/iOS).
+      label: flagged ? `🔴 ${s.label}  FUORI ORARIO` : s.label,
       style: flagged ? FLAGGED_OPTION_STYLE : NORMAL_OPTION_STYLE,
       flagged,
     }
@@ -125,8 +135,8 @@ function describeException(dateStr: string, time: string, kind: 'pickup' | 'retu
   const day = classifyDay(dateStr)
   if (day.type === 'sunday') return 'Domenica — sede chiusa'
   if (day.type === 'holiday') return day.label || 'Giorno festivo'
-  if (!isWithinOfficeHoursForDate(dateStr, time)) {
-    const ranges = getOfficeHoursForDate(dateStr) || []
+  if (!isWithinOfficeHoursForDate(dateStr, time, kind)) {
+    const ranges = getOfficeHoursForDate(dateStr, kind) || []
     const hoursLabel = formatRanges(ranges)
     return kind === 'pickup'
       ? `Orario di ritiro fuori dagli orari ufficio (${hoursLabel})`
