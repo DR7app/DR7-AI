@@ -191,7 +191,14 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // 3. Calculate fleet occupation for this category
+    // 3. Calculate fleet occupation for this category over the BOOKING'S
+    //    MONTH(s), not just the exact pickup→dropoff window. Otherwise a
+    //    preventivo made today for August (when no future August bookings
+    //    exist yet) returns occupancyPct = 0% — and the coefficient brackets
+    //    treat August as low-occupancy when in reality it's high season.
+    //    Widening to the calendar month captures the period's real demand
+    //    pattern (and across multiple months for long bookings, takes the
+    //    union of busy vehicles in any of them).
     const vehicleCategory = vehicle.category || 'urban'
 
     const { data: categoryVehicles } = await supabase
@@ -202,13 +209,27 @@ export const handler: Handler = async (event) => {
 
     const totalInCategory = categoryVehicles?.length || 1
 
+    // Expand the window to cover every calendar month touched by the booking.
+    const pickupForMonth = new Date(pickup_date)
+    const dropoffForMonth = new Date(dropoff_date)
+    const monthStart = new Date(Date.UTC(
+      pickupForMonth.getUTCFullYear(),
+      pickupForMonth.getUTCMonth(),
+      1, 0, 0, 0, 0
+    )).toISOString()
+    const monthEnd = new Date(Date.UTC(
+      dropoffForMonth.getUTCFullYear(),
+      dropoffForMonth.getUTCMonth() + 1,
+      0, 23, 59, 59, 999
+    )).toISOString()
+
     const { data: overlappingBookings } = await supabase
       .from('bookings')
       .select('vehicle_id')
       .in('vehicle_id', (categoryVehicles || []).map((v: { id: string }) => v.id))
       .not('status', 'in', '(cancelled,annullata,completed,completata)')
-      .lte('pickup_date', dropoff_date)
-      .gte('dropoff_date', pickup_date)
+      .lte('pickup_date', monthEnd)
+      .gte('dropoff_date', monthStart)
 
     const busyVehicleIds = new Set((overlappingBookings || []).map((b: { vehicle_id: string }) => b.vehicle_id))
     const occupancyPct = Math.round((busyVehicleIds.size / totalInCategory) * 100)
