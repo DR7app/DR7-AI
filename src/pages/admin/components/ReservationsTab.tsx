@@ -5361,8 +5361,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* Search Bar */}
         <div className="mb-4">
           <Input
-            label="Cerca per targa, veicolo o cliente"
-            placeholder="Cerca per targa, nome veicolo o nome cliente..."
+            label="Cerca per codice, targa, veicolo o cliente"
+            placeholder="Cerca per codice prenotazione, targa, nome veicolo o nome cliente..."
             value={bookingSearchQuery}
             onChange={(e) => setBookingSearchQuery(e.target.value)}
           />
@@ -7311,7 +7311,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
             const vehicleName = (booking.vehicle_name || '').toLowerCase()
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
-            const searchText = `${customerName} ${vehicleName} ${vehiclePlate}`
+            const bookingId = String(booking.id || '').toLowerCase()
+            const bookingCode = bookingId.substring(0, 8)
+            const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode}`
             return words.every(word => searchText.includes(word))
           }).length === 0 && (
               <div className="rounded-lg border border-theme-border/30 p-8 text-center text-theme-text-muted">
@@ -7327,7 +7329,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
             const vehicleName = (booking.vehicle_name || '').toLowerCase()
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
-            const searchText = `${customerName} ${vehicleName} ${vehiclePlate}`
+            const bookingId = String(booking.id || '').toLowerCase()
+            const bookingCode = bookingId.substring(0, 8)
+            const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode}`
             return words.every(word => searchText.includes(word))
           }).map((booking) => {
             const isCarWash = booking.service_type === 'car_wash'
@@ -7506,7 +7510,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
                   const vehicleName = (booking.vehicle_name || '').toLowerCase()
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
-                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate}`
+                  const bookingId = String(booking.id || '').toLowerCase()
+                  const bookingCode = bookingId.substring(0, 8)
+                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode}`
                   return words.every(word => searchText.includes(word))
                 }).map((booking) => {
                   const isCarWash = booking.service_type === 'car_wash'
@@ -7652,7 +7658,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
                   const vehicleName = (booking.vehicle_name || '').toLowerCase()
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase().replace(/\s/g, '')
-                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate}`
+                  const bookingId = String(booking.id || '').toLowerCase()
+                  const bookingCode = bookingId.substring(0, 8)
+                  const searchText = `${customerName} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode}`
                   return words.every(word => searchText.includes(word))
                 }).length === 0 && (
                     <tr>
