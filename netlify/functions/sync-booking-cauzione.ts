@@ -14,6 +14,12 @@ interface SyncCauzioneRequest {
     paymentMethod: 'bonifico' | 'carta' | 'preautorizzazione'
     depositPaid: boolean
     depositStatus?: 'da_incassare' | 'incassata'
+    // Optional guest fallbacks: when admin creates a booking without
+    // picking a registered customer, customerId is null. We resolve
+    // cliente_id from these instead so the cauzione still lands.
+    guestEmail?: string
+    guestPhone?: string
+    guestName?: string
 }
 
 export const handler: Handler = async (event) => {
@@ -26,7 +32,9 @@ export const handler: Handler = async (event) => {
 
     try {
         const request: SyncCauzioneRequest = JSON.parse(event.body || '{}')
-        const { bookingId, customerId, vehicleId, returnDate, depositAmount, paymentMethod, depositPaid, depositStatus } = request
+        const { bookingId, vehicleId: rawVehicleId, returnDate, depositAmount, paymentMethod, depositPaid, depositStatus } = request
+        let { customerId } = request
+        let vehicleId = rawVehicleId
 
         console.log('🔄 Syncing cauzione for booking:', bookingId)
 
@@ -35,6 +43,54 @@ export const handler: Handler = async (event) => {
             return {
                 statusCode: 400,
                 body: JSON.stringify({ error: 'Missing required fields: bookingId and returnDate are required' })
+            }
+        }
+
+        // Self-heal: if the caller couldn't supply customerId / vehicleId
+        // (e.g. booking saved without picking a registered customer), pull
+        // them from the booking row itself, then fall back to a customers
+        // lookup by email/phone. cliente_id is NOT NULL in cauzioni so we
+        // need SOME id to insert; only error out if every avenue fails.
+        if (!customerId || !vehicleId) {
+            const { data: bookingRow } = await supabase
+                .from('bookings')
+                .select('user_id, vehicle_id, customer_email, customer_phone, booking_details')
+                .eq('id', bookingId)
+                .maybeSingle()
+            if (bookingRow) {
+                if (!customerId) {
+                    customerId = bookingRow.user_id
+                        || bookingRow.booking_details?.customer?.id
+                        || bookingRow.booking_details?.customer_id
+                        || ''
+                }
+                if (!vehicleId) {
+                    vehicleId = bookingRow.vehicle_id || ''
+                }
+                // Final fallback: resolve customer from email/phone in
+                // customers_extended. Handles guest bookings where the
+                // admin removed the email from the lead but the row still
+                // exists under a different identifier.
+                if (!customerId) {
+                    const email = (bookingRow.customer_email || '').trim().toLowerCase()
+                    const phone = (bookingRow.customer_phone || '').trim()
+                    if (email) {
+                        const { data: byEmail } = await supabase
+                            .from('customers_extended')
+                            .select('id')
+                            .ilike('email', email)
+                            .maybeSingle()
+                        if (byEmail?.id) customerId = byEmail.id
+                    }
+                    if (!customerId && phone) {
+                        const { data: byPhone } = await supabase
+                            .from('customers_extended')
+                            .select('id')
+                            .eq('telefono', phone)
+                            .maybeSingle()
+                        if (byPhone?.id) customerId = byPhone.id
+                    }
+                }
             }
         }
 
@@ -192,7 +248,14 @@ export const handler: Handler = async (event) => {
             if (!customerId || !vehicleId) {
                 return {
                     statusCode: 400,
-                    body: JSON.stringify({ error: 'Missing customerId or vehicleId for new cauzione' })
+                    body: JSON.stringify({
+                        error: !customerId && !vehicleId
+                            ? 'Cliente e veicolo non identificati per la cauzione (controlla che la prenotazione abbia customer_id e vehicle_id)'
+                            : !customerId
+                                ? 'Cliente non identificato per la cauzione (lead senza customer_id; aggiungi email o telefono al cliente)'
+                                : 'Veicolo non identificato per la cauzione',
+                        debug: { customerId, vehicleId, bookingId }
+                    })
                 }
             }
             console.log('➕ Creating new cauzione for booking:', bookingId)
