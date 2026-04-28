@@ -65,6 +65,14 @@
 [functions."cancel-unpaid-nexi-bookings"]
   schedule = "*/5 * * * *"
 
+# DR7 Club — daily 0.1% wallet interest accrual (each row card-paid principal × 0.001)
+[functions."accrue-club-wallet-interest"]
+  schedule = "30 1 * * *"
+
+# DR7 Club — monthly payout of accrued interest on the 1st
+[functions."payout-club-wallet-interest"]
+  schedule = "0 2 1 * *"
+
 # SPA catch-all: ONLY for non-asset routes
 # Netlify serves existing files first, then applies redirects.
 # When a fingerprinted chunk is missing (stale HTML after deploy),

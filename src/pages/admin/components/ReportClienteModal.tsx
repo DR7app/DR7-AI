@@ -52,6 +52,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const [bookings, setBookings] = useState<BookingRecord[]>([])
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
+  const [interestAccruals, setInterestAccruals] = useState<{ accrual_date: string; principal_eur: number; accrual_eur: number; paid_out_at: string | null }[]>([])
   const [walletRecharges, setWalletRecharges] = useState<WalletRecharge[]>([])
   const [documents, setDocuments] = useState<DocRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -132,6 +133,20 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
         setWalletBalance(bal?.balance || 0)
         const { data: txs } = await supabase.from('credit_transactions').select('*').eq('user_id', walletUserId).order('created_at', { ascending: false }).limit(50)
         setWalletTxs(txs || [])
+
+        // DR7 Club daily interest accruals (last 90 days). The cron
+        // accrue-club-wallet-interest writes a row per day with 0.1% of
+        // the card-paid principal; payout-club-wallet-interest stamps
+        // paid_out_at on the 1st of each month.
+        const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+          .toISOString().split('T')[0]
+        const { data: accruals } = await supabase
+          .from('wallet_interest_accruals')
+          .select('accrual_date, principal_eur, accrual_eur, paid_out_at')
+          .eq('user_id', walletUserId)
+          .gte('accrual_date', ninetyDaysAgo)
+          .order('accrual_date', { ascending: false })
+        setInterestAccruals(accruals || [])
 
         // Wallet recharges (card-paid wallet top-ups). These — NOT the
         // booking payments made FROM the wallet — are what counts toward
@@ -674,6 +689,56 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
           {/* STORICO ATTIVITA */}
           {activeTab === 'storico' && (
             <div className="space-y-6">
+              {/* DR7 Club — interest accruals (0.1%/giorno) */}
+              {isDR7Club && interestAccruals.length > 0 && (() => {
+                const totalUnpaid = interestAccruals.filter(a => !a.paid_out_at).reduce((s, a) => s + Number(a.accrual_eur || 0), 0)
+                const totalPaid = interestAccruals.filter(a => a.paid_out_at).reduce((s, a) => s + Number(a.accrual_eur || 0), 0)
+                return (
+                  <div>
+                    <h3 className="text-sm font-bold text-dr7-gold uppercase tracking-wider mb-3">
+                      DR7 Club — Interesse Wallet (0.1%/giorno)
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                      <div className="rounded-lg border border-dr7-gold/40 bg-dr7-gold/5 p-3">
+                        <div className="text-xs text-theme-text-muted">Maturato — non ancora pagato</div>
+                        <div className="text-2xl font-bold text-dr7-gold">{fmtEur(Math.round(totalUnpaid * 100) / 100)}</div>
+                        <div className="text-[10px] text-theme-text-muted mt-1">Pagamento il 1° del mese successivo</div>
+                      </div>
+                      <div className="rounded-lg border border-theme-border bg-theme-bg-secondary p-3">
+                        <div className="text-xs text-theme-text-muted">Totale pagato (ultimi 90gg)</div>
+                        <div className="text-2xl font-bold text-green-400">{fmtEur(Math.round(totalPaid * 100) / 100)}</div>
+                      </div>
+                    </div>
+                    <div className="bg-theme-bg-secondary rounded-xl border border-theme-border overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-theme-border">
+                            <th className="px-3 py-2 text-left text-theme-text-muted font-medium">Data</th>
+                            <th className="px-3 py-2 text-right text-theme-text-muted font-medium">Capitale (carta)</th>
+                            <th className="px-3 py-2 text-right text-theme-text-muted font-medium">Interesse</th>
+                            <th className="px-3 py-2 text-right text-theme-text-muted font-medium">Stato</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {interestAccruals.slice(0, 31).map(a => (
+                            <tr key={a.accrual_date} className="border-b border-theme-border/50">
+                              <td className="px-3 py-2 text-theme-text-muted whitespace-nowrap">{a.accrual_date}</td>
+                              <td className="px-3 py-2 text-right text-theme-text-secondary">{fmtEur(Number(a.principal_eur))}</td>
+                              <td className="px-3 py-2 text-right font-medium text-dr7-gold">+{fmtEur(Number(a.accrual_eur))}</td>
+                              <td className="px-3 py-2 text-right text-xs">
+                                {a.paid_out_at
+                                  ? <span className="text-green-400">Pagato</span>
+                                  : <span className="text-amber-400">In attesa</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
+
               {/* Wallet transactions */}
               {walletTxs.length > 0 && (
                 <div>
