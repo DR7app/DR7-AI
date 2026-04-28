@@ -411,9 +411,14 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     const trackingId = `car_wash_${booking.id}`
                     if (triggeredAlarmsRef.current.has(trackingId)) continue
 
+                    // Level detection: fire whenever the appointment is within
+                    // the next `leadMs` window (and still in the future) and
+                    // hasn't been triggered yet. Edge detection (exact-minute
+                    // match) silently dropped alarms when the polling tick
+                    // happened to miss that minute.
                     const diff = appointmentDateTime.getTime() - now.getTime()
                     const leadMs = futureLeadMinCarWash * 60000
-                    if (diff >= leadMs && diff < leadMs + 60000) {
+                    if (diff >= 0 && diff <= leadMs) {
                         markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
@@ -433,6 +438,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // Only active rentals (not completed, not car wash), and only if
             // alarm_triggered_at is null — ie. no admin has dismissed it yet.
             if (!cfgReturnBefore.is_enabled) { /* skip */ } else {
+            // Level detection: any active rental whose dropoff is within the
+            // next `futureLeadMinReturn` minutes and hasn't been alarmed yet.
             const { data: returnsBefore, error: returnsBeforeError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
@@ -441,19 +448,18 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 .not('customer_name', 'eq', 'Lavaggio Rientro')
                 .not('vehicle_name', 'ilike', 'test%')
                 .is('alarm_triggered_at', null)
-                .gte('dropoff_date', tenMinutesFutureISO)
-                .lt('dropoff_date', tenMinutesFuturePlusOne)
+                .gte('dropoff_date', now.toISOString())
+                .lte('dropoff_date', tenMinutesFutureISO)
 
             if (!returnsBeforeError && returnsBefore && returnsBefore.length > 0) {
                 for (const booking of returnsBefore) {
                     const trackingId = `return_before_${booking.id}`
                     if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                    // Check exact minute match locally
                     const returnTime = new Date(booking.dropoff_date)
                     returnTime.setSeconds(0, 0)
 
-                    if (returnTime.getTime() === tenMinutesFuture.getTime()) {
+                    {
                         markAlarmTriggered(trackingId, booking.id)
 
                         playAlarm({
@@ -473,6 +479,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // Only active rentals (not completed, not car wash), and only if
             // alarm_triggered_at is null (same gating as §1A).
             if (!cfgReturnAfter.is_enabled) { /* skip */ } else {
+            // Level detection: any active rental whose dropoff was at least
+            // `cfgReturnAfter.threshold_value` minutes ago and hasn't been
+            // alarmed yet. A car that's been late since yesterday will alarm
+            // on the very next polling tick — edge detection silently lost
+            // those because the tick had to land exactly on the threshold
+            // minute.
             const { data: returnsAfter, error: returnsAfterError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, dropoff_date, status, alarm_triggered_at, service_type')
@@ -481,53 +493,47 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 .not('customer_name', 'eq', 'Lavaggio Rientro')
                 .not('vehicle_name', 'ilike', 'test%')
                 .is('alarm_triggered_at', null)
-                .gte('dropoff_date', tenMinutesAgoISO)
-                .lt('dropoff_date', tenMinutesAgoPlusOne)
+                .lte('dropoff_date', tenMinutesAgoISO)
 
             if (!returnsAfterError && returnsAfter && returnsAfter.length > 0) {
                 for (const booking of returnsAfter) {
                     const trackingId = `return_after_${booking.id}`
                     if (triggeredAlarmsRef.current.has(trackingId) || triggeredAlarmsRef.current.has(booking.id)) continue
 
-                    // Check exact minute match locally
                     const returnTime = new Date(booking.dropoff_date)
                     returnTime.setSeconds(0, 0)
 
-                    if (returnTime.getTime() === tenMinutesAgo.getTime()) {
-                        markAlarmTriggered(trackingId, booking.id)
+                    markAlarmTriggered(trackingId, booking.id)
 
-                        playAlarm({
-                            bookingId: booking.id,
-                            vehicleName: booking.vehicle_name || 'Unknown Vehicle',
-                            returnTime: returnTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                            customerName: booking.customer_name || 'Unknown Customer',
-                            type: 'return'
-                        })
-                        return // Trigger one at a time
-                    }
+                    playAlarm({
+                        bookingId: booking.id,
+                        vehicleName: booking.vehicle_name || 'Unknown Vehicle',
+                        returnTime: returnTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                        customerName: booking.customer_name || 'Unknown Customer',
+                        type: 'return'
+                    })
+                    return // Trigger one at a time
                 }
             }
             } /* end if cfgReturnAfter.is_enabled */
 
             // --- 2. CHECK DEPOSITS (lead-time mins BEFORE pickup time) ---
             if (!cfgDeposit.is_enabled) { /* skip */ } else {
-            // Per-alarm lead time may differ from return-before; recompute the window.
+            // Level detection: any pickup within the next `futureLeadMinDeposit`
+            // minutes that has a non-zero deposit and hasn't been alarmed.
             const depositFuture = new Date(now.getTime() + futureLeadMinDeposit * 60000)
             const depositFutureISO = depositFuture.toISOString()
-            const depositFuturePlusOne = new Date(depositFuture.getTime() + 60000).toISOString()
 
-            // We need to fetch bookings starting soon and check deposit in JS/JSON field
             const { data: pickups, error: pickupsError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, pickup_date, status, booking_details, service_type')
                 .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
                 .not('service_type', 'eq', 'car_wash')
-                .gte('pickup_date', depositFutureISO)
-                .lt('pickup_date', depositFuturePlusOne)
+                .gte('pickup_date', now.toISOString())
+                .lte('pickup_date', depositFutureISO)
 
             if (!pickupsError && pickups && pickups.length > 0) {
                 for (const booking of pickups) {
-                    // Check if deposit exists and > 0
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const details = booking.booking_details as any
                     const deposit = details?.deposit ? Number(details.deposit) : 0
@@ -537,42 +543,40 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     const trackingId = `deposit_${booking.id}`
                     if (triggeredAlarmsRef.current.has(trackingId)) continue
 
-                    // Check exact minute match locally
                     const pickupTime = new Date(booking.pickup_date)
                     pickupTime.setSeconds(0, 0)
 
-                    if (pickupTime.getTime() === depositFuture.getTime()) {
-                        markAlarmTriggered(trackingId, booking.id)
+                    markAlarmTriggered(trackingId, booking.id)
 
-                        playAlarm({
-                            bookingId: booking.id,
-                            vehicleName: booking.vehicle_name || 'Unknown Vehicle',
-                            returnTime: pickupTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                            customerName: booking.customer_name || 'Unknown Customer',
-                            type: 'deposit',
-                            deposit: deposit
-                        })
-                        return // Trigger one at a time
-                    }
+                    playAlarm({
+                        bookingId: booking.id,
+                        vehicleName: booking.vehicle_name || 'Unknown Vehicle',
+                        returnTime: pickupTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                        customerName: booking.customer_name || 'Unknown Customer',
+                        type: 'deposit',
+                        deposit: deposit
+                    })
+                    return // Trigger one at a time
                 }
             }
             } /* end if cfgDeposit.is_enabled */
 
             // --- 3. CHECK UNPAID PICKUP (lead-time mins BEFORE pickup) ---
             if (!cfgUnpaidPickup.is_enabled) { /* skip */ } else {
+            // Level detection: any unpaid pickup within the next
+            // `futureLeadMinUnpaid` minutes (or already past) that hasn't
+            // been alarmed yet. Three payment values count as paid:
+            // paid, completed, succeeded (project rule).
             const unpaidFuture = new Date(now.getTime() + futureLeadMinUnpaid * 60000)
             const unpaidFutureISO = unpaidFuture.toISOString()
-            const unpaidFuturePlusOne = new Date(unpaidFuture.getTime() + 60000).toISOString()
 
-            // Per project rule, three payment values count as paid: paid, completed, succeeded.
             const { data: unpaidPickups, error: unpaidError } = await supabase
                 .from('bookings')
                 .select('id, customer_name, vehicle_name, pickup_date, status, payment_status, price_total, booking_details, service_type')
                 .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
                 .not('payment_status', 'in', '("paid","completed","succeeded")')
                 .not('service_type', 'eq', 'car_wash')
-                .gte('pickup_date', unpaidFutureISO)
-                .lt('pickup_date', unpaidFuturePlusOne)
+                .lte('pickup_date', unpaidFutureISO)
 
             if (!unpaidError && unpaidPickups && unpaidPickups.length > 0) {
                 for (const booking of unpaidPickups) {
@@ -582,20 +586,17 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     const pickupTime = new Date(booking.pickup_date)
                     pickupTime.setSeconds(0, 0)
 
-                    // Double check time match just in case
-                    if (pickupTime.getTime() === unpaidFuture.getTime()) {
-                        markAlarmTriggered(trackingId, booking.id)
+                    markAlarmTriggered(trackingId, booking.id)
 
-                        playAlarm({
-                            bookingId: booking.id,
-                            vehicleName: booking.vehicle_name || 'Unknown Vehicle',
-                            returnTime: pickupTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                            customerName: booking.customer_name || 'Unknown',
-                            type: 'unpaid_pickup',
-                            deposit: booking.price_total / 100 // Convert from cents to euros
-                        })
-                        return
-                    }
+                    playAlarm({
+                        bookingId: booking.id,
+                        vehicleName: booking.vehicle_name || 'Unknown Vehicle',
+                        returnTime: pickupTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                        customerName: booking.customer_name || 'Unknown',
+                        type: 'unpaid_pickup',
+                        deposit: booking.price_total / 100
+                    })
+                    return
                 }
             }
             } /* end if cfgUnpaidPickup.is_enabled */
