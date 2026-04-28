@@ -156,15 +156,21 @@ export const handler: Handler = async (event) => {
 
         fetchError = null // handled above
 
-        // Determine payment method based on booking payment method
-        let cauzioneMetodo: 'bonifico' | 'carta' | 'preautorizzazione' = paymentMethod || 'carta'
-
-        // Map common payment methods
-        if (paymentMethod === 'carta' || paymentMethod === 'card') {
-            cauzioneMetodo = 'preautorizzazione' // Card payments typically use pre-authorization
-        } else if (paymentMethod === 'bonifico' || paymentMethod === 'bank_transfer') {
-            cauzioneMetodo = 'bonifico'
+        // Map booking payment_method (free-form admin label) → cauzioni.metodo
+        // (DB CHECK constraint: only 'bonifico' | 'carta' | 'preautorizzazione').
+        // Anything not recognized falls through to 'preautorizzazione', which
+        // is the default for card-based deposits.
+        function mapToCauzioneMetodo(raw: string | undefined): 'bonifico' | 'carta' | 'preautorizzazione' {
+            const s = (raw || '').toLowerCase().trim()
+            if (!s) return 'preautorizzazione'
+            if (s === 'preautorizzazione' || s === 'preauth' || s === 'pre-auth') return 'preautorizzazione'
+            if (s.includes('bonifico') || s.includes('bank_transfer') || s.includes('bank transfer')) return 'bonifico'
+            // Cash, wallet, paypal, nexi pay-by-link, "carta di credito", etc.
+            // all map to 'carta' — the row is recoverable; admin can change
+            // metodo from CauzioniTab if it matters.
+            return 'carta'
         }
+        const cauzioneMetodo = mapToCauzioneMetodo(paymentMethod)
 
         // Calculate scadenza: 14 business days starting the day after return
         function calcScadenza(returnDateStr: string): string {
