@@ -138,13 +138,26 @@ export const handler: Handler = async (event) => {
         if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
+        // Body comes ONLY from Messaggi di Sistema Pro (pro_richiesta_otp).
+        // No hardcoded fallback — admin edits to the template MUST always
+        // reach the customer. Available variables: {otp},
+        // {expiryMinutes}.
+        const otpMessage = await renderTemplate('signature_otp_whatsapp', {
+            otp,
+            expiryMinutes: String(OTP_EXPIRY_MINUTES),
+        })
+        if (!otpMessage) {
+            console.error('[signature-send-otp] Template "signature_otp_whatsapp" (pro_richiesta_otp) missing or disabled')
+            return { statusCode: 500, body: JSON.stringify({ error: 'Template OTP non configurato in Messaggi di Sistema Pro (pro_richiesta_otp).' }) }
+        }
+
         const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
         const waResponse = await fetch(greenApiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chatId: `${cleanPhone}@c.us`,
-                message: await renderTemplate('signature_otp_whatsapp', { otp }, `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP per la firma del contratto e:\n\n*${otp}*\n\nIl codice scade tra ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice, ignora questo messaggio.`)
+                message: otpMessage,
             })
         })
 
@@ -157,11 +170,10 @@ export const handler: Handler = async (event) => {
 
         // Log to sent_messages_log
         try {
-            const fullMessage = `*DR7 Empire - Codice di Verifica*\n\nIl tuo codice OTP per la firma del contratto e:\n\n*${otp}*\n\nIl codice scade tra ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice, ignora questo messaggio.`
             await supabase.from('sent_messages_log').insert({
                 customer_name: sigRequest.signer_name || 'N/A',
                 customer_phone: cleanPhone,
-                message_text: fullMessage,
+                message_text: otpMessage,
                 template_label: 'Signature OTP',
                 status: 'sent',
             })

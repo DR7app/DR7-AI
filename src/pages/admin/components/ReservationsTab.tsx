@@ -2206,43 +2206,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
-      // signature-init refused because the customer has no email on file.
-      // The contract is being sent via WhatsApp anyway — skip the signing
-      // flow entirely and deliver the raw PDF URL via WhatsApp so the
-      // customer at least receives the document.
-      const emailMissing = /email.*mancante|email.*missing/i.test(sigData?.error || '')
-      if (emailMissing) {
-        toast.loading('Cliente senza email — invio PDF contratto via WhatsApp...', { id: 'resend-contract' })
-        const pdfRes = await authFetch('/.netlify/functions/generate-contract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bookingId: booking.id })
-        })
-        const pdfData = await pdfRes.json().catch(() => ({} as any))
-        if (!pdfRes.ok || !pdfData?.url) {
-          toast.dismiss('resend-contract')
-          toast.error('Contratto non recuperato: ' + (pdfData?.error || `HTTP ${pdfRes.status}`), { duration: 12000 })
-          return
-        }
-        const customerName = booking.customer_name || 'Cliente'
-        const customMessage =
-          `Gentile ${customerName}, ecco il contratto di noleggio: ${pdfData.url}\n\nPer favore firmalo e rinvialo. Grazie. DR7`
-        const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: booking.customer_phone, customMessage })
-        })
-        toast.dismiss('resend-contract')
-        if (waRes.ok) {
-          toast.success('Contratto PDF inviato via WhatsApp (cliente senza email)', { duration: 8000 })
-          logAdminAction('resend_contract_no_email', 'booking', booking.id, buildBookingContext(booking))
-        } else {
-          const waData = await waRes.json().catch(() => ({} as any))
-          toast.error('Invio WhatsApp fallito: ' + (waData?.error || `HTTP ${waRes.status}`), { duration: 12000 })
-        }
-        return
-      }
-
       // 404 means no contract exists yet — try to generate it and retry once.
       if (sigRes.status === 404 || /non trovato/i.test(sigData?.error || '')) {
         toast.loading('Contratto non trovato — lo genero ora...', { id: 'resend-contract' })
@@ -2272,8 +2235,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           return
         }
 
-        // FINAL FALLBACK: signature-init still broken — send the raw PDF URL via WhatsApp
-        // so the customer always receives something usable.
+        // FINAL FALLBACK: signature-init still broken — send the raw PDF URL
+        // via the SAME signature_request_link template the primary path
+        // uses. Body lives in Messaggi di Sistema Pro (pro_richiesta_firma);
+        // never hardcode the message here so admin edits to the template
+        // always take effect.
         console.warn('[handleResendContract] signature-init retry failed, attempting direct WhatsApp fallback', retryData)
         toast.loading('Invio diretto PDF via WhatsApp...', { id: 'resend-contract' })
 
@@ -2295,16 +2261,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
 
         const pdfUrl: string = fallbackGenData.url
-        const customerName = booking.customer_name || 'Cliente'
-        const customMessage =
-          `Gentile ${customerName}, ecco il contratto di noleggio: ${pdfUrl}\n\nPer favore firmalo e rinvialo. Grazie. DR7`
 
         const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            phone: booking.customer_phone,
-            customMessage
+            customPhone: booking.customer_phone,
+            templateKey: 'signature_request_link',
+            templateVars: {
+              signerName: booking.customer_name || 'Cliente',
+              contractNumber: fallbackGenData.contract_number || '',
+              signingUrl: pdfUrl,
+            },
           })
         })
 

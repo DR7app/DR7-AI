@@ -155,11 +155,13 @@ const OLD_TO_PRO: Record<string, string> = {
   mechanical_new_admin: 'pro_conferma_meccanica',
   mechanical_modified: 'pro_promemoria_pagamento',
 
-  // Firma & Contratto — reminder body lives in pro_conferma_preventivo,
-  // OTP body lives in pro_promemoria_pickup
+  // Firma & Contratto — each call routes to its dedicated Pro slot:
+  //   signing-link  → "Richiesta Firma"
+  //   reminder      → "Promemoria Firma"
+  //   OTP           → "Richiesta OTP"   (admin-editable body for OTP send)
   signature_request_link: 'pro_richiesta_firma',
-  signature_reminder_whatsapp: 'pro_conferma_preventivo',
-  signature_otp_whatsapp: 'pro_promemoria_pickup',
+  signature_reminder_whatsapp: 'pro_promemoria_firma',
+  signature_otp_whatsapp: 'pro_richiesta_otp',
   document_signature_link: 'pro_richiesta_firma',
 
   // Pagamenti & annullamenti — payment-link body now lives in pro_richiesta_pagamento,
