@@ -4862,24 +4862,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // customer message in those cases. IMPORTANT: do NOT `return` from
           // here; the function still needs to run contract generation, the
           // EditDiffLink block, and the signing-link dispatch below.
-          // - Edit with balance owed → null (EditDiffLink sends the pay-by-link)
+          // - Any pending booking (new OR edit) → null. Conferma is delivered
+          //   only AFTER payment is recorded (admin clicks "Segna Pagato",
+          //   pay-by-link callback marks the row paid, etc.). Sending the
+          //   confirmation before payment is misleading: customer thinks the
+          //   booking is locked when it isn't yet.
           // - Edit fully paid → rental_new_customer
-          // - Conferma Prenotazione ON → rental_new_customer
-          // - New + pending → null (payment-link block above already sent link)
+          // - Conferma Prenotazione ON + paid → rental_new_customer
           // - New + paid → rental_new_customer
           let templateKey: string | null
-          if (editingId) {
-            if (isPending) {
-              logger.log('[Save] Edit with remaining balance — skipping conferma-noleggio until fully paid (EditDiffLink will send pay-by-link)')
-              templateKey = null
-            } else {
-              templateKey = 'rental_new_customer'
-            }
+          if (isPending) {
+            logger.log('[Save] Booking pending (da saldare) — skipping conferma-noleggio until payment is recorded')
+            templateKey = null
+          } else if (editingId) {
+            templateKey = 'rental_new_customer'
           } else if (confirmBooking) {
             templateKey = 'rental_new_customer'
-          } else if (isPending) {
-            logger.log('[Save] New pending booking — payment-link block handled customer WhatsApp; skipping duplicate conferma')
-            templateKey = null
           } else {
             templateKey = 'rental_new_customer'
           }
