@@ -223,7 +223,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        templateKey: 'promo_incassi',
+                        templateKey: 'pro_promo_incassi',
                         templateVars,
                         customPhone: phone,
                     }),

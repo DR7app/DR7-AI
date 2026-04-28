@@ -113,8 +113,8 @@ const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['promo', 'gap'],
   ],
   // Promo Incassi — sent when a vehicle's monthly revenue target hits its
-  // 0.7-or-lower coefficient threshold. Body editable in Messaggi di Sistema Pro.
-  promo_incassi: [
+  // 0.8-or-lower coefficient threshold. Body editable in Messaggi di Sistema Pro.
+  pro_promo_incassi: [
     ['promo', 'incassi'],
     ['promo', 'incasso'],
     ['incassi', 'promo'],
