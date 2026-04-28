@@ -1,17 +1,18 @@
 /**
  * Promo Incassi — scheduled cron.
  *
- * Runs every 15 minutes. For each vehicle whose monthly revenue target
- * has its ACTIVE coefficient at or below the configured threshold
- * (default 0.7), sends the Pro template "PROMO INCASSI" once per
- * (vehicle, year_month, threshold_coeff, recipient).
+ * Runs at 09:00 and 17:00 Europe/Rome every day. For each vehicle whose
+ * monthly revenue target has its ACTIVE coefficient at or below the
+ * configured threshold (default 0.7), sends the Pro template "PROMO
+ * INCASSI" once per (vehicle, year_month, threshold_coeff, recipient).
  *
  *   - Mode + pilot phone come from public.promo_incassi_settings.
  *   - Template body comes from Messaggi di Sistema Pro (key "promo_incassi").
  *   - Dedup ledger lives in public.promo_incassi_sent_log.
  *
- * Quiet hours: 22:00 → 07:00 Europe/Rome — cron exits early during that
- * window so customers don't get marketing pings overnight.
+ * Schedule: cron is scheduled at UTC hours that span both CET (winter)
+ * and CEST (summer): 07/08/15/16 UTC. The function then checks the
+ * actual Europe/Rome local hour and only runs when it equals 9 or 17.
  */
 import { schedule } from '@netlify/functions'
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
@@ -76,12 +77,16 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
         auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    // Quiet hours 22:00 → 07:00 Europe/Rome.
+    // Fire only at 09:00 and 17:00 Europe/Rome. Cron is scheduled at UTC
+    // hours covering both CET (winter, UTC+1) and CEST (summer, UTC+2):
+    //   09:00 Rome = 07 UTC (CEST) or 08 UTC (CET)
+    //   17:00 Rome = 15 UTC (CEST) or 16 UTC (CET)
+    // After DST flips, only one of each pair maps to the right Rome hour;
+    // the other invocation exits here.
     const hour = romeHour()
-    const QUIET_START_HOUR = 22
-    const QUIET_END_HOUR = 7
-    if (hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR) {
-        return skip(`quiet hours ${QUIET_START_HOUR}:00–${QUIET_END_HOUR}:00 (current Rome hour: ${hour})`)
+    const FIRE_HOURS = [9, 17]
+    if (!FIRE_HOURS.includes(hour)) {
+        return skip(`outside fire window (current Rome hour: ${hour}, fires at: ${FIRE_HOURS.join(', ')})`)
     }
 
     // ── 1. Settings (mode + pilot phone + threshold) ──
@@ -260,6 +265,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     }
 }
 
-// Scheduled every 15 minutes (UTC). Cron internally checks Rome-local hour
-// and exits early during quiet hours (22:00–07:00).
-export const handler = schedule('*/15 * * * *', cronHandler)
+// Scheduled at UTC 07:00, 08:00, 15:00, 16:00. The function checks the
+// Rome-local hour and only fires when it equals 09 or 17 — so depending
+// on DST the right two invocations run, the others exit early.
+export const handler = schedule('0 7,8,15,16 * * *', cronHandler)
