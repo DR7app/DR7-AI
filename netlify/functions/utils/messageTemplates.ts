@@ -302,8 +302,12 @@ export async function getMessageTemplate(
     body = body.replace(new RegExp(`\\{\\{\\s*${escRx(cleanKey)}\\s*\\}\\}`, 'g'), v ?? '')
   }
 
-  // Add header/footer if configured — pulled from Messaggi di Sistema Pro
-  if (tpl.include_header !== false) {
+  // Add header/footer ONLY if the template explicitly opts in
+  // (include_header === true). Default is OFF — admin must tick the
+  // "Includi header/footer" toggle on a template to wrap it. Wrapper
+  // content comes from the admin-written `pro_wrapper_header` /
+  // `pro_wrapper_footer` rows (labels "Header" / "Footer").
+  if (tpl.include_header === true) {
     const headerTpl = templates.find(t => t.message_key === 'pro_wrapper_header' && t.is_enabled !== false)
     const footerTpl = templates.find(t => t.message_key === 'pro_wrapper_footer' && t.is_enabled !== false)
     if (headerTpl?.message_body) body = headerTpl.message_body + '\n\n' + body
