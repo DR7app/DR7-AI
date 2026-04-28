@@ -234,23 +234,36 @@ export const handler: Handler = async (event) => {
     const busyVehicleIds = new Set((overlappingBookings || []).map((b: { vehicle_id: string }) => b.vehicle_id))
     const occupancyPct = Math.round((busyVehicleIds.size / totalInCategory) * 100)
 
-    // 3b. Per-vehicle own occupancy over last 30 days (for vehicle_occupation_coefficients)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-    const thirtyDaysAhead = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    // 3b. Per-vehicle own occupancy for `vehicle_occupation_coefficients`.
+    //     Calculated over the BOOKING'S calendar month(s), NOT today ±30
+    //     days. A preventivo made in April for an August booking should
+    //     reflect how booked the vehicle is in August, not in April.
+    //     Window = first day of pickup month → last day of dropoff month
+    //     (same window we use for fleet occupancy above). The denominator
+    //     is the number of days in that window, so the percentage is
+    //     "share of days the vehicle is booked during the booking's
+    //     period".
+    const periodStartMs = new Date(monthStart).getTime()
+    const periodEndMs = new Date(monthEnd).getTime()
+    const periodDays = Math.max(1, Math.ceil((periodEndMs - periodStartMs) / (1000 * 60 * 60 * 24)))
     const { data: thisVehicleBookings } = await supabase
       .from('bookings')
       .select('pickup_date, dropoff_date')
       .eq('vehicle_id', vehicle.id)
       .not('status', 'in', '(cancelled,annullata)')
-      .gte('pickup_date', thirtyDaysAgo)
-      .lte('dropoff_date', thirtyDaysAhead)
+      .lte('pickup_date', monthEnd)
+      .gte('dropoff_date', monthStart)
     let vehicleOwnOccupiedDays = 0
     for (const b of (thisVehicleBookings || [])) {
-      const p = new Date(b.pickup_date).getTime()
-      const d = new Date(b.dropoff_date).getTime()
-      vehicleOwnOccupiedDays += Math.max(1, Math.ceil((d - p) / (1000 * 60 * 60 * 24)))
+      // Clip each booking to the period window so a booking that spills
+      // outside the month doesn't over-count.
+      const p = Math.max(periodStartMs, new Date(b.pickup_date).getTime())
+      const d = Math.min(periodEndMs, new Date(b.dropoff_date).getTime())
+      if (d > p) {
+        vehicleOwnOccupiedDays += Math.max(1, Math.ceil((d - p) / (1000 * 60 * 60 * 24)))
+      }
     }
-    const vehicleOwnOccupancyPct = Math.min(100, Math.round((vehicleOwnOccupiedDays / 60) * 100))
+    const vehicleOwnOccupancyPct = Math.min(100, Math.round((vehicleOwnOccupiedDays / periodDays) * 100))
 
     // 3c. Calendar gap: finestra "stretta" tra la prenotazione PRECEDENTE
     //     e quella SUCCESSIVA sullo stesso veicolo. Il coefficiente serve a
