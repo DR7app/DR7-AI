@@ -774,8 +774,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (cancelled) return
         if (data.enabled && data.finalTotalEur) {
           setRevenueSuggestion(data)
-          // AUTO_APPLY: automatically set the total amount (rental + insurance + delivery + lavaggio + contanti)
-          if (data.mode === 'auto_apply' && !editingId) {
+          // Always auto-fill the total amount on new bookings using the dynamic
+          // price pipeline (rental + extras × coefficient, clamp, + experience).
+          // Mirrors PreventiviTab.pricing useMemo — base alone is wrong because
+          // the coefficient must apply to the whole rental subtotal, not just
+          // the per-day base.
+          if (!editingId) {
             setFormData(prev => {
               const selectedVehicle = vehicles.find(v => v.id === prev.vehicle_id)
               const activeTier = customerTier?.tier
@@ -851,9 +855,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // dr7 flex dipendono dalla fascia.
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, customerTier, noCauzioneResolvedDaily])
 
-  // Recalculate total when insurance, delivery fees, or payment method change
+  // Recalculate total when insurance, delivery fees, or payment method change.
+  // Runs in any engine mode — the dynamic coefficient + clamp must always
+  // apply to the full subtotal (rental + extras), matching Preventivi.
   useEffect(() => {
-    if (revenueSuggestion && revenueSuggestion.mode === 'auto_apply' && formData.vehicle_id) {
+    if (revenueSuggestion && formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       const activeTier = customerTier?.tier || 'TIER_1'
       const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
@@ -6842,7 +6848,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
                           const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
                             + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
-                          const noCauzioneCost = formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY * revenueSuggestion.rentalDays : 0
+                          const dpSurchargePerDay = selectedDepositSurchargePerDay
+                            || (formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0)
+                          const noCauzioneCost = dpSurchargePerDay * revenueSuggestion.rentalDays
                           const unlimitedKmCost = formData.unlimited_km
                             ? getUnlimitedKmPriceRes(sv, activeTier) * revenueSuggestion.rentalDays : 0
                           const secondDriverCost = formData.has_second_driver
