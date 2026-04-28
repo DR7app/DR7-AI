@@ -564,6 +564,92 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left: Activity table */}
               <div className="lg:col-span-2 space-y-4">
+                {/* DR7 Club daily interest accrual — visible at the TOP for
+                    every club member so admin sees it without digging into
+                    the Storico tab. Shows a placeholder when the cron
+                    hasn't fired yet so admin knows the gear is configured. */}
+                {isDR7Club && (() => {
+                  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+                  const todayRow = interestAccruals.find(a => a.accrual_date === today)
+                  const month = today.slice(0, 7) // YYYY-MM
+                  const monthAccruals = interestAccruals.filter(a => a.accrual_date.startsWith(month))
+                  const monthUnpaid = monthAccruals.filter(a => !a.paid_out_at).reduce((s, a) => s + Number(a.accrual_eur || 0), 0)
+                  const monthTotal = monthAccruals.reduce((s, a) => s + Number(a.accrual_eur || 0), 0)
+                  return (
+                    <div className="rounded-xl border border-dr7-gold/40 bg-dr7-gold/5 p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold text-dr7-gold uppercase tracking-wider">
+                          DR7 Club — Interesse Wallet (0,1%/giorno)
+                        </h3>
+                        <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">
+                          Pagamento il 1° del mese
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 mb-3">
+                        <div>
+                          <div className="text-[10px] text-theme-text-muted uppercase">Maturato OGGI</div>
+                          <div className="text-xl font-bold text-dr7-gold">
+                            {todayRow ? `+${fmtEur(Number(todayRow.accrual_eur))}` : '—'}
+                          </div>
+                          <div className="text-[10px] text-theme-text-muted">
+                            {todayRow ? `su €${Number(todayRow.principal_eur).toFixed(2)}` : 'cron non ancora eseguito'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-theme-text-muted uppercase">Mese in corso (in attesa)</div>
+                          <div className="text-xl font-bold text-amber-400">
+                            +{fmtEur(Math.round(monthUnpaid * 100) / 100)}
+                          </div>
+                          <div className="text-[10px] text-theme-text-muted">{monthAccruals.length} giorni</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-theme-text-muted uppercase">Totale mese</div>
+                          <div className="text-xl font-bold text-green-400">
+                            +{fmtEur(Math.round(monthTotal * 100) / 100)}
+                          </div>
+                          <div className="text-[10px] text-theme-text-muted">incl. già pagati</div>
+                        </div>
+                      </div>
+                      {interestAccruals.length === 0 ? (
+                        <p className="text-xs text-theme-text-muted italic">
+                          Nessuna riga di accrediti ancora. Il cron giornaliero scrive la prima riga la notte successiva all'iscrizione al club.
+                        </p>
+                      ) : (
+                        <div className="bg-theme-bg-secondary/50 rounded-lg overflow-hidden">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-theme-border/50">
+                                <th className="px-3 py-1.5 text-left text-theme-text-muted font-medium">Data</th>
+                                <th className="px-3 py-1.5 text-right text-theme-text-muted font-medium">Capitale</th>
+                                <th className="px-3 py-1.5 text-right text-theme-text-muted font-medium">Interesse</th>
+                                <th className="px-3 py-1.5 text-right text-theme-text-muted font-medium">Stato</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {interestAccruals.slice(0, 14).map(a => (
+                                <tr key={a.accrual_date} className="border-b border-theme-border/30">
+                                  <td className="px-3 py-1.5 text-theme-text-muted whitespace-nowrap">{a.accrual_date}</td>
+                                  <td className="px-3 py-1.5 text-right text-theme-text-secondary">{fmtEur(Number(a.principal_eur))}</td>
+                                  <td className="px-3 py-1.5 text-right font-bold text-dr7-gold">+{fmtEur(Number(a.accrual_eur))}</td>
+                                  <td className="px-3 py-1.5 text-right">
+                                    {a.paid_out_at
+                                      ? <span className="text-green-400">Pagato</span>
+                                      : <span className="text-amber-400">In attesa</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {interestAccruals.length > 14 && (
+                            <div className="px-3 py-1.5 text-[10px] text-theme-text-muted border-t border-theme-border/30">
+                              +{interestAccruals.length - 14} altri giorni — vedi tab Storico per la lista completa
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
                 <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Storico Prenotazioni</h3>
                 <div className="bg-theme-bg-secondary rounded-xl border border-theme-border overflow-hidden">
                   <table className="w-full text-sm">
