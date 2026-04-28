@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef, useMemo } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { authFetch } from '../utils/authFetch'
 import { logAdminAction } from '../utils/logAdminAction'
+import { ensureOtpConfigLoaded, isOtpRequired } from '../utils/otpConfigCache'
 
 interface LimitationState {
   isOpen: boolean
@@ -71,7 +72,32 @@ export function useLimitationOverride() {
     setOverrideCodes(new Set())
   }, [])
 
+  // Pre-warm OTP config cache once when this hook mounts.
+  useEffect(() => { ensureOtpConfigLoaded() }, [])
+
   const requestOverride = useCallback((code: string, message: string, context?: string) => {
+    // If this OTP gate has been disabled in Gestione OTP, auto-approve
+    // synthetically without opening the modal. Audit log still records
+    // the bypass with a `_bypass` overrideId so the action is traceable.
+    if (!isOtpRequired(code)) {
+      const bypassId = `bypass_${code}_${Date.now()}`
+      overrideMap.current.set(code, {
+        overrideId: bypassId,
+        limitationCode: code,
+        limitationMessage: message,
+        approvedAt: new Date().toISOString(),
+      })
+      setOverrideCodes(new Set(overrideMap.current.keys()))
+      logAdminAction('limitation_override_bypassed', 'limitation', bypassId, {
+        limitation_code: code,
+        limitation_message: message,
+        action_context: context || `${code}_${Date.now()}`,
+        draft_session_id: draftSessionIdRef.current,
+        flow_type: flowTypeRef.current,
+        reason: 'is_required=false in system_otp_overrides',
+      })
+      return
+    }
     setLimitationState({
       isOpen: true,
       limitationCode: code,

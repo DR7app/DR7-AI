@@ -46,6 +46,7 @@ const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
 const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreventiviTab'))
 const CentralinaProTab = lazyWithRetry(() => import('./components/CentralinaProTab'))
 const MaxiPromoGapTab = lazyWithRetry(() => import('./components/MaxiPromoGapTab'))
+const GestioneOtpTab = lazyWithRetry(() => import('./components/GestioneOtpTab'))
 
 const TabLoader = () => (
   <div className="flex items-center justify-center py-12">
@@ -53,7 +54,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'gestione-otp'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -243,6 +244,7 @@ export default function AdminDashboard() {
       { tab: 'scadenze', label: 'Scadenze' },
       { tab: 'fattura', label: 'Fattura' },
       { tab: 'nexi', label: 'Nexi' },
+      { tab: 'gestione-otp', label: 'Gestione OTP' },
     ] },
     { name: 'Centralina Pro', tabs: [
       { tab: 'centralina-pro', label: 'Centralina Pro' },
@@ -269,6 +271,7 @@ export default function AdminDashboard() {
     'cargos': 'Cargos',
     'trustera': 'Trustera',
     'emtn': 'E.M.T.N.',
+    'gestione-otp': 'Gestione OTP',
     'carwash': 'Prenotazioni Prime Wash',
     'carwash-calendar': 'Calendario Prime Wash',
     'carwash-catalog': 'Catalogo Prime Wash',
@@ -605,6 +608,7 @@ export default function AdminDashboard() {
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
           {activeTab === 'centralina-pro' && <CentralinaProTab />}
           {activeTab === 'maxi-promo-gap' && <MaxiPromoGapTab />}
+          {activeTab === 'gestione-otp' && <GestioneOtpTab />}
           </div>
           </Suspense>
         </main>
