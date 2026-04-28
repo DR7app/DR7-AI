@@ -138,16 +138,28 @@ const reminderHandler: Handler = async () => {
                 if (contract) contractNumber = contract.contract_number || ''
             }
 
-            // Get customer phone: booking → contract → customers_extended
+            // Get customer phone: booking → contract → customers_extended.
+            // Also load the booking status here so we can short-circuit when
+            // the booking has been cancelled — no point chasing the customer
+            // for a signature on a contract that no longer applies.
             let customerPhone = ''
 
             if (req.booking_id) {
                 const { data: booking } = await supabase
                     .from('bookings')
-                    .select('customer_phone, booking_details')
+                    .select('customer_phone, booking_details, status')
                     .eq('id', req.booking_id)
                     .single()
                 if (booking) {
+                    const status = String(booking.status || '').toLowerCase()
+                    if (status === 'cancelled' || status === 'annullata') {
+                        console.log(`[signature-reminder] Booking ${req.booking_id} is ${status} — cancelling stale signature request ${req.id}`)
+                        await supabase
+                            .from('signature_requests')
+                            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                            .eq('id', req.id)
+                        continue
+                    }
                     customerPhone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
                 }
             }
