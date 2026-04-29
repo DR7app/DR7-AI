@@ -61,6 +61,57 @@ export default function NexiTab() {
     // Tokenized cards
     const [tokenizedCards, setTokenizedCards] = useState<TokenizedCard[]>([])
     const [cardsLoading, setCardsLoading] = useState(true)
+    const [backfillRunning, setBackfillRunning] = useState(false)
+
+    async function runBackfill() {
+        // Two-step: dry run first to count, then ask for confirm before applying.
+        setBackfillRunning(true)
+        const toastId = toast.loading('Scansione transazioni Nexi...')
+        try {
+            const dry = await authFetch('/.netlify/functions/nexi-tokenize-backfill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dryRun: true, limit: 500 }),
+            })
+            const dryData = await dry.json()
+            toast.dismiss(toastId)
+            if (!dry.ok) throw new Error(dryData.error || `HTTP ${dry.status}`)
+
+            const wouldSave = dryData.would_save || 0
+            const skipped = dryData.skipped || 0
+            const noCust = dryData.no_customer_match || 0
+            const noNexi = dryData.no_nexi_data || 0
+
+            if (wouldSave === 0) {
+                toast(`Niente da recuperare. Già aggiornati: ${skipped}, no match cliente: ${noCust}, no dati Nexi: ${noNexi}`, { icon: 'ℹ️', duration: 6000 })
+                return
+            }
+
+            const ok = confirm(
+                `Recuperare ${wouldSave} carte dalle transazioni passate?\n\n` +
+                `Salterà: ${skipped} (già aggiornate), ${noCust} (cliente non trovato), ${noNexi} (Nexi non risponde).\n\n` +
+                `Premi OK per procedere.`
+            )
+            if (!ok) return
+
+            const applyToast = toast.loading(`Salvataggio ${wouldSave} carte...`)
+            const apply = await authFetch('/.netlify/functions/nexi-tokenize-backfill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dryRun: false, limit: 500 }),
+            })
+            const applyData = await apply.json()
+            toast.dismiss(applyToast)
+            if (!apply.ok) throw new Error(applyData.error || `HTTP ${apply.status}`)
+            toast.success(`✓ ${applyData.saved} carte recuperate!`)
+            await fetchTokenizedCards()
+        } catch (err: any) {
+            toast.dismiss(toastId)
+            toast.error('Errore: ' + (err.message || String(err)))
+        } finally {
+            setBackfillRunning(false)
+        }
+    }
 
     // Nuovo Addebito modal state
     const [showAddebitoModal, setShowAddebitoModal] = useState(false)
@@ -307,6 +358,14 @@ export default function NexiTab() {
                     <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Carte Tokenizzate</h3>
                     <div className="flex items-center gap-3">
                         <span className="text-xs text-theme-text-muted">{tokenizedCards.length} carte</span>
+                        <button
+                            onClick={runBackfill}
+                            disabled={backfillRunning}
+                            className="text-xs px-3 py-1 rounded-full bg-dr7-gold/15 text-dr7-gold hover:bg-dr7-gold/25 disabled:opacity-50"
+                            title="Recupera dati carta da Nexi per le transazioni passate il cui callback non ha attaccato il contractId al cliente"
+                        >
+                            {backfillRunning ? 'Recupero...' : '↻ Recupera carte mancanti'}
+                        </button>
                         <button onClick={fetchTokenizedCards} className="text-xs text-theme-text-muted hover:text-dr7-gold">Aggiorna</button>
                     </div>
                 </div>
