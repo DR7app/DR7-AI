@@ -276,33 +276,62 @@ export default function DashboardTab() {
         </div>
       </div>
 
-      {/* ========== KPI PRINCIPALI ========== */}
-      <div>
-        <SectionHeader title="KPI Principali" subtitle="La situazione della tua azienda in uno sguardo" />
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          <StatCard label="Fatturato Mese" value={`\u20AC ${fmt(d.revenue.currentMonth)}`} trend={d.revenue.changePercent} accent="gold" border />
-          <StatCard label="Incassato Mese" value={`\u20AC ${fmt(d.revenue.incassato)}`} sub={`${d.revenue.incassatoPercent}% del fatturato`} accent="green" border />
-          <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-4 border border-white/5">
-            <p className="text-[10px] uppercase tracking-widest text-theme-text-muted font-semibold mb-2">Breakdown Fatturato</p>
-            <div className="space-y-2">
-              {[
-                { label: 'Noleggi', value: d.revenue.bySource.rental, color: 'bg-[#2d8a7e]' },
-                { label: 'Lavaggi', value: d.revenue.bySource.wash, color: 'bg-blue-400' },
-                { label: 'Penali', value: d.revenue.bySource.penalties, color: 'bg-amber-400' },
-                { label: 'Danni', value: d.revenue.bySource.danni, color: 'bg-red-400' },
-              ].filter(s => s.value > 0).map((s, i) => (
-                <div key={i} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${s.color}`} />
-                    <span className="text-theme-text-muted">{s.label}</span>
-                  </div>
-                  <span className="text-theme-text-primary font-medium">{'\u20AC'} {fmt(s.value)}</span>
+      {/* ========== KPI STRIP — 5 cards (Rentora design v1) ========== */}
+      {(() => {
+        const fatturato = d.revenue.currentMonth
+        const incassato = d.revenue.incassato
+        const incassatoPct = d.revenue.incassatoPercent
+        const costiTotali = supplierData?.grandTotal || 0
+        const costiCount = supplierData?.totalCount || 0
+        const margine = Math.max(0, fatturato - costiTotali)
+        const marginePct = fatturato > 0 ? Math.round((margine / fatturato) * 100) : 0
+        // Stima Utile Netto: margine meno tasse ~33% (IRES 24% + IRAP ~9%).
+        const TAX_RATE = 0.33
+        const utileNetto = Math.round(margine * (1 - TAX_RATE) * 100) / 100
+
+        const KpiCard = ({ title, value, trend, sub, trendDirection }: {
+          title: string
+          value: string
+          trend?: number | null
+          sub?: string
+          trendDirection?: 'up-good' | 'down-good'
+        }) => {
+          let tColor = 'text-theme-text-muted'
+          let arrow = ''
+          if (typeof trend === 'number') {
+            const positive = trend >= 0
+            const isGood = trendDirection === 'down-good' ? !positive : positive
+            tColor = isGood ? 'text-green-500' : 'text-red-500'
+            arrow = positive ? '\u25B2' : '\u25BC'
+          }
+          const trendStr = typeof trend === 'number' ? `${arrow} ${Math.abs(trend).toFixed(1)}%` : ''
+          return (
+            <div className="bg-white dark:bg-theme-bg-secondary rounded-2xl p-5 border border-black/5 dark:border-white/5 shadow-sm flex flex-col gap-2 min-h-[130px]">
+              <p className="text-[12px] font-semibold text-theme-text-secondary tracking-tight">{title}</p>
+              <p className="text-[26px] font-bold text-theme-text-primary tracking-tight leading-tight">{value}</p>
+              {(trendStr || sub) && (
+                <div className="flex items-baseline gap-2 mt-auto flex-wrap">
+                  {trendStr && <span className={`text-xs font-semibold ${tColor}`}>{trendStr}</span>}
+                  {sub && <span className="text-[11px] text-theme-text-muted">{sub}</span>}
                 </div>
-              ))}
+              )}
+            </div>
+          )
+        }
+
+        return (
+          <div>
+            <SectionHeader title="Dashboard Proprietario / Investitore" subtitle="La situazione della tua azienda in uno sguardo" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <KpiCard title="Fatturato" value={`\u20AC ${fmt(fatturato)}`} trend={d.revenue.changePercent} trendDirection="up-good" />
+              <KpiCard title="Incassato Reale" value={`\u20AC ${fmt(incassato)}`} sub={`${incassatoPct}% del fatturato`} />
+              <KpiCard title="Costi Totali" value={`\u20AC ${fmtDec(costiTotali)}`} sub={`${costiCount} fatture`} />
+              <KpiCard title="Margine Operativo" value={`\u20AC ${fmt(margine)}`} sub={`${marginePct}% del fatturato`} />
+              <KpiCard title="Utile Netto Stimato" value={`\u20AC ${fmt(utileNetto)}`} trend={d.revenue.changePercent} trendDirection="up-good" sub="dopo tasse ~33%" />
             </div>
           </div>
-        </div>
-      </div>
+        )
+      })()}
 
       {/* ========== OCCUPAZIONE FLOTTA ========== */}
       <div>
