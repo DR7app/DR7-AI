@@ -227,7 +227,6 @@ export default function AdminDashboard() {
       { tab: 'codice-sconto', label: 'Codice Sconto' },
       { tab: 'maxi-promo-gap', label: 'Maxi Promo Gap' },
       { tab: 'promo-incassi', label: 'Promo Incassi' },
-      { tab: 'campaign-center', label: 'Campaign Center' },
     ] },
     { name: 'Report', tabs: [
       { tab: 'report-noleggio', label: 'Noleggio' },
@@ -263,6 +262,9 @@ export default function AdminDashboard() {
     ] },
     { name: 'E.M.T.N.', tabs: [
       { tab: 'emtn', label: 'E.M.T.N.' },
+    ] },
+    { name: 'Campaign Center', tabs: [
+      { tab: 'campaign-center', label: 'Campaign Center' },
     ] },
   ]
   const sectionForActiveTab = SECTIONS.find(s => s.tabs.some(t => t.tab === activeTab)) || null
