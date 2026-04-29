@@ -84,6 +84,8 @@ export default function ReviewManagementTab() {
   const [activeTab, setActiveTab] = useState<TabKey>('ELIGIBLE')
   const [filterServiceType, setFilterServiceType] = useState<'ALL' | 'RENTAL' | 'WASH'>('ALL')
   const [searchTerm, setSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
   const [selectAll, setSelectAll] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showSettings, setShowSettings] = useState(false)
@@ -490,99 +492,6 @@ export default function ReviewManagementTab() {
     await Promise.all([fetchCandidates(), fetchStats()])
   }
 
-  // Direct Supabase re-evaluation: move ELIGIBLE candidates with penalties/damages/open deposits to TO_REVIEW
-  async function handleFixEligibility() {
-    if (!confirm('Ri-classificare candidati con penali/danni/cauzione aperta da Idonei a Da Verificare?')) return
-    setEvaluating(true)
-    const toastId = toast.loading('Ri-classificazione in corso...')
-
-    try {
-      // Get all ELIGIBLE candidates
-      const { data: eligible, error: eErr } = await supabase
-        .from('review_candidates')
-        .select('id, source_record_id, service_type')
-        .eq('eligibility_status', 'ELIGIBLE')
-
-      if (eErr) throw eErr
-      if (!eligible || eligible.length === 0) {
-        toast.dismiss(toastId)
-        toast.success('Nessun candidato idoneo da verificare')
-        setEvaluating(false)
-        return
-      }
-
-      let moved = 0
-
-      for (const candidate of eligible) {
-        // Check booking for penalties/damages
-        const { data: booking } = await supabase
-          .from('bookings')
-          .select('booking_details')
-          .eq('id', candidate.source_record_id)
-          .single()
-
-        const details = booking?.booking_details || {}
-        const hasPenalty = Array.isArray(details.penalties) && details.penalties.length > 0
-        const hasDamage = Array.isArray(details.danni) && details.danni.length > 0
-
-        // Check penalty/damage invoices
-        const { data: penaltyInvoices } = await supabase
-          .from('fatture')
-          .select('id')
-          .eq('booking_id', candidate.source_record_id)
-          .in('tipo_fattura', ['penale', 'danno'])
-          .limit(1)
-        const hasInvoice = (penaltyInvoices && penaltyInvoices.length > 0)
-
-        // Check open deposit
-        let hasOpenDeposit = false
-        if (candidate.service_type === 'RENTAL') {
-          const { data: openCauzioni } = await supabase
-            .from('cauzioni')
-            .select('id, stato')
-            .eq('riferimento_contratto_id', candidate.source_record_id)
-          hasOpenDeposit = (openCauzioni || []).some((c: any) => c.stato !== 'Restituita' && c.stato !== 'Sbloccata')
-        }
-
-        if (hasPenalty || hasDamage || hasInvoice || hasOpenDeposit) {
-          const reason = hasPenalty ? 'Presenza di penale registrata'
-            : hasDamage ? 'Danno registrato sul veicolo'
-            : hasInvoice ? 'Fattura penale/danno presente'
-            : 'Cauzione ancora aperta o in attesa'
-          const code = hasPenalty ? 'HAS_PENALTY'
-            : hasDamage ? 'HAS_DAMAGE'
-            : hasInvoice ? 'HAS_PENALTY'
-            : 'OPEN_DEPOSIT'
-
-          await supabase
-            .from('review_candidates')
-            .update({
-              eligibility_status: 'TO_REVIEW',
-              review_risk: 'RED',
-              send_status: 'BLOCKED',
-              exclusion_reason_code: code,
-              exclusion_reason_text: reason,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', candidate.id)
-
-          moved++
-        }
-
-        toast.loading(`Verifica: ${eligible.indexOf(candidate) + 1}/${eligible.length}`, { id: toastId })
-      }
-
-      toast.dismiss(toastId)
-      toast.success(`${moved} candidati spostati da Idonei a Da Verificare`)
-      await Promise.all([fetchCandidates(), fetchStats()])
-    } catch (err: unknown) {
-      toast.dismiss(toastId)
-      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
-    } finally {
-      setEvaluating(false)
-    }
-  }
-
   async function handleBulkEvaluate(forceReEvaluate = true) {
     if (!confirm('Valutare / ri-valutare tutte le prenotazioni e lavaggi degli ultimi 30 giorni?')) return
     setEvaluating(true)
@@ -745,23 +654,39 @@ export default function ReviewManagementTab() {
   // ── Render helpers ────────────────────────────────────────────────────────
 
   function getServiceBadge(type: string) {
-    if (type === 'RENTAL') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-600 text-white">Noleggio</span>
-    if (type === 'WASH') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-600 text-white">Lavaggio</span>
-    return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-600 text-white">{type}</span>
+    if (type === 'RENTAL') return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">Noleggio</span>
+    if (type === 'WASH') return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-cyan-50 text-cyan-700 border border-cyan-200">Lavaggio</span>
+    return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200">{type}</span>
   }
 
-  function getRiskBadge(level: string) {
-    if (level === 'GREEN') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-600 text-white">Sicuro</span>
-    if (level === 'YELLOW') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-600 text-black">Attenzione</span>
-    if (level === 'RED') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-600 text-white">Non inviare</span>
-    return null
-  }
+  // Combined status pill (dot + label) — derives a single visual state from
+  // eligibility_status × send_status × review_risk. Mirrors the Rentora design.
+  function renderStatusPill(c: ReviewCandidate) {
+    let dot = 'bg-gray-400'
+    let text = 'text-gray-700'
+    let bg = 'bg-gray-50 border-gray-200'
+    let label: string = c.send_status
 
-  function getSendStatusBadge(status: string) {
-    if (status === 'TO_SEND') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-600 text-black">Da inviare</span>
-    if (status === 'SENT') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-600 text-white">Inviata</span>
-    if (status === 'FAILED') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-600 text-white">Fallita</span>
-    return null
+    if (c.eligibility_status === 'EXCLUDED') {
+      dot = 'bg-red-500'; text = 'text-red-700'; bg = 'bg-red-50 border-red-200'; label = 'Escluso'
+    } else if (c.send_status === 'SENT') {
+      dot = 'bg-green-500'; text = 'text-green-700'; bg = 'bg-green-50 border-green-200'; label = 'Inviato'
+    } else if (c.send_status === 'FAILED') {
+      dot = 'bg-red-500'; text = 'text-red-700'; bg = 'bg-red-50 border-red-200'; label = 'Fallito'
+    } else if (c.eligibility_status === 'TO_REVIEW') {
+      dot = 'bg-yellow-500'; text = 'text-yellow-800'; bg = 'bg-yellow-50 border-yellow-200'; label = 'Da Verificare'
+    } else if (c.send_status === 'TO_SEND' && c.eligibility_status === 'ELIGIBLE') {
+      dot = 'bg-green-500'; text = 'text-green-700'; bg = 'bg-green-50 border-green-200'; label = 'Pronto'
+    } else if (c.send_status === 'BLOCKED') {
+      dot = 'bg-red-500'; text = 'text-red-700'; bg = 'bg-red-50 border-red-200'; label = 'Bloccato'
+    }
+
+    return (
+      <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium border ${bg} ${text}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+        {label}
+      </span>
+    )
   }
 
   // ── Loading state ─────────────────────────────────────────────────────────
@@ -776,32 +701,59 @@ export default function ReviewManagementTab() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // Pagination derived from filtered candidates
+  const totalRows = filteredCandidates.length
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize))
+  const safePage = Math.min(currentPage, totalPages)
+  const pageStart = (safePage - 1) * pageSize
+  const pageEnd = Math.min(pageStart + pageSize, totalRows)
+  const pagedCandidates = filteredCandidates.slice(pageStart, pageEnd)
+
   return (
-    <div className="p-3 sm:p-6">
-      {/* Header */}
-      <div className="mb-6 flex justify-between items-center flex-wrap gap-3">
-        <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Recensioni</h2>
-        <div className="flex items-center gap-3 flex-wrap">
+    <div className="p-3 sm:p-6 max-w-7xl mx-auto">
+      {/* Header — title + action buttons (top-right) */}
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[22px] font-semibold text-theme-text-primary tracking-tight">Gestione Recensioni</h2>
+          <p className="text-sm text-theme-text-secondary mt-0.5">Invia richieste di recensione ai clienti idonei</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={handleFixEligibility}
-            disabled={evaluating}
-            className="px-4 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
+            onClick={() => handleBulkSend()}
+            disabled={bulkSending}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-theme-text-primary text-sm font-semibold rounded-full border border-theme-border hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
           >
-            {evaluating ? 'Verifica...' : 'Verifica Idonei'}
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            {bulkSending ? 'Invio…' : 'Invia Email'}
+          </button>
+          <button
+            onClick={() => handleBulkSend()}
+            disabled={bulkSending}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-full hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+            </svg>
+            {bulkSending ? 'Invio…' : 'Invia WhatsApp'}
           </button>
           <button
             onClick={() => handleBulkEvaluate(true)}
             disabled={evaluating}
-            className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="p-2 bg-theme-bg-tertiary border border-theme-border rounded-full hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+            title="Scansiona nuove prenotazioni"
           >
-            {evaluating ? 'Valutazione...' : 'Scansiona Nuove'}
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-theme-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
           </button>
           <button
             onClick={() => { setShowTemplates(!showTemplates); setShowSettings(false) }}
             className="p-2 bg-theme-bg-tertiary border border-theme-border rounded-full hover:bg-theme-bg-hover transition-colors"
             title="Template"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-theme-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-theme-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </button>
@@ -810,7 +762,7 @@ export default function ReviewManagementTab() {
             className="p-2 bg-theme-bg-tertiary border border-theme-border rounded-full hover:bg-theme-bg-hover transition-colors"
             title="Impostazioni"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-theme-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-theme-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
@@ -818,27 +770,41 @@ export default function ReviewManagementTab() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 mb-6">
-        <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-          <div className="text-xs sm:text-sm text-theme-text-secondary">Idonei</div>
-          <div className="text-2xl sm:text-3xl font-bold text-green-500">{stats.eligible}</div>
+      {/* Top filter bar — Tipo Servizio / Stato Recensione / Search / Page size */}
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl p-3 mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-theme-text-secondary uppercase tracking-wide">Tipo Servizio</span>
+          <select
+            value={filterServiceType}
+            onChange={e => { setFilterServiceType(e.target.value as typeof filterServiceType); setCurrentPage(1) }}
+            className="px-3 py-1.5 bg-theme-bg-primary border border-theme-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+          >
+            <option value="ALL">Lavaggio &amp; Noleggio</option>
+            <option value="RENTAL">Solo Noleggio</option>
+            <option value="WASH">Solo Lavaggio</option>
+          </select>
         </div>
-        <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-          <div className="text-xs sm:text-sm text-theme-text-secondary">Da Verificare</div>
-          <div className="text-2xl sm:text-3xl font-bold text-yellow-500">{stats.to_review}</div>
+        <div className="flex-1 min-w-[200px]">
+          <input
+            type="text"
+            placeholder="Cerca per nome, email, telefono…"
+            value={searchTerm}
+            onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1) }}
+            className="w-full px-3 py-1.5 bg-theme-bg-primary border border-theme-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-secondary focus:outline-none focus:border-dr7-gold"
+          />
         </div>
-        <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-          <div className="text-xs sm:text-sm text-theme-text-secondary">Da Inviare</div>
-          <div className="text-2xl sm:text-3xl font-bold text-blue-500">{stats.to_send}</div>
-        </div>
-        <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-          <div className="text-xs sm:text-sm text-theme-text-secondary">Inviate</div>
-          <div className="text-2xl sm:text-3xl font-bold text-green-500">{stats.sent}</div>
-        </div>
-        <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-          <div className="text-xs sm:text-sm text-theme-text-secondary">Fallite</div>
-          <div className="text-2xl sm:text-3xl font-bold text-red-500">{stats.failed}</div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-theme-text-secondary uppercase tracking-wide">Mostra</span>
+          <select
+            value={pageSize}
+            onChange={e => { setPageSize(parseInt(e.target.value)); setCurrentPage(1) }}
+            className="px-3 py-1.5 bg-theme-bg-primary border border-theme-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+          >
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
         </div>
       </div>
 
@@ -998,273 +964,293 @@ export default function ReviewManagementTab() {
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Status pill tabs (with colored dots + counts) */}
       <div className="flex gap-2 mb-4 flex-wrap">
         {([
-          { key: 'ELIGIBLE' as TabKey, label: 'Idonei', count: stats.eligible },
-          { key: 'TO_REVIEW' as TabKey, label: 'Da Verificare', count: stats.to_review },
-        ]).map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => { setActiveTab(tab.key); setSelectedIds(new Set()); setSelectAll(false) }}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-              activeTab === tab.key
-                ? 'bg-dr7-gold text-white'
-                : 'bg-theme-bg-tertiary text-theme-text-secondary border border-theme-border hover:bg-theme-bg-hover'
-            }`}
-          >
-            {tab.label} ({tab.count})
-          </button>
-        ))}
-      </div>
-
-      {/* Filters Row */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <select
-          value={filterServiceType}
-          onChange={e => setFilterServiceType(e.target.value as typeof filterServiceType)}
-          className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-xl text-sm text-theme-text-primary"
-        >
-          <option value="ALL">Tutti</option>
-          <option value="RENTAL">Noleggio</option>
-          <option value="WASH">Lavaggio</option>
-        </select>
-        <input
-          type="text"
-          placeholder="Cerca per nome, email, telefono..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="w-full sm:flex-1 sm:min-w-[200px] px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-xl text-sm text-theme-text-primary placeholder-theme-text-secondary"
-        />
-        {activeTab === 'ELIGIBLE' && (
-          <>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectAll}
-                onChange={toggleSelectAll}
-                className="w-4 h-4 rounded accent-dr7-gold"
-              />
-              <span className="text-sm text-theme-text-secondary">Seleziona Tutti</span>
-            </label>
+          { key: 'ELIGIBLE' as TabKey, label: 'Pronti', count: stats.eligible, dot: 'bg-green-500' },
+          { key: 'TO_REVIEW' as TabKey, label: 'Da Verificare', count: stats.to_review, dot: 'bg-yellow-500' },
+          { key: 'EXCLUDED' as TabKey, label: 'Esclusi', count: stats.excluded, dot: 'bg-red-500' },
+        ]).map(tab => {
+          const isActive = activeTab === tab.key
+          return (
             <button
-              onClick={handleBulkSend}
-              disabled={bulkSending}
-              className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-full hover:bg-green-700 transition-colors disabled:opacity-50"
+              key={tab.key}
+              onClick={() => { setActiveTab(tab.key); setSelectedIds(new Set()); setSelectAll(false); setCurrentPage(1) }}
+              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+                isActive
+                  ? 'bg-theme-bg-primary text-theme-text-primary border-theme-text-primary shadow-sm'
+                  : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'
+              }`}
             >
-              {bulkSending ? 'Invio in corso...' : 'Invia a Tutti gli Idonei'}
+              <span className={`w-1.5 h-1.5 rounded-full ${tab.dot}`} />
+              {tab.label}
+              <span className={`text-xs ${isActive ? 'text-theme-text-secondary' : 'text-theme-text-secondary/70'}`}>
+                {tab.count}
+              </span>
             </button>
-          </>
-        )}
+          )
+        })}
       </div>
 
-      {/* Alert banner for TO_REVIEW tab */}
+      {/* Alert banner for TO_REVIEW / EXCLUDED tabs */}
       {activeTab === 'TO_REVIEW' && (
-        <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-2xl p-3 mb-4 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+        <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-3 mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
           </svg>
-          <span className="text-sm text-yellow-300">Questi clienti richiedono verifica manuale prima dell'invio della richiesta di recensione.</span>
+          <span className="text-sm text-yellow-800">Questi clienti richiedono verifica manuale prima dell'invio della richiesta di recensione.</span>
+        </div>
+      )}
+      {activeTab === 'EXCLUDED' && (
+        <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-3 mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <span className="text-sm text-yellow-800">
+            <strong>Attenzione:</strong> Non inviare recensioni a clienti potenzialmente problematici.
+          </span>
+        </div>
+      )}
+
+      {/* Eligible-only quick action bar */}
+      {activeTab === 'ELIGIBLE' && filteredCandidates.length > 0 && (
+        <div className="flex items-center gap-3 mb-3">
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selectAll}
+              onChange={toggleSelectAll}
+              className="w-4 h-4 rounded accent-dr7-gold"
+            />
+            <span className="text-sm text-theme-text-secondary">Seleziona tutti su questa pagina</span>
+          </label>
+          {selectedIds.size > 0 && (
+            <span className="text-sm text-theme-text-secondary">{selectedIds.size} selezionati</span>
+          )}
         </div>
       )}
 
       {/* Table */}
-      <div className="bg-theme-bg-secondary border border-theme-border rounded-3xl overflow-hidden">
+      <div className="bg-theme-bg-primary border border-theme-border rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-theme-bg-hover border-b border-theme-border">
-              <tr>
-                {activeTab === 'ELIGIBLE' && (
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
-                    <input
-                      type="checkbox"
-                      checked={selectAll}
-                      onChange={toggleSelectAll}
-                      className="w-4 h-4 rounded accent-dr7-gold"
-                    />
-                  </th>
-                )}
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tipo Servizio</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Rischio</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato Invio</th>
-                {activeTab === 'EXCLUDED' && (
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Motivo Esclusione</th>
-                )}
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Contatti</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-theme-bg-tertiary/50 border-b border-theme-border text-xs uppercase tracking-wide text-theme-text-secondary">
+                {activeTab === 'ELIGIBLE' && <th className="px-4 py-3 text-left w-10"></th>}
+                <th className="px-4 py-3 text-left font-medium">Stato</th>
+                <th className="px-4 py-3 text-left font-medium">Cliente</th>
+                <th className="px-4 py-3 text-left font-medium">Oggetto</th>
+                <th className="px-4 py-3 text-left font-medium">Email</th>
+                <th className="px-4 py-3 text-left font-medium">WhatsApp</th>
+                {activeTab === 'EXCLUDED' && <th className="px-4 py-3 text-left font-medium">Motivo</th>}
+                <th className="px-4 py-3 text-right font-medium">Azioni</th>
               </tr>
             </thead>
             <tbody>
-              {filteredCandidates.length === 0 ? (
+              {pagedCandidates.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={activeTab === 'EXCLUDED' ? 8 : activeTab === 'ELIGIBLE' ? 8 : 7}
-                    className="px-4 py-12 text-center text-theme-text-secondary"
-                  >
+                  <td colSpan={activeTab === 'EXCLUDED' ? 7 : activeTab === 'ELIGIBLE' ? 7 : 6} className="px-4 py-16 text-center text-theme-text-secondary">
                     Nessun candidato trovato
                   </td>
                 </tr>
               ) : (
-                filteredCandidates.map(candidate => (
-                  <tr
-                    key={candidate.id}
-                    className="border-b border-theme-border hover:bg-theme-bg-hover transition-colors"
-                  >
-                    {/* Checkbox (ELIGIBLE only) */}
-                    {activeTab === 'ELIGIBLE' && (
+                pagedCandidates.map(candidate => {
+                  const shortId = (candidate.source_record_id || candidate.id || '').slice(0, 8).toUpperCase()
+                  return (
+                    <tr key={candidate.id} className="border-b border-theme-border last:border-0 hover:bg-theme-bg-hover/50 transition-colors">
+                      {activeTab === 'ELIGIBLE' && (
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(candidate.id)}
+                            onChange={() => toggleSelect(candidate.id)}
+                            className="w-4 h-4 rounded accent-dr7-gold"
+                          />
+                        </td>
+                      )}
+
+                      {/* Stato — colored dot pill */}
+                      <td className="px-4 py-3">{renderStatusPill(candidate)}</td>
+
+                      {/* Cliente — name + #ID */}
                       <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(candidate.id)}
-                          onChange={() => toggleSelect(candidate.id)}
-                          className="w-4 h-4 rounded accent-dr7-gold"
-                        />
+                        <div className="font-medium text-theme-text-primary">{candidate.customer_name || 'N/A'}</div>
+                        <div className="text-xs text-theme-text-secondary">#{shortId}</div>
                       </td>
-                    )}
 
-                    {/* Cliente */}
-                    <td className="px-4 py-3 text-sm text-theme-text-primary font-medium">
-                      {candidate.customer_name || 'N/A'}
-                    </td>
+                      {/* Oggetto — service-type pill */}
+                      <td className="px-4 py-3">{getServiceBadge(candidate.service_type)}</td>
 
-                    {/* Tipo Servizio */}
-                    <td className="px-4 py-3 text-sm">
-                      {getServiceBadge(candidate.service_type)}
-                    </td>
-
-                    {/* Rischio */}
-                    <td className="px-4 py-3 text-sm">
-                      {getRiskBadge(candidate.review_risk)}
-                    </td>
-
-                    {/* Stato Invio */}
-                    <td className="px-4 py-3 text-sm">
-                      {getSendStatusBadge(candidate.send_status)}
-                    </td>
-
-                    {/* Motivo Esclusione (EXCLUDED only) */}
-                    {activeTab === 'EXCLUDED' && (
-                      <td className="px-4 py-3 text-sm text-red-400">
-                        {candidate.exclusion_reason_text || candidate.exclusion_reason_code || '---'}
-                      </td>
-                    )}
-
-                    {/* Contatti */}
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex items-center gap-2">
-                        {candidate.customer_email && (
-                          <span title={candidate.customer_email} className="text-blue-400 cursor-help">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      {/* Email */}
+                      <td className="px-4 py-3 text-theme-text-secondary">
+                        {candidate.customer_email ? (
+                          <span className="inline-flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-theme-text-secondary/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
+                            <span className="truncate max-w-[200px]" title={candidate.customer_email}>{candidate.customer_email}</span>
                           </span>
+                        ) : (
+                          <span className="text-theme-text-secondary/60">—</span>
                         )}
-                        {candidate.customer_phone && (
-                          <span title={candidate.customer_phone} className="text-green-400 cursor-help">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      </td>
+
+                      {/* WhatsApp */}
+                      <td className="px-4 py-3 text-theme-text-secondary">
+                        {candidate.customer_phone ? (
+                          <span className="inline-flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                             </svg>
+                            <span>{candidate.customer_phone}</span>
                           </span>
+                        ) : (
+                          <span className="text-theme-text-secondary/60">—</span>
                         )}
-                        {!candidate.customer_email && !candidate.customer_phone && (
-                          <span className="text-theme-text-secondary text-xs">Nessun contatto</span>
-                        )}
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Azioni */}
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2 flex-wrap">
-                        {activeTab === 'ELIGIBLE' && (
-                          <>
-                            {candidate.customer_email && (
-                              <button
-                                onClick={() => handleSend(candidate.id, 'EMAIL')}
-                                disabled={sendingId === candidate.id}
-                                className="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50"
-                              >
-                                Invia Email
-                              </button>
-                            )}
-                            {candidate.customer_phone && (
-                              <button
-                                onClick={() => handleSend(candidate.id, 'WHATSAPP')}
-                                disabled={sendingId === candidate.id}
-                                className="px-3 py-1 bg-green-600 text-white text-xs font-semibold rounded-full hover:bg-green-700 transition-colors disabled:opacity-50"
-                              >
-                                Invia WhatsApp
-                              </button>
-                            )}
-                            {candidate.customer_email && candidate.customer_phone && (
-                              <button
-                                onClick={() => handleSend(candidate.id, 'BOTH')}
-                                disabled={sendingId === candidate.id}
-                                className="px-3 py-1 bg-purple-600 text-white text-xs font-semibold rounded-full hover:bg-purple-700 transition-colors disabled:opacity-50"
-                              >
-                                Invia Entrambi
-                              </button>
-                            )}
-                            {(candidate.customer_email || candidate.customer_phone) && (
-                              <button
-                                onClick={() => handleGenerateAndSendCode(candidate)}
-                                disabled={generatingCodeId === candidate.id}
-                                title="Genera codice sconto reale (Supercar €100 + Lavaggio €10) e invialo via WhatsApp"
-                                className="px-3 py-1 bg-dr7-gold text-white text-xs font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
-                              >
-                                {generatingCodeId === candidate.id ? 'Generazione...' : 'Genera Codice'}
-                              </button>
-                            )}
-                          </>
-                        )}
+                      {activeTab === 'EXCLUDED' && (
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                            {candidate.exclusion_reason_text || candidate.exclusion_reason_code || 'Motivo non specificato'}
+                          </span>
+                        </td>
+                      )}
 
-                        {activeTab === 'TO_REVIEW' && (
-                          <>
+                      {/* Azioni */}
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1.5 justify-end items-center">
+                          {activeTab === 'ELIGIBLE' && (
+                            <>
+                              {candidate.customer_email && (
+                                <button
+                                  onClick={() => handleSend(candidate.id, 'EMAIL')}
+                                  disabled={sendingId === candidate.id}
+                                  title="Invia Email"
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-theme-border bg-theme-bg-primary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  </svg>
+                                </button>
+                              )}
+                              {candidate.customer_phone && (
+                                <button
+                                  onClick={() => handleSend(candidate.id, 'WHATSAPP')}
+                                  disabled={sendingId === candidate.id}
+                                  className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                  </svg>
+                                  Invia
+                                </button>
+                              )}
+                              {(candidate.customer_email || candidate.customer_phone) && (
+                                <button
+                                  onClick={() => handleGenerateAndSendCode(candidate)}
+                                  disabled={generatingCodeId === candidate.id}
+                                  title="Genera codice sconto reale (Supercar €100 + Lavaggio €10) e invialo via WhatsApp"
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-theme-border bg-dr7-gold text-white hover:opacity-90 transition-colors disabled:opacity-50"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 8a3 3 0 116 0 3 3 0 01-6 0zM12 16a3 3 0 116 0 3 3 0 01-6 0zM4 20l16-16" />
+                                  </svg>
+                                </button>
+                              )}
+                              {candidate.send_status === 'SENT' && (
+                                <button
+                                  onClick={() => handleSblocca(candidate.id)}
+                                  disabled={sendingId === candidate.id}
+                                  className="inline-flex items-center px-3 h-8 rounded-full border border-amber-400 text-amber-700 text-xs font-semibold hover:bg-amber-50 transition-colors disabled:opacity-50"
+                                >
+                                  Sblocca
+                                </button>
+                              )}
+                            </>
+                          )}
+
+                          {activeTab === 'TO_REVIEW' && (
+                            <>
+                              <button
+                                onClick={() => handleApproveAndSend(candidate.id)}
+                                disabled={sendingId === candidate.id}
+                                className="inline-flex items-center px-3 h-8 rounded-full bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                              >
+                                Approva e Invia
+                              </button>
+                              <button
+                                onClick={() => handleExclude(candidate.id)}
+                                disabled={sendingId === candidate.id}
+                                className="inline-flex items-center px-3 h-8 rounded-full border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors disabled:opacity-50"
+                              >
+                                Escludi
+                              </button>
+                            </>
+                          )}
+
+                          {activeTab === 'EXCLUDED' && (
                             <button
-                              onClick={() => handleApproveAndSend(candidate.id)}
+                              onClick={() => handleSblocca(candidate.id)}
                               disabled={sendingId === candidate.id}
-                              className="px-3 py-1 bg-green-600 text-white text-xs font-semibold rounded-full hover:bg-green-700 transition-colors disabled:opacity-50"
+                              className="inline-flex items-center px-3 h-8 rounded-full border border-amber-400 text-amber-700 text-xs font-semibold hover:bg-amber-50 transition-colors disabled:opacity-50"
                             >
-                              Approva e Invia
+                              Sblocca
                             </button>
-                            <button
-                              onClick={() => handleExclude(candidate.id)}
-                              disabled={sendingId === candidate.id}
-                              className="px-3 py-1 bg-red-600 text-white text-xs font-semibold rounded-full hover:bg-red-700 transition-colors disabled:opacity-50"
-                            >
-                              Escludi
-                            </button>
-                          </>
-                        )}
-
-                        {activeTab === 'EXCLUDED' && (
-                          <button
-                            onClick={() => handleSblocca(candidate.id)}
-                            disabled={sendingId === candidate.id}
-                            className="px-3 py-1 bg-amber-600 text-white text-xs font-semibold rounded-full hover:bg-amber-700 transition-colors disabled:opacity-50"
-                          >
-                            Sblocca
-                          </button>
-                        )}
-
-                        {/* Sblocca for already-sent candidates (ELIGIBLE tab) */}
-                        {activeTab === 'ELIGIBLE' && candidate.send_status === 'SENT' && (
-                          <button
-                            onClick={() => handleSblocca(candidate.id)}
-                            disabled={sendingId === candidate.id}
-                            className="px-3 py-1 bg-amber-600 text-white text-xs font-semibold rounded-full hover:bg-amber-700 transition-colors disabled:opacity-50"
-                          >
-                            Sblocca Recensione
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Pagination footer */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mt-4 px-1 text-sm text-theme-text-secondary">
+        <span>
+          {totalRows === 0 ? 'Nessun risultato' : <>Mostra <strong className="text-theme-text-primary">{pageStart + 1}</strong>–<strong className="text-theme-text-primary">{pageEnd}</strong> di <strong className="text-theme-text-primary">{totalRows}</strong></>}
+        </span>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
+              disabled={safePage <= 1}
+              className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Pagina precedente"
+            >
+              ‹
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+              .map((p, i, arr) => (
+                <span key={p} className="inline-flex items-center">
+                  {i > 0 && p - arr[i - 1] > 1 && <span className="px-2 text-theme-text-secondary/60">…</span>}
+                  <button
+                    onClick={() => setCurrentPage(p)}
+                    className={`w-8 h-8 inline-flex items-center justify-center rounded-lg border text-sm transition-colors ${
+                      p === safePage
+                        ? 'border-theme-text-primary bg-theme-text-primary text-theme-bg-primary font-semibold'
+                        : 'border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                </span>
+              ))}
+            <button
+              onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
+              disabled={safePage >= totalPages}
+              className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Pagina successiva"
+            >
+              ›
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
