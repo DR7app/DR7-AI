@@ -169,16 +169,21 @@ export const handler: Handler = async (event) => {
     let sent = 0
     let failed = 0
 
-    for (const v of triggering) {
+    // Same rule as the cron: ONE message per recipient — pick the best
+    // deal (lowest coefficient) among all triggering vehicles. Otherwise
+    // a tester with three vehicles below threshold would get three
+    // messages, which is the spam behaviour we just fixed in the cron.
+    const pick = [...triggering].sort((a, b) => a.active_coeff - b.active_coeff)[0]
+    {
         const templateVars = {
-            vehicle: v.name,
-            veicolo: v.name,
-            vehicle_specs: v.name,
-            coefficient: String(v.active_coeff),
-            coefficiente: String(v.active_coeff),
-            incasso_attuale: v.monthly_revenue.toFixed(0),
-            incasso: v.monthly_revenue.toFixed(0),
-            soglia: String(v.threshold_min),
+            vehicle: pick.name,
+            veicolo: pick.name,
+            vehicle_specs: pick.name,
+            coefficient: String(pick.active_coeff),
+            coefficiente: String(pick.active_coeff),
+            incasso_attuale: pick.monthly_revenue.toFixed(0),
+            incasso: pick.monthly_revenue.toFixed(0),
+            soglia: String(pick.threshold_min),
             month: String(month),
             year: String(year),
             year_month: ym,
@@ -192,16 +197,15 @@ export const handler: Handler = async (event) => {
             const json = await res.json().catch(() => ({}))
             if (!res.ok || json.skipped) {
                 failed++
-                results.push({ vehicle: v.name, ok: false, reason: json.message || json.reason || `HTTP ${res.status}` })
+                results.push({ vehicle: pick.name, ok: false, reason: json.message || json.reason || `HTTP ${res.status}` })
             } else {
                 sent++
-                results.push({ vehicle: v.name, ok: true })
+                results.push({ vehicle: pick.name, ok: true })
             }
         } catch (err) {
             failed++
-            results.push({ vehicle: v.name, ok: false, reason: err instanceof Error ? err.message : String(err) })
+            results.push({ vehicle: pick.name, ok: false, reason: err instanceof Error ? err.message : String(err) })
         }
-        await new Promise(r => setTimeout(r, 800))
     }
 
     return {
