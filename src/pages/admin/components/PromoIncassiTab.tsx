@@ -249,7 +249,36 @@ export default function PromoIncassiTab() {
                         </p>
                     </div>
 
-                    <div className="flex gap-3 justify-end">
+                    <div className="flex gap-3 justify-between flex-wrap">
+                        <button
+                            onClick={async () => {
+                                if (!confirm(`Eseguire ora il broadcast con modalità "${draftMode}"?\n\nManderà a TUTTI i clienti idonei. Conferma solo se sei sicuro.`)) return
+                                setLoading(true)
+                                const t = toast.loading('Esecuzione cron in corso...')
+                                try {
+                                    const res = await authFetch('/.netlify/functions/promo-incassi-run-now', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({}),
+                                    })
+                                    const data = await res.json()
+                                    toast.dismiss(t)
+                                    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+                                    setLastResult(data)
+                                    toast.success(`Inviati ${data.sent ?? 0} · Saltati ${data.skipped ?? 0} · Falliti ${data.failed ?? 0}`)
+                                } catch (err: any) {
+                                    toast.dismiss(t)
+                                    toast.error('Errore: ' + (err.message || String(err)))
+                                } finally {
+                                    setLoading(false)
+                                }
+                            }}
+                            disabled={loading || savingSettings || draftMode === 'off'}
+                            className="px-5 py-2.5 bg-red-600 text-white rounded-full font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                            title="Esegue subito la stessa logica del cron 9:00/17:00 — usa solo se sei sicuro"
+                        >
+                            ▶ Esegui cron ora
+                        </button>
                         <button
                             onClick={saveSettings}
                             disabled={savingSettings}
