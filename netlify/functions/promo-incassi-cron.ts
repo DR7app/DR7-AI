@@ -154,27 +154,17 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     const vehicles: Vehicle[] = (vehiclesData || []).filter(v => v.display_name !== 'Test')
     if (vehicles.length === 0) return skip('no matching vehicles found in DB')
 
-    // ── 5. Two layers of dedup:
-    //   a) (vehicle_id, year_month, recipient) — same vehicle never sends twice
-    //      to the same customer in the same month.
-    //   b) recipient — one promo message per customer PER DAY (Rome). If they
-    //      received in the morning run, the afternoon run skips them entirely
-    //      regardless of which vehicle triggered.
-    // The 16-hour lookback safely spans the 8-hour gap between the 09:00 and
-    // 17:00 Rome runs without leaking into yesterday's send.
+    // ── 5. Dedup is per (vehicle_id, year_month, recipient).
+    // Same vehicle never sends twice to the same customer in the same month,
+    // but DIFFERENT vehicles in the same day are allowed — a customer who
+    // got RS3 this morning will get Macan this afternoon if Macan just
+    // crossed threshold (different car = different message, not a duplicate).
     const { year, month, ym } = romeYearMonth()
     const { data: alreadySent } = await supabase
         .from('promo_incassi_sent_log')
         .select('vehicle_id, recipient')
         .eq('year_month', ym)
     const sentSet = new Set((alreadySent || []).map(r => `${r.vehicle_id}|${r.recipient}`))
-
-    const sixteenHoursAgo = new Date(Date.now() - 16 * 60 * 60 * 1000).toISOString()
-    const { data: sentToday } = await supabase
-        .from('promo_incassi_sent_log')
-        .select('recipient')
-        .gte('sent_at', sixteenHoursAgo)
-    const sentTodaySet = new Set((sentToday || []).map(r => r.recipient))
 
     const siteUrl = process.env.URL || process.env.DEPLOY_URL || ''
 
@@ -220,15 +210,6 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     // the same (vehicle, customer, month) tuple.
     for (const pick of triggering) {
         for (const phone of recipients) {
-            // Daily cap: if this recipient got ANY promo in the last 16 hours
-            // (covers the 9am→5pm gap with margin), skip them entirely so a
-            // morning recipient never gets a second message in the afternoon.
-            if (sentTodaySet.has(phone)) {
-                totalSkipped++
-                results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: 'already_sent_today' })
-                continue
-            }
-
             const dedupKey = `${pick.v.id}|${phone}`
             if (sentSet.has(dedupKey)) {
                 totalSkipped++
@@ -257,11 +238,9 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
                     detail: claimErr?.code === '23505' ? 'already_sent_db_block' : (claimErr?.message || 'claim_failed'),
                 })
                 sentSet.add(dedupKey)
-                sentTodaySet.add(phone)
                 continue
             }
             sentSet.add(dedupKey)
-            sentTodaySet.add(phone)
 
             const templateVars = {
                 vehicle: pick.v.display_name,
