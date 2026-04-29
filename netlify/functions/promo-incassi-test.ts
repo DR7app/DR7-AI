@@ -169,12 +169,11 @@ export const handler: Handler = async (event) => {
     let sent = 0
     let failed = 0
 
-    // Same rule as the cron: ONE message per recipient — pick the best
-    // deal (lowest coefficient) among all triggering vehicles. Otherwise
-    // a tester with three vehicles below threshold would get three
-    // messages, which is the spam behaviour we just fixed in the cron.
-    const pick = [...triggering].sort((a, b) => a.active_coeff - b.active_coeff)[0]
-    {
+    // ONE message per triggering vehicle — same rule as the cron, but
+    // without DB dedup so the admin can re-test the body whenever needed.
+    // Sorted by best deal first (lowest coefficient).
+    const sorted = [...triggering].sort((a, b) => a.active_coeff - b.active_coeff)
+    for (const pick of sorted) {
         const templateVars = {
             vehicle: pick.name,
             veicolo: pick.name,
@@ -206,6 +205,7 @@ export const handler: Handler = async (event) => {
             failed++
             results.push({ vehicle: pick.name, ok: false, reason: err instanceof Error ? err.message : String(err) })
         }
+        await new Promise(r => setTimeout(r, 800))
     }
 
     return {

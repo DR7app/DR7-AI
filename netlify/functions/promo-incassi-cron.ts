@@ -154,17 +154,17 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     const vehicles: Vehicle[] = (vehiclesData || []).filter(v => v.display_name !== 'Test')
     if (vehicles.length === 0) return skip('no matching vehicles found in DB')
 
-    // ── 5. Dedup is now per (year_month, recipient) — ONE PROMO TOTAL per
-    // person per month, regardless of how many vehicles cross the threshold.
-    // If three vehicles trigger at once we still send the customer only one
-    // message — the one for the BEST deal (lowest coefficient = highest
-    // revenue achievement = biggest configured discount potential).
+    // ── 5. Dedup is per (vehicle_id, year_month, recipient).
+    // Each customer can receive ONE message PER vehicle PER month. If two
+    // vehicles cross threshold, the customer gets two messages (one for
+    // each vehicle), but each (vehicle, customer, month) pair fires at
+    // most once — never duplicates of the same vehicle.
     const { year, month, ym } = romeYearMonth()
     const { data: alreadySent } = await supabase
         .from('promo_incassi_sent_log')
-        .select('recipient')
+        .select('vehicle_id, recipient')
         .eq('year_month', ym)
-    const sentRecipients = new Set((alreadySent || []).map(r => r.recipient))
+    const sentSet = new Set((alreadySent || []).map(r => `${r.vehicle_id}|${r.recipient}`))
 
     const siteUrl = process.env.URL || process.env.DEPLOY_URL || ''
 
@@ -173,7 +173,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     let totalFailed = 0
     const results: Array<{ vehicle: string; activeCoeff: number; recipient: string; ok: boolean; detail?: string }> = []
 
-    // ── 6. First pass: collect every triggering vehicle (no recipients yet).
+    // ── 6. Collect every triggering vehicle.
     interface Triggering { v: Vehicle; activeCoeff: number; thresholdMin: number; totalRevenue: number }
     const triggering: Triggering[] = []
     for (const v of vehicles) {
@@ -196,97 +196,95 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
 
         triggering.push({ v, activeCoeff, thresholdMin: reached[0].min, totalRevenue })
     }
-    // Sort: lowest coefficient first = best deal first. Each recipient gets
-    // assigned to the FIRST vehicle in this list they haven't been sent to
-    // this month — i.e. the best available deal.
+    // Sort by best deal first so that — across multiple vehicles for the
+    // same customer — the lower-coefficient one gets sent first.
     triggering.sort((a, b) => a.activeCoeff - b.activeCoeff)
 
     if (triggering.length === 0) {
         return { statusCode: 200, body: JSON.stringify({ ok: true, mode, year_month: ym, threshold_coeff: thresholdCoeff, hour, sent: 0, skipped: 0, failed: 0, results: [] }) }
     }
 
-    // ── 7. One outer pass per recipient. Pick the best (lowest-coeff)
-    // triggering vehicle and send a single message. The unique index on
-    // (year_month, recipient) blocks any second insert in the same month.
-    for (const phone of recipients) {
-        if (sentRecipients.has(phone)) {
-            totalSkipped++
-            results.push({ vehicle: '—', activeCoeff: 0, recipient: phone, ok: false, detail: 'already_sent_this_month' })
-            continue
-        }
+    // ── 7. For each triggering vehicle × each recipient: pre-claim + send.
+    // The DB unique index on (vehicle_id, year_month, recipient) is the
+    // hard transactional guarantee — concurrent cron runs cannot double-fire
+    // the same (vehicle, customer, month) tuple.
+    for (const pick of triggering) {
+        for (const phone of recipients) {
+            const dedupKey = `${pick.v.id}|${phone}`
+            if (sentSet.has(dedupKey)) {
+                totalSkipped++
+                results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: 'already_sent_this_month' })
+                continue
+            }
 
-        const pick = triggering[0]
+            const { data: claimRow, error: claimErr } = await supabase
+                .from('promo_incassi_sent_log')
+                .insert({
+                    vehicle_id: pick.v.id,
+                    year_month: ym,
+                    threshold_coeff: pick.activeCoeff,
+                    recipient: phone,
+                    template_key: 'pro_promo_incassi',
+                })
+                .select('id')
+                .maybeSingle()
+            if (claimErr || !claimRow) {
+                totalSkipped++
+                results.push({
+                    vehicle: pick.v.display_name,
+                    activeCoeff: pick.activeCoeff,
+                    recipient: phone,
+                    ok: false,
+                    detail: claimErr?.code === '23505' ? 'already_sent_db_block' : (claimErr?.message || 'claim_failed'),
+                })
+                sentSet.add(dedupKey)
+                continue
+            }
+            sentSet.add(dedupKey)
 
-        // PRE-CLAIM atomically. The DB unique index on (year_month, recipient)
-        // makes this transactionally safe: even with two concurrent cron runs,
-        // only one INSERT succeeds — the other gets 23505 and we skip.
-        const { data: claimRow, error: claimErr } = await supabase
-            .from('promo_incassi_sent_log')
-            .insert({
-                vehicle_id: pick.v.id,
-                year_month: ym,
-                threshold_coeff: pick.activeCoeff,
-                recipient: phone,
-                template_key: 'pro_promo_incassi',
-            })
-            .select('id')
-            .maybeSingle()
-        if (claimErr || !claimRow) {
-            totalSkipped++
-            results.push({
+            const templateVars = {
                 vehicle: pick.v.display_name,
-                activeCoeff: pick.activeCoeff,
-                recipient: phone,
-                ok: false,
-                detail: claimErr?.code === '23505' ? 'already_sent_db_block' : (claimErr?.message || 'claim_failed'),
-            })
-            sentRecipients.add(phone)
-            continue
-        }
-        sentRecipients.add(phone)
-
-        const templateVars = {
-            vehicle: pick.v.display_name,
-            veicolo: pick.v.display_name,
-            vehicle_specs: pick.v.display_name,
-            coefficient: String(pick.activeCoeff),
-            coefficiente: String(pick.activeCoeff),
-            incasso_attuale: pick.totalRevenue.toFixed(0),
-            incasso: pick.totalRevenue.toFixed(0),
-            soglia: String(pick.thresholdMin),
-            month: String(month),
-            year: String(year),
-            year_month: ym,
-        }
-
-        try {
-            const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    templateKey: 'pro_promo_incassi',
-                    templateVars,
-                    customPhone: phone,
-                }),
-            })
-            const json = await res.json().catch(() => ({}))
-            if (!res.ok) {
-                totalFailed++
-                results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: json.message || `HTTP ${res.status}` })
-                continue
+                veicolo: pick.v.display_name,
+                vehicle_specs: pick.v.display_name,
+                coefficient: String(pick.activeCoeff),
+                coefficiente: String(pick.activeCoeff),
+                incasso_attuale: pick.totalRevenue.toFixed(0),
+                incasso: pick.totalRevenue.toFixed(0),
+                soglia: String(pick.thresholdMin),
+                month: String(month),
+                year: String(year),
+                year_month: ym,
             }
-            if (json.skipped) {
+
+            try {
+                const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        templateKey: 'pro_promo_incassi',
+                        templateVars,
+                        customPhone: phone,
+                    }),
+                })
+                const json = await res.json().catch(() => ({}))
+                if (!res.ok) {
+                    totalFailed++
+                    results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: json.message || `HTTP ${res.status}` })
+                    continue
+                }
+                if (json.skipped) {
+                    totalFailed++
+                    results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: json.reason || 'template skipped' })
+                    continue
+                }
+                totalSent++
+                results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: true })
+            } catch (err) {
                 totalFailed++
-                results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: json.reason || 'template skipped' })
-                continue
+                results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: err instanceof Error ? err.message : String(err) })
             }
-            totalSent++
-            results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: true })
-        } catch (err) {
-            totalFailed++
-            results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: err instanceof Error ? err.message : String(err) })
+            await new Promise(r => setTimeout(r, 800))
         }
-        await new Promise(r => setTimeout(r, 800))
     }
 
     return {
