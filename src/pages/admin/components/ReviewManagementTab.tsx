@@ -75,13 +75,12 @@ const PLACEHOLDERS = ['{{customer_name}}', '{{review_link}}']
 export default function ReviewManagementTab() {
   // Data state
   const [candidates, setCandidates] = useState<ReviewCandidate[]>([])
-  const [stats, setStats] = useState<DashboardStats>({ eligible: 0, to_review: 0, excluded: 0, to_send: 0, sent: 0, failed: 0 })
+  const [, setStats] = useState<DashboardStats>({ eligible: 0, to_review: 0, excluded: 0, to_send: 0, sent: 0, failed: 0 })
   const [, setSettings] = useState<ReviewSettings>(DEFAULT_SETTINGS)
   const [, setTemplates] = useState<ReviewTemplate[]>([])
 
   // UI state
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<TabKey>('ELIGIBLE')
   const [filterServiceType, setFilterServiceType] = useState<'ALL' | 'RENTAL' | 'WASH'>('ALL')
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -109,7 +108,7 @@ export default function ReviewManagementTab() {
   useEffect(() => {
     fetchCandidates()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, filterServiceType])
+  }, [filterServiceType])
 
   async function loadAll() {
     setLoading(true)
@@ -184,14 +183,17 @@ export default function ReviewManagementTab() {
 
   async function fetchCandidates() {
     try {
-      const params = new URLSearchParams({
-        eligibility_status: activeTab,
-        service_type: filterServiceType,
-      })
-      const res = await fetch(`${NETLIFY_BASE}/review-candidates?${params}`)
-      if (!res.ok) throw new Error('Errore caricamento candidati')
-      const data = await res.json()
-      setCandidates(data.candidates || data || [])
+      // Fetch all three eligibility buckets in parallel — the page renders them
+      // as separate stacked sections (Pronti / Da Verificare / Esclusi), so we
+      // need them all at once.
+      const buckets: TabKey[] = ['ELIGIBLE', 'TO_REVIEW', 'EXCLUDED']
+      const results = await Promise.all(buckets.map(b =>
+        fetch(`${NETLIFY_BASE}/review-candidates?${new URLSearchParams({ eligibility_status: b, service_type: filterServiceType })}`)
+          .then(r => r.ok ? r.json() : { candidates: [] })
+          .catch(() => ({ candidates: [] }))
+      ))
+      const merged = results.flatMap(d => d.candidates || d || [])
+      setCandidates(merged)
     } catch (err: unknown) {
       console.error('fetchCandidates error:', err)
       toast.error('Errore nel caricamento dei candidati recensione')
@@ -964,250 +966,257 @@ export default function ReviewManagementTab() {
         </div>
       )}
 
-      {/* Status pill tabs (with colored dots + counts) */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        {([
-          { key: 'ELIGIBLE' as TabKey, label: 'Pronti', count: stats.eligible, dot: 'bg-green-500' },
-          { key: 'TO_REVIEW' as TabKey, label: 'Da Verificare', count: stats.to_review, dot: 'bg-yellow-500' },
-          { key: 'EXCLUDED' as TabKey, label: 'Esclusi', count: stats.excluded, dot: 'bg-red-500' },
-        ]).map(tab => {
-          const isActive = activeTab === tab.key
+      {/* ── Section: Pronti (eligible candidates) ─────────────────────────── */}
+      {(() => {
+        const pronti = pagedCandidates.filter(c => c.eligibility_status === 'ELIGIBLE')
+        const esclusi = pagedCandidates.filter(c => c.eligibility_status === 'TO_REVIEW' || c.eligibility_status === 'EXCLUDED')
+
+        const renderActionsCell = (candidate: ReviewCandidate) => {
+          const isEligible = candidate.eligibility_status === 'ELIGIBLE'
+          const isToReview = candidate.eligibility_status === 'TO_REVIEW'
+          const isExcluded = candidate.eligibility_status === 'EXCLUDED'
           return (
-            <button
-              key={tab.key}
-              onClick={() => { setActiveTab(tab.key); setSelectedIds(new Set()); setSelectAll(false); setCurrentPage(1) }}
-              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
-                isActive
-                  ? 'bg-theme-bg-primary text-theme-text-primary border-theme-text-primary shadow-sm'
-                  : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${tab.dot}`} />
-              {tab.label}
-              <span className={`text-xs ${isActive ? 'text-theme-text-secondary' : 'text-theme-text-secondary/70'}`}>
-                {tab.count}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Alert banner for TO_REVIEW / EXCLUDED tabs */}
-      {activeTab === 'TO_REVIEW' && (
-        <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-3 mb-4 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
-          <span className="text-sm text-yellow-800">Questi clienti richiedono verifica manuale prima dell'invio della richiesta di recensione.</span>
-        </div>
-      )}
-      {activeTab === 'EXCLUDED' && (
-        <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-3 mb-4 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
-          <span className="text-sm text-yellow-800">
-            <strong>Attenzione:</strong> Non inviare recensioni a clienti potenzialmente problematici.
-          </span>
-        </div>
-      )}
-
-      {/* Eligible-only quick action bar */}
-      {activeTab === 'ELIGIBLE' && filteredCandidates.length > 0 && (
-        <div className="flex items-center gap-3 mb-3">
-          <label className="inline-flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={selectAll}
-              onChange={toggleSelectAll}
-              className="w-4 h-4 rounded accent-dr7-gold"
-            />
-            <span className="text-sm text-theme-text-secondary">Seleziona tutti su questa pagina</span>
-          </label>
-          {selectedIds.size > 0 && (
-            <span className="text-sm text-theme-text-secondary">{selectedIds.size} selezionati</span>
-          )}
-        </div>
-      )}
-
-      {/* Table */}
-      <div className="bg-theme-bg-primary border border-theme-border rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-theme-bg-tertiary/50 border-b border-theme-border text-xs uppercase tracking-wide text-theme-text-secondary">
-                {activeTab === 'ELIGIBLE' && <th className="px-4 py-3 text-left w-10"></th>}
-                <th className="px-4 py-3 text-left font-medium">Stato</th>
-                <th className="px-4 py-3 text-left font-medium">Cliente</th>
-                <th className="px-4 py-3 text-left font-medium">Oggetto</th>
-                <th className="px-4 py-3 text-left font-medium">Email</th>
-                <th className="px-4 py-3 text-left font-medium">WhatsApp</th>
-                {activeTab === 'EXCLUDED' && <th className="px-4 py-3 text-left font-medium">Motivo</th>}
-                <th className="px-4 py-3 text-right font-medium">Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedCandidates.length === 0 ? (
-                <tr>
-                  <td colSpan={activeTab === 'EXCLUDED' ? 7 : activeTab === 'ELIGIBLE' ? 7 : 6} className="px-4 py-16 text-center text-theme-text-secondary">
-                    Nessun candidato trovato
-                  </td>
-                </tr>
-              ) : (
-                pagedCandidates.map(candidate => {
-                  const shortId = (candidate.source_record_id || candidate.id || '').slice(0, 8).toUpperCase()
-                  return (
-                    <tr key={candidate.id} className="border-b border-theme-border last:border-0 hover:bg-theme-bg-hover/50 transition-colors">
-                      {activeTab === 'ELIGIBLE' && (
-                        <td className="px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(candidate.id)}
-                            onChange={() => toggleSelect(candidate.id)}
-                            className="w-4 h-4 rounded accent-dr7-gold"
-                          />
-                        </td>
-                      )}
-
-                      {/* Stato — colored dot pill */}
-                      <td className="px-4 py-3">{renderStatusPill(candidate)}</td>
-
-                      {/* Cliente — name + #ID */}
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-theme-text-primary">{candidate.customer_name || 'N/A'}</div>
-                        <div className="text-xs text-theme-text-secondary">#{shortId}</div>
-                      </td>
-
-                      {/* Oggetto — service-type pill */}
-                      <td className="px-4 py-3">{getServiceBadge(candidate.service_type)}</td>
-
-                      {/* Email */}
-                      <td className="px-4 py-3 text-theme-text-secondary">
-                        {candidate.customer_email ? (
-                          <span className="inline-flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-theme-text-secondary/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                            <span className="truncate max-w-[200px]" title={candidate.customer_email}>{candidate.customer_email}</span>
-                          </span>
-                        ) : (
-                          <span className="text-theme-text-secondary/60">—</span>
-                        )}
-                      </td>
-
-                      {/* WhatsApp */}
-                      <td className="px-4 py-3 text-theme-text-secondary">
-                        {candidate.customer_phone ? (
-                          <span className="inline-flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                            <span>{candidate.customer_phone}</span>
-                          </span>
-                        ) : (
-                          <span className="text-theme-text-secondary/60">—</span>
-                        )}
-                      </td>
-
-                      {activeTab === 'EXCLUDED' && (
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-                            {candidate.exclusion_reason_text || candidate.exclusion_reason_code || 'Motivo non specificato'}
-                          </span>
-                        </td>
-                      )}
-
-                      {/* Azioni */}
-                      <td className="px-4 py-3">
-                        <div className="flex gap-1.5 justify-end items-center">
-                          {activeTab === 'ELIGIBLE' && (
-                            <>
-                              {candidate.customer_email && (
-                                <button
-                                  onClick={() => handleSend(candidate.id, 'EMAIL')}
-                                  disabled={sendingId === candidate.id}
-                                  title="Invia Email"
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-theme-border bg-theme-bg-primary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                  </svg>
-                                </button>
-                              )}
-                              {candidate.customer_phone && (
-                                <button
-                                  onClick={() => handleSend(candidate.id, 'WHATSAPP')}
-                                  disabled={sendingId === candidate.id}
-                                  className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                  </svg>
-                                  Invia
-                                </button>
-                              )}
-                              {(candidate.customer_email || candidate.customer_phone) && (
-                                <button
-                                  onClick={() => handleGenerateAndSendCode(candidate)}
-                                  disabled={generatingCodeId === candidate.id}
-                                  title="Genera codice sconto reale (Supercar €100 + Lavaggio €10) e invialo via WhatsApp"
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-theme-border bg-dr7-gold text-white hover:opacity-90 transition-colors disabled:opacity-50"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 8a3 3 0 116 0 3 3 0 01-6 0zM12 16a3 3 0 116 0 3 3 0 01-6 0zM4 20l16-16" />
-                                  </svg>
-                                </button>
-                              )}
-                              {candidate.send_status === 'SENT' && (
-                                <button
-                                  onClick={() => handleSblocca(candidate.id)}
-                                  disabled={sendingId === candidate.id}
-                                  className="inline-flex items-center px-3 h-8 rounded-full border border-amber-400 text-amber-700 text-xs font-semibold hover:bg-amber-50 transition-colors disabled:opacity-50"
-                                >
-                                  Sblocca
-                                </button>
-                              )}
-                            </>
-                          )}
-
-                          {activeTab === 'TO_REVIEW' && (
-                            <>
-                              <button
-                                onClick={() => handleApproveAndSend(candidate.id)}
-                                disabled={sendingId === candidate.id}
-                                className="inline-flex items-center px-3 h-8 rounded-full bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
-                              >
-                                Approva e Invia
-                              </button>
-                              <button
-                                onClick={() => handleExclude(candidate.id)}
-                                disabled={sendingId === candidate.id}
-                                className="inline-flex items-center px-3 h-8 rounded-full border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors disabled:opacity-50"
-                              >
-                                Escludi
-                              </button>
-                            </>
-                          )}
-
-                          {activeTab === 'EXCLUDED' && (
-                            <button
-                              onClick={() => handleSblocca(candidate.id)}
-                              disabled={sendingId === candidate.id}
-                              className="inline-flex items-center px-3 h-8 rounded-full border border-amber-400 text-amber-700 text-xs font-semibold hover:bg-amber-50 transition-colors disabled:opacity-50"
-                            >
-                              Sblocca
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
+            <div className="flex gap-1.5 justify-end items-center flex-wrap">
+              {isEligible && (
+                <>
+                  {candidate.customer_email && (
+                    <button
+                      onClick={() => handleSend(candidate.id, 'EMAIL')}
+                      disabled={sendingId === candidate.id}
+                      title="Invia Email"
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-theme-border bg-theme-bg-primary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  )}
+                  {candidate.customer_phone && (
+                    <button
+                      onClick={() => handleSend(candidate.id, 'WHATSAPP')}
+                      disabled={sendingId === candidate.id}
+                      className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                      Invia
+                    </button>
+                  )}
+                  {(candidate.customer_email || candidate.customer_phone) && (
+                    <button
+                      onClick={() => handleGenerateAndSendCode(candidate)}
+                      disabled={generatingCodeId === candidate.id}
+                      title="Genera codice sconto reale (Supercar EUR 100 + Lavaggio EUR 10) e invialo via WhatsApp"
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-theme-border bg-dr7-gold text-white hover:opacity-90 transition-colors disabled:opacity-50"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 8a3 3 0 116 0 3 3 0 01-6 0zM12 16a3 3 0 116 0 3 3 0 01-6 0zM4 20l16-16" />
+                      </svg>
+                    </button>
+                  )}
+                  {candidate.send_status === 'SENT' && (
+                    <button
+                      onClick={() => handleSblocca(candidate.id)}
+                      disabled={sendingId === candidate.id}
+                      className="inline-flex items-center px-3 h-8 rounded-full border border-amber-400 text-amber-700 text-xs font-semibold hover:bg-amber-50 transition-colors disabled:opacity-50"
+                    >
+                      Sblocca
+                    </button>
+                  )}
+                </>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              {isToReview && (
+                <>
+                  <button
+                    onClick={() => handleApproveAndSend(candidate.id)}
+                    disabled={sendingId === candidate.id}
+                    className="inline-flex items-center px-3 h-8 rounded-full bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                  >
+                    Approva e Invia
+                  </button>
+                  <button
+                    onClick={() => handleExclude(candidate.id)}
+                    disabled={sendingId === candidate.id}
+                    className="inline-flex items-center px-3 h-8 rounded-full border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors disabled:opacity-50"
+                  >
+                    Escludi
+                  </button>
+                </>
+              )}
+              {isExcluded && (
+                <button
+                  onClick={() => handleSblocca(candidate.id)}
+                  disabled={sendingId === candidate.id}
+                  className="inline-flex items-center px-3 h-8 rounded-full border border-amber-400 text-amber-700 text-xs font-semibold hover:bg-amber-50 transition-colors disabled:opacity-50"
+                >
+                  Sblocca
+                </button>
+              )}
+            </div>
+          )
+        }
+
+        const renderRow = (candidate: ReviewCandidate, withCheckbox: boolean, withMotivo: boolean) => {
+          const shortId = (candidate.source_record_id || candidate.id || '').slice(0, 8).toUpperCase()
+          return (
+            <tr key={candidate.id} className="border-b border-theme-border last:border-0 hover:bg-theme-bg-hover/50 transition-colors">
+              {withCheckbox && (
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(candidate.id)}
+                    onChange={() => toggleSelect(candidate.id)}
+                    className="w-4 h-4 rounded accent-dr7-gold"
+                  />
+                </td>
+              )}
+              <td className="px-4 py-3">{renderStatusPill(candidate)}</td>
+              <td className="px-4 py-3">
+                <div className="font-medium text-theme-text-primary">{candidate.customer_name || 'N/A'}</div>
+                <div className="text-xs text-theme-text-secondary">#{shortId}</div>
+              </td>
+              <td className="px-4 py-3">{getServiceBadge(candidate.service_type)}</td>
+              <td className="px-4 py-3 text-theme-text-secondary">
+                {candidate.customer_email ? (
+                  <span className="inline-flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-theme-text-secondary/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span className="truncate max-w-[200px]" title={candidate.customer_email}>{candidate.customer_email}</span>
+                  </span>
+                ) : (
+                  <span className="text-theme-text-secondary/60">—</span>
+                )}
+              </td>
+              <td className="px-4 py-3 text-theme-text-secondary">
+                {candidate.customer_phone ? (
+                  <span className="inline-flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    <span>{candidate.customer_phone}</span>
+                  </span>
+                ) : (
+                  <span className="text-theme-text-secondary/60">—</span>
+                )}
+              </td>
+              {withMotivo && (
+                <td className="px-4 py-3">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                    {candidate.exclusion_reason_text || candidate.exclusion_reason_code || 'Motivo non specificato'}
+                  </span>
+                </td>
+              )}
+              <td className="px-4 py-3">{renderActionsCell(candidate)}</td>
+            </tr>
+          )
+        }
+
+        return (
+          <>
+            {/* Pronti section */}
+            <section className="mb-6">
+              <header className="flex items-center justify-between gap-3 mb-3">
+                <div className="inline-flex items-center gap-2 text-sm font-semibold text-theme-text-primary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  Pronti
+                  <span className="text-xs text-theme-text-secondary font-normal">({pronti.length})</span>
+                </div>
+                {pronti.length > 0 && (
+                  <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-theme-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={selectAll}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded accent-dr7-gold"
+                    />
+                    <span>Seleziona tutti</span>
+                    {selectedIds.size > 0 && (
+                      <span className="text-theme-text-secondary">— {selectedIds.size} selezionati</span>
+                    )}
+                  </label>
+                )}
+              </header>
+              <div className="bg-theme-bg-primary border border-theme-border rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-theme-bg-tertiary/50 border-b border-theme-border text-xs uppercase tracking-wide text-theme-text-secondary">
+                        <th className="px-4 py-3 text-left w-10"></th>
+                        <th className="px-4 py-3 text-left font-medium">Stato</th>
+                        <th className="px-4 py-3 text-left font-medium">Cliente</th>
+                        <th className="px-4 py-3 text-left font-medium">Oggetto</th>
+                        <th className="px-4 py-3 text-left font-medium">Email</th>
+                        <th className="px-4 py-3 text-left font-medium">WhatsApp</th>
+                        <th className="px-4 py-3 text-right font-medium">Azioni</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pronti.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-12 text-center text-theme-text-secondary">
+                            Nessun cliente pronto per ricevere la richiesta di recensione
+                          </td>
+                        </tr>
+                      ) : (
+                        pronti.map(c => renderRow(c, true, false))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            {/* Esclusi section */}
+            <section className="mb-6">
+              <header className="flex items-center gap-2 mb-3">
+                <div className="inline-flex items-center gap-2 text-sm font-semibold text-theme-text-primary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  Esclusi
+                  <span className="text-xs text-theme-text-secondary font-normal">({esclusi.length})</span>
+                </div>
+              </header>
+              <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-3 mb-3 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-600 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span className="text-sm text-yellow-800">
+                  <strong>Attenzione:</strong> Non inviare recensioni a clienti potenzialmente problematici (penali, danni, cauzione aperta, ecc.).
+                </span>
+              </div>
+              <div className="bg-theme-bg-primary border border-theme-border rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-theme-bg-tertiary/50 border-b border-theme-border text-xs uppercase tracking-wide text-theme-text-secondary">
+                        <th className="px-4 py-3 text-left font-medium">Stato</th>
+                        <th className="px-4 py-3 text-left font-medium">Cliente</th>
+                        <th className="px-4 py-3 text-left font-medium">Oggetto</th>
+                        <th className="px-4 py-3 text-left font-medium">Email</th>
+                        <th className="px-4 py-3 text-left font-medium">WhatsApp</th>
+                        <th className="px-4 py-3 text-left font-medium">Motivo</th>
+                        <th className="px-4 py-3 text-right font-medium">Azioni</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {esclusi.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-12 text-center text-theme-text-secondary">
+                            Nessun cliente escluso
+                          </td>
+                        </tr>
+                      ) : (
+                        esclusi.map(c => renderRow(c, false, true))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </>
+        )
+      })()}
 
       {/* Pagination footer */}
       <div className="flex flex-wrap items-center justify-between gap-3 mt-4 px-1 text-sm text-theme-text-secondary">
