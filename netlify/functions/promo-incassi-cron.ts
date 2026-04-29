@@ -154,20 +154,17 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     const vehicles: Vehicle[] = (vehiclesData || []).filter(v => v.display_name !== 'Test')
     if (vehicles.length === 0) return skip('no matching vehicles found in DB')
 
-    // ── 5. Existing dedup rows for this month ──
-    // Dedup is per (vehicle_id, year_month, recipient) — NOT per threshold.
-    // As a vehicle's revenue grows it crosses more tiers (0.8 → 0.7 → 0.6),
-    // and we only want ONE promo per vehicle per month per recipient. Old
-    // implementation included threshold_coeff in the key and re-fired every
-    // time the active coefficient dropped to a new tier (looked like spam).
+    // ── 5. Dedup is now per (year_month, recipient) — ONE PROMO TOTAL per
+    // person per month, regardless of how many vehicles cross the threshold.
+    // If three vehicles trigger at once we still send the customer only one
+    // message — the one for the BEST deal (lowest coefficient = highest
+    // revenue achievement = biggest configured discount potential).
     const { year, month, ym } = romeYearMonth()
     const { data: alreadySent } = await supabase
         .from('promo_incassi_sent_log')
-        .select('vehicle_id, recipient')
+        .select('recipient')
         .eq('year_month', ym)
-    const sentSet = new Set(
-        (alreadySent || []).map(r => `${r.vehicle_id}|${r.recipient}`)
-    )
+    const sentRecipients = new Set((alreadySent || []).map(r => r.recipient))
 
     const siteUrl = process.env.URL || process.env.DEPLOY_URL || ''
 
@@ -176,7 +173,9 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     let totalFailed = 0
     const results: Array<{ vehicle: string; activeCoeff: number; recipient: string; ok: boolean; detail?: string }> = []
 
-    // ── 6. Per-vehicle: compute revenue → active coeff → fire if ≤ threshold ──
+    // ── 6. First pass: collect every triggering vehicle (no recipients yet).
+    interface Triggering { v: Vehicle; activeCoeff: number; thresholdMin: number; totalRevenue: number }
+    const triggering: Triggering[] = []
     for (const v of vehicles) {
         const tiers = (targets[v.id]?.tiers || [])
             .map(t => ({ min: Number(t.min_revenue), coeff: Number(t.coeff) }))
@@ -190,104 +189,104 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
             month,
         )
 
-        const reached = tiers
-            .filter(t => totalRevenue >= t.min)
-            .sort((a, b) => b.min - a.min)
+        const reached = tiers.filter(t => totalRevenue >= t.min).sort((a, b) => b.min - a.min)
         if (reached.length === 0) continue
         const activeCoeff = reached[0].coeff
-
-        // Trigger: active coefficient must be at or below the threshold (e.g. 0.7).
-        // We send for THIS coefficient — not for every lower coeff also reached —
-        // so the customer gets one message per "the vehicle just dropped to X" event.
         if (activeCoeff > thresholdCoeff) continue
 
-        for (const phone of recipients) {
-            const dedupKey = `${v.id}|${phone}`
-            if (sentSet.has(dedupKey)) {
-                totalSkipped++
-                results.push({ vehicle: v.display_name, activeCoeff, recipient: phone, ok: false, detail: 'already_sent' })
-                continue
-            }
+        triggering.push({ v, activeCoeff, thresholdMin: reached[0].min, totalRevenue })
+    }
+    // Sort: lowest coefficient first = best deal first. Each recipient gets
+    // assigned to the FIRST vehicle in this list they haven't been sent to
+    // this month — i.e. the best available deal.
+    triggering.sort((a, b) => a.activeCoeff - b.activeCoeff)
 
-            // PRE-CLAIM the slot atomically BEFORE sending the WhatsApp.
-            // If a unique-index conflict happens (concurrent run, stale sentSet,
-            // duplicate recipient list, etc.) Postgres rejects the insert and
-            // we skip the send. This makes "one message per (vehicle, month,
-            // recipient)" enforced by the DB itself — code paths can race,
-            // settings can change mid-run, but the index ensures no double-fire.
-            // The trade-off: if the WhatsApp send later fails, we won't retry
-            // (the row is already in the log). That's intentional — admin
-            // can manually delete the log row to retry. Spam > missing one.
-            const { data: claimRow, error: claimErr } = await supabase
-                .from('promo_incassi_sent_log')
-                .insert({
-                    vehicle_id: v.id,
-                    year_month: ym,
-                    threshold_coeff: activeCoeff,
-                    recipient: phone,
-                    template_key: 'pro_promo_incassi',
-                })
-                .select('id')
-                .maybeSingle()
-            if (claimErr || !claimRow) {
-                // Unique-violation → already sent for this (vehicle, month, recipient).
-                totalSkipped++
-                results.push({
-                    vehicle: v.display_name,
-                    activeCoeff,
-                    recipient: phone,
-                    ok: false,
-                    detail: claimErr?.code === '23505' ? 'already_sent_db_block' : (claimErr?.message || 'claim_failed'),
-                })
-                // Track in-memory so subsequent vehicles in this run also skip.
-                sentSet.add(dedupKey)
-                continue
-            }
-            sentSet.add(dedupKey)
+    if (triggering.length === 0) {
+        return { statusCode: 200, body: JSON.stringify({ ok: true, mode, year_month: ym, threshold_coeff: thresholdCoeff, hour, sent: 0, skipped: 0, failed: 0, results: [] }) }
+    }
 
-            const templateVars = {
-                vehicle: v.display_name,
-                veicolo: v.display_name,
-                vehicle_specs: v.display_name,
-                coefficient: String(activeCoeff),
-                coefficiente: String(activeCoeff),
-                incasso_attuale: totalRevenue.toFixed(0),
-                incasso: totalRevenue.toFixed(0),
-                soglia: String(reached[0].min),
-                month: String(month),
-                year: String(year),
-                year_month: ym,
-            }
-
-            try {
-                const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        templateKey: 'pro_promo_incassi',
-                        templateVars,
-                        customPhone: phone,
-                    }),
-                })
-                const json = await res.json().catch(() => ({}))
-                if (!res.ok) {
-                    totalFailed++
-                    results.push({ vehicle: v.display_name, activeCoeff, recipient: phone, ok: false, detail: json.message || `HTTP ${res.status}` })
-                    continue
-                }
-                if (json.skipped) {
-                    totalFailed++
-                    results.push({ vehicle: v.display_name, activeCoeff, recipient: phone, ok: false, detail: json.reason || 'template skipped' })
-                    continue
-                }
-                totalSent++
-                results.push({ vehicle: v.display_name, activeCoeff, recipient: phone, ok: true })
-            } catch (err) {
-                totalFailed++
-                results.push({ vehicle: v.display_name, activeCoeff, recipient: phone, ok: false, detail: err instanceof Error ? err.message : String(err) })
-            }
-            await new Promise(r => setTimeout(r, 800))
+    // ── 7. One outer pass per recipient. Pick the best (lowest-coeff)
+    // triggering vehicle and send a single message. The unique index on
+    // (year_month, recipient) blocks any second insert in the same month.
+    for (const phone of recipients) {
+        if (sentRecipients.has(phone)) {
+            totalSkipped++
+            results.push({ vehicle: '—', activeCoeff: 0, recipient: phone, ok: false, detail: 'already_sent_this_month' })
+            continue
         }
+
+        const pick = triggering[0]
+
+        // PRE-CLAIM atomically. The DB unique index on (year_month, recipient)
+        // makes this transactionally safe: even with two concurrent cron runs,
+        // only one INSERT succeeds — the other gets 23505 and we skip.
+        const { data: claimRow, error: claimErr } = await supabase
+            .from('promo_incassi_sent_log')
+            .insert({
+                vehicle_id: pick.v.id,
+                year_month: ym,
+                threshold_coeff: pick.activeCoeff,
+                recipient: phone,
+                template_key: 'pro_promo_incassi',
+            })
+            .select('id')
+            .maybeSingle()
+        if (claimErr || !claimRow) {
+            totalSkipped++
+            results.push({
+                vehicle: pick.v.display_name,
+                activeCoeff: pick.activeCoeff,
+                recipient: phone,
+                ok: false,
+                detail: claimErr?.code === '23505' ? 'already_sent_db_block' : (claimErr?.message || 'claim_failed'),
+            })
+            sentRecipients.add(phone)
+            continue
+        }
+        sentRecipients.add(phone)
+
+        const templateVars = {
+            vehicle: pick.v.display_name,
+            veicolo: pick.v.display_name,
+            vehicle_specs: pick.v.display_name,
+            coefficient: String(pick.activeCoeff),
+            coefficiente: String(pick.activeCoeff),
+            incasso_attuale: pick.totalRevenue.toFixed(0),
+            incasso: pick.totalRevenue.toFixed(0),
+            soglia: String(pick.thresholdMin),
+            month: String(month),
+            year: String(year),
+            year_month: ym,
+        }
+
+        try {
+            const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    templateKey: 'pro_promo_incassi',
+                    templateVars,
+                    customPhone: phone,
+                }),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                totalFailed++
+                results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: json.message || `HTTP ${res.status}` })
+                continue
+            }
+            if (json.skipped) {
+                totalFailed++
+                results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: json.reason || 'template skipped' })
+                continue
+            }
+            totalSent++
+            results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: true })
+        } catch (err) {
+            totalFailed++
+            results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: err instanceof Error ? err.message : String(err) })
+        }
+        await new Promise(r => setTimeout(r, 800))
     }
 
     return {
