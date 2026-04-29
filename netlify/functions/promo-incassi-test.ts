@@ -205,7 +205,7 @@ export const handler: Handler = async (event) => {
             failed++
             results.push({ vehicle: pick.name, ok: false, reason: err instanceof Error ? err.message : String(err) })
         }
-        await new Promise(r => setTimeout(r, 800))
+        await new Promise(r => setTimeout(r, 200))
     }
 
     return {

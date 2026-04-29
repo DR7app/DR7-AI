@@ -304,7 +304,11 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
                 totalFailed++
                 results.push({ vehicle: pick.v.display_name, activeCoeff: pick.activeCoeff, recipient: phone, ok: false, detail: err instanceof Error ? err.message : String(err) })
             }
-            await new Promise(r => setTimeout(r, 800))
+            // 200ms between sends → ~5 msg/sec. Green API handles 5–10/s
+            // comfortably and 1330 customers finish in ~4.5 min, well inside
+            // the Netlify scheduled-function timeout. Earlier 800ms timed out
+            // the function after only ~67 sends.
+            await new Promise(r => setTimeout(r, 200))
         }
     }
 
