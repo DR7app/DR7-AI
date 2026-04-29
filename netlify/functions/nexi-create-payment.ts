@@ -73,6 +73,14 @@ const handler: Handler = async (event, context) => {
                 language: 'ita',
                 resultUrl: `${process.env.URL || 'http://localhost:8888'}/admin`, // Redirect back to admin
                 cancelUrl: `${process.env.URL || 'http://localhost:8888'}/admin`,
+                // Tokenize the card so future merchant-initiated charges
+                // (sforo, danni, addebiti) can run without re-asking the
+                // customer for their card.
+                recurrence: {
+                    action: 'CONTRACT_CREATION',
+                    contractId: orderId,
+                    contractType: 'MIT_UNSCHEDULED',
+                },
             }
         };
 

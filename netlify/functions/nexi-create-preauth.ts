@@ -87,7 +87,15 @@ const handler: Handler = async (event) => {
                 expirationTime: expirationDate.toISOString(),
                 resultUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=success`,
                 cancelUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=cancelled`,
-                notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback`
+                notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback`,
+                // Tokenize the card during preauth so the cauzione capture
+                // (or any later MIT charge: sforo, danni) doesn't need the
+                // card again from the customer.
+                recurrence: {
+                    action: 'CONTRACT_CREATION',
+                    contractId: orderId,
+                    contractType: 'MIT_UNSCHEDULED',
+                },
             },
             expirationDate: expirationDateStr,
         };

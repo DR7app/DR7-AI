@@ -110,7 +110,17 @@ const handler: Handler = async (event) => {
                 expirationDate: nexiExpirationStr,
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`
+                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`,
+                // Tokenize the card on every successful pay-by-link payment
+                // so that future merchant-initiated charges (sforo, danni,
+                // addebiti) can run against the same card without asking
+                // the customer for it again. contractId echoes orderId so
+                // we can find the recurringContractId from the callback.
+                recurrence: {
+                    action: 'CONTRACT_CREATION',
+                    contractId: orderId,
+                    contractType: 'MIT_UNSCHEDULED',
+                },
             },
             expirationDate: nexiExpirationStr
         };
