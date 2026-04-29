@@ -114,11 +114,82 @@ export default function ReviewManagementTab() {
     setLoading(true)
     await Promise.all([fetchSettings(), fetchTemplates(), fetchCandidates(), fetchStats()])
     setLoading(false)
-    // Evaluate new bookings in background — don't block the UI
-    autoEvaluateAll().then(() => {
-      fetchCandidates()
-      fetchStats()
-    })
+    // Background: re-evaluate new bookings, then sweep ELIGIBLE candidates and
+    // demote anyone with penali/danni/cauzione aperta to Esclusi. Both run
+    // silently — the user shouldn't have to click anything.
+    ;(async () => {
+      await autoEvaluateAll()
+      await autoFixEligibility()
+      await Promise.all([fetchCandidates(), fetchStats()])
+    })()
+  }
+
+  // Silent sweep: scan ELIGIBLE candidates and demote those with penali / danni /
+  // fattura penale o danno / cauzione ancora aperta to TO_REVIEW so they appear
+  // in the Esclusi section with a clear motivo. Runs on every page load.
+  async function autoFixEligibility() {
+    try {
+      const { data: eligible } = await supabase
+        .from('review_candidates')
+        .select('id, source_record_id, service_type')
+        .eq('eligibility_status', 'ELIGIBLE')
+
+      if (!eligible || eligible.length === 0) return
+
+      for (const candidate of eligible) {
+        const { data: booking } = await supabase
+          .from('bookings')
+          .select('booking_details')
+          .eq('id', candidate.source_record_id)
+          .single()
+
+        const details = booking?.booking_details || {}
+        const hasPenalty = Array.isArray(details.penalties) && details.penalties.length > 0
+        const hasDamage = Array.isArray(details.danni) && details.danni.length > 0
+
+        const { data: penaltyInvoices } = await supabase
+          .from('fatture')
+          .select('id')
+          .eq('booking_id', candidate.source_record_id)
+          .in('tipo_fattura', ['penale', 'danno'])
+          .limit(1)
+        const hasInvoice = !!(penaltyInvoices && penaltyInvoices.length > 0)
+
+        let hasOpenDeposit = false
+        if (candidate.service_type === 'RENTAL') {
+          const { data: openCauzioni } = await supabase
+            .from('cauzioni')
+            .select('id, stato')
+            .eq('riferimento_contratto_id', candidate.source_record_id)
+          hasOpenDeposit = (openCauzioni || []).some((c: { stato?: string }) => c.stato !== 'Restituita' && c.stato !== 'Sbloccata')
+        }
+
+        if (hasPenalty || hasDamage || hasInvoice || hasOpenDeposit) {
+          const reason = hasPenalty ? 'Presenza di penale registrata'
+            : hasDamage ? 'Danno registrato sul veicolo'
+            : hasInvoice ? 'Fattura penale/danno presente'
+            : 'Cauzione ancora aperta o in attesa'
+          const code = hasPenalty ? 'HAS_PENALTY'
+            : hasDamage ? 'HAS_DAMAGE'
+            : hasInvoice ? 'HAS_PENALTY'
+            : 'OPEN_DEPOSIT'
+
+          await supabase
+            .from('review_candidates')
+            .update({
+              eligibility_status: 'TO_REVIEW',
+              review_risk: 'RED',
+              send_status: 'BLOCKED',
+              exclusion_reason_code: code,
+              exclusion_reason_text: reason,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', candidate.id)
+        }
+      }
+    } catch (err) {
+      console.error('autoFixEligibility error:', err)
+    }
   }
 
   async function autoEvaluateAll() {
