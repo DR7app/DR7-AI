@@ -155,13 +155,18 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     if (vehicles.length === 0) return skip('no matching vehicles found in DB')
 
     // ── 5. Existing dedup rows for this month ──
+    // Dedup is per (vehicle_id, year_month, recipient) — NOT per threshold.
+    // As a vehicle's revenue grows it crosses more tiers (0.8 → 0.7 → 0.6),
+    // and we only want ONE promo per vehicle per month per recipient. Old
+    // implementation included threshold_coeff in the key and re-fired every
+    // time the active coefficient dropped to a new tier (looked like spam).
     const { year, month, ym } = romeYearMonth()
     const { data: alreadySent } = await supabase
         .from('promo_incassi_sent_log')
-        .select('vehicle_id, threshold_coeff, recipient')
+        .select('vehicle_id, recipient')
         .eq('year_month', ym)
     const sentSet = new Set(
-        (alreadySent || []).map(r => `${r.vehicle_id}|${Number(r.threshold_coeff)}|${r.recipient}`)
+        (alreadySent || []).map(r => `${r.vehicle_id}|${r.recipient}`)
     )
 
     const siteUrl = process.env.URL || process.env.DEPLOY_URL || ''
@@ -197,7 +202,7 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
         if (activeCoeff > thresholdCoeff) continue
 
         for (const phone of recipients) {
-            const dedupKey = `${v.id}|${activeCoeff}|${phone}`
+            const dedupKey = `${v.id}|${phone}`
             if (sentSet.has(dedupKey)) {
                 totalSkipped++
                 results.push({ vehicle: v.display_name, activeCoeff, recipient: phone, ok: false, detail: 'already_sent' })
