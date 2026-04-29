@@ -267,18 +267,40 @@ export default function CustomersTab() {
         return str
       }
 
-      const rows = exportSource.map(c => [
-        c.nome || '', c.cognome || '', c.email || '', c.telefono || c.phone || '',
-        c.tipo_cliente || '', c.codice_fiscale || '', c.partita_iva || '',
-        c.indirizzo || '', c.cap || c.codice_postale || '', c.citta || c.citta_residenza || '',
-        c.provincia || c.provincia_residenza || '', c.nazione || '', c.data_nascita || '',
-        c.luogo_nascita || '', c.ragione_sociale || '', c.denominazione || '',
-        c.numero_patente || c.metadata?.patente?.numero || '',
-        c.tipo_patente || c.metadata?.patente?.tipo || '',
-        c.scadenza_patente || c.metadata?.patente?.scadenza || '',
-        c.note || c.notes || '', c.status || '', c.membership_tier || '',
-        c.created_at ? new Date(c.created_at).toLocaleDateString('it-IT') : ''
-      ].map(escapeCSV))
+      // Pull nome/cognome from every place they can hide. customers_extended
+      // rows in the wild have data in nome/cognome OR first_name/last_name OR
+      // only in full_name (split it). Same for telefono — try every alias.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const splitFullName = (full: string): { first: string; last: string } => {
+        const t = String(full || '').trim()
+        if (!t) return { first: '', last: '' }
+        const parts = t.split(/\s+/)
+        if (parts.length === 1) return { first: parts[0], last: '' }
+        return { first: parts.slice(0, -1).join(' '), last: parts[parts.length - 1] }
+      }
+      const rows = exportSource.map(c => {
+        const split = splitFullName(c.full_name || c.fullName || `${c.nome || c.first_name || ''} ${c.cognome || c.last_name || ''}`)
+        const nome = c.nome || c.first_name || c.firstName || c.given_name || split.first || ''
+        const cognome = c.cognome || c.last_name || c.lastName || c.family_name || split.last || ''
+        const telefono = c.telefono || c.phone || c.mobile || c.cellulare || c.telephone || c.customer_phone || c.metadata?.telefono || ''
+        return [
+          nome, cognome, c.email || c.customer_email || '',
+          telefono,
+          c.tipo_cliente || '', c.codice_fiscale || '', c.partita_iva || '',
+          c.indirizzo || c.address || '',
+          c.cap || c.codice_postale || c.zip || c.postal_code || '',
+          c.citta || c.citta_residenza || c.city || '',
+          c.provincia || c.provincia_residenza || c.province || '',
+          c.nazione || c.country || '', c.data_nascita || c.birth_date || '',
+          c.luogo_nascita || c.birth_place || '',
+          c.ragione_sociale || '', c.denominazione || '',
+          c.numero_patente || c.metadata?.patente?.numero || '',
+          c.tipo_patente || c.metadata?.patente?.tipo || '',
+          c.scadenza_patente || c.metadata?.patente?.scadenza || '',
+          c.note || c.notes || '', c.status || '', c.membership_tier || '',
+          c.created_at ? new Date(c.created_at).toLocaleDateString('it-IT') : ''
+        ].map(escapeCSV)
+      })
 
       const csvContent = [csvHeaders.join(','), ...rows.map(r => r.join(','))].join('\n')
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -354,7 +376,10 @@ export default function CustomersTab() {
         return result
       }
 
-      const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, '_'))
+      // Strip the UTF-8 BOM that we add on export — without this, the first
+      // header becomes '﻿nome' and never matches headerMap, so every
+      // imported row loses its nome column.
+      const headers = parseCSVLine(lines[0]).map(h => h.replace(/^﻿/, '').toLowerCase().replace(/\s+/g, '_'))
 
       // Map CSV headers to customers_extended columns
       const headerMap: Record<string, string> = {
