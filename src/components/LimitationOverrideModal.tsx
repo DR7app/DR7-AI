@@ -51,6 +51,15 @@ export default function LimitationOverrideModal({
     }
   }, [isOpen, limitationCode])
 
+  // Auto-verify when 6 digits are typed — saves the operator from having to
+  // hunt for the "Verifica" button. Re-typing the code retriggers verify.
+  useEffect(() => {
+    if (step === 'otp-sent' && otpCode.length === 6 && !verifying) {
+      verifyCode()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otpCode, step])
+
   async function sendOtp() {
     setSending(true)
     setError(null)
