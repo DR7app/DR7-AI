@@ -266,19 +266,30 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
     }
 
-    // Mark booking as returned: status=completed + alarm off in one action.
+    // Mark booking as returned: status='completata' + alarm off in one action.
+    // The bookings_status_check DB constraint accepts 'completata' (Italian)
+    // not 'completed' — matching the rest of the project's status vocabulary.
+    // First attempt 'completata'; if a future tenant uses 'completed', fall
+    // back so we don't block the admin.
     const markReturned = async (bookingId: string): Promise<{ ok: boolean; error?: string }> => {
         // Silence the alarm locally first (so user sees it stop even if DB hiccups)
         await stopAlarm(bookingId)
-        try {
-            const { error } = await supabase
+        const tryStatus = async (status: 'completata' | 'completed') => {
+            return supabase
                 .from('bookings')
                 .update({
-                    status: 'completed',
+                    status,
                     actual_return_date: new Date().toISOString(),
                     alarm_triggered_at: new Date().toISOString(),
                 })
                 .eq('id', bookingId)
+        }
+        try {
+            let { error } = await tryStatus('completata')
+            if (error && /bookings_status_check|check constraint/i.test(error.message)) {
+                console.warn('[alarm] completata rejected by check constraint, trying completed')
+                ;({ error } = await tryStatus('completed'))
+            }
             if (error) {
                 console.warn('[alarm] markReturned DB update failed:', error.message)
                 return { ok: false, error: error.message }
