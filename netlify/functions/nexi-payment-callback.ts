@@ -87,17 +87,16 @@ const handler: Handler = async (event) => {
         const result = callbackData.result || op.operationResult;
         const resultCode = callbackData.resultCode;
         const authorizationCode = callbackData.authorizationCode || op.additionalData?.authorizationCode;
-        // Only use a contractId if Nexi actually returned one — i.e. the
-        // original order had `recurrence: { action: 'CONTRACT_CREATION', ...}`.
-        // Falling back to `orderId` (the previous behaviour) gave us a fake
-        // token in customers_extended.metadata for every payment, even when
-        // no card was tokenized — that's why the Nexi tab listed cards we
-        // could not actually charge via MIT.
+        // Use whatever contractId Nexi returns; otherwise fall back to the
+        // orderId we sent — your Nexi merchant has gateway-level
+        // auto-tokenization, so every successful payment registers the card
+        // under the orderId. That's why MIT charges work even on past
+        // pay-by-link orders that never explicitly requested tokenization.
         const contractId = callbackData.contractId
             || op.additionalData?.contractId
             || op.additionalData?.recurringContractId
             || callbackData.recurringContractId
-            || null;
+            || orderId;
         const paymentCircuit = callbackData.paymentCircuit || op.paymentCircuit || op.additionalData?.paymentCircuit || '';
         const paymentInstrument = callbackData.paymentInstrument || op.paymentInstrument || '';
 
@@ -874,9 +873,13 @@ const handler: Handler = async (event) => {
                         }
                     }
 
-                    // Fallback: lookup by email
+                    // Fallback: lookup by email (case-insensitive)
                     if (!savedOnCustomer && custEmail) {
-                        const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
+                        const { data: custByEmail } = await supabase
+                            .from('customers_extended')
+                            .select('id, metadata')
+                            .ilike('email', custEmail)
+                            .maybeSingle();
                         if (custByEmail) {
                             await supabase.from('customers_extended').update({
                                 metadata: { ...(custByEmail.metadata || {}), ...metadataUpdate },
@@ -887,8 +890,29 @@ const handler: Handler = async (event) => {
                         }
                     }
 
+                    // Final fallback: lookup by phone (digits only)
+                    const custPhoneRaw = booking.customer_phone || booking.booking_details?.customer?.phone || '';
+                    const custPhoneDigits = String(custPhoneRaw).replace(/[^0-9]/g, '');
+                    if (!savedOnCustomer && custPhoneDigits.length >= 10) {
+                        const last10 = custPhoneDigits.slice(-10);
+                        const { data: custByPhone } = await supabase
+                            .from('customers_extended')
+                            .select('id, metadata, telefono')
+                            .ilike('telefono', `%${last10}%`)
+                            .limit(1)
+                            .maybeSingle();
+                        if (custByPhone) {
+                            await supabase.from('customers_extended').update({
+                                metadata: { ...(custByPhone.metadata || {}), ...metadataUpdate },
+                                updated_at: new Date().toISOString()
+                            }).eq('id', custByPhone.id);
+                            savedOnCustomer = true;
+                            console.log(`[nexi-payment-callback] Saved card info + contractId on customer ${custByPhone.id} (by phone: ${last10})`);
+                        }
+                    }
+
                     if (!savedOnCustomer) {
-                        console.warn(`[nexi-payment-callback] Could not find customer to save card info. custId=${custId}, email=${custEmail}`);
+                        console.warn(`[nexi-payment-callback] Could not find customer to save card info. custId=${custId}, email=${custEmail}, phoneDigits=${custPhoneDigits}`);
                     }
                 }
 
