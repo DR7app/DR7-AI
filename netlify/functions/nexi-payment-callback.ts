@@ -87,7 +87,17 @@ const handler: Handler = async (event) => {
         const result = callbackData.result || op.operationResult;
         const resultCode = callbackData.resultCode;
         const authorizationCode = callbackData.authorizationCode || op.additionalData?.authorizationCode;
-        const contractId = callbackData.contractId || op.additionalData?.contractId || orderId;
+        // Only use a contractId if Nexi actually returned one — i.e. the
+        // original order had `recurrence: { action: 'CONTRACT_CREATION', ...}`.
+        // Falling back to `orderId` (the previous behaviour) gave us a fake
+        // token in customers_extended.metadata for every payment, even when
+        // no card was tokenized — that's why the Nexi tab listed cards we
+        // could not actually charge via MIT.
+        const contractId = callbackData.contractId
+            || op.additionalData?.contractId
+            || op.additionalData?.recurringContractId
+            || callbackData.recurringContractId
+            || null;
         const paymentCircuit = callbackData.paymentCircuit || op.paymentCircuit || op.additionalData?.paymentCircuit || '';
         const paymentInstrument = callbackData.paymentInstrument || op.paymentInstrument || '';
 
