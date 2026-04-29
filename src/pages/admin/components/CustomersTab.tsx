@@ -225,6 +225,29 @@ export default function CustomersTab() {
   async function exportCustomersCSV() {
     setExporting(true)
     try {
+      // Always pull fresh data from the backend so the export never depends on
+      // whatever UI state (search filter, paginated view, in-flight reload)
+      // happens to be in memory. Falls back to the in-memory list only if the
+      // fetch fails completely.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let exportSource: any[] = []
+      try {
+        const res = await fetch('/.netlify/functions/list-customers')
+        const json = await res.json()
+        if (res.ok && Array.isArray(json.customers)) {
+          exportSource = json.customers
+        }
+      } catch (fetchErr) {
+        console.warn('[exportCustomersCSV] Fresh fetch failed, falling back to in-memory list:', fetchErr)
+      }
+      if (exportSource.length === 0 && allCustomers.length > 0) {
+        exportSource = allCustomers
+      }
+      if (exportSource.length === 0) {
+        toast.error('Nessun cliente da esportare. Riprova fra qualche secondo.')
+        return
+      }
+
       const csvHeaders = [
         'Nome', 'Cognome', 'Email', 'Telefono', 'Tipo Cliente',
         'Codice Fiscale', 'Partita IVA', 'Indirizzo', 'CAP', 'Città',
@@ -244,16 +267,16 @@ export default function CustomersTab() {
         return str
       }
 
-      const rows = allCustomers.map(c => [
+      const rows = exportSource.map(c => [
         c.nome || '', c.cognome || '', c.email || '', c.telefono || c.phone || '',
         c.tipo_cliente || '', c.codice_fiscale || '', c.partita_iva || '',
-        c.indirizzo || '', c.codice_postale || '', c.citta_residenza || c.citta || '',
-        c.provincia_residenza || '', c.nazione || '', c.data_nascita || '',
+        c.indirizzo || '', c.cap || c.codice_postale || '', c.citta || c.citta_residenza || '',
+        c.provincia || c.provincia_residenza || '', c.nazione || '', c.data_nascita || '',
         c.luogo_nascita || '', c.ragione_sociale || '', c.denominazione || '',
         c.numero_patente || c.metadata?.patente?.numero || '',
         c.tipo_patente || c.metadata?.patente?.tipo || '',
         c.scadenza_patente || c.metadata?.patente?.scadenza || '',
-        c.notes || '', c.status || '', c.membership_tier || '',
+        c.note || c.notes || '', c.status || '', c.membership_tier || '',
         c.created_at ? new Date(c.created_at).toLocaleDateString('it-IT') : ''
       ].map(escapeCSV))
 
@@ -281,7 +304,7 @@ export default function CustomersTab() {
         URL.revokeObjectURL(url)
       }
 
-      toast.success(`${allCustomers.length} clienti esportati!`)
+      toast.success(`${exportSource.length} clienti esportati!`)
     } catch (err: unknown) {
       console.error('Export error:', err)
       toast.error('Errore durante esportazione')
@@ -2249,7 +2272,7 @@ export default function CustomersTab() {
             </button>
             <button
               onClick={exportCustomersCSV}
-              disabled={exporting || allCustomers.length === 0}
+              disabled={exporting}
               className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
