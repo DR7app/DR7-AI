@@ -209,6 +209,42 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
                 continue
             }
 
+            // PRE-CLAIM the slot atomically BEFORE sending the WhatsApp.
+            // If a unique-index conflict happens (concurrent run, stale sentSet,
+            // duplicate recipient list, etc.) Postgres rejects the insert and
+            // we skip the send. This makes "one message per (vehicle, month,
+            // recipient)" enforced by the DB itself — code paths can race,
+            // settings can change mid-run, but the index ensures no double-fire.
+            // The trade-off: if the WhatsApp send later fails, we won't retry
+            // (the row is already in the log). That's intentional — admin
+            // can manually delete the log row to retry. Spam > missing one.
+            const { data: claimRow, error: claimErr } = await supabase
+                .from('promo_incassi_sent_log')
+                .insert({
+                    vehicle_id: v.id,
+                    year_month: ym,
+                    threshold_coeff: activeCoeff,
+                    recipient: phone,
+                    template_key: 'pro_promo_incassi',
+                })
+                .select('id')
+                .maybeSingle()
+            if (claimErr || !claimRow) {
+                // Unique-violation → already sent for this (vehicle, month, recipient).
+                totalSkipped++
+                results.push({
+                    vehicle: v.display_name,
+                    activeCoeff,
+                    recipient: phone,
+                    ok: false,
+                    detail: claimErr?.code === '23505' ? 'already_sent_db_block' : (claimErr?.message || 'claim_failed'),
+                })
+                // Track in-memory so subsequent vehicles in this run also skip.
+                sentSet.add(dedupKey)
+                continue
+            }
+            sentSet.add(dedupKey)
+
             const templateVars = {
                 vehicle: v.display_name,
                 veicolo: v.display_name,
@@ -244,13 +280,6 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
                     results.push({ vehicle: v.display_name, activeCoeff, recipient: phone, ok: false, detail: json.reason || 'template skipped' })
                     continue
                 }
-                await supabase.from('promo_incassi_sent_log').insert({
-                    vehicle_id: v.id,
-                    year_month: ym,
-                    threshold_coeff: activeCoeff,
-                    recipient: phone,
-                    template_key: 'promo_incassi',
-                })
                 totalSent++
                 results.push({ vehicle: v.display_name, activeCoeff, recipient: phone, ok: true })
             } catch (err) {
