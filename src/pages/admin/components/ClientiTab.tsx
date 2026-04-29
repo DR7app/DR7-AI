@@ -69,13 +69,27 @@ export default function ClientiTab() {
   async function loadCustomers() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('customers_extended')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setCustomers(data || [])
+      // Supabase caps SELECT * at 1000 rows by default. Page through with
+      // .range() until we get a short page so the count matches the Lead
+      // tab (which uses /list-customers and naturally paginates).
+      const PAGE_SIZE = 1000
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const all: any[] = []
+      let from = 0
+      // Fetch up to 50 pages (50k customers) before bailing — paranoid limit
+      for (let i = 0; i < 50; i++) {
+        const { data, error } = await supabase
+          .from('customers_extended')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...data)
+        if (data.length < PAGE_SIZE) break
+        from += PAGE_SIZE
+      }
+      setCustomers(all)
     } catch (error) {
       console.error('Failed to load customers:', error)
       toast.error('Errore caricamento clienti')
