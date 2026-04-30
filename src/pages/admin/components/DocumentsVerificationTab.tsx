@@ -324,6 +324,7 @@ export default function DocumentsVerificationTab() {
       while (cursor < queue.length) {
         const idx = cursor++
         const doc = queue[idx]
+        const label = `${doc.user?.full_name || doc.user_id?.slice(0,8)} · ${doc.document_type}`
         try {
           const res = await authFetch('/.netlify/functions/auto-verify-document', {
             method: 'POST',
@@ -331,6 +332,9 @@ export default function DocumentsVerificationTab() {
             body: JSON.stringify({ documentId: doc.id }),
           })
           const json = await res.json().catch(() => null)
+          // eslint-disable-next-line no-console
+          console.log(`[auto-verify] ${label} →`, { httpStatus: res.status, body: json })
+          setAutoResults(prev => ({ ...prev, [doc.id]: { decision: json?.decision, reason: json?.reason, matches: json?.matches, mismatches: json?.mismatches } }))
           if (res.ok && json?.success) {
             if (json.decision === 'verified') verified++
             else if (json.decision === 'rejected') rejected++
@@ -338,7 +342,9 @@ export default function DocumentsVerificationTab() {
           } else {
             pending++
           }
-        } catch {
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error(`[auto-verify] ${label} threw:`, e)
           pending++
         } finally {
           setAutoVerifying(prev => {
@@ -661,6 +667,11 @@ export default function DocumentsVerificationTab() {
                         {doc.rejection_reason && (
                           <p className="text-[10px] text-red-400 bg-red-500/10 px-2 py-1 rounded-lg line-clamp-2" title={doc.rejection_reason}>
                             {doc.rejection_reason}
+                          </p>
+                        )}
+                        {autoResults[doc.id]?.reason && !doc.rejection_reason && (
+                          <p className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-1 rounded-lg line-clamp-3" title={autoResults[doc.id]?.reason}>
+                            {autoResults[doc.id]?.reason}
                           </p>
                         )}
                         {autoVerifying.has(doc.id) ? (
