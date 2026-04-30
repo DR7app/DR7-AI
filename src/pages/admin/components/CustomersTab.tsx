@@ -1382,7 +1382,7 @@ export default function CustomersTab() {
       const target = customers.find(c => c.id === customerId)
       setClientStatusTier(
         { customerId, userId: target?.user_id, email: target?.email, phone: target?.phone },
-        (newStatus ?? 'standard')
+        (newStatus ?? 'new')
       )
       refreshClientStatus()
 
@@ -1417,7 +1417,7 @@ export default function CustomersTab() {
       setAllCustomers(prev => prev.map(c =>
         selectedCustomerIds.has(c.id) ? { ...c, status: newStatus } : c
       ))
-      const tier = (newStatus ?? 'standard')
+      const tier = (newStatus ?? 'new')
       customers.forEach(c => {
         if (selectedCustomerIds.has(c.id)) {
           setClientStatusTier({ customerId: c.id, userId: c.user_id, email: c.email, phone: c.phone }, tier)
