@@ -121,58 +121,43 @@ export default function ReferralProgramTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection])
 
-  async function loadStats() {
-    const { data, error } = await supabase
-      .from('referral_program_stats')
-      .select('*')
-      .single()
-    if (error) {
-      console.error('[ReferralProgramTab] referral_program_stats error:', error)
-      toast.error(`Errore caricamento statistiche: ${error.message || error.code || 'sconosciuto'}`)
-      return
+  async function callReferralAdmin(action: string, body: Record<string, unknown> = {}) {
+    const token = (await supabase.auth.getSession()).data.session?.access_token
+    const res = await fetch('/.netlify/functions/referral-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action, ...body }),
+    })
+    const json = await res.json()
+    if (!res.ok || json.error) {
+      throw new Error(json.error || `HTTP ${res.status}`)
     }
-    if (data) setStats(data)
+    return json
+  }
+
+  async function loadStats() {
+    try {
+      const json = await callReferralAdmin('stats')
+      if (json.stats) setStats(json.stats)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[ReferralProgramTab] stats error:', err)
+      toast.error(`Errore caricamento statistiche: ${msg}`)
+    }
   }
 
   async function loadParticipants() {
     setLoading(true)
-    const { data: parts, error: partsError } = await supabase
-      .from('referral_participants')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (partsError) {
-      console.error('[ReferralProgramTab] referral_participants error:', partsError)
-      toast.error(`Errore caricamento partecipanti: ${partsError.message || partsError.code || 'sconosciuto'}`)
+    try {
+      const json = await callReferralAdmin('list')
+      setParticipants((json.participants || []) as Participant[])
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[ReferralProgramTab] participants error:', err)
+      toast.error(`Errore caricamento partecipanti: ${msg}`)
+    } finally {
       setLoading(false)
-      return
     }
-
-    const ids = (parts || []).map(p => p.id)
-    let walletsByParticipant = new Map<string, { balance_cents: number; total_earned_cents: number; total_topped_up_cents: number }>()
-    if (ids.length > 0) {
-      const { data: wallets, error: walletsError } = await supabase
-        .from('wallets')
-        .select('participant_id, balance_cents, total_earned_cents, total_topped_up_cents')
-        .in('participant_id', ids)
-      if (walletsError) {
-        console.warn('[ReferralProgramTab] wallets fetch failed (continuing without balances):', walletsError)
-      } else if (wallets) {
-        for (const w of wallets) {
-          if (w.participant_id) walletsByParticipant.set(w.participant_id, {
-            balance_cents: w.balance_cents || 0,
-            total_earned_cents: w.total_earned_cents || 0,
-            total_topped_up_cents: w.total_topped_up_cents || 0,
-          })
-        }
-      }
-    }
-
-    const merged = (parts || []).map(p => ({
-      ...p,
-      wallets: walletsByParticipant.has(p.id) ? [walletsByParticipant.get(p.id)!] : [],
-    }))
-    setParticipants(merged as Participant[])
-    setLoading(false)
   }
 
   async function loadParticipantDetail(participant: Participant) {
