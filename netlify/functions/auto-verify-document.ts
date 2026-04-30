@@ -183,10 +183,21 @@ export const handler: Handler = async (event) => {
     } else if (cmp.mismatches.length > 0) {
       decision = 'rejected'
       reason = `Auto-rifiuto: dati non coincidono — ${cmp.mismatches.slice(0, 2).join('; ')}`
-    } else if (extracted.confidence === 'high' && cmp.matches.length >= 2) {
+    } else if (
+      // ≥2 confirmed matches and zero mismatches → very likely the right doc
+      cmp.matches.length >= 2 ||
+      // OR exactly 1 match but high-confidence on a strong identifier
+      (cmp.matches.length === 1 &&
+       extracted.confidence === 'high' &&
+       (cmp.matches[0] === 'codice_fiscale' || cmp.matches[0] === 'patente_numero'))
+    ) {
       decision = 'verified'
+    } else if (cmp.matches.length === 0) {
+      // Nothing comparable on either side — leave for human review
+      reason = `Auto-revisione: dati cliente incompleti (no field overlap, confidence=${extracted.confidence || 'n/d'})${extracted.notes ? ' — ' + extracted.notes : ''}`
     } else {
-      reason = `Auto-revisione necessaria (confidence=${extracted.confidence || 'n/d'}, match=${cmp.matches.length})${extracted.notes ? ' — ' + extracted.notes : ''}`
+      // 1 match, low/medium confidence — borderline, human review
+      reason = `Auto-revisione: 1 match (${cmp.matches[0]}), confidence=${extracted.confidence || 'n/d'}${extracted.notes ? ' — ' + extracted.notes : ''}`
     }
 
     // 7. Apply
