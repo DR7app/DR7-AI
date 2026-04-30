@@ -42,7 +42,7 @@ export default function CampagnaMarketingTab() {
     const [imagePreviews, setImagePreviews] = useState<string[]>([])
     const [videoFile, setVideoFile] = useState<File | null>(null)
     const [videoPreview, setVideoPreview] = useState<string>('')
-    const [sending, setSending] = useState(false)
+    const [, setSending] = useState(false)
 
     const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
@@ -303,7 +303,8 @@ export default function CampagnaMarketingTab() {
         toast.dismiss(toastId)
     }
 
-    async function handleResume(campaign: CampaignRow) {
+    // @ts-expect-error -- kept for future re-enable; deliberately unused while CAMPAIGN_SENDS_ENABLED is false
+    async function _handleResume(campaign: CampaignRow) {
         const { count: retryable } = await supabase
             .from('marketing_campaign_recipients')
             .select('id', { count: 'exact', head: true })
@@ -408,6 +409,19 @@ export default function CampagnaMarketingTab() {
                 </p>
             </div>
 
+            <div className="bg-red-600/10 border border-red-600/40 rounded-lg p-4">
+                <p className="text-red-400 font-semibold text-sm">
+                    Invio campagne sospeso temporaneamente
+                </p>
+                <p className="text-red-300/80 text-xs mt-1">
+                    L'ultimo invio di massa ha attivato l'anti-spam di WhatsApp e disconnesso l'istanza Green API.
+                    Riconnetti l'istanza (console.green-api.com → Scan QR) e poi riattiva l'invio rimuovendo il blocco
+                    in <code className="bg-black/30 px-1 rounded">netlify/functions/send-whatsapp-campaign-chunk.ts</code>
+                    (<code className="bg-black/30 px-1 rounded">CAMPAIGN_SENDS_ENABLED = true</code>).
+                    Quando riattivato l'invio sarà a 1 messaggio ogni 7 secondi per evitare un nuovo ban.
+                </p>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Form */}
                 <div className="bg-theme-bg-tertiary p-5 rounded-lg border border-theme-border space-y-4">
@@ -487,8 +501,8 @@ export default function CampagnaMarketingTab() {
                         <div className="text-sm text-theme-text-muted">
                             Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span>
                         </div>
-                        <Button onClick={handleSend} disabled={sending || selectedIds.size === 0}>
-                            {sending ? 'Invio in corso...' : `Invia a ${selectedIds.size} clienti`}
+                        <Button onClick={handleSend} disabled>
+                            Invio sospeso
                         </Button>
                     </div>
                 </div>
@@ -680,10 +694,11 @@ export default function CampagnaMarketingTab() {
                                     <td className="p-3 text-right">
                                         {canResume && (
                                             <button
-                                                onClick={() => handleResume(c)}
-                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] whitespace-nowrap"
+                                                disabled
+                                                title="Invio sospeso temporaneamente"
+                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-600 text-gray-300 cursor-not-allowed whitespace-nowrap"
                                             >
-                                                Riprova non inviati
+                                                Sospeso
                                             </button>
                                         )}
                                     </td>

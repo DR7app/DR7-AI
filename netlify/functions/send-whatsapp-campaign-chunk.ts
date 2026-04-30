@@ -6,10 +6,17 @@ const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-// Process at most this many recipients per invocation. The browser keeps
-// calling this endpoint until 'done: true' comes back. With 5 recipients
-// at ~1.5s each + media latency, we stay well under the 10s Netlify limit.
-const CHUNK_SIZE = 5;
+// HARD KILL SWITCH: set to true to re-enable campaign sends.
+// Disabled 2026-04-30 after a bulk send tripped WhatsApp anti-spam and
+// disconnected the Green API instance. Flip back to true after the
+// instance is reauthorized AND we're ready to send at the slower rate.
+const CAMPAIGN_SENDS_ENABLED = false;
+
+// Process at most this many recipients per invocation. Dropped to 1 with
+// a 7s delay between sends to stay safely under WhatsApp's spam threshold
+// (~1 message per 7-10 seconds is the safe rate for Green API).
+const CHUNK_SIZE = 1;
+const PER_RECIPIENT_DELAY_MS = 7000;
 
 function normalizePhone(raw: string | null | undefined): string {
     if (!raw) return "";
@@ -55,6 +62,14 @@ function fileNameFromUrl(u: string, fallback: string): string {
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== "POST") {
         return { statusCode: 405, body: JSON.stringify({ error: "Method Not Allowed" }) };
+    }
+    if (!CAMPAIGN_SENDS_ENABLED) {
+        return {
+            statusCode: 503,
+            body: JSON.stringify({
+                error: "Invio campagne sospeso temporaneamente. Riattiva manualmente in send-whatsapp-campaign-chunk.ts (CAMPAIGN_SENDS_ENABLED = true).",
+            }),
+        };
     }
     if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
         return { statusCode: 500, body: JSON.stringify({ error: "Green API non configurato (GREEN_API_INSTANCE_ID/GREEN_API_TOKEN)" }) };
@@ -184,7 +199,7 @@ export const handler: Handler = async (event) => {
             await sb.from("marketing_campaign_recipients")
                 .update({ status: "sent", sent_at: new Date().toISOString() })
                 .eq("id", r.id);
-            await new Promise(res => setTimeout(res, 200));
+            await new Promise(res => setTimeout(res, PER_RECIPIENT_DELAY_MS));
         } catch (err: unknown) {
             chunkFailed++;
             const msg = err instanceof Error ? err.message : String(err);
