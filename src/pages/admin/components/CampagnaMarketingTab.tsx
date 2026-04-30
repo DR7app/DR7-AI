@@ -649,9 +649,10 @@ export default function CampagnaMarketingTab() {
                         </thead>
                         <tbody className="divide-y divide-theme-border">
                             {campaigns.map(c => {
-                                const canResume = c.status !== 'sending' && c.status !== 'pending'
-                                    && (c.sent_count + c.failed_count) < c.total_recipients
-                                    || (c.failed_count > 0 && c.status !== 'sending')
+                                // Show Riprova whenever there's any unsent work — covers stuck
+                                // 'sending' campaigns (bg function died) AND completed campaigns
+                                // with failures. Click handler bails out if nothing's actually retryable.
+                                const canResume = c.sent_count < c.total_recipients
                                 return (
                                 <tr key={c.id} className="hover:bg-theme-bg-hover/50">
                                     <td className="p-3 text-theme-text-muted text-xs">
