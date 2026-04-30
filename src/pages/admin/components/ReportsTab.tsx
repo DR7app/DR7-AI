@@ -519,16 +519,6 @@ export default function ReportsTab() {
                 Veicoli
               </button>
               <button
-                onClick={() => setActiveReport('washes')}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
-                  activeReport === 'washes'
-                    ? 'bg-dr7-gold text-white border-dr7-gold'
-                    : 'bg-transparent text-theme-text-primary border-theme-text-primary hover:bg-theme-text-primary hover:text-theme-bg-primary'
-                }`}
-              >
-                Lavaggi
-              </button>
-              <button
                 onClick={() => setActiveReport('cauzioni')}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
                   activeReport === 'cauzioni'
