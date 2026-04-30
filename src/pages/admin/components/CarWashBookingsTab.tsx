@@ -184,6 +184,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [targaNotFound, setTargaNotFound] = useState(false)
   // OTP override for manual category selection
   const override = useLimitationOverride()
+  // Foreign plate flow (Targa Estera) — requires OTP per category
+  const [showForeignPlateModal, setShowForeignPlateModal] = useState(false)
+  const [pendingForeignCategory, setPendingForeignCategory] = useState<'urban' | 'maxi' | null>(null)
+
+  useEffect(() => {
+    if (pendingForeignCategory && override.hasOverride('foreign_plate_carwash')) {
+      setVehicleCategory(pendingForeignCategory)
+      setClassificationSource('manual')
+      setTargaVehicleInfo({
+        brand: 'Targa Estera',
+        model: pendingForeignCategory === 'urban' ? 'Urban' : 'Maxi',
+      })
+      setTargaNotFound(false)
+      setShowForeignPlateModal(false)
+      setPendingForeignCategory(null)
+    }
+  }, [override.overrideCodes, pendingForeignCategory, override])
 
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -1632,6 +1649,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     }`}
                   >
                     Moto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowForeignPlateModal(true)}
+                    className={`px-4 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
+                      (vehicleCategory === 'urban' || vehicleCategory === 'maxi') && targaVehicleInfo?.brand === 'Targa Estera'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
+                    }`}
+                  >
+                    Targa Estera
                   </button>
                   <input
                     type="text"
@@ -3201,6 +3229,60 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
 
 
+
+      {/* Foreign plate (Targa Estera) — URBAN/MAXI choice with OTP */}
+      {showForeignPlateModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-6 max-w-md w-full shadow-xl">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-1">
+              Targa Estera
+            </h3>
+            <p className="text-sm text-theme-text-secondary mb-4">
+              Seleziona la categoria del veicolo. Per procedere e' richiesta autorizzazione tramite OTP.
+            </p>
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingForeignCategory('urban')
+                  override.requestOverride(
+                    'foreign_plate_carwash',
+                    `Targa estera ${vehiclePlate || '(non inserita)'} - categoria URBAN selezionata manualmente. Autorizzazione necessaria per procedere.`,
+                  )
+                }}
+                className="flex-1 px-4 py-3 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                URBAN
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingForeignCategory('maxi')
+                  override.requestOverride(
+                    'foreign_plate_carwash',
+                    `Targa estera ${vehiclePlate || '(non inserita)'} - categoria MAXI selezionata manualmente. Autorizzazione necessaria per procedere.`,
+                  )
+                }}
+                className="flex-1 px-4 py-3 rounded-lg text-sm font-bold bg-orange-600 text-white hover:bg-orange-700 transition-colors"
+              >
+                MAXI
+              </button>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForeignPlateModal(false)
+                  setPendingForeignCategory(null)
+                }}
+                className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors text-sm"
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* OTP Modal for manual category */}
       <LimitationOverrideModal
