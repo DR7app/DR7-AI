@@ -75,7 +75,7 @@ const PLACEHOLDERS = ['{{customer_name}}', '{{review_link}}']
 export default function ReviewManagementTab() {
   // Data state
   const [candidates, setCandidates] = useState<ReviewCandidate[]>([])
-  const [, setStats] = useState<DashboardStats>({ eligible: 0, to_review: 0, excluded: 0, to_send: 0, sent: 0, failed: 0 })
+  const [stats, setStats] = useState<DashboardStats>({ eligible: 0, to_review: 0, excluded: 0, to_send: 0, sent: 0, failed: 0 })
   const [, setSettings] = useState<ReviewSettings>(DEFAULT_SETTINGS)
   const [, setTemplates] = useState<ReviewTemplate[]>([])
 
@@ -849,6 +849,26 @@ export default function ReviewManagementTab() {
             </svg>
           </button>
         </div>
+      </div>
+
+      {/* Stats overview — counts per category (Idonei / Da Verificare / Da Inviare / Inviate / Fallite / Esclusi) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+        {([
+          { key: 'eligible', label: 'Idonei', value: stats.eligible, dot: 'bg-green-500' },
+          { key: 'to_review', label: 'Da Verificare', value: stats.to_review, dot: 'bg-yellow-500' },
+          { key: 'to_send', label: 'Da Inviare', value: stats.to_send, dot: 'bg-blue-500' },
+          { key: 'sent', label: 'Inviate', value: stats.sent, dot: 'bg-emerald-500' },
+          { key: 'failed', label: 'Fallite', value: stats.failed, dot: 'bg-red-500' },
+          { key: 'excluded', label: 'Esclusi', value: stats.excluded, dot: 'bg-gray-400' },
+        ]).map(s => (
+          <div key={s.key} className="bg-theme-bg-secondary border border-theme-border rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+              <span className="text-xs text-theme-text-secondary">{s.label}</span>
+            </div>
+            <div className="mt-1 text-2xl font-semibold text-theme-text-primary">{s.value}</div>
+          </div>
+        ))}
       </div>
 
       {/* Top filter bar — Tipo Servizio / Stato Recensione / Search / Page size */}
