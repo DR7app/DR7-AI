@@ -56,12 +56,15 @@ export function useClientStatus() {
   return v
 }
 
+type RawStatus = 'standard' | 'member' | 'elite' | 'blacklist' | null
+
 interface RawCustomer {
   id: string
   user_id: string | null
   email: string | null
   telefono: string | null
-  status_cliente: 'standard' | 'member' | 'elite' | 'blacklist' | null
+  status: RawStatus
+  status_cliente: RawStatus
 }
 
 export function ClientStatusProvider({ children }: { children: ReactNode }) {
@@ -81,7 +84,7 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
       for (let i = 0; i < 50; i++) {
         const { data, error } = await supabase
           .from('customers_extended')
-          .select('id, user_id, email, telefono, status_cliente')
+          .select('id, user_id, email, telefono, status, status_cliente')
           .range(from, from + PAGE - 1)
         if (error) break
         if (!data || data.length === 0) break
@@ -138,10 +141,16 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
         const emailBkCount = emailLc ? (bookingCountByEmail.get(emailLc) || 0) : 0
         const bkCount = Math.max(userBkCount, emailBkCount)
 
+        // Schema has two parallel columns (legacy split): CustomersTab writes `status`,
+        // ClientiTab writes `status_cliente`. Honour whichever is set.
+        const manual: RawStatus = (c.status_cliente && c.status_cliente !== 'standard')
+          ? c.status_cliente
+          : (c.status && c.status !== 'standard' ? c.status : null)
+
         let tier: ClientTier
-        if (c.status_cliente === 'blacklist') tier = 'blacklist'
-        else if (c.status_cliente === 'elite') tier = 'elite'
-        else if (c.status_cliente === 'member') tier = 'member'
+        if (manual === 'blacklist') tier = 'blacklist'
+        else if (manual === 'elite') tier = 'elite'
+        else if (manual === 'member') tier = 'member'
         else if (bkCount <= 1) tier = 'new'
         else tier = 'standard'
 

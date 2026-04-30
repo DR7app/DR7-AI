@@ -27,7 +27,7 @@ export default function ClientStatusBadge({
 }: Props) {
   const { lookup } = useClientStatus()
   const hasAnyKey = !!(customerId || userId || email || phone)
-  const looked = (tier == null && dr7Club == null) ? lookup({ customerId, userId, email, phone }) : null
+  const looked = lookup({ customerId, userId, email, phone })
 
   let resolvedTier: ClientTier | null = tier ?? looked?.tier ?? null
   const resolvedDr7 = dr7Club ?? looked?.dr7Club ?? false
