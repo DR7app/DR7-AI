@@ -20,6 +20,7 @@ const CarWashBookingsTab = lazyWithRetry(() => import('./components/CarWashBooki
 const CarWashCalendarTab = lazyWithRetry(() => import('./components/CarWashCalendarTab'))
 const UnpaidBookingsTab = lazyWithRetry(() => import('./components/UnpaidBookingsTab'))
 const MessaggiSistemaProTab = lazyWithRetry(() => import('./components/MessaggiSistemaProTab'))
+const CampagnaMarketingTab = lazyWithRetry(() => import('./components/CampagnaMarketingTab'))
 const ReviewManagementTab = lazyWithRetry(() => import('./components/ReviewManagementTab'))
 const FatturaTab = lazyWithRetry(() => import('./components/FatturaTab'))
 const ContrattoTab = lazyWithRetry(() => import('./components/ContrattoTab'))
@@ -57,7 +58,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'campaign-center' | 'gestione-otp' | 'verifica-documenti'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'campaign-center' | 'gestione-otp' | 'verifica-documenti'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -224,6 +225,7 @@ export default function AdminDashboard() {
       { tab: 'birthdays', label: 'Compleanni' },
       { tab: 'reviews', label: 'Recensioni' },
       { tab: 'marketing-pro', label: 'Messaggi di Sistema Pro' },
+      { tab: 'campagna-marketing', label: 'Campagna Marketing' },
       { tab: 'referral', label: 'Referral' },
       { tab: 'codice-sconto', label: 'Codice Sconto' },
       { tab: 'maxi-promo-gap', label: 'Maxi Promo Gap' },
@@ -297,6 +299,7 @@ export default function AdminDashboard() {
     'birthdays': 'Compleanni',
     'reviews': 'Recensioni',
     'marketing-pro': 'Messaggi di Sistema Pro',
+    'campagna-marketing': 'Campagna Marketing',
     'referral': 'Referral',
     'codice-sconto': 'Codice Sconto',
     'nexi': 'Nexi',
@@ -594,6 +597,7 @@ export default function AdminDashboard() {
           {activeTab === 'birthdays' && <BirthdaysTab />}
           {activeTab === 'reviews' && <ReviewManagementTab />}
           {activeTab === 'marketing-pro' && <MessaggiSistemaProTab />}
+          {activeTab === 'campagna-marketing' && <CampagnaMarketingTab />}
           {activeTab === 'fleet' && <FleetManagementTab />}
           {activeTab === 'nexi' && (isTabRestricted('nexi') ? <PlaceholderTab title="Accesso non autorizzato" /> : <NexiTab />)}
           {activeTab === 'scadenze' && <ScadenzeTab />}
