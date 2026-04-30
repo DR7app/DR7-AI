@@ -387,42 +387,29 @@ export default function ReferralProgramTab() {
                 <div className="text-center py-10 text-theme-text-muted">Nessun partecipante trovato</div>
               ) : (
                 <div className="space-y-2 max-h-[70vh] overflow-y-auto">
-                  {filteredParticipants.map((p) => {
-                    const wallet = p.wallets?.[0]
-                    return (
-                      <div
-                        key={p.id}
-                        onClick={() => loadParticipantDetail(p)}
-                        className={`p-4 rounded-xl border cursor-pointer transition-colors ${
-                          selectedParticipant?.id === p.id
-                            ? 'bg-dr7-gold/10 border-dr7-gold/30'
-                            : 'bg-theme-bg-secondary border-theme-border hover:border-dr7-gold/20'
-                        }`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-theme-text-primary font-semibold">
-                              {p.nome} {p.cognome}
-                            </p>
-                            <p className="text-theme-text-muted text-sm">{p.telefono}</p>
-                            <p className="text-theme-text-muted text-xs font-mono">{p.referral_code}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-dr7-gold font-bold">
-                              {wallet ? formatEur(wallet.balance_cents) : '€0.00'}
-                            </p>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              p.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                              p.status === 'suspended' ? 'bg-yellow-500/20 text-yellow-400' :
-                              'bg-red-500/20 text-red-400'
-                            }`}>
-                              {p.status}
-                            </span>
-                          </div>
+                  {filteredParticipants.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => loadParticipantDetail(p)}
+                      className={`p-4 rounded-xl border cursor-pointer transition-colors ${
+                        selectedParticipant?.id === p.id
+                          ? 'bg-dr7-gold/10 border-dr7-gold/30'
+                          : 'bg-theme-bg-secondary border-theme-border hover:border-dr7-gold/20'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center gap-4">
+                        <div className="min-w-0">
+                          <p className="text-theme-text-primary font-semibold truncate">
+                            {p.nome} {p.cognome}
+                          </p>
+                          {p.email && (
+                            <p className="text-theme-text-muted text-sm truncate">{p.email}</p>
+                          )}
                         </div>
+                        <p className="text-theme-text-muted text-sm font-mono whitespace-nowrap">{p.referral_code}</p>
                       </div>
-                    )
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
