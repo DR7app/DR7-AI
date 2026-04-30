@@ -226,42 +226,16 @@ export default function CampagnaMarketingTab() {
                 email: c.email,
                 status: 'pending',
             }))
-            const { data: insertedRecipients, error: recErr } = await supabase
+            const { error: recErr } = await supabase
                 .from('marketing_campaign_recipients')
                 .insert(recipientRows)
-                .select('id, customer_id, customer_name, phone, email')
             if (recErr) throw recErr
 
-            const payload = (insertedRecipients || []).map((r, i) => ({
-                id: r.id,
-                customer_id: r.customer_id,
-                customer_name: r.customer_name,
-                phone: r.phone,
-                email: r.email,
-                nome: recipients[i]?.nome,
-                cognome: recipients[i]?.cognome,
-            }))
-
-            // Background function: returns 202 immediately, then sends in
-            // the background up to 15 minutes. We don't await completion —
-            // progress is visible in the Storico campagne table (auto-refresh).
-            const res = await fetch('/.netlify/functions/send-whatsapp-campaign-background', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    campaignId: campaign.id,
-                    customers: payload,
-                    message,
-                    imageUrls,
-                    videoUrl: video_url,
-                }),
-            })
-            if (res.status !== 202 && !res.ok) {
-                let errMsg = `HTTP ${res.status}`
-                try { const j = await res.json(); errMsg = j.error || errMsg } catch { /* ignore */ }
-                throw new Error(errMsg)
-            }
-            toast.success(`Campagna avviata: ${recipients.length} clienti in invio. Aggiorna lo storico per vedere il progresso.`)
+            // Browser-driven chunked send: keeps calling the chunk endpoint
+            // until 'done: true'. Stays under Netlify's 10s function timeout
+            // and works on the free tier (no background functions needed).
+            await runChunkedSend(campaign.id, recipients.length)
+            toast.success('Campagna inviata.')
 
             setTitle('')
             setMessage('')
@@ -281,8 +255,55 @@ export default function CampagnaMarketingTab() {
         }
     }
 
+    // Drives chunked sending: calls the chunk endpoint repeatedly until
+    // 'done: true'. Updates a toast with live progress so the operator
+    // sees X/Y as the run progresses.
+    async function runChunkedSend(campaignId: string, total: number) {
+        const toastId = `send-${campaignId}`
+        let lastSent = 0
+        let lastFailed = 0
+        let stalled = 0
+        toast.loading(`Invio in corso 0/${total}...`, { id: toastId })
+
+        for (let i = 0; i < 1000; i++) {
+            const res = await fetch('/.netlify/functions/send-whatsapp-campaign-chunk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ campaignId }),
+            })
+            let result: any = null
+            try { result = await res.json() } catch { /* ignore */ }
+            if (!res.ok) {
+                toast.dismiss(toastId)
+                throw new Error(result?.error || `HTTP ${res.status}`)
+            }
+            const sentCount = result.sent_count ?? lastSent
+            const failedCount = result.failed_count ?? lastFailed
+            toast.loading(`Invio in corso: ${sentCount} inviati, ${failedCount} falliti, ${result.remaining ?? '?'} in attesa...`, { id: toastId })
+            loadCampaigns()
+
+            if (result.done) {
+                toast.dismiss(toastId)
+                return
+            }
+            // Detect a stalled run (no progress for 3 consecutive chunks) and bail
+            if (sentCount === lastSent && failedCount === lastFailed && result.processed === 0) {
+                stalled++
+                if (stalled >= 3) {
+                    toast.dismiss(toastId)
+                    throw new Error('Invio bloccato: nessun progresso. Controlla Green API e i log.')
+                }
+            } else {
+                stalled = 0
+            }
+            lastSent = sentCount
+            lastFailed = failedCount
+            await new Promise(r => setTimeout(r, 200))
+        }
+        toast.dismiss(toastId)
+    }
+
     async function handleResume(campaign: CampaignRow) {
-        // Count what's actually retryable so we can warn / cancel cleanly.
         const { count: retryable } = await supabase
             .from('marketing_campaign_recipients')
             .select('id', { count: 'exact', head: true })
@@ -295,17 +316,15 @@ export default function CampagnaMarketingTab() {
         if (!confirm(`Riprovare l'invio a ${retryable} destinatari (pending + falliti)?`)) return
 
         try {
-            const res = await fetch('/.netlify/functions/send-whatsapp-campaign-background', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ campaignId: campaign.id, resume: true }),
-            })
-            if (res.status !== 202 && !res.ok) {
-                let errMsg = `HTTP ${res.status}`
-                try { const j = await res.json(); errMsg = j.error || errMsg } catch { /* ignore */ }
-                throw new Error(errMsg)
-            }
-            toast.success(`Riprova avviata: ${retryable} destinatari in invio.`)
+            // Reset failed → pending so they get picked up by the chunk loop
+            await supabase
+                .from('marketing_campaign_recipients')
+                .update({ status: 'pending', error_message: null })
+                .eq('campaign_id', campaign.id)
+                .eq('status', 'failed')
+
+            await runChunkedSend(campaign.id, retryable)
+            toast.success('Riprova completata.')
             loadCampaigns()
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
