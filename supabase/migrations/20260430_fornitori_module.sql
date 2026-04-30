@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS public.fornitori (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome TEXT NOT NULL,
     piva TEXT,
-    codice_fiscale TEXT,
     referente TEXT,
     telefono TEXT,
     email TEXT,
@@ -28,6 +27,9 @@ CREATE TABLE IF NOT EXISTS public.fornitori (
     created_by UUID,
     updated_by UUID
 );
+
+-- Drop column if it was created by an earlier run of this migration
+ALTER TABLE public.fornitori DROP COLUMN IF EXISTS codice_fiscale;
 
 CREATE INDEX IF NOT EXISTS idx_fornitori_nome ON public.fornitori(LOWER(nome));
 CREATE INDEX IF NOT EXISTS idx_fornitori_piva ON public.fornitori(piva) WHERE piva IS NOT NULL;

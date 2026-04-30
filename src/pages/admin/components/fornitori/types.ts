@@ -23,7 +23,6 @@ export interface Fornitore {
     id: string
     nome: string
     piva: string | null
-    codice_fiscale: string | null
     referente: string | null
     telefono: string | null
     email: string | null

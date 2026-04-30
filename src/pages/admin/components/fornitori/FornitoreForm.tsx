@@ -45,7 +45,6 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
     const [data, setData] = useState({
         nome: fornitore?.nome || '',
         piva: fornitore?.piva || '',
-        codice_fiscale: fornitore?.codice_fiscale || '',
         referente: fornitore?.referente || '',
         telefono: fornitore?.telefono || '',
         email: fornitore?.email || '',
@@ -78,7 +77,6 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
             const payload = {
                 nome: data.nome.trim(),
                 piva: data.piva.trim() || null,
-                codice_fiscale: data.codice_fiscale.trim() || null,
                 referente: data.referente.trim() || null,
                 telefono: data.telefono.trim() || null,
                 email: data.email.trim() || null,
@@ -138,8 +136,6 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
                             onChange={e => setData({ ...data, nome: e.target.value })} placeholder="Es: Pneumatici Rossi SRL" />
                         <Input label="P.IVA" value={data.piva}
                             onChange={e => setData({ ...data, piva: e.target.value })} placeholder="01234567890" />
-                        <Input label="Codice Fiscale" value={data.codice_fiscale}
-                            onChange={e => setData({ ...data, codice_fiscale: e.target.value })} />
                         <Input label="Referente" value={data.referente}
                             onChange={e => setData({ ...data, referente: e.target.value })} placeholder="Nome cognome" />
                         <Input label="Telefono" value={data.telefono}
