@@ -55,6 +55,15 @@ export default function CampagnaMarketingTab() {
 
     const clientStatus = useClientStatus()
 
+    // Auto-refresh storico every 5s while a campaign is in flight ('pending' or 'sending'),
+    // so progress counters update without the user clicking Aggiorna.
+    useEffect(() => {
+        const inFlight = campaigns.some(c => c.status === 'pending' || c.status === 'sending')
+        if (!inFlight) return
+        const t = setInterval(() => { loadCampaigns() }, 5000)
+        return () => clearInterval(t)
+    }, [campaigns])
+
     useEffect(() => {
         loadCustomers()
         loadCampaigns()
@@ -231,8 +240,10 @@ export default function CampagnaMarketingTab() {
                 cognome: recipients[i]?.cognome,
             }))
 
-            toast.loading(`Invio in corso a ${recipients.length} clienti...`, { id: 'send' })
-            const res = await fetch('/.netlify/functions/send-whatsapp-campaign', {
+            // Background function: returns 202 immediately, then sends in
+            // the background up to 15 minutes. We don't await completion —
+            // progress is visible in the Storico campagne table (auto-refresh).
+            const res = await fetch('/.netlify/functions/send-whatsapp-campaign-background', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -243,11 +254,12 @@ export default function CampagnaMarketingTab() {
                     videoUrl: video_url,
                 }),
             })
-            const result = await res.json()
-            toast.dismiss('send')
-
-            if (!result.success) throw new Error(result.error || 'Errore invio')
-            toast.success(`Campagna inviata: ${result.sent}/${result.total} (${result.failed} falliti)`)
+            if (res.status !== 202 && !res.ok) {
+                let errMsg = `HTTP ${res.status}`
+                try { const j = await res.json(); errMsg = j.error || errMsg } catch { /* ignore */ }
+                throw new Error(errMsg)
+            }
+            toast.success(`Campagna avviata: ${recipients.length} clienti in invio. Aggiorna lo storico per vedere il progresso.`)
 
             setTitle('')
             setMessage('')

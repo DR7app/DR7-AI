@@ -151,7 +151,7 @@ export const handler: Handler = async (event) => {
                     .update({ status: "sent", sent_at: new Date().toISOString() })
                     .eq("id", c.id);
             }
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 400));
         } catch (err: unknown) {
             failed++;
             const msg = err instanceof Error ? err.message : String(err);
@@ -161,6 +161,14 @@ export const handler: Handler = async (event) => {
                     .update({ status: "failed", error_message: msg })
                     .eq("id", c.id);
             }
+        }
+
+        // Live progress: update campaign counters every 10 recipients so the
+        // history view reflects in-flight progress instead of jumping at end.
+        if (sb && campaignId && (sent + failed) % 10 === 0) {
+            await sb.from("marketing_campaigns")
+                .update({ sent_count: sent, failed_count: failed })
+                .eq("id", campaignId);
         }
     }
 
