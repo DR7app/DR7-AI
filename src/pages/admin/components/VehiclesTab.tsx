@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Select from './Select'
@@ -49,8 +49,12 @@ export default function VehiclesTab() {
     unavailable_reason: '',
     model_year: '',
     cv: '',
-    acceleration_0_100: ''
+    acceleration_0_100: '',
+    image_url: ''
   })
+
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadVehicles()
@@ -104,6 +108,12 @@ export default function VehiclesTab() {
     }
 
     try {
+      // Preserve unknown metadata keys (display_group, booking_disabled, specs, …)
+      // by merging on top of the row's current metadata when editing.
+      const existingMetadata = editingId
+        ? (vehicles.find(v => v.id === editingId)?.metadata || {})
+        : {}
+
       const dataToSave = {
         display_name: formData.display_name,
         plate: formData.plate || null,
@@ -111,6 +121,7 @@ export default function VehiclesTab() {
         daily_rate: parseFloat(formData.daily_rate),
         category: formData.category,
         metadata: {
+          ...existingMetadata,
           unavailable_from: formData.unavailable_from || null,
           unavailable_until: formData.unavailable_until || null,
           unavailable_from_time: formData.unavailable_from_time || null,
@@ -118,7 +129,8 @@ export default function VehiclesTab() {
           unavailable_reason: formData.unavailable_reason || null,
           model_year: formData.model_year ? parseInt(formData.model_year) : null,
           cv: formData.cv ? parseInt(formData.cv) : null,
-          acceleration_0_100: formData.acceleration_0_100 ? parseFloat(formData.acceleration_0_100) : null
+          acceleration_0_100: formData.acceleration_0_100 ? parseFloat(formData.acceleration_0_100) : null,
+          image: formData.image_url || null
         }
       }
 
@@ -446,7 +458,8 @@ export default function VehiclesTab() {
       unavailable_reason: '',
       model_year: '',
       cv: '',
-      acceleration_0_100: ''
+      acceleration_0_100: '',
+      image_url: ''
     })
   }
 
@@ -472,7 +485,9 @@ export default function VehiclesTab() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       cv: (vehicle.metadata as any)?.cv?.toString() || '',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      acceleration_0_100: (vehicle.metadata as any)?.acceleration_0_100?.toString() || ''
+      acceleration_0_100: (vehicle.metadata as any)?.acceleration_0_100?.toString() || '',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      image_url: (vehicle.metadata as any)?.image || ''
     })
     setEditingId(vehicle.id)
     setShowForm(true)
@@ -747,6 +762,84 @@ export default function VehiclesTab() {
               onChange={(e) => setFormData({ ...formData, acceleration_0_100: e.target.value })}
               placeholder="3.8"
             />
+          </div>
+
+          {/* Foto Veicolo - shown on the website */}
+          <div className="mt-4 p-4 bg-theme-bg-tertiary/50 border border-theme-border rounded-lg">
+            <p className="text-sm text-theme-text-muted font-semibold mb-2">Foto Veicolo (visibile sul sito web)</p>
+            <div className="flex items-start gap-4">
+              {formData.image_url ? (
+                <div className="relative">
+                  <img
+                    src={formData.image_url}
+                    alt="Anteprima"
+                    className="w-32 h-24 object-cover rounded border border-theme-border"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, image_url: '' })}
+                    className="absolute -top-2 -right-2 bg-red-700 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm"
+                    title="Rimuovi immagine"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <div className="w-32 h-24 border-2 border-dashed border-theme-border rounded flex items-center justify-center text-xs text-theme-text-muted">
+                  Nessuna foto
+                </div>
+              )}
+              <div className="flex-1">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    if (!file.type.startsWith('image/')) {
+                      alert('Solo file immagine (JPG, PNG, WEBP)')
+                      return
+                    }
+                    if (file.size > 10 * 1024 * 1024) {
+                      alert('Immagine troppo grande (max 10 MB)')
+                      return
+                    }
+                    setUploadingImage(true)
+                    try {
+                      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+                      const fileName = `vehicle-${Date.now()}-${Math.floor(Math.random() * 1000)}.${ext}`
+                      const path = `vehicles/${fileName}`
+                      const { error: upErr } = await supabase.storage
+                        .from('vehicle-images')
+                        .upload(path, file, { cacheControl: '31536000', upsert: false })
+                      if (upErr) throw upErr
+                      const { data: urlData } = supabase.storage.from('vehicle-images').getPublicUrl(path)
+                      setFormData(prev => ({ ...prev, image_url: urlData?.publicUrl || '' }))
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : String(err)
+                      alert('Errore caricamento: ' + msg)
+                    } finally {
+                      setUploadingImage(false)
+                      if (imageInputRef.current) imageInputRef.current.value = ''
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploadingImage}
+                  className="text-xs"
+                >
+                  {uploadingImage ? 'Caricamento…' : (formData.image_url ? 'Sostituisci foto' : 'Carica foto')}
+                </Button>
+                <p className="text-xs text-theme-text-muted mt-2">
+                  JPG / PNG / WEBP. Max 10 MB. Consigliato 1200×800 px o superiore, formato orizzontale.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Date Range for Unavailability */}
