@@ -5,7 +5,9 @@ import CustomerDocuments from './CustomerDocuments'
 import ReportClienteModal from './ReportClienteModal'
 import Button from './Button'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
-import { useClientStatus } from '../../../contexts/ClientStatusContext'
+import { useClientStatus, type ClientTier } from '../../../contexts/ClientStatusContext'
+
+type StatusFilter = 'all' | ClientTier | 'dr7_club'
 import toast from 'react-hot-toast'
 
 type StatusCliente = 'standard' | 'member' | 'elite' | 'blacklist'
@@ -53,11 +55,12 @@ const tierMeta: Record<ClubTier, { label: string; reward: string; badge: string 
 }
 
 export default function ClientiTab() {
-  const { refresh: refreshClientStatus, setTier: setClientStatusTier } = useClientStatus()
+  const { refresh: refreshClientStatus, setTier: setClientStatusTier, lookup: lookupClientStatus } = useClientStatus()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState<'all' | 'azienda' | 'persona_fisica' | 'pubblica_amministrazione'>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [reportCustomerId, setReportCustomerId] = useState<string | null>(null)
   // Annual spend per auth user_id (last 12 months, paid bookings only).
@@ -216,9 +219,10 @@ export default function ClientiTab() {
         c.id === customerId ? { ...c, status_cliente: newStatus } : c
       ))
       const target = customers.find(c => c.id === customerId)
+      const tierForBadge = (newStatus === 'standard' || !newStatus) ? 'new' : newStatus
       setClientStatusTier(
         { customerId, userId: target?.user_id, email: target?.email, phone: target?.telefono },
-        newStatus
+        tierForBadge
       )
       refreshClientStatus()
     } catch (error) {
@@ -227,9 +231,24 @@ export default function ClientiTab() {
     }
   }
 
-  const filteredCustomers = filter === 'all'
+  const resolvedTierFor = (c: Customer): { tier: ClientTier; dr7Club: boolean } => {
+    const looked = lookupClientStatus({ customerId: c.id, userId: c.user_id, email: c.email, phone: c.telefono })
+    const manual = (c.status_cliente && c.status_cliente !== 'standard') ? c.status_cliente : null
+    const tier: ClientTier = manual ?? looked?.tier ?? 'new'
+    return { tier, dr7Club: looked?.dr7Club ?? false }
+  }
+
+  const filteredByType = filter === 'all'
     ? customers
     : customers.filter(c => c.tipo_cliente === filter)
+
+  const filteredCustomers = statusFilter === 'all'
+    ? filteredByType
+    : filteredByType.filter(c => {
+        const { tier, dr7Club } = resolvedTierFor(c)
+        if (statusFilter === 'dr7_club') return dr7Club
+        return tier === statusFilter
+      })
 
   if (loading) {
     return (
@@ -299,6 +318,39 @@ export default function ClientiTab() {
               P.A. ({customers.filter(c => c.tipo_cliente === 'pubblica_amministrazione').length})
             </button>
           </div>
+          {(() => {
+            const counts = customers.reduce((acc, c) => {
+              const { tier, dr7Club } = resolvedTierFor(c)
+              acc[tier] = (acc[tier] || 0) + 1
+              if (dr7Club) acc['dr7_club'] = (acc['dr7_club'] || 0) + 1
+              return acc
+            }, {} as Record<string, number>)
+            const buttons: { key: StatusFilter; label: string; cls: string }[] = [
+              { key: 'all',       label: `Tutti gli stati (${customers.length})`, cls: 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover' },
+              { key: 'new',       label: `New entry (${counts.new || 0})`,         cls: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/40' },
+              { key: 'member',    label: `Member (${counts.member || 0})`,         cls: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/40' },
+              { key: 'elite',     label: `Elite (${counts.elite || 0})`,           cls: 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/40' },
+              { key: 'blacklist', label: `Blacklist (${counts.blacklist || 0})`,   cls: 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/40' },
+              { key: 'dr7_club',  label: `DR7 Club (${counts.dr7_club || 0})`,     cls: 'bg-[#C9A96E]/10 text-[#D4B896] hover:bg-[#C9A96E]/20 border border-[#C9A96E]/40' },
+            ]
+            return (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {buttons.map(b => (
+                  <button
+                    key={b.key}
+                    onClick={() => setStatusFilter(b.key)}
+                    className={`px-3 py-1 rounded-full text-sm min-h-[36px] transition-colors ${
+                      statusFilter === b.key
+                        ? 'bg-dr7-gold text-white font-semibold'
+                        : b.cls
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            )
+          })()}
         </div>
         <Button onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Chiudi Form' : '+ Nuovo Cliente'}
@@ -349,7 +401,7 @@ export default function ClientiTab() {
                     <td className="px-4 py-3 text-sm text-theme-text-primary font-medium">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span>{getDisplayName(customer)}</span>
-                        <ClientStatusBadge tier={customer.status_cliente ?? undefined} customerId={customer.id} userId={customer.user_id} email={customer.email} />
+                        <ClientStatusBadge tier={(customer.status_cliente && customer.status_cliente !== 'standard') ? customer.status_cliente : undefined} customerId={customer.id} userId={customer.user_id} email={customer.email} />
                       </div>
                       {customer.tipo_cliente === 'azienda' && customer.partita_iva && (
                         <div className="text-xs text-theme-text-muted mt-1">P.IVA: {customer.partita_iva}</div>

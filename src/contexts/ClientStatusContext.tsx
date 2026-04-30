@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from '../supabaseClient'
 
-export type ClientTier = 'new' | 'member' | 'elite' | 'blacklist' | 'standard'
+export type ClientTier = 'new' | 'member' | 'elite' | 'blacklist'
 
 export interface ClientTierMeta {
   tier: ClientTier
@@ -14,7 +14,6 @@ const TIER_META: Record<ClientTier, ClientTierMeta> = {
   member:    { tier: 'member',    label: 'Member',    badgeClass: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
   blacklist: { tier: 'blacklist', label: 'Blacklist', badgeClass: 'bg-red-500/20 text-red-400 border-red-500/50' },
   new:       { tier: 'new',       label: 'New entry', badgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' },
-  standard:  { tier: 'standard',  label: 'Standard',  badgeClass: 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border' },
 }
 
 export const DR7_CLUB_BADGE_CLASS = 'bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50'
@@ -121,29 +120,6 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
         }
       } catch { /* ignore */ }
 
-      const bookingCountByUser = new Map<string, number>()
-      const bookingCountByEmail = new Map<string, number>()
-      try {
-        let bkFrom = 0
-        for (let i = 0; i < 50; i++) {
-          const { data, error } = await supabase
-            .from('bookings')
-            .select('user_id, customer_email')
-            .not('status', 'in', '(cancelled,annullata)')
-            .range(bkFrom, bkFrom + PAGE - 1)
-          if (error || !data || data.length === 0) break
-          for (const b of data) {
-            if (b.user_id) bookingCountByUser.set(b.user_id, (bookingCountByUser.get(b.user_id) || 0) + 1)
-            if (b.customer_email) {
-              const e = b.customer_email.toLowerCase()
-              bookingCountByEmail.set(e, (bookingCountByEmail.get(e) || 0) + 1)
-            }
-          }
-          if (data.length < PAGE) break
-          bkFrom += PAGE
-        }
-      } catch { /* ignore */ }
-
       const idMap = new Map<string, ClientStatusInfo>()
       const userMap = new Map<string, ClientStatusInfo>()
       const emailMap = new Map<string, ClientStatusInfo>()
@@ -152,9 +128,6 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
       for (const c of customers) {
         const emailLc = c.email ? c.email.toLowerCase() : null
         const isDr7 = !!((c.user_id && dr7UserIds.has(c.user_id)) || (emailLc && dr7Emails.has(emailLc)))
-        const userBkCount = c.user_id ? (bookingCountByUser.get(c.user_id) || 0) : 0
-        const emailBkCount = emailLc ? (bookingCountByEmail.get(emailLc) || 0) : 0
-        const bkCount = Math.max(userBkCount, emailBkCount)
 
         // Schema has two parallel columns (legacy split): CustomersTab writes `status`,
         // ClientiTab writes `status_cliente`. Honour whichever is set.
@@ -166,8 +139,7 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
         if (manual === 'blacklist') tier = 'blacklist'
         else if (manual === 'elite') tier = 'elite'
         else if (manual === 'member') tier = 'member'
-        else if (bkCount <= 1) tier = 'new'
-        else tier = 'standard'
+        else tier = 'new'
 
         const info: ClientStatusInfo = { tier, dr7Club: isDr7 }
         idMap.set(c.id, info)

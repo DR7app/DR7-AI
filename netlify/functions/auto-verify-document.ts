@@ -147,15 +147,24 @@ export const handler: Handler = async (event) => {
       return { statusCode: 200, headers, body: JSON.stringify({ skipped: true, reason: 'no customers_extended row' }) }
     }
 
-    // 3. Signed URL for the image
+    // 3. Signed URL for the image — gracefully skip if file is missing
+    //    (DB row points to a storage object that was deleted / never landed)
     const { data: signed, error: signErr } = await supabase.storage
       .from(doc.bucket)
       .createSignedUrl(doc.file_path, 600)
     if (signErr || !signed?.signedUrl) {
-      return { statusCode: 502, headers, body: JSON.stringify({ error: 'Failed to sign URL', details: signErr?.message }) }
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          skipped: true,
+          reason: `file mancante in storage (${doc.bucket}/${doc.file_path}): ${signErr?.message || 'no signed URL'}`,
+        }),
+      }
     }
 
-    // 4. Call OCR (extract-document-data is on the same Netlify site)
+    // 4. Call OCR — also skip gracefully if it fails, so one bad doc
+    //    doesn't poison a bulk run.
     const origin = event.headers['x-forwarded-proto'] && event.headers.host
       ? `${event.headers['x-forwarded-proto']}://${event.headers.host}`
       : process.env.URL || ''
@@ -166,7 +175,14 @@ export const handler: Handler = async (event) => {
     })
     const ocrJson = await ocrRes.json().catch(() => null)
     if (!ocrRes.ok || !ocrJson?.success) {
-      return { statusCode: 502, headers, body: JSON.stringify({ error: 'OCR failed', details: ocrJson }) }
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          skipped: true,
+          reason: `OCR fallito: ${ocrJson?.error || ocrRes.status}`,
+        }),
+      }
     }
     const extracted: Extracted = ocrJson.data || {}
 
