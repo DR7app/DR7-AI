@@ -1,7 +1,8 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
-const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY;
+const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
+const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
@@ -15,26 +16,46 @@ interface CampaignRecipient {
     email?: string | null;
 }
 
+// Green API expects digits only with country code, e.g. 393921900763
 function normalizePhone(raw: string | null | undefined): string {
     if (!raw) return "";
-    let phone = raw.replace(/\s+/g, "").replace(/-/g, "");
-    if (!phone.startsWith("+")) {
-        if (phone.length === 10 && phone.startsWith("3")) phone = "+39" + phone;
-        else if (phone.length === 12 && phone.startsWith("39")) phone = "+" + phone;
-    }
+    let phone = raw.replace(/[\s\-+()]/g, "");
+    if (phone.startsWith("00")) phone = phone.substring(2);
+    if (phone.length === 10) phone = "39" + phone;
     return phone;
 }
 
-async function callMeBot(phone: string, message: string, mediaUrl?: string): Promise<void> {
-    const params = new URLSearchParams({
-        phone,
-        text: message,
-        apikey: CALLMEBOT_API_KEY || "",
+async function greenApiSendMessage(phone: string, message: string): Promise<void> {
+    const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
+    const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId: `${phone}@c.us`, message }),
     });
-    if (mediaUrl) params.set("image", mediaUrl);
-    const url = `https://api.callmebot.com/whatsapp.php?${params.toString()}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`CallMeBot returned ${res.status}`);
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.error) throw new Error(result.error || `Green API ${res.status}`);
+}
+
+async function greenApiSendFile(phone: string, urlFile: string, fileName: string, caption?: string): Promise<void> {
+    const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`;
+    const body: Record<string, string> = { chatId: `${phone}@c.us`, urlFile, fileName };
+    if (caption) body.caption = caption;
+    const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.error) throw new Error(result.error || `Green API ${res.status}`);
+}
+
+function fileNameFromUrl(u: string, fallback: string): string {
+    try {
+        const seg = new URL(u).pathname.split("/").pop();
+        return seg || fallback;
+    } catch {
+        return fallback;
+    }
 }
 
 export const handler: Handler = async (event) => {
@@ -42,8 +63,8 @@ export const handler: Handler = async (event) => {
         return { statusCode: 405, body: JSON.stringify({ message: "Method Not Allowed" }) };
     }
 
-    if (!CALLMEBOT_API_KEY) {
-        return { statusCode: 500, body: JSON.stringify({ error: "CallMeBot API key not configured" }) };
+    if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
+        return { statusCode: 500, body: JSON.stringify({ error: "Green API non configurato" }) };
     }
 
     let body: {
@@ -91,12 +112,12 @@ export const handler: Handler = async (event) => {
         const phone = normalizePhone(c.phone);
         const displayName = c.customer_name || `${c.nome || ""} ${c.cognome || ""}`.trim() || c.email || phone || "Cliente";
 
-        if (!phone) {
+        if (!phone || phone.length < 10) {
             failed++;
-            errors.push(`${displayName}: numero mancante`);
+            errors.push(`${displayName}: numero mancante o invalido`);
             if (sb && c.id) {
                 await sb.from("marketing_campaign_recipients")
-                    .update({ status: "skipped", error_message: "no phone" })
+                    .update({ status: "skipped", error_message: "no/invalid phone" })
                     .eq("id", c.id);
             }
             continue;
@@ -107,20 +128,21 @@ export const handler: Handler = async (event) => {
             .replace(/{cognome}/g, c.cognome || "");
 
         try {
-            // First message: text + first image (or video if no images).
-            const firstMedia = imageUrls[0] || videoUrl || undefined;
-            await callMeBot(phone, personalized, firstMedia);
-
-            // Remaining images (caption-less).
-            for (let i = 1; i < imageUrls.length; i++) {
-                await new Promise(r => setTimeout(r, 800));
-                await callMeBot(phone, "", imageUrls[i]);
-            }
-
-            // Video, if there were images already (otherwise it was the first media).
-            if (videoUrl && imageUrls.length > 0) {
-                await new Promise(r => setTimeout(r, 800));
-                await callMeBot(phone, "", videoUrl);
+            if (imageUrls.length === 0 && !videoUrl) {
+                await greenApiSendMessage(phone, personalized);
+            } else if (imageUrls.length > 0) {
+                // First image carries the message as caption
+                await greenApiSendFile(phone, imageUrls[0], fileNameFromUrl(imageUrls[0], "image.jpg"), personalized);
+                for (let i = 1; i < imageUrls.length; i++) {
+                    await new Promise(r => setTimeout(r, 600));
+                    await greenApiSendFile(phone, imageUrls[i], fileNameFromUrl(imageUrls[i], `image-${i + 1}.jpg`));
+                }
+                if (videoUrl) {
+                    await new Promise(r => setTimeout(r, 600));
+                    await greenApiSendFile(phone, videoUrl, fileNameFromUrl(videoUrl, "video.mp4"));
+                }
+            } else if (videoUrl) {
+                await greenApiSendFile(phone, videoUrl, fileNameFromUrl(videoUrl, "video.mp4"), personalized);
             }
 
             sent++;
@@ -129,7 +151,7 @@ export const handler: Handler = async (event) => {
                     .update({ status: "sent", sent_at: new Date().toISOString() })
                     .eq("id", c.id);
             }
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 800));
         } catch (err: unknown) {
             failed++;
             const msg = err instanceof Error ? err.message : String(err);

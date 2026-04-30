@@ -559,18 +559,24 @@ export const handler: Handler = async (event) => {
                 }
             }
 
-            // Send signed contract notification to admin via CallMeBot
-            // (Green API can't send to its own number, so we use CallMeBot for text notification)
+            // Admin notification via Green API. Note: if ADMIN_PHONE is the
+            // Green API instance number itself, the message will not be
+            // delivered (Green API cannot send to its own number).
             try {
                 const ADMIN_PHONE = '393457905205'
-                const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY || '6526748'
                 const adminMsg = await renderTemplate('admin_contract_signed_alert', { docIdentifier, signerName: sigRequest.signer_name || 'cliente', signedPdfUrl })
                 if (!adminMsg) {
                     console.log('[signature-complete] Pro template for admin_contract_signed_alert missing/disabled — skipping admin notification')
+                } else if (process.env.GREEN_API_INSTANCE_ID && process.env.GREEN_API_TOKEN) {
+                    const url = `https://api.green-api.com/waInstance${process.env.GREEN_API_INSTANCE_ID}/sendMessage/${process.env.GREEN_API_TOKEN}`
+                    const adminRes = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chatId: `${ADMIN_PHONE}@c.us`, message: adminMsg }),
+                    })
+                    console.log('[signature-complete] Admin Green API notification status:', adminRes.status)
                 } else {
-                    const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${ADMIN_PHONE}&text=${encodeURIComponent(adminMsg)}&apikey=${CALLMEBOT_API_KEY}`
-                    const adminRes = await fetch(callmebotUrl)
-                    console.log('[signature-complete] Admin CallMeBot notification status:', adminRes.status)
+                    console.log('[signature-complete] Green API not configured — skipping admin notification')
                 }
             } catch (adminErr: any) {
                 console.error('[signature-complete] Failed to send to admin:', adminErr.message)

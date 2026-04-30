@@ -55,50 +55,29 @@ export default function CampagnaMarketingTab() {
         try {
             const map = new Map<string, Customer>()
 
-            const { data: bookings } = await supabase
-                .from('bookings')
-                .select('customer_name, customer_email, customer_phone, user_id, booking_details')
+            // Use Netlify function (bypasses RLS) — same source as Lead/Clienti tab
+            const response = await fetch('/.netlify/functions/list-customers')
+            const result = await response.json()
+            if (!response.ok) throw new Error(result.error || 'list-customers failed')
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(bookings || []).forEach((b: any) => {
-                const details = b.booking_details?.customer || {}
-                const fullName = b.customer_name || details.fullName || 'Cliente'
-                const email = b.customer_email || details.email || null
-                const phone = b.customer_phone || details.phone || null
-                const key = email || phone || b.user_id
-                if (!key || map.has(key)) return
-                map.set(key, {
-                    id: b.user_id || key,
-                    full_name: fullName,
-                    email,
-                    phone,
-                    nome: fullName.split(' ')[0],
-                    cognome: fullName.split(' ').slice(1).join(' '),
-                })
-            })
-
-            const { data: ext } = await supabase
-                .from('customers_extended')
-                .select('id, nome, cognome, email, telefono, tipo_cliente, ragione_sociale, denominazione')
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(ext || []).forEach((c: any) => {
+            ;(result.customers || []).forEach((c: any) => {
                 const fullName = c.tipo_cliente === 'persona_fisica'
                     ? `${c.nome || ''} ${c.cognome || ''}`.trim()
                     : (c.ragione_sociale || c.denominazione || 'Cliente')
-                const key = c.email || c.telefono || c.id
+                const key = c.id || c.email || c.telefono
+                if (!key) return
                 map.set(key, {
                     id: c.id,
                     full_name: fullName || 'Cliente',
-                    email: c.email,
-                    phone: c.telefono,
+                    email: c.email || null,
+                    phone: c.telefono || null,
                     nome: c.nome,
                     cognome: c.cognome,
                 })
             })
 
             const list = Array.from(map.values())
-                .filter(c => c.phone)
                 .sort((a, b) => a.full_name.localeCompare(b.full_name))
             setCustomers(list)
         } catch (err) {

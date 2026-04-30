@@ -1,126 +1,79 @@
 import type { Handler } from "@netlify/functions";
 
-const CALLMEBOT_API_KEY = process.env.CALLMEBOT_API_KEY;
-const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN;
+const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
+const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
+
+function normalizePhone(raw: string | null | undefined): string {
+    if (!raw) return "";
+    let phone = raw.replace(/[\s\-+()]/g, "");
+    if (phone.startsWith("00")) phone = phone.substring(2);
+    if (phone.length === 10) phone = "39" + phone;
+    return phone;
+}
 
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            body: JSON.stringify({ message: 'Method Not Allowed' }),
-        };
+        return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
     }
 
-    // Auth check
-    const authHeader = event.headers.authorization || event.headers.Authorization;
-    const token = authHeader?.replace('Bearer ', '');
-    if (!ADMIN_API_TOKEN || token !== ADMIN_API_TOKEN) {
-        return {
-            statusCode: 401,
-            body: JSON.stringify({ error: 'Unauthorized' }),
-        };
+    if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
+        return { statusCode: 500, body: JSON.stringify({ error: 'Green API non configurato' }) };
     }
 
-    if (!CALLMEBOT_API_KEY) {
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: 'CallMeBot API key not configured' }),
-        };
-    }
-
+    let customers: Array<{ nome?: string; cognome?: string; phone?: string; email?: string }> = [];
+    let message = '';
     try {
-        const { customers, message } = JSON.parse(event.body || '{}');
-
-        if (!customers || !Array.isArray(customers) || customers.length === 0) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Nessun cliente specificato' }),
-            };
-        }
-
-        if (!message) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Messaggio mancante' }),
-            };
-        }
-
-        console.log(`[send-whatsapp-voucher] Attempting to send to ${customers.length} customers`);
-
-        let successCount = 0;
-        const errors: string[] = [];
-
-        // Send messages sequentially to avoid rate limiting
-        for (const customer of customers) {
-            // Clean phone number: remove spaces, ensure it has country code if possible
-            // Assuming Italian numbers mostly, but data might be mixed.
-            let phone = customer.phone?.replace(/\s+/g, '').replace(/-/g, '') || '';
-
-            if (!phone) {
-                console.log(`[send-whatsapp-voucher] Skipping ${customer.nome}: No phone number`);
-                errors.push(`${customer.nome}: Numero mancante`);
-                continue;
-            }
-
-            // Basic formatting: if starts with 3, add +39 (Italy default)? 
-            // Or just send as is if it has +? CallMeBot usually expects +CC...
-            if (!phone.startsWith('+')) {
-                // Heuristic: if 10 digits starting with 3, probably IT mobile
-                if (phone.length === 10 && phone.startsWith('3')) {
-                    phone = '+39' + phone;
-                } else {
-                    // If we don't know the country code, we might fail. 
-                    // We'll leave it as is if we can't guess, CallMeBot needs International format
-                }
-            }
-
-            // Personalize message
-            const personalizedMessage = message
-                .replace(/{nome}/g, customer.nome || 'Cliente')
-                .replace(/{cognome}/g, customer.cognome || '');
-
-            const wrappedMessage = personalizedMessage;
-
-            const encodedMessage = encodeURIComponent(wrappedMessage);
-            const callmebotUrl = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedMessage}&apikey=${CALLMEBOT_API_KEY}`;
-
-            try {
-                // CallMeBot might be slow, so we await
-                const response = await fetch(callmebotUrl);
-
-                // CallMeBot returns 200 even on some errors, need to check text?
-                // Actually typically it just works or times out.
-                if (response.ok) {
-                    successCount++;
-                    console.log(`[send-whatsapp-voucher] Sent to ${customer.email || customer.nome} (${phone})`);
-                } else {
-                    throw new Error(`API returned ${response.status}`);
-                }
-
-                // Small delay to be nice to the API
-                await new Promise(r => setTimeout(r, 1000));
-
-            } catch (err: any) {
-                console.error(`[send-whatsapp-voucher] Failed for ${phone}:`, err);
-                errors.push(`${customer.nome || phone}: ${err.message}`);
-            }
-        }
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                success: true,
-                sent: successCount,
-                total: customers.length,
-                errors: errors.length > 0 ? errors : undefined
-            }),
-        };
-
-    } catch (error: any) {
-        console.error('Error sending WhatsApp vouchers:', error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: error.message }),
-        };
+        const body = JSON.parse(event.body || '{}');
+        customers = body.customers || [];
+        message = body.message || '';
+    } catch {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
     }
+
+    if (!Array.isArray(customers) || customers.length === 0) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Nessun cliente specificato' }) };
+    }
+    if (!message) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Messaggio mancante' }) };
+    }
+
+    const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
+    let sent = 0;
+    const errors: string[] = [];
+
+    for (const c of customers) {
+        const phone = normalizePhone(c.phone);
+        if (!phone || phone.length < 10) {
+            errors.push(`${c.nome || c.email || 'cliente'}: numero mancante o invalido`);
+            continue;
+        }
+        const personalized = message
+            .replace(/{nome}/g, c.nome || 'Cliente')
+            .replace(/{cognome}/g, c.cognome || '');
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chatId: `${phone}@c.us`, message: personalized }),
+            });
+            const result = await res.json().catch(() => ({}));
+            if (!res.ok || result.error) throw new Error(result.error || `Green API ${res.status}`);
+            sent++;
+            await new Promise(r => setTimeout(r, 800));
+        } catch (err: unknown) {
+            const m = err instanceof Error ? err.message : String(err);
+            errors.push(`${c.nome || phone}: ${m}`);
+        }
+    }
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({
+            success: true,
+            sent,
+            total: customers.length,
+            errors: errors.length > 0 ? errors : undefined,
+        }),
+    };
 };
