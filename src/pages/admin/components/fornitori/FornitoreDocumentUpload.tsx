@@ -174,7 +174,11 @@ export default function FornitoreDocumentUpload({ fornitore, document: existingD
             }
             onClose()
         } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err)
+            console.error('[FornitoreDocumentUpload] save error:', err)
+            const e = err as { message?: string; details?: string; hint?: string; code?: string }
+            const msg = e?.message
+                ? `${e.message}${e.details ? ` — ${e.details}` : ''}${e.hint ? ` (hint: ${e.hint})` : ''}${e.code ? ` [${e.code}]` : ''}`
+                : (err instanceof Error ? err.message : JSON.stringify(err))
             alert('Errore: ' + msg)
         } finally {
             setSaving(false)
