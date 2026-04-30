@@ -31,142 +31,65 @@ export const handler: Handler = async (event) => {
 
         // 2. Fetch user details for all unique user_ids
         const userIds = [...new Set(documents.map(d => d.user_id))]
+        console.log(`[get-verification-requests] Resolving ${userIds.length} unique user_ids for ${documents.length} docs`)
 
-        // We'll try to fetch from customers_extended first
-        const { data: users, error: usersError } = await supabase
-            .from('customers_extended')
-            .select(`
-                id,
-                user_id,
-                tipo_cliente,
-                nome, 
-                cognome,
-                sesso,
-                email, 
-                telefono,
-                codice_fiscale,
-                data_nascita,
-                luogo_nascita,
-                indirizzo,
-                numero_civico,
-                citta_residenza,
-                provincia,
-                cap,
-                nazione,
-                numero_patente,
-                categoria_patente,
-                ente_rilascio,
-                data_rilascio,
-                data_scadenza,
-                ragione_sociale,
-                denominazione,
-                partita_iva,
-                codice_destinatario,
-                pec,
-                codice_ipa,
-                codice_univoco,
-                rappresentante_legale,
-                metadata,
-                source,
-                created_at,
-                updated_at
-            `)
-            .in('user_id', userIds)
+        const CE_FIELDS = `
+            id, user_id, tipo_cliente, nome, cognome, sesso, email,
+            telefono, codice_fiscale, data_nascita, luogo_nascita,
+            indirizzo, numero_civico, citta_residenza, provincia, cap,
+            nazione, numero_patente, categoria_patente, ente_rilascio,
+            data_rilascio, data_scadenza, ragione_sociale, denominazione,
+            partita_iva, codice_destinatario, pec, codice_ipa,
+            codice_univoco, rappresentante_legale, metadata, source,
+            created_at, updated_at
+        `
 
-        if (usersError) console.error('Error fetching users:', usersError)
+        // Chunk .in() queries — Postgres parameter limit + URL length safety.
+        async function chunkedIn<T>(table: string, fields: string, col: string, ids: string[]): Promise<T[]> {
+            if (ids.length === 0) return []
+            const out: T[] = []
+            const CHUNK = 200
+            for (let i = 0; i < ids.length; i += CHUNK) {
+                const slice = ids.slice(i, i + CHUNK)
+                const { data, error } = await supabase
+                    .from(table)
+                    .select(fields)
+                    .in(col, slice)
+                if (error) {
+                    console.error(`[get-verification-requests] ${table}.${col} chunk ${i} error:`, error.message)
+                    continue
+                }
+                if (data) out.push(...(data as T[]))
+            }
+            return out
+        }
+
+        // Fire BOTH customers_extended lookups in parallel — by user_id
+        // (real signups) and by id (legacy admin uploads where the doc's
+        // user_id is the row PK). Both are fast Postgres queries.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const [byUserId, byId] = await Promise.all([
+            chunkedIn<any>('customers_extended', CE_FIELDS, 'user_id', userIds),
+            chunkedIn<any>('customers_extended', CE_FIELDS, 'id', userIds),
+        ])
 
         const userMap = new Map()
-        if (users) {
-            // Key by user_id (auth UUID) — that's what user_documents.user_id references.
-            // customers_extended.id is the row PK and does NOT match user_documents.user_id.
-            users.forEach(u => userMap.set(u.user_id, u))
+        // Prefer the user_id match — it's the canonical link
+        byUserId.forEach(u => { if (u.user_id) userMap.set(u.user_id, u) })
+        // Fill in legacy ones whose doc.user_id is actually customers_extended.id
+        byId.forEach(u => {
+            if (u.id && !userMap.has(u.id)) userMap.set(u.id, u)
+        })
+
+        // Optional legacy customers table fallback (best-effort, chunked)
+        const stillMissing = userIds.filter(id => !userMap.has(id))
+        if (stillMissing.length > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const legacy = await chunkedIn<any>('customers', 'id, full_name, email, created_at', 'id', stillMissing)
+            legacy.forEach(u => userMap.set(u.id, u))
         }
 
-        // 3. Fallback for missing users:
-        // First, some user_documents rows were inserted with user_id set to
-        // the customers_extended row PK (legacy admin-side upload paths
-        // that used `customer_id` as the storage folder). Try resolving by
-        // customers_extended.id so those docs also get a real customer.
-        const missingFromExtendedByUserId = userIds.filter(id => !userMap.has(id))
-
-        if (missingFromExtendedByUserId.length > 0) {
-            const { data: extendedById } = await supabase
-                .from('customers_extended')
-                .select(`
-                    id, user_id, tipo_cliente, nome, cognome, sesso, email,
-                    telefono, codice_fiscale, data_nascita, luogo_nascita,
-                    indirizzo, numero_civico, citta_residenza, provincia, cap,
-                    nazione, numero_patente, categoria_patente, ente_rilascio,
-                    data_rilascio, data_scadenza, ragione_sociale, denominazione,
-                    partita_iva, codice_destinatario, pec, codice_ipa,
-                    codice_univoco, rappresentante_legale, metadata, source,
-                    created_at, updated_at
-                `)
-                .in('id', missingFromExtendedByUserId)
-
-            if (extendedById) {
-                // Key by .id here — that's what doc.user_id holds for these rows
-                extendedById.forEach(u => userMap.set(u.id, u))
-            }
-        }
-
-        // Then try the 'customers' table (legacy or other source)
-        const missingFromExtended = userIds.filter(id => !userMap.has(id))
-
-        if (missingFromExtended.length > 0) {
-            const { data: legacyUsers } = await supabase
-                .from('customers')
-                .select('id, full_name, email, created_at')
-                .in('id', missingFromExtended)
-
-            if (legacyUsers) {
-                legacyUsers.forEach(u => userMap.set(u.id, u))
-            }
-        }
-
-        // Then try Auth Admin which is the source of truth
-        const missingUserIds = userIds.filter(id => !userMap.has(id))
-
-        if (missingUserIds.length > 0) {
-            console.log(`[get-verification-requests] Found ${missingUserIds.length} users missing from DBs. Fetching from Auth...`)
-
-            // Fetch missing users in parallel
-            await Promise.all(missingUserIds.map(async (userId) => {
-                try {
-                    const { data: { user }, error } = await supabase.auth.admin.getUserById(userId)
-
-                    if (user && !error) {
-                        // Construct a fallback user object from Auth data
-                        const metadata = user.user_metadata || {}
-                        const firstName = metadata.nome || metadata.first_name || metadata.given_name || ''
-                        const lastName = metadata.cognome || metadata.last_name || metadata.family_name || ''
-
-                        let derivedName = ''
-                        if (firstName || lastName) {
-                            derivedName = `${firstName} ${lastName}`.trim()
-                        }
-
-                        if (!derivedName) {
-                            derivedName = metadata.full_name || metadata.name || metadata.display_name || ''
-                        }
-
-                        const fallbackUser = {
-                            id: user.id,
-                            email: user.email,
-                            nome: firstName,
-                            cognome: lastName,
-                            full_name: derivedName,
-                            created_at: user.created_at
-                        }
-                        userMap.set(userId, fallbackUser)
-                    } else {
-                        console.warn(`[get-verification-requests] Could not fetch user ${userId} from Auth:`, error)
-                    }
-                } catch (e) {
-                    console.error(`[get-verification-requests] Exception fetching user ${userId}:`, e)
-                }
-            }))
-        }
+        console.log(`[get-verification-requests] Resolved ${userMap.size}/${userIds.length} users (rest stay as 'Utente sconosciuto')`)
 
         // 4. Merge data — return everything. Truly orphan rows still show
         //    (with "Utente sconosciuto") so nothing is hidden from review.
