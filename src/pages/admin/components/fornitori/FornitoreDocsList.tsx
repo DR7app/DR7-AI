@@ -1,0 +1,190 @@
+import { useEffect, useState, useMemo } from 'react'
+import { supabase } from '../../../../supabaseClient'
+import Button from '../Button'
+import FornitoreDocumentUpload from './FornitoreDocumentUpload'
+import {
+    DOCUMENT_TIPO_LABELS,
+    DOCUMENT_STATO_LABELS,
+    DOCUMENT_STATO_COLORS,
+    MESI_IT,
+    fmtEUR,
+    fmtDateIT,
+    nextStates,
+} from './types'
+import type { Fornitore, FornitoreDocument, DocumentTipo, DocumentStato } from './types'
+
+interface Props {
+    fornitore: Fornitore
+    /** Filter shown documents */
+    tipiFilter?: DocumentTipo[]
+    /** Only show docs in these stati */
+    statiFilter?: DocumentStato[]
+    /** Force a default tipo when uploading from this view */
+    defaultUploadTipo?: DocumentTipo
+    title?: string
+}
+
+export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, title }: Props) {
+    const today = new Date()
+    const [anno, setAnno] = useState<number | 'tutti'>(today.getFullYear())
+    const [docs, setDocs] = useState<FornitoreDocument[]>([])
+    const [loading, setLoading] = useState(false)
+    const [showUpload, setShowUpload] = useState(false)
+    const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)
+
+    async function load() {
+        setLoading(true)
+        try {
+            let q = supabase
+                .from('fornitore_documents')
+                .select('*')
+                .eq('fornitore_id', fornitore.id)
+                .order('data_documento', { ascending: false })
+            if (anno !== 'tutti') q = q.eq('periodo_anno', anno)
+            if (tipiFilter && tipiFilter.length) q = q.in('tipo', tipiFilter)
+            if (statiFilter && statiFilter.length) q = q.in('stato', statiFilter)
+            const { data, error } = await q
+            if (error) throw error
+            setDocs((data || []) as FornitoreDocument[])
+        } catch (err) {
+            console.error('[docslist] load error', err)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => { load() // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fornitore.id, anno, JSON.stringify(tipiFilter), JSON.stringify(statiFilter)])
+
+    const totale = useMemo(() => docs.reduce((s, d) => s + Number(d.importo_totale || 0), 0), [docs])
+
+    async function transitionDoc(doc: FornitoreDocument, newStato: DocumentStato) {
+        const updates: Record<string, unknown> = { stato: newStato }
+        if (newStato === 'pagato') {
+            const dataPag = prompt('Data pagamento (YYYY-MM-DD)', new Date().toISOString().slice(0, 10))
+            if (!dataPag) return
+            const metodo = prompt('Metodo pagamento (bonifico, contanti, RID, ecc.)', 'bonifico')
+            if (!metodo) return
+            updates.data_pagamento = dataPag
+            updates.metodo_pagamento = metodo
+        }
+        const { error } = await supabase.from('fornitore_documents').update(updates).eq('id', doc.id)
+        if (error) { alert('Errore: ' + error.message); return }
+        load()
+    }
+
+    async function deleteDoc(doc: FornitoreDocument) {
+        if (!confirm(`Eliminare ${DOCUMENT_TIPO_LABELS[doc.tipo]} n.${doc.numero_documento}?`)) return
+        if (doc.file_url) await supabase.storage.from('fornitori-documents').remove([doc.file_url])
+        await supabase.from('fornitore_documents').delete().eq('id', doc.id)
+        load()
+    }
+
+    async function viewFile(doc: FornitoreDocument) {
+        if (!doc.file_url) return
+        const { data, error } = await supabase.storage
+            .from('fornitori-documents')
+            .createSignedUrl(doc.file_url, 60 * 5)
+        if (error || !data?.signedUrl) { alert('File non disponibile'); return }
+        window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    }
+
+    const annoOptions: number[] = []
+    for (let y = today.getFullYear() + 1; y >= 2020; y--) annoOptions.push(y)
+
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+                {title && <h3 className="text-lg font-semibold text-theme-text-primary mr-2">{title}</h3>}
+                <select value={anno} onChange={e => setAnno(e.target.value === 'tutti' ? 'tutti' : parseInt(e.target.value))}
+                    className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm">
+                    <option value="tutti">Tutti gli anni</option>
+                    {annoOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <span className="text-sm text-theme-text-secondary">
+                    {docs.length} doc · totale <strong className="text-theme-text-primary">{fmtEUR(totale)}</strong>
+                </span>
+                <div className="ml-auto">
+                    <Button onClick={() => { setEditingDoc(null); setShowUpload(true) }}>+ Carica documento</Button>
+                </div>
+            </div>
+
+            <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-x-auto">
+                <table className="w-full text-sm">
+                    <thead className="bg-theme-bg-tertiary text-theme-text-secondary">
+                        <tr>
+                            <th className="text-left px-3 py-2">Tipo</th>
+                            <th className="text-left px-3 py-2">N°</th>
+                            <th className="text-left px-3 py-2">Data</th>
+                            <th className="text-left px-3 py-2">Mese</th>
+                            <th className="text-left px-3 py-2">Scadenza</th>
+                            <th className="text-right px-3 py-2">Totale</th>
+                            <th className="text-left px-3 py-2">Stato</th>
+                            <th className="text-left px-3 py-2">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-theme-border">
+                        {loading && (
+                            <tr><td colSpan={8} className="text-center py-6 text-theme-text-muted">Caricamento…</td></tr>
+                        )}
+                        {!loading && docs.length === 0 && (
+                            <tr><td colSpan={8} className="text-center py-6 text-theme-text-muted">Nessun documento</td></tr>
+                        )}
+                        {docs.map(doc => {
+                            const transitions = nextStates(doc.stato, doc.tipo)
+                            return (
+                                <tr key={doc.id}>
+                                    <td className="px-3 py-2 text-theme-text-primary uppercase text-xs">{DOCUMENT_TIPO_LABELS[doc.tipo]}</td>
+                                    <td className="px-3 py-2 text-theme-text-primary font-mono">{doc.numero_documento}</td>
+                                    <td className="px-3 py-2 text-theme-text-secondary">{fmtDateIT(doc.data_documento)}</td>
+                                    <td className="px-3 py-2 text-theme-text-secondary text-xs">{MESI_IT[doc.periodo_mese - 1]} {doc.periodo_anno}</td>
+                                    <td className="px-3 py-2 text-theme-text-secondary">{fmtDateIT(doc.data_scadenza)}</td>
+                                    <td className="px-3 py-2 text-right text-theme-text-primary font-semibold">{fmtEUR(doc.importo_totale)}</td>
+                                    <td className="px-3 py-2">
+                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${DOCUMENT_STATO_COLORS[doc.stato]}`}>
+                                            {DOCUMENT_STATO_LABELS[doc.stato]}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <div className="flex flex-wrap gap-1">
+                                            {doc.file_url && (
+                                                <button onClick={() => viewFile(doc)}
+                                                    className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
+                                                    Vedi
+                                                </button>
+                                            )}
+                                            <button onClick={() => { setEditingDoc(doc); setShowUpload(true) }}
+                                                className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
+                                                Modifica
+                                            </button>
+                                            {transitions.map(s => (
+                                                <button key={s} onClick={() => transitionDoc(doc, s)}
+                                                    className={`text-xs px-2 py-1 rounded ${DOCUMENT_STATO_COLORS[s]} hover:opacity-80`}
+                                                    title={`Sposta in: ${DOCUMENT_STATO_LABELS[s]}`}>
+                                                    → {DOCUMENT_STATO_LABELS[s]}
+                                                </button>
+                                            ))}
+                                            <button onClick={() => deleteDoc(doc)}
+                                                className="text-xs px-2 py-1 rounded bg-red-900 hover:bg-red-800 text-red-200">
+                                                ×
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            {showUpload && (
+                <FornitoreDocumentUpload
+                    fornitore={fornitore}
+                    document={editingDoc}
+                    onClose={() => { setShowUpload(false); setEditingDoc(null) }}
+                    onSaved={() => { setShowUpload(false); setEditingDoc(null); load() }}
+                />
+            )}
+        </div>
+    )
+}

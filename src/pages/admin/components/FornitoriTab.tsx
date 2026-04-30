@@ -6,6 +6,9 @@ import FornitoreForm from './fornitori/FornitoreForm'
 import FornitoreDetail from './fornitori/FornitoreDetail'
 import FornitoreScadenziario from './fornitori/FornitoreScadenziario'
 import FornitoreAlertsPanel from './fornitori/FornitoreAlertsPanel'
+import FornitoriPageHeader from './fornitori/FornitoriPageHeader'
+import FornitoriRightRail from './fornitori/FornitoriRightRail'
+import FornitoriProcessFlow from './fornitori/FornitoriProcessFlow'
 import type { Fornitore } from './fornitori/types'
 
 type View = 'list' | 'scadenziario' | 'alerts'
@@ -97,18 +100,29 @@ export default function FornitoriTab() {
 
     if (selected) {
         return (
-            <FornitoreDetail
-                fornitore={selected}
-                onBack={() => { setSelected(null); loadFornitori() }}
-                onUpdated={(f) => { setSelected(f); loadFornitori() }}
-            />
+            <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
+                <div className="min-w-0 space-y-4">
+                    <FornitoreDetail
+                        fornitore={selected}
+                        onBack={() => { setSelected(null); loadFornitori() }}
+                        onUpdated={(f) => { setSelected(f); loadFornitori() }}
+                    />
+                    <FornitoriProcessFlow />
+                </div>
+                <div className="hidden xl:block">
+                    <FornitoriRightRail />
+                </div>
+            </div>
         )
     }
 
     return (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
+        <div className="min-w-0 space-y-4">
+            <FornitoriPageHeader />
+
             <div className="flex items-center justify-between flex-wrap gap-3">
-                <h2 className="text-2xl font-semibold text-theme-text-primary">Fornitori</h2>
+                <h2 className="text-2xl font-semibold text-theme-text-primary">Gestione Fornitori</h2>
                 <div className="flex gap-2">
                     <button onClick={() => setView('list')}
                         className={`text-sm px-3 py-1.5 rounded ${view === 'list' ? 'bg-dr7-gold text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-tertiary/70'}`}>
@@ -206,6 +220,13 @@ export default function FornitoriTab() {
                     onSaved={() => { setShowForm(false); loadFornitori() }}
                 />
             )}
+
+            <FornitoriProcessFlow />
+        </div>
+
+        <div className="hidden xl:block">
+            <FornitoriRightRail />
+        </div>
         </div>
     )
 }
