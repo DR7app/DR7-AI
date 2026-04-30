@@ -62,6 +62,8 @@ export default function DocumentsVerificationTab() {
   const [rejectionReason, setRejectionReason] = useState('')
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({})
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const [autoVerifying, setAutoVerifying] = useState<Set<string>>(new Set()) // doc ids currently being auto-verified
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
 
   useEffect(() => {
     loadDocuments()
@@ -299,6 +301,62 @@ export default function DocumentsVerificationTab() {
     }
   }
 
+  async function autoVerifyDocs(docs: UserDocument[]) {
+    const queue = docs.filter(d => d.status === 'pending_verification')
+    if (queue.length === 0) {
+      toast('Nessun documento da verificare', { icon: 'ℹ️' })
+      return { verified: 0, rejected: 0, pending: 0 }
+    }
+
+    setBulkProgress({ done: 0, total: queue.length })
+    setAutoVerifying(prev => {
+      const next = new Set(prev)
+      queue.forEach(d => next.add(d.id))
+      return next
+    })
+
+    let verified = 0, rejected = 0, pending = 0
+    // Limited concurrency (3 in parallel) to keep API usage sane
+    const CONCURRENCY = 3
+    let cursor = 0
+    async function worker() {
+      while (cursor < queue.length) {
+        const idx = cursor++
+        const doc = queue[idx]
+        try {
+          const res = await authFetch('/.netlify/functions/auto-verify-document', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ documentId: doc.id }),
+          })
+          const json = await res.json().catch(() => null)
+          if (res.ok && json?.success) {
+            if (json.decision === 'verified') verified++
+            else if (json.decision === 'rejected') rejected++
+            else pending++
+          } else {
+            pending++
+          }
+        } catch {
+          pending++
+        } finally {
+          setAutoVerifying(prev => {
+            const next = new Set(prev)
+            next.delete(doc.id)
+            return next
+          })
+          setBulkProgress(prev => prev ? { ...prev, done: prev.done + 1 } : prev)
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker))
+
+    setBulkProgress(null)
+    toast.success(`Auto-verifica: ${verified} approvati · ${rejected} rifiutati · ${pending} da rivedere`)
+    loadDocuments()
+    return { verified, rejected, pending }
+  }
+
   async function viewDocument(doc: UserDocument) {
     try {
       // Use secure server-side function to bypass RLS
@@ -402,11 +460,25 @@ export default function DocumentsVerificationTab() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="bg-theme-bg-secondary border border-theme-border rounded-3xl p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-theme-text-primary tracking-tight">Verifica Documenti</h2>
-        <p className="text-sm text-theme-text-muted mt-0.5">
-          Anteprima, accetta o rifiuta i documenti caricati dai clienti
-        </p>
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-3xl p-6 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-theme-text-primary tracking-tight">Verifica Documenti</h2>
+          <p className="text-sm text-theme-text-muted mt-0.5">
+            Anteprima, accetta o rifiuta i documenti caricati dai clienti
+          </p>
+        </div>
+        <button
+          onClick={() => autoVerifyDocs(documents)}
+          disabled={!!bulkProgress || documents.filter(d => d.status === 'pending_verification').length === 0}
+          className="self-start md:self-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-sm transition-all active:scale-[0.98]"
+          title="Verifica tutti i documenti in attesa con OCR"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+          {bulkProgress
+            ? `Verifica… ${bulkProgress.done}/${bulkProgress.total}`
+            : `Auto-verifica tutti (${documents.filter(d => d.status === 'pending_verification').length})`
+          }
+        </button>
       </div>
 
       {/* Summary + Filter (segmented control style) */}
@@ -469,11 +541,24 @@ export default function DocumentsVerificationTab() {
                     </div>
                   </div>
                 </div>
-                {pendingCount > 0 && (
-                  <span className="px-2.5 py-1 rounded-full bg-yellow-500/15 text-yellow-500 text-xs font-semibold">
-                    {pendingCount} da verificare
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {pendingCount > 0 && (
+                    <span className="px-2.5 py-1 rounded-full bg-yellow-500/15 text-yellow-500 text-xs font-semibold">
+                      {pendingCount} da verificare
+                    </span>
+                  )}
+                  {pendingCount > 0 && (
+                    <button
+                      onClick={() => autoVerifyDocs(userDocs)}
+                      disabled={!!bulkProgress}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 disabled:opacity-40 text-blue-500 text-xs font-semibold transition-all"
+                      title="Auto-verifica i documenti in attesa di questo cliente"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/></svg>
+                      Auto-verifica
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Photo grid */}
@@ -537,22 +622,29 @@ export default function DocumentsVerificationTab() {
                           </p>
                         )}
                         {isPending ? (
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <button
-                              onClick={() => updateDocumentStatus(doc.id, 'verified')}
-                              className="px-3 py-1.5 bg-green-500/90 hover:bg-green-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
-                              title="Accetta"
-                            >
-                              Accetta
-                            </button>
-                            <button
-                              onClick={() => { setSelectedDoc(doc); setShowDocModal(true) }}
-                              className="px-3 py-1.5 bg-red-500/90 hover:bg-red-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
-                              title="Rifiuta"
-                            >
-                              Rifiuta
-                            </button>
-                          </div>
+                          autoVerifying.has(doc.id) ? (
+                            <div className="flex items-center justify-center gap-2 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-[12px] font-semibold">
+                              <span className="inline-block w-3 h-3 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
+                              Auto-verifica…
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <button
+                                onClick={() => updateDocumentStatus(doc.id, 'verified')}
+                                className="px-3 py-1.5 bg-green-500/90 hover:bg-green-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
+                                title="Accetta"
+                              >
+                                Accetta
+                              </button>
+                              <button
+                                onClick={() => { setSelectedDoc(doc); setShowDocModal(true) }}
+                                className="px-3 py-1.5 bg-red-500/90 hover:bg-red-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
+                                title="Rifiuta"
+                              >
+                                Rifiuta
+                              </button>
+                            </div>
+                          )
                         ) : (
                           <button
                             onClick={() => url ? setLightboxUrl(url) : viewDocument(doc)}
