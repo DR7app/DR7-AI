@@ -126,12 +126,22 @@ export const handler: Handler = async (event) => {
       return { statusCode: 200, headers, body: JSON.stringify({ skipped: true, reason: `status is ${doc.status}` }) }
     }
 
-    // 2. Profile lookup
-    const { data: profile } = await supabase
+    // 2. Profile lookup — try by auth user_id first, then by .id (legacy
+    //    admin-uploaded docs where user_id is actually the row PK)
+    let { data: profile } = await supabase
       .from('customers_extended')
       .select('nome, cognome, codice_fiscale, data_nascita, numero_patente')
       .eq('user_id', doc.user_id)
       .maybeSingle()
+
+    if (!profile) {
+      const fb = await supabase
+        .from('customers_extended')
+        .select('nome, cognome, codice_fiscale, data_nascita, numero_patente')
+        .eq('id', doc.user_id)
+        .maybeSingle()
+      profile = fb.data
+    }
 
     if (!profile) {
       return { statusCode: 200, headers, body: JSON.stringify({ skipped: true, reason: 'no customers_extended row' }) }
