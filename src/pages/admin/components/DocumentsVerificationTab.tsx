@@ -430,279 +430,94 @@ export default function DocumentsVerificationTab() {
         </div>
       </div>
 
-      {/* Documents by User */}
+      {/* Documents by User — compact card per customer */}
       <div className="space-y-4">
         {Object.entries(documentsByUser).map(([userId, userDocs]) => {
           const user = userDocs[0].user
+          const pendingCount = userDocs.filter(d => d.status === 'pending_verification').length
           return (
-            <div key={userId} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
-              {/* User Header */}
-              <div className="bg-theme-bg-tertiary p-6 border-b border-theme-border">
-                <div className="flex flex-col lg:flex-row lg:justify-between gap-6">
-                  <div className="flex-1 space-y-4">
-                    {/* Header with Name and Badges */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h3 className="text-2xl font-bold text-theme-text-primary">{user?.full_name || 'Nome non disponibile'}</h3>
-                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      {(user as any)?.is_new && (
-                        <span className="px-3 py-1 text-xs font-bold bg-green-600 text-white rounded-full shadow-lg">
-                          🆕 NUOVO CLIENTE
-                        </span>
-                      )}
-                      {user?.tipo_cliente && (
-                        <span className={`px-3 py-1 text-xs font-bold rounded-full ${user.tipo_cliente === 'persona_fisica' ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30' :
-                          user.tipo_cliente === 'azienda' ? 'bg-purple-600/20 text-purple-400 border border-purple-600/30' :
-                            'bg-orange-600/20 text-orange-400 border border-orange-600/30'
-                          }`}>
-                          {user.tipo_cliente === 'persona_fisica' ? '👤 Persona Fisica' :
-                            user.tipo_cliente === 'azienda' ? '🏢 Azienda' :
-                              '🏛️ Pubblica Amministrazione'}
-                        </span>
-                      )}
-                      {user?.source && (
-                        <span className="px-2 py-1 text-xs bg-theme-bg-tertiary/50 text-theme-text-muted rounded border border-theme-border/30" title={`Fonte: ${user.source}`}>
-                          {user.source === 'website' ? '🌐 Web' :
-                            user.source === 'website_registration' ? '🌐 Web (Auth)' :
-                              user.source === 'booking_auto_created' ? '📅 Auto' :
-                                user.source === 'admin' ? '⚙️ Admin' : user.source}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Personal Information */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-theme-text-muted">📧 Email:</span>
-                        <span className="text-theme-text-primary font-medium">{user?.email || 'Non disponibile'}</span>
-                      </div>
-                      {user?.telefono && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-theme-text-muted">📞 Telefono:</span>
-                          <span className="text-theme-text-primary font-medium">{user.telefono}</span>
-                        </div>
-                      )}
-                      {user?.pec && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-theme-text-muted">📨 PEC:</span>
-                          <span className="text-theme-text-primary font-medium">{user.pec}</span>
-                        </div>
-                      )}
-                      {user?.sesso && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-theme-text-muted">Sesso:</span>
-                          <span className="text-theme-text-primary">{user.sesso === 'M' ? 'Maschile' : user.sesso === 'F' ? 'Femminile' : user.sesso}</span>
-                        </div>
-                      )}
-                      {user?.codice_fiscale && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-theme-text-muted">🆔 Codice Fiscale:</span>
-                          <span className="text-theme-text-primary font-mono font-bold">{user.codice_fiscale.toUpperCase()}</span>
-                        </div>
-                      )}
-                      {user?.data_nascita && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-theme-text-muted">🎂 Nato il:</span>
-                          <span className="text-theme-text-primary">
-                            {new Date(user.data_nascita).toLocaleDateString('it-IT')}
-                            {user.luogo_nascita && ` a ${user.luogo_nascita}`}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Address Information */}
-                    {(user?.indirizzo || user?.citta_residenza) && (
-                      <div className="pt-2 border-t border-theme-border/30">
-                        <div className="flex items-start gap-2 text-sm">
-                          <span className="text-theme-text-muted">🏠 Indirizzo:</span>
-                          <span className="text-theme-text-primary">
-                            {user.indirizzo}
-                            {user.numero_civico && `, ${user.numero_civico}`}
-                            {user.citta_residenza && ` - ${user.citta_residenza}`}
-                            {user.cap && ` ${user.cap}`}
-                            {user.provincia && ` (${user.provincia})`}
-                            {user.nazione && user.nazione !== 'Italia' && ` - ${user.nazione}`}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Driver's License Information */}
-                    {user?.numero_patente && (
-                      <div className="pt-2 border-t border-theme-border/30">
-                        <div className="text-sm font-semibold text-dr7-gold mb-2">🪪 Patente di Guida</div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="text-theme-text-muted">Numero:</span>
-                            <span className="text-theme-text-primary font-mono font-bold">{user.numero_patente}</span>
-                          </div>
-                          {user.categoria_patente && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Categoria:</span>
-                              <span className="text-theme-text-primary font-bold">{user.categoria_patente}</span>
-                            </div>
-                          )}
-                          {user.ente_rilascio && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Ente Rilascio:</span>
-                              <span className="text-theme-text-primary">{user.ente_rilascio}</span>
-                            </div>
-                          )}
-                          {user.data_rilascio && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Rilasciata il:</span>
-                              <span className="text-theme-text-primary">{new Date(user.data_rilascio).toLocaleDateString('it-IT')}</span>
-                            </div>
-                          )}
-                          {user.data_scadenza && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Scadenza:</span>
-                              <span className={`font-medium ${new Date(user.data_scadenza) < new Date() ? 'text-red-400' :
-                                new Date(user.data_scadenza) < new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) ? 'text-yellow-400' :
-                                  'text-theme-text-primary'
-                                }`}>
-                                {new Date(user.data_scadenza).toLocaleDateString('it-IT')}
-                                {new Date(user.data_scadenza) < new Date() && ' ⚠️ SCADUTA'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Company Information (Azienda) */}
-                    {user?.tipo_cliente === 'azienda' && (user?.ragione_sociale || user?.denominazione || user?.partita_iva) && (
-                      <div className="pt-2 border-t border-theme-border/30">
-                        <div className="text-sm font-semibold text-purple-400 mb-2">🏢 Informazioni Azienda</div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                          {(user.ragione_sociale || user.denominazione) && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Ragione Sociale:</span>
-                              <span className="text-theme-text-primary font-bold">{user.ragione_sociale || user.denominazione}</span>
-                            </div>
-                          )}
-                          {user.partita_iva && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Partita IVA:</span>
-                              <span className="text-theme-text-primary font-mono font-bold">{user.partita_iva}</span>
-                            </div>
-                          )}
-                          {user.rappresentante_legale && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Rappresentante:</span>
-                              <span className="text-theme-text-primary">{user.rappresentante_legale}</span>
-                            </div>
-                          )}
-                          {user.codice_destinatario && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Codice Destinatario:</span>
-                              <span className="text-theme-text-primary font-mono">{user.codice_destinatario}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Public Administration Information */}
-                    {user?.tipo_cliente === 'pubblica_amministrazione' && (user?.denominazione || user?.codice_ipa || user?.codice_univoco) && (
-                      <div className="pt-2 border-t border-theme-border/30">
-                        <div className="text-sm font-semibold text-orange-400 mb-2">🏛️ Pubblica Amministrazione</div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                          {user.denominazione && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Denominazione:</span>
-                              <span className="text-theme-text-primary font-bold">{user.denominazione}</span>
-                            </div>
-                          )}
-                          {user.codice_ipa && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Codice IPA:</span>
-                              <span className="text-theme-text-primary font-mono font-bold">{user.codice_ipa}</span>
-                            </div>
-                          )}
-                          {user.codice_univoco && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-theme-text-muted">Codice Univoco:</span>
-                              <span className="text-theme-text-primary font-mono font-bold">{user.codice_univoco}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Registration Metadata */}
-                    <div className="pt-2 border-t border-theme-border/30">
-                      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-theme-text-muted">
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {(user as any)?.created_at && (
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          <span>📅 Registrato: {new Date((user as any).created_at).toLocaleDateString('it-IT')} alle {new Date((user as any).created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
-                        )}
-                        {user?.updated_at && (
-                          <span>🔄 Aggiornato: {new Date(user.updated_at).toLocaleDateString('it-IT')}</span>
-                        )}
-                        <span>🆔 ID: {userId.slice(0, 8)}...</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Side - Document Count */}
-                  <div className="flex flex-col items-end justify-start">
-                    <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-4 text-center min-w-[120px]">
-                      <div className="text-3xl font-bold text-dr7-gold">{userDocs.length}</div>
-                      <div className="text-xs text-theme-text-muted mt-1">Documenti</div>
-                    </div>
-                  </div>
+            <div key={userId} className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4">
+              {/* Customer name pill + meta */}
+              <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-3 py-1 bg-dr7-gold text-theme-bg-primary text-sm font-bold rounded border border-dr7-gold">
+                    {user?.full_name || user?.email?.split('@')[0] || 'Sconosciuto'}
+                  </span>
+                  {user?.email && (
+                    <span className="text-xs text-theme-text-muted">{user.email}</span>
+                  )}
+                  {user?.telefono && (
+                    <span className="text-xs text-theme-text-muted">· {user.telefono}</span>
+                  )}
                 </div>
+                {pendingCount > 0 && (
+                  <span className="text-xs font-semibold text-yellow-400">
+                    {pendingCount} da verificare
+                  </span>
+                )}
               </div>
 
-              {/* User Documents */}
-              <div className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {userDocs.map((doc) => (
-                    <div key={doc.id} className="bg-theme-bg-tertiary/50 border border-theme-border rounded-full p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="text-theme-text-primary font-medium">{getDocumentLabel(doc.document_type)}</h4>
-                        {getStatusBadge(doc.status)}
-                      </div>
-                      <p className="text-xs text-theme-text-muted mb-3">
-                        Caricato: {new Date(doc.upload_date).toLocaleDateString('it-IT')}
-                      </p>
-                      {doc.rejection_reason && (
-                        <p className="text-xs text-red-400 mb-3 bg-red-900/20 p-2 rounded">
-                          Motivo: {doc.rejection_reason}
-                        </p>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => viewDocument(doc)}
-                          className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-theme-text-primary rounded text-xs font-semibold transition-colors"
-                        >
-                          Visualizza
-                        </button>
-                        {doc.status === 'pending_verification' && (
-                          <>
+              {/* Photo grid */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {userDocs.map((doc) => {
+                  const isPending = doc.status === 'pending_verification'
+                  const borderColor =
+                    doc.status === 'verified' ? 'border-green-600/50' :
+                    doc.status === 'rejected' ? 'border-red-600/50' :
+                    'border-theme-border'
+                  return (
+                    <div key={doc.id} className={`bg-theme-bg-tertiary/50 border-2 ${borderColor} rounded-lg overflow-hidden flex flex-col`}>
+                      {/* Thumbnail / preview area */}
+                      <button
+                        onClick={() => viewDocument(doc)}
+                        className="aspect-[4/3] bg-theme-bg-primary/40 hover:bg-theme-bg-primary/70 flex items-center justify-center text-theme-text-muted text-xs transition-colors p-2"
+                        title="Apri documento"
+                      >
+                        <span className="text-center">
+                          <span className="block text-2xl mb-1">📄</span>
+                          <span className="block font-semibold text-theme-text-primary">{getDocumentLabel(doc.document_type)}</span>
+                        </span>
+                      </button>
+                      {/* Footer: status + actions */}
+                      <div className="p-2 space-y-1.5">
+                        <div className="flex justify-center">{getStatusBadge(doc.status)}</div>
+                        {doc.rejection_reason && (
+                          <p className="text-[10px] text-red-400 bg-red-900/20 px-1.5 py-1 rounded line-clamp-2" title={doc.rejection_reason}>
+                            {doc.rejection_reason}
+                          </p>
+                        )}
+                        {isPending ? (
+                          <div className="flex gap-1">
                             <button
                               onClick={() => updateDocumentStatus(doc.id, 'verified')}
-                              className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-theme-text-primary rounded text-xs font-semibold transition-colors"
+                              className="flex-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[11px] font-bold"
+                              title="Accetta"
                             >
-                              Verifica
+                              ACC
                             </button>
                             <button
                               onClick={() => {
                                 setSelectedDoc(doc)
                                 setShowDocModal(true)
                               }}
-                              className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded text-xs font-semibold transition-colors"
+                              className="flex-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold"
+                              title="Rifiuta"
                             >
-                              Rifiuta
+                              REJ
                             </button>
-                          </>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => viewDocument(doc)}
+                            className="w-full px-2 py-1 bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary rounded text-[11px] font-semibold"
+                          >
+                            Apri
+                          </button>
                         )}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
               </div>
             </div>
           )
