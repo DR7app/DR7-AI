@@ -11,6 +11,7 @@ import Select from './Select'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
@@ -1931,8 +1932,18 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                           <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold rounded bg-blue-500/20 text-blue-400">SITO</span>
                         )}
                       </div>
-                      {p.customer_name && <div className="text-xs text-theme-text-muted">{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</div>}
-                      {!p.customer_name && p.customer_phone && <div className="text-xs text-theme-text-muted">{p.customer_phone}</div>}
+                      {p.customer_name && (
+                        <div className="text-xs text-theme-text-muted flex items-center gap-1.5 flex-wrap">
+                          <span>{p.customer_name} {p.customer_phone ? `· ${p.customer_phone}` : ''}</span>
+                          <ClientStatusBadge phone={p.customer_phone} />
+                        </div>
+                      )}
+                      {!p.customer_name && p.customer_phone && (
+                        <div className="text-xs text-theme-text-muted flex items-center gap-1.5 flex-wrap">
+                          <span>{p.customer_phone}</span>
+                          <ClientStatusBadge phone={p.customer_phone} />
+                        </div>
+                      )}
                       {p.vehicle_plate && <div className="text-xs text-theme-text-muted">{p.vehicle_plate}</div>}
                       <div className="text-[10px] mt-1 space-y-0.5">
                         {p.created_by && (
@@ -2085,7 +2096,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                           <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-500/20 text-blue-400">SITO</span>
                         )}
                       </div>
-                      {p.customer_name && <div className="text-[12px] text-theme-text-muted truncate">{p.customer_name}{p.customer_phone ? ` · ${p.customer_phone}` : ''}</div>}
+                      {p.customer_name && (
+                        <div className="text-[12px] text-theme-text-muted truncate flex items-center gap-1.5 flex-wrap">
+                          <span className="truncate">{p.customer_name}{p.customer_phone ? ` · ${p.customer_phone}` : ''}</span>
+                          <ClientStatusBadge phone={p.customer_phone} />
+                        </div>
+                      )}
                       {!p.customer_name && p.customer_phone && <div className="text-[12px] text-theme-text-muted">{p.customer_phone}</div>}
                     </div>
                     <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${statusTone[p.status] || 'bg-gray-500/15 text-gray-400'}`}>

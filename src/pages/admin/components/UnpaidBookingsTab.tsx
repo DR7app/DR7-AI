@@ -5,6 +5,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2720,7 +2721,10 @@ export default function UnpaidBookingsTab() {
                 className="w-full flex items-center justify-between p-3 text-left"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-theme-text-primary truncate">{group.customerName}</div>
+                  <div className="text-sm font-bold text-theme-text-primary truncate flex items-center gap-1.5">
+                    <span className="truncate">{group.customerName}</span>
+                    <ClientStatusBadge email={group.customerEmail} />
+                  </div>
                   <div className="flex gap-2 mt-0.5">
                     {hasNoleggio && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">Noleggio</span>}
                     {hasPW && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 text-cyan-300">Prime Wash</span>}
@@ -2862,7 +2866,10 @@ export default function UnpaidBookingsTab() {
                 <tr key={group.customerKey} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 align-top">
                   {/* Cliente column */}
                   <td className="px-4 py-3">
-                    <div className="text-sm font-bold text-theme-text-primary">{group.customerName}</div>
+                    <div className="text-sm font-bold text-theme-text-primary flex items-center gap-1.5 flex-wrap">
+                      <span>{group.customerName}</span>
+                      <ClientStatusBadge email={group.customerEmail} />
+                    </div>
                     {group.customerEmail && <div className="text-xs text-theme-text-muted mt-0.5 truncate max-w-[180px]">{group.customerEmail}</div>}
                     {group.customerPhone && <div className="text-xs text-theme-text-muted">{group.customerPhone}</div>}
                     <div className="text-red-400 font-bold text-lg mt-2">

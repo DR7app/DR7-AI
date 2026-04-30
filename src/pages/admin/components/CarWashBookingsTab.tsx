@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -2437,7 +2438,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           </>
                         ) : (
                           <>
-                            <div className="font-medium">{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
+                            <div className="font-medium flex items-center gap-1.5 flex-wrap">
+                              <span>{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</span>
+                              <ClientStatusBadge
+                                customerId={booking.customer_id}
+                                userId={booking.user_id}
+                                email={booking.customer_email || booking.booking_details?.customer?.email}
+                              />
+                            </div>
                             <div className="text-xs text-dr7-gold font-mono">DR7-{String(booking.id || '').substring(0, 8).toUpperCase()}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_email || booking.booking_details?.customer?.email || '-'}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
@@ -2545,8 +2553,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {/* Card header */}
                     <div className="px-4 pt-4 pb-3 flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-theme-text-primary text-[15px] truncate">
-                          {isRientro ? 'Lavaggio Rientro' : (booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A')}
+                        <div className="font-semibold text-theme-text-primary text-[15px] truncate flex items-center gap-1.5 flex-wrap">
+                          <span className="truncate">{isRientro ? 'Lavaggio Rientro' : (booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A')}</span>
+                          {!isRientro && (
+                            <ClientStatusBadge
+                              customerId={booking.customer_id}
+                              userId={booking.user_id}
+                              email={booking.customer_email || booking.booking_details?.customer?.email}
+                            />
+                          )}
                         </div>
                         {!isRientro && (
                           <>

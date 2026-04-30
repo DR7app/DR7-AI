@@ -5,6 +5,7 @@ import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 
 interface BookingDetailsPanelProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,7 +138,15 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
           {/* Customer Info */}
           <div className="space-y-2">
             <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Cliente</h3>
-            <div className="text-xl sm:text-2xl font-bold text-theme-text-primary">{booking.customer_name || resolvedCustomer?.name || booking.booking_details?.customer?.fullName || booking.guest_name || 'Cliente Sconosciuto'}</div>
+            <div className="text-xl sm:text-2xl font-bold text-theme-text-primary flex items-center gap-2 flex-wrap">
+              <span>{booking.customer_name || resolvedCustomer?.name || booking.booking_details?.customer?.fullName || booking.guest_name || 'Cliente Sconosciuto'}</span>
+              <ClientStatusBadge
+                size="md"
+                userId={booking.user_id || booking.booking_details?.customer?.customerId}
+                email={booking.customer_email || resolvedCustomer?.email || booking.booking_details?.customer?.email}
+                phone={booking.customer_phone || resolvedCustomer?.phone || booking.booking_details?.customer?.phone}
+              />
+            </div>
             {(booking.customer_email || resolvedCustomer?.email) && (
               <div className="text-sm text-theme-text-muted">{booking.customer_email || resolvedCustomer?.email}</div>
             )}

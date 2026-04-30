@@ -4,6 +4,7 @@ import DynamicCustomerForm from './DynamicCustomerForm'
 import CustomerDocuments from './CustomerDocuments'
 import ReportClienteModal from './ReportClienteModal'
 import Button from './Button'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import toast from 'react-hot-toast'
 
 type StatusCliente = 'standard' | 'member' | 'elite' | 'blacklist'
@@ -338,7 +339,10 @@ export default function ClientiTab() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-theme-text-primary font-medium">
-                      {getDisplayName(customer)}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span>{getDisplayName(customer)}</span>
+                        <ClientStatusBadge customerId={customer.id} userId={customer.user_id} email={customer.email} />
+                      </div>
                       {customer.tipo_cliente === 'azienda' && customer.partita_iva && (
                         <div className="text-xs text-theme-text-muted mt-1">P.IVA: {customer.partita_iva}</div>
                       )}

@@ -6,6 +6,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildMechanicalContext } from '../../../utils/adminLogHelpers'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 
 interface Customer {
   id: string
@@ -314,6 +315,7 @@ export default function MechanicalBookingTab() {
           <thead className="">
             <tr>
               <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Cliente</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Stato</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Veicolo</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Servizio</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-secondary">Appuntamento</th>
@@ -347,6 +349,12 @@ export default function MechanicalBookingTab() {
                 <td className="px-4 py-3 text-sm text-theme-text-primary">
                   <div>{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
                   <div className="text-theme-text-muted text-xs">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  <ClientStatusBadge
+                    customerId={booking.customer_id}
+                    email={booking.customer_email || booking.booking_details?.customer?.email}
+                  />
                 </td>
                 <td className="px-4 py-3 text-sm text-theme-text-primary">
                   {booking.booking_details?.vehicleInfo || '-'}

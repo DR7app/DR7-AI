@@ -6,6 +6,7 @@ import NewClientModal from './NewClientModal'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ReportClienteModal from './ReportClienteModal'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 
 interface Customer {
   id: string
@@ -1526,8 +1527,9 @@ export default function CustomersTab() {
         <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-theme-bg-secondary border border-theme-border rounded-none sm:rounded-lg w-full sm:max-w-3xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex-shrink-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-theme-text-primary">
-                Dettagli Cliente Completi - {viewingCustomerDetails.full_name}
+              <h3 className="text-xl font-bold text-theme-text-primary flex items-center gap-2 flex-wrap">
+                <span>Dettagli Cliente Completi - {viewingCustomerDetails.full_name}</span>
+                <ClientStatusBadge size="md" customerId={viewingCustomerDetails.id} userId={viewingCustomerDetails.user_id} email={viewingCustomerDetails.email} />
               </h3>
               <button
                 onClick={() => setViewingCustomerDetails(null)}
@@ -2397,7 +2399,10 @@ export default function CustomersTab() {
                   className="w-5 h-5 flex-shrink-0"
                 />
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-theme-text-primary truncate">{customer.full_name}</div>
+                  <div className="text-sm font-semibold text-theme-text-primary truncate flex items-center gap-1.5">
+                    <span className="truncate">{customer.full_name}</span>
+                    <ClientStatusBadge customerId={customer.id} userId={customer.user_id} email={customer.email} />
+                  </div>
                   <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                     {customer.tipo_cliente && (
                       <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${customer.tipo_cliente === 'persona_fisica'
@@ -2559,8 +2564,9 @@ export default function CustomersTab() {
                     />
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span>{customer.full_name}</span>
+                      <ClientStatusBadge customerId={customer.id} userId={customer.user_id} email={customer.email} />
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm">
