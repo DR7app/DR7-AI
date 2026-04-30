@@ -50,6 +50,9 @@ interface UserDocument {
   }
 }
 
+const IMAGE_EXT = /\.(jpe?g|png|webp|gif|heic|avif)$/i
+const PDF_EXT   = /\.pdf$/i
+
 export default function DocumentsVerificationTab() {
   const [documents, setDocuments] = useState<UserDocument[]>([])
   const [loading, setLoading] = useState(true)
@@ -57,6 +60,8 @@ export default function DocumentsVerificationTab() {
   const [selectedDoc, setSelectedDoc] = useState<UserDocument | null>(null)
   const [showDocModal, setShowDocModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({})
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   useEffect(() => {
     loadDocuments()
@@ -74,6 +79,52 @@ export default function DocumentsVerificationTab() {
       subscription.unsubscribe()
     }
   }, [])
+
+  // Fetch signed URLs for previews — one batch call per user
+  useEffect(() => {
+    if (documents.length === 0) return
+
+    const userIds = Array.from(new Set(documents.map(d => d.user_id)))
+    let cancelled = false
+
+    ;(async () => {
+      const next: Record<string, string> = {}
+      await Promise.all(userIds.map(async (uid) => {
+        try {
+          const res = await authFetch('/.netlify/functions/get-customer-documents', {
+            method: 'POST',
+            body: JSON.stringify({ userId: uid }),
+            headers: { 'Content-Type': 'application/json' }
+          })
+          if (!res.ok) return
+          const json = await res.json()
+          if (!json?.success) return
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const flat: any[] = [
+            ...(json.documents.licenses || []),
+            ...(json.documents.ids || []),
+            ...(json.documents.codiceFiscale || []),
+          ]
+          // Map fileName -> url
+          const byName = new Map<string, string>()
+          flat.forEach(f => { if (f.fileName && f.url) byName.set(f.fileName, f.url) })
+          // Match docs of this user to URLs by file_path basename
+          documents
+            .filter(d => d.user_id === uid)
+            .forEach(d => {
+              const base = d.file_path.split('/').pop() || ''
+              const url = byName.get(base)
+              if (url) next[d.id] = url
+            })
+        } catch (e) {
+          logger.log('[DocumentsVerificationTab] preview fetch failed:', e)
+        }
+      }))
+      if (!cancelled) setPreviewUrls(prev => ({ ...prev, ...next }))
+    })()
+
+    return () => { cancelled = true }
+  }, [documents])
 
   async function loadDocuments() {
     setLoading(true)
@@ -312,14 +363,14 @@ export default function DocumentsVerificationTab() {
   }
 
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending_verification: { text: 'Da Verificare', color: 'bg-yellow-600 text-black' },
-      verified: { text: 'Verificato', color: 'bg-green-600 text-theme-text-primary' },
-      rejected: { text: 'Rifiutato', color: 'bg-red-600 text-theme-text-primary' }
+    const statusConfig: Record<string, { text: string; color: string }> = {
+      pending_verification: { text: 'In attesa', color: 'bg-yellow-500/15 text-yellow-500' },
+      verified:             { text: 'Verificato', color: 'bg-green-500/15 text-green-500' },
+      rejected:             { text: 'Rifiutato', color: 'bg-red-500/15 text-red-500' },
     }
-    const config = statusConfig[status as keyof typeof statusConfig] || { text: status, color: 'bg-theme-bg-hover text-theme-text-primary' }
+    const config = statusConfig[status] || { text: status, color: 'bg-theme-bg-tertiary text-theme-text-muted' }
     return (
-      <span className={`px-2 py-1 rounded text-xs font-bold ${config.color}`}>
+      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${config.color}`}>
         {config.text}
       </span>
     )
@@ -349,167 +400,163 @@ export default function DocumentsVerificationTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-theme-text-primary">Verifica Documenti Utenti</h2>
-            <p className="text-sm text-theme-text-muted mt-1">
-              Gestisci e verifica i documenti caricati dagli utenti
-            </p>
-          </div>
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-3xl p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-theme-text-primary tracking-tight">Verifica Documenti</h2>
+        <p className="text-sm text-theme-text-muted mt-0.5">
+          Anteprima, accetta o rifiuta i documenti caricati dai clienti
+        </p>
+      </div>
+
+      {/* Summary + Filter (segmented control style) */}
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1">
+          {([
+            { key: 'all',                  label: 'Tutti',         count: documents.length, color: 'text-theme-text-primary' },
+            { key: 'pending_verification', label: 'Da Verificare', count: documents.filter(d => d.status === 'pending_verification').length, color: 'text-yellow-500' },
+            { key: 'verified',             label: 'Verificati',    count: documents.filter(d => d.status === 'verified').length, color: 'text-green-500' },
+            { key: 'rejected',             label: 'Rifiutati',     count: documents.filter(d => d.status === 'rejected').length, color: 'text-red-500' },
+          ] as const).map(item => {
+            const active = filterStatus === item.key
+            return (
+              <button
+                key={item.key}
+                onClick={() => setFilterStatus(item.key as typeof filterStatus)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  active
+                    ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm'
+                    : 'text-theme-text-muted hover:bg-theme-bg-tertiary/50'
+                }`}
+              >
+                <span>{item.label}</span>
+                <span className={`text-xs font-semibold ${active ? item.color : 'text-theme-text-muted'}`}>
+                  {item.count}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
-          <div className="text-sm text-theme-text-muted">Totale Documenti</div>
-          <div className="text-2xl font-bold text-theme-text-primary">{documents.length}</div>
-        </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
-          <div className="text-sm text-theme-text-muted">Da Verificare</div>
-          <div className="text-2xl font-bold text-yellow-400">
-            {documents.filter(d => d.status === 'pending_verification').length}
-          </div>
-        </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
-          <div className="text-sm text-theme-text-muted">Verificati</div>
-          <div className="text-2xl font-bold text-green-400">
-            {documents.filter(d => d.status === 'verified').length}
-          </div>
-        </div>
-        <div className="bg-theme-bg-secondary p-4 rounded-full border border-theme-border">
-          <div className="text-sm text-theme-text-muted">Rifiutati</div>
-          <div className="text-2xl font-bold text-red-400">
-            {documents.filter(d => d.status === 'rejected').length}
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Buttons */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setFilterStatus('all')}
-            className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'all'
-              ? 'bg-dr7-gold text-theme-bg-primary'
-              : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-              }`}
-          >
-            Tutti ({documents.length})
-          </button>
-          <button
-            onClick={() => setFilterStatus('pending_verification')}
-            className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'pending_verification'
-              ? 'bg-dr7-gold text-theme-bg-primary'
-              : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-              }`}
-          >
-            Da Verificare ({documents.filter(d => d.status === 'pending_verification').length})
-          </button>
-          <button
-            onClick={() => setFilterStatus('verified')}
-            className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'verified'
-              ? 'bg-dr7-gold text-theme-bg-primary'
-              : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-              }`}
-          >
-            Verificati ({documents.filter(d => d.status === 'verified').length})
-          </button>
-          <button
-            onClick={() => setFilterStatus('rejected')}
-            className={`px-4 py-2 rounded-full font-medium transition-colors ${filterStatus === 'rejected'
-              ? 'bg-dr7-gold text-theme-bg-primary'
-              : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-              }`}
-          >
-            Rifiutati ({documents.filter(d => d.status === 'rejected').length})
-          </button>
-        </div>
-      </div>
-
-      {/* Documents by User — compact card per customer */}
+      {/* Documents by User — Apple-style cards */}
       <div className="space-y-4">
         {Object.entries(documentsByUser).map(([userId, userDocs]) => {
           const user = userDocs[0].user
           const pendingCount = userDocs.filter(d => d.status === 'pending_verification').length
+          const initials = (user?.full_name || user?.email || '?')
+            .split(/\s+|@/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map(s => s[0]?.toUpperCase() || '')
+            .join('') || '?'
           return (
-            <div key={userId} className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4">
-              {/* Customer name pill + meta */}
-              <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-3 py-1 bg-dr7-gold text-theme-bg-primary text-sm font-bold rounded border border-dr7-gold">
-                    {user?.full_name || user?.email?.split('@')[0] || 'Sconosciuto'}
-                  </span>
-                  {user?.email && (
-                    <span className="text-xs text-theme-text-muted">{user.email}</span>
-                  )}
-                  {user?.telefono && (
-                    <span className="text-xs text-theme-text-muted">· {user.telefono}</span>
-                  )}
+            <div key={userId} className="bg-theme-bg-secondary border border-theme-border rounded-3xl p-5 shadow-sm">
+              {/* Customer header */}
+              <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Avatar */}
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-dr7-gold to-amber-400 text-theme-bg-primary flex items-center justify-center text-sm font-bold shadow-sm shrink-0">
+                    {initials}
+                  </div>
+                  <div className="leading-tight">
+                    <div className="text-base font-semibold text-theme-text-primary tracking-tight">
+                      {user?.full_name || user?.email?.split('@')[0] || 'Sconosciuto'}
+                    </div>
+                    <div className="text-xs text-theme-text-muted flex items-center gap-2 flex-wrap">
+                      {user?.email && <span>{user.email}</span>}
+                      {user?.telefono && <span>· {user.telefono}</span>}
+                    </div>
+                  </div>
                 </div>
                 {pendingCount > 0 && (
-                  <span className="text-xs font-semibold text-yellow-400">
+                  <span className="px-2.5 py-1 rounded-full bg-yellow-500/15 text-yellow-500 text-xs font-semibold">
                     {pendingCount} da verificare
                   </span>
                 )}
               </div>
 
               {/* Photo grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {userDocs.map((doc) => {
                   const isPending = doc.status === 'pending_verification'
-                  const borderColor =
-                    doc.status === 'verified' ? 'border-green-600/50' :
-                    doc.status === 'rejected' ? 'border-red-600/50' :
-                    'border-theme-border'
+                  const accent =
+                    doc.status === 'verified' ? 'ring-green-500/40' :
+                    doc.status === 'rejected' ? 'ring-red-500/40' :
+                    'ring-transparent'
+                  const url = previewUrls[doc.id]
+                  const isImage = IMAGE_EXT.test(doc.file_path)
+                  const isPdf   = PDF_EXT.test(doc.file_path)
                   return (
-                    <div key={doc.id} className={`bg-theme-bg-tertiary/50 border-2 ${borderColor} rounded-lg overflow-hidden flex flex-col`}>
-                      {/* Thumbnail / preview area */}
+                    <div key={doc.id} className={`group bg-theme-bg-primary/60 border border-theme-border rounded-2xl overflow-hidden ring-2 ${accent} shadow-sm hover:shadow-md transition-all`}>
+                      {/* Thumbnail */}
                       <button
-                        onClick={() => viewDocument(doc)}
-                        className="aspect-[4/3] bg-theme-bg-primary/40 hover:bg-theme-bg-primary/70 flex items-center justify-center text-theme-text-muted text-xs transition-colors p-2"
-                        title="Apri documento"
+                        onClick={() => url ? setLightboxUrl(url) : viewDocument(doc)}
+                        className="relative aspect-[4/3] w-full bg-theme-bg-tertiary/30 flex items-center justify-center overflow-hidden"
+                        title="Anteprima"
                       >
-                        <span className="text-center">
-                          <span className="block text-2xl mb-1">📄</span>
-                          <span className="block font-semibold text-theme-text-primary">{getDocumentLabel(doc.document_type)}</span>
-                        </span>
+                        {url && isImage ? (
+                          <img
+                            src={url}
+                            alt={getDocumentLabel(doc.document_type)}
+                            loading="lazy"
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                          />
+                        ) : url && isPdf ? (
+                          <object data={url + '#view=Fit&toolbar=0&navpanes=0&scrollbar=0'} type="application/pdf" className="w-full h-full pointer-events-none">
+                            <div className="flex flex-col items-center justify-center w-full h-full text-theme-text-muted">
+                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                              <span className="mt-1 text-[10px] uppercase tracking-wider font-semibold">PDF</span>
+                            </div>
+                          </object>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-theme-text-muted">
+                            <div className="w-10 h-10 rounded-2xl bg-theme-bg-tertiary flex items-center justify-center mb-1">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            </div>
+                            <span className="text-[10px] font-medium">Anteprima</span>
+                          </div>
+                        )}
+                        {/* Bottom gradient label */}
+                        <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/75 via-black/20 to-transparent">
+                          <div className="text-[12px] font-semibold text-white tracking-tight">{getDocumentLabel(doc.document_type)}</div>
+                        </div>
                       </button>
-                      {/* Footer: status + actions */}
-                      <div className="p-2 space-y-1.5">
-                        <div className="flex justify-center">{getStatusBadge(doc.status)}</div>
+
+                      {/* Footer */}
+                      <div className="px-3 py-2.5 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-theme-text-muted">
+                            {new Date(doc.upload_date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                          </span>
+                          {getStatusBadge(doc.status)}
+                        </div>
                         {doc.rejection_reason && (
-                          <p className="text-[10px] text-red-400 bg-red-900/20 px-1.5 py-1 rounded line-clamp-2" title={doc.rejection_reason}>
+                          <p className="text-[10px] text-red-400 bg-red-500/10 px-2 py-1 rounded-lg line-clamp-2" title={doc.rejection_reason}>
                             {doc.rejection_reason}
                           </p>
                         )}
                         {isPending ? (
-                          <div className="flex gap-1">
+                          <div className="grid grid-cols-2 gap-1.5">
                             <button
                               onClick={() => updateDocumentStatus(doc.id, 'verified')}
-                              className="flex-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[11px] font-bold"
+                              className="px-3 py-1.5 bg-green-500/90 hover:bg-green-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
                               title="Accetta"
                             >
-                              ACC
+                              Accetta
                             </button>
                             <button
-                              onClick={() => {
-                                setSelectedDoc(doc)
-                                setShowDocModal(true)
-                              }}
-                              className="flex-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold"
+                              onClick={() => { setSelectedDoc(doc); setShowDocModal(true) }}
+                              className="px-3 py-1.5 bg-red-500/90 hover:bg-red-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
                               title="Rifiuta"
                             >
-                              REJ
+                              Rifiuta
                             </button>
                           </div>
                         ) : (
                           <button
-                            onClick={() => viewDocument(doc)}
-                            className="w-full px-2 py-1 bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary rounded text-[11px] font-semibold"
+                            onClick={() => url ? setLightboxUrl(url) : viewDocument(doc)}
+                            className="w-full px-3 py-1.5 bg-theme-bg-tertiary/70 hover:bg-theme-bg-tertiary text-theme-text-primary rounded-xl text-[12px] font-semibold transition-colors"
                           >
                             Apri
                           </button>
@@ -524,8 +571,11 @@ export default function DocumentsVerificationTab() {
         })}
 
         {Object.keys(documentsByUser).length === 0 && (
-          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-8 text-center">
-            <p className="text-theme-text-muted">
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-3xl p-12 text-center shadow-sm">
+            <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-theme-bg-tertiary flex items-center justify-center text-theme-text-muted">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <p className="text-sm text-theme-text-muted">
               {filterStatus === 'all'
                 ? 'Nessun documento caricato'
                 : `Nessun documento ${filterStatus === 'pending_verification' ? 'da verificare' : filterStatus === 'verified' ? 'verificato' : 'rifiutato'}`
@@ -535,38 +585,54 @@ export default function DocumentsVerificationTab() {
         )}
       </div>
 
+      {/* Lightbox preview */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white flex items-center justify-center transition"
+            aria-label="Chiudi"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+          <div className="max-w-5xl max-h-[90vh] w-full h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
+            {PDF_EXT.test(lightboxUrl) ? (
+              <iframe src={lightboxUrl} className="w-full h-full rounded-2xl bg-white" title="Anteprima PDF" />
+            ) : (
+              <img src={lightboxUrl} alt="Anteprima" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Rejection Modal */}
       {showDocModal && selectedDoc && selectedDoc.status === 'pending_verification' && (
-        <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-bg-secondary border border-theme-border rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-theme-text-primary mb-4">Rifiuta Documento</h3>
-            <p className="text-theme-text-muted mb-4">
-              Stai rifiutando: <strong className="text-theme-text-primary">{getDocumentLabel(selectedDoc.document_type)}</strong>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-3xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-theme-text-primary tracking-tight">Rifiuta documento</h3>
+            <p className="text-sm text-theme-text-muted mt-1 mb-4">
+              {getDocumentLabel(selectedDoc.document_type)}
             </p>
-            <div className="mb-4">
-              <label className="block text-sm text-theme-text-muted mb-2">Motivo del rifiuto</label>
-              <textarea
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="Inserisci il motivo del rifiuto..."
-                className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm"
-                rows={4}
-              />
-            </div>
-            <div className="flex gap-2">
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Motivo del rifiuto..."
+              className="w-full px-3 py-2.5 bg-theme-bg-tertiary border border-theme-border rounded-xl text-theme-text-primary text-sm placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30"
+              rows={4}
+            />
+            <div className="flex gap-2 mt-4">
               <button
-                onClick={() => {
-                  setShowDocModal(false)
-                  setSelectedDoc(null)
-                  setRejectionReason('')
-                }}
-                className="flex-1 px-4 py-2 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded font-medium transition-colors"
+                onClick={() => { setShowDocModal(false); setSelectedDoc(null); setRejectionReason('') }}
+                className="flex-1 px-4 py-2.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-xl text-sm font-semibold transition"
               >
                 Annulla
               </button>
               <button
                 onClick={() => updateDocumentStatus(selectedDoc.id, 'rejected', rejectionReason)}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-theme-text-primary rounded font-medium transition-colors"
+                className="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition shadow-sm"
                 disabled={!rejectionReason.trim()}
               >
                 Rifiuta
