@@ -60,6 +60,7 @@ import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
 import DanniPenaliModal from './DanniPenaliModal'
@@ -80,7 +81,7 @@ import {
 } from '../../../utils/tierClassification'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
-import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig } from '../../../utils/configLookup'
+import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById } from '../../../utils/configLookup'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -398,20 +399,6 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
   }
 
   return false
-}
-
-function CustomerStatusBadge({ email, statusMap }: { email?: string | null; statusMap: Map<string, string> }) {
-  if (!email) return null
-  const status = statusMap.get(email.toLowerCase())
-  if (!status || status === 'standard') return null
-  const labels: Record<string, { text: string; cls: string }> = {
-    elite: { text: 'ELT', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/50' },
-    member: { text: 'MEM', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
-    blacklist: { text: 'BL', cls: 'bg-red-500/20 text-red-400 border-red-500/50' },
-  }
-  const badge = labels[status]
-  if (!badge) return null
-  return <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold border ${badge.cls}`}>{badge.text}</span>
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -7843,7 +7830,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <div><span className="text-theme-text-muted">Luogo Ritiro:</span> <span className="text-theme-text-primary">{selectedBooking.pickup_location || '-'}</span></div>
                         <div><span className="text-theme-text-muted">Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_date ? new Date(typeof selectedBooking.dropoff_date === 'number' ? selectedBooking.dropoff_date * 1000 : selectedBooking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</span></div>
                         <div><span className="text-theme-text-muted">Luogo Riconsegna:</span> <span className="text-theme-text-primary">{selectedBooking.dropoff_location || '-'}</span></div>
-                        <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{({'RCA':'RCA Compresa (no Kasko)','KASKO':'Kasko Base','KASKO_BASE':'Kasko Base','KASKO_BLACK':'Kasko Black','KASKO_SIGNATURE':'Kasko Signature','DR7':'Kasko DR7'} as Record<string,string>)[selectedBooking.booking_details?.insuranceOption || ''] || selectedBooking.booking_details?.insuranceOption || 'Kasko Base'}</span></div>
+                        <div><span className="text-theme-text-muted">Assicurazione:</span> <span className="text-dr7-gold">{(() => {
+                          const rawId = selectedBooking.booking_details?.insuranceOption || ''
+                          const proName = getInsuranceNameById(rentalConfig, rawId)
+                          if (proName) return proName
+                          const legacyMap: Record<string, string> = {
+                            RCA: 'RCA Compresa (no Kasko)',
+                            KASKO: 'Kasko Base',
+                            KASKO_BASE: 'Kasko Base',
+                            KASKO_BLACK: 'Kasko Black',
+                            KASKO_SIGNATURE: 'Kasko Signature',
+                            KASKO_DR7: 'Kasko DR7',
+                            DR7: 'Kasko DR7',
+                          }
+                          return legacyMap[rawId] || rawId || 'Kasko Base'
+                        })()}</span></div>
                         <div><span className="text-theme-text-muted">Cauzione:</span> <span className="text-theme-text-primary">{
                           selectedBooking.booking_details?.depositOption === 'no_deposit'
                             ? `Senza cauzione (+30% = €${selectedBooking.booking_details?.noDepositSurcharge?.toFixed(2) || '0.00'})`
