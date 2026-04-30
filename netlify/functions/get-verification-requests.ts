@@ -33,16 +33,10 @@ export const handler: Handler = async (event) => {
         const userIds = [...new Set(documents.map(d => d.user_id))]
         console.log(`[get-verification-requests] Resolving ${userIds.length} unique user_ids for ${documents.length} docs`)
 
-        const CE_FIELDS = `
-            id, user_id, tipo_cliente, nome, cognome, sesso, email,
-            telefono, codice_fiscale, data_nascita, luogo_nascita,
-            indirizzo, numero_civico, citta_residenza, provincia, cap,
-            nazione, numero_patente, categoria_patente, ente_rilascio,
-            data_rilascio, data_scadenza, ragione_sociale, denominazione,
-            partita_iva, codice_destinatario, pec, codice_ipa,
-            codice_univoco, rappresentante_legale, metadata, source,
-            created_at, updated_at
-        `
+        // Use '*' so we don't break the whole SELECT if a single column
+        // got renamed/removed. The frontend only needs a subset; the rest
+        // is harmless extra payload.
+        const CE_FIELDS = '*'
 
         // Chunk .in() queries — Postgres parameter limit + URL length safety.
         async function chunkedIn<T>(table: string, fields: string, col: string, ids: string[]): Promise<T[]> {

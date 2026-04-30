@@ -176,39 +176,31 @@ export default function DocumentsVerificationTab() {
       // 2. Fetch user details for all unique user_ids
       const userIds = Array.from(new Set(docs.map(d => d.user_id)))
 
-      const { data: users, error: usersError } = await supabase
-        .from('customers_extended')
-        .select(`
-          id,
-          user_id,
-          tipo_cliente,
-          nome,
-          cognome,
-          email,
-          telefono,
-          codice_fiscale,
-          patente,
-          indirizzo,
-          nazione,
-          ragione_sociale,
-          partita_iva,
-          codice_destinatario,
-          pec,
-          denominazione,
-          codice_ipa,
-          codice_univoco,
-          source,
-          created_at,
-          updated_at
-        `)
-        .in('user_id', userIds)
+      // Resolve users in two parallel queries — by user_id (real signups)
+      // and by id (legacy admin uploads where user_documents.user_id is
+      // actually the row PK). Field list uses safe columns (no 'patente'
+      // — that column doesn't exist; the field is 'numero_patente').
+      const CE_SELECT = `
+        id, user_id, tipo_cliente, nome, cognome, email, telefono,
+        codice_fiscale, numero_patente, indirizzo, nazione,
+        ragione_sociale, partita_iva, codice_destinatario, pec,
+        denominazione, codice_ipa, codice_univoco, source,
+        created_at, updated_at
+      `
 
-      if (usersError) console.error('Error fetching users:', usersError)
+      const [byUserIdRes, byIdRes] = await Promise.all([
+        supabase.from('customers_extended').select(CE_SELECT).in('user_id', userIds),
+        supabase.from('customers_extended').select(CE_SELECT).in('id', userIds),
+      ])
+
+      if (byUserIdRes.error) console.error('Error fetching users by user_id:', byUserIdRes.error)
+      if (byIdRes.error)     console.error('Error fetching users by id:',      byIdRes.error)
 
       const userMap = new Map()
-      if (users) {
-        users.forEach(u => userMap.set(u.user_id, u))
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (byUserIdRes.data) byUserIdRes.data.forEach((u: any) => { if (u.user_id) userMap.set(u.user_id, u) })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (byIdRes.data)     byIdRes.data.forEach((u: any) => { if (u.id && !userMap.has(u.id)) userMap.set(u.id, u) })
 
       // 3. Merge data
       const enrichedDocuments = docs.map(doc => {
