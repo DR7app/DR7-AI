@@ -130,6 +130,36 @@ export default function CauzioniTab() {
                 }))
             }
 
+            // Fallback: when veicolo_id was nulled (vehicle deleted) or the join missed,
+            // resolve the vehicle from the linked booking — bookings keep vehicle_name /
+            // vehicle_plate as denormalized strings even after the vehicle is removed.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const needsBookingLookup: any[] = (data || []).filter((c: any) => {
+                const v = c.vehicles
+                const hasVehicle = v && (v.display_name || v.plate)
+                return !hasVehicle && c.riferimento_contratto_id
+            })
+            if (needsBookingLookup.length > 0) {
+                const bookingIds = [...new Set(needsBookingLookup.map(c => c.riferimento_contratto_id).filter(Boolean))]
+                const { data: bookingRows } = await supabase
+                    .from('bookings')
+                    .select('id, vehicle_name, vehicle_plate, booking_details')
+                    .in('id', bookingIds)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const bookingMap: Record<string, any> = {}
+                ;(bookingRows || []).forEach(b => { bookingMap[b.id] = b })
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                data = (data || []).map((c: any) => {
+                    if (c.vehicles && (c.vehicles.display_name || c.vehicles.plate)) return c
+                    const b = c.riferimento_contratto_id ? bookingMap[c.riferimento_contratto_id] : null
+                    if (!b) return c
+                    const fallbackName = b.vehicle_name || b.booking_details?.vehicleMakeModel || ''
+                    const fallbackPlate = b.vehicle_plate || ''
+                    if (!fallbackName && !fallbackPlate) return c
+                    return { ...c, vehicles: { display_name: fallbackName, plate: fallbackPlate } }
+                })
+            }
+
             const today = new Date()
             today.setHours(0, 0, 0, 0)
 

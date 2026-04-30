@@ -79,18 +79,20 @@ export const handler: Handler = async (event) => {
       // 1. All active vehicles
       supabase.from('vehicles').select('id, display_name, plate, status, daily_rate, category, metadata')
         .neq('status', 'retired'),
-      // 2. Current month bookings (all types, exclude admin)
+      // 2. Current month bookings (all types, exclude admin AND test cars)
       supabase.from('bookings')
         .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, payment_method, customer_name, customer_email, appointment_date, created_at')
         .gte('pickup_date', monthStartISO + 'T00:00:00')
         .lte('pickup_date', monthEndISO + 'T23:59:59')
-        .neq('customer_email', 'admin@dr7.app'),
-      // 3. Previous month bookings (exclude admin)
+        .neq('customer_email', 'admin@dr7.app')
+        .not('vehicle_plate', 'in', '("TEST000","TEST002")'),
+      // 3. Previous month bookings (exclude admin AND test cars)
       supabase.from('bookings')
         .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, customer_name, customer_email, appointment_date, created_at')
         .gte('pickup_date', prevMonthStartISO + 'T00:00:00')
         .lte('pickup_date', prevMonthEndISO + 'T23:59:59')
-        .neq('customer_email', 'admin@dr7.app'),
+        .neq('customer_email', 'admin@dr7.app')
+        .not('vehicle_plate', 'in', '("TEST000","TEST002")'),
       // 4. All customers for new/returning analysis
       supabase.from('customers_extended')
         .select('id, created_at, nome, cognome'),

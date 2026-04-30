@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { TEST_PLATE_FILTER } from '../../../utils/testPlates'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { logger } from '../../../utils/logger'
@@ -267,6 +268,7 @@ export default function UnpaidBookingsTab() {
         .select('*')
         .not('status', 'in', '(cancelled,annullata,completed,completata,deleted)')
         .neq('customer_name', 'Lavaggio Rientro')
+        .not('vehicle_plate', 'in', TEST_PLATE_FILTER)
         .order('created_at', { ascending: false })
 
       if (activeErr) throw activeErr
@@ -279,6 +281,7 @@ export default function UnpaidBookingsTab() {
         .select('*')
         .in('status', ['cancelled', 'annullata', 'completed', 'completata'])
         .neq('customer_name', 'Lavaggio Rientro')
+        .not('vehicle_plate', 'in', TEST_PLATE_FILTER)
         .or('booking_details->penalties.neq.[],booking_details->danni.neq.[]')
         .order('created_at', { ascending: false })
 
@@ -295,6 +298,7 @@ export default function UnpaidBookingsTab() {
         .in('status', ['completed', 'completata'])
         .not('payment_status', 'in', '(paid,completed,succeeded)')
         .neq('customer_name', 'Lavaggio Rientro')
+        .not('vehicle_plate', 'in', TEST_PLATE_FILTER)
         .order('created_at', { ascending: false })
 
       const seen = new Set((activeData || []).map(b => b.id))

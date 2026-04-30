@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { normalizeBooking, computeLanes, type CalendarEvent } from '../../../utils/calendarLogic'
+import { TEST_PLATE_FILTER } from '../../../utils/testPlates'
 import BookingDetailsPanel from './BookingDetailsPanel'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -98,6 +99,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           .select('*')
           .neq('status', 'cancelled')
           .neq('status', 'annullata')
+          .not('vehicle_plate', 'in', TEST_PLATE_FILTER)
           .order('pickup_date', { ascending: true })
         allBookings = data
       }

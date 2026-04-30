@@ -279,63 +279,88 @@ const handler: Handler = async (event) => {
       }
 
       case 'site_referrals': {
-        // 1. customers who used a referral code
-        const { data: referees, error: refErr } = await supabase
+        // Source 1: customers_extended attributions (signup with ?ref=)
+        const { data: extendedRefs, error: refErr } = await supabase
           .from('customers_extended')
           .select('user_id, nome, cognome, email, created_at, referred_by_user_id')
-          .not('referred_by_user_id', 'is', null)
-          .order('created_at', { ascending: false });
+          .not('referred_by_user_id', 'is', null);
 
         if (refErr) {
           return { statusCode: 500, headers, body: JSON.stringify({ error: refErr.message }) };
         }
 
-        const referrerIds = Array.from(new Set((referees || [])
-          .map((r: any) => r.referred_by_user_id)
-          .filter(Boolean))) as string[];
+        // Source 2: referral_bonuses (payouts — authoritative for "actually rewarded")
+        const { data: bonuses, error: bonusErr } = await supabase
+          .from('referral_bonuses')
+          .select('referrer_user_id, referee_user_id, amount, created_at');
 
-        const referrerMap: Record<string, { name: string; code: string | null; email: string | null }> = {};
-        if (referrerIds.length > 0) {
-          const { data: referrers } = await supabase
+        if (bonusErr) {
+          return { statusCode: 500, headers, body: JSON.stringify({ error: bonusErr.message }) };
+        }
+
+        // Build authoritative attribution per referee. customers_extended wins
+        // over bonuses when both exist; bonuses fill in missing pairs.
+        type Pair = { referee_user_id: string; referrer_user_id: string };
+        const pairsByReferee = new Map<string, Pair>();
+        for (const r of extendedRefs || []) {
+          if (r.user_id && r.referred_by_user_id) {
+            pairsByReferee.set(r.user_id, { referee_user_id: r.user_id, referrer_user_id: r.referred_by_user_id });
+          }
+        }
+        for (const b of bonuses || []) {
+          if (b.referee_user_id && b.referrer_user_id && !pairsByReferee.has(b.referee_user_id)) {
+            pairsByReferee.set(b.referee_user_id, { referee_user_id: b.referee_user_id, referrer_user_id: b.referrer_user_id });
+          }
+        }
+
+        const allUserIds = Array.from(new Set([
+          ...Array.from(pairsByReferee.values()).flatMap(p => [p.referee_user_id, p.referrer_user_id]),
+        ]));
+
+        // Profile lookup for both referees and referrers
+        const profileMap: Record<string, { name: string; email: string | null; code: string | null; created_at: string | null }> = {};
+        if (allUserIds.length > 0) {
+          const { data: profiles } = await supabase
             .from('customers_extended')
-            .select('user_id, nome, cognome, email, referral_code')
-            .in('user_id', referrerIds);
-          for (const r of referrers || []) {
-            referrerMap[r.user_id] = {
-              name: `${r.nome || ''} ${r.cognome || ''}`.trim() || '(senza nome)',
-              code: r.referral_code,
-              email: r.email,
+            .select('user_id, nome, cognome, email, referral_code, created_at')
+            .in('user_id', allUserIds);
+          for (const p of profiles || []) {
+            profileMap[p.user_id] = {
+              name: `${p.nome || ''} ${p.cognome || ''}`.trim() || '(senza nome)',
+              email: p.email,
+              code: p.referral_code,
+              created_at: p.created_at,
             };
           }
         }
 
-        const refereeIds = (referees || []).map((r: any) => r.user_id);
         const bonusMap: Record<string, { amount: number; date: string }> = {};
-        if (refereeIds.length > 0) {
-          const { data: bonuses } = await supabase
-            .from('referral_bonuses')
-            .select('referee_user_id, amount, created_at')
-            .in('referee_user_id', refereeIds);
-          for (const b of bonuses || []) {
+        for (const b of bonuses || []) {
+          if (b.referee_user_id) {
             bonusMap[b.referee_user_id] = { amount: Number(b.amount || 0), date: b.created_at };
           }
         }
 
-        const merged = (referees || []).map((r: any) => {
-          const ref = referrerMap[r.referred_by_user_id];
-          const bonus = bonusMap[r.user_id];
+        const merged = Array.from(pairsByReferee.values()).map((p) => {
+          const referee = profileMap[p.referee_user_id];
+          const referrer = profileMap[p.referrer_user_id];
+          const bonus = bonusMap[p.referee_user_id];
           return {
-            referee_user_id: r.user_id,
-            referee_name: `${r.nome || ''} ${r.cognome || ''}`.trim() || '(senza nome)',
-            referee_email: r.email,
-            referee_signup_date: r.created_at,
-            referrer_user_id: r.referred_by_user_id,
-            referrer_name: ref?.name || '(referente sconosciuto)',
-            referrer_code: ref?.code || null,
-            referrer_email: ref?.email || null,
+            referee_user_id: p.referee_user_id,
+            referee_name: referee?.name || '(cliente sconosciuto)',
+            referee_email: referee?.email || null,
+            referee_signup_date: referee?.created_at || bonus?.date || null,
+            referrer_user_id: p.referrer_user_id,
+            referrer_name: referrer?.name || '(referente sconosciuto)',
+            referrer_code: referrer?.code || null,
+            referrer_email: referrer?.email || null,
             bonus_amount: bonus?.amount ?? null,
             bonus_date: bonus?.date ?? null,
           };
+        }).sort((a, b) => {
+          const da = a.bonus_date || a.referee_signup_date || '';
+          const db = b.bonus_date || b.referee_signup_date || '';
+          return db.localeCompare(da);
         });
 
         return { statusCode: 200, headers, body: JSON.stringify({ success: true, referrals: merged }) };
