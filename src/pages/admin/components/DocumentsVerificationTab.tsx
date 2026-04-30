@@ -85,15 +85,37 @@ export default function DocumentsVerificationTab() {
     }
   }, [])
 
-  // Sign preview URLs directly from supabase storage — no Netlify hop.
-  // Limited concurrency (8) so a 800-doc page doesn't open 800 sockets at once.
+  // Sign preview URLs lazily — only for currently-VISIBLE docs (after
+  // the search/status filter is applied). Signing 800 URLs on every page
+  // load floods Supabase with 400s/502s for orphan files and pollutes the
+  // console. This way we sign just what the user is actually looking at.
+  // (filteredDocuments is computed below; we recompute it here for the deps.)
+  const visibleForSign = (() => {
+    const ql = search.trim().toLowerCase()
+    return documents.filter(d => {
+      if (filterStatus !== 'all' && d.status !== filterStatus) return false
+      if (!ql) return true
+      const u = d.user
+      const haystack = [
+        u?.full_name, u?.email, u?.telefono, u?.codice_fiscale,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (u as any)?.nome, (u as any)?.cognome, d.document_type
+      ].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(ql)
+    })
+  })()
+  // Cap at 100 — if user scrolls past that, we'd extend (TODO).
+  const visibleIds = visibleForSign.slice(0, 100).map(d => d.id).join(',')
+
   useEffect(() => {
-    if (documents.length === 0) return
+    if (visibleForSign.length === 0) return
     let cancelled = false
 
     ;(async () => {
-      const queue = documents.filter(d => !!d.bucket && !!d.file_path)
-      const CONCURRENCY = 8
+      const queue = visibleForSign
+        .slice(0, 100)
+        .filter(d => !!d.bucket && !!d.file_path && !previewUrls[d.id])
+      const CONCURRENCY = 4
       let cursor = 0
       const next: Record<string, string> = {}
 
@@ -107,22 +129,21 @@ export default function DocumentsVerificationTab() {
               .createSignedUrl(d.file_path, 3600)
             if (data?.signedUrl) {
               next[d.id] = data.signedUrl
-              // Push partial state every ~25 docs so the user sees progress
-              if (Object.keys(next).length % 25 === 0 && !cancelled) {
-                setPreviewUrls(prev => ({ ...prev, ...next }))
-              }
             }
           } catch {
-            // ignore — placeholder will keep showing
+            // ignore — placeholder stays
           }
         }
       }
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker))
-      if (!cancelled) setPreviewUrls(prev => ({ ...prev, ...next }))
+      if (!cancelled && Object.keys(next).length > 0) {
+        setPreviewUrls(prev => ({ ...prev, ...next }))
+      }
     })()
 
     return () => { cancelled = true }
-  }, [documents])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleIds])
 
   async function loadDocuments() {
     setLoading(true)
