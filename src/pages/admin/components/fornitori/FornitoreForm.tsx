@@ -42,6 +42,8 @@ const CONDIZIONI = [
 export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
     const isEdit = !!fornitore
     const [saving, setSaving] = useState(false)
+    const [errorDetail, setErrorDetail] = useState<string | null>(null)
+    const [errorCopied, setErrorCopied] = useState(false)
     const [data, setData] = useState({
         nome: fornitore?.nome || '',
         piva: fornitore?.piva || '',
@@ -112,17 +114,33 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
             }
             onClose()
         } catch (err) {
-            // Supabase errors are plain objects (PostgrestError) with
-            // message/details/hint/code, not Error instances — pull the
-            // message explicitly so we don't end up with "[object Object]".
             console.error('[FornitoreForm] save error:', err)
             const e = err as { message?: string; details?: string; hint?: string; code?: string }
             const msg = e?.message
                 ? `${e.message}${e.details ? ` — ${e.details}` : ''}${e.hint ? ` (hint: ${e.hint})` : ''}${e.code ? ` [${e.code}]` : ''}`
                 : (err instanceof Error ? err.message : JSON.stringify(err))
-            alert('Errore salvataggio: ' + msg)
+            setErrorDetail(msg)
+            setErrorCopied(false)
         } finally {
             setSaving(false)
+        }
+    }
+
+    async function copyErrorToClipboard() {
+        if (!errorDetail) return
+        try {
+            await navigator.clipboard.writeText(errorDetail)
+            setErrorCopied(true)
+            setTimeout(() => setErrorCopied(false), 2000)
+        } catch {
+            const ta = document.createElement('textarea')
+            ta.value = errorDetail
+            document.body.appendChild(ta)
+            ta.select()
+            document.execCommand('copy')
+            document.body.removeChild(ta)
+            setErrorCopied(true)
+            setTimeout(() => setErrorCopied(false), 2000)
         }
     }
 
@@ -136,6 +154,31 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
                     </h3>
                     <button onClick={onClose} className="text-theme-text-muted text-2xl leading-none hover:text-theme-text-primary">×</button>
                 </div>
+
+                {errorDetail && (
+                    <div className="mb-4 p-4 rounded-lg border border-red-500/40 bg-red-500/10">
+                        <div className="flex justify-between items-start gap-3 mb-2">
+                            <p className="text-red-300 font-semibold text-sm">Errore salvataggio</p>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={copyErrorToClipboard}
+                                    className="text-xs px-2 py-1 rounded bg-red-500/20 text-red-200 hover:bg-red-500/30"
+                                >
+                                    {errorCopied ? 'Copiato!' : 'Copia errore'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setErrorDetail(null)}
+                                    className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-tertiary/70"
+                                >
+                                    Chiudi
+                                </button>
+                            </div>
+                        </div>
+                        <pre className="text-xs text-red-200 whitespace-pre-wrap break-all font-mono leading-relaxed">{errorDetail}</pre>
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
