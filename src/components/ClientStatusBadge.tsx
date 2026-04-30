@@ -7,9 +7,11 @@ interface Props extends ClientStatusLookupKeys {
   hideStandard?: boolean
 }
 
-export default function ClientStatusBadge({ status, customerId, userId, email, size = 'sm', className = '', hideStandard = false }: Props) {
+export default function ClientStatusBadge({ status, customerId, userId, email, phone, size = 'sm', className = '', hideStandard = false }: Props) {
   const { lookup } = useClientStatus()
-  const resolved: ClientStatus | null = status ?? lookup({ customerId, userId, email })
+  const hasAnyKey = !!(customerId || userId || email || phone)
+  let resolved: ClientStatus | null = status ?? lookup({ customerId, userId, email, phone })
+  if (!resolved && hasAnyKey) resolved = 'new'
   if (!resolved) return null
   if (hideStandard && resolved === 'standard') return null
   const meta = clientStatusMeta(resolved)
