@@ -85,14 +85,28 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
       for (let i = 0; i < 50; i++) {
         const { data, error } = await supabase
           .from('customers_extended')
-          .select('id, user_id, email, telefono, status, status_cliente')
+          .select('*')
           .range(from, from + PAGE - 1)
-        if (error) break
+        if (error) {
+          console.warn('[ClientStatusContext] customers_extended fetch error:', error)
+          break
+        }
         if (!data || data.length === 0) break
-        customers.push(...(data as RawCustomer[]))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const row of data as any[]) {
+          customers.push({
+            id: row.id,
+            user_id: row.user_id ?? null,
+            email: row.email ?? null,
+            telefono: row.telefono ?? null,
+            status: (row.status ?? null) as RawStatus,
+            status_cliente: (row.status_cliente ?? null) as RawStatus,
+          })
+        }
         if (data.length < PAGE) break
         from += PAGE
       }
+      console.info('[ClientStatusContext] loaded customers:', customers.length)
 
       const dr7UserIds = new Set<string>()
       const dr7Emails = new Set<string>()
