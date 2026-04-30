@@ -129,11 +129,31 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  function buildShareText(code: string, link: string) {
+    return `DR7 PAGA I SUOI UTENTI!\n\nRegistrati gratis e ricevi 15 EUR di credito + Buono da 50 EUR per noleggio supercar.\nUsa il mio codice: ${code}\n\n${link}`
+  }
+
   function shareWhatsApp() {
     if (!data) return
     const link = `${window.location.origin}/referral?ref=${data.participant.referral_code}`
-    const text = `🔥 DR7 PAGA I SUOI UTENTI!\n\nRegistrati gratis e ricevi €15 di credito + Buono da €50 per noleggio supercar!\nUsa il mio codice: ${data.participant.referral_code}\n\n${link}`
+    const text = buildShareText(data.participant.referral_code, link)
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
+  async function shareToFriends() {
+    if (!data) return
+    const link = `${window.location.origin}/referral?ref=${data.participant.referral_code}`
+    const text = buildShareText(data.participant.referral_code, link)
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> }
+    if (typeof nav.share === 'function') {
+      try {
+        await nav.share({ title: 'DR7 - Invito amici', text, url: link })
+        return
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return
+      }
+    }
+    shareWhatsApp()
   }
 
   if (loading) {
@@ -176,18 +196,28 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
           <p className="text-3xl font-bold text-white font-mono tracking-widest">{data.participant.referral_code}</p>
         </div>
 
+        <button
+          onClick={shareToFriends}
+          className="w-full py-3.5 bg-[#2d8a7e] hover:bg-[#247a6f] rounded-xl text-white font-bold text-base transition-colors flex items-center justify-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          Invia codice agli amici
+        </button>
+
         <div className="flex gap-3">
           <button
             onClick={copyReferralLink}
-            className="flex-1 py-3 bg-white/10 border border-white/20 rounded-xl text-white font-semibold hover:bg-white/20 transition-colors text-sm"
+            className="flex-1 py-2.5 bg-white/10 border border-white/20 rounded-xl text-white font-semibold hover:bg-white/20 transition-colors text-sm"
           >
             {copied ? 'Copiato!' : 'Copia Link'}
           </button>
           <button
             onClick={shareWhatsApp}
-            className="flex-1 py-3 bg-green-600 rounded-xl text-white font-semibold hover:bg-green-700 transition-colors text-sm"
+            className="flex-1 py-2.5 bg-green-600 rounded-xl text-white font-semibold hover:bg-green-700 transition-colors text-sm"
           >
-            Condividi WhatsApp
+            WhatsApp
           </button>
         </div>
       </div>
