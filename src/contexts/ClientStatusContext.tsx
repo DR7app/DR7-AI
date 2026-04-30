@@ -1,25 +1,31 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from '../supabaseClient'
 
-export type ClientStatus = 'new' | 'member' | 'elite' | 'dr7_club' | 'blacklist' | 'standard'
+export type ClientTier = 'new' | 'member' | 'elite' | 'blacklist' | 'standard'
 
-export interface ClientStatusMeta {
-  status: ClientStatus
+export interface ClientTierMeta {
+  tier: ClientTier
   label: string
   badgeClass: string
 }
 
-const META: Record<ClientStatus, ClientStatusMeta> = {
-  dr7_club:  { status: 'dr7_club',  label: 'DR7 Club',  badgeClass: 'bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50' },
-  elite:     { status: 'elite',     label: 'Elite',     badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/50' },
-  member:    { status: 'member',    label: 'Member',    badgeClass: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
-  blacklist: { status: 'blacklist', label: 'Blacklist', badgeClass: 'bg-red-500/20 text-red-400 border-red-500/50' },
-  new:       { status: 'new',       label: 'NEW',       badgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' },
-  standard:  { status: 'standard',  label: 'Standard',  badgeClass: 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border' },
+const TIER_META: Record<ClientTier, ClientTierMeta> = {
+  elite:     { tier: 'elite',     label: 'Elite',     badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/50' },
+  member:    { tier: 'member',    label: 'Member',    badgeClass: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
+  blacklist: { tier: 'blacklist', label: 'Blacklist', badgeClass: 'bg-red-500/20 text-red-400 border-red-500/50' },
+  new:       { tier: 'new',       label: 'New entry', badgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' },
+  standard:  { tier: 'standard',  label: 'Standard',  badgeClass: 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border' },
 }
 
-export function clientStatusMeta(status: ClientStatus): ClientStatusMeta {
-  return META[status]
+export const DR7_CLUB_BADGE_CLASS = 'bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50'
+
+export function clientTierMeta(tier: ClientTier): ClientTierMeta {
+  return TIER_META[tier]
+}
+
+export interface ClientStatusInfo {
+  tier: ClientTier
+  dr7Club: boolean
 }
 
 export interface ClientStatusLookupKeys {
@@ -39,7 +45,7 @@ function normalizePhone(p?: string | null): string | null {
 interface ClientStatusContextValue {
   loading: boolean
   refresh: () => Promise<void>
-  lookup: (keys: ClientStatusLookupKeys) => ClientStatus | null
+  lookup: (keys: ClientStatusLookupKeys) => ClientStatusInfo | null
 }
 
 const Ctx = createContext<ClientStatusContextValue | undefined>(undefined)
@@ -60,10 +66,10 @@ interface RawCustomer {
 
 export function ClientStatusProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
-  const [byCustomerId, setByCustomerId] = useState<Map<string, ClientStatus>>(new Map())
-  const [byUserId, setByUserId] = useState<Map<string, ClientStatus>>(new Map())
-  const [byEmail, setByEmail] = useState<Map<string, ClientStatus>>(new Map())
-  const [byPhone, setByPhone] = useState<Map<string, ClientStatus>>(new Map())
+  const [byCustomerId, setByCustomerId] = useState<Map<string, ClientStatusInfo>>(new Map())
+  const [byUserId, setByUserId] = useState<Map<string, ClientStatusInfo>>(new Map())
+  const [byEmail, setByEmail] = useState<Map<string, ClientStatusInfo>>(new Map())
+  const [byPhone, setByPhone] = useState<Map<string, ClientStatusInfo>>(new Map())
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -120,38 +126,38 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
         }
       } catch { /* ignore */ }
 
-      const idMap = new Map<string, ClientStatus>()
-      const userMap = new Map<string, ClientStatus>()
-      const emailMap = new Map<string, ClientStatus>()
-      const phoneMap = new Map<string, ClientStatus>()
+      const idMap = new Map<string, ClientStatusInfo>()
+      const userMap = new Map<string, ClientStatusInfo>()
+      const emailMap = new Map<string, ClientStatusInfo>()
+      const phoneMap = new Map<string, ClientStatusInfo>()
 
       for (const c of customers) {
         const emailLc = c.email ? c.email.toLowerCase() : null
-        const isDr7 = (c.user_id && dr7UserIds.has(c.user_id)) || (emailLc && dr7Emails.has(emailLc))
+        const isDr7 = !!((c.user_id && dr7UserIds.has(c.user_id)) || (emailLc && dr7Emails.has(emailLc)))
         const userBkCount = c.user_id ? (bookingCountByUser.get(c.user_id) || 0) : 0
         const emailBkCount = emailLc ? (bookingCountByEmail.get(emailLc) || 0) : 0
         const bkCount = Math.max(userBkCount, emailBkCount)
 
-        let status: ClientStatus
-        if (c.status_cliente === 'blacklist') status = 'blacklist'
-        else if (isDr7) status = 'dr7_club'
-        else if (c.status_cliente === 'elite') status = 'elite'
-        else if (c.status_cliente === 'member') status = 'member'
-        else if (bkCount <= 1) status = 'new'
-        else status = 'standard'
+        let tier: ClientTier
+        if (c.status_cliente === 'blacklist') tier = 'blacklist'
+        else if (c.status_cliente === 'elite') tier = 'elite'
+        else if (c.status_cliente === 'member') tier = 'member'
+        else if (bkCount <= 1) tier = 'new'
+        else tier = 'standard'
 
-        idMap.set(c.id, status)
-        if (c.user_id) userMap.set(c.user_id, status)
-        if (emailLc) emailMap.set(emailLc, status)
+        const info: ClientStatusInfo = { tier, dr7Club: isDr7 }
+        idMap.set(c.id, info)
+        if (c.user_id) userMap.set(c.user_id, info)
+        if (emailLc) emailMap.set(emailLc, info)
         const phoneKey = normalizePhone(c.telefono)
-        if (phoneKey) phoneMap.set(phoneKey, status)
+        if (phoneKey) phoneMap.set(phoneKey, info)
       }
 
       for (const uid of dr7UserIds) {
-        if (!userMap.has(uid)) userMap.set(uid, 'dr7_club')
+        if (!userMap.has(uid)) userMap.set(uid, { tier: 'new', dr7Club: true })
       }
       for (const em of dr7Emails) {
-        if (!emailMap.has(em)) emailMap.set(em, 'dr7_club')
+        if (!emailMap.has(em)) emailMap.set(em, { tier: 'new', dr7Club: true })
       }
 
       setByCustomerId(idMap)
