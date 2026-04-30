@@ -71,7 +71,7 @@ export const handler: Handler = async (event) => {
         .from('bookings')
         .select('id, user_id, customer_name, customer_email, customer_phone, price_total, status, service_type, payment_method, payment_status, booking_details, pickup_date, dropoff_date, appointment_date, vehicle_id, booked_at, created_at'),
       supabase.from('vehicles').select('id, category'),
-      supabase.from('cauzioni').select('cliente_id, importo, stato'),
+      supabase.from('cauzioni').select('cliente_id, importo, stato, riferimento_contratto_id'),
       supabase.from('fatture').select('id, booking_id, importo_totale, items, customer_name, customer_email'),
       supabase.from('dr7_club_subscriptions').select('user_id, plan, status, expires_at').eq('status', 'active'),
       supabase.from('user_credit_balance').select('user_id, balance'),
@@ -244,10 +244,11 @@ export const handler: Handler = async (event) => {
 
     const bookingToCustomerKey = new Map<string, string>()
 
+    // Walk every booking — cancelled, internal, unclassified included — so
+    // downstream lookups (fatture by booking_id, cauzioni by riferimento_contratto_id)
+    // can always resolve back to a customer. Spend aggregation is the only step
+    // gated by classifyBooking() since "internal" bookings shouldn't inflate KPIs.
     for (const b of (bookingsRes.data || [])) {
-      const type = classifyBooking(b)
-      if (!type) continue
-
       const details = b.booking_details || {}
       const uid = b.user_id || details?.customer?.customerId || null
       const email = b.customer_email || details?.customer?.email || null
@@ -265,11 +266,32 @@ export const handler: Handler = async (event) => {
         if (!c.ultima_prenotazione || ts > c.ultima_prenotazione) c.ultima_prenotazione = ts
       }
 
+      // Pending penali/danni inside booking_details (not yet invoiced) — count
+      // these for ALL bookings, even cancelled/internal, so the customer's risk
+      // record is never silently dropped.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pendingPenali = (details.penalties || []).filter((p: any) => p.paymentStatus === 'pending')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pendingDanni = (details.danni || []).filter((d: any) => d.paymentStatus === 'pending')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const p of pendingPenali) {
+        const total = p.total || (p.amount || 0) * (p.quantity || 1)
+        c.penali_spesa_eur += total; c.penali_eventi += 1
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const d of pendingDanni) {
+        const total = d.total || (d.amount || 0) * (d.quantity || 1)
+        c.danni_spesa_eur += total; c.danni_eventi += 1
+      }
+
       const status = norm(b.status)
       if (status === 'cancelled' || status === 'annullata') {
         c.annullate_count += 1
         continue
       }
+
+      const type = classifyBooking(b)
+      if (!type) continue
 
       const priceCents = Number(b.price_total) || 0
       const isRental = type === 'supercar' || type === 'urban' || type === 'aziendali'
@@ -290,22 +312,6 @@ export const handler: Handler = async (event) => {
         c.lavaggi_spesa_cents += priceCents; c.lavaggi_prenotazioni += 1
       } else if (type === 'mechanical') {
         c.meccanica_spesa_cents += priceCents; c.meccanica_prenotazioni += 1
-      }
-
-      // Pending penali/danni inside booking_details (not yet invoiced)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pendingPenali = (details.penalties || []).filter((p: any) => p.paymentStatus === 'pending')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pendingDanni = (details.danni || []).filter((d: any) => d.paymentStatus === 'pending')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const p of pendingPenali) {
-        const total = p.total || (p.amount || 0) * (p.quantity || 1)
-        c.penali_spesa_eur += total; c.penali_eventi += 1
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const d of pendingDanni) {
-        const total = d.total || (d.amount || 0) * (d.quantity || 1)
-        c.danni_spesa_eur += total; c.danni_eventi += 1
       }
     }
 
@@ -344,17 +350,27 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // 9) Cauzioni — cliente_id matches customers_extended.id directly.
+    // 9) Cauzioni — match by cliente_id, fall back to riferimento_contratto_id (booking).
+    //    Bloccata = security deposit currently held. Incassata = cashed in for damage,
+    //    so it counts as a danno (mirrors what GestioneDanniTab / CauzioniTab show).
     if (cauzioniRes.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const cau of cauzioniRes.data as any[]) {
-        if (!cau.cliente_id) continue
-        const target = customerMap[cau.cliente_id]
-        if (!target) continue
+        let key: string | undefined = cau.cliente_id && customerMap[cau.cliente_id] ? cau.cliente_id : undefined
+        if (!key && cau.riferimento_contratto_id && bookingToCustomerKey.has(cau.riferimento_contratto_id)) {
+          key = bookingToCustomerKey.get(cau.riferimento_contratto_id)
+        }
+        if (!key) continue
+        const c = customerMap[key]
         const stato = norm(cau.stato)
+        const importo = Number(cau.importo) || 0
         if (stato === 'bloccata') {
-          target.cauzioni_attive_count += 1
-          target.cauzioni_attive_eur += Number(cau.importo) || 0
+          c.cauzioni_attive_count += 1
+          c.cauzioni_attive_eur += importo
+        } else if (stato === 'incassata') {
+          // Cashed-in security deposit = damage payment.
+          c.danni_spesa_eur += importo
+          c.danni_eventi += 1
         }
       }
     }
