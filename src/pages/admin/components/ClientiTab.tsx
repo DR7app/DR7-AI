@@ -53,7 +53,7 @@ const tierMeta: Record<ClubTier, { label: string; reward: string; badge: string 
 }
 
 export default function ClientiTab() {
-  const { refresh: refreshClientStatus } = useClientStatus()
+  const { refresh: refreshClientStatus, setTier: setClientStatusTier } = useClientStatus()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -215,6 +215,11 @@ export default function ClientiTab() {
       setCustomers(prev => prev.map(c =>
         c.id === customerId ? { ...c, status_cliente: newStatus } : c
       ))
+      const target = customers.find(c => c.id === customerId)
+      setClientStatusTier(
+        { customerId, userId: target?.user_id, email: target?.email, phone: target?.telefono },
+        newStatus
+      )
       refreshClientStatus()
     } catch (error) {
       console.error('Failed to update status:', error)

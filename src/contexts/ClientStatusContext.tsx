@@ -46,6 +46,7 @@ interface ClientStatusContextValue {
   loading: boolean
   refresh: () => Promise<void>
   lookup: (keys: ClientStatusLookupKeys) => ClientStatusInfo | null
+  setTier: (keys: ClientStatusLookupKeys, tier: ClientTier) => void
 }
 
 const Ctx = createContext<ClientStatusContextValue | undefined>(undefined)
@@ -182,9 +183,27 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
     load()
   }, [load])
 
+  const setTier = useCallback((keys: ClientStatusLookupKeys, tier: ClientTier) => {
+    const apply = <K,>(map: Map<K, ClientStatusInfo>, key: K | null | undefined): Map<K, ClientStatusInfo> => {
+      if (!key) return map
+      const prev = map.get(key)
+      const next = new Map(map)
+      next.set(key, { tier, dr7Club: prev?.dr7Club ?? false })
+      return next
+    }
+    if (keys.customerId) setByCustomerId(prev => apply(prev, keys.customerId))
+    if (keys.userId) setByUserId(prev => apply(prev, keys.userId))
+    if (keys.email) setByEmail(prev => apply(prev, keys.email!.toLowerCase()))
+    if (keys.phone) {
+      const k = normalizePhone(keys.phone)
+      if (k) setByPhone(prev => apply(prev, k))
+    }
+  }, [])
+
   const value = useMemo<ClientStatusContextValue>(() => ({
     loading,
     refresh: load,
+    setTier,
     lookup: ({ customerId, userId, email, phone }) => {
       if (customerId) {
         const s = byCustomerId.get(customerId)
@@ -207,7 +226,7 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
       }
       return null
     },
-  }), [loading, load, byCustomerId, byUserId, byEmail, byPhone])
+  }), [loading, load, setTier, byCustomerId, byUserId, byEmail, byPhone])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

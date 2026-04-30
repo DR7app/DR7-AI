@@ -101,7 +101,7 @@ interface Customer {
 }
 
 export default function CustomersTab() {
-  const { refresh: refreshClientStatus } = useClientStatus()
+  const { refresh: refreshClientStatus, setTier: setClientStatusTier } = useClientStatus()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1379,6 +1379,11 @@ export default function CustomersTab() {
       setAllCustomers(prev => prev.map(c =>
         c.id === customerId ? { ...c, status: newStatus } : c
       ))
+      const target = customers.find(c => c.id === customerId)
+      setClientStatusTier(
+        { customerId, userId: target?.user_id, email: target?.email, phone: target?.phone },
+        (newStatus ?? 'standard')
+      )
       refreshClientStatus()
 
       alert(`Status aggiornato a: ${statusLabel}`)
@@ -1412,6 +1417,12 @@ export default function CustomersTab() {
       setAllCustomers(prev => prev.map(c =>
         selectedCustomerIds.has(c.id) ? { ...c, status: newStatus } : c
       ))
+      const tier = (newStatus ?? 'standard')
+      customers.forEach(c => {
+        if (selectedCustomerIds.has(c.id)) {
+          setClientStatusTier({ customerId: c.id, userId: c.user_id, email: c.email, phone: c.phone }, tier)
+        }
+      })
       refreshClientStatus()
 
       // Clear selection
