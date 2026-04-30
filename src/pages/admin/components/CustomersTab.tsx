@@ -2518,6 +2518,16 @@ export default function CustomersTab() {
                 </th>
                 {[
                   { field: 'name' as SortField, label: 'Nome' },
+                ].map(col => (
+                  <th key={col.field}
+                    className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary cursor-pointer select-none hover:text-dr7-gold transition-colors"
+                    onClick={() => { if (sortField === col.field) { setSortDir(d => d === 'asc' ? 'desc' : 'asc') } else { setSortField(col.field); setSortDir('asc') }; setCurrentPage(1) }}
+                  >
+                    {col.label} {sortField === col.field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                  </th>
+                ))}
+                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                {[
                   { field: 'tipo' as SortField, label: 'Tipo Cliente' },
                   { field: 'email' as SortField, label: 'Email' },
                   { field: 'phone' as SortField, label: 'Telefono' },
@@ -2564,10 +2574,10 @@ export default function CustomersTab() {
                     />
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span>{customer.full_name}</span>
-                      <ClientStatusBadge customerId={customer.id} userId={customer.user_id} email={customer.email} />
-                    </div>
+                    {customer.full_name}
+                  </td>
+                  <td className="px-4 py-3 text-sm whitespace-nowrap">
+                    <ClientStatusBadge customerId={customer.id} userId={customer.user_id} email={customer.email} />
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {customer.tipo_cliente ? (
