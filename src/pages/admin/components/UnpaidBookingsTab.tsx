@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
-import { TEST_PLATE_FILTER } from '../../../utils/testPlates'
+import { isTestPlate } from '../../../utils/testPlates'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { logger } from '../../../utils/logger'
@@ -262,13 +262,19 @@ export default function UnpaidBookingsTab() {
   async function loadUnpaidBookings() {
     setLoading(true)
     try {
+      // Test-plate exclusion is done in JS (after the fetch) instead of via
+      // PostgREST `.not('vehicle_plate', 'in', ...)` because SQL three-valued
+      // logic drops NULL-plate rows from `column NOT IN (...)`. Car wash
+      // bookings often have NULL plate, so a DB-side filter silently hid
+      // them from "In attesa di pagamento" even though they appeared in
+      // the wash calendar.
+
       // Primary fetch: active/pending bookings that might be unpaid.
       const { data: activeData, error: activeErr } = await supabase
         .from('bookings')
         .select('*')
         .not('status', 'in', '(cancelled,annullata,completed,completata,deleted)')
         .neq('customer_name', 'Lavaggio Rientro')
-        .not('vehicle_plate', 'in', TEST_PLATE_FILTER)
         .order('created_at', { ascending: false })
 
       if (activeErr) throw activeErr
@@ -281,7 +287,6 @@ export default function UnpaidBookingsTab() {
         .select('*')
         .in('status', ['cancelled', 'annullata', 'completed', 'completata'])
         .neq('customer_name', 'Lavaggio Rientro')
-        .not('vehicle_plate', 'in', TEST_PLATE_FILTER)
         .or('booking_details->penalties.neq.[],booking_details->danni.neq.[]')
         .order('created_at', { ascending: false })
 
@@ -298,7 +303,6 @@ export default function UnpaidBookingsTab() {
         .in('status', ['completed', 'completata'])
         .not('payment_status', 'in', '(paid,completed,succeeded)')
         .neq('customer_name', 'Lavaggio Rientro')
-        .not('vehicle_plate', 'in', TEST_PLATE_FILTER)
         .order('created_at', { ascending: false })
 
       const seen = new Set((activeData || []).map(b => b.id))
@@ -311,7 +315,8 @@ export default function UnpaidBookingsTab() {
           merged.push(b)
         }
       }
-      const data = merged
+      // Filter out test plates in JS (NULL-safe: NULL plates pass through).
+      const data = merged.filter(b => !isTestPlate(b.vehicle_plate))
       const error = null as null | { message: string }
 
       if (error) throw error
