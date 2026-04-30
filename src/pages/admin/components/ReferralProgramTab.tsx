@@ -144,62 +144,8 @@ export default function ReferralProgramTab() {
   async function loadSiteReferrals() {
     setSiteLoading(true)
     try {
-      // 1. Customers who used a referral code
-      const { data: referees, error: refereesErr } = await supabase
-        .from('customers_extended')
-        .select('user_id, nome, cognome, email, created_at, referred_by_user_id')
-        .not('referred_by_user_id', 'is', null)
-        .order('created_at', { ascending: false })
-      if (refereesErr) throw refereesErr
-
-      const referrerIds = Array.from(new Set((referees || []).map(r => r.referred_by_user_id).filter(Boolean) as string[]))
-
-      // 2. Referrer info
-      let referrersById = new Map<string, { name: string; code: string | null; email: string | null }>()
-      if (referrerIds.length > 0) {
-        const { data: referrers } = await supabase
-          .from('customers_extended')
-          .select('user_id, nome, cognome, email, referral_code')
-          .in('user_id', referrerIds)
-        for (const r of referrers || []) {
-          referrersById.set(r.user_id, {
-            name: `${r.nome || ''} ${r.cognome || ''}`.trim() || '(senza nome)',
-            code: r.referral_code,
-            email: r.email,
-          })
-        }
-      }
-
-      // 3. Referral bonuses (paid)
-      const refereeIds = (referees || []).map(r => r.user_id)
-      let bonusByReferee = new Map<string, { amount: number; date: string }>()
-      if (refereeIds.length > 0) {
-        const { data: bonuses } = await supabase
-          .from('referral_bonuses')
-          .select('referee_user_id, amount, created_at')
-          .in('referee_user_id', refereeIds)
-        for (const b of bonuses || []) {
-          bonusByReferee.set(b.referee_user_id, { amount: Number(b.amount || 0), date: b.created_at })
-        }
-      }
-
-      const merged: SiteReferral[] = (referees || []).map(r => {
-        const ref = referrersById.get(r.referred_by_user_id as string)
-        const bonus = bonusByReferee.get(r.user_id)
-        return {
-          referee_user_id: r.user_id,
-          referee_name: `${r.nome || ''} ${r.cognome || ''}`.trim() || '(senza nome)',
-          referee_email: r.email,
-          referee_signup_date: r.created_at,
-          referrer_user_id: r.referred_by_user_id as string,
-          referrer_name: ref?.name || '(referente sconosciuto)',
-          referrer_code: ref?.code || null,
-          referrer_email: ref?.email || null,
-          bonus_amount: bonus?.amount ?? null,
-          bonus_date: bonus?.date ?? null,
-        }
-      })
-      setSiteReferrals(merged)
+      const json = await callReferralAdmin('site_referrals')
+      setSiteReferrals((json.referrals || []) as SiteReferral[])
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[ReferralProgramTab] site referrals error:', err)

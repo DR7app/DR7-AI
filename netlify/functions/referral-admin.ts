@@ -278,6 +278,69 @@ const handler: Handler = async (event) => {
         };
       }
 
+      case 'site_referrals': {
+        // 1. customers who used a referral code
+        const { data: referees, error: refErr } = await supabase
+          .from('customers_extended')
+          .select('user_id, nome, cognome, email, created_at, referred_by_user_id')
+          .not('referred_by_user_id', 'is', null)
+          .order('created_at', { ascending: false });
+
+        if (refErr) {
+          return { statusCode: 500, headers, body: JSON.stringify({ error: refErr.message }) };
+        }
+
+        const referrerIds = Array.from(new Set((referees || [])
+          .map((r: any) => r.referred_by_user_id)
+          .filter(Boolean))) as string[];
+
+        const referrerMap: Record<string, { name: string; code: string | null; email: string | null }> = {};
+        if (referrerIds.length > 0) {
+          const { data: referrers } = await supabase
+            .from('customers_extended')
+            .select('user_id, nome, cognome, email, referral_code')
+            .in('user_id', referrerIds);
+          for (const r of referrers || []) {
+            referrerMap[r.user_id] = {
+              name: `${r.nome || ''} ${r.cognome || ''}`.trim() || '(senza nome)',
+              code: r.referral_code,
+              email: r.email,
+            };
+          }
+        }
+
+        const refereeIds = (referees || []).map((r: any) => r.user_id);
+        const bonusMap: Record<string, { amount: number; date: string }> = {};
+        if (refereeIds.length > 0) {
+          const { data: bonuses } = await supabase
+            .from('referral_bonuses')
+            .select('referee_user_id, amount, created_at')
+            .in('referee_user_id', refereeIds);
+          for (const b of bonuses || []) {
+            bonusMap[b.referee_user_id] = { amount: Number(b.amount || 0), date: b.created_at };
+          }
+        }
+
+        const merged = (referees || []).map((r: any) => {
+          const ref = referrerMap[r.referred_by_user_id];
+          const bonus = bonusMap[r.user_id];
+          return {
+            referee_user_id: r.user_id,
+            referee_name: `${r.nome || ''} ${r.cognome || ''}`.trim() || '(senza nome)',
+            referee_email: r.email,
+            referee_signup_date: r.created_at,
+            referrer_user_id: r.referred_by_user_id,
+            referrer_name: ref?.name || '(referente sconosciuto)',
+            referrer_code: ref?.code || null,
+            referrer_email: ref?.email || null,
+            bonus_amount: bonus?.amount ?? null,
+            bonus_date: bonus?.date ?? null,
+          };
+        });
+
+        return { statusCode: 200, headers, body: JSON.stringify({ success: true, referrals: merged }) };
+      }
+
       default:
         return {
           statusCode: 400,
