@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
+import { useClientStatus } from '../../../contexts/ClientStatusContext'
 
 interface Customer {
     id: string
@@ -44,6 +45,15 @@ export default function CampagnaMarketingTab() {
 
     const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
+
+    // Exclusion filters (blacklist excluded by default — never message blacklisted leads)
+    const [excludeBlacklist, setExcludeBlacklist] = useState(true)
+    const [excludeMember, setExcludeMember] = useState(false)
+    const [excludeElite, setExcludeElite] = useState(false)
+    const [excludeNewEntry, setExcludeNewEntry] = useState(false)
+    const [excludeDr7Club, setExcludeDr7Club] = useState(false)
+
+    const clientStatus = useClientStatus()
 
     useEffect(() => {
         loadCustomers()
@@ -189,7 +199,7 @@ export default function CampagnaMarketingTab() {
                     image_url: imageUrls[0] || null,
                     video_url,
                     channel: 'whatsapp',
-                    audience: selectedIds.size === customers.length ? 'all' : 'selected',
+                    audience: selectedIds.size === eligible.length ? 'all' : 'selected',
                     total_recipients: recipients.length,
                     status: 'pending',
                 })
@@ -257,7 +267,30 @@ export default function CampagnaMarketingTab() {
         }
     }
 
-    const filtered = customers.filter(c => {
+    // Apply tier / DR7 Club exclusions BEFORE search + pagination so the
+    // counts shown ("Seleziona tutti", "Selezionati") reflect what will
+    // actually be sent.
+    const eligible = useMemo(() => {
+        return customers.filter(c => {
+            const status = clientStatus.lookup({
+                customerId: c.id,
+                email: c.email,
+                phone: c.phone,
+            })
+            const tier = status?.tier ?? 'new'
+            const isDr7 = status?.dr7Club ?? false
+            if (excludeBlacklist && tier === 'blacklist') return false
+            if (excludeMember && tier === 'member') return false
+            if (excludeElite && tier === 'elite') return false
+            if (excludeNewEntry && tier === 'new') return false
+            if (excludeDr7Club && isDr7) return false
+            return true
+        })
+    }, [customers, clientStatus, excludeBlacklist, excludeMember, excludeElite, excludeNewEntry, excludeDr7Club])
+
+    const excludedCount = customers.length - eligible.length
+
+    const filtered = eligible.filter(c => {
         if (!searchQuery) return true
         const q = searchQuery.toLowerCase()
         return (
@@ -268,6 +301,21 @@ export default function CampagnaMarketingTab() {
     })
     const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
     const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+
+    // Drop selected ids that have become ineligible after exclusion change
+    useEffect(() => {
+        if (selectedIds.size === 0) return
+        const eligibleIds = new Set(eligible.map(c => c.id))
+        let changed = false
+        const next = new Set(selectedIds)
+        for (const id of selectedIds) {
+            if (!eligibleIds.has(id)) {
+                next.delete(id)
+                changed = true
+            }
+        }
+        if (changed) setSelectedIds(next)
+    }, [eligible, selectedIds])
 
     function toggle(id: string) {
         const next = new Set(selectedIds)
@@ -399,6 +447,62 @@ export default function CampagnaMarketingTab() {
                                     Deseleziona
                                 </button>
                             )}
+                        </div>
+                    </div>
+
+                    {/* Exclusion filters */}
+                    <div className="bg-theme-bg-secondary/50 border border-theme-border rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-theme-text-secondary uppercase">
+                                Escludi categorie
+                            </span>
+                            {excludedCount > 0 && (
+                                <span className="text-xs text-theme-text-muted">
+                                    {excludedCount} esclusi · {eligible.length} disponibili
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
+                                <input
+                                    type="checkbox"
+                                    checked={excludeBlacklist}
+                                    onChange={(e) => setExcludeBlacklist(e.target.checked)}
+                                />
+                                <span className="text-red-400">Blacklist</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
+                                <input
+                                    type="checkbox"
+                                    checked={excludeMember}
+                                    onChange={(e) => setExcludeMember(e.target.checked)}
+                                />
+                                <span className="text-blue-400">Member</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
+                                <input
+                                    type="checkbox"
+                                    checked={excludeElite}
+                                    onChange={(e) => setExcludeElite(e.target.checked)}
+                                />
+                                <span className="text-amber-400">Elite</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
+                                <input
+                                    type="checkbox"
+                                    checked={excludeNewEntry}
+                                    onChange={(e) => setExcludeNewEntry(e.target.checked)}
+                                />
+                                <span className="text-emerald-400">New entry</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
+                                <input
+                                    type="checkbox"
+                                    checked={excludeDr7Club}
+                                    onChange={(e) => setExcludeDr7Club(e.target.checked)}
+                                />
+                                <span className="text-[#D4B896]">DR7 Club</span>
+                            </label>
                         </div>
                     </div>
 
