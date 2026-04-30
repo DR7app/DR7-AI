@@ -19,18 +19,37 @@ const PENALI_KEYWORDS = [
   'subnoleggio', 'neopatentati', 'non abilitati', 'patente', 'riconsegna',
 ]
 
+// Detects whether an item description is a penalty / damage line.
+// Handles BOTH:
+//   - legacy phrasing: "Penale prenotazione DR7-XXXX - <motivo>"
+//   - new phrasing from generate-penalty-invoice.ts and
+//     generate-invoice-from-booking.ts: "Penale: <label>" / "Penale - <label>"
+//     and "Danno: <label>" / "Danno - <label>" (and bare "Penale" / "Danno")
+function itemKind(desc: string): 'danni' | 'penali' | null {
+  const d = desc.toLowerCase().trim()
+  if (!d) return null
+  // Damage wins over penalty when both keywords would match.
+  if (d.startsWith('danno') || d.includes('danno prenotazione') || d.includes(' danno ')) return 'danni'
+  if (d.startsWith('penale') || d.includes('penale prenotazione') || d.includes(' penale ')) {
+    // For legacy "Penale prenotazione X - <motivo>", classify by keywords;
+    // some "penali" rows actually describe damage.
+    const dashIdx = d.indexOf(' - ')
+    const motivo = dashIdx >= 0 ? d.substring(dashIdx + 3) : d
+    for (const kw of DANNI_KEYWORDS) if (motivo.includes(kw.toLowerCase())) return 'danni'
+    return 'penali'
+  }
+  return null
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function classifyInvoice(items: any[]): 'danni' | 'penali' | null {
+  let result: 'danni' | 'penali' | null = null
   for (const item of items) {
-    const desc = (item.description || '').toLowerCase()
-    if (desc.includes('danno prenotazione')) return 'danni'
-    if (!desc.includes('penale prenotazione')) continue
-    const dashIdx = desc.indexOf(' - ')
-    const motivo = dashIdx >= 0 ? desc.substring(dashIdx + 3) : desc
-    for (const kw of DANNI_KEYWORDS) if (motivo.includes(kw.toLowerCase())) return 'danni'
-    for (const kw of PENALI_KEYWORDS) if (motivo.includes(kw.toLowerCase())) return 'penali'
+    const k = itemKind(item.description || '')
+    if (k === 'danni') return 'danni' // damage takes precedence
+    if (k === 'penali') result = 'penali'
   }
-  return 'penali'
+  return result
 }
 
 const norm = (s: string | null | undefined): string => (s || '').trim().toLowerCase()
@@ -315,16 +334,12 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // 8) Fatture — invoiced penali/danni go in. Match by booking_id, then email, then name.
+    // 8) Fatture — invoiced penali/danni. classifyInvoice returns null when the
+    //    fattura has no penalty/damage line items, so it doubles as the prefilter.
     if (fattureRes.data) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const f of fattureRes.data as any[]) {
         if (!f.items || !Array.isArray(f.items)) continue
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const hasPenalty = f.items.some((it: any) =>
-          it.description && (it.description.includes('Penale prenotazione') || it.description.includes('Danno prenotazione')))
-        if (!hasPenalty) continue
-
         const cls = classifyInvoice(f.items)
         if (!cls) continue
 

@@ -332,6 +332,76 @@ const handler: Handler = async (event) => {
               created_at: p.created_at,
             };
           }
+
+          // Fallback 1: enrich missing profiles from auth.users metadata
+          const missing = allUserIds.filter((id) => !profileMap[id] || profileMap[id].name === '(senza nome)');
+          if (missing.length > 0) {
+            try {
+              // Page through auth users (admin API caps at 1000/page)
+              let page = 1;
+              const perPage = 1000;
+              const authMatches: Record<string, { name: string; email: string | null; created_at: string | null }> = {};
+              const missingSet = new Set(missing);
+              while (missingSet.size > 0) {
+                const { data: usersPage, error: listErr } = await supabase.auth.admin.listUsers({ page, perPage });
+                if (listErr || !usersPage?.users?.length) break;
+                for (const u of usersPage.users) {
+                  if (!missingSet.has(u.id)) continue;
+                  const meta = (u.user_metadata || {}) as Record<string, unknown>;
+                  const fullName = (meta.full_name as string) || (meta.name as string) || `${(meta.first_name as string) || ''} ${(meta.last_name as string) || ''}`.trim();
+                  authMatches[u.id] = {
+                    name: fullName || u.email || '(senza nome)',
+                    email: u.email || null,
+                    created_at: u.created_at || null,
+                  };
+                  missingSet.delete(u.id);
+                }
+                if (usersPage.users.length < perPage) break;
+                page += 1;
+              }
+              for (const [uid, m] of Object.entries(authMatches)) {
+                const existing = profileMap[uid];
+                profileMap[uid] = {
+                  name: existing && existing.name !== '(senza nome)' ? existing.name : m.name,
+                  email: existing?.email || m.email,
+                  code: existing?.code || null,
+                  created_at: existing?.created_at || m.created_at,
+                };
+              }
+            } catch (e) {
+              console.warn('[site_referrals] auth.admin.listUsers fallback failed:', e);
+            }
+          }
+
+          // Fallback 2: bookings.customer_name (for users with no profile + no auth metadata name)
+          const stillMissing = allUserIds.filter((id) => !profileMap[id] || profileMap[id].name === '(senza nome)');
+          if (stillMissing.length > 0) {
+            const { data: bookingNames } = await supabase
+              .from('bookings')
+              .select('user_id, customer_name, customer_email, created_at')
+              .in('user_id', stillMissing)
+              .not('customer_name', 'is', null);
+            const byUser: Record<string, { name: string; email: string | null; created_at: string | null }> = {};
+            for (const b of bookingNames || []) {
+              if (!b.user_id) continue;
+              if (!byUser[b.user_id] && b.customer_name && String(b.customer_name).trim()) {
+                byUser[b.user_id] = {
+                  name: String(b.customer_name).trim(),
+                  email: b.customer_email || null,
+                  created_at: b.created_at || null,
+                };
+              }
+            }
+            for (const [uid, m] of Object.entries(byUser)) {
+              const existing = profileMap[uid];
+              profileMap[uid] = {
+                name: existing && existing.name !== '(senza nome)' ? existing.name : m.name,
+                email: existing?.email || m.email,
+                code: existing?.code || null,
+                created_at: existing?.created_at || m.created_at,
+              };
+            }
+          }
         }
 
         const bonusMap: Record<string, { amount: number; date: string }> = {};
