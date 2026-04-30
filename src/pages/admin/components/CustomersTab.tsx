@@ -7,6 +7,7 @@ import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ReportClienteModal from './ReportClienteModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import { useClientStatus } from '../../../contexts/ClientStatusContext'
 
 interface Customer {
   id: string
@@ -100,6 +101,7 @@ interface Customer {
 }
 
 export default function CustomersTab() {
+  const { refresh: refreshClientStatus } = useClientStatus()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1377,6 +1379,7 @@ export default function CustomersTab() {
       setAllCustomers(prev => prev.map(c =>
         c.id === customerId ? { ...c, status: newStatus } : c
       ))
+      refreshClientStatus()
 
       alert(`Status aggiornato a: ${statusLabel}`)
     } catch (error: unknown) {
@@ -1409,6 +1412,7 @@ export default function CustomersTab() {
       setAllCustomers(prev => prev.map(c =>
         selectedCustomerIds.has(c.id) ? { ...c, status: newStatus } : c
       ))
+      refreshClientStatus()
 
       // Clear selection
       setSelectedCustomerIds(new Set())
@@ -1529,7 +1533,7 @@ export default function CustomersTab() {
             <div className="flex-shrink-0 bg-theme-bg-secondary border-b border-theme-border p-6 flex justify-between items-center">
               <h3 className="text-xl font-bold text-theme-text-primary flex items-center gap-2 flex-wrap">
                 <span>Dettagli Cliente Completi - {viewingCustomerDetails.full_name}</span>
-                <ClientStatusBadge size="md" customerId={viewingCustomerDetails.id} userId={viewingCustomerDetails.user_id} email={viewingCustomerDetails.email} />
+                <ClientStatusBadge size="md" tier={viewingCustomerDetails.status ?? undefined} customerId={viewingCustomerDetails.id} userId={viewingCustomerDetails.user_id} email={viewingCustomerDetails.email} />
               </h3>
               <button
                 onClick={() => setViewingCustomerDetails(null)}
@@ -2401,7 +2405,7 @@ export default function CustomersTab() {
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-theme-text-primary truncate flex items-center gap-1.5">
                     <span className="truncate">{customer.full_name}</span>
-                    <ClientStatusBadge customerId={customer.id} userId={customer.user_id} email={customer.email} />
+                    <ClientStatusBadge tier={customer.status ?? undefined} customerId={customer.id} userId={customer.user_id} email={customer.email} />
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                     {customer.tipo_cliente && (
@@ -2577,7 +2581,7 @@ export default function CustomersTab() {
                     {customer.full_name}
                   </td>
                   <td className="px-4 py-3 text-sm whitespace-nowrap">
-                    <ClientStatusBadge customerId={customer.id} userId={customer.user_id} email={customer.email} />
+                    <ClientStatusBadge tier={customer.status ?? undefined} customerId={customer.id} userId={customer.user_id} email={customer.email} />
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {customer.tipo_cliente ? (

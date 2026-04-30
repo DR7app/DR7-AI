@@ -5,6 +5,7 @@ import CustomerDocuments from './CustomerDocuments'
 import ReportClienteModal from './ReportClienteModal'
 import Button from './Button'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import { useClientStatus } from '../../../contexts/ClientStatusContext'
 import toast from 'react-hot-toast'
 
 type StatusCliente = 'standard' | 'member' | 'elite' | 'blacklist'
@@ -52,6 +53,7 @@ const tierMeta: Record<ClubTier, { label: string; reward: string; badge: string 
 }
 
 export default function ClientiTab() {
+  const { refresh: refreshClientStatus } = useClientStatus()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -213,6 +215,7 @@ export default function ClientiTab() {
       setCustomers(prev => prev.map(c =>
         c.id === customerId ? { ...c, status_cliente: newStatus } : c
       ))
+      refreshClientStatus()
     } catch (error) {
       console.error('Failed to update status:', error)
       toast.error('Errore durante l\'aggiornamento dello status')
@@ -341,7 +344,7 @@ export default function ClientiTab() {
                     <td className="px-4 py-3 text-sm text-theme-text-primary font-medium">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span>{getDisplayName(customer)}</span>
-                        <ClientStatusBadge customerId={customer.id} userId={customer.user_id} email={customer.email} />
+                        <ClientStatusBadge tier={customer.status_cliente ?? undefined} customerId={customer.id} userId={customer.user_id} email={customer.email} />
                       </div>
                       {customer.tipo_cliente === 'azienda' && customer.partita_iva && (
                         <div className="text-xs text-theme-text-muted mt-1">P.IVA: {customer.partita_iva}</div>
