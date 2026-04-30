@@ -65,6 +65,7 @@ export default function DocumentsVerificationTab() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [autoVerifying, setAutoVerifying] = useState<Set<string>>(new Set()) // doc ids currently being auto-verified
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     loadDocuments()
@@ -420,9 +421,22 @@ export default function DocumentsVerificationTab() {
     )
   }
 
-  const filteredDocuments = filterStatus === 'all'
-    ? documents
-    : documents.filter(d => d.status === filterStatus)
+  const q = search.trim().toLowerCase()
+  const filteredDocuments = documents.filter(d => {
+    if (filterStatus !== 'all' && d.status !== filterStatus) return false
+    if (!q) return true
+    const u = d.user
+    const haystack = [
+      u?.full_name, u?.email, u?.telefono, u?.codice_fiscale,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (u as any)?.nome, (u as any)?.cognome,
+      d.document_type
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    return haystack.includes(q)
+  })
 
   // Group documents by user
   const documentsByUser = filteredDocuments.reduce((acc, doc) => {
@@ -446,25 +460,54 @@ export default function DocumentsVerificationTab() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="bg-theme-bg-secondary border border-theme-border rounded-3xl p-6 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-theme-text-primary tracking-tight">Verifica Documenti</h2>
-          <p className="text-sm text-theme-text-muted mt-0.5">
-            Anteprima, accetta o rifiuta i documenti caricati dai clienti
-          </p>
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-3xl p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-theme-text-primary tracking-tight">Verifica Documenti</h2>
+            <p className="text-sm text-theme-text-muted mt-0.5">
+              Anteprima, accetta o rifiuta i documenti caricati dai clienti
+            </p>
+          </div>
+          <button
+            onClick={() => autoVerifyDocs(documents)}
+            disabled={!!bulkProgress || documents.filter(d => d.status === 'pending_verification').length === 0}
+            className="self-start md:self-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-sm transition-all active:scale-[0.98]"
+            title="Verifica tutti i documenti in attesa con OCR"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+            {bulkProgress
+              ? `Verifica… ${bulkProgress.done}/${bulkProgress.total}`
+              : `Auto-verifica tutti (${documents.filter(d => d.status === 'pending_verification').length})`
+            }
+          </button>
         </div>
-        <button
-          onClick={() => autoVerifyDocs(documents)}
-          disabled={!!bulkProgress || documents.filter(d => d.status === 'pending_verification').length === 0}
-          className="self-start md:self-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-sm transition-all active:scale-[0.98]"
-          title="Verifica tutti i documenti in attesa con OCR"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
-          {bulkProgress
-            ? `Verifica… ${bulkProgress.done}/${bulkProgress.total}`
-            : `Auto-verifica tutti (${documents.filter(d => d.status === 'pending_verification').length})`
-          }
-        </button>
+
+        {/* Search bar */}
+        <div className="relative mt-4">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted pointer-events-none"
+            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cerca cliente per nome, email, telefono o CF…"
+            className="w-full pl-10 pr-10 py-2.5 bg-theme-bg-primary/60 border border-theme-border rounded-2xl text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/40"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary flex items-center justify-center"
+              title="Cancella"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Summary + Filter (segmented control style) */}
