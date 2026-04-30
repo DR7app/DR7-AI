@@ -168,13 +168,9 @@ export const handler: Handler = async (event) => {
             }))
         }
 
-        // 4. Merge data — but only keep docs whose user_id resolved to a
-        //    real user (in customers_extended, customers, or auth.users).
-        //    Orphans (polluted backfill rows from admin-side buckets) are
-        //    suppressed from the UI without being deleted from the DB.
-        const enrichedDocuments = documents
-            .filter(doc => userMap.has(doc.user_id))
-            .map(doc => {
+        // 4. Merge data — return everything. Truly orphan rows still show
+        //    (with "Utente sconosciuto") so nothing is hidden from review.
+        const enrichedDocuments = documents.map(doc => {
             const user = userMap.get(doc.user_id)
 
             // Determine the best display name
