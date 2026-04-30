@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from './require-auth'
+import { nexiCallWithRecurrenceFallback } from './utils/nexiTokenizationFallback';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -115,18 +116,15 @@ const handler: Handler = async (event) => {
         const pblUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
         console.log('[nexi-create-preauth] URL:', pblUrl);
 
-        const response = await fetch(pblUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Api-Key': NEXI_API_KEY,
-                'Correlation-Id': correlationId
-            },
-            body: JSON.stringify(payload)
+        const { response, responseText, usedFallback } = await nexiCallWithRecurrenceFallback({
+            url: pblUrl,
+            apiKey: NEXI_API_KEY,
+            correlationId,
+            payload,
+            logTag: 'nexi-create-preauth',
         });
 
-        const responseText = await response.text();
-        console.log('[nexi-create-preauth] Response status:', response.status);
+        console.log('[nexi-create-preauth] Response status:', response.status, 'fallback:', usedFallback);
         console.log('[nexi-create-preauth] Response body:', responseText.substring(0, 500));
 
         let responseData: any;
@@ -188,6 +186,8 @@ const handler: Handler = async (event) => {
                 customer_name: customerName,
                 action_type: 'PREAUTH',
                 capture_type: 'EXPLICIT',
+                tokenization_requested: !usedFallback,
+                tokenization_fallback_used: usedFallback,
                 expires_at: expirationDate.toISOString(),
                 nexi_response: responseData
             },

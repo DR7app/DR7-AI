@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { nexiCallWithRecurrenceFallback } from './utils/nexiTokenizationFallback'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -93,18 +94,15 @@ export const handler: Handler = async (event) => {
 
     console.log('[nexi-build] Creating session:', JSON.stringify(payload))
 
-    const response = await fetch(buildUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': NEXI_API_KEY,
-        'Correlation-Id': correlationId,
-      },
-      body: JSON.stringify(payload),
+    const { response, responseText, usedFallback } = await nexiCallWithRecurrenceFallback({
+      url: buildUrl,
+      apiKey: NEXI_API_KEY,
+      correlationId,
+      payload,
+      logTag: 'nexi-build',
     })
 
-    const responseText = await response.text()
-    console.log('[nexi-build] Response:', response.status, responseText.substring(0, 500))
+    console.log('[nexi-build] Response:', response.status, responseText.substring(0, 500), 'fallback:', usedFallback)
 
     let responseData: any
     try {
@@ -155,6 +153,8 @@ export const handler: Handler = async (event) => {
           security_token: securityToken,
           payment_purpose: paymentPurpose,
           customer_name: customerName,
+          tokenization_requested: !usedFallback,
+          tokenization_fallback_used: usedFallback,
           payment_link_sent_at: sentAt.toISOString(),
           payment_link_expires_at: expiresAt.toISOString(),
           nexi_response: responseData,

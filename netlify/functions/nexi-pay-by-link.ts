@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { nexiCallWithRecurrenceFallback } from './utils/nexiTokenizationFallback';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -127,22 +128,19 @@ const handler: Handler = async (event) => {
 
         console.log('[nexi-pay-by-link] Payload:', JSON.stringify(payload));
 
-        // ─── Call Nexi API ──────────────────────────────────────────────
+        // ─── Call Nexi API (with tokenization fallback) ─────────────────
         const correlationId = crypto.randomUUID();
         const payByLinkUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink';
 
-        const response = await fetch(payByLinkUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Api-Key': NEXI_API_KEY,
-                'Correlation-Id': correlationId
-            },
-            body: JSON.stringify(payload)
+        const { response, responseText, usedFallback } = await nexiCallWithRecurrenceFallback({
+            url: payByLinkUrl,
+            apiKey: NEXI_API_KEY,
+            correlationId,
+            payload,
+            logTag: 'nexi-pay-by-link',
         });
 
-        const responseText = await response.text();
-        console.log('[nexi-pay-by-link] Response:', response.status, responseText.substring(0, 500));
+        console.log('[nexi-pay-by-link] Response:', response.status, responseText.substring(0, 500), 'fallback:', usedFallback);
 
         let responseData: any;
         try {
@@ -183,6 +181,8 @@ const handler: Handler = async (event) => {
                     payment_purpose: paymentPurpose || 'booking',
                     customer_name: customerName,
                     nexi_link_id: nexiLinkId,
+                    tokenization_requested: !usedFallback,
+                    tokenization_fallback_used: usedFallback,
                     // ─── EXPIRATION TRACKING (UTC) ───
                     payment_link_sent_at: sentAt.toISOString(),
                     payment_link_expires_at: expiresAt.toISOString(),
