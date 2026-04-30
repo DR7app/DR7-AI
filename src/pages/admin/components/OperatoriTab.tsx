@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, useEffect } from 'react'
+import { Fragment, useMemo, useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
 
@@ -28,11 +28,13 @@ const ACTION_LABELS: Record<string, string> = {
   edit_booking: 'Modifica prenotazione',
   delete_booking: 'Eliminazione prenotazione',
   generate_contract: 'Generazione contratto',
+  resend_contract: 'Re-invio contratto',
   generate_fattura: 'Generazione fattura',
   extend_booking: 'Estensione prenotazione',
   mark_paid: 'Segna pagato',
   create_penalty: 'Creazione penale',
   create_danni: 'Creazione danno',
+  create_danni_penali: 'Creazione danno+penale',
   create_carwash: 'Creazione lavaggio',
   delete_carwash: 'Eliminazione lavaggio',
   generate_carwash_fattura: 'Fattura lavaggio',
@@ -54,84 +56,146 @@ const ACTION_LABELS: Record<string, string> = {
   partial_payment: 'Pagamento parziale',
   delete_extension: 'Eliminazione estensione',
   delete_unpaid_booking: 'Eliminazione prenotazione non pagata',
+  preventivo_created: 'Preventivo creato',
+  preventivo_updated: 'Preventivo aggiornato',
+  preventivo_sent: 'Preventivo inviato',
+  preventivo_converted: 'Preventivo convertito',
+  preventivo_deleted: 'Preventivo eliminato',
+  preventivo_rejected: 'Preventivo rifiutato',
+  whatsapp_sent: 'WhatsApp inviato',
+  whatsapp_free_text: 'WhatsApp messaggio libero',
+  whatsapp_bulk_send: 'WhatsApp massivo',
+  cassa_cauzione: 'Cauzione (cassa)',
+  limitation_override_approved: 'Limitazione sbloccata',
+  centralina_pro_updated: 'Centralina Pro aggiornata',
 }
 
 const ACTION_OPTIONS = Object.entries(ACTION_LABELS).map(([value, label]) => ({ value, label }))
 
 const ROME_TZ = 'Europe/Rome'
 
+// ─── Formatters ───────────────────────────────────────────────────────────
+
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString('it-IT', { timeZone: ROME_TZ, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-
 function formatDay(iso: string) {
   return new Date(iso).toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: '2-digit', month: 'short' })
 }
-
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('it-IT', { timeZone: ROME_TZ, hour: '2-digit', minute: '2-digit' })
 }
-
 function dayKey(iso: string): string {
-  // YYYY-MM-DD in Rome timezone
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-CA', { timeZone: ROME_TZ })
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: ROME_TZ })
 }
-
+function eur(n: number): string {
+  return `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 function initials(name: string | null, email: string): string {
   const src = (name || email.split('@')[0] || '').trim()
   const parts = src.split(/\s+/).filter(Boolean)
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
   return src.slice(0, 2).toUpperCase()
 }
-
 function avatarColor(seed: string): string {
-  // Deterministic green/gold palette so cards aren't all the same colour
   const palette = ['bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-700', 'bg-sky-100 text-sky-700', 'bg-rose-100 text-rose-700', 'bg-violet-100 text-violet-700', 'bg-teal-100 text-teal-700']
   let h = 0
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
   return palette[h % palette.length]
 }
 
-function classifyAction(action: string): 'prenotazioni' | 'contratti' | 'fatture' | 'pagamenti' | 'clienti' | 'lavaggi' | 'meccanica' | 'login' | 'altri' {
+// ─── KPI / Category classification (15 categories from spec) ──────────────
+
+type KpiKey =
+  | 'pratiche' | 'clienti' | 'email' | 'messaggi' | 'pagamenti'
+  | 'contratti' | 'noleggi' | 'lavaggi' | 'meccanica' | 'wallet'
+  | 'danni' | 'penali' | 'preventivi' | 'login' | 'altri'
+
+interface KpiDef { key: KpiKey; label: string; emoji: string }
+
+const KPI_DEFS: KpiDef[] = [
+  { key: 'noleggi',    label: 'Noleggi',     emoji: '🚗' },
+  { key: 'contratti',  label: 'Contratti',   emoji: '📄' },
+  { key: 'pratiche',   label: 'Pratiche',    emoji: '📂' },
+  { key: 'clienti',    label: 'Clienti',     emoji: '👤' },
+  { key: 'pagamenti',  label: 'Pagamenti',   emoji: '💶' },
+  { key: 'preventivi', label: 'Preventivi',  emoji: '📝' },
+  { key: 'lavaggi',    label: 'Lavaggi',     emoji: '🧽' },
+  { key: 'meccanica',  label: 'Meccanica',   emoji: '🔧' },
+  { key: 'email',      label: 'Email/SDI',   emoji: '📧' },
+  { key: 'messaggi',   label: 'Messaggi',    emoji: '💬' },
+  { key: 'wallet',     label: 'Wallet',      emoji: '💳' },
+  { key: 'danni',      label: 'Danni',       emoji: '⚠️' },
+  { key: 'penali',     label: 'Penali',      emoji: '🛑' },
+  { key: 'login',      label: 'Accessi',     emoji: '🔑' },
+  { key: 'altri',      label: 'Altri',       emoji: '✨' },
+]
+
+function classifyAction(action: string): KpiKey {
   if (action === 'login') return 'login'
-  if (action.includes('booking') || action.includes('extension')) return 'prenotazioni'
+  if (action.startsWith('preventivo')) return 'preventivi'
+  if (action.startsWith('whatsapp')) return 'messaggi'
+  if (action.includes('sdi')) return 'email'
   if (action.includes('contract') || action.includes('trustera')) return 'contratti'
-  if (action.includes('fattura') || action.includes('sdi')) return 'fatture'
-  if (action.includes('paid') || action.includes('payment')) return 'pagamenti'
-  if (action.includes('customer')) return 'clienti'
+  if (action.includes('fattura')) return 'pratiche'
+  if (action.includes('paid') || action.includes('payment') || action === 'cassa_cauzione') return 'pagamenti'
+  if (action.includes('booking') || action.includes('extension')) return 'noleggi'
   if (action.includes('carwash')) return 'lavaggi'
   if (action.includes('mechanical')) return 'meccanica'
+  if (action.includes('customer')) return 'clienti'
+  if (action.includes('penalty') || action.includes('penali')) return 'penali'
+  if (action.includes('danni')) return 'danni'
+  if (action.includes('wallet') || action.includes('topup') || action.includes('credit')) return 'wallet'
   return 'altri'
 }
 
-const KPI_CATEGORIES: Array<{ key: ReturnType<typeof classifyAction>; label: string; emoji: string }> = [
-  { key: 'prenotazioni', label: 'Prenotazioni', emoji: '🚗' },
-  { key: 'contratti', label: 'Contratti', emoji: '📄' },
-  { key: 'fatture', label: 'Fatture', emoji: '🧾' },
-  { key: 'pagamenti', label: 'Pagamenti', emoji: '💶' },
-  { key: 'clienti', label: 'Clienti', emoji: '👤' },
-  { key: 'lavaggi', label: 'Lavaggi', emoji: '🧽' },
-  { key: 'meccanica', label: 'Meccanica', emoji: '🔧' },
-  { key: 'login', label: 'Accessi', emoji: '🔑' },
-]
+// ─── Amount extraction (heterogeneous fields in details JSON) ─────────────
+
+function extractAmount(log: LogEntry): number {
+  const d = log.details || {}
+  const candidates = [d.amount, d.total, d.price_total, d.recharge_amount]
+  for (const v of candidates) {
+    if (v == null) continue
+    const n = typeof v === 'number' ? v : parseFloat(String(v))
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return 0
+}
+
+// ─── Period helpers ───────────────────────────────────────────────────────
 
 function startOfMonthISO(d: Date): string {
   const year = d.toLocaleDateString('en-CA', { timeZone: ROME_TZ, year: 'numeric' })
   const month = d.toLocaleDateString('en-CA', { timeZone: ROME_TZ, month: '2-digit' })
   return `${year}-${month}-01`
 }
-
 function todayISO(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: ROME_TZ })
 }
+function previousMonthRange(): { from: string; to: string } {
+  const now = new Date()
+  const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const lastOfPrev = new Date(firstOfThisMonth.getTime() - 24 * 3600_000)
+  const firstOfPrev = new Date(lastOfPrev.getFullYear(), lastOfPrev.getMonth(), 1)
+  return {
+    from: firstOfPrev.toLocaleDateString('en-CA', { timeZone: ROME_TZ }),
+    to: lastOfPrev.toLocaleDateString('en-CA', { timeZone: ROME_TZ }),
+  }
+}
+
+const AGG_HARD_LIMIT = 5000  // cap aggregation fetch to avoid OOM
 
 export default function OperatoriTab() {
   const [admins, setAdmins] = useState<Admin[]>([])
   const [selectedAdmin, setSelectedAdmin] = useState<string | null>(null)
-  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [logs, setLogs] = useState<LogEntry[]>([])           // paginated detail
+  const [aggLogs, setAggLogs] = useState<LogEntry[]>([])     // all-period logs for stats
+  const [prevMonthLogs, setPrevMonthLogs] = useState<LogEntry[]>([])
+  const [teamCounts, setTeamCounts] = useState<Map<string, number>>(new Map())
   const [loading, setLoading] = useState(true)
   const [logsLoading, setLogsLoading] = useState(false)
+  const [aggLoading, setAggLoading] = useState(false)
+  const [aggTruncated, setAggTruncated] = useState(false)
   const [dateFrom, setDateFrom] = useState(startOfMonthISO(new Date()))
   const [dateTo, setDateTo] = useState(todayISO())
   const [actionFilter, setActionFilter] = useState('')
@@ -141,15 +205,77 @@ export default function OperatoriTab() {
 
   useEffect(() => {
     loadAdmins()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => {
-    if (selectedAdmin) {
-      setPage(0)
-      loadLogs(selectedAdmin, 0)
+  const loadLogs = useCallback(async (adminId: string, pageNum: number) => {
+    setLogsLoading(true)
+    let query = supabase
+      .from('admin_activity_log').select('*')
+      .eq('admin_id', adminId)
+      .order('created_at', { ascending: false })
+      .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1)
+    if (dateFrom) query = query.gte('created_at', new Date(dateFrom).toISOString())
+    if (dateTo) {
+      const end = new Date(dateTo); end.setHours(23, 59, 59, 999)
+      query = query.lte('created_at', end.toISOString())
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAdmin, dateFrom, dateTo, actionFilter])
+    if (actionFilter) query = query.eq('action', actionFilter)
+    const { data } = await query
+    setLogs(data || [])
+    setLogsLoading(false)
+  }, [dateFrom, dateTo, actionFilter])
+
+  const loadAggregations = useCallback(async (adminId: string) => {
+    setAggLoading(true)
+    setAggTruncated(false)
+    const fromIso = new Date(dateFrom).toISOString()
+    const end = new Date(dateTo); end.setHours(23, 59, 59, 999)
+    const toIso = end.toISOString()
+
+    // 1. All period logs for selected admin
+    const { data: aggData, count } = await supabase
+      .from('admin_activity_log')
+      .select('*', { count: 'exact' })
+      .eq('admin_id', adminId)
+      .gte('created_at', fromIso).lte('created_at', toIso)
+      .order('created_at', { ascending: false })
+      .range(0, AGG_HARD_LIMIT - 1)
+    setAggLogs(aggData || [])
+    if (count && count > AGG_HARD_LIMIT) setAggTruncated(true)
+
+    // 2. Team comparison: counts per admin in same period
+    const { data: teamData } = await supabase
+      .from('admin_activity_log')
+      .select('admin_id')
+      .gte('created_at', fromIso).lte('created_at', toIso)
+      .limit(50000)
+    const counts = new Map<string, number>()
+    for (const row of teamData || []) {
+      counts.set(row.admin_id, (counts.get(row.admin_id) || 0) + 1)
+    }
+    setTeamCounts(counts)
+
+    // 3. Previous month for selected admin
+    const prev = previousMonthRange()
+    const prevEnd = new Date(prev.to); prevEnd.setHours(23, 59, 59, 999)
+    const { data: prevData } = await supabase
+      .from('admin_activity_log').select('*')
+      .eq('admin_id', adminId)
+      .gte('created_at', new Date(prev.from).toISOString())
+      .lte('created_at', prevEnd.toISOString())
+      .limit(AGG_HARD_LIMIT)
+    setPrevMonthLogs(prevData || [])
+
+    setAggLoading(false)
+  }, [dateFrom, dateTo])
+
+  useEffect(() => {
+    if (!selectedAdmin) return
+    setPage(0)
+    loadLogs(selectedAdmin, 0)
+    loadAggregations(selectedAdmin)
+  }, [selectedAdmin, dateFrom, dateTo, actionFilter, loadLogs, loadAggregations])
 
   async function loadAdmins() {
     setLoading(true)
@@ -167,38 +293,19 @@ export default function OperatoriTab() {
     setLoading(false)
   }
 
-  async function loadLogs(adminId: string, pageNum: number) {
-    setLogsLoading(true)
-    let query = supabase
-      .from('admin_activity_log')
-      .select('*')
-      .eq('admin_id', adminId)
-      .order('created_at', { ascending: false })
-      .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1)
-
-    if (dateFrom) query = query.gte('created_at', new Date(dateFrom).toISOString())
-    if (dateTo) {
-      const endOfDay = new Date(dateTo)
-      endOfDay.setHours(23, 59, 59, 999)
-      query = query.lte('created_at', endOfDay.toISOString())
-    }
-    if (actionFilter) query = query.eq('action', actionFilter)
-
-    const { data } = await query
-    setLogs(data || [])
-    setLogsLoading(false)
-  }
-
   function handlePageChange(newPage: number) {
     setPage(newPage)
     if (selectedAdmin) loadLogs(selectedAdmin, newPage)
   }
 
-  function setPeriodPreset(preset: 'oggi' | 'mese' | '7gg' | '30gg') {
-    const today = new Date()
+  function setPeriodPreset(preset: 'oggi' | 'mese' | '7gg' | '30gg' | 'mese-prec') {
     const t = todayISO()
     if (preset === 'oggi') { setDateFrom(t); setDateTo(t); return }
-    if (preset === 'mese') { setDateFrom(startOfMonthISO(today)); setDateTo(t); return }
+    if (preset === 'mese') { setDateFrom(startOfMonthISO(new Date())); setDateTo(t); return }
+    if (preset === 'mese-prec') {
+      const r = previousMonthRange()
+      setDateFrom(r.from); setDateTo(r.to); return
+    }
     if (preset === '7gg') {
       const d = new Date(); d.setDate(d.getDate() - 6)
       setDateFrom(d.toLocaleDateString('en-CA', { timeZone: ROME_TZ })); setDateTo(t); return
@@ -211,50 +318,38 @@ export default function OperatoriTab() {
 
   const selected = admins.find(a => a.id === selectedAdmin) || null
 
-  // ─── Aggregations from current page logs ─────────────────────────────────
-  const stats = useMemo(() => {
-    const byDay = new Map<string, { first: string; last: string; count: number }>()
-    const byCategory = new Map<string, number>()
+  // ─── Aggregations ────────────────────────────────────────────────────
+  const stats = useMemo(() => computeStats(aggLogs), [aggLogs])
+  const prevStats = useMemo(() => computeStats(prevMonthLogs), [prevMonthLogs])
 
-    for (const log of logs) {
-      const k = dayKey(log.created_at)
-      const cur = byDay.get(k)
-      if (!cur) byDay.set(k, { first: log.created_at, last: log.created_at, count: 1 })
-      else {
-        if (log.created_at < cur.first) cur.first = log.created_at
-        if (log.created_at > cur.last) cur.last = log.created_at
-        cur.count += 1
-      }
-      const cat = classifyAction(log.action)
-      byCategory.set(cat, (byCategory.get(cat) || 0) + 1)
-    }
+  const teamAvg = useMemo(() => {
+    if (teamCounts.size === 0) return 0
+    let total = 0; let n = 0
+    teamCounts.forEach(v => { total += v; n += 1 })
+    return n > 0 ? total / n : 0
+  }, [teamCounts])
 
-    const days = Array.from(byDay.entries())
-      .map(([day, v]) => {
-        const ms = new Date(v.last).getTime() - new Date(v.first).getTime()
-        const hours = Math.min(12, Math.max(0, ms / 3_600_000))
-        return { day, first: v.first, last: v.last, count: v.count, hours }
-      })
-      .sort((a, b) => b.day.localeCompare(a.day))
+  const myCount = teamCounts.get(selectedAdmin || '') || 0
 
-    const totalHours = days.reduce((s, d) => s + d.hours, 0)
-    const totalActivities = logs.length
-    const activeDays = days.length
-    const avgPerDay = activeDays > 0 ? totalActivities / activeDays : 0
-    const peakDay = days.reduce<{ day: string; count: number } | null>((max, d) => !max || d.count > max.count ? { day: d.day, count: d.count } : max, null)
+  // ─── Alerts engine ───────────────────────────────────────────────────
+  const alerts = useMemo(() => buildAlerts(aggLogs, stats), [aggLogs, stats])
 
-    return { byCategory, days, totalHours, totalActivities, activeDays, avgPerDay, peakDay }
-  }, [logs])
+  // ─── Insight finale ──────────────────────────────────────────────────
+  const insight = useMemo(() => buildInsight(stats, prevStats, alerts, teamAvg, myCount), [stats, prevStats, alerts, teamAvg, myCount])
+
+  // ─── Quality score (derived from log patterns) ───────────────────────
+  const quality = useMemo(() => buildQuality(aggLogs), [aggLogs])
 
   function exportCSV() {
     if (!selected) return
-    const header = ['Data', 'Ora', 'Azione', 'Tipo Entità', 'ID Entità', 'Dettagli']
-    const rows = logs.map(l => [
+    const header = ['Data', 'Ora', 'Azione', 'Tipo Entità', 'ID Entità', 'Importo', 'Dettagli']
+    const rows = aggLogs.map(l => [
       formatDay(l.created_at),
       formatTime(l.created_at),
       ACTION_LABELS[l.action] || l.action,
       l.entity_type || '',
       l.entity_id || '',
+      String(extractAmount(l) || ''),
       JSON.stringify(l.details || {}).replace(/"/g, '""'),
     ])
     const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -267,11 +362,27 @@ export default function OperatoriTab() {
     URL.revokeObjectURL(url)
   }
 
+  function sendToConsulente() {
+    if (!selected) return
+    const subject = encodeURIComponent(`Report Operatore — ${selected.nome || selected.email} — ${dateFrom} → ${dateTo}`)
+    const body = encodeURIComponent(
+      `Operatore: ${selected.nome || selected.email}\n` +
+      `Periodo: ${dateFrom} → ${dateTo}\n` +
+      `Giorni attivi: ${stats.activeDays}\n` +
+      `Ore stimate: ${stats.totalHours.toFixed(1)} h\n` +
+      `Attività totali: ${stats.totalActivities}\n` +
+      `Importo movimentato: ${eur(stats.totalAmount)}\n\n` +
+      `Insight: ${insight}\n\n` +
+      `(Allegare CSV / PDF — esportazione automatica in arrivo nella Fase C)`
+    )
+    window.location.href = `mailto:?subject=${subject}&body=${body}`
+  }
+
   if (loading) return <div className="text-theme-text-muted p-8 text-center">Caricamento...</div>
 
   return (
     <div className="space-y-6">
-      {/* ─── Header ──────────────────────────────────────────────────────── */}
+      {/* ─── Header ──────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-theme-text-primary">Report Operatore</h2>
@@ -279,42 +390,29 @@ export default function OperatoriTab() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
-            {(['oggi', '7gg', '30gg', 'mese'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setPeriodPreset(p)}
-                className="px-3 py-1.5 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
-              >
-                {p === 'oggi' ? 'Oggi' : p === '7gg' ? '7 giorni' : p === '30gg' ? '30 giorni' : 'Mese corrente'}
-              </button>
+            {([
+              { k: 'oggi', l: 'Oggi' },
+              { k: '7gg', l: '7 giorni' },
+              { k: '30gg', l: '30 giorni' },
+              { k: 'mese', l: 'Mese corrente' },
+              { k: 'mese-prec', l: 'Mese prec.' },
+            ] as const).map(p => (
+              <button key={p.k} onClick={() => setPeriodPreset(p.k)} className="px-3 py-1.5 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover transition-colors">{p.l}</button>
             ))}
           </div>
-          <button onClick={exportCSV} disabled={!selected || logs.length === 0} className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-medium hover:opacity-90 disabled:opacity-30 transition-opacity">
-            Esporta CSV
-          </button>
-          <button onClick={() => window.print()} disabled={!selected} className="px-4 py-2 text-sm rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-30">
-            Stampa / PDF
-          </button>
+          <button onClick={exportCSV} disabled={!selected || aggLogs.length === 0} className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-medium hover:opacity-90 disabled:opacity-30 transition-opacity">Esporta CSV</button>
+          <button onClick={() => window.print()} disabled={!selected} className="px-4 py-2 text-sm rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-30">Stampa / PDF</button>
         </div>
       </div>
 
-      {/* ─── Operator Switcher ──────────────────────────────────────────── */}
+      {/* ─── Operator switcher ──────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
         {admins.map(admin => {
           const active = selectedAdmin === admin.id
           return (
-            <button
-              key={admin.id}
-              onClick={() => setSelectedAdmin(admin.id)}
-              className={`flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all ${
-                active
-                  ? 'bg-dr7-gold/10 border-dr7-gold text-theme-text-primary'
-                  : 'bg-theme-bg-secondary border-theme-border text-theme-text-secondary hover:border-dr7-gold/50'
-              }`}
-            >
-              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${avatarColor(admin.id)}`}>
-                {initials(admin.nome, admin.email)}
-              </span>
+            <button key={admin.id} onClick={() => setSelectedAdmin(admin.id)}
+              className={`flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all ${active ? 'bg-dr7-gold/10 border-dr7-gold text-theme-text-primary' : 'bg-theme-bg-secondary border-theme-border text-theme-text-secondary hover:border-dr7-gold/50'}`}>
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${avatarColor(admin.id)}`}>{initials(admin.nome, admin.email)}</span>
               <span className="text-sm font-medium">{admin.nome || admin.email.split('@')[0]}</span>
               <span className="text-[10px] uppercase tracking-wider opacity-70">{admin.role}</span>
             </button>
@@ -324,90 +422,63 @@ export default function OperatoriTab() {
 
       {selected && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ─── LEFT: main column ─────────────────────────────────────── */}
+          {/* ─── LEFT: main column ─────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* Hero card */}
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl p-6">
+            {/* SECTION 1 — TESTATA OPERATORE */}
+            <Section title="Testata operatore" subtitle="Identità e contatti">
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold ${avatarColor(selected.id)}`}>
-                  {initials(selected.nome, selected.email)}
-                </div>
+                <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold ${avatarColor(selected.id)}`}>{initials(selected.nome, selected.email)}</div>
                 <div className="flex-1">
                   <div className="text-2xl font-bold text-theme-text-primary">{selected.nome || selected.email.split('@')[0]}</div>
-                  <div className="text-sm text-theme-text-secondary capitalize">{selected.role === 'superadmin' ? 'Super Admin' : 'Operatore'}</div>
+                  <div className="text-sm text-theme-text-secondary">{selected.role === 'superadmin' ? 'Super Admin' : 'Operatore'}</div>
                   <div className="text-xs text-theme-text-muted mt-0.5">{selected.email}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-theme-text-muted">Periodo</div>
                   <div className="text-sm font-medium text-theme-text-primary">{dateFrom} → {dateTo}</div>
+                  {aggTruncated && <div className="text-[10px] text-amber-500 mt-1">⚠ Aggregazione limitata a {AGG_HARD_LIMIT} eventi</div>}
                 </div>
               </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 text-xs">
+                <ProfileField label="Sede" value="Da configurare" tag="Fase B" />
+                <ProfileField label="Reparto" value="Da configurare" tag="Fase B" />
+                <ProfileField label="Tipo rapporto" value="Da configurare" tag="Fase B" />
+                <ProfileField label="Stato" value="Attivo" />
+                <ProfileField label="Responsabile" value="—" tag="Fase B" />
+                <ProfileField label="Contatto interno" value="—" tag="Fase B" />
+                <ProfileField label="Foto profilo" value="Iniziali" />
+                <ProfileField label="ID interno" value={selected.id.slice(0, 8)} />
+              </div>
+            </Section>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
-                <StatTile label="Ore Stimate" value={stats.totalHours.toFixed(1)} suffix="h" hint={`${stats.activeDays} giorni attivi`} />
-                <StatTile label="Attività Totali" value={String(stats.totalActivities)} hint={`media ${stats.avgPerDay.toFixed(1)}/g`} />
-                <StatTile label="Pratiche" value={String((stats.byCategory.get('contratti') || 0) + (stats.byCategory.get('fatture') || 0))} hint="Contratti + fatture" />
-                <StatTile label="Clienti / Prenot." value={String((stats.byCategory.get('clienti') || 0) + (stats.byCategory.get('prenotazioni') || 0))} hint="Aggiornamenti totali" />
+            {/* SECTION 2 — KPI PRINCIPALI */}
+            <Section title="KPI principali" subtitle={`Totale: ${stats.totalActivities} attività · ${stats.activeDays} giorni attivi · ${stats.totalHours.toFixed(1)} h stimate`}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {KPI_DEFS.map(c => (
+                  <KpiTile key={c.key} label={c.label} emoji={c.emoji} value={stats.byCategory.get(c.key) || 0} />
+                ))}
               </div>
-            </div>
+            </Section>
 
-            {/* Filters */}
-            <div className="flex flex-wrap gap-3 items-end">
-              <div>
-                <label className="block text-xs font-medium text-theme-text-muted mb-1">Da</label>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={e => setDateFrom(e.target.value)}
-                  className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-                />
+            {/* SECTION 3 — PRESENZE E ORE LAVORATE */}
+            <Section title="Presenze e ore lavorate" subtitle="Stimate da prima→ultima attività di ogni giorno (sistema di timbratura ufficiale arriva in Fase C)">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-xs">
+                <StatTile label="Giorni attivi" value={String(stats.activeDays)} />
+                <StatTile label="Ore stimate" value={`${stats.totalHours.toFixed(1)} h`} />
+                <StatTile label="Media giornaliera" value={`${stats.activeDays > 0 ? (stats.totalHours / stats.activeDays).toFixed(1) : '0.0'} h`} />
+                <StatTile label="Picco settimana" value={`${weekHours(stats.days).toFixed(1)} h`} hint="ultima settimana attiva" />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-theme-text-muted mb-1">A</label>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={e => setDateTo(e.target.value)}
-                  className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-theme-text-muted mb-1">Azione</label>
-                <select
-                  value={actionFilter}
-                  onChange={e => setActionFilter(e.target.value)}
-                  className="px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-                >
-                  <option value="">Tutte</option>
-                  {ACTION_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <button
-                onClick={() => { if (selectedAdmin) loadLogs(selectedAdmin, page) }}
-                disabled={logsLoading}
-                className="px-4 py-2 text-sm rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
-              >
-                {logsLoading ? 'Caricamento…' : '↻ Aggiorna'}
-              </button>
-            </div>
-
-            {/* Presenze e Ore Lavorate */}
-            <Section title="Presenze e Ore Lavorate" subtitle="Stimate dalla prima e ultima attività di ogni giornata">
-              {logsLoading ? (
-                <div className="text-theme-text-muted text-center py-8">Caricamento…</div>
-              ) : stats.days.length === 0 ? (
-                <div className="text-theme-text-muted text-center py-8">Nessuna giornata attiva nel periodo selezionato.</div>
-              ) : (
+              {aggLoading ? <div className="text-theme-text-muted text-center py-6 text-sm">Caricamento…</div> :
+                stats.days.length === 0 ? <div className="text-theme-text-muted text-center py-6 text-sm">Nessuna giornata attiva nel periodo.</div> :
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-theme-border text-theme-text-muted text-left">
                         <th className="py-2 px-3 font-medium">Giorno</th>
-                        <th className="py-2 px-3 font-medium">Prima attività</th>
-                        <th className="py-2 px-3 font-medium">Ultima attività</th>
+                        <th className="py-2 px-3 font-medium">Ingresso</th>
+                        <th className="py-2 px-3 font-medium">Uscita</th>
+                        <th className="py-2 px-3 font-medium">Pause</th>
                         <th className="py-2 px-3 font-medium">Ore stimate</th>
                         <th className="py-2 px-3 font-medium">Attività</th>
                         <th className="py-2 px-3 font-medium">Stato</th>
@@ -419,40 +490,139 @@ export default function OperatoriTab() {
                           <td className="py-2 px-3 text-theme-text-primary font-medium">{formatDay(d.first)}</td>
                           <td className="py-2 px-3 text-theme-text-secondary">{formatTime(d.first)}</td>
                           <td className="py-2 px-3 text-theme-text-secondary">{formatTime(d.last)}</td>
+                          <td className="py-2 px-3 text-theme-text-muted text-xs">— <span className="text-[10px]">(Fase C)</span></td>
                           <td className="py-2 px-3 text-theme-text-primary">{d.hours.toFixed(1)} h</td>
                           <td className="py-2 px-3 text-theme-text-secondary">{d.count}</td>
-                          <td className="py-2 px-3">
-                            <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">Attivo</span>
-                          </td>
+                          <td className="py-2 px-3"><span className="inline-block px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">Attivo</span></td>
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t border-theme-border font-medium text-theme-text-primary">
+                        <td className="py-2 px-3">Totale</td>
+                        <td className="py-2 px-3 text-xs text-theme-text-muted" colSpan={3}>{stats.activeDays} giorni</td>
+                        <td className="py-2 px-3">{stats.totalHours.toFixed(1)} h</td>
+                        <td className="py-2 px-3">{stats.totalActivities}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
-              )}
-            </Section>
-
-            {/* KPIs Dipendente */}
-            <Section title="KPIs Dipendente" subtitle={`Totale: ${stats.totalActivities} attività registrate`}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {KPI_CATEGORIES.map(c => (
-                  <KpiTile key={c.key} label={c.label} emoji={c.emoji} value={stats.byCategory.get(c.key) || 0} />
-                ))}
+              }
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <PlaceholderRow label="Ferie" value="0" tag="Fase C" />
+                <PlaceholderRow label="Permessi" value="0" tag="Fase C" />
+                <PlaceholderRow label="Malattia" value="0" tag="Fase C" />
+                <PlaceholderRow label="Straordinari ufficiali" value="0" tag="Fase C" />
               </div>
             </Section>
 
-            {/* Produttività */}
+            {/* SECTION 4 — PRODUTTIVITÀ */}
             <Section title="Produttività" subtitle={stats.peakDay ? `Picco: ${formatDay(stats.peakDay.day + 'T12:00:00')} con ${stats.peakDay.count} attività` : 'Distribuzione attività per giorno'}>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-xs">
+                <StatTile label="Attività/ora lavorata" value={stats.totalHours > 0 ? (stats.totalActivities / stats.totalHours).toFixed(1) : '0.0'} />
+                <StatTile label="Media giornaliera" value={stats.activeDays > 0 ? (stats.totalActivities / stats.activeDays).toFixed(1) : '0.0'} hint="attività/giorno" />
+                <StatTile label="Vs media team" value={teamAvg > 0 ? `${((myCount / teamAvg - 1) * 100).toFixed(0)}%` : '—'} hint={`team: ${teamAvg.toFixed(0)} att.`} />
+                <StatTile label="Vs mese prec." value={prevStats.totalActivities > 0 ? `${((stats.totalActivities / prevStats.totalActivities - 1) * 100).toFixed(0)}%` : '—'} hint={`prec: ${prevStats.totalActivities} att.`} />
+              </div>
               <ProductivityChart days={stats.days} />
+              <div className="mt-3 text-xs text-theme-text-muted">
+                Tempo medio di gestione pratica e tempo medio di risposta cliente: <span className="text-amber-500">disponibile in Fase C</span> (richiede tracciamento eventi start/end).
+              </div>
             </Section>
 
-            {/* Attività Recenti */}
-            <Section title="Attività Recenti" subtitle="Log dettagliato delle azioni nel periodo">
-              {logsLoading ? (
-                <div className="text-theme-text-muted text-center py-8">Caricamento log...</div>
-              ) : logs.length === 0 ? (
-                <div className="text-theme-text-muted text-center py-8">Nessuna attività trovata.</div>
-              ) : (
+            {/* SECTION 5 — QUALITÀ DEL LAVORO */}
+            <Section title="Qualità del lavoro" subtitle="Score derivato da pattern del log (errori non tracciati esplicitamente)">
+              <div className="flex items-center gap-4 mb-4">
+                <div className={`px-4 py-2 rounded-full text-sm font-semibold ${qualityBadgeClass(quality.label)}`}>{quality.label}</div>
+                <div className="flex-1 h-2 bg-theme-bg-tertiary rounded-full overflow-hidden">
+                  <div className="h-full bg-dr7-gold" style={{ width: `${quality.score}%` }} />
+                </div>
+                <div className="text-sm font-medium text-theme-text-primary">{quality.score}/100</div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <QualityRow label="Eliminazioni post-creazione" value={quality.deletes} />
+                <QualityRow label="Modifiche multiple" value={quality.repeatedEdits} />
+                <QualityRow label="Annullamenti" value={quality.cancellations} />
+                <QualityRow label="Pratiche riaperte" value={0} tag="Fase C" />
+                <QualityRow label="Reclami collegati" value={0} tag="Fase C" />
+                <QualityRow label="Doppie lavorazioni" value={0} tag="Fase C" />
+              </div>
+            </Section>
+
+            {/* SECTION 6 — SEZIONE ECONOMICA */}
+            <Section title="Attività economiche gestite" subtitle={`Totale movimentato: ${eur(stats.totalAmount)}`}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+                <EconomicTile label="Incassi (segna pagato)" value={stats.economic.incassi} />
+                <EconomicTile label="Pagamenti parziali" value={stats.economic.parziali} />
+                <EconomicTile label="Wallet caricati" value={stats.economic.wallet} />
+                <EconomicTile label="Cauzioni cassa" value={stats.economic.cauzioni} />
+                <EconomicTile label="Penali applicate" value={stats.economic.penali} />
+                <EconomicTile label="Danni registrati" value={stats.economic.danni} />
+                <EconomicTile label="Fatture generate" value={stats.economic.fatture} />
+                <EconomicTile label="Preventivi inviati" value={stats.economic.preventivi} />
+              </div>
+              <div className="mt-3 text-xs text-theme-text-muted">
+                Insoluti aperti / recuperati e rimborsi: <span className="text-amber-500">disponibili in Fase C</span> (richiedono join con tabelle insoluti & rimborsi).
+              </div>
+            </Section>
+
+            {/* SECTION 7 — CONTROLLO PRESENZA + ATTIVITÀ */}
+            <Section title="Controllo presenza vs attività" subtitle="Incrocio tra ore stimate e attività svolte">
+              <CrossCheckList days={stats.days} totalHours={stats.totalHours} totalActivities={stats.totalActivities} />
+            </Section>
+
+            {/* SECTION 8 — INSIGHT FINALE AUTOMATICO */}
+            <Section title="Insight automatico" subtitle="Sintesi generata dai KPI del periodo">
+              <div className="bg-dr7-gold/10 border border-dr7-gold/30 rounded-xl p-4">
+                <div className="text-base text-theme-text-primary leading-relaxed">{insight}</div>
+              </div>
+            </Section>
+
+            {/* SECTION 9 — BLOCCO CONSULENTE DEL LAVORO */}
+            <Section title="Dati paghe e consulente del lavoro" subtitle="Esportazione mensile e invio automatico — completi nella Fase C">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <PayrollRow label="Mese di riferimento" value={dateFrom.slice(0, 7)} />
+                <PayrollRow label="Dipendente" value={selected.nome || selected.email} />
+                <PayrollRow label="Sede" value="—" tag="Fase B" />
+                <PayrollRow label="Giorni lavorati" value={String(stats.activeDays)} />
+                <PayrollRow label="Ore stimate" value={`${stats.totalHours.toFixed(1)} h`} />
+                <PayrollRow label="Ore ordinarie" value="—" tag="Fase C" />
+                <PayrollRow label="Straordinari" value="—" tag="Fase C" />
+                <PayrollRow label="Assenze" value="—" tag="Fase C" />
+                <PayrollRow label="Ferie" value="—" tag="Fase C" />
+                <PayrollRow label="Permessi" value="—" tag="Fase C" />
+                <PayrollRow label="Malattia" value="—" tag="Fase C" />
+                <PayrollRow label="Stato invio consulente" value="Da inviare" tag="Fase C" />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={exportCSV} className="px-3 py-2 text-xs rounded-lg border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors">Esporta riepilogo CSV</button>
+                <button onClick={sendToConsulente} className="px-3 py-2 text-xs rounded-lg border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors">Invia bozza consulente</button>
+                <span className="text-xs text-theme-text-muted self-center">Invio automatico mensile in arrivo (Fase C)</span>
+              </div>
+            </Section>
+
+            {/* SECTION 10 — TIMELINE ATTIVITÀ (long, at end) */}
+            <Section title="Timeline attività operative" subtitle="Log dettagliato con cliente, veicolo, pratica collegata">
+              <div className="flex flex-wrap gap-2 mb-3">
+                <div>
+                  <label className="block text-[10px] font-medium text-theme-text-muted mb-1">Da</label>
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-theme-text-muted mb-1">A</label>
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-theme-text-muted mb-1">Azione</label>
+                  <select value={actionFilter} onChange={e => setActionFilter(e.target.value)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold">
+                    <option value="">Tutte</option>
+                    {ACTION_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              {logsLoading ? <div className="text-theme-text-muted text-center py-8">Caricamento log...</div> :
+                logs.length === 0 ? <div className="text-theme-text-muted text-center py-8">Nessuna attività trovata.</div> :
                 <>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -461,6 +631,7 @@ export default function OperatoriTab() {
                           <th className="py-3 px-3 font-medium">Data/Ora</th>
                           <th className="py-3 px-3 font-medium">Azione</th>
                           <th className="py-3 px-3 font-medium">Dettaglio</th>
+                          <th className="py-3 px-3 font-medium">Importo</th>
                           <th className="py-3 px-3 font-medium w-8"></th>
                         </tr>
                       </thead>
@@ -470,42 +641,26 @@ export default function OperatoriTab() {
                           const entityLabel = formatEntityLabel(log)
                           const isExpanded = expandedIds.has(log.id)
                           const hasDetails = log.details && Object.keys(log.details).length > 0
+                          const amt = extractAmount(log)
                           return (
                             <Fragment key={log.id}>
-                              <tr
-                                onClick={() => {
-                                  if (!hasDetails) return
-                                  setExpandedIds(prev => {
-                                    const next = new Set(prev)
-                                    if (next.has(log.id)) next.delete(log.id)
-                                    else next.add(log.id)
-                                    return next
-                                  })
-                                }}
-                                className={`border-b border-theme-border/50 transition-colors ${hasDetails ? 'cursor-pointer hover:bg-theme-bg-hover' : ''}`}
-                              >
+                              <tr onClick={() => {
+                                if (!hasDetails) return
+                                setExpandedIds(prev => { const n = new Set(prev); if (n.has(log.id)) n.delete(log.id); else n.add(log.id); return n })
+                              }} className={`border-b border-theme-border/50 transition-colors ${hasDetails ? 'cursor-pointer hover:bg-theme-bg-hover' : ''}`}>
                                 <td className="py-3 px-3 whitespace-nowrap text-theme-text-secondary align-top">{formatDateTime(log.created_at)}</td>
-                                <td className="py-3 px-3 align-top">
-                                  <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-dr7-gold/10 text-dr7-gold">
-                                    {title}
-                                  </span>
-                                </td>
+                                <td className="py-3 px-3 align-top"><span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-dr7-gold/10 text-dr7-gold">{title}</span></td>
                                 <td className="py-3 px-3 text-theme-text-secondary align-top">
                                   {meta && <div className="text-sm">{meta}</div>}
                                   {entityLabel && <div className="text-xs text-theme-text-muted mt-0.5 font-mono">{entityLabel}</div>}
                                   {!meta && !entityLabel && <span className="text-theme-text-muted">—</span>}
                                 </td>
-                                <td className="py-3 px-3 text-theme-text-muted align-top text-xs">
-                                  {hasDetails && (isExpanded ? '▾' : '▸')}
-                                </td>
+                                <td className="py-3 px-3 text-right whitespace-nowrap text-theme-text-secondary align-top">{amt > 0 ? eur(amt) : '—'}</td>
+                                <td className="py-3 px-3 text-theme-text-muted align-top text-xs">{hasDetails && (isExpanded ? '▾' : '▸')}</td>
                               </tr>
                               {isExpanded && hasDetails && (
                                 <tr className="border-b border-theme-border/50 bg-theme-bg-tertiary/30">
-                                  <td colSpan={4} className="py-2 px-3">
-                                    <pre className="text-xs text-theme-text-muted font-mono whitespace-pre-wrap break-all">
-                                      {JSON.stringify(log.details, null, 2)}
-                                    </pre>
-                                  </td>
+                                  <td colSpan={5} className="py-2 px-3"><pre className="text-xs text-theme-text-muted font-mono whitespace-pre-wrap break-all">{JSON.stringify(log.details, null, 2)}</pre></td>
                                 </tr>
                               )}
                             </Fragment>
@@ -514,51 +669,70 @@ export default function OperatoriTab() {
                       </tbody>
                     </table>
                   </div>
-
                   <div className="flex items-center justify-between mt-4">
-                    <button
-                      onClick={() => handlePageChange(page - 1)}
-                      disabled={page === 0}
-                      className="px-4 py-2 text-sm rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Precedente
-                    </button>
+                    <button onClick={() => handlePageChange(page - 1)} disabled={page === 0} className="px-4 py-2 text-sm rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Precedente</button>
                     <span className="text-sm text-theme-text-muted">Pagina {page + 1}</span>
-                    <button
-                      onClick={() => handlePageChange(page + 1)}
-                      disabled={logs.length < PAGE_SIZE}
-                      className="px-4 py-2 text-sm rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Successiva
-                    </button>
+                    <button onClick={() => handlePageChange(page + 1)} disabled={logs.length < PAGE_SIZE} className="px-4 py-2 text-sm rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Successiva</button>
                   </div>
                 </>
-              )}
+              }
             </Section>
           </div>
 
-          {/* ─── RIGHT: sidebar ─────────────────────────────────────────── */}
+          {/* ─── RIGHT: sidebar ─────────────────────────────────────── */}
           <div className="space-y-6">
-            <Section title="Riepilogo Periodo">
+
+            {/* SECTION — STATO OPERATORE (fase B placeholder) */}
+            <Section title="Stato operatore">
+              <div className="space-y-2 text-sm">
+                <SummaryRow label="Stato" value="Attivo" />
+                <SummaryRow label="Tipo rapporto" value="Da configurare" />
+                <SummaryRow label="Ore contrattuali/sett." value="Da configurare" />
+                <SummaryRow label="Ultimo accesso" value={logs[0] ? formatDateTime(logs[0].created_at) : '—'} />
+              </div>
+              <div className="mt-3 text-[10px] text-theme-text-muted">Profilo HR completo in Fase B</div>
+            </Section>
+
+            {/* ALERT */}
+            <Section title="Alert e anomalie" subtitle={alerts.length === 0 ? 'Nessuna anomalia rilevata' : `${alerts.length} segnalazione/i`}>
+              {alerts.length === 0 ?
+                <div className="text-theme-text-muted text-sm py-2">✓ Tutto regolare nel periodo.</div> :
+                <div className="space-y-2">{alerts.map((a, i) => <AlertItem key={i} severity={a.severity} title={a.title} detail={a.detail} />)}</div>
+              }
+            </Section>
+
+            {/* RIEPILOGO PERIODO */}
+            <Section title="Riepilogo periodo">
               <SummaryRow label="Periodo" value={`${dateFrom} → ${dateTo}`} />
               <SummaryRow label="Giorni attivi" value={String(stats.activeDays)} />
               <SummaryRow label="Ore stimate" value={`${stats.totalHours.toFixed(1)} h`} />
               <SummaryRow label="Attività totali" value={String(stats.totalActivities)} />
-              <SummaryRow label="Media giornaliera" value={`${stats.avgPerDay.toFixed(1)} attività`} />
-              <SummaryRow label="Ultimo accesso" value={logs[0] ? formatDateTime(logs[0].created_at) : '—'} />
+              <SummaryRow label="Movimentato" value={eur(stats.totalAmount)} />
+              <SummaryRow label="Media team" value={`${teamAvg.toFixed(0)} att.`} />
+              <SummaryRow label="Mese precedente" value={`${prevStats.totalActivities} att. · ${prevStats.totalHours.toFixed(1)} h`} />
             </Section>
 
-            <Section title="Distribuzione Attività">
+            {/* DISTRIBUZIONE */}
+            <Section title="Distribuzione attività">
               <DistributionList byCategory={stats.byCategory} total={stats.totalActivities} />
             </Section>
 
-            <Section title="Azioni Rapide">
+            {/* AZIONI RAPIDE */}
+            <Section title="Azioni rapide">
               <div className="space-y-2">
-                <ActionRow label="Esporta CSV" emoji="⬇" onClick={exportCSV} disabled={logs.length === 0} />
+                <ActionRow label="Esporta CSV" emoji="⬇" onClick={exportCSV} disabled={aggLogs.length === 0} />
                 <ActionRow label="Stampa / PDF" emoji="🖨" onClick={() => window.print()} />
-                <ActionRow label="Aggiorna dati" emoji="↻" onClick={() => { if (selectedAdmin) loadLogs(selectedAdmin, page) }} />
+                <ActionRow label="Invia bozza consulente" emoji="📨" onClick={sendToConsulente} />
+                <ActionRow label="Aggiorna dati" emoji="↻" onClick={() => { if (selectedAdmin) { loadLogs(selectedAdmin, page); loadAggregations(selectedAdmin) } }} />
                 <ActionRow label="Filtra solo login" emoji="🔑" onClick={() => setActionFilter('login')} />
                 <ActionRow label="Reset filtri" emoji="✕" onClick={() => { setActionFilter(''); setPeriodPreset('mese') }} />
+                <ActionRow label="Apri mese precedente" emoji="◀" onClick={() => setPeriodPreset('mese-prec')} />
+                <div className="pt-2 mt-2 border-t border-theme-border/40 space-y-1 text-[10px] text-theme-text-muted">
+                  <div>Aggiungi nota interna · <span className="text-amber-500">Fase C</span></div>
+                  <div>Approva ore · <span className="text-amber-500">Fase C</span></div>
+                  <div>Correggi timbratura · <span className="text-amber-500">Fase C</span></div>
+                  <div>Confronta operatori · <span className="text-amber-500">Fase C</span></div>
+                </div>
               </div>
             </Section>
           </div>
@@ -566,6 +740,189 @@ export default function OperatoriTab() {
       )}
     </div>
   )
+}
+
+// ─── Aggregation logic ────────────────────────────────────────────────────
+
+interface DayAgg { day: string; first: string; last: string; count: number; hours: number }
+interface EconomicAgg { incassi: number; parziali: number; wallet: number; cauzioni: number; penali: number; danni: number; fatture: number; preventivi: number }
+interface Stats {
+  byCategory: Map<KpiKey, number>
+  days: DayAgg[]
+  totalHours: number
+  totalActivities: number
+  activeDays: number
+  avgPerDay: number
+  peakDay: { day: string; count: number } | null
+  totalAmount: number
+  economic: EconomicAgg
+}
+
+function computeStats(logs: LogEntry[]): Stats {
+  const byDay = new Map<string, { first: string; last: string; count: number }>()
+  const byCategory = new Map<KpiKey, number>()
+  const economic: EconomicAgg = { incassi: 0, parziali: 0, wallet: 0, cauzioni: 0, penali: 0, danni: 0, fatture: 0, preventivi: 0 }
+  let totalAmount = 0
+
+  for (const log of logs) {
+    const k = dayKey(log.created_at)
+    const cur = byDay.get(k)
+    if (!cur) byDay.set(k, { first: log.created_at, last: log.created_at, count: 1 })
+    else {
+      if (log.created_at < cur.first) cur.first = log.created_at
+      if (log.created_at > cur.last) cur.last = log.created_at
+      cur.count += 1
+    }
+    const cat = classifyAction(log.action)
+    byCategory.set(cat, (byCategory.get(cat) || 0) + 1)
+
+    const amt = extractAmount(log)
+    if (amt > 0) {
+      totalAmount += amt
+      if (log.action === 'mark_paid' || log.action === 'mark_extension_paid' || log.action === 'mark_all_customer_paid' || log.action === 'mark_fattura_item_paid' || log.action === 'mark_type_paid') economic.incassi += amt
+      else if (log.action === 'partial_payment') economic.parziali += amt
+      else if (log.action === 'cassa_cauzione') economic.cauzioni += amt
+      else if (log.action.includes('wallet') || log.action.includes('topup')) economic.wallet += amt
+      else if (log.action.includes('penalt') || log.action.includes('penali')) economic.penali += amt
+      else if (log.action.includes('danni')) economic.danni += amt
+      else if (log.action.includes('fattura')) economic.fatture += amt
+      else if (log.action.startsWith('preventivo')) economic.preventivi += amt
+    }
+  }
+
+  const days: DayAgg[] = Array.from(byDay.entries()).map(([day, v]) => {
+    const ms = new Date(v.last).getTime() - new Date(v.first).getTime()
+    const hours = Math.min(12, Math.max(0, ms / 3_600_000))
+    return { day, first: v.first, last: v.last, count: v.count, hours }
+  }).sort((a, b) => b.day.localeCompare(a.day))
+
+  const totalHours = days.reduce((s, d) => s + d.hours, 0)
+  const totalActivities = logs.length
+  const activeDays = days.length
+  const avgPerDay = activeDays > 0 ? totalActivities / activeDays : 0
+  const peakDay = days.reduce<{ day: string; count: number } | null>((max, d) => !max || d.count > max.count ? { day: d.day, count: d.count } : max, null)
+
+  return { byCategory, days, totalHours, totalActivities, activeDays, avgPerDay, peakDay, totalAmount, economic }
+}
+
+function weekHours(days: DayAgg[]): number {
+  // sum hours for the most recent 7-day window present in the data
+  if (days.length === 0) return 0
+  const sorted = [...days].sort((a, b) => b.day.localeCompare(a.day))
+  const latest = new Date(sorted[0].day)
+  const cutoff = new Date(latest); cutoff.setDate(cutoff.getDate() - 6)
+  const cutoffKey = cutoff.toLocaleDateString('en-CA', { timeZone: ROME_TZ })
+  return sorted.filter(d => d.day >= cutoffKey).reduce((s, d) => s + d.hours, 0)
+}
+
+// ─── Alert engine ─────────────────────────────────────────────────────────
+
+interface Alert { severity: 'low' | 'med' | 'high'; title: string; detail: string }
+
+function buildAlerts(logs: LogEntry[], stats: Stats): Alert[] {
+  const alerts: Alert[] = []
+
+  // Off-hours activity (before 6 or after 22 Rome)
+  const offHours = logs.filter(l => {
+    const t = new Date(l.created_at).toLocaleString('en-GB', { timeZone: ROME_TZ, hour: '2-digit', hour12: false })
+    const h = parseInt(t, 10)
+    return h < 6 || h >= 22
+  }).length
+  if (offHours > 0) alerts.push({ severity: offHours > 5 ? 'med' : 'low', title: 'Attività fuori orario', detail: `${offHours} azione/i prima delle 06:00 o dopo le 22:00 (Europe/Rome)` })
+
+  // Excessive deletes in single day
+  const deletesByDay = new Map<string, number>()
+  for (const l of logs) {
+    if (!l.action.includes('delete')) continue
+    const k = dayKey(l.created_at)
+    deletesByDay.set(k, (deletesByDay.get(k) || 0) + 1)
+  }
+  let maxDeletes = 0; let deleteDay = ''
+  deletesByDay.forEach((v, k) => { if (v > maxDeletes) { maxDeletes = v; deleteDay = k } })
+  if (maxDeletes >= 5) alerts.push({ severity: 'high', title: 'Molte eliminazioni concentrate', detail: `${maxDeletes} eliminazioni il ${deleteDay}` })
+  else if (maxDeletes >= 3) alerts.push({ severity: 'med', title: 'Eliminazioni elevate', detail: `${maxDeletes} eliminazioni il ${deleteDay}` })
+
+  // Low activity day (<2 actions but >0)
+  const lowDays = stats.days.filter(d => d.count <= 2 && d.hours < 1).length
+  if (lowDays >= 3) alerts.push({ severity: 'low', title: 'Giornate a bassa attività', detail: `${lowDays} giorni con ≤2 azioni e <1 h stimata` })
+
+  // High hours / no commensurate activity
+  const noiseDays = stats.days.filter(d => d.hours >= 6 && d.count <= 5).length
+  if (noiseDays > 0) alerts.push({ severity: 'med', title: 'Ore alte / poche attività', detail: `${noiseDays} giorno/i con ≥6 h ma ≤5 azioni — possibile incoerenza` })
+
+  // Penali/danni voids
+  const penaltyDeletes = logs.filter(l => l.action === 'delete_penalty' || (l.action === 'edit_booking' && l.details?.changes?.includes?.('penalty'))).length
+  if (penaltyDeletes > 0) alerts.push({ severity: 'med', title: 'Penali rimosse/modificate', detail: `${penaltyDeletes} azione/i sensibili` })
+
+  // Mass-send WhatsApp
+  const bulks = logs.filter(l => l.action === 'whatsapp_bulk_send').length
+  if (bulks > 5) alerts.push({ severity: 'low', title: 'Invii massivi frequenti', detail: `${bulks} invii WhatsApp massivi nel periodo` })
+
+  return alerts
+}
+
+// ─── Quality scoring ──────────────────────────────────────────────────────
+
+interface Quality { score: number; label: 'Ottimo' | 'Buono' | 'Sufficiente' | 'Critico'; deletes: number; repeatedEdits: number; cancellations: number }
+
+function buildQuality(logs: LogEntry[]): Quality {
+  const deletes = logs.filter(l => l.action.includes('delete')).length
+  const cancellations = logs.filter(l => l.action.includes('cancel') || l.action === 'preventivo_rejected').length
+  // Repeated edits: same entity_id edited 3+ times
+  const editCounts = new Map<string, number>()
+  for (const l of logs) {
+    if (!l.action.includes('edit')) continue
+    if (!l.entity_id) continue
+    editCounts.set(l.entity_id, (editCounts.get(l.entity_id) || 0) + 1)
+  }
+  let repeatedEdits = 0
+  editCounts.forEach(v => { if (v >= 3) repeatedEdits += 1 })
+
+  // Score formula: start at 100, subtract for negative signals
+  let score = 100
+  score -= Math.min(30, deletes * 2)
+  score -= Math.min(20, cancellations * 3)
+  score -= Math.min(20, repeatedEdits * 5)
+  if (score < 0) score = 0
+
+  const label: Quality['label'] = score >= 85 ? 'Ottimo' : score >= 70 ? 'Buono' : score >= 50 ? 'Sufficiente' : 'Critico'
+  return { score, label, deletes, repeatedEdits, cancellations }
+}
+
+function qualityBadgeClass(label: Quality['label']): string {
+  if (label === 'Ottimo') return 'bg-emerald-100 text-emerald-700'
+  if (label === 'Buono') return 'bg-sky-100 text-sky-700'
+  if (label === 'Sufficiente') return 'bg-amber-100 text-amber-700'
+  return 'bg-rose-100 text-rose-700'
+}
+
+// ─── Insight builder ──────────────────────────────────────────────────────
+
+function buildInsight(stats: Stats, prev: Stats, alerts: Alert[], teamAvg: number, myCount: number): string {
+  if (stats.totalActivities === 0) return 'Nessuna attività registrata nel periodo selezionato.'
+
+  const productive = stats.totalHours > 0 && (stats.totalActivities / stats.totalHours) >= 5
+  const consistent = stats.activeDays >= 15
+  const vsTeam = teamAvg > 0 ? myCount / teamAvg : 1
+  const vsPrev = prev.totalActivities > 0 ? stats.totalActivities / prev.totalActivities : 1
+  const highSeverityAlerts = alerts.filter(a => a.severity === 'high').length
+  const medSeverityAlerts = alerts.filter(a => a.severity === 'med').length
+
+  if (productive && consistent && vsTeam > 1.2 && highSeverityAlerts === 0)
+    return `Operatore molto produttivo e regolare: ${stats.totalActivities} attività in ${stats.activeDays} giorni, ${(vsTeam * 100 - 100).toFixed(0)}% sopra la media team.`
+  if (highSeverityAlerts > 0)
+    return `Da monitorare: ${highSeverityAlerts} anomalia/e ad alta priorità rilevata/e nel periodo. Verificare la sezione Alert.`
+  if (medSeverityAlerts > 0 && productive)
+    return `Alta produttività ma ${medSeverityAlerts} segnalazione/i operativa/e — buon volume con alcuni pattern da rivedere.`
+  if (productive && vsPrev > 1.2)
+    return `Trend positivo: produttività in crescita del ${(vsPrev * 100 - 100).toFixed(0)}% rispetto al mese precedente.`
+  if (!productive && consistent)
+    return `Buona presenza ma bassa produttività media (${(stats.totalActivities / Math.max(1, stats.totalHours)).toFixed(1)} att./ora). Verificare distribuzione del lavoro.`
+  if (vsTeam < 0.7 && consistent)
+    return `Operatore presente ma sotto la media team (${(vsTeam * 100).toFixed(0)}% del team). Possibile redistribuzione carico.`
+  if (stats.activeDays < 5)
+    return `Periodo con presenza ridotta: ${stats.activeDays} giorni attivi. Verificare ferie/permessi.`
+  return `Operatore regolare: ${stats.totalActivities} attività in ${stats.activeDays} giorni, ${stats.totalHours.toFixed(1)} h stimate.`
 }
 
 // ─── Subcomponents ────────────────────────────────────────────────────────
@@ -586,7 +943,7 @@ function StatTile({ label, value, suffix, hint }: { label: string; value: string
   return (
     <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded-xl p-3">
       <div className="text-xs text-theme-text-muted">{label}</div>
-      <div className="text-2xl font-bold text-theme-text-primary mt-1">
+      <div className="text-xl font-bold text-theme-text-primary mt-1">
         {value}
         {suffix && <span className="text-base font-medium text-theme-text-secondary ml-1">{suffix}</span>}
       </div>
@@ -599,15 +956,65 @@ function KpiTile({ label, emoji, value }: { label: string; emoji: string; value:
   return (
     <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded-xl p-3 text-center">
       <div className="text-xl">{emoji}</div>
-      <div className="text-2xl font-bold text-theme-text-primary mt-1">{value}</div>
-      <div className="text-xs text-theme-text-muted mt-0.5">{label}</div>
+      <div className="text-xl font-bold text-theme-text-primary mt-1">{value}</div>
+      <div className="text-[11px] text-theme-text-muted mt-0.5">{label}</div>
     </div>
   )
 }
 
-function ProductivityChart({ days }: { days: Array<{ day: string; count: number }> }) {
+function EconomicTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded-xl p-3">
+      <div className="text-[11px] text-theme-text-muted">{label}</div>
+      <div className="text-base font-bold text-theme-text-primary mt-1">{value > 0 ? eur(value) : '—'}</div>
+    </div>
+  )
+}
+
+function ProfileField({ label, value, tag }: { label: string; value: string; tag?: string }) {
+  return (
+    <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded-lg px-3 py-2">
+      <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">{label}</div>
+      <div className="text-sm text-theme-text-primary mt-0.5">{value}</div>
+      {tag && <div className="text-[9px] text-amber-500 mt-0.5">{tag}</div>}
+    </div>
+  )
+}
+
+function PlaceholderRow({ label, value, tag }: { label: string; value: string; tag?: string }) {
+  return (
+    <div className="flex items-center justify-between bg-theme-bg-tertiary/30 border border-theme-border rounded-lg px-3 py-2">
+      <span className="text-theme-text-muted">{label}</span>
+      <span className="flex items-center gap-2"><span className="text-theme-text-secondary">{value}</span>{tag && <span className="text-[9px] text-amber-500">{tag}</span>}</span>
+    </div>
+  )
+}
+
+function PayrollRow({ label, value, tag }: { label: string; value: string; tag?: string }) {
+  return (
+    <div className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg px-3 py-2">
+      <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">{label}</div>
+      <div className="text-sm text-theme-text-primary mt-0.5">{value}</div>
+      {tag && <div className="text-[9px] text-amber-500 mt-0.5">{tag}</div>}
+    </div>
+  )
+}
+
+function QualityRow({ label, value, tag }: { label: string; value: number; tag?: string }) {
+  return (
+    <div className="flex items-center justify-between bg-theme-bg-tertiary/30 border border-theme-border rounded-lg px-3 py-2">
+      <span className="text-theme-text-muted">{label}</span>
+      <span className="flex items-center gap-2">
+        <span className={`text-sm font-medium ${value > 0 ? 'text-amber-500' : 'text-theme-text-primary'}`}>{value}</span>
+        {tag && <span className="text-[9px] text-theme-text-muted">{tag}</span>}
+      </span>
+    </div>
+  )
+}
+
+function ProductivityChart({ days }: { days: DayAgg[] }) {
   if (days.length === 0) return <div className="text-theme-text-muted text-sm py-4">Nessun dato.</div>
-  const ordered = [...days].reverse() // chronological left-to-right
+  const ordered = [...days].reverse()
   const max = Math.max(...ordered.map(d => d.count), 1)
   return (
     <div className="flex items-end gap-1.5 h-40">
@@ -625,6 +1032,37 @@ function ProductivityChart({ days }: { days: Array<{ day: string; count: number 
   )
 }
 
+function CrossCheckList({ days, totalHours, totalActivities }: { days: DayAgg[]; totalHours: number; totalActivities: number }) {
+  const ratio = totalHours > 0 ? totalActivities / totalHours : 0
+  const bands = days.map(d => {
+    const r = d.hours > 0 ? d.count / d.hours : 0
+    let level: 'Alta' | 'Normale' | 'Bassa' | 'Anomala'
+    if (d.hours >= 6 && d.count <= 3) level = 'Anomala'
+    else if (r >= 5) level = 'Alta'
+    else if (r >= 1.5) level = 'Normale'
+    else level = 'Bassa'
+    return { ...d, ratio: r, level }
+  })
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-3 text-sm">
+        <span className="text-theme-text-muted">Globale:</span>
+        <span className="font-medium text-theme-text-primary">{ratio.toFixed(1)} att./h stimata</span>
+        <span className="text-xs text-theme-text-muted">({totalActivities} att. in {totalHours.toFixed(1)} h)</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+        {bands.slice(0, 8).map(b => (
+          <div key={b.day} className="flex items-center justify-between bg-theme-bg-tertiary/30 rounded-lg px-3 py-2">
+            <span className="text-theme-text-muted">{formatDay(b.first)}</span>
+            <span className="text-theme-text-secondary">{b.hours.toFixed(1)} h · {b.count} att.</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] ${b.level === 'Alta' ? 'bg-emerald-100 text-emerald-700' : b.level === 'Normale' ? 'bg-sky-100 text-sky-700' : b.level === 'Bassa' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{b.level}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between py-1.5 border-b border-theme-border/40 last:border-b-0 text-sm">
@@ -634,11 +1072,11 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function DistributionList({ byCategory, total }: { byCategory: Map<string, number>; total: number }) {
+function DistributionList({ byCategory, total }: { byCategory: Map<KpiKey, number>; total: number }) {
   if (total === 0) return <div className="text-theme-text-muted text-sm">Nessuna attività.</div>
   return (
     <div className="space-y-2">
-      {KPI_CATEGORIES.filter(c => (byCategory.get(c.key) || 0) > 0).map(c => {
+      {KPI_DEFS.filter(c => (byCategory.get(c.key) || 0) > 0).map(c => {
         const v = byCategory.get(c.key) || 0
         const pct = total > 0 ? (v / total) * 100 : 0
         return (
@@ -659,13 +1097,25 @@ function DistributionList({ byCategory, total }: { byCategory: Map<string, numbe
 
 function ActionRow({ label, emoji, onClick, disabled }: { label: string; emoji: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-theme-border text-sm text-theme-text-secondary hover:bg-theme-bg-hover hover:border-dr7-gold/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-    >
+    <button onClick={onClick} disabled={disabled} className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-theme-border text-sm text-theme-text-secondary hover:bg-theme-bg-hover hover:border-dr7-gold/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
       <span className="flex items-center gap-2"><span>{emoji}</span><span>{label}</span></span>
       <span className="text-theme-text-muted">›</span>
     </button>
+  )
+}
+
+function AlertItem({ severity, title, detail }: { severity: 'low' | 'med' | 'high'; title: string; detail: string }) {
+  const cls = severity === 'high' ? 'border-rose-300 bg-rose-50 text-rose-800' : severity === 'med' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-sky-300 bg-sky-50 text-sky-800'
+  const icon = severity === 'high' ? '🛑' : severity === 'med' ? '⚠' : 'ℹ'
+  return (
+    <div className={`border rounded-lg px-3 py-2 ${cls}`}>
+      <div className="flex items-start gap-2">
+        <span className="text-base leading-tight">{icon}</span>
+        <div className="flex-1">
+          <div className="text-sm font-semibold">{title}</div>
+          <div className="text-xs opacity-80 mt-0.5">{detail}</div>
+        </div>
+      </div>
+    </div>
   )
 }
