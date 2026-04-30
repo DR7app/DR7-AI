@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
 
 interface Customer {
     id: string
@@ -6,6 +7,7 @@ interface Customer {
     email: string | null
     phone: string | null
     scadenza_patente?: string | null
+    user_id?: string | null
 }
 
 interface CustomerAutocompleteProps {
@@ -175,8 +177,14 @@ export default function CustomerAutocomplete({
                                 : 'hover:bg-theme-bg-secondary/50 border-l-4 border-l-transparent'
                                 }`}
                         >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-semibold text-theme-text-primary">{customer.full_name}</span>
+                                <ClientStatusBadge
+                                    customerId={customer.id}
+                                    userId={customer.user_id}
+                                    email={customer.email}
+                                    phone={customer.phone}
+                                />
                                 {customer.scadenza_patente && new Date(customer.scadenza_patente) < new Date() && (
                                     <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/40 rounded text-[10px] font-bold text-red-400 uppercase whitespace-nowrap">Patente scaduta</span>
                                 )}
@@ -196,6 +204,20 @@ export default function CustomerAutocomplete({
                     className="absolute z-50 w-full mt-1 bg-theme-bg-secondary border border-theme-border-light rounded shadow-lg px-3 py-2"
                 >
                     <div className="text-theme-text-muted text-sm">Nessun cliente trovato</div>
+                </div>
+            )}
+
+            {/* Selected client status indicator */}
+            {selectedCustomer && !isOpen && (
+                <div className="mt-1.5 flex items-center gap-2 text-xs text-theme-text-muted">
+                    <span>Stato cliente:</span>
+                    <ClientStatusBadge
+                        customerId={selectedCustomer.id}
+                        userId={selectedCustomer.user_id}
+                        email={selectedCustomer.email}
+                        phone={selectedCustomer.phone}
+                        size="md"
+                    />
                 </div>
             )}
 
