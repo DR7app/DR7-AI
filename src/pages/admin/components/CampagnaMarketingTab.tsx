@@ -681,7 +681,7 @@ export default function CampagnaMarketingTab() {
                                         {canResume && (
                                             <button
                                                 onClick={() => handleResume(c)}
-                                                className="px-3 py-1 rounded-full text-xs font-medium bg-dr7-gold/20 text-dr7-gold hover:bg-dr7-gold/30"
+                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] whitespace-nowrap"
                                             >
                                                 Riprova non inviati
                                             </button>
