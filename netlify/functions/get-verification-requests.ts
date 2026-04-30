@@ -83,11 +83,38 @@ export const handler: Handler = async (event) => {
         }
 
         // 3. Fallback for missing users:
-        // First try the 'customers' table (legacy or other source)
+        // First, some user_documents rows were inserted with user_id set to
+        // the customers_extended row PK (legacy admin-side upload paths
+        // that used `customer_id` as the storage folder). Try resolving by
+        // customers_extended.id so those docs also get a real customer.
+        const missingFromExtendedByUserId = userIds.filter(id => !userMap.has(id))
+
+        if (missingFromExtendedByUserId.length > 0) {
+            const { data: extendedById } = await supabase
+                .from('customers_extended')
+                .select(`
+                    id, user_id, tipo_cliente, nome, cognome, sesso, email,
+                    telefono, codice_fiscale, data_nascita, luogo_nascita,
+                    indirizzo, numero_civico, citta_residenza, provincia, cap,
+                    nazione, numero_patente, categoria_patente, ente_rilascio,
+                    data_rilascio, data_scadenza, ragione_sociale, denominazione,
+                    partita_iva, codice_destinatario, pec, codice_ipa,
+                    codice_univoco, rappresentante_legale, metadata, source,
+                    created_at, updated_at
+                `)
+                .in('id', missingFromExtendedByUserId)
+
+            if (extendedById) {
+                // Key by .id here — that's what doc.user_id holds for these rows
+                extendedById.forEach(u => userMap.set(u.id, u))
+            }
+        }
+
+        // Then try the 'customers' table (legacy or other source)
         const missingFromExtended = userIds.filter(id => !userMap.has(id))
 
         if (missingFromExtended.length > 0) {
-            const { data: legacyUsers, error: legacyError } = await supabase
+            const { data: legacyUsers } = await supabase
                 .from('customers')
                 .select('id, full_name, email, created_at')
                 .in('id', missingFromExtended)
