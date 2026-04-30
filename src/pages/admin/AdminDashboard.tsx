@@ -15,6 +15,7 @@ const CustomersTab = lazyWithRetry(() => import('./components/CustomersTab'))
 const CustomerWalletTab = lazyWithRetry(() => import('./components/CustomerWalletTab'))
 const SiteUsersTab = lazyWithRetry(() => import('./components/SiteUsersTab'))
 const VehiclesTab = lazyWithRetry(() => import('./components/VehiclesTab'))
+const FornitoriTab = lazyWithRetry(() => import('./components/FornitoriTab'))
 const CalendarTab = lazyWithRetry(() => import('./components/CalendarTab'))
 const CarWashBookingsTab = lazyWithRetry(() => import('./components/CarWashBookingsTab'))
 const CarWashCalendarTab = lazyWithRetry(() => import('./components/CarWashCalendarTab'))
@@ -58,7 +59,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'campaign-center' | 'gestione-otp' | 'verifica-documenti'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'campaign-center' | 'gestione-otp' | 'verifica-documenti' | 'fornitori'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -254,6 +255,7 @@ export default function AdminDashboard() {
       { tab: 'cauzioni', label: 'Cauzioni' },
       { tab: 'scadenze', label: 'Scadenze' },
       { tab: 'fattura', label: 'Fattura' },
+      { tab: 'fornitori', label: 'Fornitori' },
       { tab: 'nexi', label: 'Nexi' },
       { tab: 'gestione-otp', label: 'Gestione OTP' },
       { tab: 'verifica-documenti', label: 'Verifica Documenti' },
@@ -288,6 +290,7 @@ export default function AdminDashboard() {
     'emtn': 'E.M.T.N.',
     'gestione-otp': 'Gestione OTP',
     'verifica-documenti': 'Verifica Documenti',
+    'fornitori': 'Fornitori',
     'carwash': 'Prenotazioni Prime Wash',
     'carwash-calendar': 'Calendario Prime Wash',
     'carwash-catalog': 'Catalogo Prime Wash',
@@ -630,6 +633,7 @@ export default function AdminDashboard() {
           {activeTab === 'campaign-center' && <CampaignCenterTab />}
           {activeTab === 'gestione-otp' && <GestioneOtpTab />}
           {activeTab === 'verifica-documenti' && <DocumentsVerificationTab />}
+          {activeTab === 'fornitori' && <FornitoriTab />}
           </div>
           </Suspense>
         </main>

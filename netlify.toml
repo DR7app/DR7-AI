@@ -73,6 +73,10 @@
 [functions."payout-club-wallet-interest"]
   schedule = "0 2 1 * *"
 
+# Fornitori — daily 8:00 Rome alerts (scadenze, bolle mancanti)
+[functions."fornitori-alerts-cron"]
+  schedule = "0 6 * * *"
+
 # SPA catch-all: ONLY for non-asset routes
 # Netlify serves existing files first, then applies redirects.
 # When a fingerprinted chunk is missing (stale HTML after deploy),
