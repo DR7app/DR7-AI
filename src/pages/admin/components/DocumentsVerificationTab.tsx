@@ -255,15 +255,25 @@ export default function DocumentsVerificationTab() {
     }
   }
 
-  async function updateDocumentStatus(documentId: string, status: 'verified' | 'rejected', reason?: string) {
+  async function updateDocumentStatus(
+    documentId: string,
+    status: 'verified' | 'rejected' | 'pending_verification',
+    reason?: string
+  ) {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updateData: any = {
-        status,
-        verified_at: new Date().toISOString(),
-        verified_by: user?.id
+      const updateData: any = { status }
+
+      if (status === 'verified' || status === 'rejected') {
+        updateData.verified_at = new Date().toISOString()
+        updateData.verified_by = user?.id
+      } else {
+        // Reopening — clear any prior verification trail
+        updateData.verified_at = null
+        updateData.verified_by = null
+        updateData.rejection_reason = null
       }
 
       if (status === 'rejected' && reason) {
@@ -277,7 +287,10 @@ export default function DocumentsVerificationTab() {
 
       if (error) throw error
 
-      toast.success(`Documento ${status === 'verified' ? 'verificato' : 'rifiutato'} con successo!`)
+      const msg =
+        status === 'verified' ? 'verificato' :
+        status === 'rejected' ? 'rifiutato' : 'riaperto'
+      toast.success(`Documento ${msg} con successo!`)
       setShowDocModal(false)
       setSelectedDoc(null)
       setRejectionReason('')
@@ -650,37 +663,63 @@ export default function DocumentsVerificationTab() {
                             {doc.rejection_reason}
                           </p>
                         )}
-                        {isPending ? (
-                          autoVerifying.has(doc.id) ? (
-                            <div className="flex items-center justify-center gap-2 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-[12px] font-semibold">
-                              <span className="inline-block w-3 h-3 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
-                              Auto-verifica…
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-2 gap-1.5">
-                              <button
-                                onClick={() => updateDocumentStatus(doc.id, 'verified')}
-                                className="px-3 py-1.5 bg-green-500/90 hover:bg-green-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
-                                title="Accetta"
-                              >
-                                Accetta
-                              </button>
-                              <button
-                                onClick={() => { setSelectedDoc(doc); setShowDocModal(true) }}
-                                className="px-3 py-1.5 bg-red-500/90 hover:bg-red-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
-                                title="Rifiuta"
-                              >
-                                Rifiuta
-                              </button>
-                            </div>
-                          )
+                        {autoVerifying.has(doc.id) ? (
+                          <div className="flex items-center justify-center gap-2 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-xl text-[12px] font-semibold">
+                            <span className="inline-block w-3 h-3 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
+                            Auto-verifica…
+                          </div>
+                        ) : doc.status === 'pending_verification' ? (
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              onClick={() => updateDocumentStatus(doc.id, 'verified')}
+                              className="px-3 py-1.5 bg-green-500/90 hover:bg-green-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
+                              title="Accetta"
+                            >
+                              Accetta
+                            </button>
+                            <button
+                              onClick={() => { setSelectedDoc(doc); setShowDocModal(true) }}
+                              className="px-3 py-1.5 bg-red-500/90 hover:bg-red-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
+                              title="Rifiuta"
+                            >
+                              Rifiuta
+                            </button>
+                          </div>
+                        ) : doc.status === 'rejected' ? (
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              onClick={() => updateDocumentStatus(doc.id, 'verified')}
+                              className="px-3 py-1.5 bg-green-500/90 hover:bg-green-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
+                              title="Accetta comunque"
+                            >
+                              Accetta
+                            </button>
+                            <button
+                              onClick={() => updateDocumentStatus(doc.id, 'pending_verification')}
+                              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover active:scale-[0.98] text-theme-text-primary rounded-xl text-[12px] font-semibold transition-all"
+                              title="Riapri (torna in attesa)"
+                            >
+                              Riapri
+                            </button>
+                          </div>
                         ) : (
-                          <button
-                            onClick={() => url ? setLightboxUrl(url) : viewDocument(doc)}
-                            className="w-full px-3 py-1.5 bg-theme-bg-tertiary/70 hover:bg-theme-bg-tertiary text-theme-text-primary rounded-xl text-[12px] font-semibold transition-colors"
-                          >
-                            Apri
-                          </button>
+                          /* verified */
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              onClick={() => { setSelectedDoc(doc); setShowDocModal(true) }}
+                              className="px-3 py-1.5 bg-red-500/90 hover:bg-red-500 active:scale-[0.98] text-white rounded-xl text-[12px] font-semibold transition-all shadow-sm"
+                              title="Rifiuta"
+                            >
+                              Rifiuta
+                            </button>
+                            <button
+                              onClick={() => updateDocumentStatus(doc.id, 'pending_verification')}
+                              className="px-3 py-1.5 bg-theme-bg-tertiary hover:bg-theme-bg-hover active:scale-[0.98] text-theme-text-primary rounded-xl text-[12px] font-semibold transition-all"
+                              title="Riapri (torna in attesa)"
+                            >
+                              Riapri
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
