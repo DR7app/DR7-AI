@@ -794,22 +794,11 @@ export default function ReviewManagementTab() {
     )
   }
 
-  // ── Loading state ─────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-xl text-theme-text-primary">Caricamento...</div>
-      </div>
-    )
-  }
-
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render-derived data (must be computed BEFORE any early return so
+  //     the React hooks order stays stable across renders) ───────────────────
 
   // Stats derived from the same candidate list shown below, so the numbers
-  // on the cards always match what the operator can actually see (the raw
-  // backend counts include Lavaggio Rientro etc. and produce off-by-100
-  // mismatches — never use them for the cards).
+  // on the cards always match what the operator can actually see.
   const visibleCandidates = useMemo(() => {
     return candidates.filter(c => {
       const name = (c.customer_name || '').toLowerCase()
@@ -825,6 +814,18 @@ export default function ReviewManagementTab() {
     failed: visibleCandidates.filter(c => c.send_status === 'FAILED').length,
     excluded: visibleCandidates.filter(c => c.eligibility_status === 'EXCLUDED').length,
   }), [visibleCandidates])
+
+  // ── Loading state ─────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-xl text-theme-text-primary">Caricamento...</div>
+      </div>
+    )
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   // Pronti and Esclusi sections share the user's category + search filters,
   // and Esclusi additionally respects motivoFilter (Penali / Danni / Cauzione
