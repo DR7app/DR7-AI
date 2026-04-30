@@ -199,6 +199,7 @@ async function generateVehicleReport(
     .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email')
     .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
     .or('customer_email.is.null,customer_email.neq.admin@dr7.app')
+    .not('vehicle_plate', 'in', '("TEST000","TEST002")')
 
   if (bookingsError) throw bookingsError
 
@@ -814,6 +815,7 @@ async function generateWashReport(
     .gte('appointment_date', monthStartISO + 'T00:00:00')
     .lte('appointment_date', monthEndISO + 'T23:59:59')
     .in('status', ['confirmed', 'confermata', 'completed', 'in_corso'])
+    .not('vehicle_plate', 'in', '("TEST000","TEST002")')
 
   if (washError) throw washError
 

@@ -126,6 +126,7 @@ export const handler: Handler = async (event) => {
       .lt('pickup_date', monthStartISO + 'T00:00:00')
       .gte('dropoff_date', monthStartISO + 'T00:00:00')
       .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
+      .not('vehicle_plate', 'in', '("TEST000","TEST002")')
 
     // Filter rental bookings helper
     const filterRentals = (bookings: any[]) => bookings.filter(b => {
