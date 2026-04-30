@@ -127,7 +127,8 @@ export default function ReferralProgramTab() {
       .select('*')
       .single()
     if (error) {
-      toast.error('Errore caricamento statistiche')
+      console.error('[ReferralProgramTab] referral_program_stats error:', error)
+      toast.error(`Errore caricamento statistiche: ${error.message || error.code || 'sconosciuto'}`)
       return
     }
     if (data) setStats(data)
@@ -135,16 +136,42 @@ export default function ReferralProgramTab() {
 
   async function loadParticipants() {
     setLoading(true)
-    const { data, error } = await supabase
+    const { data: parts, error: partsError } = await supabase
       .from('referral_participants')
-      .select('*, wallets(balance_cents, total_earned_cents, total_topped_up_cents)')
+      .select('*')
       .order('created_at', { ascending: false })
-    if (error) {
-      toast.error('Errore caricamento partecipanti')
+    if (partsError) {
+      console.error('[ReferralProgramTab] referral_participants error:', partsError)
+      toast.error(`Errore caricamento partecipanti: ${partsError.message || partsError.code || 'sconosciuto'}`)
       setLoading(false)
       return
     }
-    if (data) setParticipants(data)
+
+    const ids = (parts || []).map(p => p.id)
+    let walletsByParticipant = new Map<string, { balance_cents: number; total_earned_cents: number; total_topped_up_cents: number }>()
+    if (ids.length > 0) {
+      const { data: wallets, error: walletsError } = await supabase
+        .from('wallets')
+        .select('participant_id, balance_cents, total_earned_cents, total_topped_up_cents')
+        .in('participant_id', ids)
+      if (walletsError) {
+        console.warn('[ReferralProgramTab] wallets fetch failed (continuing without balances):', walletsError)
+      } else if (wallets) {
+        for (const w of wallets) {
+          if (w.participant_id) walletsByParticipant.set(w.participant_id, {
+            balance_cents: w.balance_cents || 0,
+            total_earned_cents: w.total_earned_cents || 0,
+            total_topped_up_cents: w.total_topped_up_cents || 0,
+          })
+        }
+      }
+    }
+
+    const merged = (parts || []).map(p => ({
+      ...p,
+      wallets: walletsByParticipant.has(p.id) ? [walletsByParticipant.get(p.id)!] : [],
+    }))
+    setParticipants(merged as Participant[])
     setLoading(false)
   }
 
