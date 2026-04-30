@@ -83,8 +83,6 @@ export default function ReviewManagementTab() {
   const [loading, setLoading] = useState(true)
   const [filterServiceType, setFilterServiceType] = useState<'ALL' | 'RENTAL' | 'WASH'>('ALL')
   const [searchTerm, setSearchTerm] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(25)
   const [selectAll, setSelectAll] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showSettings, setShowSettings] = useState(false)
@@ -255,8 +253,8 @@ export default function ReviewManagementTab() {
   async function fetchCandidates() {
     try {
       // Fetch all three eligibility buckets in parallel — the page renders them
-      // as separate stacked sections (Pronti / Da Verificare / Esclusi), so we
-      // need them all at once.
+      // as separate stacked sections (Pronti / Esclusi), so we need them all
+      // at once.
       const buckets: TabKey[] = ['ELIGIBLE', 'TO_REVIEW', 'EXCLUDED']
       const results = await Promise.all(buckets.map(b =>
         fetch(`${NETLIFY_BASE}/review-candidates?${new URLSearchParams({ eligibility_status: b, service_type: filterServiceType })}`)
@@ -264,7 +262,18 @@ export default function ReviewManagementTab() {
           .catch(() => ({ candidates: [] }))
       ))
       const merged = results.flatMap(d => d.candidates || d || [])
-      setCandidates(merged)
+      // Dedupe by id — a row can briefly appear in two buckets while the
+      // background autoFixEligibility sweep is moving it ELIGIBLE→TO_REVIEW,
+      // and we don't want the same person rendered twice. Keep the most
+      // recently updated copy when there's a conflict.
+      const byId = new Map<string, ReviewCandidate>()
+      for (const c of merged) {
+        const existing = byId.get(c.id)
+        if (!existing || (c.updated_at || '') > (existing.updated_at || '')) {
+          byId.set(c.id, c)
+        }
+      }
+      setCandidates(Array.from(byId.values()))
     } catch (err: unknown) {
       console.error('fetchCandidates error:', err)
       toast.error('Errore nel caricamento dei candidati recensione')
@@ -774,13 +783,12 @@ export default function ReviewManagementTab() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  // Pagination derived from filtered candidates
-  const totalRows = filteredCandidates.length
-  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize))
-  const safePage = Math.min(currentPage, totalPages)
-  const pageStart = (safePage - 1) * pageSize
-  const pageEnd = Math.min(pageStart + pageSize, totalRows)
-  const pagedCandidates = filteredCandidates.slice(pageStart, pageEnd)
+  // Split candidates into the two stacked sections. No pagination — each
+  // section shows every row in its bucket so the operator can always see
+  // and send to anyone they need (the previous global pagination was hiding
+  // Pronti rows on later pages).
+  const pronti = filteredCandidates.filter(c => c.eligibility_status === 'ELIGIBLE')
+  const esclusi = filteredCandidates.filter(c => c.eligibility_status === 'TO_REVIEW' || c.eligibility_status === 'EXCLUDED')
 
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
@@ -849,7 +857,7 @@ export default function ReviewManagementTab() {
           <span className="text-xs text-theme-text-secondary uppercase tracking-wide">Tipo Servizio</span>
           <select
             value={filterServiceType}
-            onChange={e => { setFilterServiceType(e.target.value as typeof filterServiceType); setCurrentPage(1) }}
+            onChange={e => setFilterServiceType(e.target.value as typeof filterServiceType)}
             className="px-3 py-1.5 bg-theme-bg-primary border border-theme-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold"
           >
             <option value="ALL">Lavaggio &amp; Noleggio</option>
@@ -862,22 +870,9 @@ export default function ReviewManagementTab() {
             type="text"
             placeholder="Cerca per nome, email, telefono…"
             value={searchTerm}
-            onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1) }}
+            onChange={e => setSearchTerm(e.target.value)}
             className="w-full px-3 py-1.5 bg-theme-bg-primary border border-theme-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-secondary focus:outline-none focus:border-dr7-gold"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-theme-text-secondary uppercase tracking-wide">Mostra</span>
-          <select
-            value={pageSize}
-            onChange={e => { setPageSize(parseInt(e.target.value)); setCurrentPage(1) }}
-            className="px-3 py-1.5 bg-theme-bg-primary border border-theme-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold"
-          >
-            <option value="10">10</option>
-            <option value="25">25</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-          </select>
         </div>
       </div>
 
@@ -1039,8 +1034,6 @@ export default function ReviewManagementTab() {
 
       {/* ── Section: Pronti (eligible candidates) ─────────────────────────── */}
       {(() => {
-        const pronti = pagedCandidates.filter(c => c.eligibility_status === 'ELIGIBLE')
-        const esclusi = pagedCandidates.filter(c => c.eligibility_status === 'TO_REVIEW' || c.eligibility_status === 'EXCLUDED')
 
         const renderActionsCell = (candidate: ReviewCandidate) => {
           const isEligible = candidate.eligibility_status === 'ELIGIBLE'
@@ -1289,49 +1282,6 @@ export default function ReviewManagementTab() {
         )
       })()}
 
-      {/* Pagination footer */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mt-4 px-1 text-sm text-theme-text-secondary">
-        <span>
-          {totalRows === 0 ? 'Nessun risultato' : <>Mostra <strong className="text-theme-text-primary">{pageStart + 1}</strong>–<strong className="text-theme-text-primary">{pageEnd}</strong> di <strong className="text-theme-text-primary">{totalRows}</strong></>}
-        </span>
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
-              disabled={safePage <= 1}
-              className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label="Pagina precedente"
-            >
-              ‹
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
-              .map((p, i, arr) => (
-                <span key={p} className="inline-flex items-center">
-                  {i > 0 && p - arr[i - 1] > 1 && <span className="px-2 text-theme-text-secondary/60">…</span>}
-                  <button
-                    onClick={() => setCurrentPage(p)}
-                    className={`w-8 h-8 inline-flex items-center justify-center rounded-lg border text-sm transition-colors ${
-                      p === safePage
-                        ? 'border-theme-text-primary bg-theme-text-primary text-theme-bg-primary font-semibold'
-                        : 'border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                </span>
-              ))}
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
-              disabled={safePage >= totalPages}
-              className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label="Pagina successiva"
-            >
-              ›
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   )
 }
