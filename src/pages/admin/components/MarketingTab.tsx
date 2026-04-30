@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import ReferralProgramTab from './ReferralProgramTab'
 import CustomerWalletTab from './CustomerWalletTab'
 import MessaggiSistemaTab from './MessaggiSistemaTab'
+import CampagnaMarketingTab from './CampagnaMarketingTab'
 import { logger } from '../../../utils/logger'
 
 interface Customer {
@@ -72,7 +73,7 @@ interface CustomerMarketingConsent {
 type ActiveSection = 'customers' | 'consents' | 'discount_codes' | 'marketing_consent'
 type MarketingConsentFilter = 'all' | 'yes' | 'no' | 'unregistered'
 type DiscountCodeFilter = 'all' | 'active' | 'deactivated' | 'expired'
-type MarketingSubTab = 'marketing' | 'referral' | 'wallet' | 'messaggi'
+type MarketingSubTab = 'marketing' | 'campagna' | 'referral' | 'wallet' | 'messaggi'
 
 export default function MarketingTab() {
     const [activeSubTab, setActiveSubTab] = useState<MarketingSubTab>('marketing')
@@ -90,6 +91,16 @@ export default function MarketingTab() {
                     }`}
                 >
                     Marketing
+                </button>
+                <button
+                    onClick={() => setActiveSubTab('campagna')}
+                    className={`px-5 py-2.5 rounded-full font-semibold text-sm transition-colors ${
+                        activeSubTab === 'campagna'
+                            ? 'bg-dr7-gold text-white'
+                            : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
+                    }`}
+                >
+                    Campagna Marketing
                 </button>
                 <button
                     onClick={() => setActiveSubTab('referral')}
@@ -124,6 +135,7 @@ export default function MarketingTab() {
             </div>
 
             {/* Sub-tab Content */}
+            {activeSubTab === 'campagna' && <CampagnaMarketingTab />}
             {activeSubTab === 'referral' && <ReferralProgramTab />}
             {activeSubTab === 'wallet' && <CustomerWalletTab />}
             {activeSubTab === 'messaggi' && <MessaggiSistemaTab />}
