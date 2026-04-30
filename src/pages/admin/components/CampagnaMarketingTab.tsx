@@ -18,6 +18,7 @@ interface CampaignRow {
     title: string
     message_text: string
     image_url: string | null
+    image_urls: string[] | null
     video_url: string | null
     total_recipients: number
     sent_count: number
@@ -206,6 +207,7 @@ export default function CampagnaMarketingTab() {
                     title,
                     message_text: message,
                     image_url: imageUrls[0] || null,
+                    image_urls: imageUrls.length > 0 ? imageUrls : null,
                     video_url,
                     channel: 'whatsapp',
                     audience: selectedIds.size === eligible.length ? 'all' : 'selected',
@@ -276,6 +278,38 @@ export default function CampagnaMarketingTab() {
             toast.error(`Errore: ${msg}`)
         } finally {
             setSending(false)
+        }
+    }
+
+    async function handleResume(campaign: CampaignRow) {
+        // Count what's actually retryable so we can warn / cancel cleanly.
+        const { count: retryable } = await supabase
+            .from('marketing_campaign_recipients')
+            .select('id', { count: 'exact', head: true })
+            .eq('campaign_id', campaign.id)
+            .in('status', ['pending', 'failed'])
+        if (!retryable || retryable === 0) {
+            toast('Nessun destinatario da riprovare')
+            return
+        }
+        if (!confirm(`Riprovare l'invio a ${retryable} destinatari (pending + falliti)?`)) return
+
+        try {
+            const res = await fetch('/.netlify/functions/send-whatsapp-campaign-background', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ campaignId: campaign.id, resume: true }),
+            })
+            if (res.status !== 202 && !res.ok) {
+                let errMsg = `HTTP ${res.status}`
+                try { const j = await res.json(); errMsg = j.error || errMsg } catch { /* ignore */ }
+                throw new Error(errMsg)
+            }
+            toast.success(`Riprova avviata: ${retryable} destinatari in invio.`)
+            loadCampaigns()
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Errore riprova: ${msg}`)
         }
     }
 
@@ -591,10 +625,15 @@ export default function CampagnaMarketingTab() {
                                 <th className="p-3 text-left">Inviati</th>
                                 <th className="p-3 text-left">Falliti</th>
                                 <th className="p-3 text-left">Stato</th>
+                                <th className="p-3 text-right">Azioni</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-theme-border">
-                            {campaigns.map(c => (
+                            {campaigns.map(c => {
+                                const canResume = c.status !== 'sending' && c.status !== 'pending'
+                                    && (c.sent_count + c.failed_count) < c.total_recipients
+                                    || (c.failed_count > 0 && c.status !== 'sending')
+                                return (
                                 <tr key={c.id} className="hover:bg-theme-bg-hover/50">
                                     <td className="p-3 text-theme-text-muted text-xs">
                                         {new Date(c.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -618,10 +657,21 @@ export default function CampagnaMarketingTab() {
                                             {c.status}
                                         </span>
                                     </td>
+                                    <td className="p-3 text-right">
+                                        {canResume && (
+                                            <button
+                                                onClick={() => handleResume(c)}
+                                                className="px-3 py-1 rounded-full text-xs font-medium bg-dr7-gold/20 text-dr7-gold hover:bg-dr7-gold/30"
+                                            >
+                                                Riprova non inviati
+                                            </button>
+                                        )}
+                                    </td>
                                 </tr>
-                            ))}
+                                )
+                            })}
                             {campaigns.length === 0 && (
-                                <tr><td colSpan={7} className="p-6 text-center text-theme-text-muted">Nessuna campagna ancora inviata</td></tr>
+                                <tr><td colSpan={8} className="p-6 text-center text-theme-text-muted">Nessuna campagna ancora inviata</td></tr>
                             )}
                         </tbody>
                     </table>

@@ -74,6 +74,7 @@ export const handler: Handler = async (event) => {
         imageUrl?: string;
         imageUrls?: string[];
         videoUrl?: string;
+        resume?: boolean;
     };
 
     try {
@@ -82,31 +83,84 @@ export const handler: Handler = async (event) => {
         return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON" }) };
     }
 
-    const { campaignId, customers, message, imageUrl, videoUrl } = body;
-    const imageUrls: string[] = body.imageUrls && body.imageUrls.length > 0
+    const { campaignId, resume } = body;
+    let workingCustomers: CampaignRecipient[] = body.customers || [];
+    let workingMessage: string = body.message || "";
+    let workingImageUrls: string[] = body.imageUrls && body.imageUrls.length > 0
         ? body.imageUrls
-        : (imageUrl ? [imageUrl] : []);
-
-    if (!customers || !Array.isArray(customers) || customers.length === 0) {
-        return { statusCode: 400, body: JSON.stringify({ error: "Nessun cliente specificato" }) };
-    }
-    if (!message) {
-        return { statusCode: 400, body: JSON.stringify({ error: "Messaggio mancante" }) };
-    }
+        : (body.imageUrl ? [body.imageUrl] : []);
+    let workingVideoUrl: string | undefined = body.videoUrl;
 
     const sb = SUPABASE_URL && SUPABASE_SERVICE_KEY
         ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
         : null;
 
-    if (sb && campaignId) {
-        await sb.from("marketing_campaigns")
-            .update({ status: "sending", started_at: new Date().toISOString() })
-            .eq("id", campaignId);
+    // RESUME MODE: load campaign + pending/failed recipients from DB
+    if (resume && campaignId) {
+        if (!sb) {
+            return { statusCode: 500, body: JSON.stringify({ error: "Supabase non configurato" }) };
+        }
+        const { data: camp } = await sb.from("marketing_campaigns").select("*").eq("id", campaignId).single();
+        if (!camp) return { statusCode: 404, body: JSON.stringify({ error: "Campagna non trovata" }) };
+        workingMessage = camp.message_text;
+        workingImageUrls = Array.isArray(camp.image_urls) && camp.image_urls.length > 0
+            ? camp.image_urls
+            : (camp.image_url ? [camp.image_url] : []);
+        workingVideoUrl = camp.video_url || undefined;
+
+        const { data: recs } = await sb.from("marketing_campaign_recipients")
+            .select("id, customer_id, customer_name, phone, email")
+            .eq("campaign_id", campaignId)
+            .in("status", ["pending", "failed"]);
+        workingCustomers = (recs || []).map((r: any) => {
+            const fullName = r.customer_name || "";
+            return {
+                id: r.id,
+                customer_id: r.customer_id,
+                customer_name: fullName,
+                phone: r.phone,
+                email: r.email,
+                nome: fullName.split(" ")[0],
+                cognome: fullName.split(" ").slice(1).join(" "),
+            };
+        });
     }
 
+    if (!workingCustomers || workingCustomers.length === 0) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Nessun destinatario" }) };
+    }
+    if (!workingMessage) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Messaggio mancante" }) };
+    }
+
+    // Initialize counters. On resume keep cumulative sent_count from DB.
     let sent = 0;
     let failed = 0;
     const errors: string[] = [];
+
+    if (sb && campaignId) {
+        if (resume) {
+            const { count } = await sb.from("marketing_campaign_recipients")
+                .select("id", { count: "exact", head: true })
+                .eq("campaign_id", campaignId)
+                .eq("status", "sent");
+            sent = count || 0;
+        }
+        await sb.from("marketing_campaigns")
+            .update({
+                status: "sending",
+                started_at: new Date().toISOString(),
+                completed_at: null,
+                ...(resume ? { failed_count: 0 } : {}),
+            })
+            .eq("id", campaignId);
+    }
+
+    // Use the resolved values for the rest of the function
+    const customers = workingCustomers;
+    const message = workingMessage;
+    const imageUrls = workingImageUrls;
+    const videoUrl = workingVideoUrl;
 
     for (const c of customers) {
         const phone = normalizePhone(c.phone);
