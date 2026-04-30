@@ -82,6 +82,9 @@ export default function ReviewManagementTab() {
   // UI state
   const [loading, setLoading] = useState(true)
   const [filterServiceType, setFilterServiceType] = useState<'ALL' | 'RENTAL' | 'WASH'>('ALL')
+  // categoryFilter is driven by the stat cards (Idonei / Da Verificare / Da
+  // Inviare / Inviate / Fallite / Esclusi). 'ALL' means show everything.
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'ELIGIBLE' | 'TO_REVIEW' | 'TO_SEND' | 'SENT' | 'FAILED' | 'EXCLUDED'>('ALL')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectAll, setSelectAll] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -721,6 +724,20 @@ export default function ReviewManagementTab() {
 
   const filteredCandidates = useMemo(() => {
     return candidates.filter(c => {
+      // Hide Lavaggio Rientro / internal car wash records — they're automatic
+      // entries created by the booking trigger, not real customer services.
+      // Same rule as Prime Wash calendar / bookings list.
+      const name = (c.customer_name || '').toLowerCase()
+      if (name.includes('lavaggio rientro') || name.includes('rientro') || name.includes('interno')) return false
+
+      // Stat-card category filter
+      if (categoryFilter === 'ELIGIBLE' && !(c.eligibility_status === 'ELIGIBLE' && c.send_status === 'TO_SEND')) return false
+      if (categoryFilter === 'TO_REVIEW' && c.eligibility_status !== 'TO_REVIEW') return false
+      if (categoryFilter === 'TO_SEND' && c.send_status !== 'TO_SEND') return false
+      if (categoryFilter === 'SENT' && c.send_status !== 'SENT') return false
+      if (categoryFilter === 'FAILED' && c.send_status !== 'FAILED') return false
+      if (categoryFilter === 'EXCLUDED' && c.eligibility_status !== 'EXCLUDED') return false
+
       if (searchTerm) {
         const term = searchTerm.toLowerCase()
         const matchesSearch =
@@ -731,7 +748,7 @@ export default function ReviewManagementTab() {
       }
       return true
     })
-  }, [candidates, searchTerm])
+  }, [candidates, searchTerm, categoryFilter])
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
@@ -851,24 +868,36 @@ export default function ReviewManagementTab() {
         </div>
       </div>
 
-      {/* Stats overview — counts per category (Idonei / Da Verificare / Da Inviare / Inviate / Fallite / Esclusi) */}
+      {/* Stats overview — clickable cards, each filters the list below.
+          Click the same card again to clear the filter (back to ALL). */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         {([
-          { key: 'eligible', label: 'Idonei', value: stats.eligible, dot: 'bg-green-500' },
-          { key: 'to_review', label: 'Da Verificare', value: stats.to_review, dot: 'bg-yellow-500' },
-          { key: 'to_send', label: 'Da Inviare', value: stats.to_send, dot: 'bg-blue-500' },
-          { key: 'sent', label: 'Inviate', value: stats.sent, dot: 'bg-emerald-500' },
-          { key: 'failed', label: 'Fallite', value: stats.failed, dot: 'bg-red-500' },
-          { key: 'excluded', label: 'Esclusi', value: stats.excluded, dot: 'bg-gray-400' },
-        ]).map(s => (
-          <div key={s.key} className="bg-theme-bg-secondary border border-theme-border rounded-xl px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-              <span className="text-xs text-theme-text-secondary">{s.label}</span>
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-theme-text-primary">{s.value}</div>
-          </div>
-        ))}
+          { key: 'ELIGIBLE', label: 'Idonei', value: stats.eligible, dot: 'bg-green-500' },
+          { key: 'TO_REVIEW', label: 'Da Verificare', value: stats.to_review, dot: 'bg-yellow-500' },
+          { key: 'TO_SEND', label: 'Da Inviare', value: stats.to_send, dot: 'bg-blue-500' },
+          { key: 'SENT', label: 'Inviate', value: stats.sent, dot: 'bg-emerald-500' },
+          { key: 'FAILED', label: 'Fallite', value: stats.failed, dot: 'bg-red-500' },
+          { key: 'EXCLUDED', label: 'Esclusi', value: stats.excluded, dot: 'bg-gray-400' },
+        ] as const).map(s => {
+          const active = categoryFilter === s.key
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setCategoryFilter(active ? 'ALL' : s.key)}
+              className={`text-left bg-theme-bg-secondary border rounded-xl px-4 py-3 transition-colors hover:bg-theme-bg-hover ${
+                active ? 'border-theme-text-primary ring-1 ring-theme-text-primary/30' : 'border-theme-border'
+              }`}
+              title={active ? 'Clicca di nuovo per rimuovere il filtro' : `Filtra: ${s.label}`}
+            >
+              <div className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                <span className="text-xs text-theme-text-secondary">{s.label}</span>
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-theme-text-primary">{s.value}</div>
+            </button>
+          )
+        })}
       </div>
 
       {/* Top filter bar — Tipo Servizio / Stato Recensione / Search / Page size */}
