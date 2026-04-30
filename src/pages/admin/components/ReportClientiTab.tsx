@@ -1,9 +1,17 @@
 import { useState, useMemo } from 'react'
+import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import type { ClientTier } from '../../../contexts/ClientStatusContext'
 
 interface CustomerReport {
   customerId: string
   name: string
   email: string
+  phone?: string
+  tipo_cliente?: string | null
+  status_cliente?: ClientTier | null
+  dr7_club?: boolean
+  wallet_balance: number
+  wallet_recharges_12m: number
   supercar_spesa: number
   supercar_prenotazioni: number
   supercar_giorni: number
@@ -21,6 +29,11 @@ interface CustomerReport {
   penali_eventi: number
   danni_spesa: number
   danni_eventi: number
+  annullate_count: number
+  cauzioni_attive_count: number
+  cauzioni_attive: number
+  prima_prenotazione: string | null
+  ultima_prenotazione: string | null
   totale_giorni: number
   totale_prenotazioni: number
   totale_spesa: number
@@ -31,7 +44,10 @@ interface CustomerReportData {
   customers: CustomerReport[]
 }
 
-type SortField = keyof Omit<CustomerReport, 'customerId' | 'name' | 'email'>
+type SortField = keyof Omit<
+  CustomerReport,
+  'customerId' | 'name' | 'email' | 'phone' | 'tipo_cliente' | 'status_cliente' | 'dr7_club' | 'prima_prenotazione' | 'ultima_prenotazione'
+>
 
 function formatCurrency(amount: number): string {
   return `€${amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -119,6 +135,35 @@ const COLUMN_GROUPS: ColumnGroup[] = [
     columns: [
       { key: 'danni_spesa', label: 'Spesa', type: 'eur' },
       { key: 'danni_eventi', label: 'Eventi', type: 'int' },
+    ],
+  },
+  {
+    label: 'Annullate',
+    border: true,
+    bg: 'bg-zinc-500/5',
+    cellBg: 'bg-zinc-500/5',
+    columns: [
+      { key: 'annullate_count', label: 'Pren.', type: 'int' },
+    ],
+  },
+  {
+    label: 'Wallet',
+    border: true,
+    bg: 'bg-emerald-500/5',
+    cellBg: 'bg-emerald-500/5',
+    columns: [
+      { key: 'wallet_balance', label: 'Saldo', type: 'eur' },
+      { key: 'wallet_recharges_12m', label: 'Ric. 12m', type: 'eur' },
+    ],
+  },
+  {
+    label: 'Cauzioni',
+    border: true,
+    bg: 'bg-purple-500/5',
+    cellBg: 'bg-purple-500/5',
+    columns: [
+      { key: 'cauzioni_attive', label: 'Bloccate', type: 'eur' },
+      { key: 'cauzioni_attive_count', label: 'N°', type: 'int' },
     ],
   },
   {
@@ -339,8 +384,25 @@ export default function ReportClientiTab() {
                         className="px-3 py-2 sticky left-0 z-10 bg-theme-bg-secondary/95 backdrop-blur-sm"
                         style={{ boxShadow: '4px 0 10px -2px rgba(0,0,0,0.15)' }}
                       >
-                        <div className="font-medium text-theme-text-primary text-sm leading-tight">{c.name}</div>
-                        <div className="text-[11px] text-theme-text-muted leading-tight truncate max-w-[200px]">{c.email !== '-' ? c.email : ''}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-theme-text-primary text-sm leading-tight">{c.name}</span>
+                          <ClientStatusBadge
+                            tier={c.status_cliente ?? undefined}
+                            dr7Club={c.dr7_club}
+                            customerId={c.customerId}
+                            email={c.email !== '-' ? c.email : undefined}
+                            phone={c.phone !== '-' ? c.phone : undefined}
+                          />
+                        </div>
+                        <div className="text-[11px] text-theme-text-muted leading-tight truncate max-w-[220px]">
+                          {c.email !== '-' ? c.email : ''}
+                          {c.phone && c.phone !== '-' ? ` · ${c.phone}` : ''}
+                        </div>
+                        {c.ultima_prenotazione && (
+                          <div className="text-[10px] text-theme-text-muted/70 leading-tight">
+                            Ultima: {new Date(c.ultima_prenotazione).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                          </div>
+                        )}
                       </td>
                       {COLUMN_GROUPS.map((g, gi) =>
                         g.columns.map((col, ci) => {
