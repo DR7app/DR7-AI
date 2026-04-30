@@ -66,6 +66,7 @@ export default function DocumentsVerificationTab() {
   const [autoVerifying, setAutoVerifying] = useState<Set<string>>(new Set()) // doc ids currently being auto-verified
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
   const [search, setSearch] = useState('')
+  const [autoResults, setAutoResults] = useState<Record<string, { decision?: string; reason?: string; matches?: string[]; mismatches?: string[] }>>({})
 
   useEffect(() => {
     loadDocuments()

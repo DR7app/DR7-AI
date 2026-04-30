@@ -113,6 +113,8 @@ export const handler: Handler = async (event) => {
     const { documentId } = JSON.parse(event.body || '{}')
     if (!documentId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'documentId required' }) }
 
+    console.log(`[auto-verify] start documentId=${documentId}`)
+
     // 1. Fetch the doc row
     const { data: doc, error: docErr } = await supabase
       .from('user_documents')
@@ -120,19 +122,23 @@ export const handler: Handler = async (event) => {
       .eq('id', documentId)
       .single()
     if (docErr || !doc) {
+      console.log(`[auto-verify] EXIT-1: doc ${documentId} not found`, docErr?.message)
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Document not found' }) }
     }
+    console.log(`[auto-verify] doc loaded user_id=${doc.user_id} type=${doc.document_type} status=${doc.status} bucket=${doc.bucket}`)
     if (doc.status !== 'pending_verification') {
+      console.log(`[auto-verify] EXIT-2: not pending (status=${doc.status})`)
       return { statusCode: 200, headers, body: JSON.stringify({ skipped: true, reason: `status is ${doc.status}` }) }
     }
 
     // 2. Profile lookup — try by auth user_id first, then by .id (legacy
     //    admin-uploaded docs where user_id is actually the row PK)
-    let { data: profile } = await supabase
+    let { data: profile, error: profByUserIdErr } = await supabase
       .from('customers_extended')
       .select('nome, cognome, codice_fiscale, data_nascita, numero_patente')
       .eq('user_id', doc.user_id)
       .maybeSingle()
+    if (profByUserIdErr) console.log(`[auto-verify] profile by user_id err:`, profByUserIdErr.message)
 
     if (!profile) {
       const fb = await supabase
@@ -140,12 +146,15 @@ export const handler: Handler = async (event) => {
         .select('nome, cognome, codice_fiscale, data_nascita, numero_patente')
         .eq('id', doc.user_id)
         .maybeSingle()
+      if (fb.error) console.log(`[auto-verify] profile by id err:`, fb.error.message)
       profile = fb.data
     }
 
     if (!profile) {
+      console.log(`[auto-verify] EXIT-3: no customers_extended row for user_id=${doc.user_id}`)
       return { statusCode: 200, headers, body: JSON.stringify({ skipped: true, reason: 'no customers_extended row' }) }
     }
+    console.log(`[auto-verify] profile resolved nome=${profile.nome} cognome=${profile.cognome} hasCF=${!!profile.codice_fiscale}`)
 
     // 3. Signed URL for the image — gracefully skip if file is missing
     //    (DB row points to a storage object that was deleted / never landed)
@@ -153,6 +162,7 @@ export const handler: Handler = async (event) => {
       .from(doc.bucket)
       .createSignedUrl(doc.file_path, 600)
     if (signErr || !signed?.signedUrl) {
+      console.log(`[auto-verify] EXIT-4: signing failed for ${doc.bucket}/${doc.file_path}: ${signErr?.message || 'no URL'}`)
       return {
         statusCode: 200,
         headers,
@@ -162,6 +172,7 @@ export const handler: Handler = async (event) => {
         }),
       }
     }
+    console.log(`[auto-verify] signed OK, calling OCR…`)
 
     // 4. Call OCR — also skip gracefully if it fails, so one bad doc
     //    doesn't poison a bulk run.
@@ -175,6 +186,7 @@ export const handler: Handler = async (event) => {
     })
     const ocrJson = await ocrRes.json().catch(() => null)
     if (!ocrRes.ok || !ocrJson?.success) {
+      console.log(`[auto-verify] EXIT-5: OCR failed (${ocrRes.status}):`, JSON.stringify(ocrJson).slice(0, 300))
       return {
         statusCode: 200,
         headers,
@@ -185,9 +197,11 @@ export const handler: Handler = async (event) => {
       }
     }
     const extracted: Extracted = ocrJson.data || {}
+    console.log(`[auto-verify] OCR ok confidence=${extracted.confidence} fields=${Object.keys(extracted).filter(k => extracted[k as keyof Extracted]).join(',')}`)
 
     // 5. Compare
     const cmp = compare(extracted, profile as Profile, doc.document_type)
+    console.log(`[auto-verify] cmp matches=[${cmp.matches.join('|')}] mismatches=[${cmp.mismatches.join('|')}] expired=${cmp.expired}`)
 
     // 6. Decide
     let decision: 'verified' | 'rejected' | 'pending_verification' = 'pending_verification'
@@ -215,6 +229,8 @@ export const handler: Handler = async (event) => {
       // 1 match, low/medium confidence — borderline, human review
       reason = `Auto-revisione: 1 match (${cmp.matches[0]}), confidence=${extracted.confidence || 'n/d'}${extracted.notes ? ' — ' + extracted.notes : ''}`
     }
+
+    console.log(`[auto-verify] DECISION=${decision} reason=${reason || '(none)'}`)
 
     // 7. Apply
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
