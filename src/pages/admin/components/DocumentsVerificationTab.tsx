@@ -606,7 +606,6 @@ export default function DocumentsVerificationTab() {
               {/* Photo grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {userDocs.map((doc) => {
-                  const isPending = doc.status === 'pending_verification'
                   const accent =
                     doc.status === 'verified' ? 'ring-green-500/40' :
                     doc.status === 'rejected' ? 'ring-red-500/40' :
