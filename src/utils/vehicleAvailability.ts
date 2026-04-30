@@ -22,6 +22,17 @@ const BUSINESS_START_HOUR = 0  // Admin can book any time
 const BUSINESS_END_HOUR = 24   // Admin can book any time
 const TIME_SLOT_INTERVAL_MINUTES = 15
 
+// Test plates: bookings on these vehicles are ignored everywhere availability is computed
+// (same-vehicle slot blocking AND cross-vehicle handover gap).
+const TEST_PLATES = new Set(['TEST000', 'TEST002'])
+
+function isTestBooking(booking: Booking): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = booking.vehicle_plate || (booking as any).booking_details?.vehicle_plate
+    if (!raw) return false
+    return TEST_PLATES.has(raw.replace(/\s+/g, '').toUpperCase())
+}
+
 // Types
 export interface Vehicle {
     id: string
@@ -197,6 +208,8 @@ export function getEarliestValidPickupTime(
         if (booking.status === 'cancelled' || booking.status === 'expired') return false
         // Exclude expired pending_payment bookings (payment link timed out)
         if (booking.status === 'pending_payment' && booking.payment_status === 'expired') return false
+        // Test bookings (TEST000/TEST002) never block real availability
+        if (isTestBooking(booking)) return false
         // Pending Nexi Pay by Link bookings BLOCK the slot for 1 hour while awaiting payment
         return matchVehicleByPlate(booking, vehicle)
     })
@@ -320,6 +333,8 @@ export function isVehicleAvailable(
         if (booking.status === 'cancelled' || booking.status === 'expired') return false
         // Skip pending_payment bookings whose payment has expired (slot should be released)
         if (booking.status === 'pending_payment' && booking.payment_status === 'expired') return false
+        // Test bookings (TEST000/TEST002) never block real availability
+        if (isTestBooking(booking)) return false
 
         // CRITICAL: Skip linked car wash bookings when extending a rental
         // Car wash bookings are automatically created/updated, so they shouldn't block extensions
@@ -387,6 +402,8 @@ export function isVehicleAvailable(
         if (booking.status === 'completed' || booking.status === 'completata') continue
         if (booking.status === 'expired') continue
         if (booking.status === 'pending_payment' && booking.payment_status === 'expired') continue
+        // Test bookings (TEST000/TEST002) never block real availability
+        if (isTestBooking(booking)) continue
         // Only rental bookings consume handover staff. Car wash / mechanical are appointments.
         if (booking.service_type && booking.service_type !== 'car_rental') continue
         // Same-vehicle conflicts are already covered above with the 75-min buffer.

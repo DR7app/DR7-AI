@@ -25,7 +25,10 @@ export async function runCrosscheck(fornitoreId: string, anno: number, mese: num
  */
 export async function applyCrosscheckToFatture(rows: CrosscheckRow[], fatture: FornitoreDocument[]): Promise<void> {
     const AUTO_STATES = new Set(['caricato', 'verificato', 'anomalia'])
-    const updates: Promise<unknown>[] = []
+    // Supabase's query builder is PromiseLike, not Promise. Promise.all
+    // accepts PromiseLike so this is fine — the typed annotation just has
+    // to match what the calls actually return.
+    const updates: PromiseLike<unknown>[] = []
     for (const row of rows) {
         const fattura = fatture.find(f => f.id === row.fattura_id)
         if (!fattura) continue
