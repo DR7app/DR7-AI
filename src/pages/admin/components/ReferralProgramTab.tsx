@@ -65,7 +65,20 @@ interface WalletTransaction {
   created_at: string
 }
 
-type ActiveSection = 'overview' | 'participants' | 'buoni' | 'fraud'
+type ActiveSection = 'overview' | 'participants' | 'buoni' | 'fraud' | 'sito'
+
+interface SiteReferral {
+  referee_user_id: string
+  referee_name: string
+  referee_email: string | null
+  referee_signup_date: string
+  referrer_user_id: string
+  referrer_name: string
+  referrer_code: string | null
+  referrer_email: string | null
+  bonus_amount: number | null
+  bonus_date: string | null
+}
 
 const TYPE_LABELS: Record<string, string> = {
   registration_bonus: 'Bonus Registrazione',
@@ -106,6 +119,10 @@ export default function ReferralProgramTab() {
   const [fraudData, setFraudData] = useState<any>(null)
   const [fraudLoading, setFraudLoading] = useState(false)
 
+  // Website referrals (System A: customers_extended.referred_by_user_id + referral_bonuses)
+  const [siteReferrals, setSiteReferrals] = useState<SiteReferral[]>([])
+  const [siteLoading, setSiteLoading] = useState(false)
+
   useEffect(() => {
     loadStats()
     loadParticipants()
@@ -118,8 +135,79 @@ export default function ReferralProgramTab() {
     if (activeSection === 'buoni' && allDiscountCodes.length === 0) {
       loadAllDiscountCodes()
     }
+    if (activeSection === 'sito' && siteReferrals.length === 0) {
+      loadSiteReferrals()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection])
+
+  async function loadSiteReferrals() {
+    setSiteLoading(true)
+    try {
+      // 1. Customers who used a referral code
+      const { data: referees, error: refereesErr } = await supabase
+        .from('customers_extended')
+        .select('user_id, nome, cognome, email, created_at, referred_by_user_id')
+        .not('referred_by_user_id', 'is', null)
+        .order('created_at', { ascending: false })
+      if (refereesErr) throw refereesErr
+
+      const referrerIds = Array.from(new Set((referees || []).map(r => r.referred_by_user_id).filter(Boolean) as string[]))
+
+      // 2. Referrer info
+      let referrersById = new Map<string, { name: string; code: string | null; email: string | null }>()
+      if (referrerIds.length > 0) {
+        const { data: referrers } = await supabase
+          .from('customers_extended')
+          .select('user_id, nome, cognome, email, referral_code')
+          .in('user_id', referrerIds)
+        for (const r of referrers || []) {
+          referrersById.set(r.user_id, {
+            name: `${r.nome || ''} ${r.cognome || ''}`.trim() || '(senza nome)',
+            code: r.referral_code,
+            email: r.email,
+          })
+        }
+      }
+
+      // 3. Referral bonuses (paid)
+      const refereeIds = (referees || []).map(r => r.user_id)
+      let bonusByReferee = new Map<string, { amount: number; date: string }>()
+      if (refereeIds.length > 0) {
+        const { data: bonuses } = await supabase
+          .from('referral_bonuses')
+          .select('referee_user_id, amount, created_at')
+          .in('referee_user_id', refereeIds)
+        for (const b of bonuses || []) {
+          bonusByReferee.set(b.referee_user_id, { amount: Number(b.amount || 0), date: b.created_at })
+        }
+      }
+
+      const merged: SiteReferral[] = (referees || []).map(r => {
+        const ref = referrersById.get(r.referred_by_user_id as string)
+        const bonus = bonusByReferee.get(r.user_id)
+        return {
+          referee_user_id: r.user_id,
+          referee_name: `${r.nome || ''} ${r.cognome || ''}`.trim() || '(senza nome)',
+          referee_email: r.email,
+          referee_signup_date: r.created_at,
+          referrer_user_id: r.referred_by_user_id as string,
+          referrer_name: ref?.name || '(referente sconosciuto)',
+          referrer_code: ref?.code || null,
+          referrer_email: ref?.email || null,
+          bonus_amount: bonus?.amount ?? null,
+          bonus_date: bonus?.date ?? null,
+        }
+      })
+      setSiteReferrals(merged)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[ReferralProgramTab] site referrals error:', err)
+      toast.error(`Errore caricamento Referral Sito: ${msg}`)
+    } finally {
+      setSiteLoading(false)
+    }
+  }
 
   async function callReferralAdmin(action: string, body: Record<string, unknown> = {}) {
     const token = (await supabase.auth.getSession()).data.session?.access_token
@@ -334,7 +422,7 @@ export default function ReferralProgramTab() {
     <div className="space-y-6">
       {/* Section Toggle */}
       <div className="flex gap-2 flex-wrap">
-        {(['overview', 'participants', 'buoni', 'fraud'] as const).map((section) => (
+        {(['overview', 'participants', 'sito', 'buoni', 'fraud'] as const).map((section) => (
           <button
             key={section}
             onClick={() => setActiveSection(section)}
@@ -344,7 +432,15 @@ export default function ReferralProgramTab() {
                 : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-hover'
             }`}
           >
-            {section === 'overview' ? 'Panoramica' : section === 'participants' ? 'Partecipanti' : section === 'buoni' ? 'Buoni Sconto' : 'Antifrode'}
+            {section === 'overview'
+              ? 'Panoramica'
+              : section === 'participants'
+              ? 'Partecipanti'
+              : section === 'sito'
+              ? 'Referral Sito'
+              : section === 'buoni'
+              ? 'Buoni Sconto'
+              : 'Antifrode'}
           </button>
         ))}
       </div>
@@ -668,6 +764,81 @@ export default function ReferralProgramTab() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* === SITO (System A: customers_extended + referral_bonuses) === */}
+      {activeSection === 'sito' && (
+        <div className="animate-fadeIn space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-theme-text-primary font-bold">Referral dal Sito</h3>
+              <p className="text-theme-text-muted text-sm">Clienti registrati sul sito che hanno usato il codice di un amico</p>
+            </div>
+            <button
+              onClick={loadSiteReferrals}
+              className="px-3 py-1.5 text-sm rounded-lg bg-theme-bg-secondary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover"
+            >
+              Aggiorna
+            </button>
+          </div>
+
+          {siteLoading ? (
+            <div className="text-center py-10 text-theme-text-muted">Caricamento...</div>
+          ) : siteReferrals.length === 0 ? (
+            <div className="text-center py-10 text-theme-text-muted">Nessun referral dal sito</div>
+          ) : (
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-theme-bg-tertiary border-b border-theme-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-theme-text-secondary">Referente</th>
+                    <th className="text-left px-4 py-3 font-medium text-theme-text-secondary">Codice</th>
+                    <th className="text-left px-4 py-3 font-medium text-theme-text-secondary">Amico Invitato</th>
+                    <th className="text-left px-4 py-3 font-medium text-theme-text-secondary">Registrato</th>
+                    <th className="text-right px-4 py-3 font-medium text-theme-text-secondary">Bonus Pagato</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {siteReferrals.map((r) => {
+                    const signedUp = new Date(r.referee_signup_date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
+                    return (
+                      <tr key={r.referee_user_id} className="border-b border-theme-border last:border-b-0 hover:bg-theme-bg-hover">
+                        <td className="px-4 py-3">
+                          <div className="text-theme-text-primary font-medium">{r.referrer_name}</div>
+                          {r.referrer_email && <div className="text-theme-text-muted text-xs">{r.referrer_email}</div>}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-theme-text-secondary text-xs">{r.referrer_code || '-'}</td>
+                        <td className="px-4 py-3">
+                          <div className="text-theme-text-primary">{r.referee_name}</div>
+                          {r.referee_email && <div className="text-theme-text-muted text-xs">{r.referee_email}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-theme-text-secondary">{signedUp}</td>
+                        <td className="px-4 py-3 text-right">
+                          {r.bonus_amount !== null ? (
+                            <span className="text-green-400 font-semibold">+€{r.bonus_amount.toFixed(2)}</span>
+                          ) : (
+                            <span className="text-theme-text-muted text-xs">In attesa ricarica</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!siteLoading && siteReferrals.length > 0 && (
+            <div className="grid grid-cols-3 gap-4">
+              <StatCard label="Inviti totali" value={siteReferrals.length} />
+              <StatCard label="Bonus erogati" value={siteReferrals.filter(r => r.bonus_amount !== null).length} />
+              <StatCard
+                label="Totale bonus"
+                value={`€${siteReferrals.reduce((s, r) => s + (r.bonus_amount || 0), 0).toFixed(2)}`}
+              />
             </div>
           )}
         </div>
