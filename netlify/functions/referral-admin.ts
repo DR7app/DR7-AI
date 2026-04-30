@@ -436,6 +436,43 @@ const handler: Handler = async (event) => {
         return { statusCode: 200, headers, body: JSON.stringify({ success: true, referrals: merged }) };
       }
 
+      case 'site_referrers': {
+        // List of distinct customers who have invited at least one other user
+        // (i.e. they appear as referred_by_user_id in customers_extended).
+        const { data: invitedRows, error: invErr } = await supabase
+          .from('customers_extended')
+          .select('referred_by_user_id')
+          .not('referred_by_user_id', 'is', null);
+
+        if (invErr) {
+          return { statusCode: 500, headers, body: JSON.stringify({ error: invErr.message }) };
+        }
+
+        const referrerIds = Array.from(new Set((invitedRows || []).map(r => r.referred_by_user_id).filter(Boolean) as string[]));
+        if (referrerIds.length === 0) {
+          return { statusCode: 200, headers, body: JSON.stringify({ success: true, referrers: [] }) };
+        }
+
+        const { data: profiles, error: profErr } = await supabase
+          .from('customers_extended')
+          .select('user_id, nome, cognome, email, referral_code, created_at')
+          .in('user_id', referrerIds);
+
+        if (profErr) {
+          return { statusCode: 500, headers, body: JSON.stringify({ error: profErr.message }) };
+        }
+
+        const referrers = (profiles || []).map(p => ({
+          user_id: p.user_id,
+          name: `${p.nome || ''} ${p.cognome || ''}`.trim() || '(senza nome)',
+          email: p.email || null,
+          referral_code: p.referral_code || null,
+          created_at: p.created_at || null,
+        })).sort((a, b) => a.name.localeCompare(b.name));
+
+        return { statusCode: 200, headers, body: JSON.stringify({ success: true, referrers }) };
+      }
+
       default:
         return {
           statusCode: 400,
