@@ -9,6 +9,7 @@ interface UserDocument {
   user_id: string
   document_type: string
   file_path: string
+  bucket?: string
   upload_date: string
   status: 'pending_verification' | 'verified' | 'rejected'
   verified_at?: string
@@ -82,46 +83,39 @@ export default function DocumentsVerificationTab() {
     }
   }, [])
 
-  // Fetch signed URLs for previews — one batch call per user
+  // Sign preview URLs directly from supabase storage — no Netlify hop.
+  // Limited concurrency (8) so a 800-doc page doesn't open 800 sockets at once.
   useEffect(() => {
     if (documents.length === 0) return
-
-    const userIds = Array.from(new Set(documents.map(d => d.user_id)))
     let cancelled = false
 
     ;(async () => {
+      const queue = documents.filter(d => !!d.bucket && !!d.file_path)
+      const CONCURRENCY = 8
+      let cursor = 0
       const next: Record<string, string> = {}
-      await Promise.all(userIds.map(async (uid) => {
-        try {
-          const res = await authFetch('/.netlify/functions/get-customer-documents', {
-            method: 'POST',
-            body: JSON.stringify({ userId: uid }),
-            headers: { 'Content-Type': 'application/json' }
-          })
-          if (!res.ok) return
-          const json = await res.json()
-          if (!json?.success) return
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const flat: any[] = [
-            ...(json.documents.licenses || []),
-            ...(json.documents.ids || []),
-            ...(json.documents.codiceFiscale || []),
-          ]
-          // Map fileName -> url
-          const byName = new Map<string, string>()
-          flat.forEach(f => { if (f.fileName && f.url) byName.set(f.fileName, f.url) })
-          // Match docs of this user to URLs by file_path basename
-          documents
-            .filter(d => d.user_id === uid)
-            .forEach(d => {
-              const base = d.file_path.split('/').pop() || ''
-              const url = byName.get(base)
-              if (url) next[d.id] = url
-            })
-        } catch (e) {
-          logger.log('[DocumentsVerificationTab] preview fetch failed:', e)
+
+      async function worker() {
+        while (cursor < queue.length) {
+          const idx = cursor++
+          const d = queue[idx]
+          try {
+            const { data } = await supabase.storage
+              .from(d.bucket!)
+              .createSignedUrl(d.file_path, 3600)
+            if (data?.signedUrl) {
+              next[d.id] = data.signedUrl
+              // Push partial state every ~25 docs so the user sees progress
+              if (Object.keys(next).length % 25 === 0 && !cancelled) {
+                setPreviewUrls(prev => ({ ...prev, ...next }))
+              }
+            }
+          } catch {
+            // ignore — placeholder will keep showing
+          }
         }
-      }))
+      }
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker))
       if (!cancelled) setPreviewUrls(prev => ({ ...prev, ...next }))
     })()
 
