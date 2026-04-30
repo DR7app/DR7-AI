@@ -75,7 +75,10 @@ const PLACEHOLDERS = ['{{customer_name}}', '{{review_link}}']
 export default function ReviewManagementTab() {
   // Data state
   const [candidates, setCandidates] = useState<ReviewCandidate[]>([])
-  const [stats, setStats] = useState<DashboardStats>({ eligible: 0, to_review: 0, excluded: 0, to_send: 0, sent: 0, failed: 0 })
+  // setStats kept for the existing fetchStats path (server-side counts) but
+  // the cards now render from liveStats — counts derived from the visible
+  // candidate list — so they match what's actually shown.
+  const [, setStats] = useState<DashboardStats>({ eligible: 0, to_review: 0, excluded: 0, to_send: 0, sent: 0, failed: 0 })
   const [, setSettings] = useState<ReviewSettings>(DEFAULT_SETTINGS)
   const [, setTemplates] = useState<ReviewTemplate[]>([])
 
@@ -85,6 +88,9 @@ export default function ReviewManagementTab() {
   // categoryFilter is driven by the stat cards (Idonei / Da Verificare / Da
   // Inviare / Inviate / Fallite / Esclusi). 'ALL' means show everything.
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'ELIGIBLE' | 'TO_REVIEW' | 'TO_SEND' | 'SENT' | 'FAILED' | 'EXCLUDED'>('ALL')
+  // motivoFilter applies to the Esclusi section only — narrows the rows by
+  // exclusion reason (penali / danni / cauzione aperta / altri).
+  const [motivoFilter, setMotivoFilter] = useState<'ALL' | 'PENALE' | 'DANNO' | 'OPEN_DEPOSIT' | 'ALTRI'>('ALL')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectAll, setSelectAll] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -775,7 +781,7 @@ export default function ReviewManagementTab() {
     } else if (c.eligibility_status === 'TO_REVIEW') {
       dot = 'bg-yellow-500'; text = 'text-yellow-800'; bg = 'bg-yellow-50 border-yellow-200'; label = 'Da Verificare'
     } else if (c.send_status === 'TO_SEND' && c.eligibility_status === 'ELIGIBLE') {
-      dot = 'bg-green-500'; text = 'text-green-700'; bg = 'bg-green-50 border-green-200'; label = 'Pronto'
+      dot = 'bg-blue-500'; text = 'text-blue-700'; bg = 'bg-blue-50 border-blue-200'; label = 'Pronto'
     } else if (c.send_status === 'BLOCKED') {
       dot = 'bg-red-500'; text = 'text-red-700'; bg = 'bg-red-50 border-red-200'; label = 'Bloccato'
     }
@@ -800,12 +806,52 @@ export default function ReviewManagementTab() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  // Split candidates into the two stacked sections. No pagination — each
-  // section shows every row in its bucket so the operator can always see
-  // and send to anyone they need (the previous global pagination was hiding
-  // Pronti rows on later pages).
+  // Stats derived from the same candidate list shown below, so the numbers
+  // on the cards always match what the operator can actually see (the raw
+  // backend counts include Lavaggio Rientro etc. and produce off-by-100
+  // mismatches — never use them for the cards).
+  const visibleCandidates = useMemo(() => {
+    return candidates.filter(c => {
+      const name = (c.customer_name || '').toLowerCase()
+      if (name.includes('lavaggio rientro') || name.includes('rientro') || name.includes('interno')) return false
+      return true
+    })
+  }, [candidates])
+  const liveStats = useMemo(() => ({
+    eligible: visibleCandidates.filter(c => c.eligibility_status === 'ELIGIBLE' && c.send_status === 'TO_SEND').length,
+    to_review: visibleCandidates.filter(c => c.eligibility_status === 'TO_REVIEW').length,
+    to_send: visibleCandidates.filter(c => c.send_status === 'TO_SEND').length,
+    sent: visibleCandidates.filter(c => c.send_status === 'SENT').length,
+    failed: visibleCandidates.filter(c => c.send_status === 'FAILED').length,
+    excluded: visibleCandidates.filter(c => c.eligibility_status === 'EXCLUDED').length,
+  }), [visibleCandidates])
+
+  // Pronti and Esclusi sections share the user's category + search filters,
+  // and Esclusi additionally respects motivoFilter (Penali / Danni / Cauzione
+  // aperta / Altri). No pagination — each section shows every matching row.
   const pronti = filteredCandidates.filter(c => c.eligibility_status === 'ELIGIBLE')
-  const esclusi = filteredCandidates.filter(c => c.eligibility_status === 'TO_REVIEW' || c.eligibility_status === 'EXCLUDED')
+  const esclusiBase = filteredCandidates.filter(c => c.eligibility_status === 'TO_REVIEW' || c.eligibility_status === 'EXCLUDED')
+  const esclusi = esclusiBase.filter(c => {
+    if (motivoFilter === 'ALL') return true
+    const code = c.exclusion_reason_code || ''
+    if (motivoFilter === 'PENALE') return code === 'HAS_PENALTY'
+    if (motivoFilter === 'DANNO') return code === 'HAS_DAMAGE'
+    if (motivoFilter === 'OPEN_DEPOSIT') return code === 'OPEN_DEPOSIT'
+    if (motivoFilter === 'ALTRI') return code !== 'HAS_PENALTY' && code !== 'HAS_DAMAGE' && code !== 'OPEN_DEPOSIT'
+    return true
+  })
+  // Counts for the motivo sub-filter pills (computed off the unfiltered
+  // Esclusi base so each pill always shows its true count).
+  const motivoCounts = {
+    all: esclusiBase.length,
+    penali: esclusiBase.filter(c => c.exclusion_reason_code === 'HAS_PENALTY').length,
+    danni: esclusiBase.filter(c => c.exclusion_reason_code === 'HAS_DAMAGE').length,
+    cauzione: esclusiBase.filter(c => c.exclusion_reason_code === 'OPEN_DEPOSIT').length,
+    altri: esclusiBase.filter(c => {
+      const code = c.exclusion_reason_code || ''
+      return code !== 'HAS_PENALTY' && code !== 'HAS_DAMAGE' && code !== 'OPEN_DEPOSIT'
+    }).length,
+  }
 
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
@@ -872,12 +918,12 @@ export default function ReviewManagementTab() {
           Click the same card again to clear the filter (back to ALL). */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         {([
-          { key: 'ELIGIBLE', label: 'Idonei', value: stats.eligible, dot: 'bg-green-500' },
-          { key: 'TO_REVIEW', label: 'Da Verificare', value: stats.to_review, dot: 'bg-yellow-500' },
-          { key: 'TO_SEND', label: 'Da Inviare', value: stats.to_send, dot: 'bg-blue-500' },
-          { key: 'SENT', label: 'Inviate', value: stats.sent, dot: 'bg-emerald-500' },
-          { key: 'FAILED', label: 'Fallite', value: stats.failed, dot: 'bg-red-500' },
-          { key: 'EXCLUDED', label: 'Esclusi', value: stats.excluded, dot: 'bg-gray-400' },
+          { key: 'ELIGIBLE', label: 'Idonei', value: liveStats.eligible, dot: 'bg-blue-500' },
+          { key: 'TO_REVIEW', label: 'Da Verificare', value: liveStats.to_review, dot: 'bg-yellow-500' },
+          { key: 'TO_SEND', label: 'Da Inviare', value: liveStats.to_send, dot: 'bg-blue-500' },
+          { key: 'SENT', label: 'Inviate', value: liveStats.sent, dot: 'bg-emerald-500' },
+          { key: 'FAILED', label: 'Fallite', value: liveStats.failed, dot: 'bg-red-500' },
+          { key: 'EXCLUDED', label: 'Esclusi', value: liveStats.excluded, dot: 'bg-gray-400' },
         ] as const).map(s => {
           const active = categoryFilter === s.key
           return (
@@ -1232,7 +1278,7 @@ export default function ReviewManagementTab() {
             <section className="mb-6">
               <header className="flex items-center justify-between gap-3 mb-3">
                 <div className="inline-flex items-center gap-2 text-sm font-semibold text-theme-text-primary">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                   Pronti
                   <span className="text-xs text-theme-text-secondary font-normal">({pronti.length})</span>
                 </div>
@@ -1283,11 +1329,39 @@ export default function ReviewManagementTab() {
 
             {/* Esclusi section */}
             <section className="mb-6">
-              <header className="flex items-center gap-2 mb-3">
+              <header className="flex flex-wrap items-center gap-2 mb-3">
                 <div className="inline-flex items-center gap-2 text-sm font-semibold text-theme-text-primary">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
                   Esclusi
                   <span className="text-xs text-theme-text-secondary font-normal">({esclusi.length})</span>
+                </div>
+                {/* Motivo sub-filter pills — make the danni/penali split visible */}
+                <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+                  {([
+                    { key: 'ALL', label: 'Tutti motivi', count: motivoCounts.all, dot: 'bg-gray-400' },
+                    { key: 'PENALE', label: 'Penali', count: motivoCounts.penali, dot: 'bg-red-500' },
+                    { key: 'DANNO', label: 'Danni', count: motivoCounts.danni, dot: 'bg-orange-500' },
+                    { key: 'OPEN_DEPOSIT', label: 'Cauzione aperta', count: motivoCounts.cauzione, dot: 'bg-amber-500' },
+                    { key: 'ALTRI', label: 'Altri', count: motivoCounts.altri, dot: 'bg-gray-400' },
+                  ] as const).map(p => {
+                    const active = motivoFilter === p.key
+                    return (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => setMotivoFilter(active ? 'ALL' : p.key)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          active
+                            ? 'border-theme-text-primary bg-theme-bg-primary text-theme-text-primary'
+                            : 'border-theme-border bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${p.dot}`} />
+                        {p.label}
+                        <span className="text-theme-text-secondary/70">{p.count}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </header>
               <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-3 mb-3 flex items-center gap-2">
