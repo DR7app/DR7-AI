@@ -680,9 +680,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       handleClose()
 
     } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const errObj = error as Record<string, any> | null
+      const _errMsg = error instanceof Error
+        ? error.message
+        : (errObj && typeof errObj === 'object' && 'message' in errObj && errObj.message != null
+            ? (typeof errObj.message === 'string' ? errObj.message : JSON.stringify(errObj.message))
+            : String(error))
       const errCode = typeof errObj === 'object' && errObj !== null ? String(errObj.code ?? '') : ''
       console.error('❌ Error saving customer:', error)
       console.error('Error details:', {
