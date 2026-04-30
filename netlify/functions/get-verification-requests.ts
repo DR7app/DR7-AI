@@ -77,7 +77,9 @@ export const handler: Handler = async (event) => {
 
         const userMap = new Map()
         if (users) {
-            users.forEach(u => userMap.set(u.id, u))
+            // Key by user_id (auth UUID) — that's what user_documents.user_id references.
+            // customers_extended.id is the row PK and does NOT match user_documents.user_id.
+            users.forEach(u => userMap.set(u.user_id, u))
         }
 
         // 3. Fallback for missing users:
