@@ -11,7 +11,9 @@ interface Props {
     onSaved: (f: Fornitore) => void
 }
 
-const CATEGORIE = [
+// Fallback categories if the DB lookup fails (e.g. table missing). Real categories
+// come from public.fornitore_categorie loaded in the component.
+const CATEGORIE_FALLBACK = [
     { value: '', label: '-- categoria --' },
     { value: 'carburante', label: 'Carburante' },
     { value: 'ricambi', label: 'Ricambi' },
@@ -44,6 +46,27 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
     const [saving, setSaving] = useState(false)
     const [errorDetail, setErrorDetail] = useState<string | null>(null)
     const [errorCopied, setErrorCopied] = useState(false)
+    const [CATEGORIE, setCATEGORIE] = useState(CATEGORIE_FALLBACK)
+
+    useEffect(() => {
+        ;(async () => {
+            const { data, error } = await supabase
+                .from('fornitore_categorie')
+                .select('slug, label, attiva')
+                .order('sort_order', { ascending: true })
+            if (error || !data) return
+            const opts = [{ value: '', label: '-- categoria --' }]
+            for (const c of data as { slug: string; label: string; attiva: boolean }[]) {
+                if (!c.attiva && c.slug !== fornitore?.categoria_merce) continue
+                opts.push({ value: c.slug, label: c.label + (c.attiva ? '' : ' (disattivata)') })
+            }
+            // Include legacy slug if not in table
+            if (fornitore?.categoria_merce && !data.some((c: any) => c.slug === fornitore.categoria_merce)) {
+                opts.push({ value: fornitore.categoria_merce, label: `${fornitore.categoria_merce} (legacy)` })
+            }
+            if (opts.length > 1) setCATEGORIE(opts)
+        })()
+    }, [fornitore?.categoria_merce])
     const [data, setData] = useState({
         nome: fornitore?.nome || '',
         piva: fornitore?.piva || '',

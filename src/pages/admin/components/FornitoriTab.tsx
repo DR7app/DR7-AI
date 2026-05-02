@@ -10,6 +10,7 @@ import FornitoreAlertsPanel from './fornitori/FornitoreAlertsPanel'
 import FornitoriPageHeader from './fornitori/FornitoriPageHeader'
 import FornitoriRightRail from './fornitori/FornitoriRightRail'
 import FornitoriProcessFlow from './fornitori/FornitoriProcessFlow'
+import CategorieManagerModal from './fornitori/CategorieManagerModal'
 import type { Fornitore } from './fornitori/types'
 
 type View = 'list' | 'scadenziario' | 'alerts'
@@ -34,21 +35,36 @@ export default function FornitoriTab() {
     const [arubaMonthsScanned, setArubaMonthsScanned] = useState(3)
     const [autoCategorizing, setAutoCategorizing] = useState(false)
     const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null)
+    const [categorie, setCategorie] = useState<{ slug: string; label: string; attiva: boolean }[]>([])
+    const [showCategorieModal, setShowCategorieModal] = useState(false)
 
-    const CATEGORIE = [
-        { value: '', label: '-- categoria --' },
-        { value: 'carburante', label: 'Carburante' },
-        { value: 'ricambi', label: 'Ricambi' },
-        { value: 'manutenzione', label: 'Manutenzione' },
-        { value: 'pneumatici', label: 'Pneumatici' },
-        { value: 'lavaggio_prodotti', label: 'Prodotti lavaggio' },
-        { value: 'pulizia', label: 'Pulizia' },
-        { value: 'ufficio', label: 'Ufficio' },
-        { value: 'utenze', label: 'Utenze' },
-        { value: 'consulenze', label: 'Consulenze' },
-        { value: 'noleggio_attrezzature', label: 'Noleggio attrezzature' },
-        { value: 'altro', label: 'Altro' },
-    ]
+    async function loadCategorie() {
+        const { data, error } = await supabase
+            .from('fornitore_categorie')
+            .select('slug, label, attiva')
+            .order('sort_order', { ascending: true })
+        if (error) {
+            console.warn('[Fornitori] categorie fetch failed:', error.message)
+            return
+        }
+        setCategorie((data || []) as { slug: string; label: string; attiva: boolean }[])
+    }
+
+    useEffect(() => { loadCategorie() }, [])
+
+    function categoriaOptions(currentValue: string | null | undefined) {
+        const opts: { value: string; label: string }[] = [{ value: '', label: '-- categoria --' }]
+        for (const c of categorie) {
+            // Show inactive categories only if a fornitore is currently using them
+            if (!c.attiva && c.slug !== currentValue) continue
+            opts.push({ value: c.slug, label: c.label + (c.attiva ? '' : ' (disattivata)') })
+        }
+        // If a fornitore has a slug not in the table (orphan), include it so it shows up
+        if (currentValue && !categorie.some(c => c.slug === currentValue)) {
+            opts.push({ value: currentValue, label: `${currentValue} (legacy)` })
+        }
+        return opts
+    }
 
     async function changeCategory(fornitore: FornitoreRow, newCat: string) {
         setSavingCategoryId(fornitore.id)
@@ -311,6 +327,14 @@ export default function FornitoriTab() {
                         >
                             {autoCategorizing ? 'Categorizzo...' : 'Auto-categorizza'}
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowCategorieModal(true)}
+                            className="text-sm px-3 py-2 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary font-semibold border border-theme-border"
+                            title="Aggiungi, rinomina, disattiva categorie"
+                        >
+                            Gestisci categorie
+                        </button>
                         <Button onClick={() => setShowForm(true)}>+ Nuovo fornitore</Button>
                     </div>
 
@@ -352,7 +376,7 @@ export default function FornitoriTab() {
                                                 disabled={savingCategoryId === f.id}
                                                 className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary focus:outline-none focus:border-dr7-gold disabled:opacity-50"
                                             >
-                                                {CATEGORIE.map(c => (
+                                                {categoriaOptions(f.categoria_merce).map(c => (
                                                     <option key={c.value} value={c.value}>{c.label}</option>
                                                 ))}
                                             </select>
@@ -393,6 +417,13 @@ export default function FornitoriTab() {
                 <FornitoreForm
                     onClose={() => setShowForm(false)}
                     onSaved={() => { setShowForm(false); loadFornitori() }}
+                />
+            )}
+
+            {showCategorieModal && (
+                <CategorieManagerModal
+                    onClose={() => setShowCategorieModal(false)}
+                    onChanged={loadCategorie}
                 />
             )}
 
