@@ -541,11 +541,28 @@ export default function DashboardTab() {
 
       {/* ========== CASH FLOW ========== */}
       <div>
-        <SectionHeader title="Cash Flow" subtitle="Liquidit\u00E0 aziendale" />
+        <SectionHeader title="Fatturato & Cash Flow" subtitle="Tutte le prenotazioni del mese, pagate e non" />
+        {/* Totale fatturato \u2014 TUTTO il mese, indipendentemente dallo stato pagamento */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <StatCard
+            label="Totale Fatturato Mese"
+            value={`\u20AC ${fmt(d.revenue.currentMonth)}`}
+            sub={`Incassato + da incassare (tutte le prenotazioni valide di ${formatMonth(selectedMonth)})`}
+            accent="gold"
+            border
+          />
+          <StatCard
+            label="Mese precedente"
+            value={`\u20AC ${fmt(d.revenue.previousMonth)}`}
+            trend={d.revenue.changePercent}
+            accent="default"
+            border
+          />
+        </div>
         <div className="grid grid-cols-3 gap-3 mb-3">
-          <StatCard label="Incassato" value={`\u20AC ${fmt(d.cashFlow.incassato)}`} accent="green" border />
-          <StatCard label="Da Incassare" value={`\u20AC ${fmt(d.cashFlow.daIncassare)}`} accent="orange" border />
-          <StatCard label="Scaduti" value={`\u20AC ${fmt(d.cashFlow.insolutiScaduti)}`} accent="red" border />
+          <StatCard label="Incassato" value={`\u20AC ${fmt(d.cashFlow.incassato)}`} sub="Cassa effettiva" accent="green" border />
+          <StatCard label="Da Incassare" value={`\u20AC ${fmt(d.cashFlow.daIncassare)}`} sub="Pending / da saldare" accent="orange" border />
+          <StatCard label="Scaduti" value={`\u20AC ${fmt(d.cashFlow.insolutiScaduti)}`} sub="Non pagati oltre scadenza" accent="red" border />
         </div>
         {/* Visual progress bar */}
         {cashTotal > 0 && (
