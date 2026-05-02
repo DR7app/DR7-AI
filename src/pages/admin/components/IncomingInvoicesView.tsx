@@ -35,7 +35,7 @@ function fmtDate(iso: string) {
 
 export default function IncomingInvoicesView() {
   const [month, setMonth] = useState<string>(currentMonth())
-  const [mode, setMode] = useState<'tracked' | 'all'>('tracked')
+  const [mode, setMode] = useState<'tracked' | 'all'>('all')
   const [invoices, setInvoices] = useState<IncomingInvoice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
