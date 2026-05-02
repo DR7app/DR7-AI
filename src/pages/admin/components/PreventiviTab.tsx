@@ -2294,6 +2294,28 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                                 Invia
                               </button>
                             )}
+                            {/* "Invia coefficienti" — visible on EVERY row regardless
+                                of status. Pre-checks the box and pre-fills the
+                                preview with the coefficienti-only payload. */}
+                            <button
+                              onClick={async () => {
+                                setSelectedPreventivo(p)
+                                setWhatsappPhone(p.customer_phone || '')
+                                setPreviewMessage('')
+                                const preview = await formatWhatsAppMessage(p, { coefficientiOnly: true })
+                                if (!preview) {
+                                  toast.error('Nessun coefficiente disponibile per questo preventivo (Centralina Pro disabilitata o trace mancante).')
+                                  return
+                                }
+                                setIncludeCoefficienti(true)
+                                setPreviewMessage(preview)
+                                setShowPhoneModal(true)
+                              }}
+                              className="px-2 py-1 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded"
+                              title="Invia al cliente solo la ripartizione dei coefficienti applicati"
+                            >
+                              Invia coefficienti
+                            </button>
                             {(p.status === 'inviato' || p.status === 'bozza') && (
                               <button
                                 onClick={() => openAcceptModal(p)}
@@ -2387,7 +2409,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                   {/* Action row — mirrors the desktop Azioni column, gated by
                       the same status rules. Wraps onto a second row when
                       needed so every button stays a full 44pt tap target. */}
-                  {(canEdit || canSend || canConvert || canReject || canEditMotivo) && (
+                  {/* Always render the action row — "Invia coefficienti" lives
+                      here regardless of other gates so it's reachable on every
+                      preventivo (bozza/inviato/accettato/rifiutato/scaduto). */}
+                  {(
                     <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-theme-border/40">
                       {canEdit && (
                         <button
@@ -2420,6 +2445,27 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                           Invia
                         </button>
                       )}
+                      {/* "Invia coefficienti" — visible on EVERY card. */}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setSelectedPreventivo(p)
+                          setWhatsappPhone(p.customer_phone || '')
+                          setPreviewMessage('')
+                          const preview = await formatWhatsAppMessage(p, { coefficientiOnly: true })
+                          if (!preview) {
+                            toast.error('Nessun coefficiente disponibile per questo preventivo (Centralina Pro disabilitata o trace mancante).')
+                            return
+                          }
+                          setIncludeCoefficienti(true)
+                          setPreviewMessage(preview)
+                          setShowPhoneModal(true)
+                        }}
+                        className="flex-1 min-w-[48%] h-10 rounded-lg bg-purple-600 hover:bg-purple-500 active:opacity-70 text-white text-[13px] font-semibold"
+                        title="Invia al cliente solo la ripartizione dei coefficienti applicati"
+                      >
+                        Invia coefficienti
+                      </button>
                       {canConvert && (
                         <button
                           type="button"
