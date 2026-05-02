@@ -200,7 +200,49 @@ export const handler: Handler = async (event) => {
       }
     })
 
-    const invoices = mode === 'all' ? parsed : parsed.filter(i => i.is_tracked)
+    const filteredByMode = mode === 'all' ? parsed : parsed.filter(i => i.is_tracked)
+
+    // Enrich rows whose summary lacks amount/date/number by calling getByFilename
+    // (the findByUsername summary doesn't include these fields). Done in batches
+    // of CONCURRENCY to keep wall-clock reasonable.
+    const CONCURRENCY = 5
+    const needEnrich = filteredByMode.filter(i => i.filename && (!i.amount || !i.invoiceDate || !i.invoiceNumber))
+    console.log(`[Aruba] enriching ${needEnrich.length} of ${filteredByMode.length} rows`)
+
+    for (let i = 0; i < needEnrich.length; i += CONCURRENCY) {
+      const batch = needEnrich.slice(i, i + CONCURRENCY)
+      await Promise.all(batch.map(async (row) => {
+        try {
+          const detail = await getIncomingInvoice(row.filename, false)
+          // Aruba detail may put fields at top level, in 'metadata', or inside parsed XML JSON
+          const candidates = [detail, detail?.metadata, detail?.invoice, detail?.fattura].filter(Boolean)
+          for (const src of candidates) {
+            const amt = src.totalDocument ?? src.documentTotal ?? src.importoTotaleDocumento ??
+                        src.importoTotale ?? src.totalAmount ?? src.totale ?? src.amount ?? src.total
+            if (amt != null && row.amount === 0) {
+              const parsedAmt = parseFloat(String(amt).replace(',', '.'))
+              if (!isNaN(parsedAmt)) row.amount = parsedAmt
+            }
+            const dt = src.documentDate || src.invoiceDate || src.dataDocumento || src.dataEmissione || src.dataFattura
+            if (dt && !row.invoiceDate) {
+              let d = String(dt)
+              if (d.includes('T')) d = d.split('T')[0]
+              if (d.includes('/')) {
+                const parts = d.split('/')
+                if (parts.length === 3) d = `${parts[2]}-${parts[1]}-${parts[0]}`
+              }
+              row.invoiceDate = d
+            }
+            const num = src.documentNumber || src.invoiceNumber || src.numeroDocumento || src.numero || src.number
+            if (num && !row.invoiceNumber) row.invoiceNumber = String(num)
+          }
+        } catch (e: any) {
+          console.warn(`[Aruba] enrich failed for ${row.filename}:`, e?.message)
+        }
+      }))
+    }
+
+    const invoices = filteredByMode
 
     // Sort by date descending
     invoices.sort((a: any, b: any) => (b.invoiceDate || '').localeCompare(a.invoiceDate || ''))
