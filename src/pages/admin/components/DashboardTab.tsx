@@ -539,9 +539,9 @@ export default function DashboardTab() {
         )}
       </div>
 
-      {/* ========== CASH FLOW ========== */}
+      {/* ========== FATTURATO DEL MESE (era "Cash Flow") ========== */}
       <div>
-        <SectionHeader title="Fatturato & Cash Flow" subtitle="Tutte le prenotazioni del mese, pagate e non" />
+        <SectionHeader title="Fatturato del Mese" subtitle="Tutte le prenotazioni del mese — pagate, da incassare e scadute" />
         {/* Totale fatturato \u2014 TUTTO il mese, indipendentemente dallo stato pagamento */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <StatCard
