@@ -87,15 +87,42 @@ export default function FornitoriTab() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    type SortKey = 'nome' | 'fatture' | 'bolle' | 'pendenti' | 'recente'
+    const [sortKey, setSortKey] = useState<SortKey>('nome')
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase()
-        if (!q) return fornitori
-        return fornitori.filter(f =>
-            f.nome.toLowerCase().includes(q) ||
-            (f.piva || '').toLowerCase().includes(q) ||
-            (f.categoria_merce || '').toLowerCase().includes(q)
-        )
-    }, [fornitori, search])
+        const base = q
+            ? fornitori.filter(f =>
+                f.nome.toLowerCase().includes(q) ||
+                (f.piva || '').toLowerCase().includes(q) ||
+                (f.categoria_merce || '').toLowerCase().includes(q)
+            )
+            : fornitori
+
+        const sorted = [...base]
+        switch (sortKey) {
+            case 'nome':
+                sorted.sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }))
+                break
+            case 'fatture':
+                sorted.sort((a, b) => b.fattureCount - a.fattureCount || a.nome.localeCompare(b.nome))
+                break
+            case 'bolle':
+                sorted.sort((a, b) => b.bolleCount - a.bolleCount || a.nome.localeCompare(b.nome))
+                break
+            case 'pendenti':
+                sorted.sort((a, b) =>
+                    (b.daApprovareCount + b.daPagareCount) - (a.daApprovareCount + a.daPagareCount)
+                    || a.nome.localeCompare(b.nome)
+                )
+                break
+            case 'recente':
+                sorted.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
+                break
+        }
+        return sorted
+    }, [fornitori, search, sortKey])
 
     async function importFromAruba(opts: { silent?: boolean } = {}) {
         setImporting(true)
@@ -156,11 +183,27 @@ export default function FornitoriTab() {
                 </p>
             </div>
 
-            <Input
-                placeholder="Cerca per nome, P.IVA o categoria…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="flex-1 min-w-[240px]">
+                    <Input
+                        placeholder="Cerca per nome, P.IVA o categoria…"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                </div>
+                <select
+                    value={sortKey}
+                    onChange={e => setSortKey(e.target.value as SortKey)}
+                    className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                    title="Ordina per"
+                >
+                    <option value="nome">Ordina: A → Z</option>
+                    <option value="fatture">Ordina: più fatture</option>
+                    <option value="bolle">Ordina: più bolle</option>
+                    <option value="pendenti">Ordina: da gestire</option>
+                    <option value="recente">Ordina: più recente</option>
+                </select>
+            </div>
 
             <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-hidden">
                 {loading && (
