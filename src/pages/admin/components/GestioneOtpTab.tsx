@@ -23,9 +23,15 @@ interface OtpRow {
     sort_order: number
 }
 
+// Direzione allowlist — only these two are exempt from typing an OTP.
+// Other superadmins must still pass the gate (the role label is just
+// for permissions; only the direzione self-approves).
+const DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
+
 export default function GestioneOtpTab() {
-    const { role: adminRole, loading: roleLoading } = useAdminRole()
-    const isSuperadmin = adminRole === 'superadmin'
+    const { adminEmail, loading: roleLoading } = useAdminRole()
+    const isSuperadmin = !!adminEmail &&
+        DIREZIONE_EMAILS.includes(adminEmail.toLowerCase())
     const override = useLimitationOverride()
 
     // Gate the entire section behind an OTP for non-superadmins.

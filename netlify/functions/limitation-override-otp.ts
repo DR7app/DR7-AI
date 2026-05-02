@@ -9,10 +9,10 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// OTP recipient — the direzione that approves overrides. Valerio at his
-// work email. When this admin himself triggers an OTP-required action,
-// the bypass below auto-approves without sending him an email.
-const OTP_RECIPIENT = 'valerio@dr7.app'
+// OTP recipient — direzione's working channel (kept as-is, do not change).
+// When a superadmin himself triggers an OTP-required action the bypass
+// below auto-approves without sending any email.
+const OTP_RECIPIENT = 'valesaja91@icloud.com'
 const OTP_TTL_MINUTES = 10
 const OVERRIDE_TTL_HOURS = 2
 
@@ -55,15 +55,13 @@ export const handler: Handler = async (event) => {
       const otpExpiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString()
       const overrideExpiresAt = new Date(Date.now() + OVERRIDE_TTL_HOURS * 60 * 60 * 1000).toISOString()
 
-      // BYPASS: any superadmin can self-approve their own override.
-      // Sending an OTP to the direzione only to type it themselves is
-      // theatre — the gate exists to keep regular admins honest.
-      const { data: requesterAdmin } = await supabase
-        .from('admins')
-        .select('role')
-        .eq('user_id', authUser!.id)
-        .maybeSingle()
-      const isSelfApproval = requesterAdmin?.role === 'superadmin'
+      // BYPASS — strict allowlist by email, NOT by role. Only direzione
+      // (Valerio + Ilenia) self-approve. Everyone else, including any
+      // historical 'superadmin' rows in the admins table, must enter the
+      // OTP that the direzione sends them.
+      const SELF_APPROVE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
+      const isSelfApproval = !!authUser?.email &&
+        SELF_APPROVE_EMAILS.includes(authUser.email.toLowerCase())
 
       // Store OTP server-side
       const { data: override, error: insertErr } = await supabase
