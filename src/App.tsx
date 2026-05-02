@@ -15,6 +15,7 @@ const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'
 const AdminRoute = lazyWithRetry(() => import('./components/AdminRoute'))
 const ReferralPage = lazyWithRetry(() => import('./pages/ReferralPage'))
 const FirmaPage = lazyWithRetry(() => import('./pages/FirmaPage'))
+const RegistrazioneClientePage = lazyWithRetry(() => import('./pages/RegistrazioneClientePage'))
 
 function App() {
   return (
@@ -53,6 +54,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/referral" element={<ReferralPage />} />
             <Route path="/firma/:token" element={<FirmaPage />} />
+            <Route path="/registrazione-cliente/:token" element={<RegistrazioneClientePage />} />
             <Route
               path="/admin"
               element={
