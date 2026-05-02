@@ -1817,12 +1817,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       service_type: 'rental',
       payment_method,
       payment_status: 'pending',
-      customer_id,
       customer_name: customerName,
       customer_email: customerEmail,
       customer_phone: customerPhone,
       booking_details: {
         from_preventivo: p.id,
+        customer_id,
+        customer: { customerId: customer_id, name: customerName, email: customerEmail, phone: customerPhone },
         insurance_option: p.insurance_option,
         rental_days: p.rental_days,
         unlimited_km: (p.unlimited_km_total || 0) > 0,
@@ -1840,10 +1841,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       .single()
     if (insertErr) throw new Error(`Creazione prenotazione fallita: ${insertErr.message}`)
 
-    const { error: updErr } = await supabase
+    const preventivoUpdate: Record<string, unknown> = { status: 'accettato' }
+    if (inserted?.id) preventivoUpdate.booking_id = inserted.id
+    // Try with customer_id; if the column doesn't exist on preventivi we fall back below.
+    let { error: updErr } = await supabase
       .from('preventivi')
-      .update({ status: 'accettato', booking_id: inserted?.id, customer_id })
+      .update({ ...preventivoUpdate, customer_id })
       .eq('id', p.id)
+    if (updErr && /customer_id/i.test(updErr.message)) {
+      const retry = await supabase.from('preventivi').update(preventivoUpdate).eq('id', p.id)
+      updErr = retry.error
+    }
     if (updErr) {
       console.warn('[Preventivi] Booking creato ma update preventivo fallito:', updErr.message)
     }
