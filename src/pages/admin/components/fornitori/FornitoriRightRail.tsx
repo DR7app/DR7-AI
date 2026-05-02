@@ -28,7 +28,7 @@ export default function FornitoriRightRail() {
                                     {s.label}
                                     {s.adminOnly && (
                                         <span className="ml-2 text-[10px] uppercase tracking-wide bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded-full align-middle">
-                                            Solo Valerio / Ilenia
+                                            Solo amministratore
                                         </span>
                                     )}
                                 </p>

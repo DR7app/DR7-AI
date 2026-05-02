@@ -40,6 +40,44 @@ html.light {
   filter: invert(1) hue-rotate(180deg);
 }
 
+/* Gradient ciano DR7 — utility class globale. Usata su ogni bottone
+   "azione primaria" per coerenza brand: invece di hardcodare il
+   gradient in ogni JSX, basta `className="btn-cyan"`. La sorgente
+   e' --gradient-primary (definito in :root, gia' usato altrove).
+   Hover: leggera shadow ciano. Il colore testo e' bianco perche' il
+   ciano e' abbastanza scuro in entrambi i temi. */
+.btn-cyan {
+  background-image: var(--gradient-primary);
+  color: #ffffff;
+  transition: box-shadow 200ms ease, transform 100ms ease, filter 200ms ease;
+}
+.btn-cyan:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 16px rgba(25, 194, 214, 0.35);
+}
+.btn-cyan:active {
+  transform: scale(0.98);
+}
+.btn-cyan:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: none;
+  box-shadow: none;
+}
+
+/* Tutti gli usi esistenti di bg-dr7-gold (269+ in admin) ricevono
+   automaticamente il gradient brand DR7. Il background-color resta
+   come fallback per browser che non gestiscono il gradient (basicamente
+   nessuno oggi). Niente tocchi al JSX — coerenza visiva istantanea. */
+.bg-dr7-gold {
+  background-image: var(--gradient-primary) !important;
+}
+.bg-dr7-gold:hover,
+.hover\:bg-dr7-gold\/90:hover,
+.hover\:bg-dr7-gold:hover {
+  filter: brightness(1.08);
+}
+
 /* Prevent white flash on overscroll (iOS) */
 body {
   overscroll-behavior: none;

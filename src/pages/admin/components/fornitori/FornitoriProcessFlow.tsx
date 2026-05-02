@@ -28,7 +28,7 @@ export default function FornitoriProcessFlow() {
                             </div>
                             {s.adminOnly && (
                                 <p className="text-[10px] uppercase tracking-wide bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded-full inline-block mb-1">
-                                    Solo Valerio / Ilenia
+                                    Solo amministratore
                                 </p>
                             )}
                             <p className="text-xs text-theme-text-secondary">{s.desc}</p>

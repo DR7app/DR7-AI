@@ -63,16 +63,16 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-theme-bg-secondary">
 
       <div className="w-full max-w-md relative z-10">
-        {/* Box login: sfondo segue il tema (nero in dark, bianco in light).
-            Il logo usa la classe theme-aware-logo che applica invert+hue
-            in light mode, cosi' lo stesso PNG funziona in entrambi i temi. */}
-        <div className="rounded-2xl px-6 sm:px-10 pt-10 pb-8 border border-dr7-gold/40 relative shadow-2xl shadow-dr7-gold/10 bg-theme-bg-primary">
+        {/* Box login: sempre NERO in entrambi i temi cosi' il PNG del logo
+            (che ha sfondo nero) si fonde sempre senza rettangolo spaiato.
+            Solo la pagina circostante cambia con il tema. */}
+        <div className="rounded-2xl px-6 sm:px-10 pt-10 pb-8 border border-dr7-gold/40 relative shadow-2xl shadow-dr7-gold/10" style={{ backgroundColor: '#000' }}>
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <img
               src="/rentora-logo.jpeg"
               alt="DR7 A.I."
-              className="theme-aware-logo h-32 sm:h-36 w-auto max-w-full object-contain"
+              className="h-32 sm:h-36 w-auto max-w-full object-contain"
             />
           </div>
 
@@ -96,7 +96,7 @@ export default function Login() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     autoComplete="email"
-                    className="w-full pl-11 pr-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-xl text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all"
+                    className="w-full pl-11 pr-4 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-white/[0.06] transition-all"
                     placeholder="admin@dr7empire.com"
                   />
                 </div>
@@ -121,14 +121,14 @@ export default function Login() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     autoComplete="current-password"
-                    className="w-full pl-11 pr-12 py-3 bg-theme-input-bg border border-theme-input-border rounded-xl text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all"
+                    className="w-full pl-11 pr-12 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-white/[0.06] transition-all"
                     placeholder="••••••••"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(s => !s)}
                     aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-dr7-gold transition-colors p-1"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-dr7-gold transition-colors p-1"
                   >
                     {showPassword ? (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -175,7 +175,7 @@ export default function Login() {
             </form>
           ) : (
             <form onSubmit={handleForgotPassword} className="space-y-4">
-              <p className="text-sm text-theme-text-muted">
+              <p className="text-sm text-gray-400">
                 Inserisci la tua email per ricevere un link di recupero password.
               </p>
               <div className="relative">
@@ -189,7 +189,7 @@ export default function Login() {
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
                   required
-                  className="w-full pl-11 pr-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-xl text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all"
+                  className="w-full pl-11 pr-4 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-white/[0.06] transition-all"
                   placeholder="La tua email"
                 />
               </div>
@@ -213,7 +213,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => { setShowForgot(false); setForgotError(''); setForgotMessage('') }}
-                className="w-full text-xs text-theme-text-muted hover:text-dr7-gold transition-colors py-1"
+                className="w-full text-xs text-gray-500 hover:text-dr7-gold transition-colors py-1"
               >
                 ← Torna al login
               </button>
@@ -221,7 +221,7 @@ export default function Login() {
           )}
 
           {/* Footer secure note */}
-          <div className="mt-8 pt-5 border-t border-theme-border flex items-center justify-center gap-2 text-[11px] text-theme-text-muted">
+          <div className="mt-8 pt-5 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] text-gray-500">
             <svg className="w-3.5 h-3.5 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M12 21a9 9 0 100-18 9 9 0 000 18z" />
             </svg>

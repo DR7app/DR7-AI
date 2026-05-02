@@ -342,15 +342,18 @@ export default function AdminDashboard() {
             horizontally. object-contain + matched max-width/max-height
             lets the browser preserve aspect ratio inside the sidebar's
             narrow ~140px inner panel without flex shrinking it. */}
-        <div className="relative px-3 py-3 flex items-center justify-center" style={{ backgroundColor: '#FCFCFC' }}>
+        {/* Logo tile: bg SEMPRE nera in entrambi i temi cosi' il PNG (che
+            ha sfondo nero) si fonde sempre. La X close usa colori chiari
+            perche' sta sopra al nero. */}
+        <div className="relative px-3 py-3 flex items-center justify-center bg-black">
           <img
-            src="/rentora-logo.jpeg"
-            alt="Rentora"
+            src="/DR7logo1.png"
+            alt="DR7 A.I."
             className="max-h-10 max-w-[120px] w-auto h-auto object-contain"
           />
           <button
             onClick={() => setSidebarOpen(false)}
-            className="absolute right-1 top-1/2 -translate-y-1/2 text-[#1a2332]/40 hover:text-[#1a2332] min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg"
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-white/60 hover:text-white min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -383,11 +386,11 @@ export default function AdminDashboard() {
                 // the oversized green block that spanned the full sidebar.
                 className="w-full text-left flex items-center justify-between px-1 transition-colors group"
               >
-                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${sectionActive ? 'bg-gradient-to-r from-primary-dark via-primary to-primary-light text-white shadow-md shadow-dr7-gold/20' : 'text-white/70 group-hover:text-white group-hover:bg-dr7-gold/10'}`}>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${sectionActive ? 'bg-gradient-to-r from-primary-dark via-primary to-primary-light text-white shadow-md shadow-dr7-gold/20' : 'text-theme-text-secondary group-hover:text-theme-text-primary group-hover:bg-dr7-gold/10'}`}>
                   {section.name}
                 </span>
                 {showBirthdayBadge && (
-                  <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2">{birthdayCount}</span>
+                  <span className="bg-dr7-gold/20 text-dr7-gold text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2">{birthdayCount}</span>
                 )}
               </button>
             )
@@ -403,7 +406,7 @@ export default function AdminDashboard() {
             {!alarmState.audioEnabled ? (
               <button
                 onClick={enableAudio}
-                className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] text-white/60 hover:text-white hover:bg-theme-bg-hover transition-colors"
+                className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
               >
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -422,7 +425,7 @@ export default function AdminDashboard() {
               onClick={() => setShowAlarmInventory(true)}
               title="Gestione Allarmi — vedi quali allarmi sono attivi, quando suonano e perché"
               aria-label="Gestione Allarmi"
-              className="px-2 py-1.5 rounded-lg text-white/60 hover:text-white hover:bg-theme-bg-hover transition-colors flex items-center justify-center"
+              className="px-2 py-1.5 rounded-lg text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors flex items-center justify-center"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -433,7 +436,7 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); }}
-              className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-white/60 hover:text-white hover:bg-theme-bg-hover transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -442,7 +445,7 @@ export default function AdminDashboard() {
             </button>
             <button
               onClick={handleSignOut}
-              className="flex items-center justify-center px-3 min-h-[36px] rounded-lg text-[10px] text-white/40 hover:text-red-400 hover:bg-theme-bg-hover transition-colors"
+              className="flex items-center justify-center px-3 min-h-[36px] rounded-lg text-[10px] text-theme-text-muted hover:text-red-400 hover:bg-theme-bg-hover transition-colors"
             >
               Esci
             </button>

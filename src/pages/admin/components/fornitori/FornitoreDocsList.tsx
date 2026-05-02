@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../../../../supabaseClient'
 import Button from '../Button'
 import FornitoreDocumentUpload from './FornitoreDocumentUpload'
+import { useAdminRole } from '../../../../hooks/useAdminRole'
 import {
     DOCUMENT_TIPO_LABELS,
     DOCUMENT_STATO_LABELS,
@@ -13,9 +14,7 @@ import {
 } from './types'
 import type { Fornitore, FornitoreDocument, DocumentTipo, DocumentStato } from './types'
 
-// Solo questi due account possono APPROVARE o PAGARE le fatture fornitore.
-// Stessa lista usata in FatturaTab.PAYMENT_MANAGERS e GestioneOtpTab.DIREZIONE_EMAILS.
-const PAYMENT_MANAGERS = ['valerio@dr7.app', 'ilenia@dr7.app']
+// Approvazione + pagamento riservati agli amministratori (role === 'superadmin').
 const RESTRICTED_STATES: DocumentStato[] = ['approvato', 'pagabile', 'pagato']
 
 interface Props {
@@ -39,14 +38,8 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
     const [showUpload, setShowUpload] = useState(false)
     const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)
     const [syncingAruba, setSyncingAruba] = useState(false)
-    const [currentEmail, setCurrentEmail] = useState<string | null>(null)
-    const canApproveOrPay = !!currentEmail && PAYMENT_MANAGERS.includes(currentEmail.toLowerCase())
-
-    useEffect(() => {
-        supabase.auth.getSession().then(({ data }) => {
-            setCurrentEmail(data.session?.user?.email || null)
-        })
-    }, [])
+    const { role: adminRole } = useAdminRole()
+    const canApproveOrPay = adminRole === 'superadmin'
 
     async function syncFromAruba() {
         const monthsStr = window.prompt('Quanti mesi indietro sincronizzare da Aruba? (1-12)', '6')
@@ -106,9 +99,9 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
     const totale = useMemo(() => docs.reduce((s, d) => s + Number(d.importo_totale || 0), 0), [docs])
 
     async function transitionDoc(doc: FornitoreDocument, newStato: DocumentStato) {
-        // Approvazione + pagamento riservati a Valerio e Ilenia
+        // Approvazione + pagamento riservati agli amministratori
         if (RESTRICTED_STATES.includes(newStato) && !canApproveOrPay) {
-            alert(`Solo ${PAYMENT_MANAGERS.join(' o ')} possono approvare o pagare.`)
+            alert('Solo un amministratore può approvare o pagare.')
             return
         }
         const updates: Record<string, unknown> = { stato: newStato }
@@ -268,7 +261,7 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
                                                         disabled={blocked}
                                                         className={`text-xs px-2 py-1 rounded ${DOCUMENT_STATO_COLORS[s]} ${blocked ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-80'}`}
                                                         title={blocked
-                                                            ? `Solo ${PAYMENT_MANAGERS.join(' o ')} possono ${s === 'pagato' ? 'pagare' : 'approvare'}`
+                                                            ? `Solo un amministratore può ${s === 'pagato' ? 'pagare' : 'approvare'}`
                                                             : `Sposta in: ${DOCUMENT_STATO_LABELS[s]}`}>
                                                         → {DOCUMENT_STATO_LABELS[s]}
                                                     </button>
