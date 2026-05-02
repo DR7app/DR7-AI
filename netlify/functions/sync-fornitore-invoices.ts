@@ -112,15 +112,15 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // Fetch existing fornitore_documents to dedupe (we use natural key fornitore+tipo+numero+data via unique index)
+    // Fetch existing fornitore_documents to dedupe and to backfill aruba_filename
     const { data: existingDocs } = await supabase
       .from('fornitore_documents')
-      .select('numero_documento, data_documento, file_url')
+      .select('id, numero_documento, data_documento, file_url, aruba_filename')
       .eq('fornitore_id', fornitoreId)
       .eq('tipo', 'fattura')
-    const existingKey = new Set<string>()
+    const existingKey = new Map<string, { id: string; aruba_filename: string | null }>()
     for (const d of existingDocs || []) {
-      existingKey.add(`${d.numero_documento}|${d.data_documento}`)
+      existingKey.set(`${d.numero_documento}|${d.data_documento}`, { id: d.id, aruba_filename: d.aruba_filename })
     }
 
     let inserted = 0
@@ -166,7 +166,15 @@ export const handler: Handler = async (event) => {
         }
 
         const dedupeKey = `${number}|${date}`
-        if (existingKey.has(dedupeKey)) {
+        const existing = existingKey.get(dedupeKey)
+        if (existing) {
+          // Backfill aruba_filename if missing on the existing row
+          if (!existing.aruba_filename) {
+            await supabase
+              .from('fornitore_documents')
+              .update({ aruba_filename: m.filename })
+              .eq('id', existing.id)
+          }
           skipped++
           continue
         }
@@ -193,7 +201,7 @@ export const handler: Handler = async (event) => {
           }
         } else {
           inserted++
-          existingKey.add(dedupeKey)
+          existingKey.set(dedupeKey, { id: '', aruba_filename: m.filename })
         }
       } catch (e: any) {
         failed++
