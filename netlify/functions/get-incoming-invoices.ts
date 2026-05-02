@@ -86,8 +86,15 @@ export const handler: Handler = async (event) => {
     if (month) {
       const [year, mo] = month.split('-')
       const daysInMonth = new Date(parseInt(year), parseInt(mo), 0).getDate()
-      startDate = `01/${mo}/${year}`  // dd/MM/yyyy for Aruba
-      endDate = `${String(daysInMonth).padStart(2, '0')}/${mo}/${year}`
+      // Aruba wants ISO 8601 with timezone: yyyy-MM-ddTHH:mm:ss.fffzzz
+      // Compute Europe/Rome offset for the chosen month (CET +01:00 / CEST +02:00 during DST).
+      const monthMid = new Date(Date.UTC(parseInt(year), parseInt(mo) - 1, 15, 12, 0, 0))
+      const romeStr = monthMid.toLocaleString('en-US', { timeZone: 'Europe/Rome', hour12: false })
+      const utcStr = monthMid.toLocaleString('en-US', { timeZone: 'UTC', hour12: false })
+      const offsetHours = Math.round((new Date(romeStr).getTime() - new Date(utcStr).getTime()) / 3600000)
+      const tz = `${offsetHours >= 0 ? '+' : '-'}${String(Math.abs(offsetHours)).padStart(2, '0')}:00`
+      startDate = `${year}-${mo}-01T00:00:00.000${tz}`
+      endDate = `${year}-${mo}-${String(daysInMonth).padStart(2, '0')}T23:59:59.999${tz}`
     }
 
     // Fetch all incoming invoices for the period

@@ -154,8 +154,8 @@ export async function checkArubaStatus(filename: string): Promise<any> {
  * Based on official docs: POST /services/invoice/in/findByUsername
  */
 export async function searchIncomingInvoices(params: {
-    startDate?: string  // dd/MM/yyyy
-    endDate?: string    // dd/MM/yyyy
+    startDate?: string  // ISO 8601: yyyy-MM-ddTHH:mm:ss.fffzzz
+    endDate?: string    // ISO 8601: yyyy-MM-ddTHH:mm:ss.fffzzz
     page?: number
     pageSize?: number
     senderDescription?: string
