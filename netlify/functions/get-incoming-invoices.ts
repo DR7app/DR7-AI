@@ -1,27 +1,55 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
+import { createClient } from '@supabase/supabase-js'
 import { searchIncomingInvoices, getIncomingInvoice } from './aruba-utils'
 
-// Tracked suppliers — filter incoming invoices to only these
-const TRACKED_SUPPLIERS = [
-  'sotgia gomme',
-  'galprix',
-  'b.k. luxury rent',
-  'begaj kujtim',
-  'dap autoricambi',
-  'lobrano',
-  'leasys italia',
-  'linda corriga',
-  'antonio corriga',
-  'elena demontis',
-  'antonio demuro',
-  'artizzu rossana',
-]
+const supabaseUrl = process.env.VITE_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-function matchesSupplier(senderName: string): boolean {
-  if (!senderName) return false
-  const lower = senderName.toLowerCase()
-  return TRACKED_SUPPLIERS.some(s => lower.includes(s))
+interface Fornitore {
+  id: string
+  nome: string
+  piva: string | null
+}
+
+function normalizeVat(s: string | null | undefined): string {
+  if (!s) return ''
+  return s.replace(/\D/g, '')
+}
+
+async function loadTrackedFornitori(): Promise<Fornitore[]> {
+  const { data, error } = await supabase
+    .from('fornitori')
+    .select('id, nome, piva')
+    .eq('attivo', true)
+  if (error) {
+    console.warn('[get-incoming-invoices] fornitori lookup failed:', error.message)
+    return []
+  }
+  return (data || []) as Fornitore[]
+}
+
+function buildSupplierMatcher(fornitori: Fornitore[]) {
+  const vatSet = new Set<string>()
+  const nameNeedles: string[] = []
+  for (const f of fornitori) {
+    const v = normalizeVat(f.piva)
+    if (v) vatSet.add(v)
+    if (f.nome) nameNeedles.push(f.nome.toLowerCase().trim())
+  }
+  return (senderName: string, senderVat: string): { matches: boolean; fornitore_id?: string } => {
+    const v = normalizeVat(senderVat)
+    if (v && vatSet.has(v)) {
+      const f = fornitori.find(x => normalizeVat(x.piva) === v)
+      return { matches: true, fornitore_id: f?.id }
+    }
+    const lower = (senderName || '').toLowerCase()
+    if (!lower) return { matches: false }
+    const f = fornitori.find(x => x.nome && lower.includes(x.nome.toLowerCase().trim()))
+    if (f) return { matches: true, fornitore_id: f.id }
+    return { matches: false }
+  }
 }
 
 export const handler: Handler = async (event) => {
@@ -51,6 +79,7 @@ export const handler: Handler = async (event) => {
 
     // List incoming invoices for the selected month
     const month = params.month // YYYY-MM format
+    const mode = params.mode || 'tracked' // 'tracked' (filter to fornitori) | 'all' (no filter)
     let startDate: string | undefined
     let endDate: string | undefined
 
@@ -66,20 +95,18 @@ export const handler: Handler = async (event) => {
       startDate,
       endDate,
       page: 0,
-      pageSize: 200
+      pageSize: 500
     })
 
     // Extract invoices array from Aruba response
     const allInvoices: any[] = result.invoices || result.content || []
 
-    // Filter to tracked suppliers only
-    const filtered = allInvoices.filter((inv: any) => {
-      const sender = inv.senderDescription || inv.sender?.description || inv.cedentePrestatore?.denominazione || ''
-      return matchesSupplier(sender)
-    })
+    // Match against fornitori table (replaces previous hardcoded list)
+    const fornitori = await loadTrackedFornitori()
+    const supplierMatcher = buildSupplierMatcher(fornitori)
 
-    // Parse and normalize each invoice
-    const invoices = filtered.map((inv: any) => {
+    // Parse and normalize each invoice (always — filtering happens after)
+    const parsed = allInvoices.map((inv: any) => {
       const sender = inv.senderDescription || inv.sender?.description || inv.cedentePrestatore?.denominazione || 'Sconosciuto'
       const senderVat = inv.senderCountryCode && inv.senderId
         ? `${inv.senderCountryCode}${inv.senderId}`
@@ -99,6 +126,8 @@ export const handler: Handler = async (event) => {
         if (parts.length === 3) invoiceDate = `${parts[2]}-${parts[1]}-${parts[0]}`
       }
 
+      const match = supplierMatcher(sender, senderVat)
+
       return {
         id: inv.id || inv.filename || inv.uploadFileName,
         filename: inv.filename || inv.uploadFileName,
@@ -109,8 +138,12 @@ export const handler: Handler = async (event) => {
         amount,
         status: inv.status || inv.stato || 'ricevuta',
         receivedAt: inv.receivedDate || inv.createdAt || inv.dataRicezione || '',
+        fornitore_id: match.fornitore_id || null,
+        is_tracked: match.matches,
       }
     })
+
+    const invoices = mode === 'all' ? parsed : parsed.filter(i => i.is_tracked)
 
     // Sort by date descending
     invoices.sort((a: any, b: any) => (b.invoiceDate || '').localeCompare(a.invoiceDate || ''))

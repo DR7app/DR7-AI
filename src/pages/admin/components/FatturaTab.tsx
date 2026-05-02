@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildFatturaContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
+import IncomingInvoicesView from './IncomingInvoicesView'
 
 interface Invoice {
   id: string
@@ -46,6 +47,7 @@ interface InvoiceItem {
 }
 
 export default function FatturaTab() {
+  const [view, setView] = useState<'emesse' | 'ricevute'>('emesse')
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [checkingStatus, setCheckingStatus] = useState<string | null>(null)
@@ -284,32 +286,57 @@ export default function FatturaTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-theme-text-primary">Fatture</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              setMultiSelectMode(!multiSelectMode)
-              setSelectedIds([])
-            }}
-            className={`px-4 py-2 rounded-full font-medium transition-colors ${multiSelectMode
-              ? 'bg-blue-600 text-white'
-              : 'bg-theme-bg-secondary text-theme-text-muted hover:bg-theme-bg-tertiary'
-              }`}
-          >
-            {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
-          </button>
-
-          {multiSelectMode && selectedIds.length > 0 && (
+      <div className="flex justify-between items-center flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Fatture</h2>
+          <div className="flex bg-theme-bg-secondary border border-theme-border rounded-full overflow-hidden text-sm">
             <button
-              onClick={handleBulkDelete}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium transition-colors"
+              type="button"
+              onClick={() => setView('emesse')}
+              className={`px-4 py-1.5 transition-colors ${view === 'emesse' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
             >
-              × Selezionati ({selectedIds.length})
+              Emesse
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => setView('ricevute')}
+              className={`px-4 py-1.5 transition-colors ${view === 'ricevute' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+            >
+              Ricevute (Aruba)
+            </button>
+          </div>
         </div>
+        {view === 'emesse' && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setMultiSelectMode(!multiSelectMode)
+                setSelectedIds([])
+              }}
+              className={`px-4 py-2 rounded-full font-medium transition-colors ${multiSelectMode
+                ? 'bg-blue-600 text-white'
+                : 'bg-theme-bg-secondary text-theme-text-muted hover:bg-theme-bg-tertiary'
+                }`}
+            >
+              {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
+            </button>
+
+            {multiSelectMode && selectedIds.length > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium transition-colors"
+              >
+                × Selezionati ({selectedIds.length})
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {view === 'ricevute' && <IncomingInvoicesView />}
+      {view === 'emesse' && (
+      <>
+      {/* Empty header replaced above; the rest of Emesse UI follows */}
 
       {/* Search Bar */}
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
@@ -450,6 +477,8 @@ export default function FatturaTab() {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   )
