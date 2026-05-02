@@ -298,9 +298,20 @@ export async function getMessageTemplate(
   for (const [rawKey, v] of Object.entries(variables)) {
     const cleanKey = String(rawKey).replace(/^\s*\{+\s*|\s*\}+\s*$/g, '').trim()
     if (!cleanKey) continue
-    body = body.replace(new RegExp(`\\{\\s*${escRx(cleanKey)}\\s*\\}`, 'g'), v ?? '')
-    body = body.replace(new RegExp(`\\{\\{\\s*${escRx(cleanKey)}\\s*\\}\\}`, 'g'), v ?? '')
+    // Trim the substituted value. WhatsApp's *bold* / _italic_ only render
+    // when the markers are tight to the text — `*Thomas *` (with a trailing
+    // space coming from a dirty customer.nome) renders raw, but `*Thomas*`
+    // bolds correctly. Trimming here removes incidental whitespace from
+    // database values without forcing a data cleanup.
+    const cleanV = (v ?? '').trim()
+    body = body.replace(new RegExp(`\\{\\s*${escRx(cleanKey)}\\s*\\}`, 'g'), cleanV)
+    body = body.replace(new RegExp(`\\{\\{\\s*${escRx(cleanKey)}\\s*\\}\\}`, 'g'), cleanV)
   }
+  // Defensive cleanup for templates authored with stray spaces inside markers
+  // (`* word *` / `_ word _`): convert them to tight `*word*` / `_word_` so
+  // WhatsApp's formatter actually fires.
+  body = body.replace(/(\*)\s+([^\s*][^*]*?)\s+(\*)(?=\s|[.,;:!?)\]]|$)/g, '$1$2$3')
+  body = body.replace(/(_)\s+([^\s_][^_]*?)\s+(_)(?=\s|[.,;:!?)\]]|$)/g, '$1$2$3')
 
   // Add header/footer ONLY if the template explicitly opts in
   // (include_header === true). Default is OFF — admin must tick the
