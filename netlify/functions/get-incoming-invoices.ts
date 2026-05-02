@@ -155,32 +155,46 @@ export const handler: Handler = async (event) => {
         ? `${inv.senderCountryCode}${inv.senderId}`
         : inv.sender?.vatCode || inv.cedentePrestatore?.idFiscaleIVA || ''
 
-      // Amount parsing — Aruba may store as cents or euros
-      let amount = 0
-      if (inv.importoTotale != null) amount = parseFloat(inv.importoTotale)
-      else if (inv.totalAmount != null) amount = parseFloat(inv.totalAmount)
-      else if (inv.amount != null) amount = parseFloat(inv.amount)
+      // Amount parsing — Aruba response varies (try every common name)
+      const rawAmount =
+        inv.importoTotaleDocumento ?? inv.importoTotale ?? inv.totalAmount ?? inv.totalDocument ??
+        inv.documentTotal ?? inv.invoiceTotal ?? inv.totale ?? inv.totaleDocumento ??
+        inv.amount ?? inv.total ?? inv.amountTotal ?? inv.amountDocument ??
+        inv.datiGenerali?.importoTotaleDocumento ??
+        inv.cedentePrestatore?.importoTotale ?? null
+      const amount = rawAmount != null ? parseFloat(String(rawAmount).replace(',', '.')) : 0
 
       // Date parsing — Aruba format varies
-      let invoiceDate = inv.invoiceDate || inv.dataFattura || inv.date || ''
+      const rawDate =
+        inv.documentDate || inv.invoiceDate || inv.dataFattura || inv.dataDocumento ||
+        inv.dataEmissione || inv.date || inv.uploadDate || ''
+      let invoiceDate = rawDate
       // If dd/MM/yyyy, convert to YYYY-MM-DD
       if (invoiceDate && invoiceDate.includes('/')) {
         const parts = invoiceDate.split('/')
         if (parts.length === 3) invoiceDate = `${parts[2]}-${parts[1]}-${parts[0]}`
       }
+      // If full ISO (yyyy-MM-ddT...), keep just the date portion for display
+      if (invoiceDate && invoiceDate.includes('T')) {
+        invoiceDate = invoiceDate.split('T')[0]
+      }
+
+      const invoiceNumber =
+        inv.documentNumber || inv.invoiceNumber || inv.numeroFattura || inv.numeroDocumento ||
+        inv.numero || inv.number || ''
 
       const match = supplierMatcher(sender, senderVat)
 
       return {
         id: inv.id || inv.filename || inv.uploadFileName,
         filename: inv.filename || inv.uploadFileName,
-        invoiceNumber: inv.invoiceNumber || inv.numeroFattura || inv.number || '',
+        invoiceNumber,
         invoiceDate,
         sender,
         senderVat,
-        amount,
+        amount: isNaN(amount) ? 0 : amount,
         status: inv.status || inv.stato || 'ricevuta',
-        receivedAt: inv.receivedDate || inv.createdAt || inv.dataRicezione || '',
+        receivedAt: inv.receivedDate || inv.uploadDate || inv.createdAt || inv.dataRicezione || '',
         fornitore_id: match.fornitore_id || null,
         is_tracked: match.matches,
       }
