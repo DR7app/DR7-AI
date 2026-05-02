@@ -12,6 +12,38 @@ function normalizeVat(s: string | null | undefined): string {
   return s.replace(/\D/g, '')
 }
 
+// Normalizza un nome per matching tollerante: lowercase, rimuove forme
+// societarie comuni (s.r.l., s.p.a., snc, sas, srl, spa, soc., societa', ecc.),
+// punteggiatura, accenti, e collassa spazi multipli. Cosi' "AGENZIA GOFFI SRL"
+// e "Agenzia Goffi S.r.l." vengono trattati come uguali.
+function normalizeName(s: string | null | undefined): string {
+  if (!s) return ''
+  return s
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')        // rimuovi accenti
+    .replace(/\b(s\.?r\.?l\.?|s\.?p\.?a\.?|s\.?n\.?c\.?|s\.?a\.?s\.?|soc(?:ieta')?|srls|s\.r\.l\.s\.?)\b/gi, '')
+    .replace(/\b(a socio unico|succursale italiana|italia|italy|italiana|italiano)\b/gi, '')
+    .replace(/['".,&\-_/\\()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Restituisce true se due nomi normalizzati combaciano abbastanza:
+// - uguali, oppure
+// - uno contiene l'altro (per ragioni sociali abbreviate)
+// - condividono >= 2 token significativi
+function namesMatch(a: string, b: string): boolean {
+  if (!a || !b) return false
+  if (a === b) return true
+  if (a.length >= 4 && b.includes(a)) return true
+  if (b.length >= 4 && a.includes(b)) return true
+  const at = a.split(' ').filter(t => t.length >= 3)
+  const bt = b.split(' ').filter(t => t.length >= 3)
+  if (at.length === 0 || bt.length === 0) return false
+  const shared = at.filter(t => bt.includes(t)).length
+  return shared >= Math.min(2, Math.min(at.length, bt.length))
+}
+
 function isoMonthRange(year: number, monthIdxOneBased: number) {
   const daysInMonth = new Date(year, monthIdxOneBased, 0).getDate()
   const monthMid = new Date(Date.UTC(year, monthIdxOneBased - 1, 15, 12, 0, 0))
@@ -64,7 +96,7 @@ export const handler: Handler = async (event) => {
   try {
     const body = JSON.parse(event.body || '{}')
     const fornitoreId: string = body.fornitore_id
-    const monthsBack: number = Math.min(Math.max(parseInt(body.months) || 6, 1), 12)
+    const monthsBack: number = Math.min(Math.max(parseInt(body.months) || 12, 1), 24)
     if (!fornitoreId) {
       return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'fornitore_id required' }) }
     }
@@ -79,7 +111,7 @@ export const handler: Handler = async (event) => {
     }
 
     const piva = normalizeVat(fornitore.piva)
-    const nameLower = (fornitore.nome || '').toLowerCase().trim()
+    const nameNorm = normalizeName(fornitore.nome)
 
     // Aggregate Aruba invoices for last N months that match this fornitore
     const matched: { filename: string; sender: string; senderVat: string }[] = []
@@ -98,8 +130,15 @@ export const handler: Handler = async (event) => {
           const senderVatRaw = inv.senderCountryCode && inv.senderId ? `${inv.senderCountryCode}${inv.senderId}` : (inv.sender?.vatCode || '')
           const v = normalizeVat(senderVatRaw)
           let isMatch = false
+          // 1) match per P.IVA (entrambi normalizzati a sole cifre)
           if (piva && v === piva) isMatch = true
-          else if (!piva && nameLower && (sender || '').toLowerCase().includes(nameLower)) isMatch = true
+          // 2) fallback: match per nome — sempre tentato anche se la P.IVA esiste,
+          //    perche' a volte Aruba scrive la P.IVA in modo non comparabile
+          //    (es. country code mancante o esteso). namesMatch tollera maiusc/
+          //    minusc, suffissi societari, punteggiatura e accenti.
+          if (!isMatch && nameNorm && namesMatch(nameNorm, normalizeName(sender))) {
+            isMatch = true
+          }
           if (isMatch) {
             const filename = inv.filename || inv.uploadFileName
             if (filename) matched.push({ filename, sender, senderVat: v })
