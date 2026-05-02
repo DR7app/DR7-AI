@@ -27,8 +27,15 @@ interface Props {
  * disabled (with "Solo amministratore" badge) for non-superadmins.
  */
 export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
-    const { canViewFinancials } = useAdminRole()
+    const { canViewFinancials, adminName, adminEmail } = useAdminRole()
     const today = new Date()
+
+    // Step 3 (Approvazione) e Step 4 (Pagamento) sono riservati a Valerio e
+    // Ilenia. canViewFinancials da solo non basta — deve essere accompagnato
+    // dal nome admin che combacia con uno dei due.
+    const adminTokens = ((adminName || '') + ' ' + (adminEmail || '')).toLowerCase()
+    const isValerioOrIlenia = adminTokens.includes('valerio') || adminTokens.includes('ilenia')
+    const canApproveAndPay = canViewFinancials && isValerioOrIlenia
     const [anno, setAnno] = useState(today.getFullYear())
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
@@ -85,6 +92,12 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
         })
         return all
     }, [crosscheck])
+
+    const fatturaById = useMemo(() => {
+        const m = new Map<string, FornitoreDocument>()
+        for (const d of fatture) m.set(d.id, d)
+        return m
+    }, [fatture])
 
     const countOk = useMemo(() => {
         let n = 0
@@ -178,25 +191,34 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 )}
                 {tutteAnomalie.length > 0 && (
                     <div className="space-y-1">
-                        {tutteAnomalie.map(a => (
-                            <div key={a.fattura_id} className="text-xs px-3 py-2 rounded bg-orange-900/20 border border-orange-800/40 flex flex-wrap items-center gap-2">
-                                <span className="text-orange-300">⚠</span>
-                                <span className="font-mono">{a.fattura_numero}</span>
-                                <span className="text-theme-text-muted">— {MESI_IT[a.mese - 1]} {anno}</span>
-                                <span className="ml-auto">Fatt: <strong>{fmtEUR(a.fattura_totale)}</strong></span>
-                                <span>Bolle: <strong>{fmtEUR(a.ddt_totale)}</strong></span>
-                                <span className="text-orange-300">Δ {fmtEUR(a.differenza)}</span>
-                            </div>
-                        ))}
+                        {tutteAnomalie.map(a => {
+                            const fattura = fatturaById.get(a.fattura_id)
+                            return (
+                                <div key={a.fattura_id} className="text-xs px-3 py-2 rounded bg-orange-900/20 border border-orange-800/40 flex flex-wrap items-center gap-2">
+                                    <span className="text-orange-300">⚠</span>
+                                    <span className="font-mono">{a.fattura_numero}</span>
+                                    <span className="text-theme-text-muted">— {MESI_IT[a.mese - 1]} {anno}</span>
+                                    <span className="ml-auto">Fatt: <strong>{fmtEUR(a.fattura_totale)}</strong></span>
+                                    <span>Bolle: <strong>{fmtEUR(a.ddt_totale)}</strong></span>
+                                    <span className="text-orange-300">Δ {fmtEUR(a.differenza)}</span>
+                                    {fattura?.file_url && (
+                                        <button onClick={() => viewFile(fattura)}
+                                            className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
+                                            Vedi fattura
+                                        </button>
+                                    )}
+                                </div>
+                            )
+                        })}
                     </div>
                 )}
             </Step>
 
-            {/* STEP 3 — Approvazione (admin only) */}
+            {/* STEP 3 — Approvazione (Valerio / Ilenia only) */}
             <Step n={3} title="Approvazione" desc={`${daApprovare.length} fattur${daApprovare.length === 1 ? 'a' : 'e'} da approvare`}
-                adminOnly={!canViewFinancials}>
-                {!canViewFinancials ? (
-                    <p className="text-sm text-theme-text-muted">Solo gli amministratori autorizzati (Valerio, Ilenia) possono approvare.</p>
+                adminOnly={!canApproveAndPay}>
+                {!canApproveAndPay ? (
+                    <p className="text-sm text-theme-text-muted">Solo Valerio o Ilenia possono approvare.</p>
                 ) : daApprovare.length === 0 ? (
                     <p className="text-sm text-theme-text-muted">Nessuna fattura verificata in attesa.</p>
                 ) : (
@@ -210,6 +232,12 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                                     <span className="font-mono">{f.numero_documento}</span>
                                     <span className="text-theme-text-muted text-xs">{fmtDateIT(f.data_documento)}</span>
                                     <span className="ml-auto font-semibold">{fmtEUR(f.importo_totale)}</span>
+                                    {f.file_url && (
+                                        <button onClick={() => viewFile(f)}
+                                            className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
+                                            Vedi
+                                        </button>
+                                    )}
                                     <button onClick={() => approveDoc(f)} className="text-xs px-2 py-1 rounded bg-blue-700 hover:bg-blue-600 text-white">
                                         Approva
                                     </button>
@@ -220,11 +248,11 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 )}
             </Step>
 
-            {/* STEP 4 — Pagamento (admin only) */}
+            {/* STEP 4 — Pagamento (Valerio / Ilenia only) */}
             <Step n={4} title="Pagamento" desc={`${daPagare.length} fattur${daPagare.length === 1 ? 'a' : 'e'} da pagare`}
-                adminOnly={!canViewFinancials}>
-                {!canViewFinancials ? (
-                    <p className="text-sm text-theme-text-muted">Solo gli amministratori autorizzati possono registrare pagamenti.</p>
+                adminOnly={!canApproveAndPay}>
+                {!canApproveAndPay ? (
+                    <p className="text-sm text-theme-text-muted">Solo Valerio o Ilenia possono registrare pagamenti.</p>
                 ) : daPagare.length === 0 ? (
                     <p className="text-sm text-theme-text-muted">Nessuna fattura approvata in attesa di pagamento.</p>
                 ) : (
@@ -235,6 +263,12 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                                 <span className="text-theme-text-muted text-xs">{fmtDateIT(f.data_documento)}</span>
                                 {f.data_scadenza && <span className="text-xs text-amber-300">scade {fmtDateIT(f.data_scadenza)}</span>}
                                 <span className="ml-auto font-semibold">{fmtEUR(f.importo_totale)}</span>
+                                {f.file_url && (
+                                    <button onClick={() => viewFile(f)}
+                                        className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
+                                        Vedi
+                                    </button>
+                                )}
                                 <button onClick={() => setPaymentDoc(f)} className="text-xs px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white">
                                     Registra pagamento
                                 </button>
