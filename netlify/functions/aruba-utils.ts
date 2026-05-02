@@ -178,6 +178,8 @@ export async function searchIncomingInvoices(params: {
     // Build query string — Aruba incoming search uses GET with query params
     const queryParams = new URLSearchParams()
     queryParams.set('username', USERNAME)
+    // countryReceiver is required by Aruba — recipient country (IT for Italian VAT IDs)
+    queryParams.set('countryReceiver', process.env.ARUBA_COUNTRY_RECEIVER || 'IT')
     if (params.page != null) queryParams.set('page', String(params.page))
     if (params.pageSize != null) queryParams.set('pageSize', String(params.pageSize))
     if (params.startDate) queryParams.set('startDate', params.startDate)
