@@ -2345,10 +2345,22 @@ export default function CustomersTab() {
             <Button
               variant="secondary"
               onClick={async () => {
-                const note = window.prompt('Promemoria (opzionale, es. "Mario Rossi - WhatsApp 333…")', '')
+                // Ask for phone first; we'll generate the invite + send via WhatsApp bot.
+                const phoneRaw = window.prompt('Numero WhatsApp del cliente (es. 3331234567 oppure +393331234567)')
+                if (!phoneRaw) return
+                // Normalize for Green API: digits only, prepend 39 if 10-digit IT mobile.
+                let phone = phoneRaw.replace(/[\s\-+()]/g, '')
+                if (phone.startsWith('00')) phone = phone.substring(2)
+                if (phone.length === 10) phone = '39' + phone
+                if (phone.length < 10) {
+                  toast.error('Numero non valido')
+                  return
+                }
+                const note = window.prompt('Promemoria interno (opzionale, es. "Mario Rossi")', '')
                 try {
                   const { data: { session } } = await supabase.auth.getSession()
-                  const res = await fetch('/.netlify/functions/create-customer-invite', {
+                  // 1. Generate the invite link
+                  const inviteRes = await fetch('/.netlify/functions/create-customer-invite', {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
@@ -2356,14 +2368,28 @@ export default function CustomersTab() {
                     },
                     body: JSON.stringify({ note: note || null }),
                   })
-                  const json = await res.json()
-                  if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
-                  await navigator.clipboard.writeText(json.url).catch(() => {})
-                  toast.success('Link copiato negli appunti — valido 7 giorni')
-                  window.prompt('Link auto-registrazione (Cmd+C per copiarlo di nuovo):', json.url)
+                  const invite = await inviteRes.json()
+                  if (!inviteRes.ok || !invite.success) throw new Error(invite.error || `HTTP ${inviteRes.status}`)
+                  const link: string = invite.url
+
+                  // 2. Send the link via Green API (the same bot used for all WhatsApp sends)
+                  const message = `Ciao! 👋\n\nPer registrarti su DR7 Empire compila il modulo a questo link:\n${link}\n\nIl link è valido 7 giorni.\n\nA presto,\nDR7 Empire`
+                  const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customPhone: phone, customMessage: message, type: 'invito_registrazione' }),
+                  })
+                  const sendJson = await sendRes.json().catch(() => ({}))
+                  if (!sendRes.ok || sendJson.skipped) {
+                    // Fallback: copy to clipboard so the operator can send manually
+                    await navigator.clipboard.writeText(link).catch(() => {})
+                    toast.error(`WhatsApp non inviato (${sendJson.message || sendRes.status}) — link copiato negli appunti`)
+                    return
+                  }
+                  toast.success(`Link inviato via WhatsApp al +${phone}`)
                 } catch (err) {
                   const msg = err instanceof Error ? err.message : String(err)
-                  toast.error('Generazione link fallita: ' + msg)
+                  toast.error('Errore: ' + msg)
                 }
               }}
             >

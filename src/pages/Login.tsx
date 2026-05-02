@@ -63,16 +63,17 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-theme-bg-secondary">
 
       <div className="w-full max-w-md relative z-10">
-        {/* Box login: sempre NERO in entrambi i temi cosi' il PNG del logo
-            (che ha sfondo nero) si fonde sempre senza rettangolo spaiato.
-            Solo la pagina circostante cambia con il tema. */}
-        <div className="rounded-2xl px-6 sm:px-10 pt-10 pb-8 border border-dr7-gold/40 relative shadow-2xl shadow-dr7-gold/10" style={{ backgroundColor: '#000' }}>
+        {/* Box login: SEGUE il tema. Light = bianco con testo scuro,
+            dark = nero con testo chiaro. Il logo usa la classe
+            theme-aware-logo (filter invert+hue-rotate in light) cosi'
+            lo stesso PNG funziona in entrambi i temi. */}
+        <div className="rounded-2xl px-6 sm:px-10 pt-10 pb-8 border border-dr7-gold/40 relative shadow-2xl shadow-dr7-gold/10 bg-theme-bg-primary">
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <img
               src="/rentora-logo.jpeg"
               alt="DR7 A.I."
-              className="h-32 sm:h-36 w-auto max-w-full object-contain"
+              className="theme-aware-logo h-32 sm:h-36 w-auto max-w-full object-contain"
             />
           </div>
 
