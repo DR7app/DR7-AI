@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildFatturaContext } from '../../../utils/adminLogHelpers'
@@ -46,6 +47,9 @@ interface InvoiceItem {
   total: number
 }
 
+// Solo questi due account possono cambiare lo stato di pagamento delle fatture
+const PAYMENT_MANAGERS = ['valerio@dr7.app', 'ilenia@dr7.app']
+
 export default function FatturaTab() {
   const [view, setView] = useState<'emesse' | 'ricevute'>('emesse')
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -55,6 +59,38 @@ export default function FatturaTab() {
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [creatingNdc, setCreatingNdc] = useState<string | null>(null)
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null)
+  const canManagePayments = !!currentEmail && PAYMENT_MANAGERS.includes(currentEmail.toLowerCase())
+  const [updatingStato, setUpdatingStato] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentEmail(data.session?.user?.email || null)
+    })
+  }, [])
+
+  async function togglePagato(invoice: Invoice) {
+    if (!canManagePayments) {
+      toast.error(`Solo ${PAYMENT_MANAGERS.join(' o ')} possono modificare lo stato pagamento.`)
+      return
+    }
+    const newStato = invoice.stato === 'paid' ? 'pending' : 'paid'
+    setUpdatingStato(invoice.id)
+    try {
+      const { error } = await supabase.from('fatture').update({ stato: newStato }).eq('id', invoice.id)
+      if (error) throw error
+      setInvoices(prev => prev.map(i => i.id === invoice.id ? { ...i, stato: newStato } : i))
+      toast.success(newStato === 'paid' ? 'Fattura segnata come PAGATA' : 'Fattura segnata come NON PAGATA')
+      logAdminAction('fattura_payment_toggle', 'fattura', invoice.id, {
+        ...buildFatturaContext(invoice),
+        new_stato: newStato,
+      })
+    } catch (err: any) {
+      toast.error(`Errore: ${err.message}`)
+    } finally {
+      setUpdatingStato(null)
+    }
+  }
 
   useEffect(() => {
     loadInvoices()
@@ -388,6 +424,23 @@ export default function FatturaTab() {
                       }`}>
                       {invoice.stato === 'paid' ? 'Pagata' : invoice.stato === 'pending' ? 'In attesa' : 'Scaduta'}
                     </span>
+                    {canManagePayments && (
+                      <button
+                        type="button"
+                        onClick={() => togglePagato(invoice)}
+                        disabled={updatingStato === invoice.id}
+                        className={`px-2 py-1 rounded text-xs font-semibold border transition-colors ${
+                          invoice.stato === 'paid'
+                            ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/15'
+                            : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15'
+                        } disabled:opacity-50`}
+                        title={invoice.stato === 'paid' ? 'Riporta a NON pagata' : 'Segna come PAGATA'}
+                      >
+                        {updatingStato === invoice.id
+                          ? '...'
+                          : invoice.stato === 'paid' ? 'Segna NON pagata' : 'Segna PAGATA'}
+                      </button>
+                    )}
                     {invoice.sdi_status && (
                       <span className={`px-2 py-1 rounded text-xs font-bold ${invoice.sdi_status === 'accepted' ? 'bg-green-600 text-white' :
                         invoice.sdi_status === 'sent' ? 'bg-blue-600 text-white' :
