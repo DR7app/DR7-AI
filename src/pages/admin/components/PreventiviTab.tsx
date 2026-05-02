@@ -1501,6 +1501,30 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         let discountLine = ''
         if (p.sconto > 0) discountLine = `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}`
 
+        // Coefficienti Centralina Pro: leggiamo dal pricing_trace salvato al
+        // momento della creazione del preventivo. Mostriamo TUTTI i coefficienti
+        // (anche quelli neutri = x1) e il moltiplicatore combinato risultante.
+        const trace = (p.pricing_trace || {}) as {
+          enabled?: boolean
+          breakdown?: { label: string; coeff: number; description?: string }[]
+        }
+        const traceBreakdown = Array.isArray(trace.breakdown) ? trace.breakdown : []
+        const combinedCoeff = traceBreakdown.reduce((acc, b) => acc * (Number(b?.coeff) || 1), 1)
+        const fmtCoeff = (n: number) => {
+          const s = n.toFixed(4).replace('.', ',').replace(/,?0+$/, '')
+          return `x${s || '1'}`
+        }
+        let coefficientiBlock = ''
+        if (trace.enabled && traceBreakdown.length > 0) {
+          const lines = traceBreakdown.map(b => {
+            const cleanLabel = String(b.label || '').replace(/^Coefficienti\s+/i, '')
+            const desc = b.description ? ` (${b.description})` : ''
+            return `- ${cleanLabel}${desc}: ${fmtCoeff(Number(b.coeff) || 1)}`
+          })
+          coefficientiBlock = `Coefficienti applicati:\n${lines.join('\n')}\nCoefficiente combinato: ${fmtCoeff(combinedCoeff)}`
+        }
+        const coefficienteCombinatoStr = trace.enabled ? fmtCoeff(combinedCoeff) : ''
+
         const vars: Record<string, string> = {
           vehicle_specs: specs,
           vehicle_name: p.vehicle_name || '',
@@ -1528,6 +1552,12 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           subtotal: formatEur(p.subtotal),
           total: formatEur(p.total_final || p.subtotal),
           sconto: discountLine,
+          // Centralina Pro: blocco multilinea con tutti i coefficienti
+          // applicati al preventivo + il moltiplicatore combinato.
+          coefficienti: coefficientiBlock,
+          // Solo il moltiplicatore combinato (es. "x1,2143"), per template
+          // che vogliono una riga sintetica.
+          coefficiente_combinato: coefficienteCombinatoStr,
           customer_name: p.customer_name || '',
           // Pickup / dropoff date-time — Europe/Rome, split into date and time slots
           // so the Pro template placeholders {pickup_date}, {pickup_time},
