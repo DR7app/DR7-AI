@@ -195,7 +195,11 @@ export async function searchIncomingInvoices(params: {
     }
     queryParams.set('vatcodeReceiver', vatReceiver)
     if (params.page != null) queryParams.set('page', String(params.page))
-    if (params.pageSize != null) queryParams.set('pageSize', String(params.pageSize))
+    // Send both common pageSize names — different Aruba accounts honor different ones
+    if (params.pageSize != null) {
+        queryParams.set('pageSize', String(params.pageSize))
+        queryParams.set('size', String(params.pageSize))
+    }
     if (params.startDate) queryParams.set('startDate', params.startDate)
     if (params.endDate) queryParams.set('endDate', params.endDate)
     if (params.senderDescription) queryParams.set('senderDescription', params.senderDescription)

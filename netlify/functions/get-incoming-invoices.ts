@@ -97,23 +97,52 @@ export const handler: Handler = async (event) => {
       endDate = `${year}-${mo}-${String(daysInMonth).padStart(2, '0')}T23:59:59.999${tz}`
     }
 
-    // Fetch all incoming invoices for the period
-    const result = await searchIncomingInvoices({
-      startDate,
-      endDate,
-      page: 0,
-      pageSize: 500
-    })
+    // Fetch all incoming invoices for the period — paginate through all pages
+    const PAGE_SIZE = 100
+    const MAX_PAGES = 50  // safety cap (5000 invoices)
+    const allInvoices: any[] = []
+    let page = 0
+    let firstResultLogged = false
 
-    // Extract invoices array from Aruba response
-    const allInvoices: any[] = result.invoices || result.content || []
+    while (page < MAX_PAGES) {
+      const result = await searchIncomingInvoices({
+        startDate,
+        endDate,
+        page,
+        pageSize: PAGE_SIZE
+      })
 
-    // Diagnostic — dump the keys + first row so we can see what Aruba actually returns
-    if (allInvoices.length > 0) {
-      console.log('[Aruba] response top-level keys:', Object.keys(result || {}))
-      console.log('[Aruba] first invoice keys:', Object.keys(allInvoices[0] || {}))
-      console.log('[Aruba] first invoice raw:', JSON.stringify(allInvoices[0]).substring(0, 2000))
+      const pageInvoices: any[] = result.invoices || result.content || result.data || []
+
+      if (page === 0 && !firstResultLogged) {
+        console.log('[Aruba] response top-level keys:', Object.keys(result || {}))
+        if (pageInvoices.length > 0) {
+          console.log('[Aruba] first invoice keys:', Object.keys(pageInvoices[0] || {}))
+          console.log('[Aruba] first invoice raw:', JSON.stringify(pageInvoices[0]).substring(0, 2000))
+        }
+        console.log('[Aruba] page meta:', {
+          totalElements: result.totalElements,
+          totalPages: result.totalPages,
+          number: result.number,
+          size: result.size,
+          last: result.last
+        })
+        firstResultLogged = true
+      }
+
+      console.log(`[Aruba] page ${page}: ${pageInvoices.length} invoices`)
+      allInvoices.push(...pageInvoices)
+
+      // Stop conditions: empty page, fewer than PAGE_SIZE returned, or last=true flag
+      if (pageInvoices.length === 0) break
+      if (pageInvoices.length < PAGE_SIZE) break
+      if (result.last === true) break
+      if (typeof result.totalPages === 'number' && page + 1 >= result.totalPages) break
+
+      page++
     }
+
+    console.log(`[Aruba] total invoices fetched: ${allInvoices.length} across ${page + 1} page(s)`)
 
     // Match against fornitori table (replaces previous hardcoded list)
     const fornitori = await loadTrackedFornitori()
