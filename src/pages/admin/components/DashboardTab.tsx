@@ -156,6 +156,27 @@ function calcHealthScore(d: DashboardData): { score: number; label: string; colo
   return { score, label, color }
 }
 
+// localStorage cache — keep snapshot per (month) so reopening the dashboard
+// doesn't need to re-sync every time. The snapshot has a timestamp so we can
+// show the user how stale it is + a manual refresh.
+const CACHE_PREFIX = 'dr7_dashboard_cache_v1'
+const SUPPLIER_CACHE_PREFIX = 'dr7_dashboard_supplier_cache_v1'
+type Cached<T> = { data: T; cachedAt: string }
+
+function readCache<T>(key: string): Cached<T> | null {
+    try {
+        const raw = localStorage.getItem(key)
+        if (!raw) return null
+        return JSON.parse(raw) as Cached<T>
+    } catch { return null }
+}
+function writeCache<T>(key: string, data: T) {
+    try {
+        const payload: Cached<T> = { data, cachedAt: new Date().toISOString() }
+        localStorage.setItem(key, JSON.stringify(payload))
+    } catch { /* quota / serialize errors — silent */ }
+}
+
 export default function DashboardTab() {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date()
@@ -164,6 +185,7 @@ export default function DashboardTab() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [cachedAt, setCachedAt] = useState<string | null>(null)
 
   // Supplier costs state
   const [supplierData, setSupplierData] = useState<{
@@ -176,7 +198,15 @@ export default function DashboardTab() {
   const [supplierExpanded, setSupplierExpanded] = useState(false)
   const [supplierDetailOpen, setSupplierDetailOpen] = useState<string | null>(null)
 
-  const fetchSupplierCosts = useCallback(async (month: string) => {
+  const fetchSupplierCosts = useCallback(async (month: string, opts?: { useCache?: boolean }) => {
+    const cacheKey = `${SUPPLIER_CACHE_PREFIX}:${month}`
+    if (opts?.useCache !== false) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cached = readCache<any>(cacheKey)
+      if (cached) {
+        setSupplierData(cached.data)
+      }
+    }
     setSupplierLoading(true)
     setSupplierError(null)
     try {
@@ -186,23 +216,35 @@ export default function DashboardTab() {
         throw new Error(json.error || `HTTP ${res.status}`)
       }
       setSupplierData(json)
+      writeCache(cacheKey, json)
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
       console.error('[Dashboard] Supplier costs error:', err)
       setSupplierError(_errMsg || 'Errore sconosciuto')
-      setSupplierData(null)
+      // Keep cached data visible if fetch failed
     } finally {
       setSupplierLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchDashboard()
-    fetchSupplierCosts(selectedMonth)
+    fetchDashboard({ useCache: true })
+    fetchSupplierCosts(selectedMonth, { useCache: true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth])
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = async (opts?: { useCache?: boolean; force?: boolean }) => {
+    const cacheKey = `${CACHE_PREFIX}:${selectedMonth}`
+    if (opts?.useCache !== false) {
+      const cached = readCache<DashboardData>(cacheKey)
+      if (cached) {
+        setData(cached.data)
+        setCachedAt(cached.cachedAt)
+        if (!opts?.force) {
+          // Show cached instantly; refresh in background.
+        }
+      }
+    }
     setLoading(true)
     setError(null)
     try {
@@ -210,12 +252,51 @@ export default function DashboardTab() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setData(json)
+      const now = new Date().toISOString()
+      setCachedAt(now)
+      writeCache(cacheKey, json)
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
       setError(_errMsg || 'Errore nel caricamento')
+      // If we have cached data, keep it visible; just surface the error
     } finally {
       setLoading(false)
     }
+  }
+
+  function refreshAll() {
+    fetchDashboard({ force: true })
+    fetchSupplierCosts(selectedMonth, { useCache: false })
+  }
+
+  function fmtRelative(iso: string | null): string {
+    if (!iso) return ''
+    const dt = new Date(iso).getTime()
+    if (isNaN(dt)) return ''
+    const diff = Math.max(0, Math.floor((Date.now() - dt) / 1000))
+    if (diff < 60) return 'aggiornato adesso'
+    if (diff < 3600) return `aggiornato ${Math.floor(diff / 60)} min fa`
+    if (diff < 86400) return `aggiornato ${Math.floor(diff / 3600)}h fa`
+    return `aggiornato ${Math.floor(diff / 86400)} giorni fa`
+  }
+
+  function downloadJsonSnapshot() {
+    if (!data) return
+    const snapshot = {
+      generatedAt: new Date().toISOString(),
+      month: selectedMonth,
+      dashboard: data,
+      supplier: supplierData,
+    }
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `dr7-dashboard-${selectedMonth}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   // Format month for display
@@ -225,7 +306,9 @@ export default function DashboardTab() {
     return `${months[parseInt(mo) - 1]} ${y}`
   }
 
-  if (loading) {
+  // Only show full-screen loader if we have NOTHING to display.
+  // When cache is present, render it immediately + show the "Aggiorno…" badge.
+  if (loading && !data) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="relative">
@@ -241,7 +324,7 @@ export default function DashboardTab() {
       <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-8 text-center max-w-md mx-auto mt-12">
         <p className="text-red-400 font-medium text-lg mb-2">Errore nel caricamento</p>
         <p className="text-theme-text-muted text-sm mb-4">{error}</p>
-        <button onClick={fetchDashboard} className="px-6 py-2.5 bg-[#19C2D6] text-black rounded-xl text-sm font-bold hover:bg-[#0A8FA3] transition-colors">
+        <button onClick={() => fetchDashboard({ force: true })} className="px-6 py-2.5 bg-[#19C2D6] text-black rounded-xl text-sm font-bold hover:bg-[#0A8FA3] transition-colors">
           Riprova
         </button>
       </div>
@@ -264,13 +347,32 @@ export default function DashboardTab() {
           <h2 className="text-xl font-bold text-theme-text-primary tracking-wide">DASHBOARD PROPRIETARIO</h2>
           <p className="text-xs text-theme-text-muted mt-0.5">La visione strategica della tua azienda</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <input
             type="month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
             className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-[#19C2D6]/40 focus:border-[#19C2D6] outline-none"
           />
+          <span className={`text-xs px-2 py-1 rounded-full ${loading ? 'bg-blue-500/20 text-blue-300' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}>
+            {loading ? 'Aggiorno…' : (cachedAt ? fmtRelative(cachedAt) : 'snapshot non disponibile')}
+          </span>
+          <button
+            onClick={refreshAll}
+            disabled={loading}
+            className="text-xs px-3 py-1.5 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6] disabled:opacity-50"
+            title="Forza aggiornamento e ri-sincronizza tutto"
+          >
+            ↻ Aggiorna
+          </button>
+          <button
+            onClick={downloadJsonSnapshot}
+            disabled={!data}
+            className="text-xs px-3 py-1.5 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6] disabled:opacity-50"
+            title="Scarica lo snapshot di questo mese in JSON"
+          >
+            Scarica snapshot
+          </button>
           <div className="text-right hidden sm:block">
             <p className="text-[10px] text-theme-text-muted uppercase">Periodo</p>
             <p className="text-sm font-semibold text-theme-text-primary">{formatMonth(selectedMonth)}</p>

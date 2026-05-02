@@ -79,20 +79,20 @@ export const handler: Handler = async (event) => {
       // 1. All active vehicles
       supabase.from('vehicles').select('id, display_name, plate, status, daily_rate, category, metadata')
         .neq('status', 'retired'),
-      // 2. Current month bookings (all types, exclude admin AND test cars)
+      // 2. Current month bookings (all types, exclude admin only).
+      // Test plate filter is applied client-side AFTER fetch so NULL plates
+      // (preventivi-converted bookings often have plate=null) aren't dropped.
       supabase.from('bookings')
         .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, payment_method, customer_name, customer_email, appointment_date, created_at')
         .gte('pickup_date', monthStartISO + 'T00:00:00')
         .lte('pickup_date', monthEndISO + 'T23:59:59')
-        .neq('customer_email', 'admin@dr7.app')
-        .not('vehicle_plate', 'in', '("TEST000","TEST002")'),
-      // 3. Previous month bookings (exclude admin AND test cars)
+        .neq('customer_email', 'admin@dr7.app'),
+      // 3. Previous month bookings
       supabase.from('bookings')
         .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, customer_name, customer_email, appointment_date, created_at')
         .gte('pickup_date', prevMonthStartISO + 'T00:00:00')
         .lte('pickup_date', prevMonthEndISO + 'T23:59:59')
-        .neq('customer_email', 'admin@dr7.app')
-        .not('vehicle_plate', 'in', '("TEST000","TEST002")'),
+        .neq('customer_email', 'admin@dr7.app'),
       // 4. Customers — only fetch this month + previous month for the new/returning
       // calculation; total count comes from a separate exact-count query below.
       // (PostgREST caps array selects at 1000 rows.)
@@ -122,8 +122,12 @@ export const handler: Handler = async (event) => {
       .select('id', { count: 'exact', head: true })
 
     const vehicles = vehiclesRes.data || []
-    const allCurrentBookings = currentBookingsRes.data || []
-    const allPrevBookings = prevBookingsRes.data || []
+    // Apply test-plate filter in JS so NULL plates (admin-created bookings,
+    // preventivi-accept flow) aren't accidentally excluded by SQL NOT IN.
+    const TEST_PLATES = new Set(['TEST000', 'TEST002'])
+    const dropTest = (rows: any[]) => rows.filter(b => !TEST_PLATES.has((b.vehicle_plate || '').toUpperCase()))
+    const allCurrentBookings = dropTest(currentBookingsRes.data || [])
+    const allPrevBookings = dropTest(prevBookingsRes.data || [])
     const customers = customersRes.data || []
     const cauzioni = cauzioniRes.data || []
     const fatture = fattureRes.data || []
