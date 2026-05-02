@@ -342,6 +342,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false)
   const [selectedPreventivo, setSelectedPreventivo] = useState<Preventivo | null>(null)
   const [previewMessage, setPreviewMessage] = useState<string>('')
+  // Default OFF — admin opts in per-message. The block only renders if the
+  // template contains {coefficienti} or {coefficiente_combinato} AND the
+  // checkbox is checked.
+  const [includeCoefficienti, setIncludeCoefficienti] = useState<boolean>(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   // Modal "Rifiutato" — stato isolato dentro PreventivoRejectModal e aperto
   // tramite CustomEvent su window, così aprirlo NON ri-renderizza l'intera
@@ -1427,7 +1431,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
-  async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
+  async function formatWhatsAppMessage(p: Preventivo, opts?: { includeCoefficienti?: boolean }): Promise<string> {
+    const optIncludeCoefficienti = opts?.includeCoefficienti ?? false
     // Due template gestiti dall'admin in Messaggi di Sistema Pro, identificati
     // per LABEL (non per key) perché creati tramite "Aggiungi template" e
     // quindi salvati sotto chiavi pro_custom_<slug>_<timestamp>:
@@ -1517,7 +1522,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           return `x${s || '1'}`
         }
         let coefficientiBlock = ''
-        if (trace.enabled && traceBreakdown.length > 0) {
+        // Admin opt-in: only render the coefficienti block when the checkbox
+        // in the send modal is ticked. Default OFF — most clients don't want
+        // to see the internal pricing math.
+        if (optIncludeCoefficienti && trace.enabled && traceBreakdown.length > 0) {
           const lines = traceBreakdown.map(b => {
             const cleanLabel = String(b.label || '').replace(/^Coefficienti\s+/i, '')
             const desc = b.description ? ` (${b.description})` : ''
@@ -1525,7 +1533,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           })
           coefficientiBlock = `Coefficienti applicati:\n${lines.join('\n')}\nCoefficiente combinato: ${fmtCoeff(combinedCoeff)}`
         }
-        const coefficienteCombinatoStr = trace.enabled ? fmtCoeff(combinedCoeff) : ''
+        const coefficienteCombinatoStr = (optIncludeCoefficienti && trace.enabled) ? fmtCoeff(combinedCoeff) : ''
 
         const vars: Record<string, string> = {
           vehicle_specs: specs,
@@ -2241,7 +2249,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                                   setSelectedPreventivo(p);
                                   setWhatsappPhone(p.customer_phone || '');
                                   setPreviewMessage('');
-                                  const preview = await formatWhatsAppMessage(p)
+                                  setIncludeCoefficienti(false);
+                                  const preview = await formatWhatsAppMessage(p, { includeCoefficienti: false })
                                   if (!preview) {
                                     const which = (p.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'
                                     toast.error(`Template ${which} vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.`)
@@ -2366,7 +2375,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                             setSelectedPreventivo(p)
                             setWhatsappPhone(p.customer_phone || '')
                             setPreviewMessage('')
-                            const preview = await formatWhatsAppMessage(p)
+                            setIncludeCoefficienti(false)
+                            const preview = await formatWhatsAppMessage(p, { includeCoefficienti: false })
                             if (!preview) {
                               const which = (p.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'
                               toast.error(`Template ${which} vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.`)
@@ -2476,6 +2486,27 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                   <p className="text-[11px] text-theme-text-muted mt-1">
                     Template caricato da {(selectedPreventivo.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'} in Messaggi di Sistema Pro.
                   </p>
+
+                  {/* Coefficienti opt-in — re-formats the message body on toggle */}
+                  <label className="mt-3 flex items-start gap-2 cursor-pointer text-xs text-theme-text-secondary select-none">
+                    <input
+                      type="checkbox"
+                      checked={includeCoefficienti}
+                      onChange={async (e) => {
+                        const next = e.target.checked
+                        setIncludeCoefficienti(next)
+                        const refreshed = await formatWhatsAppMessage(selectedPreventivo, { includeCoefficienti: next })
+                        if (refreshed) setPreviewMessage(refreshed)
+                      }}
+                      className="mt-0.5 accent-dr7-gold"
+                    />
+                    <span>
+                      <span className="font-medium text-theme-text-primary">Includi coefficienti applicati</span>
+                      <span className="block text-[11px] text-theme-text-muted">
+                        Aggiunge il blocco "Coefficienti applicati" e il coefficiente combinato al messaggio (richiede i placeholder <code className="bg-theme-bg-tertiary px-1 rounded">{'{coefficienti}'}</code> / <code className="bg-theme-bg-tertiary px-1 rounded">{'{coefficiente_combinato}'}</code> nel template).
+                      </span>
+                    </span>
+                  </label>
 
                   <label className="block text-sm font-medium text-theme-text-secondary mt-3 mb-1">Anteprima formattata</label>
                   <div
