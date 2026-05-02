@@ -79,19 +79,19 @@ export const handler: Handler = async (event) => {
       // 1. All active vehicles
       supabase.from('vehicles').select('id, display_name, plate, status, daily_rate, category, metadata')
         .neq('status', 'retired'),
-      // 2. Current month bookings (all types, exclude admin only).
-      // Test plate filter is applied client-side AFTER fetch so NULL plates
-      // (preventivi-converted bookings often have plate=null) aren't dropped.
+      // 2. Current month bookings — OVERLAP logic, matches Report Noleggio:
+      // include any booking active during the month, even if it picked up
+      // before. Test plate filter applied client-side after fetch.
       supabase.from('bookings')
         .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, payment_method, customer_name, customer_email, appointment_date, created_at')
-        .gte('pickup_date', monthStartISO + 'T00:00:00')
         .lte('pickup_date', monthEndISO + 'T23:59:59')
+        .gte('dropoff_date', monthStartISO + 'T00:00:00')
         .neq('customer_email', 'admin@dr7.app'),
-      // 3. Previous month bookings
+      // 3. Previous month bookings (same overlap logic)
       supabase.from('bookings')
         .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, customer_name, customer_email, appointment_date, created_at')
-        .gte('pickup_date', prevMonthStartISO + 'T00:00:00')
         .lte('pickup_date', prevMonthEndISO + 'T23:59:59')
+        .gte('dropoff_date', prevMonthStartISO + 'T00:00:00')
         .neq('customer_email', 'admin@dr7.app'),
       // 4. Customers — only fetch this month + previous month for the new/returning
       // calculation; total count comes from a separate exact-count query below.

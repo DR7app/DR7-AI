@@ -130,8 +130,13 @@ const handler: Handler = async () => {
     }
 
     // 2. bolle_mancanti — fatture in stato verificato/anomalia/in_verifica without DDT in same month
+    // Skip fatture older than 60 days to avoid flooding with alerts when historical
+    // invoices are bulk-synced from Aruba (backfill). Old imports have no bolle by
+    // definition; flagging them as payment-blocking is noise.
+    const SIXTY_DAYS_AGO = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     for (const f of fatture || []) {
         if (!['verificato', 'anomalia', 'in_verifica', 'caricato'].includes(f.stato)) continue
+        if (f.data_documento && f.data_documento < SIXTY_DAYS_AGO) continue
         const { count } = await supabase
             .from('fornitore_documents')
             .select('id', { count: 'exact', head: true })
