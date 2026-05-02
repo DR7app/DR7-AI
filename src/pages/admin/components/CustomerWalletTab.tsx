@@ -341,11 +341,21 @@ export default function CustomerWalletTab() {
         throw new Error(err.error || 'Errore invio email')
       }
 
-      setOtpSent(true)
-      setOtpVerified(false)
-      setOtpDigits(['', '', '', '', '', ''])
-      toast.success('Codice di verifica inviato via email')
-      setTimeout(() => otpRefs.current[0]?.focus(), 100)
+      const data = await res.json().catch(() => ({}))
+      // Self-approval bypass: when the requester IS the OTP recipient,
+      // the server returns autoApproved=true and skips the email.
+      if (data.autoApproved) {
+        setOtpSent(true)
+        setOtpVerified(true)
+        setOtpDigits(code.split(''))
+        toast.success('Approvato direttamente (direzione)')
+      } else {
+        setOtpSent(true)
+        setOtpVerified(false)
+        setOtpDigits(['', '', '', '', '', ''])
+        toast.success('Codice di verifica inviato via email')
+        setTimeout(() => otpRefs.current[0]?.focus(), 100)
+      }
     } catch {
       toast.error('Errore invio codice')
     } finally {

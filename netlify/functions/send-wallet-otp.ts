@@ -1,8 +1,12 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import { Resend } from 'resend'
+import { requireAuth } from './require-auth'
 
-const OTP_RECIPIENT = 'valesaja91@icloud.com'
+// OTP recipient — the direzione that approves wallet operations.
+// When this admin himself triggers a wallet OTP, the bypass below
+// auto-approves without sending email (he IS the approver).
+const OTP_RECIPIENT = 'valerio@dr7.app'
 
 export const handler: Handler = async (event) => {
   const headers = {
@@ -20,11 +24,21 @@ export const handler: Handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
+  // Identify the requesting admin so we can bypass for self-approval
+  const { user: authUser, error: authErr } = await requireAuth(event)
+  if (authErr) return authErr
+
   try {
     const { code, action, customerName, amount, description } = JSON.parse(event.body || '{}')
 
     if (!code || !action || !customerName || !amount) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) }
+    }
+
+    // BYPASS: when the recipient is the one acting, no email needed.
+    if (authUser?.email?.toLowerCase() === OTP_RECIPIENT.toLowerCase()) {
+      console.log(`[send-wallet-otp] AUTO-APPROVED for ${authUser.email} (recipient self-approval)`)
+      return { statusCode: 200, headers, body: JSON.stringify({ success: true, autoApproved: true }) }
     }
 
     const apiKey = process.env.RESEND_API_KEY

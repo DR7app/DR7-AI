@@ -9,7 +9,10 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-const OTP_RECIPIENT = 'valesaja91@icloud.com'
+// OTP recipient — the direzione that approves overrides. Valerio at his
+// work email. When this admin himself triggers an OTP-required action,
+// the bypass below auto-approves without sending him an email.
+const OTP_RECIPIENT = 'valerio@dr7.app'
 const OTP_TTL_MINUTES = 10
 const OVERRIDE_TTL_HOURS = 2
 
@@ -52,6 +55,11 @@ export const handler: Handler = async (event) => {
       const otpExpiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString()
       const overrideExpiresAt = new Date(Date.now() + OVERRIDE_TTL_HOURS * 60 * 60 * 1000).toISOString()
 
+      // BYPASS: when the recipient is the one requesting the override,
+      // auto-approve without going through the OTP loop. He IS the
+      // direzione — sending him a code only to type it himself is theatre.
+      const isSelfApproval = authUser!.email?.toLowerCase() === OTP_RECIPIENT.toLowerCase()
+
       // Store OTP server-side
       const { data: override, error: insertErr } = await supabase
         .from('limitation_overrides')
@@ -60,8 +68,9 @@ export const handler: Handler = async (event) => {
           action_context: actionContext || null,
           draft_session_id: draftSessionId,
           flow_type: flowType || 'booking_create',
-          status: 'pending',
+          status: isSelfApproval ? 'active' : 'pending',
           otp_code: code,
+          otp_verified: isSelfApproval,
           otp_expires_at: otpExpiresAt,
           expires_at: overrideExpiresAt,
           approved_by_user_id: authUser!.id !== 'admin' ? authUser!.id : null,
@@ -69,7 +78,8 @@ export const handler: Handler = async (event) => {
             limitation_message: limitationMessage,
             requested_by: authUser!.email,
             draft_session_id: draftSessionId,
-            flow_type: flowType || 'booking_create'
+            flow_type: flowType || 'booking_create',
+            ...(isSelfApproval ? { auto_approved: true, reason: 'requestor is OTP recipient' } : {})
           }
         })
         .select('id')
@@ -78,6 +88,16 @@ export const handler: Handler = async (event) => {
       if (insertErr) {
         console.error('[limitation-override-otp] Insert error:', insertErr)
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to create override request' }) }
+      }
+
+      // Self-approval shortcut: skip email, return active override.
+      if (isSelfApproval) {
+        console.log(`[limitation-override-otp] AUTO-APPROVED for ${authUser!.email} (recipient self-approval) — override ${override.id}`)
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, autoApproved: true, overrideId: override.id })
+        }
       }
 
       // Send email via Resend (same channel as wallet OTP)

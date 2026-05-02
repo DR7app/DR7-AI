@@ -82,6 +82,14 @@ export default function LimitationOverrideModal({
         return
       }
       setOverrideId(data.overrideId)
+      // Self-approval: requestor IS the OTP recipient → server already
+      // marked the override as active. Skip the OTP entry step.
+      if (data.autoApproved) {
+        setStep('verified')
+        toast.success('Approvato direttamente (direzione)')
+        onOverrideApproved(data.overrideId)
+        return
+      }
       setStep('otp-sent')
       toast.success('Codice inviato alla direzione')
       setTimeout(() => otpInputRef.current?.focus(), 100)
