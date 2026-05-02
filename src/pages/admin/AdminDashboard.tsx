@@ -718,7 +718,7 @@ export default function AdminDashboard() {
               <button
                 type="submit"
                 disabled={passwordLoading}
-                className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white font-medium py-3 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wide"
+                className="w-full bg-dr7-gold hover:bg-[#0A8FA3] text-white font-medium py-3 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wide"
               >
                 {passwordLoading ? 'Aggiornamento...' : 'Aggiorna Password'}
               </button>

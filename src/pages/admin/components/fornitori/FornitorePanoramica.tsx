@@ -159,7 +159,7 @@ export default function FornitorePanoramica({ fornitore }: Props) {
                     <button
                         onClick={handleRunCrosscheck}
                         disabled={crossCheckRunning}
-                        className="px-3 py-1.5 rounded-full text-sm font-semibold bg-dr7-gold hover:bg-[#247a6f] text-white disabled:opacity-60"
+                        className="px-3 py-1.5 rounded-full text-sm font-semibold bg-dr7-gold hover:bg-[#0A8FA3] text-white disabled:opacity-60"
                     >
                         {crossCheckRunning ? 'Controllo in corso…' : 'Controllo Incrociato'}
                     </button>

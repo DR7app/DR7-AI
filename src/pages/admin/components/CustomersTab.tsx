@@ -2288,7 +2288,7 @@ export default function CustomersTab() {
                 </button>
                 <button
                   onClick={() => handleBulkStatusUpdate('elite')}
-                  className="px-3 py-2 rounded-full text-sm font-bold bg-dr7-gold text-white hover:bg-[#247a6f] border border-dr7-gold transition-all"
+                  className="px-3 py-2 rounded-full text-sm font-bold bg-dr7-gold text-white hover:bg-[#0A8FA3] border border-dr7-gold transition-all"
                   title="Imposta come Elite"
                 >
                   Elite

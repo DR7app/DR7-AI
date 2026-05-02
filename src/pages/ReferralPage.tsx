@@ -80,7 +80,7 @@ export default function ReferralPage() {
             {/* Hero */}
             <div className="text-center space-y-4">
               <h1 className="text-4xl sm:text-5xl font-black text-white leading-tight">
-                DR7 <span className="text-[#2d8a7e]">PAGA</span> I SUOI UTENTI
+                DR7 <span className="text-[#19C2D6]">PAGA</span> I SUOI UTENTI
               </h1>
               <p className="text-gray-400 text-lg max-w-xl mx-auto">
                 Registrati gratis, ricevi credito immediato e guadagna invitando i tuoi amici!

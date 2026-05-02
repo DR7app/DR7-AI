@@ -271,7 +271,7 @@ export default function MechanicalCalendarTab() {
                 onClick={() => setHideFinancials(!hideFinancials)}
                 className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${hideFinancials
                   ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
-                  : 'bg-dr7-gold text-white hover:bg-[#247a6f]'
+                  : 'bg-dr7-gold text-white hover:bg-[#0A8FA3]'
                   }`}
               >
                 {hideFinancials ? 'MOSTRA' : 'NASCONDI'}

@@ -1552,7 +1552,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               if (!showForm) resetWizard()
               setShowForm(!showForm)
             }}
-            className="px-4 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors"
+            className="px-4 py-2 bg-dr7-gold hover:bg-[#0A8FA3] text-white font-semibold rounded-full transition-colors"
           >
             {showForm ? 'Chiudi' : '+ Nuova Prenotazione'}
           </button>
@@ -1683,7 +1683,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
                       vehiclePlate.length < 5 || lookingUpTarga
                         ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                        : 'bg-dr7-gold hover:bg-[#247a6f] text-white'
+                        : 'bg-dr7-gold hover:bg-[#0A8FA3] text-white'
                     }`}
                   >
                     {lookingUpTarga ? 'Ricerca...' : 'Cerca'}
@@ -1736,7 +1736,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   ) : (
                     <button type="button"
                       onClick={() => override.requestOverride('manual_category_carwash', `Targa ${vehiclePlate} non trovata nel database. Autorizzazione necessaria per selezionare la categoria manualmente.`)}
-                      className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors">
+                      className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold text-white hover:bg-[#0A8FA3] transition-colors">
                       Richiedi autorizzazione
                     </button>
                   )}
@@ -1792,7 +1792,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     }}
                     className={`px-6 py-2 rounded-full font-semibold transition-colors ${
                       targaVehicleInfo
-                        ? 'bg-dr7-gold hover:bg-[#247a6f] text-white'
+                        ? 'bg-dr7-gold hover:bg-[#0A8FA3] text-white'
                         : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                     }`}
                   >
@@ -1957,7 +1957,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     selectedService &&
                     (!selectedService.price_options?.length || selectedPriceOption) &&
                     !(selectedService.price_unit === 'custom' && (!customPrice || parseFloat(customPrice) < selectedService.price))
-                      ? 'bg-dr7-gold hover:bg-[#247a6f] text-white'
+                      ? 'bg-dr7-gold hover:bg-[#0A8FA3] text-white'
                       : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                   }`}
                 >
@@ -2108,7 +2108,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <button
                     type="button"
                     onClick={() => setCurrentStep(3)}
-                    className="px-6 py-2 rounded-full font-semibold bg-dr7-gold hover:bg-[#247a6f] text-white transition-colors"
+                    className="px-6 py-2 rounded-full font-semibold bg-dr7-gold hover:bg-[#0A8FA3] text-white transition-colors"
                   >
                     Avanti
                   </button>
@@ -2375,7 +2375,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   className={`px-8 py-3 rounded-full font-bold text-base transition-colors ${
                     submitting || !formData.customer_id || !formData.appointment_time
                       ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                      : 'bg-dr7-gold hover:bg-[#247a6f] text-white'
+                      : 'bg-dr7-gold hover:bg-[#0A8FA3] text-white'
                   }`}
                 >
                   {submitting ? 'Creazione...' : `Conferma - EUR ${getFinalPrice().toFixed(2)}`}

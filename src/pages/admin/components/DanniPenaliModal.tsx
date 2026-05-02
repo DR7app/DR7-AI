@@ -875,7 +875,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M5 12h14" /></svg>
                                                             </button>
                                                             <span className="w-7 text-center text-[13px] font-semibold text-theme-text-primary tabular-nums">{qty}</span>
-                                                            <button type="button" onClick={() => addPenaltyPreset(penalty)} className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-[#247a6f] transition-colors rounded-r-full">
+                                                            <button type="button" onClick={() => addPenaltyPreset(penalty)} className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-[#0A8FA3] transition-colors rounded-r-full">
                                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 5v14M5 12h14" /></svg>
                                                             </button>
                                                         </div>
@@ -1089,7 +1089,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                             Annulla
                         </button>
                         <button type="button" onClick={handleSubmit} disabled={isGenerating || cart.length === 0 || cartTotal < 10}
-                            className="flex-1 py-3 bg-gradient-to-r from-red-500 to-dr7-gold hover:from-red-600 hover:to-[#247a6f] text-white text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="flex-1 py-3 bg-gradient-to-r from-red-500 to-dr7-gold hover:from-red-600 hover:to-[#0A8FA3] text-white text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             title={cartTotal > 0 && cartTotal < 10 ? 'Importo minimo: €10.00' : undefined}
                         >
                             {isGenerating ? (

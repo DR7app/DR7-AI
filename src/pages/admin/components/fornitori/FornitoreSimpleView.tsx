@@ -169,6 +169,20 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
         load()
     }
 
+    async function deleteDoc(doc: FornitoreDocument) {
+        if (!confirm(`Eliminare definitivamente questo documento (${doc.numero_documento})?`)) return
+        try {
+            if (doc.file_url) {
+                await supabase.storage.from('fornitori-documents').remove([doc.file_url])
+            }
+            const { error } = await supabase.from('fornitore_documents').delete().eq('id', doc.id)
+            if (error) throw error
+            load()
+        } catch (err) {
+            alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        }
+    }
+
     async function viewFile(doc: FornitoreDocument) {
         // Path 1 — file caricato manualmente: signed URL su Supabase storage
         if (doc.file_url) {
@@ -239,7 +253,8 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                     {loading && <span className="text-xs text-theme-text-muted">Caricamento…</span>}
                 </div>
                 <CompactDocList docs={bolle.slice(0, 10)} viewFile={viewFile}
-                    onEdit={(d) => setEditingDoc(d)} />
+                    onEdit={(d) => setEditingDoc(d)}
+                    onDelete={deleteDoc} />
                 {bolle.length > 10 && <p className="text-xs text-theme-text-muted mt-2">… e altre {bolle.length - 10} bolle</p>}
             </Step>
 
@@ -430,10 +445,11 @@ function Step({ n, title, desc, tone, locked, lockedAction, children }: {
     )
 }
 
-function CompactDocList({ docs, viewFile, onEdit }: {
+function CompactDocList({ docs, viewFile, onEdit, onDelete }: {
     docs: FornitoreDocument[]
     viewFile: (d: FornitoreDocument) => void
     onEdit: (d: FornitoreDocument) => void
+    onDelete: (d: FornitoreDocument) => void
 }) {
     if (docs.length === 0) {
         return <p className="text-sm text-theme-text-muted">Nessuna bolla per questo periodo.</p>
@@ -454,6 +470,9 @@ function CompactDocList({ docs, viewFile, onEdit }: {
                     )}
                     <button onClick={() => onEdit(d)} className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
                         Modifica
+                    </button>
+                    <button onClick={() => onDelete(d)} className="text-xs px-2 py-1 rounded bg-red-700 hover:bg-red-600 text-white" title="Elimina">
+                        ×
                     </button>
                 </li>
             ))}

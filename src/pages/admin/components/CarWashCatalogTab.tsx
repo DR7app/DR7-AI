@@ -223,7 +223,7 @@ export default function CarWashCatalogTab() {
           <button
             type="button"
             onClick={() => { setShowNewForm(true); setNewService(prev => ({ ...prev, main_tab: selectedTab })) }}
-            className="px-4 py-2 rounded-full text-sm font-medium bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors"
+            className="px-4 py-2 rounded-full text-sm font-medium bg-dr7-gold text-white hover:bg-[#0A8FA3] transition-colors"
           >
             + Nuovo Servizio
           </button>
@@ -311,7 +311,7 @@ export default function CarWashCatalogTab() {
           </div>
           <div className="flex gap-2">
             <button onClick={addNewService} disabled={saving || !newService.name.trim()}
-              className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50">
+              className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50">
               {saving ? 'Salvataggio...' : 'Crea Servizio'}
             </button>
             <button onClick={() => setShowNewForm(false)}
@@ -552,7 +552,7 @@ function ServiceCard({
           <button
             onClick={onSave}
             disabled={saving}
-            className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
+            className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
           >
             {saving ? 'Salvataggio...' : 'Salva'}
           </button>

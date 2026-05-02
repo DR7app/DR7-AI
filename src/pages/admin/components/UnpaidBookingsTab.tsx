@@ -2086,7 +2086,7 @@ export default function UnpaidBookingsTab() {
         <button
           onClick={() => { const v = parseFloat(editAmountValue); if (!isNaN(v) && v > 0) onSubmit(v) }}
           disabled={!editAmountValue || parseFloat(editAmountValue) <= 0}
-          className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold disabled:opacity-30"
+          className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold disabled:opacity-30"
         >OK</button>
         <button onClick={onCancel} className="px-2 py-1 bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover rounded text-xs">x</button>
       </div>
@@ -2290,7 +2290,7 @@ export default function UnpaidBookingsTab() {
                 {editAmountKey !== editKey && (
                   <button
                     onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
-                    className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
                   >Modifica</button>
                 )}
                 {confirmDeleteKey !== bkKey && (
@@ -2397,7 +2397,7 @@ export default function UnpaidBookingsTab() {
                 {editAmountKey !== editKey && (
                   <button
                     onClick={() => { setEditAmountKey(editKey); setEditAmountValue((totalCents / 100).toFixed(2)) }}
-                    className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
                   >Modifica</button>
                 )}
                 {confirmDeleteKey !== bkKey && (
@@ -2533,7 +2533,7 @@ export default function UnpaidBookingsTab() {
                     {editAmountKey !== editKey && (
                       <button
                         onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
-                        className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold"
+                        className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
                       >Modifica</button>
                     )}
                     <button
@@ -2565,7 +2565,7 @@ export default function UnpaidBookingsTab() {
                     {editAmountKey !== editKey && (
                       <button
                         onClick={() => { setEditAmountKey(editKey); setEditAmountValue(item.amount.toFixed(2)) }}
-                        className="px-2 py-1 bg-dr7-gold hover:bg-[#247a6f] text-white rounded text-xs font-semibold"
+                        className="px-2 py-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded text-xs font-semibold"
                       >Modifica</button>
                     )}
                     <button

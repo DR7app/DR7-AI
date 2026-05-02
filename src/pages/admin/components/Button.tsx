@@ -13,7 +13,7 @@ export default function Button({
   const baseClasses = 'px-4 py-2 min-h-[44px] rounded-full font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
 
   const variantClasses = {
-    primary: 'bg-dr7-gold hover:bg-[#247a6f] text-white',
+    primary: 'bg-dr7-gold hover:bg-[#0A8FA3] text-white',
     secondary: 'bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary',
     danger: 'bg-red-600 hover:bg-red-700 text-theme-text-primary'
   }

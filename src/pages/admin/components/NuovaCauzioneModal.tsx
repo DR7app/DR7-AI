@@ -280,7 +280,7 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                         type="submit"
                         onClick={handleSubmit}
                         disabled={loading || loadingData}
-                        className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loading ? 'Salvataggio...' : 'Salva'}
                     </button>

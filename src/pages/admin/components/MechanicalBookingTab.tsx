@@ -258,7 +258,7 @@ export default function MechanicalBookingTab() {
         <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Meccanica</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-dr7-gold hover:bg-[#247a6f] text-white font-semibold rounded-full transition-colors"
+          className="px-4 py-2 bg-dr7-gold hover:bg-[#0A8FA3] text-white font-semibold rounded-full transition-colors"
         >
           + Nuova Prenotazione
         </button>

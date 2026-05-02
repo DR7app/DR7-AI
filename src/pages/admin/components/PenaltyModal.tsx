@@ -579,7 +579,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                                     <button
                                                         type="button"
                                                         onClick={() => addToCart(penalty)}
-                                                        className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-[#247a6f] transition-colors rounded-r-full"
+                                                        className="w-8 h-8 flex items-center justify-center text-dr7-gold hover:text-[#0A8FA3] transition-colors rounded-r-full"
                                                     >
                                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" d="M12 5v14M5 12h14" />
@@ -818,7 +818,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             type="button"
                             onClick={handleSubmit}
                             disabled={isGenerating || cart.length === 0 || cartTotal < 10}
-                            className="flex-1 py-3 bg-dr7-gold hover:bg-[#247a6f] text-white text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="flex-1 py-3 bg-dr7-gold hover:bg-[#0A8FA3] text-white text-[15px] font-semibold rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             title={cartTotal > 0 && cartTotal < 10 ? 'Importo minimo: €10.00' : undefined}
                         >
                             {isGenerating ? (

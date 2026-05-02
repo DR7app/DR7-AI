@@ -31,16 +31,21 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
         return () => window.removeEventListener('keydown', handler)
     }, [onClose, uploading])
 
+    const ACCEPTED_EXT = /\.(pdf|jpe?g|png|webp)$/i
+    const ACCEPTED_MIME = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+
     function handleFiles(fileList: FileList | null) {
         if (!fileList) return
         const incoming: PendingItem[] = []
         for (const f of Array.from(fileList)) {
-            if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
-                incoming.push({ file: f, status: 'error', error: 'Solo PDF' })
+            const okMime = ACCEPTED_MIME.includes(f.type)
+            const okExt = ACCEPTED_EXT.test(f.name)
+            if (!okMime && !okExt) {
+                incoming.push({ file: f, status: 'error', error: 'Solo PDF o immagini (JPG, PNG, WEBP)' })
                 continue
             }
-            if (f.size > 20 * 1024 * 1024) {
-                incoming.push({ file: f, status: 'error', error: 'File >20MB' })
+            if (f.size > 50 * 1024 * 1024) {
+                incoming.push({ file: f, status: 'error', error: 'File >50MB' })
                 continue
             }
             incoming.push({ file: f, status: 'pending' })
@@ -57,10 +62,11 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
         try {
             const file = item.file
             const hash = await hashFile(file)
-            const baseName = file.name.replace(/\.pdf$/i, '').slice(0, 100)
+            const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] || 'bin').toLowerCase()
+            const baseName = file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 100)
             const numero = baseName || `BOLLA-${Date.now()}`
             const today = new Date().toISOString().slice(0, 10)
-            const safeName = `bolla-${numero.replace(/[^\w-]/g, '_')}-${Date.now()}.pdf`
+            const safeName = `bolla-${numero.replace(/[^\w-]/g, '_')}-${Date.now()}.${ext}`
             const yy = today.slice(0, 4)
             const mm = today.slice(5, 7)
             const path = `fornitori/${fornitore.id}/${yy}/${mm}/${safeName}`
@@ -138,14 +144,14 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
                     className="border-2 border-dashed border-theme-border rounded-lg p-8 text-center cursor-pointer hover:bg-theme-bg-tertiary transition"
                 >
                     <p className="text-theme-text-secondary text-sm">
-                        Clicca o trascina qui i PDF
+                        Clicca o trascina qui i file
                     </p>
-                    <p className="text-xs text-theme-text-muted mt-1">Max 20 MB per file</p>
+                    <p className="text-xs text-theme-text-muted mt-1">PDF o immagini (JPG, PNG, WEBP) — max 50 MB</p>
                 </div>
                 <input
                     ref={fileRef}
                     type="file"
-                    accept="application/pdf,.pdf"
+                    accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
                     multiple
                     className="hidden"
                     onChange={e => handleFiles(e.target.files)}

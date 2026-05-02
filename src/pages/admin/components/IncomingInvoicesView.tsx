@@ -267,7 +267,7 @@ export default function IncomingInvoicesView() {
         </div>
         <button
           onClick={load}
-          className="px-4 py-2 rounded bg-dr7-gold text-black font-semibold text-sm hover:bg-[#247a6f] hover:text-white transition-colors"
+          className="px-4 py-2 rounded bg-dr7-gold text-black font-semibold text-sm hover:bg-[#0A8FA3] hover:text-white transition-colors"
         >
           Aggiorna
         </button>

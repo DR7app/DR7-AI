@@ -1057,7 +1057,7 @@ export default function ReviewManagementTab() {
             <button
               onClick={handleSaveSettings}
               disabled={savingSettings}
-              className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
+              className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
             >
               {savingSettings ? 'Salvataggio...' : 'Salva Impostazioni'}
             </button>
@@ -1116,7 +1116,7 @@ export default function ReviewManagementTab() {
                     <button
                       onClick={() => handleSaveTemplate(t)}
                       disabled={savingTemplateKey === key}
-                      className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#247a6f] transition-colors disabled:opacity-50"
+                      className="px-4 py-1.5 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
                     >
                       {savingTemplateKey === key ? 'Salvataggio...' : 'Salva'}
                     </button>

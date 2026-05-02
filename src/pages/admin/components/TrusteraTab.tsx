@@ -336,7 +336,7 @@ function DocumentiSubTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">Trustera - Firma Documenti</h2>
         <button
           onClick={() => { setShowUpload(!showUpload); if (showUpload) resetForm() }}
-          className="bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-2 px-4 rounded-full transition-colors"
+          className="bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold py-2 px-4 rounded-full transition-colors"
         >
           {showUpload ? 'Annulla' : '+ Invia Documento'}
         </button>
@@ -438,7 +438,7 @@ function DocumentiSubTab() {
           <button
             onClick={handleSend}
             disabled={sending || !uploadedUrl}
-            className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-3 px-4 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold py-3 px-4 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {sending ? 'Invio in corso...' : 'Invia per Firma via WhatsApp'}
           </button>

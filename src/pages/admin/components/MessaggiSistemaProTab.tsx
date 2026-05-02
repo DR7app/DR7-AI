@@ -736,7 +736,7 @@ export default function MessaggiSistemaProTab() {
                     <div className="flex gap-2">
                         <button
                             onClick={() => setShowNewForm(!showNewForm)}
-                            className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f]"
+                            className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#0A8FA3]"
                         >
                             + Nuovo Messaggio
                         </button>
@@ -845,7 +845,7 @@ export default function MessaggiSistemaProTab() {
                             <button
                                 onClick={handleCreateTemplate}
                                 disabled={creatingNew || !newLabel.trim()}
-                                className="px-5 py-2 rounded-full text-sm font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors disabled:opacity-50"
+                                className="px-5 py-2 rounded-full text-sm font-semibold bg-dr7-gold text-white hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
                             >
                                 {creatingNew ? 'Salvataggio...' : 'Crea Messaggio'}
                             </button>
@@ -1044,7 +1044,7 @@ export default function MessaggiSistemaProTab() {
                                                             <button onClick={() => setEditingId(null)}
                                                                 className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors">Annulla</button>
                                                             <button onClick={() => handleSaveEdit(template.id)} disabled={saving}
-                                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-[#247a6f] transition-colors disabled:opacity-50">
+                                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-[#0A8FA3] transition-colors disabled:opacity-50">
                                                                 {saving ? 'Salvataggio...' : 'Salva'}
                                                             </button>
                                                         </>
@@ -1197,7 +1197,7 @@ export default function MessaggiSistemaProTab() {
                         <button
                             onClick={handleSend}
                             disabled={sending || !getMessageText().trim() || selectedCustomers.length === 0}
-                            className="px-6 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#247a6f] disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-6 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#0A8FA3] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {sending
                                 ? `Invio ${sendProgress.current}/${sendProgress.total}...`

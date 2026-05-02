@@ -226,7 +226,7 @@ export default function LimitationOverrideModal({
               <button
                 onClick={sendOtp}
                 disabled={sending}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium w-full sm:w-auto"
+                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium w-full sm:w-auto"
               >
                 {sending ? 'Invio...' : 'Richiedi autorizzazione'}
               </button>
@@ -245,7 +245,7 @@ export default function LimitationOverrideModal({
               <button
                 onClick={verifyCode}
                 disabled={otpCode.length < 6 || verifying}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#247a6f] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium"
+                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium"
               >
                 {verifying ? 'Verifica...' : 'Verifica'}
               </button>

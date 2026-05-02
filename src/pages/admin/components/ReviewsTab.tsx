@@ -363,7 +363,7 @@ export default function ReviewsTab() {
                         onClick={handleSendReviews}
                         disabled={selectedIds.size === 0 || sending}
                         className={selectedIds.size > 0 && !sending
-                            ? 'bg-dr7-gold hover:bg-[#247a6f] text-white shadow-[0_0_15px_rgba(212,175,55,0.4)]'
+                            ? 'bg-dr7-gold hover:bg-[#0A8FA3] text-white shadow-[0_0_15px_rgba(212,175,55,0.4)]'
                             : ''
                         }
                     >
@@ -412,7 +412,7 @@ export default function ReviewsTab() {
                                     <Button
                                         onClick={saveWaTemplate}
                                         disabled={waSaving}
-                                        className="bg-dr7-gold hover:bg-[#247a6f] text-white"
+                                        className="bg-dr7-gold hover:bg-[#0A8FA3] text-white"
                                     >
                                         {waSaving ? 'Salvataggio...' : 'Salva Template'}
                                     </Button>

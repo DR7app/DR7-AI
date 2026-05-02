@@ -242,7 +242,7 @@ export default function MaxiPromoGapTab() {
             <button
               onClick={saveSettings}
               disabled={savingSettings}
-              className="px-5 py-2.5 bg-dr7-gold text-white rounded-full font-semibold hover:bg-[#247a6f] transition-colors disabled:opacity-50"
+              className="px-5 py-2.5 bg-dr7-gold text-white rounded-full font-semibold hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
             >
               {savingSettings ? 'Salvataggio...' : 'Salva impostazioni cron'}
             </button>

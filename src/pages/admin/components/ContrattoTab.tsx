@@ -448,7 +448,7 @@ export default function ContrattoTab() {
           <div className="flex gap-3">
             <button
               type="submit"
-              className="flex-1 bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-3 px-4 rounded-full transition-colors"
+              className="flex-1 bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold py-3 px-4 rounded-full transition-colors"
             >
               {editingId ? 'Aggiorna Contratto' : 'Crea Contratto'}
             </button>
@@ -476,7 +476,7 @@ export default function ContrattoTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">📄 Contratti</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-2 px-4 rounded-full transition-colors"
+          className="bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold py-2 px-4 rounded-full transition-colors"
         >
           + Nuovo Contratto
         </button>
@@ -499,7 +499,7 @@ export default function ContrattoTab() {
           <p className="text-theme-text-muted text-lg mb-4">Nessun contratto trovato</p>
           <button
             onClick={() => setShowForm(true)}
-            className="bg-dr7-gold hover:bg-[#247a6f] text-white font-bold py-2 px-6 rounded-full transition-colors"
+            className="bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold py-2 px-6 rounded-full transition-colors"
           >
             Crea il primo contratto
           </button>
@@ -579,7 +579,7 @@ export default function ContrattoTab() {
                       <button
                         onClick={() => handleSendSignatureEmail(contract)}
                         disabled={sendingSignature === contract.id}
-                        className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
+                        className="w-full bg-dr7-gold hover:bg-[#0A8FA3] text-white px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
                       >
                         {sendingSignature === contract.id ? 'Invio...' : 'Reinvia Contratto'}
                       </button>
@@ -594,7 +594,7 @@ export default function ContrattoTab() {
                     <button
                       onClick={() => handleSendSignatureEmail(contract)}
                       disabled={sendingSignature === contract.id}
-                      className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
+                      className="w-full bg-dr7-gold hover:bg-[#0A8FA3] text-white px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 font-bold disabled:opacity-50"
                     >
                       {sendingSignature === contract.id ? 'Invio...' : 'Firma via WhatsApp'}
                     </button>

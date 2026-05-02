@@ -33,7 +33,7 @@ function App() {
               borderRadius: '12px',
             },
             success: {
-              iconTheme: { primary: '#2d8a7e', secondary: '#1a2332' },
+              iconTheme: { primary: '#19C2D6', secondary: '#1a2332' },
             },
             error: {
               duration: 5000,

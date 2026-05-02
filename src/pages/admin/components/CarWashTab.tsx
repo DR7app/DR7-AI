@@ -508,7 +508,7 @@ export default function CarWashTab() {
                 onClick={() => handleToggleActive(service.id, service.is_active)}
                 className={`px-3 py-1 text-theme-text-primary text-sm rounded transition-colors ${
                   service.is_active
-                    ? 'bg-dr7-gold hover:bg-[#247a6f]'
+                    ? 'bg-dr7-gold hover:bg-[#0A8FA3]'
                     : 'bg-green-600 hover:bg-green-700'
                 }`}
               >

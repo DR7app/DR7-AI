@@ -439,7 +439,7 @@ export default function ScannerTab() {
                         <button
                             onClick={extractAll}
                             disabled={isExtracting || uploadedCount === 0}
-                            className="px-8 py-3 bg-dr7-gold text-white font-bold rounded-full hover:bg-[#247a6f] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="px-8 py-3 bg-dr7-gold text-white font-bold rounded-full hover:bg-[#0A8FA3] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             {isExtracting ? (
                                 <>
@@ -578,7 +578,7 @@ export default function ScannerTab() {
                         </button>
                         <button
                             onClick={openClientModal}
-                            className="px-8 py-3 bg-dr7-gold text-white font-bold rounded-full hover:bg-[#247a6f] transition-all"
+                            className="px-8 py-3 bg-dr7-gold text-white font-bold rounded-full hover:bg-[#0A8FA3] transition-all"
                         >
                             Apri Form Nuovo Cliente
                         </button>
