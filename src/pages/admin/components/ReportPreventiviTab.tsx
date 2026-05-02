@@ -36,6 +36,8 @@ interface Preventivo {
   customer_name?: string | null
   driver_tier?: string
   status?: string
+  motivo_rifiuto?: string | null
+  motivo_rifiuto_note?: string | null
   booking_id?: string | null
   whatsapp_sent_at?: string | null
   whatsapp_message_id?: string | null
@@ -191,7 +193,7 @@ export default function ReportPreventiviTab() {
           .order('created_at', { ascending: false }),
         supabase
           .from('preventivi')
-          .select('id, status, total_final, total_amount, subtotal, whatsapp_sent_at, customer_name, customer_id, created_at')
+          .select('id, status, motivo_rifiuto, motivo_rifiuto_note, total_final, total_amount, subtotal, whatsapp_sent_at, customer_name, customer_id, created_at')
           .gte('created_at', prevStartDate)
           .lte('created_at', prevEndDate),
       ])
@@ -437,21 +439,30 @@ export default function ReportPreventiviTab() {
     const variance = allAmounts.length > 0 ? allAmounts.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / allAmounts.length : 0
     const stddev = Math.sqrt(variance)
 
-    // Motivo stimato abbandono heuristics
+    // Motivo stimato abbandono — for rejected preventivi we trust the explicit
+    // motivo_rifiuto column the operator picked at rejection time; for the
+    // others we fall back to heuristics on whatsapp/customer/status.
     const motivoCounts: Record<string, number> = {
+      'Rifiutato — Cauzione': 0,
+      'Rifiutato — Prezzo': 0,
+      'Rifiutato — Altro': 0,
+      'Rifiutato (motivo non specificato)': 0,
       'Preventivo mai inviato al cliente': 0,
       'Cliente non ha risposto': 0,
-      'Rifiutato dal cliente': 0,
       'Prezzo superiore alla media': 0,
       'Nessun follow-up possibile': 0,
     }
     nonConverted.forEach(p => {
-      if (p.status === 'bozza' && !p.whatsapp_sent_at) {
+      if (isRifiutato(p)) {
+        const motivo = (p.motivo_rifiuto || '').toLowerCase()
+        if (motivo === 'cauzione') motivoCounts['Rifiutato — Cauzione']++
+        else if (motivo === 'prezzo') motivoCounts['Rifiutato — Prezzo']++
+        else if (motivo === 'altro') motivoCounts['Rifiutato — Altro']++
+        else motivoCounts['Rifiutato (motivo non specificato)']++
+      } else if (p.status === 'bozza' && !p.whatsapp_sent_at) {
         motivoCounts['Preventivo mai inviato al cliente']++
       } else if (isExpired(p) && p.whatsapp_sent_at) {
         motivoCounts['Cliente non ha risposto']++
-      } else if (isRifiutato(p)) {
-        motivoCounts['Rifiutato dal cliente']++
       } else if (getAmount(p) > avg + stddev && getAmount(p) > 0) {
         motivoCounts['Prezzo superiore alla media']++
       } else if (!p.customer_name && !p.customer_id && p.status !== 'bozza') {
