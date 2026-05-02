@@ -1791,10 +1791,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     })
   }
 
-  async function confirmAccept(args: { preventivo: { id: string; vehicle_name: string; pickup_date: string; dropoff_date: string; total_final: number | null }; customer_id: string; payment_method: string }) {
-    const { preventivo, customer_id, payment_method } = args
+  async function confirmAccept(args: {
+    preventivo: { id: string; vehicle_name: string; pickup_date: string; dropoff_date: string; total_final: number | null }
+    customer_id: string
+    payment_method: string
+    payment_status: 'pending' | 'paid'
+    amount_paid_eur: number
+  }) {
+    const { preventivo, customer_id, payment_method, payment_status, amount_paid_eur } = args
 
-    // Find the full preventivo + selected customer
     const p = preventivi.find(x => x.id === preventivo.id)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c = customers.find((x: any) => x.id === customer_id)
@@ -1802,47 +1807,56 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       throw new Error('Preventivo o cliente non trovato in cache')
     }
 
-    const customerName = `${c.nome || ''} ${c.cognome || ''}`.trim() || c.full_name || c.ragione_sociale || 'Cliente'
+    const customerName = c.full_name || `${c.nome || ''} ${c.cognome || ''}`.trim() || c.ragione_sociale || 'Cliente'
     const customerEmail = c.email || ''
     const customerPhone = c.telefono || c.phone || p.customer_phone || ''
 
-    const totalEur = p.total_final ?? 0
+    // bookings.price_total stores cents (INTEGER); convert from euros.
+    const eurToCents = (eur: number) => Math.round((eur || 0) * 100)
+    const totalCents = eurToCents(p.total_final ?? 0)
+    const paidCents = payment_status === 'paid' ? totalCents : eurToCents(amount_paid_eur)
+
     const bookingPayload = {
+      // user_id satisfies the bookings_user_or_guest_check constraint
+      // (existing ConvertPreventivoModal does the same).
+      user_id: customer_id,
       vehicle_id: p.vehicle_id,
       vehicle_name: p.vehicle_name,
       vehicle_plate: p.vehicle_plate,
       pickup_date: p.pickup_date,
       dropoff_date: p.dropoff_date,
-      // bookings.price_total is INTEGER in this schema (euros, no decimals).
-      // Round to the nearest euro; the exact decimal lives in booking_details.exact_total.
-      price_total: Math.round(totalEur),
-      status: 'confirmed',
-      service_type: 'rental',
+      price_total: totalCents,
+      currency: 'EUR',
+      status: payment_status === 'paid' ? 'confirmed' : 'pending',
+      payment_status,
       payment_method,
-      payment_status: 'pending',
+      amount_paid: paidCents,
+      service_type: 'rental',
+      booking_source: 'admin',
       customer_name: customerName,
       customer_email: customerEmail,
       customer_phone: customerPhone,
-      // bookings has a CHECK constraint: user_id OR guest_name must be present.
-      // Admin-created bookings for non-registered customers go through the
-      // guest_* fields; the linkage to customers_extended lives in
-      // booking_details.customer.customerId.
-      guest_name: customerName,
-      guest_email: customerEmail || null,
-      guest_phone: customerPhone || null,
       booking_details: {
         from_preventivo: p.id,
-        customer_id,
-        customer: { customerId: customer_id, name: customerName, email: customerEmail, phone: customerPhone },
-        exact_total: totalEur,
+        source: 'admin_preventivo_accept',
+        customer: {
+          fullName: customerName,
+          email: customerEmail,
+          phone: customerPhone,
+          id: customer_id,
+          customerId: customer_id,
+        },
+        amountPaid: paidCents,
         insurance_option: p.insurance_option,
         rental_days: p.rental_days,
         unlimited_km: (p.unlimited_km_total || 0) > 0,
         no_cauzione: (p.no_cauzione_total || 0) > 0,
         include_lavaggio: (p.lavaggio_fee || 0) > 0,
         driver_tier: p.driver_tier,
-        createdBy: 'admin_preventivo_accept',
       },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      booked_at: new Date().toISOString(),
     }
 
     const { data: inserted, error: insertErr } = await supabase
@@ -1852,9 +1866,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       .single()
     if (insertErr) throw new Error(`Creazione prenotazione fallita: ${insertErr.message}`)
 
-    const preventivoUpdate: Record<string, unknown> = { status: 'accettato' }
-    if (inserted?.id) preventivoUpdate.booking_id = inserted.id
-    // Try with customer_id; if the column doesn't exist on preventivi we fall back below.
+    const preventivoUpdate: Record<string, unknown> = {
+      status: 'accettato',
+      booking_id: inserted?.id,
+      customer_name: customerName,
+      updated_at: new Date().toISOString(),
+    }
     let { error: updErr } = await supabase
       .from('preventivi')
       .update({ ...preventivoUpdate, customer_id })
@@ -1867,13 +1884,43 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       console.warn('[Preventivi] Booking creato ma update preventivo fallito:', updErr.message)
     }
 
+    appendPreventivoEvent(p.id, 'preventivo_convertito', { detail: inserted?.id || '' })
     logAdminAction('preventivo_accepted', 'preventivo', p.id, {
       booking_id: inserted?.id,
       vehicle: p.vehicle_name,
       customer: customerName,
       payment_method,
+      payment_status,
+      amount_paid_eur,
       total: p.total_final,
     })
+
+    // If admin chose Pay by Link Nexi, generate it and offer to copy/send
+    if (payment_method === 'Pay by Link Nexi' && payment_status === 'pending' && inserted?.id) {
+      try {
+        const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: inserted.id,
+            amountCents: totalCents,
+            description: `Prenotazione ${p.vehicle_name}`,
+            customerEmail,
+            customerName,
+            expirationHours: 24,
+          }),
+        })
+        const linkData = await linkRes.json()
+        if (linkRes.ok && linkData?.paymentUrl) {
+          await navigator.clipboard.writeText(linkData.paymentUrl).catch(() => {})
+          toast.success('Link Nexi generato e copiato negli appunti')
+        } else {
+          toast(`Prenotazione creata. Genera il link Nexi manualmente: ${linkData?.error || ''}`)
+        }
+      } catch (err: any) {
+        toast(`Prenotazione creata. Errore generazione link Nexi: ${err?.message}`)
+      }
+    }
 
     loadPreventivi()
     toast.success(`Prenotazione creata · ${customerName}`)

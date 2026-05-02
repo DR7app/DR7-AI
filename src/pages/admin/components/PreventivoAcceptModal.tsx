@@ -27,6 +27,8 @@ export interface AcceptConfirmArgs {
     preventivo: AcceptModalPreventivo
     customer_id: string
     payment_method: string
+    payment_status: 'pending' | 'paid'
+    amount_paid_eur: number
 }
 
 /** Imperative open helper. Call from anywhere — no React state involved. */
@@ -41,17 +43,21 @@ interface Props {
 }
 
 const PAYMENT_METHODS: { value: string; label: string }[] = [
-    { value: 'pos', label: 'POS / Carta in sede' },
-    { value: 'contanti', label: 'Contanti' },
-    { value: 'bonifico', label: 'Bonifico bancario' },
-    { value: 'nexi_link', label: 'Link Nexi (online)' },
-    { value: 'wallet', label: 'Credit Wallet' },
+    { value: 'Bonifico', label: 'Bonifico' },
+    { value: 'Contanti', label: 'Contanti' },
+    { value: 'Credit Wallet', label: 'Credit Wallet' },
+    { value: 'Carta di Credito / bancomat', label: 'Carta di Credito / bancomat' },
+    { value: 'Paypal', label: 'Paypal' },
+    { value: 'RIBA', label: 'RIBA' },
+    { value: 'Pay by Link Nexi', label: 'Pay by Link (Nexi)' },
 ]
 
 function PreventivoAcceptModal({ onConfirm, customers }: Props) {
     const [preventivo, setPreventivo] = useState<AcceptModalPreventivo | null>(null)
     const [customerId, setCustomerId] = useState('')
-    const [paymentMethod, setPaymentMethod] = useState('pos')
+    const [paymentMethod, setPaymentMethod] = useState('Contanti')
+    const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending')
+    const [amountPaid, setAmountPaid] = useState('0')
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -61,7 +67,9 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
             if (!ce.detail) return
             setPreventivo(ce.detail)
             setCustomerId('')
-            setPaymentMethod('pos')
+            setPaymentMethod('Contanti')
+            setPaymentStatus('pending')
+            setAmountPaid('0')
             setSubmitting(false)
             setError(null)
         }
@@ -93,7 +101,14 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
         setSubmitting(true)
         setError(null)
         try {
-            await onConfirm({ preventivo, customer_id: customerId, payment_method: paymentMethod })
+            const amt = parseFloat(amountPaid) || 0
+            await onConfirm({
+                preventivo,
+                customer_id: customerId,
+                payment_method: paymentMethod,
+                payment_status: paymentStatus,
+                amount_paid_eur: paymentStatus === 'paid' ? (preventivo.total_final ?? 0) : amt,
+            })
             setPreventivo(null)
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
@@ -136,24 +151,56 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                 </div>
 
                 <div className="mb-4">
-                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Metodo di pagamento *</label>
-                    <div className="space-y-2">
-                        {PAYMENT_METHODS.map(pm => (
-                            <label key={pm.value} className={`block cursor-pointer rounded-lg border p-3 transition-colors ${paymentMethod === pm.value ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border hover:border-theme-text-muted'}`}>
-                                <div className="flex items-center gap-3">
-                                    <input
-                                        type="radio"
-                                        name="paymentMethod"
-                                        value={pm.value}
-                                        checked={paymentMethod === pm.value}
-                                        onChange={() => setPaymentMethod(pm.value)}
-                                    />
-                                    <span className="text-theme-text-primary text-sm">{pm.label}</span>
-                                </div>
-                            </label>
-                        ))}
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Stato pagamento *</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setPaymentStatus('pending')}
+                            className={`px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${paymentStatus === 'pending' ? 'border-amber-500 bg-amber-500/15 text-amber-300' : 'border-theme-border text-theme-text-secondary hover:border-theme-text-muted'}`}
+                        >
+                            Da saldare
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setPaymentStatus('paid')}
+                            className={`px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${paymentStatus === 'paid' ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300' : 'border-theme-border text-theme-text-secondary hover:border-theme-text-muted'}`}
+                        >
+                            Pagato
+                        </button>
                     </div>
                 </div>
+
+                <div className="mb-4">
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Metodo di pagamento *</label>
+                    <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+                    >
+                        {PAYMENT_METHODS.map(pm => (
+                            <option key={pm.value} value={pm.value}>{pm.label}</option>
+                        ))}
+                    </select>
+                    {paymentMethod === 'Pay by Link Nexi' && (
+                        <p className="text-xs text-theme-text-muted mt-1">Il link Nexi viene generato dopo la creazione della prenotazione.</p>
+                    )}
+                </div>
+
+                {paymentStatus === 'pending' && (
+                    <div className="mb-4">
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-1">Acconto incassato (EUR)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={amountPaid}
+                            onChange={(e) => setAmountPaid(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+                        />
+                        <p className="text-xs text-theme-text-muted mt-1">Lascia 0 se nulla e' stato ancora pagato.</p>
+                    </div>
+                )}
 
                 {error && (
                     <div className="bg-red-500/10 border border-red-500/30 rounded p-2 mb-3 text-red-300 text-sm">
