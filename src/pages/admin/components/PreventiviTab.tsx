@@ -2331,6 +2331,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
             </div>
           </div>
         )}
+
+        {/* Modal motivo rifiuto — mounted in list view so CustomEvent listener
+            is active when user clicks "Rifiutato" from this view */}
+        <PreventivoRejectModal onConfirm={confirmReject} />
       </div>
     )
   }
