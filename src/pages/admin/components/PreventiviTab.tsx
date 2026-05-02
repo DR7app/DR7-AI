@@ -8,6 +8,7 @@ import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice } from '../../.
 import type { RentalConfig } from '../../../types/rentalConfig'
 import Input from './Input'
 import Select from './Select'
+import PreventivoRejectModal, { type RejectModalRef } from './PreventivoRejectModal'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
@@ -339,9 +340,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [selectedPreventivo, setSelectedPreventivo] = useState<Preventivo | null>(null)
   const [previewMessage, setPreviewMessage] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [rejectingPreventivo, setRejectingPreventivo] = useState<Preventivo | null>(null)
-  const [rejectMotivo, setRejectMotivo] = useState<'cauzione' | 'prezzo' | 'altro'>('prezzo')
-  const [rejectNote, setRejectNote] = useState('')
+  // Modal "Rifiutato" — stato isolato dentro PreventivoRejectModal via ref,
+  // così aprirlo NON ri-renderizza l'intera lista preventivi (era il motivo
+  // dei 15 sec di apertura).
+  const rejectModalRef = useRef<RejectModalRef | null>(null)
   const [whatsappPhone, setWhatsappPhone] = useState('')
   const [showPhoneModal, setShowPhoneModal] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1776,26 +1778,24 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }
 
   function openRejectModal(p: Preventivo) {
-    setRejectingPreventivo(p)
-    setRejectMotivo('prezzo')
-    setRejectNote('')
+    // Imperative open — no setState in this component, so the 121+ rows do
+    // NOT re-render. Modal owns its own internal state.
+    rejectModalRef.current?.open({ id: p.id, vehicle_name: p.vehicle_name })
   }
 
-  async function confirmReject() {
-    if (!rejectingPreventivo) return
+  async function confirmReject(args: { preventivo: { id: string; vehicle_name: string }; motivo: 'cauzione' | 'prezzo' | 'altro'; note: string }) {
     const updates: Record<string, unknown> = {
       status: 'rifiutato',
-      motivo_rifiuto: rejectMotivo,
+      motivo_rifiuto: args.motivo,
     }
-    if (rejectNote.trim()) updates.motivo_rifiuto_note = rejectNote.trim()
-    const { error } = await supabase.from('preventivi').update(updates).eq('id', rejectingPreventivo.id)
+    if (args.note.trim()) updates.motivo_rifiuto_note = args.note.trim()
+    const { error } = await supabase.from('preventivi').update(updates).eq('id', args.preventivo.id)
     if (error) {
       toast.error(`Errore: ${error.message}`)
       return
     }
-    setRejectingPreventivo(null)
     loadPreventivi()
-    toast.success(`Preventivo rifiutato (motivo: ${rejectMotivo})`)
+    toast.success(`Preventivo rifiutato (motivo: ${args.motivo})`)
   }
 
   const toggleSort = (field: typeof sortField) => {
@@ -2933,67 +2933,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         }}
       />
 
-      {/* Modal motivo rifiuto */}
-      {rejectingPreventivo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setRejectingPreventivo(null)}>
-          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-theme-text-primary">Motivo rifiuto</h3>
-              <button onClick={() => setRejectingPreventivo(null)} className="text-theme-text-muted text-2xl leading-none hover:text-theme-text-primary">×</button>
-            </div>
-            <p className="text-sm text-theme-text-secondary mb-4">
-              Perche' il cliente ha rifiutato questo preventivo? ({rejectingPreventivo.vehicle_name})
-            </p>
-            <div className="space-y-2 mb-4">
-              {([
-                { value: 'cauzione', label: 'Cauzione', desc: 'Cliente non ha accettato l\'importo o le condizioni della cauzione' },
-                { value: 'prezzo', label: 'Prezzo', desc: 'Cliente ha trovato il prezzo troppo alto' },
-                { value: 'altro', label: 'Altro', desc: 'Specifica il motivo nel campo note' },
-              ] as const).map(opt => (
-                <label key={opt.value} className={`block cursor-pointer rounded-lg border p-3 transition-colors ${rejectMotivo === opt.value ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border hover:border-theme-text-muted'}`}>
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="radio"
-                      name="rejectMotivo"
-                      value={opt.value}
-                      checked={rejectMotivo === opt.value}
-                      onChange={() => setRejectMotivo(opt.value)}
-                      className="mt-1"
-                    />
-                    <div>
-                      <div className="text-theme-text-primary font-semibold text-sm">{opt.label}</div>
-                      <div className="text-theme-text-muted text-xs">{opt.desc}</div>
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </div>
-            <textarea
-              value={rejectNote}
-              onChange={(e) => setRejectNote(e.target.value)}
-              placeholder="Note aggiuntive (facoltative)..."
-              rows={2}
-              className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setRejectingPreventivo(null)}
-                className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary"
-              >
-                Annulla
-              </button>
-              <button
-                type="button"
-                onClick={confirmReject}
-                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white text-sm font-semibold"
-              >
-                Conferma Rifiuto
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal motivo rifiuto — stato isolato, non causa re-render della lista */}
+      <PreventivoRejectModal ref={rejectModalRef} onConfirm={confirmReject} />
     </div>
   )
 }
