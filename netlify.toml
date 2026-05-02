@@ -77,6 +77,12 @@
 [functions."fornitori-alerts-cron"]
   schedule = "0 6 * * *"
 
+# Supercar rental extension reminder — fires at 18:00 Rome the day before drop-off
+# for rentals on exotic vehicles with duration ≥ 3 days. Two times cover both
+# CEST (16 UTC) and CET (17 UTC); the function gates inside on Rome hour == 18.
+[functions."rental-extension-supercar-cron"]
+  schedule = "0 16,17 * * *"
+
 # SPA catch-all: ONLY for non-asset routes
 # Netlify serves existing files first, then applies redirects.
 # When a fingerprinted chunk is missing (stale HTML after deploy),
