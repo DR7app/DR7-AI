@@ -179,8 +179,9 @@ export const handler: Handler = async (event) => {
             numero_documento: number,
             data_documento: date,
             importo_totale: amount,
-            note: `Sincronizzata da Aruba: ${m.filename}`,
+            note: `Sincronizzata da Aruba`,
             stato: 'caricato',
+            aruba_filename: m.filename,
           })
         if (insErr) {
           // Unique violation (already inserted by another sync) — count as skipped

@@ -123,6 +123,31 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
         window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
     }
 
+    async function downloadAruba(doc: FornitoreDocument, kind: 'pdf' | 'xml') {
+        if (!doc.aruba_filename) return
+        try {
+            const res = await fetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(doc.aruba_filename)}`)
+            const json = await res.json()
+            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+            const data = json.invoice || {}
+            const base64 = kind === 'pdf' ? (data.pdf || data.pdfFile) : (data.file || data.xml)
+            const mime = kind === 'pdf' ? 'application/pdf' : 'application/xml'
+            if (!base64) {
+                alert(`${kind.toUpperCase()} non disponibile per questa fattura`)
+                return
+            }
+            const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+            const blob = new Blob([bytes], { type: mime })
+            const url = URL.createObjectURL(blob)
+            window.open(url, '_blank', 'noopener,noreferrer')
+            // Revoke after a short delay so the new tab can load
+            setTimeout(() => URL.revokeObjectURL(url), 60000)
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            alert(`Download fallito: ${msg}`)
+        }
+    }
+
     const annoOptions: number[] = []
     for (let y = today.getFullYear() + 1; y >= 2020; y--) annoOptions.push(y)
 
@@ -197,6 +222,20 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
                                                     className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
                                                     Vedi
                                                 </button>
+                                            )}
+                                            {doc.aruba_filename && (
+                                                <>
+                                                    <button onClick={() => downloadAruba(doc, 'pdf')}
+                                                        className="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white"
+                                                        title="Scarica il PDF dalla fattura Aruba">
+                                                        PDF
+                                                    </button>
+                                                    <button onClick={() => downloadAruba(doc, 'xml')}
+                                                        className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary"
+                                                        title="Scarica il XML dalla fattura Aruba">
+                                                        XML
+                                                    </button>
+                                                </>
                                             )}
                                             <button onClick={() => { setEditingDoc(doc); setShowUpload(true) }}
                                                 className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">

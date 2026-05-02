@@ -56,6 +56,7 @@ export interface FornitoreDocument {
     file_url: string | null
     file_name: string | null
     file_hash: string | null
+    aruba_filename?: string | null
     stato: DocumentStato
     metodo_pagamento: string | null
     data_pagamento: string | null
