@@ -93,9 +93,13 @@ export const handler: Handler = async (event) => {
         .lte('pickup_date', prevMonthEndISO + 'T23:59:59')
         .neq('customer_email', 'admin@dr7.app')
         .not('vehicle_plate', 'in', '("TEST000","TEST002")'),
-      // 4. All customers for new/returning analysis
+      // 4. Customers — only fetch this month + previous month for the new/returning
+      // calculation; total count comes from a separate exact-count query below.
+      // (PostgREST caps array selects at 1000 rows.)
       supabase.from('customers_extended')
-        .select('id, created_at, nome, cognome'),
+        .select('id, created_at, nome, cognome')
+        .gte('created_at', prevMonthStartISO + 'T00:00:00')
+        .lte('created_at', monthEndISO + 'T23:59:59'),
       // 5. Cauzioni for current month
       supabase.from('cauzioni')
         .select('id, importo, stato, metodo, updated_at')
@@ -111,6 +115,11 @@ export const handler: Handler = async (event) => {
     if (vehiclesRes.error) throw vehiclesRes.error
     if (currentBookingsRes.error) throw currentBookingsRes.error
     if (prevBookingsRes.error) throw prevBookingsRes.error
+
+    // Exact total customer count (not capped at 1000 like array selects)
+    const { count: totalCustomersCount } = await supabase
+      .from('customers_extended')
+      .select('id', { count: 'exact', head: true })
 
     const vehicles = vehiclesRes.data || []
     const allCurrentBookings = currentBookingsRes.data || []
@@ -556,7 +565,7 @@ export const handler: Handler = async (event) => {
         activeThisMonth: activeEmails.size,
         previousNewCount: prevNewCount,
         changePercent: customersChangePercent,
-        totalCustomers: customers.length
+        totalCustomers: totalCustomersCount ?? customers.length
       },
 
       damages: {
