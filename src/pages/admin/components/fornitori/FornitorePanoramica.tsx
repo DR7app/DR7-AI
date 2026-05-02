@@ -161,8 +161,8 @@ export default function FornitorePanoramica({ fornitore }: Props) {
 
             {/* Two parallel tables: Bolle Recenti + Fatture Recenti */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <RecentTable title={`Bolle recenti (${stats.countBolle})`} rows={bolleRecenti} kind="bolla" />
-                <RecentTable title={`Fatture recenti (${stats.countFatture})`} rows={fattureRecenti} kind="fattura" />
+                <RecentTable title={`Bolle recenti (${stats.countBolle})`} rows={bolleRecenti} kind="bolla" onChanged={load} />
+                <RecentTable title={`Fatture recenti (${stats.countFatture})`} rows={fattureRecenti} kind="fattura" onChanged={load} />
             </div>
 
             {/* Discrepancy details */}
@@ -232,11 +232,26 @@ function StatCard({ label, value, sub, color }: {
     )
 }
 
-function RecentTable({ title, rows, kind }: {
+function RecentTable({ title, rows, kind, onChanged }: {
     title: string
     rows: FornitoreDocument[]
     kind: 'bolla' | 'fattura'
+    onChanged?: () => void
 }) {
+    async function deleteDoc(d: FornitoreDocument) {
+        if (!confirm(`Eliminare ${kind === 'bolla' ? 'la bolla' : 'la fattura'} n. ${d.numero_documento}?\nQuesta azione non puo' essere annullata.`)) return
+        if (d.file_url) {
+            await supabase.storage.from('fornitori-documents').remove([d.file_url])
+        }
+        const { error } = await supabase.from('fornitore_documents').delete().eq('id', d.id)
+        if (error) {
+            alert('Errore: ' + error.message)
+            return
+        }
+        onChanged?.()
+    }
+
+    const colspan = kind === 'fattura' ? 6 : 5
     return (
         <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-hidden">
             <div className="px-4 py-3 border-b border-theme-border">
@@ -250,11 +265,12 @@ function RecentTable({ title, rows, kind }: {
                         <th className="text-right px-3 py-2 text-xs">Importo</th>
                         {kind === 'fattura' && <th className="text-left px-3 py-2 text-xs">Scadenza</th>}
                         <th className="text-left px-3 py-2 text-xs">Stato</th>
+                        <th className="text-right px-3 py-2 text-xs">Azioni</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-theme-border">
                     {rows.length === 0 && (
-                        <tr><td colSpan={kind === 'fattura' ? 5 : 4} className="text-center py-4 text-theme-text-muted text-xs">
+                        <tr><td colSpan={colspan} className="text-center py-4 text-theme-text-muted text-xs">
                             Nessun documento
                         </td></tr>
                     )}
@@ -270,6 +286,15 @@ function RecentTable({ title, rows, kind }: {
                                 <span className={`px-2 py-0.5 rounded text-xs ${DOCUMENT_STATO_COLORS[r.stato]}`}>
                                     {DOCUMENT_STATO_LABELS[r.stato]}
                                 </span>
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                                <button
+                                    onClick={() => deleteDoc(r)}
+                                    className="text-xs px-2 py-1 rounded bg-red-900 hover:bg-red-800 text-red-200"
+                                    title={`Elimina ${kind === 'bolla' ? 'bolla' : 'fattura'}`}
+                                >
+                                    ×
+                                </button>
                             </td>
                         </tr>
                     ))}
