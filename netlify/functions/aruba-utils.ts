@@ -180,6 +180,10 @@ export async function searchIncomingInvoices(params: {
     queryParams.set('username', USERNAME)
     // countryReceiver is required by Aruba — recipient country (IT for Italian VAT IDs)
     queryParams.set('countryReceiver', process.env.ARUBA_COUNTRY_RECEIVER || 'IT')
+    // vatcodeReceiver is required by Aruba — our own P.IVA (digits only, no IT prefix)
+    if (process.env.ARUBA_VATCODE_RECEIVER) {
+        queryParams.set('vatcodeReceiver', process.env.ARUBA_VATCODE_RECEIVER)
+    }
     if (params.page != null) queryParams.set('page', String(params.page))
     if (params.pageSize != null) queryParams.set('pageSize', String(params.pageSize))
     if (params.startDate) queryParams.set('startDate', params.startDate)
