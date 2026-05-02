@@ -93,6 +93,9 @@ export default function IncomingInvoicesView() {
     }
 
     ;(async () => {
+      const eligible = invoices.filter(i => i.filename && (!i.amount || !i.invoiceDate || !i.invoiceNumber))
+      console.log(`[IncomingInvoices] starting enrichment: ${eligible.length} of ${invoices.length} need details`)
+      let done = 0
       for (const inv of invoices) {
         if (cancelled) return
         const needs = inv.filename && (!inv.amount || !inv.invoiceDate || !inv.invoiceNumber)
@@ -106,9 +109,14 @@ export default function IncomingInvoicesView() {
             invoiceDate: x.invoiceDate || detail.invoiceDate || '',
             invoiceNumber: x.invoiceNumber || detail.invoiceNumber || '',
           } : x))
+          done++
+          if (done % 5 === 0) console.log(`[IncomingInvoices] enriched ${done}/${eligible.length}`)
+        } else {
+          console.warn(`[IncomingInvoices] enrich returned null for ${inv.filename}`)
         }
         await new Promise(r => setTimeout(r, 300))
       }
+      console.log(`[IncomingInvoices] enrichment complete: ${done}/${eligible.length} populated`)
     })()
 
     return () => { cancelled = true }

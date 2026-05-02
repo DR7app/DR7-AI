@@ -25,12 +25,14 @@ export const handler: Handler = async (event) => {
   }
 
   try {
+    // Fetch with the actual XML file (no PDF, smaller payload)
     const detail = await getIncomingInvoice(filename, false)
 
     let amount: number | null = null
     let invoiceDate = ''
     let invoiceNumber = ''
 
+    // First try Aruba's parsed JSON fields (cheap if present)
     const candidates = [detail, detail?.metadata, detail?.invoice, detail?.fattura].filter(Boolean)
     for (const src of candidates) {
       const amt = src.totalDocument ?? src.documentTotal ?? src.importoTotaleDocumento ??
@@ -53,6 +55,37 @@ export const handler: Handler = async (event) => {
       if (num && !invoiceNumber) invoiceNumber = String(num)
     }
 
+    // Fallback — parse the XML directly. FatturaPA always has these fields under DatiGeneraliDocumento.
+    const fileBase64: string | undefined = detail?.file || detail?.xml || detail?.fileBytes || detail?.invoiceFile
+    if (fileBase64 && (amount == null || !invoiceDate || !invoiceNumber)) {
+      try {
+        const xml = Buffer.from(fileBase64, 'base64').toString('utf-8')
+        // Strip namespace prefixes for simpler regex (e.g., p:ImportoTotaleDocumento → ImportoTotaleDocumento)
+        const flat = xml.replace(/<\/?[a-zA-Z0-9_-]+:/g, m => m.replace(/[a-zA-Z0-9_-]+:/, ''))
+        if (amount == null) {
+          const m = flat.match(/<ImportoTotaleDocumento>\s*([0-9.,-]+)\s*<\/ImportoTotaleDocumento>/i)
+          if (m) {
+            const parsed = parseFloat(m[1].replace(',', '.'))
+            if (!isNaN(parsed)) amount = parsed
+          }
+        }
+        if (!invoiceDate) {
+          const m = flat.match(/<Data>\s*([0-9T:.+\-]+)\s*<\/Data>/)
+          if (m) {
+            let d = m[1]
+            if (d.includes('T')) d = d.split('T')[0]
+            invoiceDate = d
+          }
+        }
+        if (!invoiceNumber) {
+          const m = flat.match(/<Numero>\s*([^<]+?)\s*<\/Numero>/)
+          if (m) invoiceNumber = m[1].trim()
+        }
+      } catch (xerr: any) {
+        console.warn('[get-incoming-invoice-detail] XML parse failed:', xerr?.message)
+      }
+    }
+
     return {
       statusCode: 200, headers,
       body: JSON.stringify({
@@ -61,6 +94,8 @@ export const handler: Handler = async (event) => {
         amount,
         invoiceDate,
         invoiceNumber,
+        had_xml: !!fileBase64,
+        detail_keys: Object.keys(detail || {}),
       })
     }
   } catch (err: any) {
