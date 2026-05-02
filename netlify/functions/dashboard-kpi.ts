@@ -549,6 +549,11 @@ export const handler: Handler = async (event) => {
         changePercent: revenueChangePercent,
         incassato: Math.round(incassato * 100) / 100,
         incassatoPercent: currentRevenue.total > 0 ? Math.round((incassato / currentRevenue.total) * 100) : 0,
+        // Visibility on what's intentionally NOT in fatturato
+        cancelledRentalsTotal: Math.round(cancelledRentalsTotal * 100) / 100,
+        cancelledRentalsCount,
+        washTotal: Math.round(washTotal * 100) / 100,
+        washCount,
         bySource: {
           rental: Math.round(currentRevenue.rental * 100) / 100,
           wash: Math.round(currentRevenue.wash * 100) / 100,

@@ -6,6 +6,8 @@ interface DashboardData {
   revenue: {
     currentMonth: number; previousMonth: number; changePercent: number
     incassato: number; incassatoPercent: number
+    cancelledRentalsTotal?: number; cancelledRentalsCount?: number
+    washTotal?: number; washCount?: number
     bySource: { rental: number; wash: number; penalties: number; danni: number }
   }
   fleet: {
@@ -563,6 +565,24 @@ export default function DashboardTab() {
           <StatCard label="Incassato" value={`\u20AC ${fmt(d.cashFlow.incassato)}`} sub="Cassa effettiva" accent="green" border />
           <StatCard label="Da Incassare" value={`\u20AC ${fmt(d.cashFlow.daIncassare)}`} sub="Pending / da saldare" accent="orange" border />
           <StatCard label="Scaduti" value={`\u20AC ${fmt(d.cashFlow.insolutiScaduti)}`} sub="Non pagati oltre scadenza" accent="red" border />
+        </div>
+
+        {/* Visibility on what's intentionally NOT in fatturato */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <StatCard
+            label="Annullate del mese"
+            value={`\u20AC ${fmt(d.revenue.cancelledRentalsTotal || 0)}`}
+            sub={`${d.revenue.cancelledRentalsCount || 0} prenotazioni cancellate (non in fatturato)`}
+            accent="red"
+            border
+          />
+          <StatCard
+            label="Lavaggi del mese"
+            value={`\u20AC ${fmt(d.revenue.washTotal || 0)}`}
+            sub={`${d.revenue.washCount || 0} lavaggi (rendiconto separato)`}
+            accent="blue"
+            border
+          />
         </div>
         {/* Visual progress bar */}
         {cashTotal > 0 && (
