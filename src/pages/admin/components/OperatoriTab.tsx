@@ -414,7 +414,11 @@ export default function OperatoriTab() {
               className={`flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all ${active ? 'bg-dr7-gold/10 border-dr7-gold text-theme-text-primary' : 'bg-theme-bg-secondary border-theme-border text-theme-text-secondary hover:border-dr7-gold/50'}`}>
               <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${avatarColor(admin.id)}`}>{initials(admin.nome, admin.email)}</span>
               <span className="text-sm font-medium">{admin.nome || admin.email.split('@')[0]}</span>
-              <span className="text-[10px] uppercase tracking-wider opacity-70">{admin.role}</span>
+              <span className="text-[10px] uppercase tracking-wider opacity-70">{
+                ['valerio@dr7.app','ilenia@dr7.app'].includes((admin.email || '').toLowerCase())
+                  ? 'Amministratore'
+                  : admin.role
+              }</span>
             </button>
           )
         })}
