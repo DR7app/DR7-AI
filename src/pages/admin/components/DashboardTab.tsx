@@ -694,6 +694,98 @@ export default function DashboardTab() {
         )}
       </div>
 
+      {/* ========== RIASSUNTO MENSILE PER REPORT ========== */}
+      {d.monthlyReports && (
+        <div>
+          <SectionHeader title="Riassunto Mensile per Report" subtitle="Stessi numeri dei tab Report — clicca su una card per i dettagli" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* NOLEGGIO */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.noleggio.link } }))}
+              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-[#19C2D6]/40 transition-colors group"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Noleggio</p>
+                <span className="text-theme-text-muted text-xs group-hover:text-[#19C2D6]">Apri →</span>
+              </div>
+              <p className="text-2xl font-bold text-[#19C2D6]">€ {fmt(d.monthlyReports.noleggio.ricavoTotale)}</p>
+              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.noleggio.prenotazioniCount} prenotazioni · {d.monthlyReports.noleggio.prenotazioniAnnullateCount} annullate (€ {fmt(d.monthlyReports.noleggio.prenotazioniAnnullateValue)})</p>
+            </button>
+
+            {/* LAVAGGIO */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.lavaggio.link } }))}
+              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-blue-400/40 transition-colors group"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Lavaggio</p>
+                <span className="text-theme-text-muted text-xs group-hover:text-blue-400">Apri →</span>
+              </div>
+              <p className="text-2xl font-bold text-blue-400">€ {fmt(d.monthlyReports.lavaggio.ricavoTotale)}</p>
+              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.lavaggio.count} lavaggi nel mese</p>
+            </button>
+
+            {/* CLIENTI */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.clienti.link } }))}
+              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-emerald-400/40 transition-colors group"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Clienti</p>
+                <span className="text-theme-text-muted text-xs group-hover:text-emerald-400">Apri →</span>
+              </div>
+              <p className="text-2xl font-bold text-emerald-400">+{d.monthlyReports.clienti.nuoviMese}</p>
+              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.clienti.attiviMese} attivi nel mese · {fmt(d.monthlyReports.clienti.totale)} totali</p>
+            </button>
+
+            {/* PENALI & DANNI */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.penaliDanni.link } }))}
+              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-red-400/40 transition-colors group"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Penali & Danni</p>
+                <span className="text-theme-text-muted text-xs group-hover:text-red-400">Apri →</span>
+              </div>
+              <p className="text-2xl font-bold text-red-400">€ {fmt(d.monthlyReports.penaliDanni.danniTotale + d.monthlyReports.penaliDanni.insolutiTotale)}</p>
+              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.penaliDanni.danniCount} danni · {d.monthlyReports.penaliDanni.insolutiCount} insoluti</p>
+            </button>
+
+            {/* PREVENTIVI */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.preventivi.link } }))}
+              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-amber-400/40 transition-colors group"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Preventivi</p>
+                <span className="text-theme-text-muted text-xs group-hover:text-amber-400">Apri →</span>
+              </div>
+              <p className="text-2xl font-bold text-amber-400">{d.monthlyReports.preventivi.total}</p>
+              <p className="text-xs text-theme-text-muted mt-1">
+                {d.monthlyReports.preventivi.accettati} accettati ({d.monthlyReports.preventivi.conversionRate}%) · {d.monthlyReports.preventivi.rifiutatiCount} rifiutati
+                {d.monthlyReports.preventivi.rifiutatiCount > 0 && ` (cauzione ${d.monthlyReports.preventivi.motivoCounts.cauzione} · prezzo ${d.monthlyReports.preventivi.motivoCounts.prezzo})`}
+              </p>
+            </button>
+
+            {/* FORNITORI */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.fornitori.link } }))}
+              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-purple-400/40 transition-colors group"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Fornitori</p>
+                <span className="text-theme-text-muted text-xs group-hover:text-purple-400">Apri →</span>
+              </div>
+              <p className="text-2xl font-bold text-purple-400">€ {fmt(d.monthlyReports.fornitori.daPagare)}</p>
+              <p className="text-xs text-theme-text-muted mt-1">
+                Da pagare · pagato € {fmt(d.monthlyReports.fornitori.pagatoMese)}
+                {d.monthlyReports.fornitori.alertsOpen > 0 && ` · ${d.monthlyReports.fornitori.alertsOpen} alert`}
+              </p>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ========== FATTURATO DEL MESE (era "Cash Flow") ========== */}
       <div>
         <SectionHeader title="Fatturato del Mese" subtitle="Tutte le prenotazioni del mese — pagate, da incassare e scadute" />

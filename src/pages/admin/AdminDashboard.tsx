@@ -89,6 +89,18 @@ export default function AdminDashboard() {
       _setActiveTab(prev)
     }
   }
+
+  // Allow any child (e.g. DashboardTab cards) to switch tab without
+  // prop-drilling, via a window CustomEvent.
+  useEffect(() => {
+    function handleNav(e: Event) {
+      const detail = (e as CustomEvent<{ tab: string }>).detail
+      if (detail?.tab) setActiveTab(detail.tab as TabType)
+    }
+    window.addEventListener('admin:navigate-tab', handleNav)
+    return () => window.removeEventListener('admin:navigate-tab', handleNav)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
   const [showAlarmInventory, setShowAlarmInventory] = useState(false)
