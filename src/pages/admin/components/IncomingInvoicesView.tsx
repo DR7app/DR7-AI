@@ -47,7 +47,11 @@ export default function IncomingInvoicesView() {
     setError(null)
     try {
       const res = await fetch(`/.netlify/functions/get-incoming-invoices?month=${month}&mode=${mode}`)
-      const json = await res.json()
+      const text = await res.text()
+      let json: any
+      try { json = JSON.parse(text) } catch {
+        throw new Error(`HTTP ${res.status} (risposta non JSON, probabile timeout): ${text.slice(0, 200)}`)
+      }
       if (!res.ok || !json.success) {
         throw new Error(json.error || `HTTP ${res.status}`)
       }
@@ -64,6 +68,52 @@ export default function IncomingInvoicesView() {
   useEffect(() => {
     load()
   }, [load])
+
+  // Progressive per-row enrichment — call detail endpoint for each row that's
+  // missing amount/date/number. Sequential w/ small delay to respect Aruba rate
+  // limits. Runs after invoices are loaded; cancels if month/mode changes.
+  useEffect(() => {
+    if (invoices.length === 0) return
+    let cancelled = false
+
+    async function enrichOne(filename: string): Promise<{ amount: number | null; invoiceDate: string; invoiceNumber: string } | null> {
+      const res = await fetch(`/.netlify/functions/get-incoming-invoice-detail?filename=${encodeURIComponent(filename)}`)
+      if (res.status === 429) {
+        await new Promise(r => setTimeout(r, 1500))
+        return null
+      }
+      if (!res.ok) return null
+      try {
+        const json = await res.json()
+        if (!json.success) return null
+        return { amount: json.amount, invoiceDate: json.invoiceDate, invoiceNumber: json.invoiceNumber }
+      } catch {
+        return null
+      }
+    }
+
+    ;(async () => {
+      for (const inv of invoices) {
+        if (cancelled) return
+        const needs = inv.filename && (!inv.amount || !inv.invoiceDate || !inv.invoiceNumber)
+        if (!needs) continue
+        const detail = await enrichOne(inv.filename)
+        if (cancelled) return
+        if (detail) {
+          setInvoices(prev => prev.map(x => x.id === inv.id ? {
+            ...x,
+            amount: (detail.amount != null && (!x.amount || x.amount === 0)) ? detail.amount : x.amount,
+            invoiceDate: x.invoiceDate || detail.invoiceDate || '',
+            invoiceNumber: x.invoiceNumber || detail.invoiceNumber || '',
+          } : x))
+        }
+        await new Promise(r => setTimeout(r, 300))
+      }
+    })()
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, mode, invoices.length])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
