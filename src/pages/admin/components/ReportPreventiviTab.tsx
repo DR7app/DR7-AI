@@ -258,6 +258,16 @@ export default function ReportPreventiviTab() {
     const active = filtered.filter(isActive).length
     const converted = filtered.filter(isConverted).length
     const expired = filtered.filter(isExpired).length
+    const rifiutati = filtered.filter(isRifiutato)
+    const rifiutatiCount = rifiutati.length
+    const rifiutatiValue = rifiutati.reduce((s, p) => s + getAmount(p), 0)
+    const rifiutatiByMotivo: Record<string, number> = { cauzione: 0, prezzo: 0, non_specificato: 0 }
+    for (const p of rifiutati) {
+      const m = (p.motivo_rifiuto || '').toLowerCase()
+      if (m === 'cauzione') rifiutatiByMotivo.cauzione++
+      else if (m === 'prezzo') rifiutatiByMotivo.prezzo++
+      else rifiutatiByMotivo.non_specificato++
+    }
     const totalValue = filtered.reduce((s, p) => s + getAmount(p), 0)
     const convertedValue = filtered.filter(isConverted).reduce((s, p) => s + getAmount(p), 0)
     const lostValue = filtered.filter(p => !isConverted(p)).reduce((s, p) => s + getAmount(p), 0)
@@ -268,14 +278,16 @@ export default function ReportPreventiviTab() {
     // Previous month metrics (no filter applied — raw totals)
     const prevTotal = prevMonthData.length
     const prevConverted = prevMonthData.filter(isConverted).length
+    const prevRifiutati = prevMonthData.filter(isRifiutato).length
     const prevConversionRate = prevTotal > 0 ? (prevConverted / prevTotal) * 100 : 0
     const prevTotalValue = prevMonthData.reduce((s, p) => s + getAmount(p), 0)
 
     return {
       total, active, converted, expired,
+      rifiutatiCount, rifiutatiValue, rifiutatiByMotivo,
       totalValue, convertedValue, lostValue, conversionRate,
       withCustomer, withDelivery,
-      prevTotal, prevConverted, prevConversionRate, prevTotalValue,
+      prevTotal, prevConverted, prevRifiutati, prevConversionRate, prevTotalValue,
     }
   }, [filtered, prevMonthData])
 
@@ -721,7 +733,7 @@ export default function ReportPreventiviTab() {
           {/* ===== OVERVIEW ===== */}
           {activeSection === 'overview' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 <StatCard
                   label="Preventivi Totali"
                   value={overview.total}
@@ -729,12 +741,18 @@ export default function ReportPreventiviTab() {
                 />
                 <StatCard label="Attivi" value={overview.active} color="text-blue-400" />
                 <StatCard
-                  label="Convertiti"
+                  label="Accettati"
                   value={overview.converted}
                   color="text-green-400"
                   trend={<Trend current={overview.converted} previous={overview.prevConverted} />}
                 />
-                <StatCard label="Scaduti" value={overview.expired} color="text-red-400" />
+                <StatCard
+                  label="Rifiutati"
+                  value={overview.rifiutatiCount}
+                  color="text-red-400"
+                  trend={<Trend current={overview.rifiutatiCount} previous={overview.prevRifiutati} />}
+                />
+                <StatCard label="Scaduti" value={overview.expired} color="text-amber-400" />
                 <StatCard
                   label="Conversion Rate"
                   value={`${overview.conversionRate.toFixed(1)}%`}
@@ -742,6 +760,34 @@ export default function ReportPreventiviTab() {
                   trend={<Trend current={overview.conversionRate} previous={overview.prevConversionRate} format="percent" />}
                 />
               </div>
+
+              {/* Rifiutati breakdown by motivo */}
+              {overview.rifiutatiCount > 0 && (
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-4">
+                  <p className="text-xs uppercase tracking-wider text-theme-text-muted mb-2">Motivo dei rifiuti</p>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div className="bg-red-500/10 border border-red-500/30 rounded p-3">
+                      <p className="text-red-300 font-semibold">Cauzione</p>
+                      <p className="text-2xl font-bold text-red-400">{overview.rifiutatiByMotivo.cauzione}</p>
+                      <p className="text-xs text-theme-text-muted mt-1">
+                        {overview.rifiutatiCount > 0 ? `${((overview.rifiutatiByMotivo.cauzione / overview.rifiutatiCount) * 100).toFixed(0)}% dei rifiuti` : ''}
+                      </p>
+                    </div>
+                    <div className="bg-red-500/10 border border-red-500/30 rounded p-3">
+                      <p className="text-red-300 font-semibold">Prezzo</p>
+                      <p className="text-2xl font-bold text-red-400">{overview.rifiutatiByMotivo.prezzo}</p>
+                      <p className="text-xs text-theme-text-muted mt-1">
+                        {overview.rifiutatiCount > 0 ? `${((overview.rifiutatiByMotivo.prezzo / overview.rifiutatiCount) * 100).toFixed(0)}% dei rifiuti` : ''}
+                      </p>
+                    </div>
+                    <div className="bg-theme-bg-tertiary/50 border border-theme-border rounded p-3">
+                      <p className="text-theme-text-secondary font-semibold">Senza motivo</p>
+                      <p className="text-2xl font-bold text-theme-text-muted">{overview.rifiutatiByMotivo.non_specificato}</p>
+                      <p className="text-xs text-theme-text-muted mt-1">Storici prima del tracciamento</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <StatCard
