@@ -202,59 +202,8 @@ export const handler: Handler = async (event) => {
 
     const filteredByMode = mode === 'all' ? parsed : parsed.filter(i => i.is_tracked)
 
-    // Enrich rows whose summary lacks amount/date/number by calling getByFilename.
-    // Sequential + small delay to respect Aruba rate limits. If enrichment fails
-    // for a row (e.g. 429), keep the row visible with sender/PIVA but no amount.
-    const CONCURRENCY = 1
-    const PER_REQUEST_DELAY_MS = 250
-    const needEnrich = filteredByMode.filter(i => i.filename && (!i.amount || !i.invoiceDate || !i.invoiceNumber))
-    console.log(`[Aruba] enriching ${needEnrich.length} of ${filteredByMode.length} rows (sequential)`)
-
-    let consecutive429 = 0
-    for (let i = 0; i < needEnrich.length; i += CONCURRENCY) {
-      const batch = needEnrich.slice(i, i + CONCURRENCY)
-      if (i > 0 && PER_REQUEST_DELAY_MS > 0) {
-        await new Promise(r => setTimeout(r, PER_REQUEST_DELAY_MS))
-      }
-      // Stop early if we hit too many rate limits
-      if (consecutive429 >= 5) {
-        console.warn(`[Aruba] aborting enrichment after ${consecutive429} consecutive 429s — remaining rows will show without amount`)
-        break
-      }
-      await Promise.all(batch.map(async (row) => {
-        try {
-          const detail = await getIncomingInvoice(row.filename, false)
-          // Aruba detail may put fields at top level, in 'metadata', or inside parsed XML JSON
-          const candidates = [detail, detail?.metadata, detail?.invoice, detail?.fattura].filter(Boolean)
-          for (const src of candidates) {
-            const amt = src.totalDocument ?? src.documentTotal ?? src.importoTotaleDocumento ??
-                        src.importoTotale ?? src.totalAmount ?? src.totale ?? src.amount ?? src.total
-            if (amt != null && row.amount === 0) {
-              const parsedAmt = parseFloat(String(amt).replace(',', '.'))
-              if (!isNaN(parsedAmt)) row.amount = parsedAmt
-            }
-            const dt = src.documentDate || src.invoiceDate || src.dataDocumento || src.dataEmissione || src.dataFattura
-            if (dt && !row.invoiceDate) {
-              let d = String(dt)
-              if (d.includes('T')) d = d.split('T')[0]
-              if (d.includes('/')) {
-                const parts = d.split('/')
-                if (parts.length === 3) d = `${parts[2]}-${parts[1]}-${parts[0]}`
-              }
-              row.invoiceDate = d
-            }
-            const num = src.documentNumber || src.invoiceNumber || src.numeroDocumento || src.numero || src.number
-            if (num && !row.invoiceNumber) row.invoiceNumber = String(num)
-          }
-          consecutive429 = 0
-        } catch (e: any) {
-          const msg = e?.message || String(e)
-          if (msg.includes('429')) consecutive429++
-          console.warn(`[Aruba] enrich failed for ${row.filename}:`, msg)
-        }
-      }))
-    }
-
+    // No server-side enrichment — would blow Netlify's 10s timeout for many rows.
+    // The UI calls /get-incoming-invoice-detail per row to populate amount/date/number.
     const invoices = filteredByMode
 
     // Sort by date descending
