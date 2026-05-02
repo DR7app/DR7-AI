@@ -1431,7 +1431,37 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
-  async function formatWhatsAppMessage(p: Preventivo, opts?: { includeCoefficienti?: boolean }): Promise<string> {
+  /** Build a coefficienti-only message: just the breakdown lines + the
+   *  combined multiplier, no pricing/specs/discount. Used when the admin
+   *  ticks "Invia SOLO i coefficienti" — the client asked for the math. */
+  function buildCoefficientiOnlyMessage(p: Preventivo): string {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const trace = (p.pricing_trace || {}) as any
+    const traceBreakdown: { label: string; coeff: number; description?: string }[] =
+      Array.isArray(trace.breakdown) ? trace.breakdown : []
+    if (!trace.enabled || traceBreakdown.length === 0) return ''
+    const combined = traceBreakdown.reduce((acc, b) => acc * (Number(b?.coeff) || 1), 1)
+    const fmtCoeff = (n: number) => {
+      const s = n.toFixed(4).replace('.', ',').replace(/,?0+$/, '')
+      return `x${s || '1'}`
+    }
+    const lines = traceBreakdown.map(b => {
+      const cleanLabel = String(b.label || '').replace(/^Coefficienti\s+/i, '')
+      const desc = b.description ? ` (${b.description})` : ''
+      return `- ${cleanLabel}${desc}: ${fmtCoeff(Number(b.coeff) || 1)}`
+    })
+    const header = `*Coefficienti applicati ${p.vehicle_name ? '— ' + p.vehicle_name : ''}*`.trim()
+    let msg = `${header}\n\n${lines.join('\n')}\n\n*Coefficiente combinato:* ${fmtCoeff(combined)}`
+    const footer = rentalConfig?.preventivi?.whatsapp_footer
+    if (footer) msg += `\n\n${footer}`
+    return msg
+  }
+
+  async function formatWhatsAppMessage(p: Preventivo, opts?: { includeCoefficienti?: boolean; coefficientiOnly?: boolean }): Promise<string> {
+    // "Solo coefficienti" short-circuits the template loader entirely.
+    if (opts?.coefficientiOnly) {
+      return buildCoefficientiOnlyMessage(p)
+    }
     const optIncludeCoefficienti = opts?.includeCoefficienti ?? false
     // Due template gestiti dall'admin in Messaggi di Sistema Pro, identificati
     // per LABEL (non per key) perché creati tramite "Aggiungi template" e
@@ -2487,7 +2517,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                     Template caricato da {(selectedPreventivo.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'} in Messaggi di Sistema Pro.
                   </p>
 
-                  {/* Coefficienti opt-in — re-formats the message body on toggle */}
+                  {/* Invia SOLO i coefficienti — sostituisce completamente
+                      il messaggio normale con il solo blocco coefficienti.
+                      Usato quando il cliente chiede esplicitamente la
+                      ripartizione dei coefficienti applicati. */}
                   <label className="mt-3 flex items-start gap-2 cursor-pointer text-xs text-theme-text-secondary select-none">
                     <input
                       type="checkbox"
@@ -2495,15 +2528,22 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                       onChange={async (e) => {
                         const next = e.target.checked
                         setIncludeCoefficienti(next)
-                        const refreshed = await formatWhatsAppMessage(selectedPreventivo, { includeCoefficienti: next })
+                        const refreshed = next
+                          ? await formatWhatsAppMessage(selectedPreventivo, { coefficientiOnly: true })
+                          : await formatWhatsAppMessage(selectedPreventivo)
+                        if (next && !refreshed) {
+                          toast.error('Nessun coefficiente disponibile per questo preventivo (Centralina Pro disabilitata o trace mancante).')
+                          setIncludeCoefficienti(false)
+                          return
+                        }
                         if (refreshed) setPreviewMessage(refreshed)
                       }}
                       className="mt-0.5 accent-dr7-gold"
                     />
                     <span>
-                      <span className="font-medium text-theme-text-primary">Includi coefficienti applicati</span>
+                      <span className="font-medium text-theme-text-primary">Invia SOLO i coefficienti</span>
                       <span className="block text-[11px] text-theme-text-muted">
-                        Aggiunge il blocco "Coefficienti applicati" e il coefficiente combinato al messaggio (richiede i placeholder <code className="bg-theme-bg-tertiary px-1 rounded">{'{coefficienti}'}</code> / <code className="bg-theme-bg-tertiary px-1 rounded">{'{coefficiente_combinato}'}</code> nel template).
+                        Sostituisce il messaggio con la sola ripartizione dei coefficienti Centralina Pro applicati al preventivo. Da usare quando il cliente chiede esplicitamente il dettaglio.
                       </span>
                     </span>
                   </label>
