@@ -32,6 +32,65 @@ export default function FornitoriTab() {
     const [importingFromAruba, setImportingFromAruba] = useState(false)
     const [arubaCountsLoading, setArubaCountsLoading] = useState(false)
     const [arubaMonthsScanned, setArubaMonthsScanned] = useState(3)
+    const [autoCategorizing, setAutoCategorizing] = useState(false)
+    const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null)
+
+    const CATEGORIE = [
+        { value: '', label: '-- categoria --' },
+        { value: 'carburante', label: 'Carburante' },
+        { value: 'ricambi', label: 'Ricambi' },
+        { value: 'manutenzione', label: 'Manutenzione' },
+        { value: 'pneumatici', label: 'Pneumatici' },
+        { value: 'lavaggio_prodotti', label: 'Prodotti lavaggio' },
+        { value: 'pulizia', label: 'Pulizia' },
+        { value: 'ufficio', label: 'Ufficio' },
+        { value: 'utenze', label: 'Utenze' },
+        { value: 'consulenze', label: 'Consulenze' },
+        { value: 'noleggio_attrezzature', label: 'Noleggio attrezzature' },
+        { value: 'altro', label: 'Altro' },
+    ]
+
+    async function changeCategory(fornitore: FornitoreRow, newCat: string) {
+        setSavingCategoryId(fornitore.id)
+        try {
+            const value = newCat || null
+            const { error } = await supabase
+                .from('fornitori')
+                .update({ categoria_merce: value })
+                .eq('id', fornitore.id)
+            if (error) throw error
+            setFornitori(prev => prev.map(f => f.id === fornitore.id ? { ...f, categoria_merce: value } : f))
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Salvataggio categoria fallito: ${msg}`)
+        } finally {
+            setSavingCategoryId(null)
+        }
+    }
+
+    async function autoCategorize(overwrite = false) {
+        if (!window.confirm(overwrite
+            ? 'Riscrivere TUTTE le categorie usando le regole automatiche? Le categorie esistenti saranno sovrascritte.'
+            : 'Auto-categorizzare i fornitori senza categoria? I fornitori gia\' categorizzati restano invariati.')) return
+        setAutoCategorizing(true)
+        try {
+            const res = await fetch('/.netlify/functions/auto-categorize-fornitori', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ overwrite }),
+            })
+            const json = await res.json()
+            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+            const breakdown = Object.entries(json.byCategoria || {}).map(([k, v]) => `${k}: ${v}`).join(', ')
+            toast.success(`Categorizzati ${json.updated} fornitori (${json.unmatched} senza match). ${breakdown ? '— ' + breakdown : ''}`)
+            loadFornitori()
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Auto-categorize fallito: ${msg}`)
+        } finally {
+            setAutoCategorizing(false)
+        }
+    }
 
     async function loadArubaInvoiceCounts(months = 3) {
         setArubaCountsLoading(true)
@@ -243,6 +302,15 @@ export default function FornitoriTab() {
                         >
                             {importingFromAruba ? 'Importo da Aruba...' : 'Importa da Aruba'}
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => autoCategorize(false)}
+                            disabled={autoCategorizing}
+                            className="text-sm px-3 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Categorizza i fornitori senza categoria usando regole automatiche basate sul nome"
+                        >
+                            {autoCategorizing ? 'Categorizzo...' : 'Auto-categorizza'}
+                        </button>
                         <Button onClick={() => setShowForm(true)}>+ Nuovo fornitore</Button>
                     </div>
 
@@ -277,7 +345,18 @@ export default function FornitoriTab() {
                                             {f.nome} {!f.attivo && <span className="ml-1 text-xs text-red-400">(disattivato)</span>}
                                         </td>
                                         <td className="px-3 py-2 font-mono text-theme-text-secondary">{f.piva || '—'}</td>
-                                        <td className="px-3 py-2 text-theme-text-secondary">{f.categoria_merce || '—'}</td>
+                                        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                                            <select
+                                                value={f.categoria_merce || ''}
+                                                onChange={(e) => changeCategory(f, e.target.value)}
+                                                disabled={savingCategoryId === f.id}
+                                                className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary focus:outline-none focus:border-dr7-gold disabled:opacity-50"
+                                            >
+                                                {CATEGORIE.map(c => (
+                                                    <option key={c.value} value={c.value}>{c.label}</option>
+                                                ))}
+                                            </select>
+                                        </td>
                                         <td className="px-3 py-2 text-theme-text-secondary">{f.condizioni_pagamento || '—'}</td>
                                         <td className="px-3 py-2 text-theme-text-secondary">{f.referente || '—'}</td>
                                         <td className="px-3 py-2 text-right">
