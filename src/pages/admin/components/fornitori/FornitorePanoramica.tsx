@@ -7,7 +7,8 @@ import {
     fmtDateIT,
 } from './types'
 import type { Fornitore, FornitoreDocument, CrosscheckRow } from './types'
-import { runCrosscheck } from './FornitoreCrosscheck'
+import { runCrosscheck, applyCrosscheckToFatture } from './FornitoreCrosscheck'
+import FornitoreBollaUpload from './FornitoreBollaUpload'
 
 interface Props {
     fornitore: Fornitore
@@ -23,6 +24,9 @@ export default function FornitorePanoramica({ fornitore }: Props) {
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [discrepanze, setDiscrepanze] = useState<Discrepanza[]>([])
     const [loading, setLoading] = useState(false)
+    const [showBollaUpload, setShowBollaUpload] = useState(false)
+    const [crossCheckRunning, setCrossCheckRunning] = useState(false)
+    const [crossCheckMsg, setCrossCheckMsg] = useState<string | null>(null)
 
     async function load() {
         setLoading(true)
@@ -56,6 +60,44 @@ export default function FornitorePanoramica({ fornitore }: Props) {
 
     useEffect(() => { load() // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fornitore.id, anno])
+
+    // Manual: re-run cross-check for every month and APPLY the results to fatture
+    // (updates stato + creates/keeps anomaly alerts). The auto-load above only
+    // reads — this button is what actually writes the verifica back.
+    async function handleRunCrosscheck() {
+        setCrossCheckRunning(true)
+        setCrossCheckMsg(null)
+        let totalAnomalies = 0
+        let monthsRun = 0
+        try {
+            // Refresh docs to apply against the latest set
+            const { data } = await supabase
+                .from('fornitore_documents')
+                .select('*')
+                .eq('fornitore_id', fornitore.id)
+                .eq('periodo_anno', anno)
+            const allDocs = (data || []) as FornitoreDocument[]
+            const fatture = allDocs.filter(d => d.tipo === 'fattura')
+
+            for (let m = 1; m <= 12; m++) {
+                const cc = await runCrosscheck(fornitore.id, anno, m)
+                if (cc.length === 0) continue
+                await applyCrosscheckToFatture(cc, fatture)
+                monthsRun++
+                totalAnomalies += cc.filter(r => r.stato_calcolato === 'anomalia').length
+            }
+            setCrossCheckMsg(
+                `Controllo completato — ${monthsRun} mesi analizzati, ${totalAnomalies} anomali${totalAnomalies === 1 ? 'a' : 'e'} rilevat${totalAnomalies === 1 ? 'a' : 'e'}.`
+            )
+            await load()
+        } catch (err) {
+            console.error('[panoramica] crosscheck error', err)
+            const msg = err instanceof Error ? err.message : String(err)
+            setCrossCheckMsg(`Errore: ${msg}`)
+        } finally {
+            setCrossCheckRunning(false)
+        }
+    }
 
     const stats = useMemo(() => {
         const bolle = docs.filter(d => d.tipo === 'ddt' || d.tipo === 'bolla')
@@ -97,7 +139,7 @@ export default function FornitorePanoramica({ fornitore }: Props) {
 
     return (
         <div className="space-y-4">
-            {/* Year selector */}
+            {/* Year selector + Actions */}
             <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                     <span className="text-sm text-theme-text-muted">Anno</span>
@@ -105,9 +147,38 @@ export default function FornitorePanoramica({ fornitore }: Props) {
                         className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm">
                         {annoOptions.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
+                    {loading && <span className="text-xs text-theme-text-muted">Caricamento…</span>}
                 </div>
-                {loading && <span className="text-xs text-theme-text-muted">Caricamento…</span>}
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowBollaUpload(true)}
+                        className="px-3 py-1.5 rounded-full text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white"
+                    >
+                        Carica Bolla
+                    </button>
+                    <button
+                        onClick={handleRunCrosscheck}
+                        disabled={crossCheckRunning}
+                        className="px-3 py-1.5 rounded-full text-sm font-semibold bg-dr7-gold hover:bg-[#247a6f] text-white disabled:opacity-60"
+                    >
+                        {crossCheckRunning ? 'Controllo in corso…' : 'Controllo Incrociato'}
+                    </button>
+                </div>
             </div>
+
+            {crossCheckMsg && (
+                <div className="text-xs text-theme-text-secondary bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2">
+                    {crossCheckMsg}
+                </div>
+            )}
+
+            {showBollaUpload && (
+                <FornitoreBollaUpload
+                    fornitore={fornitore}
+                    onClose={() => setShowBollaUpload(false)}
+                    onSaved={() => { setShowBollaUpload(false); load() }}
+                />
+            )}
 
             {/* 5 stats cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
