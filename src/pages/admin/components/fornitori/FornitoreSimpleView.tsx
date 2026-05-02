@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../../supabaseClient'
 import { useAdminRole } from '../../../../hooks/useAdminRole'
 import Button from '../Button'
@@ -185,17 +186,37 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
         setCrossCheckRunning(true)
         try {
             const map = new Map<number, CrosscheckRow[]>()
+            let totalRows = 0
+            let totalAnomalie = 0
+            let totalOk = 0
             for (let m = 1; m <= 12; m++) {
                 const cc = await runCrosscheck(fornitore.id, anno, m)
                 if (cc.length > 0) {
                     map.set(m, cc)
-                    // Apply crosscheck → set verificato/anomalia stato + create alerts
+                    totalRows += cc.length
+                    totalAnomalie += cc.filter(r => r.stato_calcolato === 'anomalia').length
+                    totalOk += cc.filter(r => r.stato_calcolato === 'verificato').length
                     await applyCrosscheckToFatture(cc, fatture)
                 }
             }
             setCrosscheck(map)
-            // Reload docs to pick up updated stati
             await load()
+
+            // Feedback esplicito — l'utente DEVE sapere cos'e' successo
+            if (totalRows === 0) {
+                if (fatture.length === 0) {
+                    toast(`Nessuna fattura da controllare per il ${anno}.`, { icon: 'ℹ️' })
+                } else {
+                    toast(`${fatture.length} fattur${fatture.length === 1 ? 'a' : 'e'} ma nessuna ha importi da confrontare. Carica le bolle e l'AI estrarra' gli importi.`, { icon: 'ℹ️' })
+                }
+            } else if (totalAnomalie === 0) {
+                toast.success(`Tutte le ${totalOk} fatture quadrano con le bolle.`)
+            } else {
+                toast.error(`Trovate ${totalAnomalie} anomali${totalAnomalie === 1 ? 'a' : 'e'} su ${totalRows} fatture.`)
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Controllo fallito: ' + msg)
         } finally {
             setCrossCheckRunning(false)
         }
@@ -236,7 +257,9 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 return
             }
         }
-        // Path 2 — fattura importata da Aruba SDI: scarica via API Aruba
+        // Path 2 — fattura importata da Aruba SDI: scarica via API Aruba E
+        // cache la copia in Supabase storage cosi' le viste successive sono
+        // istantanee (signed URL invece di chiamare di nuovo Aruba).
         if (doc.aruba_filename) {
             try {
                 const res = await fetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(doc.aruba_filename)}`)
@@ -250,9 +273,37 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 }
                 const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
                 const blob = new Blob([bytes], { type: 'application/pdf' })
+
+                // Apri subito il PDF
                 const url = URL.createObjectURL(blob)
                 window.open(url, '_blank', 'noopener,noreferrer')
                 setTimeout(() => URL.revokeObjectURL(url), 60000)
+
+                // In background: cache su Supabase storage cosi' le viste
+                // successive saltano la chiamata a Aruba.
+                ;(async () => {
+                    try {
+                        const dataDoc = doc.data_documento ? new Date(doc.data_documento) : new Date()
+                        const yy = dataDoc.getFullYear()
+                        const mm = String(dataDoc.getMonth() + 1).padStart(2, '0')
+                        const safe = (doc.numero_documento || 'fattura').replace(/[^\w-]/g, '_')
+                        const path = `fornitori/${doc.fornitore_id}/${yy}/${mm}/aruba-${safe}-${doc.id}.pdf`
+                        const { error: upErr } = await supabase.storage
+                            .from('fornitori-documents')
+                            .upload(path, blob, { contentType: 'application/pdf', upsert: true })
+                        if (!upErr) {
+                            await supabase.from('fornitore_documents')
+                                .update({ file_url: path, file_name: `${safe}.pdf` })
+                                .eq('id', doc.id)
+                            // Aggiorna lo state locale senza ri-render forzato
+                            setDocs(prev => prev.map(d => d.id === doc.id
+                                ? { ...d, file_url: path, file_name: `${safe}.pdf` }
+                                : d))
+                        }
+                    } catch (e) {
+                        console.warn('[viewFile] cache to storage failed:', e)
+                    }
+                })()
                 return
             } catch (err) {
                 alert('Download fallito: ' + (err instanceof Error ? err.message : String(err)))
