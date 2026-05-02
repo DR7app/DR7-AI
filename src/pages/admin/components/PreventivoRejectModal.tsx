@@ -19,7 +19,7 @@ export interface RejectModalPreventivo {
 
 export interface RejectConfirmArgs {
     preventivo: RejectModalPreventivo
-    motivo: 'cauzione' | 'prezzo' | 'altro'
+    motivo: 'cauzione' | 'prezzo'
     note: string
 }
 
@@ -34,7 +34,7 @@ interface Props {
 
 function PreventivoRejectModal({ onConfirm }: Props) {
     const [preventivo, setPreventivo] = useState<RejectModalPreventivo | null>(null)
-    const [motivo, setMotivo] = useState<'cauzione' | 'prezzo' | 'altro'>('prezzo')
+    const [motivo, setMotivo] = useState<'cauzione' | 'prezzo'>('prezzo')
     const [note, setNote] = useState('')
     const [submitting, setSubmitting] = useState(false)
 
@@ -87,7 +87,6 @@ function PreventivoRejectModal({ onConfirm }: Props) {
                     {([
                         { value: 'cauzione', label: 'Cauzione', desc: "Cliente non ha accettato l'importo o le condizioni della cauzione" },
                         { value: 'prezzo', label: 'Prezzo', desc: 'Cliente ha trovato il prezzo troppo alto' },
-                        { value: 'altro', label: 'Altro', desc: 'Specifica il motivo nel campo note' },
                     ] as const).map(opt => (
                         <label key={opt.value} className={`block cursor-pointer rounded-lg border p-3 transition-colors ${motivo === opt.value ? 'border-dr7-gold bg-dr7-gold/10' : 'border-theme-border hover:border-theme-text-muted'}`}>
                             <div className="flex items-start gap-3">

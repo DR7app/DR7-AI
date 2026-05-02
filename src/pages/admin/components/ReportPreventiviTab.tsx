@@ -445,7 +445,6 @@ export default function ReportPreventiviTab() {
     const motivoCounts: Record<string, number> = {
       'Rifiutato — Cauzione': 0,
       'Rifiutato — Prezzo': 0,
-      'Rifiutato — Altro': 0,
       'Rifiutato (motivo non specificato)': 0,
       'Preventivo mai inviato al cliente': 0,
       'Cliente non ha risposto': 0,
@@ -457,7 +456,6 @@ export default function ReportPreventiviTab() {
         const motivo = (p.motivo_rifiuto || '').toLowerCase()
         if (motivo === 'cauzione') motivoCounts['Rifiutato — Cauzione']++
         else if (motivo === 'prezzo') motivoCounts['Rifiutato — Prezzo']++
-        else if (motivo === 'altro') motivoCounts['Rifiutato — Altro']++
         else motivoCounts['Rifiutato (motivo non specificato)']++
       } else if (p.status === 'bozza' && !p.whatsapp_sent_at) {
         motivoCounts['Preventivo mai inviato al cliente']++

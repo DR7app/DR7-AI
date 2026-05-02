@@ -1812,7 +1812,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     openPreventivoRejectModal({ id: p.id, vehicle_name: p.vehicle_name })
   }
 
-  async function confirmReject(args: { preventivo: { id: string; vehicle_name: string }; motivo: 'cauzione' | 'prezzo' | 'altro'; note: string }) {
+  async function confirmReject(args: { preventivo: { id: string; vehicle_name: string }; motivo: 'cauzione' | 'prezzo'; note: string }) {
     const updates: Record<string, unknown> = {
       status: 'rifiutato',
       motivo_rifiuto: args.motivo,
