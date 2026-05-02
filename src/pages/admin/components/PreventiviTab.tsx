@@ -9,6 +9,7 @@ import type { RentalConfig } from '../../../types/rentalConfig'
 import Input from './Input'
 import Select from './Select'
 import PreventivoRejectModal, { openPreventivoRejectModal } from './PreventivoRejectModal'
+import PreventivoAcceptModal, { openPreventivoAcceptModal } from './PreventivoAcceptModal'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
@@ -327,7 +328,8 @@ const STATUS_COLORS: Record<string, string> = {
 const VALERIO_EMAIL = 'valerio@dr7.app'
 const BOSS_PHONE = '393472817258'
 
-export default function PreventiviTab({ onConvertToBooking }: Props) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking }: Props) {
   const { adminEmail } = useAdminRole()
   const isValerio = adminEmail?.toLowerCase() === VALERIO_EMAIL
   const [view, setView] = useState<'list' | 'form'>('list')
@@ -1676,66 +1678,31 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     }
   }
 
-  // ─── Convert to Booking ─────────────────────────────────────────────────
+  // ─── Accept (was: Convert to Booking) ──────────────────────────────────
+  // Old flow navigated to a separate booking form. Now: opens a small modal
+  // (PreventivoAcceptModal) that collects customer + payment method and
+  // creates the booking inline. No-cauzione preventivi from non-Valerio
+  // admins are still gated to a WhatsApp approval request.
 
-  async function handleConvertToBooking(preventivo: Preventivo) {
-    // No-cauzione requests require Valerio's approval
-    const isNoCauzione = preventivo.source === 'website_no_cauzione'
-    if (isNoCauzione && !isValerio) {
-      // Send approval request to Valerio via WhatsApp
-      const msg = `*RICHIESTA APPROVAZIONE NO CAUZIONE*\n\n`
-        + `*Admin:* ${adminEmail}\n`
-        + `*Cliente:* ${preventivo.customer_name || 'N/A'}\n`
-        + `*Telefono:* ${preventivo.customer_phone || 'N/A'}\n`
-        + `*Veicolo:* ${preventivo.vehicle_name}\n`
-        + `*Totale:* €${(preventivo.total_final || 0).toFixed(2)}\n\n`
-        + `Approva o rifiuta dal pannello admin > Preventivi.`
+  function gateNoCauzioneApproval(preventivo: Preventivo): boolean {
+    if (preventivo.source !== 'website_no_cauzione') return false
+    if (isValerio) return false
+    const msg = `*RICHIESTA APPROVAZIONE NO CAUZIONE*\n\n`
+      + `*Admin:* ${adminEmail}\n`
+      + `*Cliente:* ${preventivo.customer_name || 'N/A'}\n`
+      + `*Telefono:* ${preventivo.customer_phone || 'N/A'}\n`
+      + `*Veicolo:* ${preventivo.vehicle_name}\n`
+      + `*Totale:* €${(preventivo.total_final || 0).toFixed(2)}\n\n`
+      + `Approva o rifiuta dal pannello admin > Preventivi.`
 
-      fetch('/.netlify/functions/send-whatsapp-notification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customPhone: BOSS_PHONE, customMessage: msg }),
-      }).catch(() => {})
+    fetch('/.netlify/functions/send-whatsapp-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customPhone: BOSS_PHONE, customMessage: msg }),
+    }).catch(() => {})
 
-      toast.success('Richiesta approvazione inviata a Valerio')
-      return
-    }
-
-    await supabase
-      .from('preventivi')
-      .update({ status: 'accettato' })
-      .eq('id', preventivo.id)
-
-    logAdminAction('preventivo_converted', 'preventivo', preventivo.id, {
-      number: preventivo.id.substring(0, 8),
-      customer: preventivo.customer_name,
-      phone: preventivo.customer_phone,
-      vehicle: preventivo.vehicle_name,
-      plate: preventivo.vehicle_plate,
-      total: preventivo.total_final,
-    })
-
-    if (onConvertToBooking) {
-      onConvertToBooking({
-        vehicleId: preventivo.vehicle_id,
-        pickupDate: new Date(preventivo.pickup_date),
-        fromPreventivo: {
-          preventivoId: preventivo.id,
-          vehicle_id: preventivo.vehicle_id,
-          pickup_date: preventivo.pickup_date,
-          dropoff_date: preventivo.dropoff_date,
-          insurance_option: preventivo.insurance_option,
-          total_amount: preventivo.total_final,
-          driver_tier: preventivo.driver_tier,
-          unlimited_km: preventivo.unlimited_km_total > 0,
-          no_cauzione: preventivo.no_cauzione_total > 0,
-          include_lavaggio: preventivo.lavaggio_fee > 0,
-          customer_phone: preventivo.customer_phone,
-          customer_name: preventivo.customer_name,
-        },
-      })
-    }
-    toast.success('Preventivo accettato - compila la prenotazione')
+    toast.success('Richiesta approvazione inviata a Valerio')
+    return true
   }
 
   async function handleRejectNoCauzionePreventivo(preventivo: Preventivo) {
@@ -1810,6 +1777,87 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     // No setState here → no re-render of the 121+ row list. The modal listens
     // to a window CustomEvent and opens itself via its own internal state.
     openPreventivoRejectModal({ id: p.id, vehicle_name: p.vehicle_name })
+  }
+
+  function openAcceptModal(p: Preventivo) {
+    if (gateNoCauzioneApproval(p)) return
+    openPreventivoAcceptModal({
+      id: p.id,
+      vehicle_name: p.vehicle_name,
+      pickup_date: p.pickup_date,
+      dropoff_date: p.dropoff_date,
+      total_final: p.total_final ?? null,
+      customer_phone: p.customer_phone ?? null,
+    })
+  }
+
+  async function confirmAccept(args: { preventivo: { id: string; vehicle_name: string; pickup_date: string; dropoff_date: string; total_final: number | null }; customer_id: string; payment_method: string }) {
+    const { preventivo, customer_id, payment_method } = args
+
+    // Find the full preventivo + selected customer
+    const p = preventivi.find(x => x.id === preventivo.id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = customers.find((x: any) => x.id === customer_id)
+    if (!p || !c) {
+      throw new Error('Preventivo o cliente non trovato in cache')
+    }
+
+    const customerName = `${c.nome || ''} ${c.cognome || ''}`.trim() || c.full_name || c.ragione_sociale || 'Cliente'
+    const customerEmail = c.email || ''
+    const customerPhone = c.telefono || c.phone || p.customer_phone || ''
+
+    const bookingPayload = {
+      vehicle_id: p.vehicle_id,
+      vehicle_name: p.vehicle_name,
+      vehicle_plate: p.vehicle_plate,
+      pickup_date: p.pickup_date,
+      dropoff_date: p.dropoff_date,
+      price_total: p.total_final ?? 0,
+      status: 'confirmed',
+      service_type: 'rental',
+      payment_method,
+      payment_status: 'pending',
+      customer_id,
+      customer_name: customerName,
+      customer_email: customerEmail,
+      customer_phone: customerPhone,
+      booking_details: {
+        from_preventivo: p.id,
+        insurance_option: p.insurance_option,
+        rental_days: p.rental_days,
+        unlimited_km: (p.unlimited_km_total || 0) > 0,
+        no_cauzione: (p.no_cauzione_total || 0) > 0,
+        include_lavaggio: (p.lavaggio_fee || 0) > 0,
+        driver_tier: p.driver_tier,
+        createdBy: 'admin_preventivo_accept',
+      },
+    }
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from('bookings')
+      .insert(bookingPayload)
+      .select('id')
+      .single()
+    if (insertErr) throw new Error(`Creazione prenotazione fallita: ${insertErr.message}`)
+
+    const { error: updErr } = await supabase
+      .from('preventivi')
+      .update({ status: 'accettato', booking_id: inserted?.id, customer_id })
+      .eq('id', p.id)
+    if (updErr) {
+      console.warn('[Preventivi] Booking creato ma update preventivo fallito:', updErr.message)
+    }
+
+    logAdminAction('preventivo_accepted', 'preventivo', p.id, {
+      booking_id: inserted?.id,
+      vehicle: p.vehicle_name,
+      customer: customerName,
+      payment_method,
+      total: p.total_final,
+    })
+
+    loadPreventivi()
+    toast.success(`Prenotazione creata · ${customerName}`)
   }
 
   async function confirmReject(args: { preventivo: { id: string; vehicle_name: string }; motivo: 'cauzione' | 'prezzo'; note: string }) {
@@ -2034,7 +2082,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                         {p.source?.startsWith('website') && (p.status === 'bozza' || p.status === 'inviato') ? (
                           <>
                             <button
-                              onClick={() => handleConvertToBooking(p)}
+                              onClick={() => openAcceptModal(p)}
                               className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded font-bold"
                             >
                               Accetta
@@ -2087,10 +2135,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                             )}
                             {(p.status === 'inviato' || p.status === 'bozza') && (
                               <button
-                                onClick={() => handleConvertToBooking(p)}
-                                className="px-2 py-1 text-xs bg-dr7-gold hover:bg-[#247a6f] text-white rounded"
+                                onClick={() => openAcceptModal(p)}
+                                className="px-2 py-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded"
                               >
-                                Converti
+                                Accetta
                               </button>
                             )}
                             {p.status === 'inviato' && (
@@ -2213,10 +2261,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                       {canConvert && (
                         <button
                           type="button"
-                          onClick={() => handleConvertToBooking(p)}
-                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-dr7-gold hover:bg-[#247a6f] active:opacity-70 text-white text-[13px] font-semibold"
+                          onClick={() => openAcceptModal(p)}
+                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:opacity-70 text-white text-[13px] font-semibold"
                         >
-                          Converti
+                          Accetta
                         </button>
                       )}
                       {canReject && (
@@ -2335,6 +2383,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         {/* Modal motivo rifiuto — mounted in list view so CustomEvent listener
             is active when user clicks "Rifiutato" from this view */}
         <PreventivoRejectModal onConfirm={confirmReject} />
+        <PreventivoAcceptModal onConfirm={confirmAccept} customers={customers} />
       </div>
     )
   }
@@ -2970,6 +3019,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
           state, renders via portal at document.body. Click "Rifiutato" sulle
           righe non causa re-render della lista. */}
       <PreventivoRejectModal onConfirm={confirmReject} />
+      <PreventivoAcceptModal onConfirm={confirmAccept} customers={customers} />
     </div>
   )
 }
