@@ -2342,6 +2342,33 @@ export default function CustomersTab() {
                 if (file) importCustomersCSV(file)
               }}
             />
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                const note = window.prompt('Promemoria (opzionale, es. "Mario Rossi - WhatsApp 333…")', '')
+                try {
+                  const { data: { session } } = await supabase.auth.getSession()
+                  const res = await fetch('/.netlify/functions/create-customer-invite', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${session?.access_token || ''}`,
+                    },
+                    body: JSON.stringify({ note: note || null }),
+                  })
+                  const json = await res.json()
+                  if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+                  await navigator.clipboard.writeText(json.url).catch(() => {})
+                  toast.success('Link copiato negli appunti — valido 7 giorni')
+                  window.prompt('Link auto-registrazione (Cmd+C per copiarlo di nuovo):', json.url)
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err)
+                  toast.error('Generazione link fallita: ' + msg)
+                }
+              }}
+            >
+              Invia link auto-registrazione
+            </Button>
             <Button onClick={() => {
               setSelectedCustomer(null)  // Clear any previous selection
               setShowNewClientModal(true)
