@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { authFetch } from '../../../utils/authFetch'
+import { supabase } from '../../../supabaseClient'
 
 interface DashboardData {
   period: { month: string; daysInMonth: number; daysElapsed: number }
@@ -186,6 +187,48 @@ export default function DashboardTab() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [cachedAt, setCachedAt] = useState<string | null>(null)
+  const [showAlertDetails, setShowAlertDetails] = useState(false)
+  const [alertDetails, setAlertDetails] = useState<Array<{ id: string; tipo: string; severity: string; messaggio: string; created_at: string; fornitore_nome: string; fornitore_id: string }> | null>(null)
+  const [alertDetailsLoading, setAlertDetailsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!showAlertDetails || alertDetails) return
+    setAlertDetailsLoading(true)
+    ;(async () => {
+      try {
+        const { data: alerts } = await supabase
+          .from('fornitore_alerts')
+          .select('id, tipo, severity, messaggio, created_at, fornitore_id')
+          .eq('status', 'open')
+          .order('created_at', { ascending: false })
+          .limit(20)
+        if (!alerts || alerts.length === 0) {
+          setAlertDetails([])
+          return
+        }
+        const ids = Array.from(new Set(alerts.map(a => a.fornitore_id).filter(Boolean)))
+        const { data: forns } = await supabase
+          .from('fornitori')
+          .select('id, nome')
+          .in('id', ids)
+        const byId = new Map((forns || []).map(f => [f.id, f.nome]))
+        setAlertDetails(alerts.map(a => ({
+          id: a.id,
+          tipo: a.tipo,
+          severity: a.severity,
+          messaggio: a.messaggio,
+          created_at: a.created_at,
+          fornitore_id: a.fornitore_id,
+          fornitore_nome: byId.get(a.fornitore_id) || '(fornitore sconosciuto)',
+        })))
+      } catch (err) {
+        console.error('[Dashboard] alert details fetch failed:', err)
+        setAlertDetails([])
+      } finally {
+        setAlertDetailsLoading(false)
+      }
+    })()
+  }, [showAlertDetails, alertDetails])
 
   // Supplier costs state
   const [supplierData, setSupplierData] = useState<{
@@ -756,12 +799,66 @@ export default function DashboardTab() {
                 <p className="text-xl font-semibold text-emerald-400 mt-1">€ {fmt(margineNetto)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">Fatturato − Pagato</p>
               </div>
-              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
-                <p className="text-xs text-theme-text-muted uppercase tracking-wide">Alert Fornitori</p>
+              <button
+                type="button"
+                onClick={() => setShowAlertDetails(v => !v)}
+                className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5 text-left hover:border-amber-500/30 transition-colors"
+                title="Clicca per vedere i dettagli degli alert"
+              >
+                <p className="text-xs text-theme-text-muted uppercase tracking-wide flex items-center justify-between">
+                  Alert Fornitori
+                  <span className="text-theme-text-muted text-[10px]">{showAlertDetails ? '▲' : '▼'}</span>
+                </p>
                 <p className={`text-xl font-semibold mt-1 ${fcf.alertsOpen > 0 ? 'text-amber-400' : 'text-theme-text-primary'}`}>{fcf.alertsOpen}</p>
-                <p className="text-xs text-theme-text-muted mt-1">{fcf.activeFornitoriCount} fornitori attivi</p>
-              </div>
+                <p className="text-xs text-theme-text-muted mt-1">{fcf.activeFornitoriCount} fornitori attivi · clicca per dettagli</p>
+              </button>
             </div>
+
+            {/* Alert details panel — opens below the FORNITORI grid */}
+            {showAlertDetails && (
+              <div className="mt-3 bg-amber-500/5 border border-amber-500/30 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-amber-300">Dettaglio Alert Fornitori</p>
+                  <button
+                    onClick={() => setShowAlertDetails(false)}
+                    className="text-xs text-theme-text-muted hover:text-theme-text-primary"
+                  >
+                    Chiudi ×
+                  </button>
+                </div>
+                {alertDetailsLoading && (
+                  <p className="text-xs text-theme-text-muted">Caricamento alert…</p>
+                )}
+                {!alertDetailsLoading && alertDetails && alertDetails.length === 0 && (
+                  <p className="text-xs text-theme-text-muted">Nessun alert aperto al momento.</p>
+                )}
+                {!alertDetailsLoading && alertDetails && alertDetails.length > 0 && (
+                  <ul className="space-y-2">
+                    {alertDetails.map(a => (
+                      <li key={a.id} className="bg-theme-bg-secondary/60 rounded-lg p-3 border border-theme-border">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                                a.severity === 'error' ? 'bg-red-500/20 text-red-300'
+                                  : a.severity === 'warning' ? 'bg-amber-500/20 text-amber-300'
+                                  : 'bg-blue-500/20 text-blue-300'
+                              }`}>{a.severity}</span>
+                              <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">{a.tipo.replace(/_/g, ' ')}</span>
+                              <span className="text-theme-text-primary font-semibold text-sm">{a.fornitore_nome}</span>
+                            </div>
+                            <p className="text-sm text-theme-text-secondary">{a.messaggio}</p>
+                          </div>
+                          <span className="text-[10px] text-theme-text-muted whitespace-nowrap">
+                            {new Date(a.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             {(fcf.bySupplier.length > 0 || fcf.byCategoria.length > 0) && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
