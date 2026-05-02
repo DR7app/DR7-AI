@@ -37,9 +37,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const adminTokens = ((adminName || '') + ' ' + (adminEmail || '')).toLowerCase()
     const isValerioOrIlenia = adminTokens.includes('valerio') || adminTokens.includes('ilenia')
     const isAuthorizedByRole = canViewFinancials && isValerioOrIlenia
-    // L'utente puo' usare step 3/4 se e' tra gli autorizzati di base oppure
-    // se ha sbloccato la sessione tramite OTP override (verifica via mail).
-    const canApproveAndPay = isAuthorizedByRole || otpUnlocked
+
     const [anno, setAnno] = useState(today.getFullYear())
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
@@ -51,6 +49,10 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const [otpUnlocked, setOtpUnlocked] = useState(false)
     const [otpOpen, setOtpOpen] = useState(false)
     const draftSessionId = useRef(`fornitori-${fornitore.id}-${Date.now()}`).current
+
+    // L'utente puo' usare step 3/4 se e' tra gli autorizzati di base oppure
+    // se ha sbloccato la sessione tramite OTP override (verifica via mail).
+    const canApproveAndPay = isAuthorizedByRole || otpUnlocked
 
     async function load() {
         setLoading(true)
