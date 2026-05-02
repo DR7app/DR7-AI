@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Button from './Button'
@@ -27,6 +28,39 @@ export default function FornitoriTab() {
     const [selected, setSelected] = useState<Fornitore | null>(null)
     const [globalOpenAlerts, setGlobalOpenAlerts] = useState(0)
     const [showInactive, setShowInactive] = useState(false)
+    const [importingFromAruba, setImportingFromAruba] = useState(false)
+
+    async function importFromAruba() {
+        const monthsStr = window.prompt('Quanti mesi indietro scansionare in Aruba? (1-12)', '3')
+        if (!monthsStr) return
+        const months = parseInt(monthsStr)
+        if (isNaN(months) || months < 1 || months > 12) {
+            toast.error('Inserisci un numero tra 1 e 12')
+            return
+        }
+        if (!window.confirm(`Scansionare le fatture ricevute degli ultimi ${months} mesi e aggiungere i fornitori non ancora in anagrafica?`)) return
+        setImportingFromAruba(true)
+        try {
+            const res = await fetch('/.netlify/functions/import-fornitori-from-aruba', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ months }),
+            })
+            const text = await res.text()
+            let json: any
+            try { json = JSON.parse(text) } catch {
+                throw new Error(`HTTP ${res.status} (probabile timeout): ${text.slice(0, 200)}`)
+            }
+            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+            toast.success(`Aggiunti ${json.added} fornitori (${json.skipped} gia' presenti, ${json.scanned} totali)`)
+            loadFornitori()
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Import fallito: ${msg}`)
+        } finally {
+            setImportingFromAruba(false)
+        }
+    }
 
     async function loadFornitori() {
         setLoading(true)
@@ -155,6 +189,15 @@ export default function FornitoriTab() {
                             <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
                             Mostra disattivati
                         </label>
+                        <button
+                            type="button"
+                            onClick={importFromAruba}
+                            disabled={importingFromAruba}
+                            className="text-sm px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Scansiona le fatture ricevute via Aruba e aggiungi i fornitori mancanti"
+                        >
+                            {importingFromAruba ? 'Importo da Aruba...' : 'Importa da Aruba'}
+                        </button>
                         <Button onClick={() => setShowForm(true)}>+ Nuovo fornitore</Button>
                     </div>
 
