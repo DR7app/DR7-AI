@@ -194,6 +194,8 @@ interface Preventivo {
   customer_name: string | null
   driver_tier: string | null
   status: string
+  motivo_rifiuto?: string | null
+  motivo_rifiuto_note?: string | null
   booking_id: string | null
   whatsapp_sent_at: string | null
   whatsapp_message_id: string | null
@@ -2099,7 +2101,8 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               const canEdit = p.status === 'bozza' || p.status === 'inviato' || p.status === 'accettato'
               const canSend = p.status === 'bozza' || p.status === 'inviato'
               const canConvert = p.status === 'bozza' || p.status === 'inviato'
-              const canReject = p.status === 'inviato'
+              const canReject = p.status === 'bozza' || p.status === 'inviato' || p.status === 'accettato' || p.status === 'scaduto'
+              const canEditMotivo = p.status === 'rifiutato'
               return (
                 <div
                   key={p.id}
@@ -2146,7 +2149,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                   {/* Action row — mirrors the desktop Azioni column, gated by
                       the same status rules. Wraps onto a second row when
                       needed so every button stays a full 44pt tap target. */}
-                  {(canEdit || canSend || canConvert || canReject) && (
+                  {(canEdit || canSend || canConvert || canReject || canEditMotivo) && (
                     <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-theme-border/40">
                       {canEdit && (
                         <button
@@ -2193,7 +2196,17 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                           onClick={() => openRejectModal(p)}
                           className="flex-1 min-w-[48%] h-10 rounded-lg bg-red-600 hover:bg-red-500 active:opacity-70 text-white text-[13px] font-semibold"
                         >
-                          Rifiutato
+                          Rifiuta
+                        </button>
+                      )}
+                      {canEditMotivo && (
+                        <button
+                          type="button"
+                          onClick={() => openRejectModal(p)}
+                          className="flex-1 min-w-[48%] h-10 rounded-lg bg-amber-600 hover:bg-amber-500 active:opacity-70 text-white text-[13px] font-semibold"
+                          title={p.motivo_rifiuto ? `Motivo attuale: ${p.motivo_rifiuto}` : 'Imposta motivo rifiuto'}
+                        >
+                          {p.motivo_rifiuto ? `Motivo: ${p.motivo_rifiuto}` : 'Imposta motivo'}
                         </button>
                       )}
                     </div>

@@ -1,22 +1,26 @@
 /**
- * Bottom horizontal process visualization — 6 step verifica incrociata.
+ * Horizontal process visualization — 4-step flow.
+ *
+ * Le fatture arrivano automaticamente da Aruba SDI; al fornitore basta caricare
+ * le bolle, controllare l'incrocio, gestire le scadenze e archiviare il pagamento.
  */
 const STEPS = [
-    { n: 1, label: 'Carica bolle', desc: 'Ogni bolla viene digitalizzata e caricata' },
-    { n: 2, label: 'Carica fatture', desc: 'Fatture ricevute dal fornitore' },
-    { n: 3, label: 'Abbinamento', desc: 'Sistema collega fatture ↔ bolle dello stesso mese' },
-    { n: 4, label: 'Verifica', desc: 'Confronto importi, segnale di anomalia se non quadrano' },
-    { n: 5, label: 'Approvazione', desc: 'Verifica e approvazione amministrazione' },
-    { n: 6, label: 'Pagamento', desc: 'Registrazione pagamento e archiviazione' },
+    { n: 1, label: 'Carica bolle', desc: 'Carica le bolle/DDT ricevute dal fornitore (PDF, JPG, PNG)' },
+    { n: 2, label: 'Controllo incrociato', desc: 'Confronto automatico bolle vs fatture Aruba dello stesso mese, totali e differenze' },
+    { n: 3, label: 'Scadenze e pagamento', desc: 'Visualizza scadenze in arrivo, autorizza e registra pagamento + ricevuta' },
+    { n: 4, label: 'Archivio', desc: 'Storico completo, conformita\' fiscale, tracciabilita\' di ogni operazione' },
 ]
 
 export default function FornitoriProcessFlow() {
     return (
         <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-4">
-            <p className="text-sm font-semibold text-theme-text-primary uppercase tracking-wide mb-4 text-center">
-                Processo di verifica incrociata
+            <p className="text-sm font-semibold text-theme-text-primary uppercase tracking-wide mb-1 text-center">
+                Flusso operativo
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <p className="text-xs text-theme-text-muted text-center mb-4">
+                Le fatture vengono importate automaticamente da Aruba SDI. Tu carichi solo le bolle, il sistema fa il resto.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 {STEPS.map((s, i) => (
                     <div key={s.n} className="relative">
                         <div className="bg-theme-bg-tertiary/50 border border-theme-border rounded-lg p-3 h-full">

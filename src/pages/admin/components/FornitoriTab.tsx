@@ -395,7 +395,7 @@ export default function FornitoriTab() {
                                     <th className="text-right px-3 py-2" title="Fatture ricevute via Aruba">Fatture Aruba</th>
                                     <th className="text-right px-3 py-2">Documenti</th>
                                     <th className="text-right px-3 py-2">Alert</th>
-                                    <th className="text-left px-3 py-2"></th>
+                                    <th className="text-right px-3 py-2 w-8"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-theme-border">
@@ -441,12 +441,7 @@ export default function FornitoriTab() {
                                                 ? <span className="inline-block px-2 py-0.5 rounded-full bg-red-900 text-red-200 text-xs">{f.openAlerts}</span>
                                                 : <span className="text-theme-text-muted">—</span>}
                                         </td>
-                                        <td className="px-3 py-2">
-                                            <button onClick={(e) => { e.stopPropagation(); setSelected(f) }}
-                                                className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-tertiary/70">
-                                                Apri →
-                                            </button>
-                                        </td>
+                                        <td className="px-3 py-2 text-theme-text-muted text-right">→</td>
                                     </tr>
                                 ))}
                             </tbody>
