@@ -192,6 +192,31 @@ export const handler: Handler = async (event) => {
     const currentRevenue = calcRevenue(currentAllValid)
     const prevRevenue = calcRevenue(prevAllValid)
 
+    // Cancelled bookings — money that WAS booked but won't be earned. The user
+    // wants visibility on this so it doesn't look like the month is empty.
+    const cancelledStatuses = ['cancelled', 'annullata']
+    const currentCancelled = allCurrentBookings.filter(b => cancelledStatuses.includes(b.status))
+    const cancelledRentals = currentCancelled.filter(b => {
+      const st = (b.service_type || '').trim().toLowerCase()
+      return st !== 'car_wash' && st !== 'mechanical_service' && st !== 'mechanical'
+    })
+    const cancelledRentalsTotal = cancelledRentals.reduce((s, b) => {
+      const raw = b.price_total
+      const val = (typeof raw === 'string' ? parseFloat(raw) : (raw || 0)) / 100
+      return s + val
+    }, 0)
+    const cancelledRentalsCount = cancelledRentals.length
+
+    // Car-wash totals (separate revenue stream — kept out of "rental fatturato"
+    // but still part of the month's activity).
+    const washBookings = currentAllValid.filter(b => (b.service_type || '').trim().toLowerCase() === 'car_wash')
+    const washCount = washBookings.length
+    const washTotal = washBookings.reduce((s, b) => {
+      const raw = b.price_total
+      const val = (typeof raw === 'string' ? parseFloat(raw) : (raw || 0)) / 100
+      return s + val
+    }, 0)
+
     // Incassato: bookings that are actually paid
     const paidStatuses = ['paid', 'completed', 'succeeded']
     const currentPaid = currentAllValid.filter(b => paidStatuses.includes(b.payment_status))

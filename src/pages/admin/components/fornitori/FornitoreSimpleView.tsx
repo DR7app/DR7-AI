@@ -40,6 +40,11 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const isAuthorizedByRole = canViewFinancials && isValerioOrIlenia
 
     const [anno, setAnno] = useState(today.getFullYear())
+    // Default sul mese corrente — l'utente sale tipicamente per gestire il mese
+    // attuale (carica bolle del mese, controlla incrocio col mese, paga il mese).
+    // Selettore "Tutti i mesi" disponibile per la vista annuale.
+    const [mese, setMese] = useState<number | 'tutti'>(today.getMonth() + 1)
+    const [syncing, setSyncing] = useState(false)
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
     const [loading, setLoading] = useState(false)
@@ -91,6 +96,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
         const last = parseInt(localStorage.getItem(key) || '0')
         if (Date.now() - last < 5 * 60 * 1000) return // already synced recently
 
+        setSyncing(true)
         ;(async () => {
             try {
                 const res = await fetch('/.netlify/functions/sync-fornitore-invoices', {
@@ -101,20 +107,27 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 const json = await res.json()
                 if (res.ok && json.success) {
                     localStorage.setItem(key, String(Date.now()))
-                    if ((json.inserted || 0) > 0) {
-                        // Reload local view if new fatture appeared
-                        load()
-                    }
+                    // Sempre reload — sia che siano arrivate nuove fatture, sia che
+                    // sia cambiato qualcosa tipo file_url / aruba_filename / status.
+                    await load()
                 }
             } catch (err) {
                 console.warn('[fornitore-simple] auto-sync fatture failed:', err)
+            } finally {
+                setSyncing(false)
             }
         })()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fornitore.id])
 
-    const bolle = useMemo(() => docs.filter(d => d.tipo === 'ddt' || d.tipo === 'bolla'), [docs])
-    const fatture = useMemo(() => docs.filter(d => d.tipo === 'fattura'), [docs])
+    // Quando l'utente seleziona un mese specifico, filtriamo TUTTI i derivati
+    // (bolle, fatture, daApprovare, daPagare, anomalie) su quel solo mese.
+    const docsFiltered = useMemo(
+        () => mese === 'tutti' ? docs : docs.filter(d => d.periodo_mese === mese),
+        [docs, mese]
+    )
+    const bolle = useMemo(() => docsFiltered.filter(d => d.tipo === 'ddt' || d.tipo === 'bolla'), [docsFiltered])
+    const fatture = useMemo(() => docsFiltered.filter(d => d.tipo === 'fattura'), [docsFiltered])
     const daApprovare = useMemo(
         () => fatture.filter(f => f.stato === 'verificato'),
         [fatture]
@@ -126,9 +139,10 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
 
     const tutteAnomalie = useMemo(() => {
         const all: Array<CrosscheckRow & { mese: number }> = []
-        crosscheck.forEach((rows, mese) => {
+        crosscheck.forEach((rows, m) => {
+            if (mese !== 'tutti' && m !== mese) return
             rows.forEach(r => {
-                if (r.stato_calcolato === 'anomalia') all.push({ ...r, mese })
+                if (r.stato_calcolato === 'anomalia') all.push({ ...r, mese: m })
             })
         })
         return all
@@ -142,11 +156,12 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
 
     const countOk = useMemo(() => {
         let n = 0
-        crosscheck.forEach(rows => {
+        crosscheck.forEach((rows, m) => {
+            if (mese !== 'tutti' && m !== mese) return
             n += rows.filter(r => r.stato_calcolato === 'verificato').length
         })
         return n
-    }, [crosscheck])
+    }, [crosscheck, mese])
 
     async function approveDoc(doc: FornitoreDocument) {
         const { error } = await supabase
@@ -255,7 +270,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     }
 
     const annoOptions: number[] = []
-    for (let y = today.getFullYear() + 1; y >= 2026; y--) annoOptions.push(y)
+    for (let y = today.getFullYear(); y >= 2026; y--) annoOptions.push(y)
 
     return (
         <div className="space-y-4">
@@ -268,12 +283,22 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                         {fornitore.piva && <span>P.IVA {fornitore.piva}</span>}
                         {fornitore.condizioni_pagamento && <span>{fornitore.condizioni_pagamento}</span>}
                         {fornitore.email && <span>{fornitore.email}</span>}
+                        {syncing && <span className="text-amber-300">Sincronizzazione fatture da Aruba…</span>}
                     </div>
                 </div>
-                <select value={anno} onChange={e => setAnno(parseInt(e.target.value))}
-                    className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm">
-                    {annoOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
+                <div className="flex items-center gap-2">
+                    <select value={mese} onChange={e => setMese(e.target.value === 'tutti' ? 'tutti' : parseInt(e.target.value))}
+                        className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm">
+                        <option value="tutti">Tutti i mesi</option>
+                        {MESI_IT.map((label, idx) => (
+                            <option key={idx} value={idx + 1}>{label}</option>
+                        ))}
+                    </select>
+                    <select value={anno} onChange={e => setAnno(parseInt(e.target.value))}
+                        className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm">
+                        {annoOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                </div>
             </div>
 
             {/* STEP 1 — Carica bolle */}

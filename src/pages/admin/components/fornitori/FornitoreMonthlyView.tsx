@@ -124,7 +124,7 @@ export default function FornitoreMonthlyView({ fornitore }: Props) {
     }
 
     const annoOptions: number[] = []
-    for (let y = today.getFullYear() + 1; y >= 2026; y--) annoOptions.push(y)
+    for (let y = today.getFullYear(); y >= 2026; y--) annoOptions.push(y)
 
     return (
         <div className="space-y-4">

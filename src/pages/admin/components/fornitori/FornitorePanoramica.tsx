@@ -133,7 +133,7 @@ export default function FornitorePanoramica({ fornitore }: Props) {
     )
 
     const annoOptions: number[] = []
-    for (let y = today.getFullYear() + 1; y >= 2026; y--) annoOptions.push(y)
+    for (let y = today.getFullYear(); y >= 2026; y--) annoOptions.push(y)
 
     const hasDiscrepanze = discrepanze.length > 0
 
