@@ -80,12 +80,58 @@ const handler: Handler = async (event) => {
             insert.data_scadenza_patente = customer.data_scadenza_patente
         }
 
-        // Minimum required fields — at least name and contact info
-        if (!insert.nome && !insert.ragione_sociale) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nome o Ragione Sociale obbligatori' }) }
+        // ─── Required fields validation ──────────────────────────────────
+        // Both privati and aziende must provide enough info to actually
+        // contact the customer and bill them. The form mirrors these on
+        // the client side; this is the authoritative server-side check.
+        const tipoCliente = (insert.tipo_cliente as string) || 'privato'
+        const missing: string[] = []
+
+        // Common to all: phone + email + address
+        if (!insert.telefono) missing.push('Telefono')
+        if (!insert.email) missing.push('Email')
+        if (!insert.indirizzo) missing.push('Indirizzo')
+        if (!insert.citta) missing.push('Città')
+        if (!insert.cap) missing.push('CAP')
+        if (!insert.provincia) missing.push('Provincia')
+
+        if (tipoCliente === 'azienda') {
+            if (!insert.ragione_sociale) missing.push('Ragione sociale')
+            if (!insert.partita_iva) missing.push('P.IVA')
+            // PEC is required for invoicing if no codice destinatario; require at
+            // least one of the two so SDI delivery works.
+            if (!insert.pec && !insert.codice_destinatario) {
+                missing.push('PEC oppure Codice Destinatario SDI')
+            }
+        } else {
+            // Privato
+            if (!insert.nome) missing.push('Nome')
+            if (!insert.cognome) missing.push('Cognome')
+            if (!insert.codice_fiscale) missing.push('Codice Fiscale')
+            if (!insert.data_nascita) missing.push('Data di nascita')
+            if (!insert.luogo_nascita) missing.push('Luogo di nascita')
         }
-        if (!insert.telefono && !insert.email) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Telefono o Email obbligatori' }) }
+
+        if (missing.length > 0) {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: `Campi obbligatori mancanti: ${missing.join(', ')}` }),
+            }
+        }
+
+        // Minimal sanity checks
+        if (typeof insert.telefono === 'string' && insert.telefono.replace(/\D/g, '').length < 8) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Numero di telefono non valido' }) }
+        }
+        if (typeof insert.email === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(insert.email)) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email non valida' }) }
+        }
+        if (typeof insert.codice_fiscale === 'string' && insert.codice_fiscale.length > 0 && insert.codice_fiscale.length !== 16) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Codice Fiscale deve essere di 16 caratteri' }) }
+        }
+        if (typeof insert.partita_iva === 'string' && insert.partita_iva.length > 0 && !/^\d{11}$/.test(insert.partita_iva)) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'P.IVA deve essere di 11 cifre' }) }
         }
 
         const { data: customerRow, error: insErr } = await supabase

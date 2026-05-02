@@ -82,9 +82,40 @@ export default function RegistrazioneClientePage() {
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setSubmitErr(null)
-        if (form.tipo_cliente === 'privato' && !form.nome.trim()) return setSubmitErr('Nome obbligatorio')
-        if (form.tipo_cliente === 'azienda' && !form.ragione_sociale.trim()) return setSubmitErr('Ragione sociale obbligatoria')
-        if (!form.telefono.trim() && !form.email.trim()) return setSubmitErr('Telefono o email obbligatori')
+
+        const missing: string[] = []
+        // Common
+        if (!form.telefono.trim()) missing.push('Telefono')
+        if (!form.email.trim()) missing.push('Email')
+        if (!form.indirizzo.trim()) missing.push('Indirizzo')
+        if (!form.citta.trim()) missing.push('Città')
+        if (!form.cap.trim()) missing.push('CAP')
+        if (!form.provincia.trim()) missing.push('Provincia')
+
+        if (form.tipo_cliente === 'azienda') {
+            if (!form.ragione_sociale.trim()) missing.push('Ragione sociale')
+            if (!form.partita_iva.trim()) missing.push('P.IVA')
+            if (!form.pec.trim() && !form.codice_destinatario.trim()) {
+                missing.push('PEC o Codice Destinatario SDI')
+            }
+        } else {
+            if (!form.nome.trim()) missing.push('Nome')
+            if (!form.cognome.trim()) missing.push('Cognome')
+            if (!form.codice_fiscale.trim()) missing.push('Codice Fiscale')
+            if (!form.data_nascita) missing.push('Data di nascita')
+            if (!form.luogo_nascita.trim()) missing.push('Luogo di nascita')
+        }
+
+        if (missing.length > 0) return setSubmitErr(`Campi mancanti: ${missing.join(', ')}`)
+
+        if (form.telefono.replace(/\D/g, '').length < 8) return setSubmitErr('Numero di telefono non valido')
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return setSubmitErr('Email non valida')
+        if (form.tipo_cliente === 'privato' && form.codice_fiscale.length !== 16) {
+            return setSubmitErr('Codice Fiscale deve essere di 16 caratteri')
+        }
+        if (form.tipo_cliente === 'azienda' && !/^\d{11}$/.test(form.partita_iva)) {
+            return setSubmitErr('P.IVA deve essere di 11 cifre')
+        }
 
         setSubmitting(true)
         try {
@@ -186,36 +217,38 @@ export default function RegistrazioneClientePage() {
                         {form.tipo_cliente === 'privato' ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <Field label="Nome *" value={form.nome} onChange={v => update('nome', v)} required />
-                                <Field label="Cognome" value={form.cognome} onChange={v => update('cognome', v)} />
-                                <Field label="Codice Fiscale" value={form.codice_fiscale} onChange={v => update('codice_fiscale', v.toUpperCase())} />
-                                <Field label="Data di Nascita" type="date" value={form.data_nascita} onChange={v => update('data_nascita', v)} />
-                                <Field label="Luogo di Nascita" value={form.luogo_nascita} onChange={v => update('luogo_nascita', v)} />
+                                <Field label="Cognome *" value={form.cognome} onChange={v => update('cognome', v)} required />
+                                <Field label="Codice Fiscale *" value={form.codice_fiscale} onChange={v => update('codice_fiscale', v.toUpperCase())} required maxLength={16} minLength={16} />
+                                <Field label="Data di Nascita *" type="date" value={form.data_nascita} onChange={v => update('data_nascita', v)} required />
+                                <Field label="Luogo di Nascita *" value={form.luogo_nascita} onChange={v => update('luogo_nascita', v)} required />
                                 <Field label="Provincia di Nascita" value={form.provincia_nascita} onChange={v => update('provincia_nascita', v)} maxLength={2} />
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <Field label="Ragione Sociale *" value={form.ragione_sociale} onChange={v => update('ragione_sociale', v)} required />
-                                <Field label="P.IVA" value={form.partita_iva} onChange={v => update('partita_iva', v)} />
-                                <Field label="PEC" type="email" value={form.pec} onChange={v => update('pec', v)} />
-                                <Field label="Codice Destinatario SDI" value={form.codice_destinatario} onChange={v => update('codice_destinatario', v.toUpperCase())} maxLength={7} />
+                                <Field label="P.IVA *" value={form.partita_iva} onChange={v => update('partita_iva', v.replace(/\D/g, ''))} required maxLength={11} minLength={11} />
+                                <Field label="PEC (richiesta se nessun Codice SDI)" type="email" value={form.pec} onChange={v => update('pec', v)} />
+                                <Field label="Codice Destinatario SDI (richiesto se nessuna PEC)" value={form.codice_destinatario} onChange={v => update('codice_destinatario', v.toUpperCase())} maxLength={7} />
                                 <Field label="Codice Fiscale (rappresentante)" value={form.codice_fiscale} onChange={v => update('codice_fiscale', v.toUpperCase())} />
                             </div>
                         )}
 
                         <h3 className="text-md font-semibold pt-4 border-t">Contatti</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <Field label="Telefono" type="tel" value={form.telefono} onChange={v => update('telefono', v)} />
-                            <Field label="Email" type="email" value={form.email} onChange={v => update('email', v)} />
+                            <Field label="Telefono *" type="tel" value={form.telefono} onChange={v => update('telefono', v)} required />
+                            <Field label="Email *" type="email" value={form.email} onChange={v => update('email', v)} required />
                         </div>
 
                         <h3 className="text-md font-semibold pt-4 border-t">Indirizzo</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <Field label="Indirizzo" value={form.indirizzo} onChange={v => update('indirizzo', v)} />
-                            <Field label="Città" value={form.citta} onChange={v => update('citta', v)} />
-                            <Field label="CAP" value={form.cap} onChange={v => update('cap', v)} maxLength={5} />
-                            <Field label="Provincia" value={form.provincia} onChange={v => update('provincia', v)} maxLength={2} />
-                            <Field label="Nazione" value={form.nazione} onChange={v => update('nazione', v)} />
+                            <Field label="Indirizzo *" value={form.indirizzo} onChange={v => update('indirizzo', v)} required />
+                            <Field label="Città *" value={form.citta} onChange={v => update('citta', v)} required />
+                            <Field label="CAP *" value={form.cap} onChange={v => update('cap', v.replace(/\D/g, ''))} maxLength={5} minLength={5} required />
+                            <Field label="Provincia *" value={form.provincia} onChange={v => update('provincia', v.toUpperCase())} maxLength={2} minLength={2} required />
+                            <Field label="Nazione" value={form.nazione} onChange={v => update('nazione', v.toUpperCase())} maxLength={2} />
                         </div>
+
+                        <p className="text-xs text-gray-500 pt-2">I campi contrassegnati con * sono obbligatori.</p>
 
                         {submitErr && <p className="text-red-600 text-sm">{submitErr}</p>}
 
@@ -296,13 +329,14 @@ function Centered({ children }: { children: React.ReactNode }) {
     )
 }
 
-function Field({ label, value, onChange, type = 'text', required, maxLength }: {
+function Field({ label, value, onChange, type = 'text', required, maxLength, minLength }: {
     label: string
     value: string
     onChange: (v: string) => void
     type?: string
     required?: boolean
     maxLength?: number
+    minLength?: number
 }) {
     return (
         <label className="block">
@@ -313,6 +347,7 @@ function Field({ label, value, onChange, type = 'text', required, maxLength }: {
                 onChange={e => onChange(e.target.value)}
                 required={required}
                 maxLength={maxLength}
+                minLength={minLength}
                 className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
             />
         </label>
