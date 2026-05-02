@@ -190,8 +190,16 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
             const res = await fetch('/.netlify/functions/sync-fornitore-invoices', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fornitore_id: fornitore.id, months: 24 }),
+                body: JSON.stringify({ fornitore_id: fornitore.id, months: 12 }),
             })
+            // Netlify gateway timeout / 5xx restituisce HTML, non JSON. Gestiamolo
+            // con un messaggio chiaro invece di "Unexpected token <".
+            const contentType = res.headers.get('content-type') || ''
+            if (!contentType.includes('application/json')) {
+                throw new Error(res.status === 504 || res.status === 502
+                    ? 'Aruba ha impiegato troppo tempo. Riprova fra qualche minuto.'
+                    : `Errore ${res.status}: server non ha restituito JSON`)
+            }
             const json = await res.json()
             if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
             localStorage.setItem(key, String(Date.now()))

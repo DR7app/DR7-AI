@@ -96,7 +96,9 @@ export const handler: Handler = async (event) => {
   try {
     const body = JSON.parse(event.body || '{}')
     const fornitoreId: string = body.fornitore_id
-    const monthsBack: number = Math.min(Math.max(parseInt(body.months) || 12, 1), 24)
+    // Cap a 12 mesi — sopra rischiamo il timeout Netlify (26s) perche' Aruba
+    // restituisce fino a 100 fatture/page × 20 pagine/mese.
+    const monthsBack: number = Math.min(Math.max(parseInt(body.months) || 12, 1), 12)
     if (!fornitoreId) {
       return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'fornitore_id required' }) }
     }
