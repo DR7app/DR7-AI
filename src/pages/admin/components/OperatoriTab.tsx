@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, useEffect, useCallback } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
 
@@ -7,6 +8,12 @@ interface Admin {
   email: string
   nome: string | null
   role: string
+  sede?: string | null
+  reparto?: string | null
+  tipo_rapporto?: string | null
+  stato?: string | null
+  responsabile?: string | null
+  contatto_interno?: string | null
 }
 
 interface LogEntry {
@@ -280,7 +287,7 @@ export default function OperatoriTab() {
   async function loadAdmins() {
     setLoading(true)
     const ADMIN_ORDER = ['Valerio', 'Ilenia', 'Salvatore', 'Ophélie', 'Davide']
-    const { data } = await supabase.from('admins').select('id, email, nome, role')
+    const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno')
     if (data) {
       data.sort((a, b) => {
         const ai = ADMIN_ORDER.indexOf(a.nome || '')
@@ -317,6 +324,29 @@ export default function OperatoriTab() {
   }
 
   const selected = admins.find(a => a.id === selectedAdmin) || null
+
+  // Only direzione (Valerio + Ilenia by email) can edit operator HR fields
+  // — same allowlist as the OTP self-approval.
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentEmail(data.user?.email || null))
+  }, [])
+  const canEditOperators = !!currentEmail &&
+    ['valerio@dr7.app', 'ilenia@dr7.app'].includes(currentEmail.toLowerCase())
+
+  // Save a single field on the selected admin row + update local state.
+  async function updateOperatorField(adminId: string, field: keyof Admin, value: string) {
+    const { error } = await supabase
+      .from('admins')
+      .update({ [field]: value || null })
+      .eq('id', adminId)
+    if (error) {
+      toast.error(`Salvataggio fallito: ${error.message}`)
+      return
+    }
+    setAdmins(prev => prev.map(a => a.id === adminId ? { ...a, [field]: value || null } : a))
+    toast.success('Salvato')
+  }
 
   // ─── Aggregations ────────────────────────────────────────────────────
   const stats = useMemo(() => computeStats(aggLogs), [aggLogs])
@@ -449,12 +479,12 @@ export default function OperatoriTab() {
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 text-xs">
-                <ProfileField label="Sede" value="Da configurare" tag="Fase B" />
-                <ProfileField label="Reparto" value="Da configurare" tag="Fase B" />
-                <ProfileField label="Tipo rapporto" value="Da configurare" tag="Fase B" />
-                <ProfileField label="Stato" value="Attivo" />
-                <ProfileField label="Responsabile" value="—" tag="Fase B" />
-                <ProfileField label="Contatto interno" value="—" tag="Fase B" />
+                <ProfileFieldEditable label="Sede"            value={selected.sede}             placeholder="es. Cagliari"                  canEdit={canEditOperators} onSave={(v) => updateOperatorField(selected.id, 'sede', v)} />
+                <ProfileFieldEditable label="Reparto"         value={selected.reparto}          placeholder="es. Direzione"                 canEdit={canEditOperators} onSave={(v) => updateOperatorField(selected.id, 'reparto', v)} />
+                <ProfileFieldEditable label="Tipo rapporto"   value={selected.tipo_rapporto}    placeholder="Dipendente / Collaboratore…"   canEdit={canEditOperators} onSave={(v) => updateOperatorField(selected.id, 'tipo_rapporto', v)} />
+                <ProfileFieldEditable label="Stato"           value={selected.stato || 'Attivo'} placeholder="Attivo / Sospeso / Inattivo" canEdit={canEditOperators} onSave={(v) => updateOperatorField(selected.id, 'stato', v)} />
+                <ProfileFieldEditable label="Responsabile"    value={selected.responsabile}     placeholder="Nome responsabile"             canEdit={canEditOperators} onSave={(v) => updateOperatorField(selected.id, 'responsabile', v)} />
+                <ProfileFieldEditable label="Contatto interno" value={selected.contatto_interno} placeholder="Telefono interno"             canEdit={canEditOperators} onSave={(v) => updateOperatorField(selected.id, 'contatto_interno', v)} />
                 <ProfileField label="Foto profilo" value="Iniziali" />
                 <ProfileField label="ID interno" value={selected.id.slice(0, 8)} />
               </div>
@@ -985,6 +1015,62 @@ function ProfileField({ label, value, tag }: { label: string; value: string; tag
       <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">{label}</div>
       <div className="text-sm text-theme-text-primary mt-0.5">{value}</div>
       {tag && <div className="text-[9px] text-amber-500 mt-0.5">{tag}</div>}
+    </div>
+  )
+}
+
+/** Inline-editable variant of ProfileField. Click value → input → blur/Enter to save.
+ *  `canEdit` from caller (only direzione should be able to write). */
+function ProfileFieldEditable({
+  label, value, placeholder, onSave, canEdit,
+}: {
+  label: string
+  value: string | null | undefined
+  placeholder?: string
+  onSave: (next: string) => Promise<void> | void
+  canEdit: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value || '')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => { setDraft(value || '') }, [value])
+
+  async function commit() {
+    if (!canEdit) { setEditing(false); return }
+    if ((draft || '').trim() === (value || '').trim()) { setEditing(false); return }
+    setSaving(true)
+    try {
+      await onSave(draft.trim())
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className={`bg-theme-bg-tertiary/40 border border-theme-border rounded-lg px-3 py-2 ${canEdit ? 'cursor-text hover:border-dr7-gold/40' : ''}`}>
+      <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">{label}</div>
+      {editing && canEdit ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value || ''); setEditing(false) } }}
+          disabled={saving}
+          placeholder={placeholder || ''}
+          className="w-full bg-transparent text-sm text-theme-text-primary mt-0.5 border-b border-dr7-gold focus:outline-none px-0 py-0.5"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => canEdit && setEditing(true)}
+          disabled={!canEdit}
+          className={`block text-left w-full text-sm mt-0.5 ${value ? 'text-theme-text-primary' : 'text-theme-text-muted italic'} ${canEdit ? '' : 'cursor-default'}`}
+        >
+          {value || placeholder || '—'}
+        </button>
+      )}
     </div>
   )
 }
