@@ -17,6 +17,7 @@ type View = 'list' | 'scadenziario' | 'alerts'
 interface FornitoreRow extends Fornitore {
     docCount?: number
     openAlerts?: number
+    arubaInvoiceCount?: number
 }
 
 export default function FornitoriTab() {
@@ -29,6 +30,36 @@ export default function FornitoriTab() {
     const [globalOpenAlerts, setGlobalOpenAlerts] = useState(0)
     const [showInactive, setShowInactive] = useState(false)
     const [importingFromAruba, setImportingFromAruba] = useState(false)
+    const [arubaCountsLoading, setArubaCountsLoading] = useState(false)
+    const [arubaMonthsScanned, setArubaMonthsScanned] = useState(3)
+
+    async function loadArubaInvoiceCounts(months = 3) {
+        setArubaCountsLoading(true)
+        try {
+            const res = await fetch(`/.netlify/functions/get-fornitore-invoice-counts?months=${months}`)
+            const text = await res.text()
+            let json: any
+            try { json = JSON.parse(text) } catch {
+                throw new Error(`HTTP ${res.status}`)
+            }
+            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+            const byPiva: Record<string, { count: number }> = json.byPiva || {}
+            const byName: Record<string, { count: number }> = json.byName || {}
+            setFornitori(prev => prev.map(f => {
+                const v = (f.piva || '').replace(/\D/g, '')
+                let count = 0
+                if (v && byPiva[v]) count = byPiva[v].count
+                else if (f.nome && byName[f.nome.toLowerCase().trim()]) count = byName[f.nome.toLowerCase().trim()].count
+                return { ...f, arubaInvoiceCount: count }
+            }))
+            setArubaMonthsScanned(json.months_scanned || months)
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            console.warn('[Fornitori] Aruba counts fetch failed:', msg)
+        } finally {
+            setArubaCountsLoading(false)
+        }
+    }
 
     async function importFromAruba() {
         const monthsStr = window.prompt('Quanti mesi indietro scansionare in Aruba? (1-12)', '3')
@@ -121,6 +152,11 @@ export default function FornitoriTab() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showInactive])
 
+    useEffect(() => {
+        if (fornitori.length > 0) loadArubaInvoiceCounts(3)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fornitori.length])
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase()
         if (!q) return fornitori
@@ -156,7 +192,16 @@ export default function FornitoriTab() {
             <FornitoriPageHeader />
 
             <div className="flex items-center justify-between flex-wrap gap-3">
-                <h2 className="text-2xl font-semibold text-theme-text-primary">Gestione Fornitori</h2>
+                <div className="flex items-baseline gap-3 flex-wrap">
+                    <h2 className="text-2xl font-semibold text-theme-text-primary">Gestione Fornitori</h2>
+                    <span className="text-sm text-theme-text-muted">
+                        {fornitori.length} {fornitori.length === 1 ? 'fornitore' : 'fornitori'}
+                        {' · '}
+                        {fornitori.reduce((s, f) => s + (f.arubaInvoiceCount || 0), 0)} fatture ricevute
+                        <span className="opacity-70"> ({arubaMonthsScanned} mesi)</span>
+                        {arubaCountsLoading && <span className="ml-2 italic">aggiorno conteggi...</span>}
+                    </span>
+                </div>
                 <div className="flex gap-2">
                     <button onClick={() => setView('list')}
                         className={`text-sm px-3 py-1.5 rounded ${view === 'list' ? 'bg-dr7-gold text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-tertiary/70'}`}>
@@ -210,6 +255,7 @@ export default function FornitoriTab() {
                                     <th className="text-left px-3 py-2">Categoria</th>
                                     <th className="text-left px-3 py-2">Condizioni</th>
                                     <th className="text-left px-3 py-2">Referente</th>
+                                    <th className="text-right px-3 py-2" title="Fatture ricevute via Aruba">Fatture Aruba</th>
                                     <th className="text-right px-3 py-2">Documenti</th>
                                     <th className="text-right px-3 py-2">Alert</th>
                                     <th className="text-left px-3 py-2"></th>
@@ -217,10 +263,10 @@ export default function FornitoriTab() {
                             </thead>
                             <tbody className="divide-y divide-theme-border">
                                 {loading && (
-                                    <tr><td colSpan={8} className="text-center py-6 text-theme-text-muted">Caricamento…</td></tr>
+                                    <tr><td colSpan={9} className="text-center py-6 text-theme-text-muted">Caricamento…</td></tr>
                                 )}
                                 {!loading && filtered.length === 0 && (
-                                    <tr><td colSpan={8} className="text-center py-6 text-theme-text-muted">
+                                    <tr><td colSpan={9} className="text-center py-6 text-theme-text-muted">
                                         {search ? 'Nessun fornitore corrisponde alla ricerca' : 'Nessun fornitore. Crea il primo →'}
                                     </td></tr>
                                 )}
@@ -234,6 +280,13 @@ export default function FornitoriTab() {
                                         <td className="px-3 py-2 text-theme-text-secondary">{f.categoria_merce || '—'}</td>
                                         <td className="px-3 py-2 text-theme-text-secondary">{f.condizioni_pagamento || '—'}</td>
                                         <td className="px-3 py-2 text-theme-text-secondary">{f.referente || '—'}</td>
+                                        <td className="px-3 py-2 text-right">
+                                            {(f.arubaInvoiceCount || 0) > 0 ? (
+                                                <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-600/20 text-emerald-400 text-xs font-semibold">{f.arubaInvoiceCount}</span>
+                                            ) : (
+                                                <span className="text-theme-text-muted">0</span>
+                                            )}
+                                        </td>
                                         <td className="px-3 py-2 text-right text-theme-text-secondary">{f.docCount || 0}</td>
                                         <td className="px-3 py-2 text-right">
                                             {(f.openAlerts || 0) > 0
