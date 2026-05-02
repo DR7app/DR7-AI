@@ -150,108 +150,147 @@ export default function LimitationOverrideModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-theme-bg-primary w-full sm:max-w-md rounded-t-lg sm:rounded-lg shadow-xl flex flex-col max-h-full sm:max-h-[90vh] border border-theme-border">
-        {/* Header */}
-        <div className="p-4 border-b border-theme-border flex justify-between items-center rounded-t-lg flex-shrink-0">
-          <h3 className="text-lg font-bold text-amber-400">
-            {step === 'blocked' ? 'Limitazione rilevata' : step === 'otp-sent' ? 'Inserisci codice di autorizzazione' : 'Autorizzazione direzionale'}
-          </h3>
-        </div>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-theme-bg-secondary w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-full sm:max-h-[90vh] border border-theme-border relative">
+
+        {/* Close button (top-right) — usa onCancel cosi' lascia che il flow esterno
+            decida cosa fare; se non c'e' onCancel non mostriamo la X. */}
+        {onCancel && step !== 'verified' && (
+          <button
+            onClick={onCancel}
+            aria-label="Chiudi"
+            className="absolute top-3 right-3 p-2 rounded-full text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors z-10"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
 
         {/* Content */}
-        <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
-          {/* Limitation message (always visible) */}
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-4">
-            <p className="text-amber-300 text-sm font-medium">{limitationMessage}</p>
-            <p className="text-amber-300/60 text-xs mt-1 font-mono">{limitationCode}</p>
+        <div className="px-6 sm:px-8 pt-8 pb-6">
+          {/* Icon + Title (centered) */}
+          <div className="flex flex-col items-center mb-5">
+            <div className="w-14 h-14 rounded-full bg-dr7-gold/10 border border-dr7-gold/30 flex items-center justify-center mb-4">
+              {step === 'verified' ? (
+                <svg className="w-7 h-7 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-7 h-7 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                </svg>
+              )}
+            </div>
+            <h3 className="text-xl font-bold text-theme-text-primary text-center">
+              {step === 'blocked' && 'Richiedi autorizzazione OTP'}
+              {step === 'otp-sent' && 'Inserisci il codice OTP'}
+              {step === 'verified' && 'Autorizzazione concessa'}
+            </h3>
+            <p className="text-sm text-theme-text-muted text-center mt-2 leading-relaxed">
+              {step === 'blocked' && 'Per procedere con l\'operazione è necessaria l\'autorizzazione tramite codice OTP.'}
+              {step === 'otp-sent' && 'Il codice è stato inviato alla direzione. Inseriscilo qui sotto per autorizzare l\'operazione.'}
+              {step === 'verified' && 'Autorizzazione concessa solo per questo evento.'}
+            </p>
           </div>
 
+          {/* Info banner — solo nello step blocked, in tono ciano coerente */}
           {step === 'blocked' && (
-            <p className="text-theme-text-muted text-sm">
-              Questa operazione è bloccata. Per procedere è obbligatorio richiedere e verificare un codice di autorizzazione direzionale via OTP.
-            </p>
+            <div className="bg-dr7-gold/5 border border-dr7-gold/20 rounded-xl px-4 py-3 mb-5 flex items-start gap-3">
+              <svg className="w-4 h-4 text-dr7-gold mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <circle cx="12" cy="12" r="9" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4M12 16h.01" />
+              </svg>
+              <p className="text-xs text-theme-text-secondary leading-relaxed">
+                Verrai reindirizzato alla pagina di verifica dopo l'invio della richiesta.
+              </p>
+            </div>
           )}
+
+          {/* Limitation context — sempre visibile, ora in stile sobrio non amber */}
+          <div className="bg-theme-bg-tertiary border border-theme-border rounded-xl px-4 py-3 mb-5">
+            <p className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Operazione</p>
+            <p className="text-sm text-theme-text-primary font-medium leading-snug">{limitationMessage}</p>
+            <p className="text-[11px] text-theme-text-muted mt-1.5 font-mono">{limitationCode}</p>
+          </div>
 
           {step === 'otp-sent' && (
-            <>
-              <p className="text-theme-text-muted text-sm mb-4">
-                Il codice è stato inviato al numero autorizzativo configurato per le ricariche wallet. Inserisci il codice per autorizzare questa specifica operazione.
-              </p>
-
-              {/* OTP Input — single rectangle */}
-              <div className="mb-4">
-                <input
-                  ref={otpInputRef}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={otpCode}
-                  onChange={(e) => handleOtpChange(e.target.value)}
-                  onKeyDown={handleOtpKeyDown}
-                  placeholder="------"
-                  className="w-full h-14 text-center text-2xl font-bold tracking-[0.5em] rounded-lg border-2 border-theme-border bg-theme-bg-secondary text-theme-text-primary focus:border-dr7-gold focus:outline-none transition-colors"
-                />
-              </div>
-            </>
-          )}
-
-          {step === 'verified' && (
-            <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              Autorizzazione concessa solo per questo evento.
+            <div className="mb-2">
+              <input
+                ref={otpInputRef}
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => handleOtpChange(e.target.value)}
+                onKeyDown={handleOtpKeyDown}
+                placeholder="------"
+                className="w-full h-14 text-center text-2xl font-bold tracking-[0.5em] rounded-xl border-2 border-theme-border bg-theme-bg-primary text-theme-text-primary focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:outline-none transition-all"
+              />
             </div>
           )}
 
           {error && (
-            <p className="text-red-400 text-sm mt-3">{error}</p>
+            <div className="bg-theme-error/10 border border-theme-error/30 rounded-xl px-4 py-2.5 mt-2">
+              <p className="text-sm text-theme-error">{error}</p>
+            </div>
           )}
         </div>
 
         {/* Actions */}
-        <div className="p-4 border-t border-theme-border flex flex-col-reverse sm:flex-row gap-3 sm:justify-end rounded-b-lg flex-shrink-0">
-          {step === 'blocked' && (
-            <>
-              {onCancel && (
+        {step !== 'verified' && (
+          <div className="px-6 sm:px-8 pb-6 flex flex-col-reverse sm:flex-row gap-3 sm:justify-stretch flex-shrink-0">
+            {step === 'blocked' && (
+              <>
+                {onCancel && (
+                  <button
+                    onClick={onCancel}
+                    className="flex-1 px-5 py-3 min-h-[44px] bg-transparent border border-theme-border hover:border-theme-text-muted text-theme-text-primary rounded-xl transition-colors text-sm font-medium"
+                  >
+                    Annulla
+                  </button>
+                )}
                 <button
-                  onClick={onCancel}
-                  className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-muted rounded-full transition-colors text-sm w-full sm:w-auto"
+                  onClick={sendOtp}
+                  disabled={sending}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[44px] bg-dr7-gold text-white rounded-xl transition-all disabled:opacity-50 text-sm font-semibold shadow-lg shadow-dr7-gold/20"
                 >
-                  Annulla
+                  {!sending && (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 11l18-8-8 18-2-7-8-3z" />
+                    </svg>
+                  )}
+                  {sending ? 'Invio...' : 'Invia richiesta OTP'}
                 </button>
-              )}
-              <button
-                onClick={sendOtp}
-                disabled={sending}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium w-full sm:w-auto"
-              >
-                {sending ? 'Invio...' : 'Richiedi autorizzazione'}
-              </button>
-            </>
-          )}
+              </>
+            )}
 
-          {step === 'otp-sent' && (
-            <>
-              <button
-                onClick={resendOtp}
-                disabled={sending}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-muted rounded-full transition-colors text-sm disabled:opacity-50"
-              >
-                {sending ? 'Invio...' : 'Reinvia codice'}
-              </button>
-              <button
-                onClick={verifyCode}
-                disabled={otpCode.length < 6 || verifying}
-                className="px-4 py-3 sm:py-2 min-h-[44px] bg-dr7-gold hover:bg-[#0A8FA3] text-white rounded-full transition-colors disabled:opacity-50 text-sm font-medium"
-              >
-                {verifying ? 'Verifica...' : 'Verifica'}
-              </button>
-            </>
-          )}
-        </div>
+            {step === 'otp-sent' && (
+              <>
+                <button
+                  onClick={resendOtp}
+                  disabled={sending}
+                  className="flex-1 px-5 py-3 min-h-[44px] bg-transparent border border-theme-border hover:border-theme-text-muted text-theme-text-primary rounded-xl transition-colors text-sm font-medium disabled:opacity-50"
+                >
+                  {sending ? 'Invio...' : 'Reinvia codice'}
+                </button>
+                <button
+                  onClick={verifyCode}
+                  disabled={otpCode.length < 6 || verifying}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[44px] bg-dr7-gold text-white rounded-xl transition-all disabled:opacity-50 text-sm font-semibold shadow-lg shadow-dr7-gold/20"
+                >
+                  {!verifying && (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                  {verifying ? 'Verifica...' : 'Verifica'}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
