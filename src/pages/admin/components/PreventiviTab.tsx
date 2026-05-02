@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { authFetch } from '../../../utils/authFetch'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
@@ -1895,30 +1896,85 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       total: p.total_final,
     })
 
-    // If admin chose Pay by Link Nexi, generate it and offer to copy/send
+    // If admin chose Pay by Link Nexi, generate it and send to customer via
+    // WhatsApp using the same flow as ReservationsTab "Da saldare".
     if (payment_method === 'Pay by Link Nexi' && payment_status === 'pending' && inserted?.id) {
       try {
-        const linkRes = await fetch('/.netlify/functions/nexi-pay-by-link', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: inserted.id,
-            amountCents: totalCents,
-            description: `Prenotazione ${p.vehicle_name}`,
-            customerEmail,
-            customerName,
-            expirationHours: 24,
-          }),
-        })
-        const linkData = await linkRes.json()
-        if (linkRes.ok && linkData?.paymentUrl) {
-          await navigator.clipboard.writeText(linkData.paymentUrl).catch(() => {})
-          toast.success('Link Nexi generato e copiato negli appunti')
+        const totalEur = p.total_final ?? 0
+        const remainingEur = Math.max(0, totalEur - amount_paid_eur)
+        if (remainingEur <= 0) {
+          toast('Totale gia\' coperto: nessun link generato.')
         } else {
-          toast(`Prenotazione creata. Genera il link Nexi manualmente: ${linkData?.error || ''}`)
+          const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: inserted.id,
+              amount: remainingEur,
+              customerEmail,
+              customerName,
+              description: `Noleggio DR7 - ${p.vehicle_name} - ${customerName}`,
+              expirationHours: 1,
+            }),
+          })
+          const linkData = await linkRes.json().catch(() => ({} as Record<string, unknown>))
+
+          if (linkRes.ok && (linkData as { paymentUrl?: string }).paymentUrl) {
+            const paymentUrl = (linkData as { paymentUrl: string }).paymentUrl
+            const orderId = (linkData as { orderId?: string }).orderId
+            const expiresAt = (linkData as { expiresAt?: string }).expiresAt
+            // Update booking_details with link info (same shape as ReservationsTab)
+            await supabase.from('bookings').update({
+              booking_details: {
+                ...bookingPayload.booking_details,
+                nexi_payment_link: paymentUrl,
+                nexi_order_id: orderId || null,
+                payment_link_expires_at: expiresAt || null,
+                payment_link_created_at: new Date().toISOString(),
+              }
+            }).eq('id', inserted.id)
+
+            if (!customerPhone) {
+              toast(`Link generato ma cliente senza numero: ${paymentUrl}`, { duration: 12000 })
+            } else {
+              const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customPhone: customerPhone,
+                  templateKey: 'payment_link_customer',
+                  templateVars: {
+                    '{customer_name}': customerName,
+                    '{nome}': customerName.split(' ')[0] || 'Cliente',
+                    '{booking_id}': inserted.id.substring(0, 8).toUpperCase(),
+                    '{booking_ref}': inserted.id.substring(0, 8).toUpperCase(),
+                    '{total}': remainingEur.toFixed(2),
+                    '{amount}': remainingEur.toFixed(2),
+                    '{importo}': remainingEur.toFixed(2),
+                    '{payment_link}': paymentUrl,
+                    '{link}': paymentUrl,
+                    '{expiry}': '1 ora',
+                  }
+                })
+              })
+              const waJson = await waRes.json().catch(() => ({} as Record<string, unknown>))
+              const skipped = (waJson as { skipped?: boolean }).skipped
+              if (skipped) {
+                toast.error('Link creato ma template "payment_link_customer" mancante in Messaggi di Sistema Pro — non inviato.', { duration: 10000 })
+              } else if (!waRes.ok) {
+                toast.error(`Link creato ma invio WhatsApp fallito: ${(waJson as { message?: string }).message || waRes.status}`, { duration: 10000 })
+              } else {
+                toast.success('Pay by Link generato e inviato al cliente via WhatsApp')
+              }
+            }
+          } else {
+            const errMsg = (linkData as { error?: string; message?: string }).error || (linkData as { message?: string }).message || `HTTP ${linkRes.status}`
+            toast.error('Errore generazione Pay by Link: ' + errMsg, { duration: 10000 })
+          }
         }
-      } catch (err: any) {
-        toast(`Prenotazione creata. Errore generazione link Nexi: ${err?.message}`)
+      } catch (linkErr: unknown) {
+        const msg = linkErr instanceof Error ? linkErr.message : String(linkErr)
+        toast.error('Errore Pay by Link: ' + msg, { duration: 10000 })
       }
     }
 
