@@ -1806,13 +1806,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const customerEmail = c.email || ''
     const customerPhone = c.telefono || c.phone || p.customer_phone || ''
 
+    const totalEur = p.total_final ?? 0
     const bookingPayload = {
       vehicle_id: p.vehicle_id,
       vehicle_name: p.vehicle_name,
       vehicle_plate: p.vehicle_plate,
       pickup_date: p.pickup_date,
       dropoff_date: p.dropoff_date,
-      price_total: p.total_final ?? 0,
+      // bookings.price_total is INTEGER in this schema (euros, no decimals).
+      // Round to the nearest euro; the exact decimal lives in booking_details.exact_total.
+      price_total: Math.round(totalEur),
       status: 'confirmed',
       service_type: 'rental',
       payment_method,
@@ -1824,6 +1827,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         from_preventivo: p.id,
         customer_id,
         customer: { customerId: customer_id, name: customerName, email: customerEmail, phone: customerPhone },
+        exact_total: totalEur,
         insurance_option: p.insurance_option,
         rental_days: p.rental_days,
         unlimited_km: (p.unlimited_km_total || 0) > 0,
