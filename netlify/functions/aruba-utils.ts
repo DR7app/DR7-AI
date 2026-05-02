@@ -182,7 +182,14 @@ export async function searchIncomingInvoices(params: {
     queryParams.set('countryReceiver', process.env.ARUBA_COUNTRY_RECEIVER || 'IT')
     // vatcodeReceiver is required by Aruba — our own P.IVA (digits only, no IT prefix).
     // Falls back to ARUBA_USERNAME (many Aruba SDI accounts use the P.IVA as username).
-    const vatReceiver = (process.env.ARUBA_VATCODE_RECEIVER || USERNAME || '').replace(/\D/g, '')
+    const rawReceiver = process.env.ARUBA_VATCODE_RECEIVER || USERNAME || ''
+    const vatReceiver = rawReceiver.replace(/\D/g, '')
+    console.log('[Aruba] vatcodeReceiver source:', {
+        from_env: !!process.env.ARUBA_VATCODE_RECEIVER,
+        raw_length: rawReceiver.length,
+        digits_length: vatReceiver.length,
+        digits_preview: vatReceiver ? `${vatReceiver.slice(0, 2)}***${vatReceiver.slice(-2)}` : '(empty)',
+    })
     if (!vatReceiver) {
         throw new Error('Aruba vatcodeReceiver mancante: settare ARUBA_VATCODE_RECEIVER (P.IVA della societa, solo cifre) in Netlify env')
     }
