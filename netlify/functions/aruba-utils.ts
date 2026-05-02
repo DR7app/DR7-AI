@@ -204,17 +204,26 @@ export async function searchIncomingInvoices(params: {
     if (params.endDate) queryParams.set('endDate', params.endDate)
     if (params.senderDescription) queryParams.set('senderDescription', params.senderDescription)
 
-    const response = await fetch(`${ARUBA_API_URL}/services/invoice/in/findByUsername?${queryParams}`, {
-        method: 'GET',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json'
-        },
-    })
+    let response: Response | null = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+        response = await fetch(`${ARUBA_API_URL}/services/invoice/in/findByUsername?${queryParams}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            },
+        })
+        if (response.status !== 429) break
+        const wait = 1000 * (attempt + 1) + Math.floor(Math.random() * 500)
+        console.warn(`[Aruba] 429 on findByUsername, retry in ${wait}ms (attempt ${attempt + 1}/3)`)
+        await new Promise(r => setTimeout(r, wait))
+    }
+    if (!response) throw new Error('Aruba findByUsername: no response')
 
     if (!response.ok) {
         const text = await response.text()
-        throw new Error(`Aruba Incoming Search Failed: ${response.status} ${text}`)
+        const snippet = text.length > 300 ? text.slice(0, 300) + '...' : text
+        throw new Error(`Aruba Incoming Search Failed: ${response.status} ${snippet.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}`)
     }
 
     const result = await response.json()
@@ -230,20 +239,32 @@ export async function searchIncomingInvoices(params: {
 /**
  * Get a single incoming invoice with full details (XML/PDF)
  * Based on official docs: GET /services/invoice/in/getByFilename
+ * Retries once with backoff on 429 (rate limit).
  */
 export async function getIncomingInvoice(filename: string, includePdf = true): Promise<any> {
     const token = await getArubaToken()
 
-    const response = await fetch(
-        `${ARUBA_API_URL}/services/invoice/in/getByFilename?filename=${encodeURIComponent(filename)}&includePdf=${includePdf}&includeFile=true`,
-        {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
+    let response: Response | null = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+        response = await fetch(
+            `${ARUBA_API_URL}/services/invoice/in/getByFilename?filename=${encodeURIComponent(filename)}&includePdf=${includePdf}&includeFile=true`,
+            {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json'
+                },
             }
-        }
-    )
+        )
+        if (response.status !== 429) break
+        const wait = 600 * (attempt + 1) + Math.floor(Math.random() * 300)
+        console.warn(`[Aruba] 429 rate limit on ${filename}, retry in ${wait}ms (attempt ${attempt + 1}/3)`)
+        await new Promise(r => setTimeout(r, wait))
+    }
+    if (!response) throw new Error('Aruba getByFilename: no response')
+    if (response.status === 429) {
+        throw new Error(`Aruba 429 rate limit (filename ${filename})`)
+    }
 
     if (!response.ok) {
         const text = await response.text()

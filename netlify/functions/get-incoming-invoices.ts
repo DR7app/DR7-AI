@@ -202,15 +202,25 @@ export const handler: Handler = async (event) => {
 
     const filteredByMode = mode === 'all' ? parsed : parsed.filter(i => i.is_tracked)
 
-    // Enrich rows whose summary lacks amount/date/number by calling getByFilename
-    // (the findByUsername summary doesn't include these fields). Done in batches
-    // of CONCURRENCY to keep wall-clock reasonable.
-    const CONCURRENCY = 5
+    // Enrich rows whose summary lacks amount/date/number by calling getByFilename.
+    // Sequential + small delay to respect Aruba rate limits. If enrichment fails
+    // for a row (e.g. 429), keep the row visible with sender/PIVA but no amount.
+    const CONCURRENCY = 1
+    const PER_REQUEST_DELAY_MS = 250
     const needEnrich = filteredByMode.filter(i => i.filename && (!i.amount || !i.invoiceDate || !i.invoiceNumber))
-    console.log(`[Aruba] enriching ${needEnrich.length} of ${filteredByMode.length} rows`)
+    console.log(`[Aruba] enriching ${needEnrich.length} of ${filteredByMode.length} rows (sequential)`)
 
+    let consecutive429 = 0
     for (let i = 0; i < needEnrich.length; i += CONCURRENCY) {
       const batch = needEnrich.slice(i, i + CONCURRENCY)
+      if (i > 0 && PER_REQUEST_DELAY_MS > 0) {
+        await new Promise(r => setTimeout(r, PER_REQUEST_DELAY_MS))
+      }
+      // Stop early if we hit too many rate limits
+      if (consecutive429 >= 5) {
+        console.warn(`[Aruba] aborting enrichment after ${consecutive429} consecutive 429s — remaining rows will show without amount`)
+        break
+      }
       await Promise.all(batch.map(async (row) => {
         try {
           const detail = await getIncomingInvoice(row.filename, false)
@@ -236,8 +246,11 @@ export const handler: Handler = async (event) => {
             const num = src.documentNumber || src.invoiceNumber || src.numeroDocumento || src.numero || src.number
             if (num && !row.invoiceNumber) row.invoiceNumber = String(num)
           }
+          consecutive429 = 0
         } catch (e: any) {
-          console.warn(`[Aruba] enrich failed for ${row.filename}:`, e?.message)
+          const msg = e?.message || String(e)
+          if (msg.includes('429')) consecutive429++
+          console.warn(`[Aruba] enrich failed for ${row.filename}:`, msg)
         }
       }))
     }
