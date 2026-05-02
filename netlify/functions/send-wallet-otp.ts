@@ -1,12 +1,18 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
+import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { requireAuth } from './require-auth'
 
 // OTP recipient — the direzione that approves wallet operations.
-// When this admin himself triggers a wallet OTP, the bypass below
-// auto-approves without sending email (he IS the approver).
+// Any superadmin who triggers an OTP-required action self-approves
+// (no email sent) — the gate is there to keep regular admins honest.
 const OTP_RECIPIENT = 'valerio@dr7.app'
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export const handler: Handler = async (event) => {
   const headers = {
@@ -35,10 +41,17 @@ export const handler: Handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) }
     }
 
-    // BYPASS: when the recipient is the one acting, no email needed.
-    if (authUser?.email?.toLowerCase() === OTP_RECIPIENT.toLowerCase()) {
-      console.log(`[send-wallet-otp] AUTO-APPROVED for ${authUser.email} (recipient self-approval)`)
-      return { statusCode: 200, headers, body: JSON.stringify({ success: true, autoApproved: true }) }
+    // BYPASS: any superadmin self-approves wallet OTPs.
+    if (authUser?.id) {
+      const { data: requesterAdmin } = await supabase
+        .from('admins')
+        .select('role')
+        .eq('user_id', authUser.id)
+        .maybeSingle()
+      if (requesterAdmin?.role === 'superadmin') {
+        console.log(`[send-wallet-otp] AUTO-APPROVED for ${authUser.email} (superadmin)`)
+        return { statusCode: 200, headers, body: JSON.stringify({ success: true, autoApproved: true }) }
+      }
     }
 
     const apiKey = process.env.RESEND_API_KEY

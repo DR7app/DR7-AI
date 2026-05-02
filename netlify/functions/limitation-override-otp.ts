@@ -55,10 +55,15 @@ export const handler: Handler = async (event) => {
       const otpExpiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString()
       const overrideExpiresAt = new Date(Date.now() + OVERRIDE_TTL_HOURS * 60 * 60 * 1000).toISOString()
 
-      // BYPASS: when the recipient is the one requesting the override,
-      // auto-approve without going through the OTP loop. He IS the
-      // direzione — sending him a code only to type it himself is theatre.
-      const isSelfApproval = authUser!.email?.toLowerCase() === OTP_RECIPIENT.toLowerCase()
+      // BYPASS: any superadmin can self-approve their own override.
+      // Sending an OTP to the direzione only to type it themselves is
+      // theatre — the gate exists to keep regular admins honest.
+      const { data: requesterAdmin } = await supabase
+        .from('admins')
+        .select('role')
+        .eq('user_id', authUser!.id)
+        .maybeSingle()
+      const isSelfApproval = requesterAdmin?.role === 'superadmin'
 
       // Store OTP server-side
       const { data: override, error: insertErr } = await supabase
@@ -92,7 +97,7 @@ export const handler: Handler = async (event) => {
 
       // Self-approval shortcut: skip email, return active override.
       if (isSelfApproval) {
-        console.log(`[limitation-override-otp] AUTO-APPROVED for ${authUser!.email} (recipient self-approval) — override ${override.id}`)
+        console.log(`[limitation-override-otp] AUTO-APPROVED for ${authUser!.email} (superadmin) — override ${override.id}`)
         return {
           statusCode: 200,
           headers,
