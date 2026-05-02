@@ -139,12 +139,44 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     }
 
     async function viewFile(doc: FornitoreDocument) {
-        if (!doc.file_url) return
-        const { data, error } = await supabase.storage
-            .from('fornitori-documents')
-            .createSignedUrl(doc.file_url, 60 * 5)
-        if (error || !data?.signedUrl) { alert('File non disponibile'); return }
-        window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+        // Path 1 — file caricato manualmente: signed URL su Supabase storage
+        if (doc.file_url) {
+            const { data, error } = await supabase.storage
+                .from('fornitori-documents')
+                .createSignedUrl(doc.file_url, 60 * 5)
+            if (!error && data?.signedUrl) {
+                window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+                return
+            }
+        }
+        // Path 2 — fattura importata da Aruba SDI: scarica via API Aruba
+        if (doc.aruba_filename) {
+            try {
+                const res = await fetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(doc.aruba_filename)}`)
+                const json = await res.json()
+                if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+                const data = json.invoice || {}
+                const base64 = data.pdf || data.pdfFile
+                if (!base64) {
+                    alert('PDF non disponibile in Aruba per questa fattura.')
+                    return
+                }
+                const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+                const blob = new Blob([bytes], { type: 'application/pdf' })
+                const url = URL.createObjectURL(blob)
+                window.open(url, '_blank', 'noopener,noreferrer')
+                setTimeout(() => URL.revokeObjectURL(url), 60000)
+                return
+            } catch (err) {
+                alert('Download fallito: ' + (err instanceof Error ? err.message : String(err)))
+                return
+            }
+        }
+        alert('Nessun file disponibile per questa fattura.')
+    }
+
+    function canViewDoc(d: FornitoreDocument | undefined): boolean {
+        return !!(d && (d.file_url || d.aruba_filename))
     }
 
     const annoOptions: number[] = []
@@ -194,16 +226,16 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                         {tutteAnomalie.map(a => {
                             const fattura = fatturaById.get(a.fattura_id)
                             return (
-                                <div key={a.fattura_id} className="text-xs px-3 py-2 rounded bg-orange-900/20 border border-orange-800/40 flex flex-wrap items-center gap-2">
-                                    <span className="text-orange-300">⚠</span>
-                                    <span className="font-mono">{a.fattura_numero}</span>
-                                    <span className="text-theme-text-muted">— {MESI_IT[a.mese - 1]} {anno}</span>
-                                    <span className="ml-auto">Fatt: <strong>{fmtEUR(a.fattura_totale)}</strong></span>
+                                <div key={a.fattura_id} className="text-sm px-3 py-2 rounded bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 flex flex-wrap items-center gap-3 text-orange-900 dark:text-orange-100">
+                                    <span>⚠</span>
+                                    <span className="font-mono font-semibold">{a.fattura_numero}</span>
+                                    <span className="opacity-70">— {MESI_IT[a.mese - 1]} {anno}</span>
+                                    <span className="ml-auto">Fattura: <strong>{fmtEUR(a.fattura_totale)}</strong></span>
                                     <span>Bolle: <strong>{fmtEUR(a.ddt_totale)}</strong></span>
-                                    <span className="text-orange-300">Δ {fmtEUR(a.differenza)}</span>
-                                    {fattura?.file_url && (
-                                        <button onClick={() => viewFile(fattura)}
-                                            className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
+                                    <span className="font-bold">Δ {fmtEUR(a.differenza)}</span>
+                                    {canViewDoc(fattura) && (
+                                        <button onClick={() => fattura && viewFile(fattura)}
+                                            className="text-xs px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold">
                                             Vedi fattura
                                         </button>
                                     )}
@@ -214,69 +246,67 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 )}
             </Step>
 
-            {/* STEP 3 — Approvazione (Valerio / Ilenia only) */}
-            <Step n={3} title="Approvazione" desc={`${daApprovare.length} fattur${daApprovare.length === 1 ? 'a' : 'e'} da approvare`}
-                adminOnly={!canApproveAndPay}>
-                {!canApproveAndPay ? (
-                    <p className="text-sm text-theme-text-muted">Solo Valerio o Ilenia possono approvare.</p>
-                ) : daApprovare.length === 0 ? (
-                    <p className="text-sm text-theme-text-muted">Nessuna fattura verificata in attesa.</p>
-                ) : (
-                    <>
-                        <div className="flex justify-end mb-2">
-                            <Button onClick={approveAll}>Approva tutte ({daApprovare.length})</Button>
-                        </div>
+            {/* STEP 3 — Approvazione (visible solo per amministratori autorizzati) */}
+            {canApproveAndPay && (
+                <Step n={3} title="Approvazione" desc={`${daApprovare.length} fattur${daApprovare.length === 1 ? 'a' : 'e'} da approvare`}>
+                    {daApprovare.length === 0 ? (
+                        <p className="text-sm text-theme-text-muted">Nessuna fattura verificata in attesa.</p>
+                    ) : (
+                        <>
+                            <div className="flex justify-end mb-2">
+                                <Button onClick={approveAll}>Approva tutte ({daApprovare.length})</Button>
+                            </div>
+                            <ul className="space-y-1">
+                                {daApprovare.map(f => (
+                                    <li key={f.id} className="text-sm flex items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
+                                        <span className="font-mono">{f.numero_documento}</span>
+                                        <span className="text-theme-text-muted text-xs">{fmtDateIT(f.data_documento)}</span>
+                                        <span className="ml-auto font-semibold">{fmtEUR(f.importo_totale)}</span>
+                                        {canViewDoc(f) && (
+                                            <button onClick={() => viewFile(f)}
+                                                className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
+                                                Vedi
+                                            </button>
+                                        )}
+                                        <button onClick={() => approveDoc(f)} className="text-xs px-2 py-1 rounded bg-blue-700 hover:bg-blue-600 text-white">
+                                            Approva
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </>
+                    )}
+                </Step>
+            )}
+
+            {/* STEP 4 — Pagamento (visible solo per amministratori autorizzati) */}
+            {canApproveAndPay && (
+                <Step n={4} title="Pagamento" desc={`${daPagare.length} fattur${daPagare.length === 1 ? 'a' : 'e'} da pagare`}>
+                    {daPagare.length === 0 ? (
+                        <p className="text-sm text-theme-text-muted">Nessuna fattura approvata in attesa di pagamento.</p>
+                    ) : (
                         <ul className="space-y-1">
-                            {daApprovare.map(f => (
-                                <li key={f.id} className="text-sm flex items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
+                            {daPagare.map(f => (
+                                <li key={f.id} className="text-sm flex flex-wrap items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
                                     <span className="font-mono">{f.numero_documento}</span>
                                     <span className="text-theme-text-muted text-xs">{fmtDateIT(f.data_documento)}</span>
+                                    {f.data_scadenza && <span className="text-xs text-amber-300">scade {fmtDateIT(f.data_scadenza)}</span>}
                                     <span className="ml-auto font-semibold">{fmtEUR(f.importo_totale)}</span>
-                                    {f.file_url && (
+                                    {canViewDoc(f) && (
                                         <button onClick={() => viewFile(f)}
                                             className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
                                             Vedi
                                         </button>
                                     )}
-                                    <button onClick={() => approveDoc(f)} className="text-xs px-2 py-1 rounded bg-blue-700 hover:bg-blue-600 text-white">
-                                        Approva
+                                    <button onClick={() => setPaymentDoc(f)} className="text-xs px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white">
+                                        Registra pagamento
                                     </button>
                                 </li>
                             ))}
                         </ul>
-                    </>
-                )}
-            </Step>
-
-            {/* STEP 4 — Pagamento (Valerio / Ilenia only) */}
-            <Step n={4} title="Pagamento" desc={`${daPagare.length} fattur${daPagare.length === 1 ? 'a' : 'e'} da pagare`}
-                adminOnly={!canApproveAndPay}>
-                {!canApproveAndPay ? (
-                    <p className="text-sm text-theme-text-muted">Solo Valerio o Ilenia possono registrare pagamenti.</p>
-                ) : daPagare.length === 0 ? (
-                    <p className="text-sm text-theme-text-muted">Nessuna fattura approvata in attesa di pagamento.</p>
-                ) : (
-                    <ul className="space-y-1">
-                        {daPagare.map(f => (
-                            <li key={f.id} className="text-sm flex flex-wrap items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
-                                <span className="font-mono">{f.numero_documento}</span>
-                                <span className="text-theme-text-muted text-xs">{fmtDateIT(f.data_documento)}</span>
-                                {f.data_scadenza && <span className="text-xs text-amber-300">scade {fmtDateIT(f.data_scadenza)}</span>}
-                                <span className="ml-auto font-semibold">{fmtEUR(f.importo_totale)}</span>
-                                {f.file_url && (
-                                    <button onClick={() => viewFile(f)}
-                                        className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
-                                        Vedi
-                                    </button>
-                                )}
-                                <button onClick={() => setPaymentDoc(f)} className="text-xs px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white">
-                                    Registra pagamento
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </Step>
+                    )}
+                </Step>
+            )}
 
             {showUpload && (
                 <FornitoreDocumentUpload
@@ -294,30 +324,22 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     )
 }
 
-function Step({ n, title, desc, tone, adminOnly, children }: {
+function Step({ n, title, desc, tone, children }: {
     n: number
     title: string
     desc: string
     tone?: 'ok' | 'warning'
-    adminOnly?: boolean
     children: React.ReactNode
 }) {
-    const toneCls = tone === 'warning' ? 'bg-orange-950/20 border-orange-800/40'
-        : tone === 'ok' ? 'bg-emerald-950/20 border-emerald-800/40'
+    const toneCls = tone === 'warning' ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-800'
+        : tone === 'ok' ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800'
         : 'bg-theme-bg-secondary border-theme-border'
     return (
         <div className={`rounded-lg border p-4 ${toneCls}`}>
             <div className="flex items-center gap-3 mb-3">
                 <span className="flex-shrink-0 w-8 h-8 rounded-full bg-dr7-gold text-black font-bold flex items-center justify-center">{n}</span>
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
-                        {title}
-                        {adminOnly && (
-                            <span className="text-[10px] uppercase tracking-wide bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded-full">
-                                Solo amministratore
-                            </span>
-                        )}
-                    </p>
+                    <p className="text-sm font-semibold text-theme-text-primary">{title}</p>
                     <p className="text-xs text-theme-text-secondary">{desc}</p>
                 </div>
             </div>
