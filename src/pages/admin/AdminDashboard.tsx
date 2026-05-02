@@ -455,12 +455,14 @@ export default function AdminDashboard() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen w-full max-w-full">
-        {/* Top Bar */}
-        <header className="bg-theme-bg-primary border-b border-theme-border px-4 sm:px-8 py-4 flex justify-between items-center">
+        {/* Top Bar — SEMPRE nero in entrambi i temi (richiesta brand:
+            l'header ospita il logo brand cyan-on-black). Testi e icone
+            forzati su scala chiara perche' siamo sempre su nero. */}
+        <header className="bg-black border-b border-white/10 px-4 sm:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="text-theme-text-primary p-2 min-h-[44px] min-w-[44px] flex-shrink-0 flex items-center justify-center hover:bg-theme-bg-hover rounded-lg transition-colors"
+              className="text-white p-2 min-h-[44px] min-w-[44px] flex-shrink-0 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors"
               aria-label="Toggle menu"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -470,7 +472,7 @@ export default function AdminDashboard() {
             {tabHistory.length > 0 && (
               <button
                 onClick={goBack}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-theme-bg-hover transition-colors text-theme-text-muted hover:text-theme-text-primary flex-shrink-0"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white flex-shrink-0"
                 aria-label="Indietro"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -478,7 +480,7 @@ export default function AdminDashboard() {
                 </svg>
               </button>
             )}
-            <h2 className="text-lg sm:text-xl font-bold text-theme-text-primary truncate">
+            <h2 className="text-lg sm:text-xl font-bold text-white truncate">
               {(() => {
                 if (!sectionForActiveTab) return tabLabels[activeTab] || activeTab
                 // Match by tab AND subView when multiple entries point at the same tab.
@@ -517,7 +519,7 @@ export default function AdminDashboard() {
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Passa al tema chiaro' : 'Passa al tema scuro'}
               aria-label="Cambia tema"
-              className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full border border-theme-border hover:border-dr7-gold text-theme-text-muted hover:text-dr7-gold transition-colors"
+              className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full border border-white/20 hover:border-dr7-gold text-white/70 hover:text-dr7-gold transition-colors"
             >
               {theme === 'dark' ? (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -530,7 +532,7 @@ export default function AdminDashboard() {
                 </svg>
               )}
             </button>
-            <span className="text-sm text-theme-text-muted hidden sm:block">
+            <span className="text-sm text-white/70 hidden sm:block">
               {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
           </div>
@@ -540,19 +542,13 @@ export default function AdminDashboard() {
             active section. Renders only if the section has more than one
             sub-tab so single-tab sections don't get a one-button bar. */}
         {sectionForActiveTab && sectionForActiveTab.tabs.filter(t => !t.superadminOnly || adminRole === 'superadmin').length > 1 && (
-          <div className="bg-theme-bg-primary border-b border-theme-border overflow-x-auto scrollbar-thin">
+          <div className="bg-black border-b border-white/10 overflow-x-auto scrollbar-thin">
             <div className="flex items-center gap-1 px-3 sm:px-6 lg:px-8">
               {sectionForActiveTab.tabs
                 .filter(t => !t.superadminOnly || adminRole === 'superadmin')
                 .map((t, idx) => {
-                  // A tab is active if its `tab` matches activeTab AND, when
-                  // `subView` is declared, the rentalSubView also matches.
-                  // For tabs without subView, ignore rentalSubView.
                   const tabMatch = activeTab === t.tab
                   const subMatch = t.subView ? rentalSubView === t.subView : (t.tab !== 'reservations' || true)
-                  // Special: if there are multiple entries pointing to the
-                  // same `tab` (Noleggio/Preventivi both → reservations), only
-                  // ONE should appear active — the one whose subView matches.
                   const sameTabEntries = sectionForActiveTab.tabs.filter(x => x.tab === t.tab)
                   const isActive = sameTabEntries.length > 1
                     ? (tabMatch && t.subView === rentalSubView)
@@ -567,7 +563,7 @@ export default function AdminDashboard() {
                       className={`relative px-3 sm:px-4 py-3 text-[13px] font-medium whitespace-nowrap transition-colors ${
                         isActive
                           ? 'text-primary-light'
-                          : 'text-theme-text-muted hover:text-dr7-gold'
+                          : 'text-white/60 hover:text-dr7-gold'
                       }`}
                     >
                       {t.label}

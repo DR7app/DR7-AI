@@ -21,12 +21,19 @@ interface FornitoreRow extends Fornitore {
  * direttamente nelle azioni che l'utente esegue (carica bolla, controlla,
  * approva, paga).
  */
+const LAST_SYNC_KEY = 'dr7_fornitori_last_aruba_sync'
+const AUTO_SYNC_THROTTLE_MS = 30 * 60 * 1000  // 30 min — no point re-scanning Aruba more often
+
 export default function FornitoriTab() {
     const [fornitori, setFornitori] = useState<FornitoreRow[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     const [selected, setSelected] = useState<Fornitore | null>(null)
     const [importing, setImporting] = useState(false)
+    const [lastSync, setLastSync] = useState<number | null>(() => {
+        const v = localStorage.getItem(LAST_SYNC_KEY)
+        return v ? parseInt(v) : null
+    })
 
     async function load() {
         setLoading(true)
@@ -68,7 +75,18 @@ export default function FornitoriTab() {
         }
     }
 
-    useEffect(() => { load() }, [])
+    useEffect(() => {
+        load()
+        // Auto-sync da Aruba al mount, throttled a 30 min per non rifare lo
+        // scan a ogni navigazione. La prima volta gira sempre.
+        const lastIso = localStorage.getItem(LAST_SYNC_KEY)
+        const lastMs = lastIso ? parseInt(lastIso) : 0
+        if (Date.now() - lastMs > AUTO_SYNC_THROTTLE_MS) {
+            // Fire-and-forget; UI shows un piccolo spinner durante l'import
+            importFromAruba({ silent: true }).catch(() => { /* swallow */ })
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase()
@@ -80,7 +98,7 @@ export default function FornitoriTab() {
         )
     }, [fornitori, search])
 
-    async function importFromAruba() {
+    async function importFromAruba(opts: { silent?: boolean } = {}) {
         setImporting(true)
         try {
             const res = await fetch('/.netlify/functions/import-fornitori-from-aruba', {
@@ -89,17 +107,34 @@ export default function FornitoriTab() {
                 body: JSON.stringify({ months: 3 }),
             })
             const text = await res.text()
-            let json: { success?: boolean; inserted?: number; updated?: number; error?: string } = {}
+            let json: { success?: boolean; added?: number; skipped?: number; scanned?: number; error?: string } = {}
             try { json = JSON.parse(text) } catch { /* ignore */ }
             if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
-            toast.success(`Sincronizzato: ${json.inserted ?? 0} nuovi · ${json.updated ?? 0} aggiornati`)
+            const ts = Date.now()
+            localStorage.setItem(LAST_SYNC_KEY, String(ts))
+            setLastSync(ts)
+            if (!opts.silent) {
+                toast.success(`Sincronizzato: ${json.added ?? 0} nuovi fornitori · ${json.skipped ?? 0} già presenti`)
+            } else if ((json.added ?? 0) > 0) {
+                toast.success(`${json.added} nuovi fornitori importati da Aruba`)
+            }
             load()
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
-            toast.error('Sincronizzazione fallita: ' + msg)
+            if (!opts.silent) toast.error('Sincronizzazione fallita: ' + msg)
+            else console.warn('[fornitori] auto-sync failed:', msg)
         } finally {
             setImporting(false)
         }
+    }
+
+    function fmtRelative(ms: number | null): string {
+        if (!ms) return 'mai'
+        const diff = Math.floor((Date.now() - ms) / 1000)
+        if (diff < 60) return 'pochi secondi fa'
+        if (diff < 3600) return `${Math.floor(diff / 60)} min fa`
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h fa`
+        return `${Math.floor(diff / 86400)}gg fa`
     }
 
     if (selected) {
@@ -114,9 +149,16 @@ export default function FornitoriTab() {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
-                <h2 className="text-2xl font-semibold text-theme-text-primary">Fornitori</h2>
-                <Button variant="secondary" onClick={importFromAruba} disabled={importing}>
-                    {importing ? 'Sincronizzazione…' : 'Sincronizza da Aruba'}
+                <div>
+                    <h2 className="text-2xl font-semibold text-theme-text-primary">Fornitori</h2>
+                    <p className="text-xs text-theme-text-muted">
+                        {importing
+                            ? 'Sincronizzazione in corso…'
+                            : `Aruba sincronizzato ${fmtRelative(lastSync)}`}
+                    </p>
+                </div>
+                <Button variant="secondary" onClick={() => importFromAruba()} disabled={importing}>
+                    {importing ? 'Sincronizzazione…' : 'Sincronizza ora'}
                 </Button>
             </div>
 
