@@ -77,6 +77,12 @@
 [functions."fornitori-alerts-cron"]
   schedule = "0 6 * * *"
 
+# Fornitori — nightly sync of all fornitori invoices from Aruba SDI
+# (03:00 Rome estate / 02:00 inverno). So when admin opens a fornitore in
+# the morning, fatture are already there. Throttled internally.
+[functions."fornitori-fatture-sync-cron"]
+  schedule = "0 1 * * *"
+
 # Supercar rental extension reminder — fires at 18:00 Rome the day before drop-off
 # for rentals on exotic vehicles with duration ≥ 3 days. Two times cover both
 # CEST (16 UTC) and CET (17 UTC); the function gates inside on Rome hour == 18.

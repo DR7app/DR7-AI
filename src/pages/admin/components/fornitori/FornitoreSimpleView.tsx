@@ -44,7 +44,6 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     // attuale (carica bolle del mese, controlla incrocio col mese, paga il mese).
     // Selettore "Tutti i mesi" disponibile per la vista annuale.
     const [mese, setMese] = useState<number | 'tutti'>(today.getMonth() + 1)
-    const [syncing, setSyncing] = useState(false)
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
     const [loading, setLoading] = useState(false)
@@ -92,11 +91,13 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     // non riscaricare ad ogni navigazione). Va fino a 12 mesi indietro per
     // coprire tutto il 2026 — i dati partono da 01/26.
     useEffect(() => {
+        // Throttle 60 min — il cron notturno fornitori-fatture-sync-cron fa
+        // il grosso del lavoro; questo qui e' un fallback se l'utente apre un
+        // fornitore appena creato o se il cron non e' partito.
         const key = `dr7_fornitore_sync_${fornitore.id}`
         const last = parseInt(localStorage.getItem(key) || '0')
-        if (Date.now() - last < 5 * 60 * 1000) return // already synced recently
+        if (Date.now() - last < 60 * 60 * 1000) return
 
-        setSyncing(true)
         ;(async () => {
             try {
                 const res = await fetch('/.netlify/functions/sync-fornitore-invoices', {
@@ -107,14 +108,10 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 const json = await res.json()
                 if (res.ok && json.success) {
                     localStorage.setItem(key, String(Date.now()))
-                    // Sempre reload — sia che siano arrivate nuove fatture, sia che
-                    // sia cambiato qualcosa tipo file_url / aruba_filename / status.
-                    await load()
+                    if ((json.inserted || 0) > 0) await load()
                 }
             } catch (err) {
                 console.warn('[fornitore-simple] auto-sync fatture failed:', err)
-            } finally {
-                setSyncing(false)
             }
         })()
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -283,7 +280,6 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                         {fornitore.piva && <span>P.IVA {fornitore.piva}</span>}
                         {fornitore.condizioni_pagamento && <span>{fornitore.condizioni_pagamento}</span>}
                         {fornitore.email && <span>{fornitore.email}</span>}
-                        {syncing && <span className="text-amber-300">Sincronizzazione fatture da Aruba…</span>}
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
