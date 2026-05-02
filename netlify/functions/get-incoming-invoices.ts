@@ -108,6 +108,13 @@ export const handler: Handler = async (event) => {
     // Extract invoices array from Aruba response
     const allInvoices: any[] = result.invoices || result.content || []
 
+    // Diagnostic — dump the keys + first row so we can see what Aruba actually returns
+    if (allInvoices.length > 0) {
+      console.log('[Aruba] response top-level keys:', Object.keys(result || {}))
+      console.log('[Aruba] first invoice keys:', Object.keys(allInvoices[0] || {}))
+      console.log('[Aruba] first invoice raw:', JSON.stringify(allInvoices[0]).substring(0, 2000))
+    }
+
     // Match against fornitori table (replaces previous hardcoded list)
     const fornitori = await loadTrackedFornitori()
     const supplierMatcher = buildSupplierMatcher(fornitori)
