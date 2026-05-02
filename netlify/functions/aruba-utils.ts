@@ -204,8 +204,12 @@ export async function searchIncomingInvoices(params: {
     if (params.endDate) queryParams.set('endDate', params.endDate)
     if (params.senderDescription) queryParams.set('senderDescription', params.senderDescription)
 
+    // Backoff esponenziale 2s/4s/8s + jitter. Aruba puo' tenere il
+    // rate limit per ~30s — 5 tentativi danno fino a ~30s totali prima
+    // di mollare, dentro la finestra di 26s del Netlify background.
     let response: Response | null = null
-    for (let attempt = 0; attempt < 3; attempt++) {
+    const MAX_ATTEMPTS = 5
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         response = await fetch(`${ARUBA_API_URL}/services/invoice/in/findByUsername?${queryParams}`, {
             method: 'GET',
             headers: {
@@ -214,16 +218,31 @@ export async function searchIncomingInvoices(params: {
             },
         })
         if (response.status !== 429) break
-        const wait = 1000 * (attempt + 1) + Math.floor(Math.random() * 500)
-        console.warn(`[Aruba] 429 on findByUsername, retry in ${wait}ms (attempt ${attempt + 1}/3)`)
+        const base = 2000 * Math.pow(2, attempt) // 2s, 4s, 8s, 16s, 32s
+        const wait = Math.min(base, 8000) + Math.floor(Math.random() * 500)
+        console.warn(`[Aruba] 429 on findByUsername, retry in ${wait}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`)
         await new Promise(r => setTimeout(r, wait))
     }
     if (!response) throw new Error('Aruba findByUsername: no response')
 
+    // Errore 429 dopo tutti i retry → messaggio pulito senza HTML/CSS.
+    if (response.status === 429) {
+        throw new Error('Aruba ha limitato le richieste (429). Riprova tra qualche minuto.')
+    }
+
     if (!response.ok) {
         const text = await response.text()
-        const snippet = text.length > 300 ? text.slice(0, 300) + '...' : text
-        throw new Error(`Aruba Incoming Search Failed: ${response.status} ${snippet.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}`)
+        // Rimuovi blocchi <style>...</style> e <script>...</script> PRIMA
+        // di togliere i tag, altrimenti il loro contenuto (CSS/JS) finisce
+        // nel messaggio mostrato all'admin come testo grezzo.
+        const cleanText = text
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+        const snippet = cleanText.length > 200 ? cleanText.slice(0, 200) + '...' : cleanText
+        throw new Error(`Aruba Incoming Search Failed: ${response.status}${snippet ? ' — ' + snippet : ''}`)
     }
 
     const result = await response.json()
@@ -245,7 +264,8 @@ export async function getIncomingInvoice(filename: string, includePdf = true): P
     const token = await getArubaToken()
 
     let response: Response | null = null
-    for (let attempt = 0; attempt < 3; attempt++) {
+    const MAX_ATTEMPTS = 5
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         response = await fetch(
             `${ARUBA_API_URL}/services/invoice/in/getByFilename?filename=${encodeURIComponent(filename)}&includePdf=${includePdf}&includeFile=true`,
             {
@@ -257,8 +277,9 @@ export async function getIncomingInvoice(filename: string, includePdf = true): P
             }
         )
         if (response.status !== 429) break
-        const wait = 600 * (attempt + 1) + Math.floor(Math.random() * 300)
-        console.warn(`[Aruba] 429 rate limit on ${filename}, retry in ${wait}ms (attempt ${attempt + 1}/3)`)
+        const base = 2000 * Math.pow(2, attempt)
+        const wait = Math.min(base, 8000) + Math.floor(Math.random() * 500)
+        console.warn(`[Aruba] 429 rate limit on ${filename}, retry in ${wait}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`)
         await new Promise(r => setTimeout(r, wait))
     }
     if (!response) throw new Error('Aruba getByFilename: no response')
@@ -268,7 +289,14 @@ export async function getIncomingInvoice(filename: string, includePdf = true): P
 
     if (!response.ok) {
         const text = await response.text()
-        throw new Error(`Aruba Incoming Invoice Fetch Failed: ${response.status} ${text}`)
+        const cleanText = text
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+        const snippet = cleanText.length > 200 ? cleanText.slice(0, 200) + '...' : cleanText
+        throw new Error(`Aruba Incoming Invoice Fetch Failed: ${response.status}${snippet ? ' — ' + snippet : ''}`)
     }
 
     const result = await response.json()
