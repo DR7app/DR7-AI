@@ -1823,6 +1823,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       customer_name: customerName,
       customer_email: customerEmail,
       customer_phone: customerPhone,
+      // bookings has a CHECK constraint: user_id OR guest_name must be present.
+      // Admin-created bookings for non-registered customers go through the
+      // guest_* fields; the linkage to customers_extended lives in
+      // booking_details.customer.customerId.
+      guest_name: customerName,
+      guest_email: customerEmail || null,
+      guest_phone: customerPhone || null,
       booking_details: {
         from_preventivo: p.id,
         customer_id,
