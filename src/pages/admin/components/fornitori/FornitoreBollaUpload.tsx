@@ -76,7 +76,7 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
                 .upload(path, file, { cacheControl: '31536000', upsert: false })
             if (upErr) throw upErr
 
-            const { error: insErr } = await supabase
+            const { data: inserted, error: insErr } = await supabase
                 .from('fornitore_documents')
                 .insert({
                     fornitore_id: fornitore.id,
@@ -88,9 +88,21 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
                     file_name: file.name,
                     file_hash: hash,
                 })
+                .select('id')
+                .single()
             if (insErr) throw insErr
 
             setItems(prev => prev.map((it, i) => i === index ? { ...it, status: 'done' } : it))
+
+            // Lancia in background l'estrazione AI dei dati strutturati (numero,
+            // data, importi). Non blocchiamo l'upload — fa il refresh il caller.
+            if (inserted?.id) {
+                fetch('/.netlify/functions/extract-bolla-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ documentId: inserted.id }),
+                }).catch(e => console.warn('[bolla-upload] AI extraction trigger failed:', e))
+            }
         } catch (err: unknown) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const e = err as any
