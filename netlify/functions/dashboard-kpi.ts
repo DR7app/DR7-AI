@@ -161,17 +161,48 @@ export const handler: Handler = async (event) => {
     const monthRentals = [...currentRentals, ...overlapRentals]
 
     // === 1. FATTURATO (Revenue) ===
-    const calcRevenue = (bookings: any[]) => {
+    // Prorate rental revenue by overlap-days-in-month / total-booking-days,
+    // matching Report Noleggio (monthly-report.ts) exactly so the two stay in
+    // lockstep. Bookings spanning multiple months contribute only the slice
+    // attributable to the selected month.
+    const calcRevenueForMonth = (bookings: any[], yearN: number, monthN: number) => {
+      const dim = new Date(yearN, monthN, 0).getDate()
       let rental = 0, wash = 0, penalties = 0, danni = 0
       bookings.forEach(b => {
         const rawPrice = b.price_total
         const price = (typeof rawPrice === 'string' ? parseFloat(rawPrice) : (rawPrice || 0)) / 100
         const st = (b.service_type || '').trim().toLowerCase()
+
         if (st === 'car_wash') {
           wash += price
+        } else if (b.pickup_date && b.dropoff_date) {
+          // Compute overlap days within (yearN, monthN) — same algorithm as
+          // monthly-report.ts: count rented days in this month, exclude dropoff day.
+          const [pY, pM, pD] = b.pickup_date.substring(0, 10).split('-').map(Number)
+          const [dY, dM, dD] = b.dropoff_date.substring(0, 10).split('-').map(Number)
+          let startDay: number, endDay: number
+          if (pY < yearN || (pY === yearN && pM < monthN)) startDay = 1
+          else if (pY === yearN && pM === monthN) startDay = pD
+          else { return /* pickup after this month */ }
+          if (dY > yearN || (dY === yearN && dM > monthN)) endDay = dim
+          else if (dY === yearN && dM === monthN) {
+            endDay = dD - 1
+            if (endDay < startDay) {
+              if (pY === yearN && pM === monthN) endDay = startDay
+              else return
+            }
+          } else return /* dropoff before this month */
+          const overlapDays = endDay - startDay + 1
+          // Total booking days (exclude dropoff day, min 1)
+          const startUtc = Date.UTC(pY, pM - 1, pD)
+          const endUtc = Date.UTC(dY, dM - 1, dD)
+          const totalBookingDays = Math.max(1, Math.round((endUtc - startUtc) / (1000 * 60 * 60 * 24)))
+          rental += (price / totalBookingDays) * overlapDays
         } else {
+          // No dates → can't prorate; count full price
           rental += price
         }
+
         const details = b.booking_details || {}
         if (Array.isArray(details.penalties)) {
           details.penalties.forEach((p: any) => {
@@ -188,13 +219,15 @@ export const handler: Handler = async (event) => {
       })
       return { rental, wash, penalties, danni, total: rental + wash + penalties + danni }
     }
+    // Backwards-compat alias used by older paths in this file
+    const calcRevenue = (bookings: any[]) => calcRevenueForMonth(bookings, year, monthNum)
 
     // Current month: all bookings starting this month (rentals + washes + everything)
     const currentAllValid = allCurrentBookings.filter(b => validStatuses.includes(b.status))
     const prevAllValid = allPrevBookings.filter(b => validStatuses.includes(b.status))
 
-    const currentRevenue = calcRevenue(currentAllValid)
-    const prevRevenue = calcRevenue(prevAllValid)
+    const currentRevenue = calcRevenueForMonth(currentAllValid, year, monthNum)
+    const prevRevenue = calcRevenueForMonth(prevAllValid, prevYear, prevMonthNum)
 
     // Cancelled bookings — money that WAS booked but won't be earned. The user
     // wants visibility on this so it doesn't look like the month is empty.
