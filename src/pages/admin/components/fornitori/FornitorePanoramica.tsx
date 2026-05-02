@@ -145,12 +145,12 @@ export default function FornitorePanoramica({ fornitore }: Props) {
 
             {/* Discrepancy alert */}
             {hasDiscrepanze && (
-                <div className="border-l-4 border-orange-500 bg-orange-900/20 rounded px-4 py-3">
+                <div className="border-l-4 border-amber-600 bg-amber-50 dark:bg-amber-950/40 rounded px-4 py-3">
                     <div className="flex items-center gap-2">
-                        <span className="text-orange-300 text-lg">⚠</span>
+                        <span className="text-amber-700 dark:text-amber-300 text-lg">⚠</span>
                         <div className="flex-1">
-                            <p className="text-orange-200 font-semibold">Attenzione: discrepanze rilevate</p>
-                            <p className="text-xs text-orange-300/80">
+                            <p className="text-amber-900 dark:text-amber-100 font-semibold">Attenzione: discrepanze rilevate</p>
+                            <p className="text-sm text-amber-800 dark:text-amber-200">
                                 Sono state trovate {discrepanze.length} fattur{discrepanze.length === 1 ? 'a' : 'e'} con
                                 importi che non corrispondono alle bolle del medesimo mese. Verifica e risolvi prima del pagamento.
                             </p>
