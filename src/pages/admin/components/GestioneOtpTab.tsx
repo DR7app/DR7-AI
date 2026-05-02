@@ -6,10 +6,13 @@
  * auto-bypasses disabled codes on next request. Realtime sub keeps
  * every open browser session in sync.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { reloadOtpConfig } from '../../../utils/otpConfigCache'
+import { useAdminRole } from '../../../hooks/useAdminRole'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 
 interface OtpRow {
     id: string
@@ -21,6 +24,67 @@ interface OtpRow {
 }
 
 export default function GestioneOtpTab() {
+    const { role: adminRole, loading: roleLoading } = useAdminRole()
+    const isSuperadmin = adminRole === 'superadmin'
+    const override = useLimitationOverride()
+
+    // Gate the entire section behind an OTP for non-superadmins.
+    // Superadmins (Valerio, Ilenia) bypass this server-side automatically.
+    const [tabUnlocked, setTabUnlocked] = useState(false)
+
+    useEffect(() => {
+        if (roleLoading) return
+        if (isSuperadmin) {
+            setTabUnlocked(true)
+            return
+        }
+        // Non-superadmin: request OTP override before exposing any data
+        if (!override.hasOverride('gestione_otp_access')) {
+            override.requestOverride('gestione_otp_access', 'Accesso alla Gestione OTP richiede autorizzazione direzionale')
+        }
+        // tabUnlocked stays false until override is approved (effect below)
+    }, [roleLoading, isSuperadmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    // When the access override is approved, unlock the tab
+    useEffect(() => {
+        if (override.hasOverride('gestione_otp_access')) {
+            setTabUnlocked(true)
+        }
+    }, [override])
+
+    // Pending-action queue — when an OTP is requested for a write, we
+    // park the action here and run it once the modal approves.
+    const pendingAction = useRef<null | { code: string; run: () => Promise<void> | void }>(null)
+
+    /** Gate a write action through OTP. Superadmins skip the gate
+     *  (server-side bypass returns autoApproved → modal auto-closes).
+     *  Every call requires a fresh OTP unless a previously-approved
+     *  override for the same code is still in this session. */
+    function gated(code: string, message: string, run: () => Promise<void> | void) {
+        if (isSuperadmin) {
+            // Even for superadmins, route through the modal so the audit
+            // log records the intent. Modal auto-closes thanks to bypass.
+            pendingAction.current = { code, run }
+            override.requestOverride(code, message)
+            return
+        }
+        pendingAction.current = { code, run }
+        override.requestOverride(code, message)
+    }
+
+    // Run any queued action once its override lands.
+    useEffect(() => {
+        const p = pendingAction.current
+        if (p && override.hasOverride(p.code)) {
+            pendingAction.current = null
+            ;(async () => {
+                try { await p.run() } finally {
+                    await override.consumeOverride(p.code)
+                }
+            })()
+        }
+    }, [override])
+
     const [rows, setRows] = useState<OtpRow[]>([])
     const [loading, setLoading] = useState(true)
     const [savingId, setSavingId] = useState<string | null>(null)
@@ -74,7 +138,7 @@ export default function GestioneOtpTab() {
         return Object.keys(e).some(k => e[k as keyof OtpRow] !== row[k as keyof OtpRow])
     }
 
-    const save = async (row: OtpRow) => {
+    const doSave = async (row: OtpRow) => {
         const e = editing[row.id]
         if (!e) return
         setSavingId(row.id)
@@ -92,8 +156,11 @@ export default function GestioneOtpTab() {
         setEditing(prev => { const n = { ...prev }; delete n[row.id]; return n })
         await reloadOtpConfig()
     }
+    const save = (row: OtpRow) => {
+        gated('gestione_otp_write', `Modifica OTP "${row.label}" richiede autorizzazione direzionale`, () => doSave(row))
+    }
 
-    const toggleRequired = async (row: OtpRow) => {
+    const doToggleRequired = async (row: OtpRow) => {
         const next = !row.is_required
         setSavingId(row.id)
         const { error } = await supabase
@@ -108,11 +175,15 @@ export default function GestioneOtpTab() {
         setRows(prev => prev.map(r => (r.id === row.id ? { ...r, is_required: next } : r)))
         await reloadOtpConfig()
     }
+    const toggleRequired = (row: OtpRow) => {
+        const verb = row.is_required ? 'Disattivare' : 'Attivare'
+        gated('gestione_otp_toggle', `${verb} l'OTP "${row.label}" richiede autorizzazione direzionale`, () => doToggleRequired(row))
+    }
 
     const slugifyId = (raw: string) =>
         raw.toLowerCase().trim().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80)
 
-    const createNew = async () => {
+    const doCreateNew = async () => {
         const id = slugifyId(newRow.id || newRow.label)
         if (!id) { toast.error('Inserisci un ID o una label'); return }
         if (!newRow.label.trim()) { toast.error('Inserisci una label'); return }
@@ -139,9 +210,11 @@ export default function GestioneOtpTab() {
         setShowCreate(false)
         await reloadOtpConfig()
     }
+    const createNew = () => {
+        gated('gestione_otp_create', `Creazione di un nuovo OTP "${newRow.label || newRow.id}" richiede autorizzazione direzionale`, doCreateNew)
+    }
 
-    const removeRow = async (row: OtpRow) => {
-        if (!confirm(`Eliminare l'OTP "${row.label}" (${row.id})?\n\nLa limitazione corrispondente non verrà più protetta da OTP nel codice che la richiede.`)) return
+    const doRemoveRow = async (row: OtpRow) => {
         setSavingId(row.id)
         const { error } = await supabase
             .from('system_otp_overrides')
@@ -156,12 +229,62 @@ export default function GestioneOtpTab() {
         setRows(prev => prev.filter(r => r.id !== row.id))
         await reloadOtpConfig()
     }
+    const removeRow = (row: OtpRow) => {
+        if (!confirm(`Eliminare l'OTP "${row.label}" (${row.id})?\n\nLa limitazione corrispondente non verrà più protetta da OTP nel codice che la richiede.`)) return
+        gated('gestione_otp_delete', `Eliminazione dell'OTP "${row.label}" richiede autorizzazione direzionale`, () => doRemoveRow(row))
+    }
 
     const requiredCount = rows.filter(r => r.is_required).length
     const disabledCount = rows.length - requiredCount
 
+    if (roleLoading) {
+        return <p className="text-sm text-theme-text-muted p-6">Caricamento…</p>
+    }
+
+    if (!tabUnlocked) {
+        return (
+            <>
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-3xl p-12 text-center shadow-sm">
+                    <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Sezione protetta</h2>
+                    <p className="text-sm text-theme-text-muted max-w-md mx-auto">
+                        L'accesso alla Gestione OTP richiede autorizzazione direzionale. Verifica il codice ricevuto via email per continuare.
+                    </p>
+                    <button
+                        onClick={() => override.requestOverride('gestione_otp_access', 'Accesso alla Gestione OTP richiede autorizzazione direzionale')}
+                        className="mt-4 px-4 py-2 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold shadow-sm"
+                    >
+                        Richiedi accesso
+                    </button>
+                </div>
+                <LimitationOverrideModal
+                    isOpen={override.limitationState.isOpen}
+                    limitationCode={override.limitationState.limitationCode}
+                    limitationMessage={override.limitationState.limitationMessage}
+                    actionContext={override.limitationState.actionContext}
+                    draftSessionId={override.draftSessionId}
+                    flowType={override.flowType}
+                    onCancel={override.cancelLimitation}
+                    onOverrideApproved={override.handleOverrideApproved}
+                />
+            </>
+        )
+    }
+
     return (
         <div className="space-y-4">
+            <LimitationOverrideModal
+                isOpen={override.limitationState.isOpen}
+                limitationCode={override.limitationState.limitationCode}
+                limitationMessage={override.limitationState.limitationMessage}
+                actionContext={override.limitationState.actionContext}
+                draftSessionId={override.draftSessionId}
+                flowType={override.flowType}
+                onCancel={override.cancelLimitation}
+                onOverrideApproved={override.handleOverrideApproved}
+            />
             <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
                     <h2 className="text-xl font-semibold text-theme-text-primary">Gestione OTP</h2>
