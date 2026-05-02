@@ -1,50 +1,64 @@
-import { useState, forwardRef, useImperativeHandle, memo } from 'react'
+import { useState, useEffect, memo } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
- * Modal "Rifiutato" estratto fuori da PreventiviTab.
+ * Modal "Rifiutato" — owns its own state. Listens to a CustomEvent on
+ * window so the parent doesn't have to manage state to open it. This avoids
+ * re-rendering the (heavy) PreventiviTab when the user clicks "Rifiutato".
  *
- * Perché esiste: il parent renderizza 121+ righe di tabella (desktop) e
- * altrettante card (mobile). Tenere lo stato del modal nel parent fa sì che
- * cliccare "Rifiutato" forzi un re-render dell'intera lista — ~15 sec per
- * mostrare un modal banale.
- *
- * Soluzione: il modal possiede da solo i propri 3 stati (preventivo,
- * motivo, note). Il parent lo apre tramite `ref.current.open(p)` — nessuna
- * setState al livello del parent, nessun re-render delle 121 righe.
- *
- * Quando l'utente conferma, chiamiamo onConfirm con i dati raccolti; il
- * parent decide cosa fare (update DB, refresh lista, toast).
+ * Renders via a portal at document.body so it's never hidden by a parent
+ * stacking context.
  */
+
+const OPEN_EVENT = 'preventivo-reject-modal:open'
 
 export interface RejectModalPreventivo {
     id: string
     vehicle_name: string
 }
 
-export interface RejectModalRef {
-    open: (p: RejectModalPreventivo) => void
-    close: () => void
+export interface RejectConfirmArgs {
+    preventivo: RejectModalPreventivo
+    motivo: 'cauzione' | 'prezzo' | 'altro'
+    note: string
+}
+
+/** Imperative open helper. Call from anywhere — no React state involved. */
+export function openPreventivoRejectModal(p: RejectModalPreventivo) {
+    window.dispatchEvent(new CustomEvent<RejectModalPreventivo>(OPEN_EVENT, { detail: p }))
 }
 
 interface Props {
-    onConfirm: (args: { preventivo: RejectModalPreventivo; motivo: 'cauzione' | 'prezzo' | 'altro'; note: string }) => Promise<void> | void
+    onConfirm: (args: RejectConfirmArgs) => Promise<void> | void
 }
 
-const PreventivoRejectModal = forwardRef<RejectModalRef, Props>(function PreventivoRejectModal({ onConfirm }, ref) {
+function PreventivoRejectModal({ onConfirm }: Props) {
     const [preventivo, setPreventivo] = useState<RejectModalPreventivo | null>(null)
     const [motivo, setMotivo] = useState<'cauzione' | 'prezzo' | 'altro'>('prezzo')
     const [note, setNote] = useState('')
     const [submitting, setSubmitting] = useState(false)
 
-    useImperativeHandle(ref, () => ({
-        open: (p: RejectModalPreventivo) => {
-            setPreventivo(p)
+    useEffect(() => {
+        function handleOpen(e: Event) {
+            const ce = e as CustomEvent<RejectModalPreventivo>
+            if (!ce.detail) return
+            setPreventivo(ce.detail)
             setMotivo('prezzo')
             setNote('')
             setSubmitting(false)
-        },
-        close: () => setPreventivo(null),
-    }), [])
+        }
+        window.addEventListener(OPEN_EVENT, handleOpen)
+        return () => window.removeEventListener(OPEN_EVENT, handleOpen)
+    }, [])
+
+    useEffect(() => {
+        if (!preventivo) return
+        function handleEsc(e: KeyboardEvent) {
+            if (e.key === 'Escape') setPreventivo(null)
+        }
+        window.addEventListener('keydown', handleEsc)
+        return () => window.removeEventListener('keydown', handleEsc)
+    }, [preventivo])
 
     if (!preventivo) return null
 
@@ -59,8 +73,8 @@ const PreventivoRejectModal = forwardRef<RejectModalRef, Props>(function Prevent
         }
     }
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setPreventivo(null)}>
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4" onClick={() => setPreventivo(null)}>
             <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-semibold text-theme-text-primary">Motivo rifiuto</h3>
@@ -119,8 +133,9 @@ const PreventivoRejectModal = forwardRef<RejectModalRef, Props>(function Prevent
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     )
-})
+}
 
 export default memo(PreventivoRejectModal)

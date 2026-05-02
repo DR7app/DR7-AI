@@ -8,7 +8,7 @@ import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice } from '../../.
 import type { RentalConfig } from '../../../types/rentalConfig'
 import Input from './Input'
 import Select from './Select'
-import PreventivoRejectModal, { type RejectModalRef } from './PreventivoRejectModal'
+import PreventivoRejectModal, { openPreventivoRejectModal } from './PreventivoRejectModal'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
@@ -340,10 +340,9 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [selectedPreventivo, setSelectedPreventivo] = useState<Preventivo | null>(null)
   const [previewMessage, setPreviewMessage] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  // Modal "Rifiutato" — stato isolato dentro PreventivoRejectModal via ref,
-  // così aprirlo NON ri-renderizza l'intera lista preventivi (era il motivo
-  // dei 15 sec di apertura).
-  const rejectModalRef = useRef<RejectModalRef | null>(null)
+  // Modal "Rifiutato" — stato isolato dentro PreventivoRejectModal e aperto
+  // tramite CustomEvent su window, così aprirlo NON ri-renderizza l'intera
+  // lista preventivi (era il motivo dei 15 sec di apertura).
   const [whatsappPhone, setWhatsappPhone] = useState('')
   const [showPhoneModal, setShowPhoneModal] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1808,19 +1807,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   }
 
   function openRejectModal(p: Preventivo) {
-    // Imperative open via ref (no parent re-render). Falls back to state-driven
-    // open if the ref isn't ready yet.
-    console.log('[Preventivi] openRejectModal click for', p.id, p.vehicle_name)
-    if (rejectModalRef.current) {
-      rejectModalRef.current.open({ id: p.id, vehicle_name: p.vehicle_name })
-    } else {
-      console.warn('[Preventivi] rejectModalRef is null — using state fallback')
-      setRejectFallbackPreventivo({ id: p.id, vehicle_name: p.vehicle_name })
-    }
+    // No setState here → no re-render of the 121+ row list. The modal listens
+    // to a window CustomEvent and opens itself via its own internal state.
+    openPreventivoRejectModal({ id: p.id, vehicle_name: p.vehicle_name })
   }
-
-  // State-driven fallback in case the ref-based modal fails to mount/attach
-  const [rejectFallbackPreventivo, setRejectFallbackPreventivo] = useState<{ id: string; vehicle_name: string } | null>(null)
 
   async function confirmReject(args: { preventivo: { id: string; vehicle_name: string }; motivo: 'cauzione' | 'prezzo' | 'altro'; note: string }) {
     const updates: Record<string, unknown> = {
@@ -2972,45 +2962,10 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         }}
       />
 
-      {/* Modal motivo rifiuto — stato isolato, non causa re-render della lista */}
-      <PreventivoRejectModal ref={rejectModalRef} onConfirm={confirmReject} />
-
-      {/* Fallback state-driven modal (only renders if the ref version failed to attach) */}
-      {rejectFallbackPreventivo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setRejectFallbackPreventivo(null)}>
-          <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-theme-text-primary">Motivo rifiuto</h3>
-              <button onClick={() => setRejectFallbackPreventivo(null)} className="text-theme-text-muted text-2xl leading-none hover:text-theme-text-primary">×</button>
-            </div>
-            <p className="text-sm text-theme-text-secondary mb-4">
-              Perche' il cliente ha rifiutato questo preventivo? ({rejectFallbackPreventivo.vehicle_name})
-            </p>
-            <div className="flex flex-col gap-2 mb-4">
-              {(['cauzione', 'prezzo', 'altro'] as const).map(m => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={async () => {
-                    await confirmReject({ preventivo: rejectFallbackPreventivo, motivo: m, note: '' })
-                    setRejectFallbackPreventivo(null)
-                  }}
-                  className="px-4 py-3 rounded bg-red-600 hover:bg-red-700 text-white font-semibold text-sm capitalize"
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setRejectFallbackPreventivo(null)}
-              className="w-full px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary"
-            >
-              Annulla
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Modal motivo rifiuto — listens to window CustomEvent, owns its own
+          state, renders via portal at document.body. Click "Rifiutato" sulle
+          righe non causa re-render della lista. */}
+      <PreventivoRejectModal onConfirm={confirmReject} />
     </div>
   )
 }
