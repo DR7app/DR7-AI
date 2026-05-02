@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
-import Button from './Button'
 import FornitoreSimpleView from './fornitori/FornitoreSimpleView'
 import type { Fornitore } from './fornitori/types'
 
@@ -148,18 +147,13 @@ export default function FornitoriTab() {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h2 className="text-2xl font-semibold text-theme-text-primary">Fornitori</h2>
-                    <p className="text-xs text-theme-text-muted">
-                        {importing
-                            ? 'Sincronizzazione in corso…'
-                            : `Aruba sincronizzato ${fmtRelative(lastSync)}`}
-                    </p>
-                </div>
-                <Button variant="secondary" onClick={() => importFromAruba()} disabled={importing}>
-                    {importing ? 'Sincronizzazione…' : 'Sincronizza ora'}
-                </Button>
+            <div>
+                <h2 className="text-2xl font-semibold text-theme-text-primary">Fornitori</h2>
+                <p className="text-xs text-theme-text-muted">
+                    {importing
+                        ? 'Sincronizzazione automatica da Aruba in corso…'
+                        : `Sincronizzato automaticamente da Aruba ${fmtRelative(lastSync)}`}
+                </p>
             </div>
 
             <Input

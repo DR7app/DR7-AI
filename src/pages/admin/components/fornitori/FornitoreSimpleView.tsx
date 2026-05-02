@@ -3,6 +3,7 @@ import { supabase } from '../../../../supabaseClient'
 import { useAdminRole } from '../../../../hooks/useAdminRole'
 import Button from '../Button'
 import FornitoreDocumentUpload from './FornitoreDocumentUpload'
+import FornitoreBollaUpload from './FornitoreBollaUpload'
 import LimitationOverrideModal from '../../../../components/LimitationOverrideModal'
 import { runCrosscheck, applyCrosscheckToFatture } from './FornitoreCrosscheck'
 import {
@@ -42,8 +43,8 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
     const [loading, setLoading] = useState(false)
-    const [showUpload, setShowUpload] = useState(false)
-    const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)
+    const [showUpload, setShowUpload] = useState(false)        // simple bolla upload (PDF only)
+    const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)  // edit modal for existing docs
     const [paymentDoc, setPaymentDoc] = useState<FornitoreDocument | null>(null)
     const [crossCheckRunning, setCrossCheckRunning] = useState(false)
     const [otpUnlocked, setOtpUnlocked] = useState(false)
@@ -234,11 +235,11 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
             {/* STEP 1 — Carica bolle */}
             <Step n={1} title="Carica bolle" desc={`${bolle.length} caricate · ${fmtEUR(bolle.reduce((s, b) => s + Number(b.importo_totale || 0), 0))} totale`}>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <Button onClick={() => { setEditingDoc(null); setShowUpload(true) }}>+ Carica bolla</Button>
+                    <Button onClick={() => setShowUpload(true)}>+ Carica bolla</Button>
                     {loading && <span className="text-xs text-theme-text-muted">Caricamento…</span>}
                 </div>
                 <CompactDocList docs={bolle.slice(0, 10)} viewFile={viewFile}
-                    onEdit={(d) => { setEditingDoc(d); setShowUpload(true) }} />
+                    onEdit={(d) => setEditingDoc(d)} />
                 {bolle.length > 10 && <p className="text-xs text-theme-text-muted mt-2">… e altre {bolle.length - 10} bolle</p>}
             </Step>
 
@@ -360,11 +361,19 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
             </Step>
 
             {showUpload && (
+                <FornitoreBollaUpload
+                    fornitore={fornitore}
+                    onClose={() => setShowUpload(false)}
+                    onSaved={() => { setShowUpload(false); load() }}
+                />
+            )}
+
+            {editingDoc && (
                 <FornitoreDocumentUpload
                     fornitore={fornitore}
                     document={editingDoc}
-                    onClose={() => { setShowUpload(false); setEditingDoc(null) }}
-                    onSaved={() => { setShowUpload(false); setEditingDoc(null); load() }}
+                    onClose={() => setEditingDoc(null)}
+                    onSaved={() => { setEditingDoc(null); load() }}
                 />
             )}
 
