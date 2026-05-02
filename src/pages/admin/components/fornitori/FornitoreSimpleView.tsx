@@ -1,9 +1,10 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '../../../../supabaseClient'
 import { useAdminRole } from '../../../../hooks/useAdminRole'
 import Button from '../Button'
 import FornitoreDocumentUpload from './FornitoreDocumentUpload'
-import { runCrosscheck } from './FornitoreCrosscheck'
+import LimitationOverrideModal from '../../../../components/LimitationOverrideModal'
+import { runCrosscheck, applyCrosscheckToFatture } from './FornitoreCrosscheck'
 import {
     DOCUMENT_TIPO_LABELS,
     DOCUMENT_STATO_LABELS,
@@ -35,7 +36,10 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     // dal nome admin che combacia con uno dei due.
     const adminTokens = ((adminName || '') + ' ' + (adminEmail || '')).toLowerCase()
     const isValerioOrIlenia = adminTokens.includes('valerio') || adminTokens.includes('ilenia')
-    const canApproveAndPay = canViewFinancials && isValerioOrIlenia
+    const isAuthorizedByRole = canViewFinancials && isValerioOrIlenia
+    // L'utente puo' usare step 3/4 se e' tra gli autorizzati di base oppure
+    // se ha sbloccato la sessione tramite OTP override (verifica via mail).
+    const canApproveAndPay = isAuthorizedByRole || otpUnlocked
     const [anno, setAnno] = useState(today.getFullYear())
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
@@ -43,6 +47,10 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const [showUpload, setShowUpload] = useState(false)
     const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)
     const [paymentDoc, setPaymentDoc] = useState<FornitoreDocument | null>(null)
+    const [crossCheckRunning, setCrossCheckRunning] = useState(false)
+    const [otpUnlocked, setOtpUnlocked] = useState(false)
+    const [otpOpen, setOtpOpen] = useState(false)
+    const draftSessionId = useRef(`fornitori-${fornitore.id}-${Date.now()}`).current
 
     async function load() {
         setLoading(true)
@@ -126,6 +134,26 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
             .in('id', ids)
         if (error) { alert('Errore: ' + error.message); return }
         load()
+    }
+
+    async function runManualCrossCheck() {
+        setCrossCheckRunning(true)
+        try {
+            const map = new Map<number, CrosscheckRow[]>()
+            for (let m = 1; m <= 12; m++) {
+                const cc = await runCrosscheck(fornitore.id, anno, m)
+                if (cc.length > 0) {
+                    map.set(m, cc)
+                    // Apply crosscheck → set verificato/anomalia stato + create alerts
+                    await applyCrosscheckToFatture(cc, fatture)
+                }
+            }
+            setCrosscheck(map)
+            // Reload docs to pick up updated stati
+            await load()
+        } finally {
+            setCrossCheckRunning(false)
+        }
     }
 
     async function recordPayment(doc: FornitoreDocument, dataPag: string, metodo: string) {
@@ -218,8 +246,13 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                     ? `${tutteAnomalie.length} anomali${tutteAnomalie.length === 1 ? 'a' : 'e'} · ${countOk} fatture OK`
                     : `${countOk} fatture verificate ${countOk > 0 ? '✓' : ''}`}
                 tone={tutteAnomalie.length > 0 ? 'warning' : 'ok'}>
+                <div className="flex justify-end mb-3">
+                    <Button onClick={runManualCrossCheck} disabled={crossCheckRunning}>
+                        {crossCheckRunning ? 'Analisi in corso…' : 'Esegui controllo incrociato'}
+                    </Button>
+                </div>
                 {tutteAnomalie.length === 0 && countOk === 0 && (
-                    <p className="text-sm text-theme-text-muted">Le fatture verranno confrontate con le bolle dello stesso mese non appena ne carichi qualcuna.</p>
+                    <p className="text-sm text-theme-text-muted">Le fatture verranno confrontate con le bolle dello stesso mese. Premi "Esegui controllo incrociato" per analizzare ora.</p>
                 )}
                 {tutteAnomalie.length > 0 && (
                     <div className="space-y-1">
@@ -246,67 +279,83 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 )}
             </Step>
 
-            {/* STEP 3 — Approvazione (visible solo per amministratori autorizzati) */}
-            {canApproveAndPay && (
-                <Step n={3} title="Approvazione" desc={`${daApprovare.length} fattur${daApprovare.length === 1 ? 'a' : 'e'} da approvare`}>
-                    {daApprovare.length === 0 ? (
-                        <p className="text-sm text-theme-text-muted">Nessuna fattura verificata in attesa.</p>
-                    ) : (
-                        <>
+            {/* STEP 3 — Approvazione */}
+            <Step n={3} title="Approvazione" desc={`${daApprovare.length} fattur${daApprovare.length === 1 ? 'a' : 'e'} da approvare`}
+                locked={!canApproveAndPay}
+                lockedAction={!canApproveAndPay && (
+                    <button onClick={() => setOtpOpen(true)}
+                        className="text-xs px-3 py-1.5 rounded bg-dr7-gold text-black font-semibold hover:opacity-90">
+                        Richiedi accesso OTP
+                    </button>
+                )}>
+                {daApprovare.length === 0 ? (
+                    <p className="text-sm text-theme-text-muted">Nessuna fattura verificata in attesa.</p>
+                ) : (
+                    <>
+                        {canApproveAndPay && (
                             <div className="flex justify-end mb-2">
                                 <Button onClick={approveAll}>Approva tutte ({daApprovare.length})</Button>
                             </div>
-                            <ul className="space-y-1">
-                                {daApprovare.map(f => (
-                                    <li key={f.id} className="text-sm flex items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
-                                        <span className="font-mono">{f.numero_documento}</span>
-                                        <span className="text-theme-text-muted text-xs">{fmtDateIT(f.data_documento)}</span>
-                                        <span className="ml-auto font-semibold">{fmtEUR(f.importo_totale)}</span>
-                                        {canViewDoc(f) && (
-                                            <button onClick={() => viewFile(f)}
-                                                className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
-                                                Vedi
-                                            </button>
-                                        )}
-                                        <button onClick={() => approveDoc(f)} className="text-xs px-2 py-1 rounded bg-blue-700 hover:bg-blue-600 text-white">
-                                            Approva
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </>
-                    )}
-                </Step>
-            )}
-
-            {/* STEP 4 — Pagamento (visible solo per amministratori autorizzati) */}
-            {canApproveAndPay && (
-                <Step n={4} title="Pagamento" desc={`${daPagare.length} fattur${daPagare.length === 1 ? 'a' : 'e'} da pagare`}>
-                    {daPagare.length === 0 ? (
-                        <p className="text-sm text-theme-text-muted">Nessuna fattura approvata in attesa di pagamento.</p>
-                    ) : (
+                        )}
                         <ul className="space-y-1">
-                            {daPagare.map(f => (
-                                <li key={f.id} className="text-sm flex flex-wrap items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
+                            {daApprovare.map(f => (
+                                <li key={f.id} className="text-sm flex items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
                                     <span className="font-mono">{f.numero_documento}</span>
                                     <span className="text-theme-text-muted text-xs">{fmtDateIT(f.data_documento)}</span>
-                                    {f.data_scadenza && <span className="text-xs text-amber-300">scade {fmtDateIT(f.data_scadenza)}</span>}
                                     <span className="ml-auto font-semibold">{fmtEUR(f.importo_totale)}</span>
-                                    {canViewDoc(f) && (
+                                    {canApproveAndPay && canViewDoc(f) && (
                                         <button onClick={() => viewFile(f)}
                                             className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
                                             Vedi
                                         </button>
                                     )}
-                                    <button onClick={() => setPaymentDoc(f)} className="text-xs px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white">
-                                        Registra pagamento
-                                    </button>
+                                    {canApproveAndPay && (
+                                        <button onClick={() => approveDoc(f)} className="text-xs px-2 py-1 rounded bg-blue-700 hover:bg-blue-600 text-white">
+                                            Approva
+                                        </button>
+                                    )}
                                 </li>
                             ))}
                         </ul>
-                    )}
-                </Step>
-            )}
+                    </>
+                )}
+            </Step>
+
+            {/* STEP 4 — Pagamento */}
+            <Step n={4} title="Pagamento" desc={`${daPagare.length} fattur${daPagare.length === 1 ? 'a' : 'e'} da pagare`}
+                locked={!canApproveAndPay}
+                lockedAction={!canApproveAndPay && (
+                    <button onClick={() => setOtpOpen(true)}
+                        className="text-xs px-3 py-1.5 rounded bg-dr7-gold text-black font-semibold hover:opacity-90">
+                        Richiedi accesso OTP
+                    </button>
+                )}>
+                {daPagare.length === 0 ? (
+                    <p className="text-sm text-theme-text-muted">Nessuna fattura approvata in attesa di pagamento.</p>
+                ) : (
+                    <ul className="space-y-1">
+                        {daPagare.map(f => (
+                            <li key={f.id} className="text-sm flex flex-wrap items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
+                                <span className="font-mono">{f.numero_documento}</span>
+                                <span className="text-theme-text-muted text-xs">{fmtDateIT(f.data_documento)}</span>
+                                {f.data_scadenza && <span className="text-xs text-amber-300">scade {fmtDateIT(f.data_scadenza)}</span>}
+                                <span className="ml-auto font-semibold">{fmtEUR(f.importo_totale)}</span>
+                                {canApproveAndPay && canViewDoc(f) && (
+                                    <button onClick={() => viewFile(f)}
+                                        className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
+                                        Vedi
+                                    </button>
+                                )}
+                                {canApproveAndPay && (
+                                    <button onClick={() => setPaymentDoc(f)} className="text-xs px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white">
+                                        Registra pagamento
+                                    </button>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </Step>
 
             {showUpload && (
                 <FornitoreDocumentUpload
@@ -320,30 +369,52 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
             {paymentDoc && (
                 <PaymentModal doc={paymentDoc} onClose={() => setPaymentDoc(null)} onConfirm={recordPayment} />
             )}
+
+            <LimitationOverrideModal
+                isOpen={otpOpen}
+                limitationCode="fornitore_admin_action"
+                limitationMessage="Approvazione e pagamento fatture fornitore"
+                actionContext={`fornitore_${fornitore.id}`}
+                draftSessionId={draftSessionId}
+                flowType="fornitori"
+                onClose={() => setOtpOpen(false)}
+                onCancel={() => setOtpOpen(false)}
+                onOverrideApproved={() => {
+                    setOtpUnlocked(true)
+                    setOtpOpen(false)
+                }}
+            />
         </div>
     )
 }
 
-function Step({ n, title, desc, tone, children }: {
+function Step({ n, title, desc, tone, locked, lockedAction, children }: {
     n: number
     title: string
     desc: string
     tone?: 'ok' | 'warning'
+    locked?: boolean
+    lockedAction?: React.ReactNode
     children: React.ReactNode
 }) {
     const toneCls = tone === 'warning' ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-800'
         : tone === 'ok' ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800'
         : 'bg-theme-bg-secondary border-theme-border'
     return (
-        <div className={`rounded-lg border p-4 ${toneCls}`}>
+        <div className={`rounded-lg border p-4 relative ${locked ? 'border-theme-border bg-theme-bg-tertiary/40' : toneCls}`}>
             <div className="flex items-center gap-3 mb-3">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-dr7-gold text-black font-bold flex items-center justify-center">{n}</span>
+                <span className={`flex-shrink-0 w-8 h-8 rounded-full font-bold flex items-center justify-center ${locked ? 'bg-theme-bg-tertiary text-theme-text-muted' : 'bg-dr7-gold text-black'}`}>
+                    {locked ? '🔒' : n}
+                </span>
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-theme-text-primary">{title}</p>
-                    <p className="text-xs text-theme-text-secondary">{desc}</p>
+                    <p className={`text-sm font-semibold ${locked ? 'text-theme-text-muted' : 'text-theme-text-primary'}`}>{title}</p>
+                    <p className="text-xs text-theme-text-muted">{desc}</p>
                 </div>
+                {locked && lockedAction}
             </div>
-            {children}
+            <div className={locked ? 'opacity-50 pointer-events-none select-none' : ''}>
+                {children}
+            </div>
         </div>
     )
 }
