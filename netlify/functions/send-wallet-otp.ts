@@ -68,8 +68,8 @@ export const handler: Handler = async (event) => {
       subject: `Codice Verifica Wallet - ${actionLabel} €${parseFloat(amount).toFixed(2)}`,
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" style="height: 60px;" />
+          <div style="background: #000; border-radius: 12px; padding: 24px 16px; text-align: center; margin-bottom: 30px;">
+            <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" style="height: 60px; display: block; margin: 0 auto;" />
           </div>
           <h2 style="color: #111; text-align: center;">Codice Verifica Wallet</h2>
           <table style="width: 100%; margin: 20px 0; font-size: 14px; color: #333;">

@@ -10,12 +10,23 @@
 }
 
 html, body, #root {
-  background-color: #171717;
-  color: #ffffff;
+  background-color: var(--color-theme-bg-primary);
+  color: var(--color-theme-text-primary);
   min-height: 100vh;
   min-height: 100dvh;
-  
+
   -webkit-overflow-scrolling: touch;
+}
+
+/* Tailwind v4 @theme exposes vars but only after the class context applies.
+   Force a sane default before the ThemeProvider mounts: dark. */
+html:not(.light):not(.dark), html.dark {
+  background-color: #050708;
+  color: #FFFFFF;
+}
+html.light {
+  background-color: #FFFFFF;
+  color: #0A1418;
 }
 
 /* Prevent white flash on overscroll (iOS) */
@@ -40,39 +51,140 @@ body {
 
 
 @theme {
-  --color-dr7-gold: #2d8a7e;
-  --color-dr7-dark: #000000;
-  --color-dr7-darker: #000000;
+  /* BRAND — DR7 Cyan (sostituisce la vecchia palette gold/teal) */
+  --color-primary: #19C2D6;
+  --color-primary-light: #4DE3F0;
+  --color-primary-dark: #0A8FA3;
 
-  --color-theme-bg-primary: #000000;
-  --color-theme-bg-secondary: #171717;
-  --color-theme-bg-tertiary: #1f1f1f;
-  --color-theme-bg-hover: #262626;
-  --color-theme-text-primary: #ffffff;
-  --color-theme-text-secondary: #d4d4d4;
-  --color-theme-text-muted: #a3a3a3;
-  --color-theme-border: #404040;
-  --color-theme-border-light: #525252;
-  --color-theme-input-bg: #000000;
-  --color-theme-input-border: #525252;
-  --color-theme-shadow: rgba(0, 0, 0, 0.5);
+  /* Alias legacy: ovunque il codice usi `dr7-gold` ora rende ciano DR7,
+     senza dover toccare ogni componente. */
+  --color-dr7-gold: #19C2D6;
+  --color-dr7-gold-light: #4DE3F0;
+  --color-dr7-gold-dark: #0A8FA3;
+  --color-dr7-dark: #050708;
+  --color-dr7-darker: #050708;
+
+  /* BACKGROUND */
+  --color-theme-bg-primary: #050708;
+  --color-theme-bg-secondary: #0B0F12;
+  --color-theme-bg-tertiary: #12171B;
+  --color-theme-bg-hover: #182025;
+  --color-theme-bg-elevated: #182025;
+  --color-theme-surface: #12171B;
+
+  /* BORDERS */
+  --color-theme-border: #1E262C;
+  --color-theme-border-light: #2A343B;
+  --color-theme-border-active: #19C2D6;
+
+  /* TEXT */
+  --color-theme-text-primary: #FFFFFF;
+  --color-theme-text-secondary: #B8C2CC;
+  --color-theme-text-muted: #7D8A94;
+  --color-theme-text-disabled: #4F5B63;
+
+  /* INPUTS */
+  --color-theme-input-bg: #0B0F12;
+  --color-theme-input-border: #1E262C;
+  --color-theme-input-border-focus: #19C2D6;
+  --color-theme-input-placeholder: #7D8A94;
+
+  /* STATUS */
+  --color-theme-success: #22C55E;
+  --color-theme-success-bg: #0E2A18;
+  --color-theme-warning: #F59E0B;
+  --color-theme-warning-bg: #2A1D05;
+  --color-theme-error: #EF4444;
+  --color-theme-error-bg: #2A0E0E;
+  --color-theme-info: #3B82F6;
+  --color-theme-info-bg: #0B1B35;
+
+  /* SHADOW / OVERLAY */
+  --color-theme-shadow: rgba(0, 0, 0, 0.45);
   --color-theme-overlay: rgba(0, 0, 0, 0.75);
 }
 
+/* Variabili plain (non Tailwind) per usi avanzati: button states, sidebar,
+   gradient. Questi non generano utility class ma sono leggibili da CSS
+   custom (style={}, var(--...)). */
+:root {
+  --button-primary-bg: #19C2D6;
+  --button-primary-hover: #4DE3F0;
+  --button-primary-active: #0A8FA3;
+  --button-primary-text: #031014;
+
+  --button-secondary-bg: #12171B;
+  --button-secondary-hover: #182025;
+  --button-secondary-border: #2A343B;
+  --button-secondary-text: #FFFFFF;
+
+  --sidebar-bg: #050708;
+  --sidebar-item-hover: #12171B;
+  --sidebar-item-active: #102A30;
+  --sidebar-item-active-border: #19C2D6;
+
+  --card-bg: #12171B;
+  --card-border: #1E262C;
+  --card-shadow: rgba(0, 0, 0, 0.45);
+
+  --gradient-primary: linear-gradient(135deg, #4DE3F0 0%, #19C2D6 50%, #0A8FA3 100%);
+}
+
 .light {
-  --color-theme-bg-primary: #ffffff;
-  --color-theme-bg-secondary: #fafafa;
-  --color-theme-bg-tertiary: #f5f5f5;
-  --color-theme-bg-hover: #eeeeee;
-  --color-theme-text-primary: #0a0a0a;
-  --color-theme-text-secondary: #525252;
-  --color-theme-text-muted: #737373;
-  --color-theme-border: #e0e0e0;
-  --color-theme-border-light: #eeeeee;
-  --color-theme-input-bg: #ffffff;
-  --color-theme-input-border: #d4d4d4;
-  --color-theme-shadow: rgba(0, 0, 0, 0.08);
-  --color-theme-overlay: rgba(0, 0, 0, 0.4);
+  /* DR7 Light theme — sfondo bianco, accento ciano invariato.
+     I valori cyan brand (--color-primary, --color-dr7-gold) NON cambiano
+     fra dark e light: l'identita' visiva resta la stessa. */
+  --color-theme-bg-primary: #FFFFFF;
+  --color-theme-bg-secondary: #F7F9FA;
+  --color-theme-bg-tertiary: #F0F3F5;
+  --color-theme-bg-hover: #E8ECEF;
+  --color-theme-bg-elevated: #FFFFFF;
+  --color-theme-surface: #FFFFFF;
+
+  --color-theme-text-primary: #0A1418;
+  --color-theme-text-secondary: #3D4A52;
+  --color-theme-text-muted: #6B7680;
+  --color-theme-text-disabled: #A8B2BA;
+
+  --color-theme-border: #DCE3E8;
+  --color-theme-border-light: #ECF0F3;
+  --color-theme-border-active: #19C2D6;
+
+  --color-theme-input-bg: #FFFFFF;
+  --color-theme-input-border: #DCE3E8;
+  --color-theme-input-border-focus: #19C2D6;
+  --color-theme-input-placeholder: #A8B2BA;
+
+  /* Status: stessi colori semantici, sfondi adattati al chiaro */
+  --color-theme-success: #16A34A;
+  --color-theme-success-bg: #DCFCE7;
+  --color-theme-warning: #D97706;
+  --color-theme-warning-bg: #FEF3C7;
+  --color-theme-error: #DC2626;
+  --color-theme-error-bg: #FEE2E2;
+  --color-theme-info: #2563EB;
+  --color-theme-info-bg: #DBEAFE;
+
+  --color-theme-shadow: rgba(15, 23, 28, 0.08);
+  --color-theme-overlay: rgba(15, 23, 28, 0.4);
+}
+
+/* Variabili plain (non Tailwind) sovrascritte in light mode per coerenza
+   con button states e sidebar. */
+.light {
+  --button-secondary-bg: #FFFFFF;
+  --button-secondary-hover: #F0F3F5;
+  --button-secondary-border: #DCE3E8;
+  --button-secondary-text: #0A1418;
+
+  --sidebar-bg: #FFFFFF;
+  --sidebar-item-hover: #F0F3F5;
+  --sidebar-item-active: #E0F7FA;
+  --sidebar-item-active-border: #19C2D6;
+
+  --card-bg: #FFFFFF;
+  --card-border: #DCE3E8;
+  --card-shadow: rgba(15, 23, 28, 0.08);
 }
 
 .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,

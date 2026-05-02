@@ -2,6 +2,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import RentalTabs from './components/RentalTabs'
 import { useBirthdayCount } from './components/BirthdaysTab'
 import PlaceholderTab from './components/PlaceholderTab'
@@ -106,6 +107,7 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const { role: adminRole, canViewFinancials, loading: roleLoading } = useAdminRole()
+  const { theme, toggleTheme } = useTheme()
 
   // RBAC: tabs restricted to superadmin
   const financialTabs: TabType[] = ['fattura', 'nexi', 'unpaid', 'cauzioni']
@@ -334,7 +336,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Sidebar — max-w-[280px] on mobile to leave space for closing */}
-      <aside className={`fixed inset-y-3 left-3 z-[70] w-[60vw] max-w-[180px] bg-[#1a2332] flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
+      <aside className={`fixed inset-y-3 left-3 z-[70] w-[60vw] max-w-[180px] bg-theme-bg-primary flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
         {/* Logo + Close.
             The logo (2048×632, ratio ≈ 3.24:1) must NEVER be compressed
             horizontally. object-contain + matched max-width/max-height
@@ -381,7 +383,7 @@ export default function AdminDashboard() {
                 // the oversized green block that spanned the full sidebar.
                 className="w-full text-left flex items-center justify-between px-1 transition-colors group"
               >
-                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${sectionActive ? 'bg-dr7-gold text-white' : 'text-white/70 group-hover:text-white group-hover:bg-[#243044]'}`}>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${sectionActive ? 'bg-gradient-to-r from-primary-dark via-primary to-primary-light text-white shadow-md shadow-dr7-gold/20' : 'text-white/70 group-hover:text-white group-hover:bg-dr7-gold/10'}`}>
                   {section.name}
                 </span>
                 {showBirthdayBadge && (
@@ -401,7 +403,7 @@ export default function AdminDashboard() {
             {!alarmState.audioEnabled ? (
               <button
                 onClick={enableAudio}
-                className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
+                className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] text-white/60 hover:text-white hover:bg-theme-bg-hover transition-colors"
               >
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -420,7 +422,7 @@ export default function AdminDashboard() {
               onClick={() => setShowAlarmInventory(true)}
               title="Gestione Allarmi — vedi quali allarmi sono attivi, quando suonano e perché"
               aria-label="Gestione Allarmi"
-              className="px-2 py-1.5 rounded-lg text-white/60 hover:text-white hover:bg-[#243044] transition-colors flex items-center justify-center"
+              className="px-2 py-1.5 rounded-lg text-white/60 hover:text-white hover:bg-theme-bg-hover transition-colors flex items-center justify-center"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -431,7 +433,7 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); }}
-              className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-white/60 hover:text-white hover:bg-[#243044] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-white/60 hover:text-white hover:bg-theme-bg-hover transition-colors"
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -440,7 +442,7 @@ export default function AdminDashboard() {
             </button>
             <button
               onClick={handleSignOut}
-              className="flex items-center justify-center px-3 min-h-[36px] rounded-lg text-[10px] text-white/40 hover:text-red-400 hover:bg-[#243044] transition-colors"
+              className="flex items-center justify-center px-3 min-h-[36px] rounded-lg text-[10px] text-white/40 hover:text-red-400 hover:bg-theme-bg-hover transition-colors"
             >
               Esci
             </button>
@@ -508,6 +510,23 @@ export default function AdminDashboard() {
               </svg>
               <span className="hidden sm:inline">Calendario Giornaliero</span>
             </button>
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Passa al tema chiaro' : 'Passa al tema scuro'}
+              aria-label="Cambia tema"
+              className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full border border-theme-border hover:border-dr7-gold text-theme-text-muted hover:text-dr7-gold transition-colors"
+            >
+              {theme === 'dark' ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="4" strokeWidth={2} />
+                  <path strokeLinecap="round" strokeWidth={2} d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
+            </button>
             <span className="text-sm text-theme-text-muted hidden sm:block">
               {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
@@ -544,13 +563,13 @@ export default function AdminDashboard() {
                       }}
                       className={`relative px-3 sm:px-4 py-3 text-[13px] font-medium whitespace-nowrap transition-colors ${
                         isActive
-                          ? 'text-theme-text-primary'
-                          : 'text-theme-text-muted hover:text-theme-text-primary'
+                          ? 'text-primary-light'
+                          : 'text-theme-text-muted hover:text-dr7-gold'
                       }`}
                     >
                       {t.label}
                       {isActive && (
-                        <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-theme-text-primary rounded-full" />
+                        <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-primary-dark via-primary to-primary-light" />
                       )}
                     </button>
                   )

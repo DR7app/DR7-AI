@@ -118,8 +118,8 @@ export const handler: Handler = async (event) => {
         subject: `Autorizzazione Direzionale - ${limitationCode}`,
         html: `
           <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-              <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" style="height: 60px;" />
+            <div style="background: #000; border-radius: 12px; padding: 24px 16px; text-align: center; margin-bottom: 30px;">
+              <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" style="height: 60px; display: block; margin: 0 auto;" />
             </div>
             <h2 style="color: #111; text-align: center;">Autorizzazione Direzionale</h2>
             <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 16px; margin: 20px 0;">

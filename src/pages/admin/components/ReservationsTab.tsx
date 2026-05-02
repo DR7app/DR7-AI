@@ -63,6 +63,7 @@ import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
 import DanniModal from './DanniModal'
+import GestisciMenu, { type GestisciSection } from './GestisciMenu'
 import DanniPenaliModal from './DanniPenaliModal'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
@@ -7444,89 +7445,53 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   }
                 </div>
 
-                <div className="flex justify-between items-start mt-3 gap-2">
+                <div className="flex justify-between items-center mt-3 gap-2" onClick={(e) => e.stopPropagation()}>
                   <div className="text-lg font-bold text-theme-text-primary">
                     {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
-                        className="px-3 py-1 min-h-[44px] bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
-                      >
-                        Modifica
-                      </button>
-                      {!isCarWash && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleExtendBooking(booking) }}
-                          className="px-3 py-1 min-h-[44px] bg-purple-600/30 hover:bg-purple-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
-                        >
-                          Estendi
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Contract Actions */}
-                    {booking.booking_details?.contract_generated_at || booking.contract_url ? (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); window.open(booking.contract_url, '_blank') }}
-                          className="px-3 py-1 min-h-[44px] bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap flex items-center gap-1"
-                          title="Visualizza Contratto"
-                        >
-                          Contratto
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleResendContract(booking) }}
-                          className="px-3 py-1 min-h-[44px] bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap flex items-center gap-1"
-                          title="Invia link firma contratto via WhatsApp"
-                        >
-                          Invia Contratto
-                        </button>
-                        {/* Fattura Button (Mobile) */}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
-                          disabled={generatingInvoice}
-                          className={`px-3 py-1 min-h-[44px] ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-blue-600/30 hover:bg-blue-600/50 text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
-                          title="Fattura"
-                        >
-                          {generatingInvoice ? 'Generazione...' : 'Fattura'}
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleGenerateContract(booking) }}
-                        disabled={generatingContract}
-                        className={`px-3 py-1 min-h-[44px] ${generatingContract ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold hover:bg-[#247a6f] text-theme-text-primary'} text-sm rounded-full transition-colors whitespace-nowrap flex items-center gap-1`}
-                      >
-                        {generatingContract ? 'Generazione...' : 'Contratto'}
-                      </button>
-                    )}
-
-
-                    {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
-                        className="px-3 py-1 min-h-[44px] bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
-                      >
-                        {booking.booking_details?.nexi_payment_link ? 'Rinvia Link' : 'Genera Link'}
-                      </button>
-                    )}
-
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) }}
-                      className="px-3 py-1 min-h-[44px] bg-gradient-to-r from-red-600/30 to-dr7-gold/30 hover:from-red-600/50 hover:to-dr7-gold/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap"
-                    >
-                      Danni & Penali
-                    </button>
-
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
-                      className="px-3 py-1 min-h-[44px] bg-red-600/30 hover:bg-red-600/50 rounded-full text-theme-text-primary text-sm transition-colors whitespace-nowrap w-full"
-                    >
-                      ×
-                    </button>
-                  </div>
+                  {(() => {
+                    const isPaid = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
+                    const hasContract = !!(booking.booking_details?.contract_generated_at || booking.contract_url)
+                    const sections: GestisciSection[] = [
+                      {
+                        title: 'Gestione',
+                        actions: [
+                          { label: 'Modifica', onClick: () => handleEditBooking(booking) },
+                          { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: !isCarWash },
+                          { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking') },
+                        ],
+                      },
+                      {
+                        title: 'Documenti',
+                        actions: [
+                          {
+                            label: hasContract ? 'Visualizza Contratto' : (generatingContract ? 'Generazione...' : 'Genera Contratto'),
+                            onClick: () => { if (booking.contract_url) { window.open(booking.contract_url, '_blank') } else { handleGenerateContract(booking) } },
+                            disabled: !hasContract && generatingContract,
+                          },
+                          { label: 'Invia Contratto', onClick: () => handleResendContract(booking), visible: hasContract },
+                          { label: generatingInvoice ? 'Generazione...' : 'Genera Fattura', onClick: () => handleGenerateInvoice(booking), disabled: generatingInvoice },
+                        ],
+                      },
+                      {
+                        title: 'Pagamenti',
+                        actions: [
+                          {
+                            label: booking.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
+                            onClick: () => handleResendPaymentLink(booking),
+                            visible: !isPaid,
+                          },
+                        ],
+                      },
+                      {
+                        title: 'Altro',
+                        actions: [
+                          { label: 'Danni & Penali', onClick: () => { setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) } },
+                        ],
+                      },
+                    ]
+                    return <GestisciMenu sections={sections} size="md" />
+                  })()}
                 </div>
               </div>
             )
@@ -7636,69 +7601,62 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                       </td>
-                      <td className="px-3 py-3 text-sm">
-                        <div className="flex flex-wrap gap-2 items-center">
-                          {booking.status !== 'cancelled' && (
-                            <>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); if (booking.contract_url) { window.open(booking.contract_url, '_blank') } else { handleGenerateContract(booking) } }}
-                                disabled={!booking.contract_url && generatingContract}
-                                className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap disabled:opacity-50"
-                              >
-                                {!booking.contract_url && generatingContract ? '...' : 'Contratto'}
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleGenerateInvoice(booking) }}
-                                disabled={generatingInvoice}
-                                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap disabled:opacity-50"
-                              >
-                                {generatingInvoice ? '...' : 'Fattura'}
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleEditBooking(booking) }}
-                                className="px-3 py-1 bg-blue-600/30 hover:bg-blue-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
-                              >
-                                Modifica
-                              </button>
-                              {!isCarWash && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleExtendBooking(booking) }}
-                                  className="px-3 py-1 bg-purple-600/30 hover:bg-purple-600/50 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
-                                >
-                                  Estendi
-                                </button>
-                              )}
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id, 'booking') }}
-                                className="px-3 py-1 bg-orange-600 hover:bg-orange-700 rounded-full text-theme-text-primary text-xs rounded-full transition-colors whitespace-nowrap"
-                              >
-                                Cancella
-                              </button>
-                              {booking.contract_url && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleResendContract(booking) }}
-                                  className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
-                                >
-                                  Invia Contratto
-                                </button>
-                              )}
-                              {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleResendPaymentLink(booking) }}
-                                  className="px-3 py-1 bg-orange-500/30 hover:bg-orange-500/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
-                                >
-                                  {booking.booking_details?.nexi_payment_link ? 'Rinvia Link' : 'Genera Link'}
-                                </button>
-                              )}
-                            </>
-                          )}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) }}
-                            className="px-3 py-1 bg-gradient-to-r from-red-600/30 to-dr7-gold/30 hover:from-red-600/50 hover:to-dr7-gold/50 rounded-full text-theme-text-primary text-xs transition-colors whitespace-nowrap"
-                          >
-                            Danni & Penali
-                          </button>
-                        </div>
+                      <td className="px-3 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const isPaid = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
+                          const sections: GestisciSection[] = [
+                            {
+                              title: 'Gestione',
+                              actions: [
+                                { label: 'Modifica', onClick: () => handleEditBooking(booking), visible: booking.status !== 'cancelled' },
+                                { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: booking.status !== 'cancelled' && !isCarWash },
+                                { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking'), visible: booking.status !== 'cancelled' },
+                              ],
+                            },
+                            {
+                              title: 'Documenti',
+                              actions: [
+                                {
+                                  label: booking.contract_url ? 'Visualizza Contratto' : (generatingContract ? 'Generazione...' : 'Genera Contratto'),
+                                  onClick: () => { if (booking.contract_url) { window.open(booking.contract_url, '_blank') } else { handleGenerateContract(booking) } },
+                                  disabled: !booking.contract_url && generatingContract,
+                                  visible: booking.status !== 'cancelled',
+                                },
+                                {
+                                  label: 'Invia Contratto',
+                                  onClick: () => handleResendContract(booking),
+                                  visible: booking.status !== 'cancelled' && !!booking.contract_url,
+                                },
+                                {
+                                  label: generatingInvoice ? 'Generazione...' : 'Genera Fattura',
+                                  onClick: () => handleGenerateInvoice(booking),
+                                  disabled: generatingInvoice,
+                                  visible: booking.status !== 'cancelled',
+                                },
+                              ],
+                            },
+                            {
+                              title: 'Pagamenti',
+                              actions: [
+                                {
+                                  label: booking.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
+                                  onClick: () => handleResendPaymentLink(booking),
+                                  visible: booking.status !== 'cancelled' && !isPaid,
+                                },
+                              ],
+                            },
+                            {
+                              title: 'Altro',
+                              actions: [
+                                {
+                                  label: 'Danni & Penali',
+                                  onClick: () => { setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) },
+                                },
+                              ],
+                            },
+                          ]
+                          return <GestisciMenu sections={sections} size="sm" />
+                        })()}
                       </td>
                     </tr>
                   )

@@ -11,24 +11,27 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    // The admin panel is light-themed everywhere. Ignoring any legacy value in
-    // localStorage (some devices still have 'dark' saved from a previous
-    // version) to guarantee a white background on every screen, including
-    // mobile Preventivi.
-    const [theme, setTheme] = useState<Theme>('light')
+    // Two themes con switcher: 'dark' = black DR7, 'light' = white DR7.
+    // Default = dark (matches il nuovo brand); preferenza salvata in
+    // localStorage 'dr7-theme'. Se non c'e' nulla salvato, prova
+    // prefers-color-scheme; in fallback restiamo su dark.
+    const [theme, setTheme] = useState<Theme>(() => {
+        if (typeof window === 'undefined') return 'dark'
+        const saved = localStorage.getItem('dr7-theme')
+        if (saved === 'light' || saved === 'dark') return saved
+        const prefersLight = window.matchMedia?.('(prefers-color-scheme: light)').matches
+        return prefersLight ? 'light' : 'dark'
+    })
 
     useEffect(() => {
         const root = document.documentElement
         root.classList.remove('light', 'dark')
         root.classList.add(theme)
-        // Overwrite any legacy saved value with 'light' so the next reload is
-        // consistent even if we re-enable user toggling later.
-        localStorage.setItem('dr7-theme', 'light')
+        localStorage.setItem('dr7-theme', theme)
     }, [theme])
 
-    // Theme toggling is a no-op for now — admin panel must stay light.
     const toggleTheme = () => {
-        setTheme('light')
+        setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
     }
 
     return (

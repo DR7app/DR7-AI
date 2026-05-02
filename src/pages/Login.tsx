@@ -59,25 +59,27 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden" style={{ backgroundColor: '#FCFCFC' }}>
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden bg-theme-bg-primary">
 
       <div className="w-full max-w-xl relative z-10">
-        {/* Main Card — backgroundColor matches the logo JPEG background (#FCFCFC)
-            so the image blends seamlessly with the panel. */}
-        <div className="rounded-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-theme-border relative" style={{ backgroundColor: '#FCFCFC' }}>
+        {/* Login box: matches the new DR7 A.I. logo background (pure black) IN
+            BOTH themes — the logo PNG has black bg, so the box stays nero
+            anche in light mode per non avere il rettangolo nero spaiato
+            sopra a un box bianco. La pagina invece segue il tema. */}
+        <div className="rounded-2xl px-6 md:px-12 pt-8 md:pt-12 pb-10 md:pb-14 border border-black relative shadow-2xl shadow-black/30" style={{ backgroundColor: '#000' }}>
 
           <div className="relative">
-            <div className="flex justify-center mb-4">
+            <div className="flex justify-center mb-6">
               <img
                 src="/rentora-logo.jpeg"
-                alt="Rentora"
-                className="h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain"
+                alt="DR7 A.I."
+                className="h-32 sm:h-40 md:h-48 w-auto max-w-full object-contain"
               />
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-theme-text-primary mb-2">
+                <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
                   Email
                 </label>
                 <input
@@ -86,13 +88,13 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/30 transition-all duration-200"
                   placeholder="admin@dr7empire.com"
                 />
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-theme-text-primary mb-2">
+                <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
                   Password
                 </label>
                 <input
@@ -101,13 +103,13 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/30 transition-all duration-200"
                   placeholder="••••••••"
                 />
               </div>
 
               {error && (
-                <div className="bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-3 rounded-full text-sm">
+                <div className="bg-red-500/10 border border-red-500/40 text-red-300 px-4 py-3 rounded-full text-sm">
                   {error}
                 </div>
               )}
@@ -115,7 +117,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-dr7-gold hover:bg-[#247a6f] text-white font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg tracking-wide uppercase text-sm"
+                className="w-full text-white font-medium py-3.5 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg tracking-wide uppercase text-sm bg-gradient-to-r from-primary-dark via-primary to-primary-light hover:opacity-90"
               >
                 {loading ? 'Accesso in corso...' : 'Accedi'}
               </button>
@@ -125,7 +127,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => { setShowForgot(!showForgot); setForgotError(''); setForgotMessage(''); }}
-                className="text-sm text-theme-text-muted hover:text-dr7-gold transition-colors"
+                className="text-sm text-gray-400 hover:text-primary-light transition-colors"
               >
                 Password dimenticata?
               </button>
@@ -133,7 +135,7 @@ export default function Login() {
 
             {showForgot && (
               <form onSubmit={handleForgotPassword} className="mt-4 space-y-3">
-                <p className="text-sm text-theme-text-muted">
+                <p className="text-sm text-gray-400">
                   Inserisci la tua email per ricevere un link di recupero password.
                 </p>
                 <input
@@ -141,23 +143,23 @@ export default function Login() {
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/30 transition-all duration-200"
                   placeholder="La tua email"
                 />
                 {forgotError && (
-                  <div className="bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-3 rounded-full text-sm">
+                  <div className="bg-red-500/10 border border-red-500/40 text-red-300 px-4 py-3 rounded-full text-sm">
                     {forgotError}
                   </div>
                 )}
                 {forgotMessage && (
-                  <div className="bg-green-500/10 border border-green-500/30 text-green-500 px-4 py-3 rounded-full text-sm">
+                  <div className="bg-green-500/10 border border-green-500/40 text-green-300 px-4 py-3 rounded-full text-sm">
                     {forgotMessage}
                   </div>
                 )}
                 <button
                   type="submit"
                   disabled={forgotLoading}
-                  className="w-full bg-theme-input-bg border border-theme-input-border hover:border-dr7-gold text-theme-text-primary font-medium py-3 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  className="w-full bg-white/5 border border-white/15 hover:border-dr7-gold text-white font-medium py-3 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   {forgotLoading ? 'Invio in corso...' : 'Invia link di recupero'}
                 </button>
