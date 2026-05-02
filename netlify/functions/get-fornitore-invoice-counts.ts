@@ -1,6 +1,11 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
+import { createClient } from '@supabase/supabase-js'
 import { searchIncomingInvoices } from './aruba-utils'
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 function normalizeVat(s: string | null | undefined): string {
   if (!s) return ''
@@ -82,6 +87,39 @@ export const handler: Handler = async (event) => {
         if (typeof result.totalPages === 'number' && page + 1 >= result.totalPages) break
         page++
       }
+    }
+
+    // Persist cache onto fornitori rows so the list view renders instantly
+    // on subsequent loads without hitting Aruba.
+    try {
+      const { data: fornitori } = await supabase
+        .from('fornitori')
+        .select('id, nome, piva')
+      const now = new Date().toISOString()
+      const updates: Promise<unknown>[] = []
+      for (const f of fornitori || []) {
+        const v = (f.piva || '').replace(/\D/g, '')
+        let count = 0
+        let lastDate: string | null = null
+        if (v && byPiva[v]) {
+          count = byPiva[v].count
+          lastDate = byPiva[v].lastDate
+        } else if (f.nome && byName[f.nome.toLowerCase().trim()]) {
+          count = byName[f.nome.toLowerCase().trim()].count
+          lastDate = byName[f.nome.toLowerCase().trim()].lastDate
+        }
+        updates.push(
+          supabase.from('fornitori').update({
+            aruba_invoices_count: count,
+            aruba_last_invoice_at: lastDate,
+            aruba_synced_at: now,
+          }).eq('id', f.id)
+        )
+      }
+      // Wait for cache writes (small fornitori list, so this stays fast)
+      await Promise.all(updates)
+    } catch (cacheErr: any) {
+      console.warn('[get-fornitore-invoice-counts] cache update failed:', cacheErr?.message)
     }
 
     return {

@@ -19,6 +19,20 @@ interface FornitoreRow extends Fornitore {
     docCount?: number
     openAlerts?: number
     arubaInvoiceCount?: number
+    aruba_invoices_count?: number | null
+    aruba_synced_at?: string | null
+}
+
+const STALE_AFTER_MS = 60 * 60 * 1000  // 1h
+function fmtRelative(iso: string | null | undefined): string {
+    if (!iso) return 'mai sincronizzato'
+    const dt = new Date(iso).getTime()
+    if (isNaN(dt)) return 'mai sincronizzato'
+    const diffSec = Math.floor((Date.now() - dt) / 1000)
+    if (diffSec < 60) return 'aggiornato adesso'
+    if (diffSec < 3600) return `aggiornato ${Math.floor(diffSec / 60)} min fa`
+    if (diffSec < 86400) return `aggiornato ${Math.floor(diffSec / 3600)}h fa`
+    return `aggiornato ${Math.floor(diffSec / 86400)} giorni fa`
 }
 
 export default function FornitoriTab() {
@@ -120,12 +134,13 @@ export default function FornitoriTab() {
             if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
             const byPiva: Record<string, { count: number }> = json.byPiva || {}
             const byName: Record<string, { count: number }> = json.byName || {}
+            const nowIso = new Date().toISOString()
             setFornitori(prev => prev.map(f => {
                 const v = (f.piva || '').replace(/\D/g, '')
                 let count = 0
                 if (v && byPiva[v]) count = byPiva[v].count
                 else if (f.nome && byName[f.nome.toLowerCase().trim()]) count = byName[f.nome.toLowerCase().trim()].count
-                return { ...f, arubaInvoiceCount: count }
+                return { ...f, arubaInvoiceCount: count, aruba_invoices_count: count, aruba_synced_at: nowIso }
             }))
             setArubaMonthsScanned(json.months_scanned || months)
         } catch (err: unknown) {
@@ -204,6 +219,9 @@ export default function FornitoriTab() {
             for (const r of rows) {
                 r.docCount = docByForn.get(r.id) || 0
                 r.openAlerts = alertByForn.get(r.id) || 0
+                // Use cached Aruba count from the row itself (instant). The
+                // background sync will refresh it if stale.
+                r.arubaInvoiceCount = r.aruba_invoices_count ?? 0
             }
             setFornitori(rows)
         } catch (err) {
@@ -227,10 +245,26 @@ export default function FornitoriTab() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showInactive])
 
+    // Auto-refresh Aruba counts only if the cache is stale (>1h old) or missing.
+    // Otherwise we trust the cached value on the row and skip hitting Aruba.
     useEffect(() => {
-        if (fornitori.length > 0) loadArubaInvoiceCounts(3)
+        if (fornitori.length === 0) return
+        const oldest = fornitori.reduce<number>((acc, f) => {
+            if (!f.aruba_synced_at) return 0
+            const t = new Date(f.aruba_synced_at).getTime()
+            return acc === 0 ? t : Math.min(acc, t)
+        }, 0)
+        const isStale = oldest === 0 || (Date.now() - oldest) > STALE_AFTER_MS
+        if (isStale) loadArubaInvoiceCounts(3)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fornitori.length])
+
+    // Cache freshness derived from the rows
+    const oldestSyncedAt = useMemo(() => {
+        const ts = fornitori.map(f => f.aruba_synced_at).filter(Boolean) as string[]
+        if (ts.length === 0) return null
+        return ts.reduce((a, b) => (a < b ? a : b))
+    }, [fornitori])
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase()
@@ -274,8 +308,19 @@ export default function FornitoriTab() {
                         {' · '}
                         {fornitori.reduce((s, f) => s + (f.arubaInvoiceCount || 0), 0)} fatture ricevute
                         <span className="opacity-70"> ({arubaMonthsScanned} mesi)</span>
-                        {arubaCountsLoading && <span className="ml-2 italic">aggiorno conteggi...</span>}
                     </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${arubaCountsLoading ? 'bg-blue-500/20 text-blue-300' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}>
+                        {arubaCountsLoading ? 'Aggiorno conteggi Aruba…' : fmtRelative(oldestSyncedAt)}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => loadArubaInvoiceCounts(arubaMonthsScanned)}
+                        disabled={arubaCountsLoading}
+                        className="text-xs px-2 py-0.5 rounded text-theme-text-secondary hover:text-theme-text-primary border border-theme-border hover:border-dr7-gold disabled:opacity-50"
+                        title="Aggiorna ora i conteggi Aruba"
+                    >
+                        ↻ Aggiorna
+                    </button>
                 </div>
                 <div className="flex gap-2">
                     <button onClick={() => setView('list')}
