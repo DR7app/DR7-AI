@@ -9,6 +9,7 @@ import type { Fornitore, FornitoreDocument, DocumentTipo } from './types'
 interface Props {
     fornitore: Fornitore
     document?: FornitoreDocument | null  // for edit
+    defaultTipo?: DocumentTipo  // pre-selected tipo when uploading from a tab
     onClose: () => void
     onSaved: (doc: FornitoreDocument) => void
 }
@@ -21,9 +22,9 @@ const TIPO_OPTIONS: { value: DocumentTipo; label: string }[] = [
     { value: 'ricevuta_pagamento', label: DOCUMENT_TIPO_LABELS.ricevuta_pagamento },
 ]
 
-export default function FornitoreDocumentUpload({ fornitore, document: existingDoc, onClose, onSaved }: Props) {
+export default function FornitoreDocumentUpload({ fornitore, document: existingDoc, defaultTipo, onClose, onSaved }: Props) {
     const isEdit = !!existingDoc
-    const [tipo, setTipo] = useState<DocumentTipo>(existingDoc?.tipo || 'fattura')
+    const [tipo, setTipo] = useState<DocumentTipo>(existingDoc?.tipo || defaultTipo || 'fattura')
     const [numeroDoc, setNumeroDoc] = useState(existingDoc?.numero_documento || '')
     const [dataDoc, setDataDoc] = useState(existingDoc?.data_documento || new Date().toISOString().slice(0, 10))
     const [dataScadenza, setDataScadenza] = useState(existingDoc?.data_scadenza || '')

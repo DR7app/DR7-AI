@@ -7,6 +7,7 @@ import FornitoreMonthlyView from './FornitoreMonthlyView'
 import FornitoreDocsList from './FornitoreDocsList'
 import FornitoreScadenziario from './FornitoreScadenziario'
 import FornitoreAlertsPanel from './FornitoreAlertsPanel'
+import FornitoreCrossCheckPanel from './FornitoreCrossCheckPanel'
 import type { Fornitore } from './types'
 
 interface Props {
@@ -15,7 +16,7 @@ interface Props {
     onUpdated: (f: Fornitore) => void
 }
 
-type SubTab = 'panoramica' | 'bolle' | 'fatture' | 'scadenze' | 'pagamenti' | 'documenti' | 'alert'
+type SubTab = 'panoramica' | 'bolle' | 'fatture' | 'controllo' | 'scadenze' | 'pagamenti' | 'documenti' | 'alert'
 
 interface Counts {
     bolle: number
@@ -100,6 +101,7 @@ export default function FornitoreDetail({ fornitore, onBack, onUpdated }: Props)
                 <TabBtn active={tab === 'panoramica'} onClick={() => setTab('panoramica')} label="Panoramica" />
                 <TabBtn active={tab === 'bolle'} onClick={() => setTab('bolle')} label="Bolle" count={counts.bolle} />
                 <TabBtn active={tab === 'fatture'} onClick={() => setTab('fatture')} label="Fatture" count={counts.fatture} />
+                <TabBtn active={tab === 'controllo'} onClick={() => setTab('controllo')} label="Controllo Incrociato" />
                 <TabBtn active={tab === 'scadenze'} onClick={() => setTab('scadenze')} label="Scadenze" count={counts.scadenze} />
                 <TabBtn active={tab === 'pagamenti'} onClick={() => setTab('pagamenti')} label="Pagamenti" count={counts.pagamenti} />
                 <TabBtn active={tab === 'documenti'} onClick={() => setTab('documenti')} label="Documenti" count={counts.documenti} />
@@ -108,11 +110,12 @@ export default function FornitoreDetail({ fornitore, onBack, onUpdated }: Props)
 
             {tab === 'panoramica' && <FornitorePanoramica fornitore={fornitore} />}
             {tab === 'bolle' && (
-                <FornitoreDocsList fornitore={fornitore} tipiFilter={['ddt', 'bolla']} title="Bolle e DDT" />
+                <FornitoreDocsList fornitore={fornitore} tipiFilter={['ddt', 'bolla']} defaultUploadTipo="bolla" title="Bolle e DDT" />
             )}
             {tab === 'fatture' && (
-                <FornitoreDocsList fornitore={fornitore} tipiFilter={['fattura']} title="Fatture" />
+                <FornitoreDocsList fornitore={fornitore} tipiFilter={['fattura']} defaultUploadTipo="fattura" title="Fatture" />
             )}
+            {tab === 'controllo' && <FornitoreCrossCheckPanel fornitore={fornitore} />}
             {tab === 'scadenze' && <FornitoreScadenziario fornitore={fornitore} />}
             {tab === 'pagamenti' && (
                 <FornitoreDocsList fornitore={fornitore} statiFilter={['pagato', 'archiviato']} title="Documenti pagati" />

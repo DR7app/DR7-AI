@@ -24,7 +24,7 @@ interface Props {
     title?: string
 }
 
-export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, title }: Props) {
+export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, title, defaultUploadTipo }: Props) {
     const today = new Date()
     const [anno, setAnno] = useState<number | 'tutti'>(today.getFullYear())
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
@@ -181,6 +181,7 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
                 <FornitoreDocumentUpload
                     fornitore={fornitore}
                     document={editingDoc}
+                    defaultTipo={!editingDoc ? defaultUploadTipo : undefined}
                     onClose={() => { setShowUpload(false); setEditingDoc(null) }}
                     onSaved={() => { setShowUpload(false); setEditingDoc(null); load() }}
                 />
