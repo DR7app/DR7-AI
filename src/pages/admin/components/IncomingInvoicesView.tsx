@@ -41,6 +41,7 @@ export default function IncomingInvoicesView() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [downloading, setDownloading] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -145,6 +146,47 @@ export default function IncomingInvoicesView() {
     return { grand, bySupplier, count: filtered.length }
   }, [filtered])
 
+  async function importToAnagrafica() {
+    if (invoices.length === 0) {
+      toast.error('Nessuna fattura da cui importare')
+      return
+    }
+    // Dedupe by P.IVA (or name) before sending
+    const seen = new Map<string, { nome: string; piva: string | null }>()
+    for (const inv of invoices) {
+      const piva = (inv.senderVat || '').replace(/\D/g, '') || null
+      const key = piva || `name:${(inv.sender || '').toLowerCase().trim()}`
+      if (!key || !inv.sender) continue
+      if (!seen.has(key)) seen.set(key, { nome: inv.sender, piva })
+    }
+    const suppliers = Array.from(seen.values())
+    if (suppliers.length === 0) {
+      toast.error('Nessun fornitore valido da importare')
+      return
+    }
+    if (!window.confirm(`Aggiungere ${suppliers.length} fornitori all'anagrafica? I duplicati (stessa P.IVA o nome) verranno saltati.`)) {
+      return
+    }
+    setImporting(true)
+    try {
+      const res = await fetch('/.netlify/functions/import-fornitori-from-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suppliers }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+      toast.success(`Aggiunti ${json.added} fornitori, ${json.skipped} gia' presenti`)
+      // Refresh list so badges update
+      load()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error(`Import fallito: ${msg}`)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   async function downloadInvoice(inv: IncomingInvoice, kind: 'pdf' | 'xml') {
     if (!inv.filename) {
       toast.error('Filename mancante')
@@ -228,6 +270,14 @@ export default function IncomingInvoicesView() {
           className="px-4 py-2 rounded bg-dr7-gold text-black font-semibold text-sm hover:bg-[#247a6f] hover:text-white transition-colors"
         >
           Aggiorna
+        </button>
+        <button
+          onClick={importToAnagrafica}
+          disabled={importing || invoices.length === 0}
+          className="px-4 py-2 rounded bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Aggiungi tutti i fornitori visibili all'Anagrafica Fornitori, evitando i duplicati"
+        >
+          {importing ? 'Importo...' : `Importa ${invoices.length} in Anagrafica`}
         </button>
       </div>
 
