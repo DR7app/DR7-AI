@@ -21,16 +21,50 @@ interface Props {
     statiFilter?: DocumentStato[]
     /** Force a default tipo when uploading from this view */
     defaultUploadTipo?: DocumentTipo
+    /** Show "Sincronizza da Aruba" button — only meaningful on the Fatture tab */
+    enableArubaSync?: boolean
     title?: string
 }
 
-export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, title, defaultUploadTipo }: Props) {
+export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, title, defaultUploadTipo, enableArubaSync }: Props) {
     const today = new Date()
     const [anno, setAnno] = useState<number | 'tutti'>(today.getFullYear())
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [loading, setLoading] = useState(false)
     const [showUpload, setShowUpload] = useState(false)
     const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)
+    const [syncingAruba, setSyncingAruba] = useState(false)
+
+    async function syncFromAruba() {
+        const monthsStr = window.prompt('Quanti mesi indietro sincronizzare da Aruba? (1-12)', '6')
+        if (!monthsStr) return
+        const months = parseInt(monthsStr)
+        if (isNaN(months) || months < 1 || months > 12) {
+            alert('Inserisci un numero tra 1 e 12')
+            return
+        }
+        setSyncingAruba(true)
+        try {
+            const res = await fetch('/.netlify/functions/sync-fornitore-invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fornitore_id: fornitore.id, months }),
+            })
+            const text = await res.text()
+            let json: any
+            try { json = JSON.parse(text) } catch {
+                throw new Error(`HTTP ${res.status} (probabile timeout): ${text.slice(0, 200)}`)
+            }
+            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+            alert(`Sincronizzazione completata:\n- Match Aruba: ${json.matched}\n- Inserite: ${json.inserted}\n- Gia' presenti: ${json.skipped}\n- Falliti: ${json.failed}`)
+            load()
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            alert(`Sincronizzazione fallita: ${msg}`)
+        } finally {
+            setSyncingAruba(false)
+        }
+    }
 
     async function load() {
         setLoading(true)
@@ -104,7 +138,18 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
                 <span className="text-sm text-theme-text-secondary">
                     {docs.length} doc · totale <strong className="text-theme-text-primary">{fmtEUR(totale)}</strong>
                 </span>
-                <div className="ml-auto">
+                <div className="ml-auto flex gap-2">
+                    {enableArubaSync && (
+                        <button
+                            type="button"
+                            onClick={syncFromAruba}
+                            disabled={syncingAruba}
+                            className="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50"
+                            title="Importa nel database le fatture trovate su Aruba SDI per questo fornitore"
+                        >
+                            {syncingAruba ? 'Sincronizzo...' : 'Sincronizza da Aruba'}
+                        </button>
+                    )}
                     <Button onClick={() => { setEditingDoc(null); setShowUpload(true) }}>+ Carica documento</Button>
                 </div>
             </div>

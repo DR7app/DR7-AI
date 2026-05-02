@@ -113,7 +113,7 @@ export default function FornitoreDetail({ fornitore, onBack, onUpdated }: Props)
                 <FornitoreDocsList fornitore={fornitore} tipiFilter={['ddt', 'bolla']} defaultUploadTipo="bolla" title="Bolle e DDT" />
             )}
             {tab === 'fatture' && (
-                <FornitoreDocsList fornitore={fornitore} tipiFilter={['fattura']} defaultUploadTipo="fattura" title="Fatture" />
+                <FornitoreDocsList fornitore={fornitore} tipiFilter={['fattura']} defaultUploadTipo="fattura" enableArubaSync title="Fatture" />
             )}
             {tab === 'controllo' && <FornitoreCrossCheckPanel fornitore={fornitore} />}
             {tab === 'scadenze' && <FornitoreScadenziario fornitore={fornitore} />}
