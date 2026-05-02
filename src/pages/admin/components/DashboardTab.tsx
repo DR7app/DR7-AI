@@ -36,6 +36,14 @@ interface DashboardData {
   cashFlow: {
     incassato: number; daIncassare: number; insolutiScaduti: number
   }
+  monthlyReports?: {
+    noleggio: { ricavoTotale: number; ricavoMesePrev: number; ricavoChangePercent: number; prenotazioniCount: number; prenotazioniAnnullateCount: number; prenotazioniAnnullateValue: number; link: string }
+    lavaggio: { ricavoTotale: number; count: number; link: string }
+    clienti: { nuoviMese: number; attiviMese: number; totale: number; changePercent: number; link: string }
+    penaliDanni: { danniTotale: number; danniCount: number; insolutiTotale: number; insolutiCount: number; link: string }
+    preventivi: { total: number; accettati: number; rifiutatiCount: number; conversionRate: number; motivoCounts: { cauzione: number; prezzo: number; non_specificato: number }; link: string }
+    fornitori: { pagatoMese: number; daPagare: number; scaduto: number; alertsOpen: number; link: string }
+  }
 }
 
 function fmt(n: number): string {

@@ -949,6 +949,77 @@ export const handler: Handler = async (event) => {
       }),
     ])
 
+    // ============================================================
+    // PREVENTIVI rollup for the month (lightweight — uses dedicated query)
+    // ============================================================
+    const preventiviSummary = await safe('preventivi', async () => {
+      const { data: prevs } = await supabase
+        .from('preventivi')
+        .select('id, status, total_final, total_amount, motivo_rifiuto, created_at')
+        .gte('created_at', monthStartISO + 'T00:00:00')
+        .lte('created_at', monthEndISO + 'T23:59:59')
+      const list = prevs || []
+      const total = list.length
+      const accettati = list.filter(p => p.status === 'accettato' || p.status === 'convertito').length
+      const rifiutati = list.filter(p => p.status === 'rifiutato')
+      const rifiutatiCount = rifiutati.length
+      const conv = total > 0 ? Math.round((accettati / total) * 100) : 0
+      const motivoCounts: Record<string, number> = { cauzione: 0, prezzo: 0, non_specificato: 0 }
+      for (const p of rifiutati) {
+        const m = (p.motivo_rifiuto || '').toLowerCase()
+        if (m === 'cauzione') motivoCounts.cauzione++
+        else if (m === 'prezzo') motivoCounts.prezzo++
+        else motivoCounts.non_specificato++
+      }
+      return { total, accettati, rifiutatiCount, conversionRate: conv, motivoCounts }
+    }, { total: 0, accettati: 0, rifiutatiCount: 0, conversionRate: 0, motivoCounts: { cauzione: 0, prezzo: 0, non_specificato: 0 } })
+
+    // ============================================================
+    // MONTHLY REPORTS — rollup for the new "Riassunto Mensile" view.
+    // One entry per Report tab so Dashboard and Reports stay coherent.
+    // ============================================================
+    const monthlyReports = {
+      noleggio: {
+        ricavoTotale: response.revenue.currentMonth,
+        ricavoMesePrev: response.revenue.previousMonth,
+        ricavoChangePercent: response.revenue.changePercent,
+        prenotazioniCount: confirmedBookings + pendingBookings,
+        prenotazioniAnnullateCount: response.revenue.cancelledRentalsCount,
+        prenotazioniAnnullateValue: response.revenue.cancelledRentalsTotal,
+        link: 'reports',
+      },
+      lavaggio: {
+        ricavoTotale: response.revenue.washTotal,
+        count: response.revenue.washCount,
+        link: 'report-lavaggio',
+      },
+      clienti: {
+        nuoviMese: response.customers.newThisMonth,
+        attiviMese: response.customers.activeThisMonth,
+        totale: response.customers.totalCustomers,
+        changePercent: response.customers.changePercent,
+        link: 'report-clienti',
+      },
+      penaliDanni: {
+        danniTotale: response.damages.danniAmount,
+        danniCount: response.damages.danniCount,
+        insolutiTotale: response.damages.insoluti,
+        insolutiCount: response.damages.insolutiCount,
+        link: 'report-penali-danni',
+      },
+      preventivi: {
+        ...preventiviSummary,
+        link: 'preventivi',
+      },
+      fornitori: {
+        pagatoMese: fornitoriCashFlowSection.pagatoMese,
+        daPagare: fornitoriCashFlowSection.daPagare,
+        scaduto: fornitoriCashFlowSection.scaduto,
+        alertsOpen: fornitoriCashFlowSection.alertsOpen,
+        link: 'fornitori',
+      },
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fullResponse: any = {
       ...response,
@@ -960,6 +1031,7 @@ export const handler: Handler = async (event) => {
       dr7Club: dr7ClubSection,
       spese: speseSection,
       fornitoriCashFlow: fornitoriCashFlowSection,
+      monthlyReports,
     }
 
     return {

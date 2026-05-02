@@ -182,6 +182,26 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
         load()
     }
 
+    async function forceResyncFromAruba() {
+        const key = `dr7_fornitore_sync_${fornitore.id}`
+        localStorage.removeItem(key)
+        const t = toast.loading('Sincronizzo fatture da Aruba…')
+        try {
+            const res = await fetch('/.netlify/functions/sync-fornitore-invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fornitore_id: fornitore.id, months: 24 }),
+            })
+            const json = await res.json()
+            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+            localStorage.setItem(key, String(Date.now()))
+            await load()
+            toast.success(`Trovate ${json.matched} fatture · ${json.inserted} nuove · ${json.skipped} già presenti`, { id: t })
+        } catch (err) {
+            toast.error('Sync fallita: ' + (err instanceof Error ? err.message : String(err)), { id: t })
+        }
+    }
+
     async function runManualCrossCheck() {
         setCrossCheckRunning(true)
         try {
@@ -334,6 +354,13 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={forceResyncFromAruba}
+                        className="text-xs px-3 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary border border-theme-border"
+                        title="Forza sincronizzazione fatture da Aruba (ultimi 24 mesi)"
+                    >
+                        Aggiorna fatture
+                    </button>
                     <select value={mese} onChange={e => setMese(e.target.value === 'tutti' ? 'tutti' : parseInt(e.target.value))}
                         className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm">
                         <option value="tutti">Tutti i mesi</option>
