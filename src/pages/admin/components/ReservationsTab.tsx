@@ -7534,8 +7534,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   return normalisedWords.every(word => searchText.includes(word))
                 }).map((booking) => {
                   const isCarWash = booking.service_type === 'car_wash'
+                  const isCancelled = booking.status === 'cancelled' || booking.status === 'annullata'
                   return (
-                    <tr key={`booking-${booking.id}`} className="border-t border-theme-border hover:/50 cursor-pointer" onClick={() => setSelectedBooking(booking)}>
+                    <tr
+                      key={`booking-${booking.id}`}
+                      className={`border-t border-theme-border cursor-pointer ${
+                        isCancelled
+                          ? 'bg-red-500/10 hover:bg-red-500/15 text-red-300'
+                          : 'hover:bg-theme-bg-tertiary/30'
+                      }`}
+                      title={isCancelled ? 'Prenotazione annullata' : undefined}
+                      onClick={() => setSelectedBooking(booking)}
+                    >
                       <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
                         <span className="truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
                       </td>
