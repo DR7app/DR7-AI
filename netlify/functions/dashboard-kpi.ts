@@ -610,6 +610,7 @@ export const handler: Handler = async (event) => {
       referralSection,
       dr7ClubSection,
       speseSection,
+      fornitoriCashFlowSection,
     ] = await Promise.all([
       // -------- PRIME WASH (lavaggi + meccanica from bookings) --------
       safe('primeWash', async () => {
@@ -804,6 +805,114 @@ export const handler: Handler = async (event) => {
           invoiceCount: Number(currMonthRes?.totalCount) || 0,
         }
       }, { totalThisMonth: 0, totalPrevMonth: 0, changePercent: 0, bySupplier: [], supplierCount: 0, invoiceCount: 0 }),
+
+      // -------- FORNITORI CASH-FLOW (manual Fornitori module — source of truth) --------
+      // Operator manually marks documents as paid via the Fornitori UI; this block
+      // reflects what was ACTUALLY PAID (data_pagamento), not just invoiced. The
+      // headline KPI cards (Costi, Margine, Utile Netto) use these figures.
+      safe('fornitoriCashFlow', async () => {
+        const todayISO = new Date().toISOString().slice(0, 10)
+        const [paidCurrRes, paidPrevRes, outstandingRes, overdueRes, alertsRes, fornitoriRes] = await Promise.all([
+          // 1. Paid this month — cash-flow figure
+          supabase.from('fornitore_documents')
+            .select('id, importo_totale, fornitore_id, data_pagamento')
+            .gte('data_pagamento', monthStartISO)
+            .lte('data_pagamento', monthEndISO + 'T23:59:59'),
+          // 2. Paid previous month — for MoM
+          supabase.from('fornitore_documents')
+            .select('id, importo_totale')
+            .gte('data_pagamento', prevMonthStartISO)
+            .lte('data_pagamento', prevMonthEndISO + 'T23:59:59'),
+          // 3. Outstanding (not paid yet, regardless of period)
+          supabase.from('fornitore_documents')
+            .select('id, importo_totale, data_scadenza, fornitore_id, stato')
+            .not('stato', 'in', '(pagato,archiviato,bloccato)')
+            .in('tipo', ['fattura']),
+          // 4. Overdue (scadenza past + not paid)
+          supabase.from('fornitore_documents')
+            .select('id, importo_totale, data_scadenza, fornitore_id')
+            .not('stato', 'in', '(pagato,archiviato,bloccato)')
+            .lt('data_scadenza', todayISO)
+            .in('tipo', ['fattura']),
+          // 5. Open alerts
+          supabase.from('fornitore_alerts')
+            .select('id, severity', { count: 'exact', head: false })
+            .eq('status', 'open'),
+          // 6. Active fornitori (for nome / categoria lookup)
+          supabase.from('fornitori')
+            .select('id, nome, categoria_merce')
+            .eq('attivo', true),
+        ])
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const paidCurr: any[] = paidCurrRes.data || []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const paidPrev: any[] = paidPrevRes.data || []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const outstanding: any[] = outstandingRes.data || []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const overdue: any[] = overdueRes.data || []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fornitori: any[] = fornitoriRes.data || []
+
+        const fornitoreIndex = new Map<string, { nome: string; categoria_merce: string | null }>()
+        fornitori.forEach(f => fornitoreIndex.set(f.id, { nome: f.nome, categoria_merce: f.categoria_merce }))
+
+        const pagatoMese = paidCurr.reduce((s, d) => s + (Number(d.importo_totale) || 0), 0)
+        const pagatoMesePrev = paidPrev.reduce((s, d) => s + (Number(d.importo_totale) || 0), 0)
+        const changePercent = pagatoMesePrev > 0
+          ? Math.round(((pagatoMese - pagatoMesePrev) / pagatoMesePrev) * 100)
+          : 0
+        const daPagare = outstanding.reduce((s, d) => s + (Number(d.importo_totale) || 0), 0)
+        const scaduto = overdue.reduce((s, d) => s + (Number(d.importo_totale) || 0), 0)
+
+        // Top suppliers paid this month
+        const supplierAgg = new Map<string, { nome: string; total: number; count: number }>()
+        for (const d of paidCurr) {
+          const f = fornitoreIndex.get(d.fornitore_id)
+          const nome = f?.nome || 'Sconosciuto'
+          const cur = supplierAgg.get(d.fornitore_id) || { nome, total: 0, count: 0 }
+          cur.total += Number(d.importo_totale) || 0
+          cur.count += 1
+          supplierAgg.set(d.fornitore_id, cur)
+        }
+        const bySupplier = Array.from(supplierAgg.values())
+          .map(s => ({ nome: s.nome, total: Math.round(s.total * 100) / 100, count: s.count }))
+          .sort((a, b) => b.total - a.total)
+
+        // Spend per category (paid this month)
+        const categoriaAgg = new Map<string, number>()
+        for (const d of paidCurr) {
+          const f = fornitoreIndex.get(d.fornitore_id)
+          const cat = f?.categoria_merce || 'altro'
+          categoriaAgg.set(cat, (categoriaAgg.get(cat) || 0) + (Number(d.importo_totale) || 0))
+        }
+        const byCategoria = Array.from(categoriaAgg.entries())
+          .map(([categoria, total]) => ({ categoria, total: Math.round(total * 100) / 100 }))
+          .sort((a, b) => b.total - a.total)
+
+        return {
+          pagatoMese: Math.round(pagatoMese * 100) / 100,
+          pagatoMesePrev: Math.round(pagatoMesePrev * 100) / 100,
+          changePercent,
+          daPagare: Math.round(daPagare * 100) / 100,
+          daPagareCount: outstanding.length,
+          scaduto: Math.round(scaduto * 100) / 100,
+          scadutoCount: overdue.length,
+          invoicePaidCount: paidCurr.length,
+          activeFornitoriCount: fornitori.length,
+          bySupplier,
+          byCategoria,
+          alertsOpen: alertsRes.count ?? 0,
+        }
+      }, {
+        pagatoMese: 0, pagatoMesePrev: 0, changePercent: 0,
+        daPagare: 0, daPagareCount: 0, scaduto: 0, scadutoCount: 0,
+        invoicePaidCount: 0, activeFornitoriCount: 0,
+        bySupplier: [] as Array<{ nome: string; total: number; count: number }>,
+        byCategoria: [] as Array<{ categoria: string; total: number }>,
+        alertsOpen: 0,
+      }),
     ])
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -816,6 +925,7 @@ export const handler: Handler = async (event) => {
       referral: referralSection,
       dr7Club: dr7ClubSection,
       spese: speseSection,
+      fornitoriCashFlow: fornitoriCashFlowSection,
     }
 
     return {

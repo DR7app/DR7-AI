@@ -281,8 +281,14 @@ export default function DashboardTab() {
         const fatturato = d.revenue.currentMonth
         const incassato = d.revenue.incassato
         const incassatoPct = d.revenue.incassatoPercent
-        const costiTotali = supplierData?.grandTotal || 0
-        const costiCount = supplierData?.totalCount || 0
+        // Cash-flow from the manual Fornitori module (operator-confirmed paid).
+        // Falls back to Aruba SDI invoices only if no Fornitori data yet.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fcf = (d as any).fornitoriCashFlow as
+          | { pagatoMese: number; invoicePaidCount: number; daPagare: number; scaduto: number }
+          | undefined
+        const costiTotali = fcf?.pagatoMese ?? supplierData?.grandTotal ?? 0
+        const costiCount = fcf?.invoicePaidCount ?? supplierData?.totalCount ?? 0
         const margine = Math.max(0, fatturato - costiTotali)
         const marginePct = fatturato > 0 ? Math.round((margine / fatturato) * 100) : 0
         // Stima Utile Netto: margine meno tasse ~33% (IRES 24% + IRAP ~9%).
@@ -570,9 +576,91 @@ export default function DashboardTab() {
         )}
       </div>
 
-      {/* ========== COSTI FORNITORI ========== */}
+      {/* ========== FORNITORI CASH FLOW (manual module — source of truth) ========== */}
+      {(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fcf = (d as any).fornitoriCashFlow as {
+          pagatoMese: number; pagatoMesePrev: number; changePercent: number
+          daPagare: number; daPagareCount: number
+          scaduto: number; scadutoCount: number
+          invoicePaidCount: number; activeFornitoriCount: number
+          bySupplier: Array<{ nome: string; total: number; count: number }>
+          byCategoria: Array<{ categoria: string; total: number }>
+          alertsOpen: number
+        } | undefined
+        if (!fcf) return null
+        const margineNetto = Math.max(0, d.revenue.currentMonth - fcf.pagatoMese)
+        const trend = fcf.changePercent
+        return (
+          <div>
+            <SectionHeader title="Fornitori — Cash Flow" subtitle="Pagamenti effettivi dal modulo Fornitori (data_pagamento)" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+                <p className="text-xs text-theme-text-muted uppercase tracking-wide">Pagato nel mese</p>
+                <p className="text-xl font-semibold text-theme-text-primary mt-1">€ {fmtDec(fcf.pagatoMese)}</p>
+                <p className="text-xs text-theme-text-muted mt-1">
+                  {fcf.invoicePaidCount} fatture · {trend >= 0 ? '+' : ''}{trend}% vs mese prec.
+                </p>
+              </div>
+              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+                <p className="text-xs text-theme-text-muted uppercase tracking-wide">Da Pagare</p>
+                <p className="text-xl font-semibold text-amber-400 mt-1">€ {fmtDec(fcf.daPagare)}</p>
+                <p className="text-xs text-theme-text-muted mt-1">{fcf.daPagareCount} fatture aperte</p>
+              </div>
+              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+                <p className="text-xs text-theme-text-muted uppercase tracking-wide">Scaduto</p>
+                <p className={`text-xl font-semibold mt-1 ${fcf.scaduto > 0 ? 'text-red-400' : 'text-theme-text-primary'}`}>€ {fmtDec(fcf.scaduto)}</p>
+                <p className="text-xs text-theme-text-muted mt-1">{fcf.scadutoCount} fatture scadute</p>
+              </div>
+              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+                <p className="text-xs text-theme-text-muted uppercase tracking-wide">Margine Netto Cash</p>
+                <p className="text-xl font-semibold text-emerald-400 mt-1">€ {fmt(margineNetto)}</p>
+                <p className="text-xs text-theme-text-muted mt-1">Fatturato − Pagato</p>
+              </div>
+              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+                <p className="text-xs text-theme-text-muted uppercase tracking-wide">Alert Fornitori</p>
+                <p className={`text-xl font-semibold mt-1 ${fcf.alertsOpen > 0 ? 'text-amber-400' : 'text-theme-text-primary'}`}>{fcf.alertsOpen}</p>
+                <p className="text-xs text-theme-text-muted mt-1">{fcf.activeFornitoriCount} fornitori attivi</p>
+              </div>
+            </div>
+
+            {(fcf.bySupplier.length > 0 || fcf.byCategoria.length > 0) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
+                {fcf.bySupplier.length > 0 && (
+                  <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+                    <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-2">Top Fornitori (pagato nel mese)</p>
+                    <div className="space-y-1.5">
+                      {fcf.bySupplier.slice(0, 5).map((s, i) => (
+                        <div key={i} className="flex justify-between items-center text-sm">
+                          <span className="text-theme-text-primary truncate pr-3">{s.nome}</span>
+                          <span className="text-theme-text-muted whitespace-nowrap">€ {fmtDec(s.total)} · {s.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {fcf.byCategoria.length > 0 && (
+                  <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+                    <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-2">Spesa per Categoria</p>
+                    <div className="space-y-1.5">
+                      {fcf.byCategoria.map((c, i) => (
+                        <div key={i} className="flex justify-between items-center text-sm">
+                          <span className="text-theme-text-primary capitalize">{c.categoria.replace(/_/g, ' ')}</span>
+                          <span className="text-theme-text-muted whitespace-nowrap">€ {fmtDec(c.total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ========== COSTI FORNITORI (Aruba SDI — secondary, for reconciliation) ========== */}
       <div>
-        <SectionHeader title="Costi Fornitori" subtitle="Fatture ricevute dai fornitori tramite Aruba SDI" />
+        <SectionHeader title="Fatture SDI Ricevute" subtitle="Fatture passive ricevute via Aruba SDI (riconciliazione)" />
 
         {supplierLoading && (
           <div className="bg-theme-bg-secondary/60 rounded-2xl p-6 border border-white/5 text-center">
