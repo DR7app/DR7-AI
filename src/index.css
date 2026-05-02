@@ -29,6 +29,17 @@ html.light {
   color: #0A1418;
 }
 
+/* Logo theme-swap: il PNG ha sfondo nero pieno + testo bianco + accenti
+   ciano. In light mode applichiamo invert(1) hue-rotate(180deg):
+   - nero -> bianco (sparisce sullo sfondo bianco del box)
+   - bianco -> nero (le lettere DR7 diventano scure, leggibili su bianco)
+   - ciano -> ciano (la rotazione di 180° + invert preserva il ciano del brand)
+   Cosi' lo stesso file funziona in entrambi i temi senza dover esportare
+   una variante chiara. */
+.light .theme-aware-logo {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 /* Prevent white flash on overscroll (iOS) */
 body {
   overscroll-behavior: none;

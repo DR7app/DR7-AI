@@ -127,8 +127,8 @@ export default function AdminManagementTab() {
                                         onChange={(e) => updateRole(admin.id, e.target.value as 'superadmin' | 'admin')}
                                         className="bg-theme-bg-tertiary text-theme-text-primary border border-theme-border-light rounded px-2 py-1"
                                     >
-                                        <option value="admin">Operatore</option>
-                                        <option value="superadmin">Amministratore</option>
+                                        <option value="admin">Admin</option>
+                                        <option value="superadmin">Superadmin</option>
                                     </select>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">

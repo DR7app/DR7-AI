@@ -13,6 +13,11 @@ import {
 } from './types'
 import type { Fornitore, FornitoreDocument, DocumentTipo, DocumentStato } from './types'
 
+// Solo questi due account possono APPROVARE o PAGARE le fatture fornitore.
+// Stessa lista usata in FatturaTab.PAYMENT_MANAGERS e GestioneOtpTab.DIREZIONE_EMAILS.
+const PAYMENT_MANAGERS = ['valerio@dr7.app', 'ilenia@dr7.app']
+const RESTRICTED_STATES: DocumentStato[] = ['approvato', 'pagabile', 'pagato']
+
 interface Props {
     fornitore: Fornitore
     /** Filter shown documents */
@@ -34,6 +39,14 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
     const [showUpload, setShowUpload] = useState(false)
     const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)
     const [syncingAruba, setSyncingAruba] = useState(false)
+    const [currentEmail, setCurrentEmail] = useState<string | null>(null)
+    const canApproveOrPay = !!currentEmail && PAYMENT_MANAGERS.includes(currentEmail.toLowerCase())
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data }) => {
+            setCurrentEmail(data.session?.user?.email || null)
+        })
+    }, [])
 
     async function syncFromAruba() {
         const monthsStr = window.prompt('Quanti mesi indietro sincronizzare da Aruba? (1-12)', '6')
@@ -93,6 +106,11 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
     const totale = useMemo(() => docs.reduce((s, d) => s + Number(d.importo_totale || 0), 0), [docs])
 
     async function transitionDoc(doc: FornitoreDocument, newStato: DocumentStato) {
+        // Approvazione + pagamento riservati a Valerio e Ilenia
+        if (RESTRICTED_STATES.includes(newStato) && !canApproveOrPay) {
+            alert(`Solo ${PAYMENT_MANAGERS.join(' o ')} possono approvare o pagare.`)
+            return
+        }
         const updates: Record<string, unknown> = { stato: newStato }
         if (newStato === 'pagato') {
             const dataPag = prompt('Data pagamento (YYYY-MM-DD)', new Date().toISOString().slice(0, 10))
@@ -241,13 +259,21 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
                                                 className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
                                                 Modifica
                                             </button>
-                                            {transitions.map(s => (
-                                                <button key={s} onClick={() => transitionDoc(doc, s)}
-                                                    className={`text-xs px-2 py-1 rounded ${DOCUMENT_STATO_COLORS[s]} hover:opacity-80`}
-                                                    title={`Sposta in: ${DOCUMENT_STATO_LABELS[s]}`}>
-                                                    → {DOCUMENT_STATO_LABELS[s]}
-                                                </button>
-                                            ))}
+                                            {transitions.map(s => {
+                                                const restricted = RESTRICTED_STATES.includes(s)
+                                                const blocked = restricted && !canApproveOrPay
+                                                return (
+                                                    <button key={s}
+                                                        onClick={() => transitionDoc(doc, s)}
+                                                        disabled={blocked}
+                                                        className={`text-xs px-2 py-1 rounded ${DOCUMENT_STATO_COLORS[s]} ${blocked ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-80'}`}
+                                                        title={blocked
+                                                            ? `Solo ${PAYMENT_MANAGERS.join(' o ')} possono ${s === 'pagato' ? 'pagare' : 'approvare'}`
+                                                            : `Sposta in: ${DOCUMENT_STATO_LABELS[s]}`}>
+                                                        → {DOCUMENT_STATO_LABELS[s]}
+                                                    </button>
+                                                )
+                                            })}
                                             <button onClick={() => deleteDoc(doc)}
                                                 className="text-xs px-2 py-1 rounded bg-red-900 hover:bg-red-800 text-red-200">
                                                 ×

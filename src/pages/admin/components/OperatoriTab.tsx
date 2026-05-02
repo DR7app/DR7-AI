@@ -431,7 +431,11 @@ export default function OperatoriTab() {
                 <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold ${avatarColor(selected.id)}`}>{initials(selected.nome, selected.email)}</div>
                 <div className="flex-1">
                   <div className="text-2xl font-bold text-theme-text-primary">{selected.nome || selected.email.split('@')[0]}</div>
-                  <div className="text-sm text-theme-text-secondary">{(['valerio@dr7.app','ilenia@dr7.app'].includes((selected.email || '').toLowerCase())) ? 'Amministratore' : 'Operatore'}</div>
+                  <div className="text-sm text-theme-text-secondary">{
+                    ['valerio@dr7.app','ilenia@dr7.app'].includes((selected.email || '').toLowerCase())
+                      ? 'Amministratore'
+                      : selected.role === 'superadmin' ? 'Superadmin' : 'Operatore'
+                  }</div>
                   <div className="text-xs text-theme-text-muted mt-0.5">{selected.email}</div>
                 </div>
                 <div className="text-right">
