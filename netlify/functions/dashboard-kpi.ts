@@ -584,9 +584,243 @@ export const handler: Handler = async (event) => {
       }
     }
 
+    // ============================================================
+    // EXTENDED KPI SECTIONS — each in its own try/catch so a single
+    // failing query never blanks the dashboard. Run in parallel.
+    // ============================================================
+    const sevenDaysFromNowISO = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    const thirtyDaysFromNowISO = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const thirtyDaysAgoISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+    // Helper: settle and extract or fall back
+    const safe = async <T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await fn()
+      } catch (e) {
+        console.error(`[dashboard-kpi] ${label} failed:`, (e as Error).message)
+        return fallback
+      }
+    }
+
+    const [
+      primeWashSection,
+      cauzioniSection,
+      recensioniSection,
+      walletSection,
+      referralSection,
+      dr7ClubSection,
+      speseSection,
+    ] = await Promise.all([
+      // -------- PRIME WASH (lavaggi + meccanica from bookings) --------
+      safe('primeWash', async () => {
+        const [curr, prev] = await Promise.all([
+          supabase.from('bookings')
+            .select('id, service_type, price_total, payment_status, appointment_date')
+            .in('service_type', ['car_wash', 'mechanical'])
+            .gte('appointment_date', monthStartISO)
+            .lte('appointment_date', monthEndISO),
+          supabase.from('bookings')
+            .select('id, service_type, price_total, appointment_date')
+            .in('service_type', ['car_wash', 'mechanical'])
+            .gte('appointment_date', prevMonthStartISO)
+            .lte('appointment_date', prevMonthEndISO),
+        ])
+        const cur = curr.data || []
+        const prv = prev.data || []
+        const lavaggi = cur.filter(b => b.service_type === 'car_wash').reduce((s, b) => s + (Number(b.price_total) || 0), 0)
+        const meccanica = cur.filter(b => b.service_type === 'mechanical').reduce((s, b) => s + (Number(b.price_total) || 0), 0)
+        const revenue = lavaggi + meccanica
+        const revenuePrev = prv.reduce((s, b) => s + (Number(b.price_total) || 0), 0)
+        const changePercent = revenuePrev > 0 ? Math.round(((revenue - revenuePrev) / revenuePrev) * 100) : 0
+        const bookingsCount = cur.length
+        const bookingsPrev = prv.length
+        const avgTicket = bookingsCount > 0 ? revenue / bookingsCount : 0
+        return {
+          revenue: Math.round(revenue * 100) / 100,
+          revenuePrev: Math.round(revenuePrev * 100) / 100,
+          changePercent,
+          bookingsCount,
+          bookingsPrev,
+          avgTicket: Math.round(avgTicket * 100) / 100,
+          bySource: {
+            lavaggi: Math.round(lavaggi * 100) / 100,
+            meccanica: Math.round(meccanica * 100) / 100,
+          },
+        }
+      }, { revenue: 0, revenuePrev: 0, changePercent: 0, bookingsCount: 0, bookingsPrev: 0, avgTicket: 0, bySource: { lavaggi: 0, meccanica: 0 } }),
+
+      // -------- CAUZIONI (active + expiring + recovered) --------
+      safe('cauzioni', async () => {
+        const [active, expiring, recovered] = await Promise.all([
+          supabase.from('cauzioni').select('id, importo, stato', { count: 'exact' }).eq('stato', 'attiva'),
+          supabase.from('cauzioni').select('id, importo, expires_at').eq('stato', 'attiva').lte('expires_at', sevenDaysFromNowISO),
+          supabase.from('cauzioni').select('id, importo, updated_at').eq('stato', 'rilasciata').gte('updated_at', thirtyDaysAgoISO),
+        ])
+        const activeRows = active.data || []
+        const activeOutstanding = activeRows.reduce((s, c) => s + (Number(c.importo) || 0), 0)
+        const expiringRows = expiring.data || []
+        const expiringNext7Days = expiringRows.reduce((s, c) => s + (Number(c.importo) || 0), 0)
+        const recoveredRows = recovered.data || []
+        const recoveredLast30Days = recoveredRows.reduce((s, c) => s + (Number(c.importo) || 0), 0)
+        return {
+          activeOutstanding: Math.round(activeOutstanding * 100) / 100,
+          activeCount: active.count ?? activeRows.length,
+          expiringNext7Days: Math.round(expiringNext7Days * 100) / 100,
+          expiringNext7Count: expiringRows.length,
+          recoveredLast30Days: Math.round(recoveredLast30Days * 100) / 100,
+          recoveredLast30Count: recoveredRows.length,
+        }
+      }, { activeOutstanding: 0, activeCount: 0, expiringNext7Days: 0, expiringNext7Count: 0, recoveredLast30Days: 0, recoveredLast30Count: 0 }),
+
+      // -------- RECENSIONI --------
+      safe('recensioni', async () => {
+        // Prefer review_candidates with rating filled. Adjust if your real
+        // schema differs — this falls back to safe defaults on error.
+        const { data, error } = await supabase
+          .from('review_candidates')
+          .select('rating, status, created_at, replied_at')
+          .gte('created_at', monthStartISO + 'T00:00:00')
+          .lte('created_at', monthEndISO + 'T23:59:59')
+        if (error) throw error
+        const rows = (data || []).filter(r => r.rating != null)
+        const receivedThisMonth = rows.length
+        const avgRating = receivedThisMonth > 0
+          ? rows.reduce((s, r) => s + Number(r.rating), 0) / receivedThisMonth
+          : 0
+        const replied = rows.filter(r => r.replied_at).length
+        const responseRate = receivedThisMonth > 0 ? Math.round((replied / receivedThisMonth) * 100) : 0
+        const negative = rows.filter(r => Number(r.rating) <= 2).length
+        const negativePercent = receivedThisMonth > 0 ? Math.round((negative / receivedThisMonth) * 100) : 0
+        return {
+          avgRating: Math.round(avgRating * 10) / 10,
+          receivedThisMonth,
+          responseRate,
+          negativePercent,
+          negativeCount: negative,
+        }
+      }, { avgRating: 0, receivedThisMonth: 0, responseRate: 0, negativePercent: 0, negativeCount: 0 }),
+
+      // -------- CUSTOMER WALLET --------
+      safe('wallet', async () => {
+        // Total liability = sum of all positive balances
+        const [balances, topups, redemptions] = await Promise.all([
+          supabase.from('user_credit_balance').select('balance'),
+          supabase.from('credit_transactions')
+            .select('amount, type, created_at')
+            .eq('type', 'topup')
+            .gte('created_at', monthStartISO + 'T00:00:00')
+            .lte('created_at', monthEndISO + 'T23:59:59'),
+          supabase.from('credit_transactions')
+            .select('amount, type, created_at')
+            .eq('type', 'spend')
+            .gte('created_at', monthStartISO + 'T00:00:00')
+            .lte('created_at', monthEndISO + 'T23:59:59'),
+        ])
+        const totalLiability = (balances.data || []).reduce((s, w) => s + Math.max(0, Number(w.balance) || 0), 0)
+        const topupsAmount = (topups.data || []).reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0)
+        const redemptionsAmount = (redemptions.data || []).reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0)
+        return {
+          totalLiability: Math.round(totalLiability * 100) / 100,
+          topupsThisMonth: Math.round(topupsAmount * 100) / 100,
+          redemptionsThisMonth: Math.round(redemptionsAmount * 100) / 100,
+          netFlow: Math.round((topupsAmount - redemptionsAmount) * 100) / 100,
+        }
+      }, { totalLiability: 0, topupsThisMonth: 0, redemptionsThisMonth: 0, netFlow: 0 }),
+
+      // -------- REFERRAL --------
+      safe('referral', async () => {
+        const [participants, bonuses, conversions] = await Promise.all([
+          supabase.from('referral_participants').select('user_id, status', { count: 'exact', head: true }).eq('status', 'active'),
+          supabase.from('referral_bonuses')
+            .select('amount, status')
+            .eq('status', 'pending'),
+          supabase.from('referral_bonuses')
+            .select('amount, created_at')
+            .gte('created_at', monthStartISO + 'T00:00:00')
+            .lte('created_at', monthEndISO + 'T23:59:59'),
+        ])
+        const activeReferrers = participants.count ?? 0
+        const payoutsOwed = (bonuses.data || []).reduce((s, b) => s + (Number(b.amount) || 0), 0)
+        const conversionsThisMonth = (conversions.data || []).length
+        return {
+          activeReferrers,
+          conversionsThisMonth,
+          payoutsOwed: Math.round(payoutsOwed * 100) / 100,
+        }
+      }, { activeReferrers: 0, conversionsThisMonth: 0, payoutsOwed: 0 }),
+
+      // -------- DR7 CLUB --------
+      safe('dr7Club', async () => {
+        const { data, error } = await supabase
+          .from('dr7_club_subscriptions')
+          .select('user_id, plan, status, expires_at, amount')
+          .eq('status', 'active')
+        if (error) throw error
+        const rows = data || []
+        const activeMembers = rows.length
+        // MRR: sum of monthly equivalent. If amount is yearly (most common at €39/anno),
+        // divide by 12. If a row has a `plan` like 'monthly', use amount directly.
+        const mrr = rows.reduce((s, r) => {
+          const amt = Number(r.amount) || 0
+          const monthly = (r.plan && /month|mens/i.test(r.plan)) ? amt : amt / 12
+          return s + monthly
+        }, 0)
+        const expiringNext30Days = rows.filter(r => r.expires_at && r.expires_at <= thirtyDaysFromNowISO).length
+        return {
+          activeMembers,
+          mrr: Math.round(mrr * 100) / 100,
+          expiringNext30Days,
+        }
+      }, { activeMembers: 0, mrr: 0, expiringNext30Days: 0 }),
+
+      // -------- SPESE (passive invoices, ALL suppliers) --------
+      // Reuses the existing get-incoming-invoices function via internal call.
+      safe('spese', async () => {
+        // Build absolute origin for internal call
+        const origin = event.headers['x-forwarded-proto'] && event.headers.host
+          ? `${event.headers['x-forwarded-proto']}://${event.headers.host}`
+          : process.env.URL || ''
+        const [currMonthRes, prevMonthRes] = await Promise.all([
+          fetch(`${origin}/.netlify/functions/get-incoming-invoices?month=${month}&mode=all`).then(r => r.json()).catch(() => null),
+          fetch(`${origin}/.netlify/functions/get-incoming-invoices?month=${prevYear}-${String(prevMonthNum).padStart(2, '0')}&mode=all`).then(r => r.json()).catch(() => null),
+        ])
+        const totalThisMonth = Number(currMonthRes?.grandTotal) || 0
+        const totalPrevMonth = Number(prevMonthRes?.grandTotal) || 0
+        const changePercent = totalPrevMonth > 0
+          ? Math.round(((totalThisMonth - totalPrevMonth) / totalPrevMonth) * 100)
+          : 0
+        // bySupplier — full list, sorted by total desc
+        const supplierTotals = currMonthRes?.supplierTotals || {}
+        const bySupplier = Object.entries(supplierTotals)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map(([name, agg]: [string, any]) => ({ name, count: agg.count, total: Math.round(agg.total * 100) / 100 }))
+          .sort((a, b) => b.total - a.total)
+        return {
+          totalThisMonth: Math.round(totalThisMonth * 100) / 100,
+          totalPrevMonth: Math.round(totalPrevMonth * 100) / 100,
+          changePercent,
+          bySupplier,
+          supplierCount: bySupplier.length,
+          invoiceCount: Number(currMonthRes?.totalCount) || 0,
+        }
+      }, { totalThisMonth: 0, totalPrevMonth: 0, changePercent: 0, bySupplier: [], supplierCount: 0, invoiceCount: 0 }),
+    ])
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fullResponse: any = {
+      ...response,
+      primeWash: primeWashSection,
+      cauzioni: cauzioniSection,
+      recensioni: recensioniSection,
+      wallet: walletSection,
+      referral: referralSection,
+      dr7Club: dr7ClubSection,
+      spese: speseSection,
+    }
+
     return {
       statusCode: 200,
-      body: JSON.stringify(response)
+      body: JSON.stringify(fullResponse)
     }
   } catch (error: any) {
     console.error('Dashboard KPI error:', error)
