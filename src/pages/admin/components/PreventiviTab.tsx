@@ -1676,38 +1676,56 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       const result = await response.json()
       if (!response.ok) throw new Error(result.message || 'Errore invio WhatsApp')
 
-      const expiryHours = configOverlay.defaultExpiryHours || 24
-      const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString()
-
+      // Coefficienti-only flow: do NOT change the preventivo status,
+      // do NOT touch expires_at — it's a follow-up note, not the
+      // preventivo itself going out.
+      const isCoefficientiOnly = includeCoefficienti
       const selectedCust = customers.find((c: any) => c.id === selectedCustomerId)
-      await supabase
-        .from('preventivi')
-        .update({
-          status: 'inviato',
-          customer_phone: phone,
-          customer_name: selectedCust?.full_name || preventivo.customer_name || null,
-          customer_id: selectedCustomerId || preventivo.customer_id || null,
-          sent_by: adminEmail || null,
-          whatsapp_sent_at: new Date().toISOString(),
-          whatsapp_message_id: result.messageId || null,
-          expires_at: expiresAt,
-        })
-        .eq('id', preventivo.id)
 
-      appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: `${phone} - ${selectedCust?.full_name || ''}` })
-      logAdminAction('preventivo_sent', 'preventivo', preventivo.id, {
-        number: preventivo.id.substring(0, 8),
-        customer: selectedCust?.full_name || preventivo.customer_name || null,
-        phone,
-        vehicle: preventivo.vehicle_name,
-        plate: preventivo.vehicle_plate,
-        total: preventivo.total_final,
-        rental_days: preventivo.rental_days,
-      })
-      toast.success('Preventivo inviato via WhatsApp!')
+      if (isCoefficientiOnly) {
+        appendPreventivoEvent(preventivo.id, 'coefficienti_inviati', { detail: `${phone} - ${selectedCust?.full_name || preventivo.customer_name || ''}` })
+        logAdminAction('preventivo_coefficienti_sent', 'preventivo', preventivo.id, {
+          number: preventivo.id.substring(0, 8),
+          customer: selectedCust?.full_name || preventivo.customer_name || null,
+          phone,
+          vehicle: preventivo.vehicle_name,
+        })
+        toast.success('Coefficienti inviati al cliente')
+      } else {
+        const expiryHours = configOverlay.defaultExpiryHours || 24
+        const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString()
+
+        await supabase
+          .from('preventivi')
+          .update({
+            status: 'inviato',
+            customer_phone: phone,
+            customer_name: selectedCust?.full_name || preventivo.customer_name || null,
+            customer_id: selectedCustomerId || preventivo.customer_id || null,
+            sent_by: adminEmail || null,
+            whatsapp_sent_at: new Date().toISOString(),
+            whatsapp_message_id: result.messageId || null,
+            expires_at: expiresAt,
+          })
+          .eq('id', preventivo.id)
+
+        appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: `${phone} - ${selectedCust?.full_name || ''}` })
+        logAdminAction('preventivo_sent', 'preventivo', preventivo.id, {
+          number: preventivo.id.substring(0, 8),
+          customer: selectedCust?.full_name || preventivo.customer_name || null,
+          phone,
+          vehicle: preventivo.vehicle_name,
+          plate: preventivo.vehicle_plate,
+          total: preventivo.total_final,
+          rental_days: preventivo.rental_days,
+        })
+        toast.success('Preventivo inviato via WhatsApp!')
+      }
+
       setShowPhoneModal(false)
       setWhatsappPhone('')
       setSelectedCustomerId('')
+      setIncludeCoefficienti(false)
       loadPreventivi()
     } catch (error: unknown) {
       console.error('WhatsApp send error:', error)
