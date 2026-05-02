@@ -3,227 +3,64 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Button from './Button'
-import FornitoreForm from './fornitori/FornitoreForm'
-import FornitoreDetail from './fornitori/FornitoreDetail'
-import FornitoreScadenziario from './fornitori/FornitoreScadenziario'
-import FornitoreAlertsPanel from './fornitori/FornitoreAlertsPanel'
-import FornitoriPageHeader from './fornitori/FornitoriPageHeader'
-import FornitoriRightRail from './fornitori/FornitoriRightRail'
-import FornitoriProcessFlow from './fornitori/FornitoriProcessFlow'
-import CategorieManagerModal from './fornitori/CategorieManagerModal'
+import FornitoreSimpleView from './fornitori/FornitoreSimpleView'
 import type { Fornitore } from './fornitori/types'
 
-type View = 'list' | 'scadenziario' | 'alerts'
-
 interface FornitoreRow extends Fornitore {
-    docCount?: number
-    openAlerts?: number
-    arubaInvoiceCount?: number
-    aruba_invoices_count?: number | null
-    aruba_synced_at?: string | null
+    bolleCount: number
+    fattureCount: number
+    daApprovareCount: number
+    daPagareCount: number
 }
 
-const STALE_AFTER_MS = 60 * 60 * 1000  // 1h
-function fmtRelative(iso: string | null | undefined): string {
-    if (!iso) return 'mai sincronizzato'
-    const dt = new Date(iso).getTime()
-    if (isNaN(dt)) return 'mai sincronizzato'
-    const diffSec = Math.floor((Date.now() - dt) / 1000)
-    if (diffSec < 60) return 'aggiornato adesso'
-    if (diffSec < 3600) return `aggiornato ${Math.floor(diffSec / 60)} min fa`
-    if (diffSec < 86400) return `aggiornato ${Math.floor(diffSec / 3600)}h fa`
-    return `aggiornato ${Math.floor(diffSec / 86400)} giorni fa`
-}
-
+/**
+ * Lista fornitori — semplice. Ricerca + import automatico da Aruba.
+ * Click su un fornitore apre il flusso a 4 step (FornitoreSimpleView).
+ *
+ * Niente più tab, info-card di marketing o pannello laterale: il flusso è
+ * direttamente nelle azioni che l'utente esegue (carica bolla, controlla,
+ * approva, paga).
+ */
 export default function FornitoriTab() {
-    const [view, setView] = useState<View>('list')
     const [fornitori, setFornitori] = useState<FornitoreRow[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
-    const [showForm, setShowForm] = useState(false)
     const [selected, setSelected] = useState<Fornitore | null>(null)
-    const [globalOpenAlerts, setGlobalOpenAlerts] = useState(0)
-    const [showInactive, setShowInactive] = useState(false)
-    const [importingFromAruba, setImportingFromAruba] = useState(false)
-    const [arubaCountsLoading, setArubaCountsLoading] = useState(false)
-    const [arubaMonthsScanned, setArubaMonthsScanned] = useState(3)
-    const [autoCategorizing, setAutoCategorizing] = useState(false)
-    const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null)
-    const [categorie, setCategorie] = useState<{ slug: string; label: string; attiva: boolean }[]>([])
-    const [showCategorieModal, setShowCategorieModal] = useState(false)
+    const [importing, setImporting] = useState(false)
 
-    async function loadCategorie() {
-        const { data, error } = await supabase
-            .from('fornitore_categorie')
-            .select('slug, label, attiva')
-            .order('sort_order', { ascending: true })
-        if (error) {
-            console.warn('[Fornitori] categorie fetch failed:', error.message)
-            return
-        }
-        setCategorie((data || []) as { slug: string; label: string; attiva: boolean }[])
-    }
-
-    useEffect(() => { loadCategorie() }, [])
-
-    function categoriaOptions(currentValue: string | null | undefined) {
-        const opts: { value: string; label: string }[] = [{ value: '', label: '-- categoria --' }]
-        for (const c of categorie) {
-            // Show inactive categories only if a fornitore is currently using them
-            if (!c.attiva && c.slug !== currentValue) continue
-            opts.push({ value: c.slug, label: c.label + (c.attiva ? '' : ' (disattivata)') })
-        }
-        // If a fornitore has a slug not in the table (orphan), include it so it shows up
-        if (currentValue && !categorie.some(c => c.slug === currentValue)) {
-            opts.push({ value: currentValue, label: `${currentValue} (legacy)` })
-        }
-        return opts
-    }
-
-    async function changeCategory(fornitore: FornitoreRow, newCat: string) {
-        setSavingCategoryId(fornitore.id)
-        try {
-            const value = newCat || null
-            const { error } = await supabase
-                .from('fornitori')
-                .update({ categoria_merce: value })
-                .eq('id', fornitore.id)
-            if (error) throw error
-            setFornitori(prev => prev.map(f => f.id === fornitore.id ? { ...f, categoria_merce: value } : f))
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            toast.error(`Salvataggio categoria fallito: ${msg}`)
-        } finally {
-            setSavingCategoryId(null)
-        }
-    }
-
-    async function autoCategorize(overwrite = false) {
-        if (!window.confirm(overwrite
-            ? 'Riscrivere TUTTE le categorie usando le regole automatiche? Le categorie esistenti saranno sovrascritte.'
-            : 'Auto-categorizzare i fornitori senza categoria? I fornitori gia\' categorizzati restano invariati.')) return
-        setAutoCategorizing(true)
-        try {
-            const res = await fetch('/.netlify/functions/auto-categorize-fornitori', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ overwrite }),
-            })
-            const json = await res.json()
-            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
-            const breakdown = Object.entries(json.byCategoria || {}).map(([k, v]) => `${k}: ${v}`).join(', ')
-            toast.success(`Categorizzati ${json.updated} fornitori (${json.unmatched} senza match). ${breakdown ? '— ' + breakdown : ''}`)
-            loadFornitori()
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            toast.error(`Auto-categorize fallito: ${msg}`)
-        } finally {
-            setAutoCategorizing(false)
-        }
-    }
-
-    async function loadArubaInvoiceCounts(months = 3) {
-        setArubaCountsLoading(true)
-        try {
-            const res = await fetch(`/.netlify/functions/get-fornitore-invoice-counts?months=${months}`)
-            const text = await res.text()
-            let json: any
-            try { json = JSON.parse(text) } catch {
-                throw new Error(`HTTP ${res.status}`)
-            }
-            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
-            const byPiva: Record<string, { count: number }> = json.byPiva || {}
-            const byName: Record<string, { count: number }> = json.byName || {}
-            const nowIso = new Date().toISOString()
-            setFornitori(prev => prev.map(f => {
-                const v = (f.piva || '').replace(/\D/g, '')
-                let count = 0
-                if (v && byPiva[v]) count = byPiva[v].count
-                else if (f.nome && byName[f.nome.toLowerCase().trim()]) count = byName[f.nome.toLowerCase().trim()].count
-                return { ...f, arubaInvoiceCount: count, aruba_invoices_count: count, aruba_synced_at: nowIso }
-            }))
-            setArubaMonthsScanned(json.months_scanned || months)
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            console.warn('[Fornitori] Aruba counts fetch failed:', msg)
-        } finally {
-            setArubaCountsLoading(false)
-        }
-    }
-
-    async function importFromAruba() {
-        const monthsStr = window.prompt('Quanti mesi indietro scansionare in Aruba? (1-12)', '3')
-        if (!monthsStr) return
-        const months = parseInt(monthsStr)
-        if (isNaN(months) || months < 1 || months > 12) {
-            toast.error('Inserisci un numero tra 1 e 12')
-            return
-        }
-        if (!window.confirm(`Scansionare le fatture ricevute degli ultimi ${months} mesi e aggiungere i fornitori non ancora in anagrafica?`)) return
-        setImportingFromAruba(true)
-        try {
-            const res = await fetch('/.netlify/functions/import-fornitori-from-aruba', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ months }),
-            })
-            const text = await res.text()
-            let json: any
-            try { json = JSON.parse(text) } catch {
-                throw new Error(`HTTP ${res.status} (probabile timeout): ${text.slice(0, 200)}`)
-            }
-            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
-            toast.success(`Aggiunti ${json.added} fornitori (${json.skipped} gia' presenti, ${json.scanned} totali)`)
-            loadFornitori()
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            toast.error(`Import fallito: ${msg}`)
-        } finally {
-            setImportingFromAruba(false)
-        }
-    }
-
-    async function loadFornitori() {
+    async function load() {
         setLoading(true)
         try {
-            let q = supabase
+            const { data, error } = await supabase
                 .from('fornitori')
                 .select('*')
+                .eq('attivo', true)
                 .order('nome', { ascending: true })
-            if (!showInactive) q = q.eq('attivo', true)
-            const { data, error } = await q
             if (error) throw error
-            const rows = (data || []) as FornitoreRow[]
+            const rows = (data || []) as Fornitore[]
 
-            // Counts (single round-trip aggregate via two grouped queries)
-            const [docCounts, alertCounts] = await Promise.all([
-                supabase.from('fornitore_documents')
-                    .select('fornitore_id', { count: 'exact', head: false })
-                    .in('fornitore_id', rows.map(r => r.id))
-                    .then(r => r.data || []),
-                supabase.from('fornitore_alerts')
-                    .select('fornitore_id')
-                    .eq('status', 'open')
-                    .in('fornitore_id', rows.map(r => r.id))
-                    .then(r => r.data || []),
-            ])
-
-            const docByForn = new Map<string, number>()
-            for (const d of docCounts as { fornitore_id: string }[]) {
-                docByForn.set(d.fornitore_id, (docByForn.get(d.fornitore_id) || 0) + 1)
-            }
-            const alertByForn = new Map<string, number>()
-            for (const a of alertCounts as { fornitore_id: string }[]) {
-                alertByForn.set(a.fornitore_id, (alertByForn.get(a.fornitore_id) || 0) + 1)
-            }
+            const ids = rows.map(r => r.id)
+            const counts: Record<string, FornitoreRow> = {}
             for (const r of rows) {
-                r.docCount = docByForn.get(r.id) || 0
-                r.openAlerts = alertByForn.get(r.id) || 0
-                // Use cached Aruba count from the row itself (instant). The
-                // background sync will refresh it if stale.
-                r.arubaInvoiceCount = r.aruba_invoices_count ?? 0
+                counts[r.id] = { ...r, bolleCount: 0, fattureCount: 0, daApprovareCount: 0, daPagareCount: 0 }
             }
-            setFornitori(rows)
+            if (ids.length > 0) {
+                const { data: docs } = await supabase
+                    .from('fornitore_documents')
+                    .select('fornitore_id, tipo, stato')
+                    .in('fornitore_id', ids)
+                for (const d of (docs || []) as { fornitore_id: string; tipo: string; stato: string }[]) {
+                    const row = counts[d.fornitore_id]
+                    if (!row) continue
+                    if (d.tipo === 'ddt' || d.tipo === 'bolla') row.bolleCount++
+                    else if (d.tipo === 'fattura') {
+                        row.fattureCount++
+                        if (d.stato === 'verificato') row.daApprovareCount++
+                        else if (d.stato === 'approvato' || d.stato === 'pagabile') row.daPagareCount++
+                    }
+                }
+            }
+            setFornitori(Object.values(counts))
         } catch (err) {
             console.error('[fornitori] load error', err)
         } finally {
@@ -231,40 +68,7 @@ export default function FornitoriTab() {
         }
     }
 
-    async function loadGlobalAlertCount() {
-        const { count } = await supabase
-            .from('fornitore_alerts')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'open')
-        setGlobalOpenAlerts(count || 0)
-    }
-
-    useEffect(() => {
-        loadFornitori()
-        loadGlobalAlertCount()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [showInactive])
-
-    // Auto-refresh Aruba counts only if the cache is stale (>1h old) or missing.
-    // Otherwise we trust the cached value on the row and skip hitting Aruba.
-    useEffect(() => {
-        if (fornitori.length === 0) return
-        const oldest = fornitori.reduce<number>((acc, f) => {
-            if (!f.aruba_synced_at) return 0
-            const t = new Date(f.aruba_synced_at).getTime()
-            return acc === 0 ? t : Math.min(acc, t)
-        }, 0)
-        const isStale = oldest === 0 || (Date.now() - oldest) > STALE_AFTER_MS
-        if (isStale) loadArubaInvoiceCounts(3)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fornitori.length])
-
-    // Cache freshness derived from the rows
-    const oldestSyncedAt = useMemo(() => {
-        const ts = fornitori.map(f => f.aruba_synced_at).filter(Boolean) as string[]
-        if (ts.length === 0) return null
-        return ts.reduce((a, b) => (a < b ? a : b))
-    }, [fornitori])
+    useEffect(() => { load() }, [])
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase()
@@ -272,207 +76,107 @@ export default function FornitoriTab() {
         return fornitori.filter(f =>
             f.nome.toLowerCase().includes(q) ||
             (f.piva || '').toLowerCase().includes(q) ||
-            (f.referente || '').toLowerCase().includes(q) ||
             (f.categoria_merce || '').toLowerCase().includes(q)
         )
     }, [fornitori, search])
 
+    async function importFromAruba() {
+        setImporting(true)
+        try {
+            const res = await fetch('/.netlify/functions/import-fornitori-from-aruba', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ months: 3 }),
+            })
+            const text = await res.text()
+            let json: { success?: boolean; inserted?: number; updated?: number; error?: string } = {}
+            try { json = JSON.parse(text) } catch { /* ignore */ }
+            if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+            toast.success(`Sincronizzato: ${json.inserted ?? 0} nuovi · ${json.updated ?? 0} aggiornati`)
+            load()
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Sincronizzazione fallita: ' + msg)
+        } finally {
+            setImporting(false)
+        }
+    }
+
     if (selected) {
         return (
-            <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
-                <div className="min-w-0 space-y-4">
-                    <FornitoreDetail
-                        fornitore={selected}
-                        onBack={() => { setSelected(null); loadFornitori() }}
-                        onUpdated={(f) => { setSelected(f); loadFornitori() }}
-                    />
-                    <FornitoriProcessFlow />
-                </div>
-                <div className="hidden xl:block">
-                    <FornitoriRightRail />
-                </div>
-            </div>
+            <FornitoreSimpleView
+                fornitore={selected}
+                onBack={() => { setSelected(null); load() }}
+            />
         )
     }
 
     return (
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
-        <div className="min-w-0 space-y-4">
-            <FornitoriPageHeader />
-
+        <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-baseline gap-3 flex-wrap">
-                    <h2 className="text-2xl font-semibold text-theme-text-primary">Gestione Fornitori</h2>
-                    <span className="text-sm text-theme-text-muted">
-                        {fornitori.length} {fornitori.length === 1 ? 'fornitore' : 'fornitori'}
-                        {' · '}
-                        {fornitori.reduce((s, f) => s + (f.arubaInvoiceCount || 0), 0)} fatture ricevute
-                        <span className="opacity-70"> ({arubaMonthsScanned} mesi)</span>
-                    </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${arubaCountsLoading ? 'bg-blue-500/20 text-blue-300' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}>
-                        {arubaCountsLoading ? 'Aggiorno conteggi Aruba…' : fmtRelative(oldestSyncedAt)}
-                    </span>
-                    <button
-                        type="button"
-                        onClick={() => loadArubaInvoiceCounts(arubaMonthsScanned)}
-                        disabled={arubaCountsLoading}
-                        className="text-xs px-2 py-0.5 rounded text-theme-text-secondary hover:text-theme-text-primary border border-theme-border hover:border-dr7-gold disabled:opacity-50"
-                        title="Aggiorna ora i conteggi Aruba"
-                    >
-                        ↻ Aggiorna
-                    </button>
-                </div>
-                <div className="flex gap-2">
-                    <button onClick={() => setView('list')}
-                        className={`text-sm px-3 py-1.5 rounded ${view === 'list' ? 'bg-dr7-gold text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-tertiary/70'}`}>
-                        Anagrafica
-                    </button>
-                    <button onClick={() => setView('scadenziario')}
-                        className={`text-sm px-3 py-1.5 rounded ${view === 'scadenziario' ? 'bg-dr7-gold text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-tertiary/70'}`}>
-                        Scadenziario globale
-                    </button>
-                    <button onClick={() => setView('alerts')}
-                        className={`text-sm px-3 py-1.5 rounded relative ${view === 'alerts' ? 'bg-dr7-gold text-black font-semibold' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-tertiary/70'}`}>
-                        Alert {globalOpenAlerts > 0 && (
-                            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-900 text-red-200 text-xs">{globalOpenAlerts}</span>
-                        )}
-                    </button>
-                </div>
+                <h2 className="text-2xl font-semibold text-theme-text-primary">Fornitori</h2>
+                <Button variant="secondary" onClick={importFromAruba} disabled={importing}>
+                    {importing ? 'Sincronizzazione…' : 'Sincronizza da Aruba'}
+                </Button>
             </div>
 
-            {view === 'list' && (
-                <>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex-1 min-w-[240px]">
-                            <Input
-                                placeholder="Cerca per nome, P.IVA, referente, categoria…"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
-                        </div>
-                        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
-                            <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
-                            Mostra disattivati
-                        </label>
-                        <button
-                            type="button"
-                            onClick={importFromAruba}
-                            disabled={importingFromAruba}
-                            className="text-sm px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Scansiona le fatture ricevute via Aruba e aggiungi i fornitori mancanti"
-                        >
-                            {importingFromAruba ? 'Importo da Aruba...' : 'Importa da Aruba'}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => autoCategorize(false)}
-                            disabled={autoCategorizing}
-                            className="text-sm px-3 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Categorizza i fornitori senza categoria usando regole automatiche basate sul nome"
-                        >
-                            {autoCategorizing ? 'Categorizzo...' : 'Auto-categorizza'}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setShowCategorieModal(true)}
-                            className="text-sm px-3 py-2 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary font-semibold border border-theme-border"
-                            title="Aggiungi, rinomina, disattiva categorie"
-                        >
-                            Gestisci categorie
-                        </button>
-                        <Button onClick={() => setShowForm(true)}>+ Nuovo fornitore</Button>
-                    </div>
+            <Input
+                placeholder="Cerca per nome, P.IVA o categoria…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+            />
 
-                    <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-theme-bg-tertiary text-theme-text-secondary">
-                                <tr>
-                                    <th className="text-left px-3 py-2">Nome</th>
-                                    <th className="text-left px-3 py-2">P.IVA</th>
-                                    <th className="text-left px-3 py-2">Categoria</th>
-                                    <th className="text-left px-3 py-2">Condizioni</th>
-                                    <th className="text-left px-3 py-2">Referente</th>
-                                    <th className="text-right px-3 py-2" title="Fatture ricevute via Aruba">Fatture Aruba</th>
-                                    <th className="text-right px-3 py-2">Documenti</th>
-                                    <th className="text-right px-3 py-2">Alert</th>
-                                    <th className="text-right px-3 py-2 w-8"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-theme-border">
-                                {loading && (
-                                    <tr><td colSpan={9} className="text-center py-6 text-theme-text-muted">Caricamento…</td></tr>
-                                )}
-                                {!loading && filtered.length === 0 && (
-                                    <tr><td colSpan={9} className="text-center py-6 text-theme-text-muted">
-                                        {search ? 'Nessun fornitore corrisponde alla ricerca' : 'Nessun fornitore. Crea il primo →'}
-                                    </td></tr>
-                                )}
-                                {filtered.map(f => (
-                                    <tr key={f.id} className="hover:bg-theme-bg-tertiary/30 cursor-pointer"
-                                        onClick={() => setSelected(f)}>
-                                        <td className="px-3 py-2 text-theme-text-primary font-semibold">
-                                            {f.nome} {!f.attivo && <span className="ml-1 text-xs text-red-400">(disattivato)</span>}
-                                        </td>
-                                        <td className="px-3 py-2 font-mono text-theme-text-secondary">{f.piva || '—'}</td>
-                                        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                                            <select
-                                                value={f.categoria_merce || ''}
-                                                onChange={(e) => changeCategory(f, e.target.value)}
-                                                disabled={savingCategoryId === f.id}
-                                                className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary focus:outline-none focus:border-dr7-gold disabled:opacity-50"
-                                            >
-                                                {categoriaOptions(f.categoria_merce).map(c => (
-                                                    <option key={c.value} value={c.value}>{c.label}</option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                        <td className="px-3 py-2 text-theme-text-secondary">{f.condizioni_pagamento || '—'}</td>
-                                        <td className="px-3 py-2 text-theme-text-secondary">{f.referente || '—'}</td>
-                                        <td className="px-3 py-2 text-right">
-                                            {(f.arubaInvoiceCount || 0) > 0 ? (
-                                                <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-600/20 text-emerald-400 text-xs font-semibold">{f.arubaInvoiceCount}</span>
-                                            ) : (
-                                                <span className="text-theme-text-muted">0</span>
+            <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-hidden">
+                {loading && (
+                    <div className="px-4 py-6 text-center text-theme-text-muted text-sm">Caricamento…</div>
+                )}
+                {!loading && filtered.length === 0 && (
+                    <div className="px-4 py-6 text-center text-theme-text-muted text-sm">
+                        {search
+                            ? 'Nessun fornitore corrisponde alla ricerca'
+                            : 'Nessun fornitore. Clicca "Sincronizza da Aruba" per importarli automaticamente.'}
+                    </div>
+                )}
+                {!loading && filtered.length > 0 && (
+                    <ul className="divide-y divide-theme-border">
+                        {filtered.map(f => {
+                            const todoCount = f.daApprovareCount + f.daPagareCount
+                            return (
+                                <li key={f.id}>
+                                    <button
+                                        onClick={() => setSelected(f)}
+                                        className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-theme-bg-tertiary/30 transition-colors"
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-theme-text-primary font-semibold truncate">{f.nome}</p>
+                                            <p className="text-xs text-theme-text-muted truncate">
+                                                {f.piva ? `P.IVA ${f.piva}` : '— P.IVA non impostata'}
+                                                {f.categoria_merce && <span className="ml-2">{f.categoria_merce}</span>}
+                                            </p>
+                                        </div>
+                                        <div className="text-xs text-theme-text-secondary text-right space-y-0.5 hidden sm:block">
+                                            <div>{f.bolleCount} bolle · {f.fattureCount} fatture</div>
+                                            {todoCount > 0 && (
+                                                <div className="text-amber-400 font-semibold">
+                                                    {f.daApprovareCount > 0 && <>{f.daApprovareCount} da approvare</>}
+                                                    {f.daApprovareCount > 0 && f.daPagareCount > 0 && ' · '}
+                                                    {f.daPagareCount > 0 && <>{f.daPagareCount} da pagare</>}
+                                                </div>
                                             )}
-                                        </td>
-                                        <td className="px-3 py-2 text-right text-theme-text-secondary">{f.docCount || 0}</td>
-                                        <td className="px-3 py-2 text-right">
-                                            {(f.openAlerts || 0) > 0
-                                                ? <span className="inline-block px-2 py-0.5 rounded-full bg-red-900 text-red-200 text-xs">{f.openAlerts}</span>
-                                                : <span className="text-theme-text-muted">—</span>}
-                                        </td>
-                                        <td className="px-3 py-2 text-theme-text-muted text-right">→</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </>
-            )}
-
-            {view === 'scadenziario' && <FornitoreScadenziario />}
-            {view === 'alerts' && <FornitoreAlertsPanel />}
-
-            {showForm && (
-                <FornitoreForm
-                    onClose={() => setShowForm(false)}
-                    onSaved={() => { setShowForm(false); loadFornitori() }}
-                />
-            )}
-
-            {showCategorieModal && (
-                <CategorieManagerModal
-                    onClose={() => setShowCategorieModal(false)}
-                    onChanged={loadCategorie}
-                />
-            )}
-
-            <FornitoriProcessFlow />
-        </div>
-
-        <div className="hidden xl:block">
-            <FornitoriRightRail />
-        </div>
+                                        </div>
+                                        {todoCount > 0 && (
+                                            <span className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-600 text-white text-xs font-bold">
+                                                {todoCount}
+                                            </span>
+                                        )}
+                                        <span className="text-theme-text-muted">→</span>
+                                    </button>
+                                </li>
+                            )
+                        })}
+                    </ul>
+                )}
+            </div>
         </div>
     )
 }
