@@ -110,7 +110,7 @@ export default function FornitoreCrossCheck({ fornitore }: Props) {
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1)
   const yearOptions: number[] = []
-  for (let y = today.getFullYear() + 1; y >= 2020; y--) yearOptions.push(y)
+  for (let y = today.getFullYear() + 1; y >= 2026; y--) yearOptions.push(y)
 
   return (
     <div className="space-y-4">

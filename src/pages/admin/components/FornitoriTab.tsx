@@ -10,6 +10,7 @@ interface FornitoreRow extends Fornitore {
     fattureCount: number
     daApprovareCount: number
     daPagareCount: number
+    lastDocAt: string | null
 }
 
 /**
@@ -48,14 +49,14 @@ export default function FornitoriTab() {
             const ids = rows.map(r => r.id)
             const counts: Record<string, FornitoreRow> = {}
             for (const r of rows) {
-                counts[r.id] = { ...r, bolleCount: 0, fattureCount: 0, daApprovareCount: 0, daPagareCount: 0 }
+                counts[r.id] = { ...r, bolleCount: 0, fattureCount: 0, daApprovareCount: 0, daPagareCount: 0, lastDocAt: null }
             }
             if (ids.length > 0) {
                 const { data: docs } = await supabase
                     .from('fornitore_documents')
-                    .select('fornitore_id, tipo, stato')
+                    .select('fornitore_id, tipo, stato, data_documento')
                     .in('fornitore_id', ids)
-                for (const d of (docs || []) as { fornitore_id: string; tipo: string; stato: string }[]) {
+                for (const d of (docs || []) as { fornitore_id: string; tipo: string; stato: string; data_documento: string | null }[]) {
                     const row = counts[d.fornitore_id]
                     if (!row) continue
                     if (d.tipo === 'ddt' || d.tipo === 'bolla') row.bolleCount++
@@ -63,6 +64,9 @@ export default function FornitoriTab() {
                         row.fattureCount++
                         if (d.stato === 'verificato') row.daApprovareCount++
                         else if (d.stato === 'approvato' || d.stato === 'pagabile') row.daPagareCount++
+                    }
+                    if (d.data_documento && (!row.lastDocAt || d.data_documento > row.lastDocAt)) {
+                        row.lastDocAt = d.data_documento
                     }
                 }
             }
@@ -118,7 +122,14 @@ export default function FornitoriTab() {
                 )
                 break
             case 'recente':
-                sorted.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
+                // Ordinamento per data dell'ultimo documento (fattura/bolla) reale.
+                // I fornitori senza documenti vanno in fondo.
+                sorted.sort((a, b) => {
+                    if (!a.lastDocAt && !b.lastDocAt) return a.nome.localeCompare(b.nome)
+                    if (!a.lastDocAt) return 1
+                    if (!b.lastDocAt) return -1
+                    return b.lastDocAt.localeCompare(a.lastDocAt)
+                })
                 break
         }
         return sorted

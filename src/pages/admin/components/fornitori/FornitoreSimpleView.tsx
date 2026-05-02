@@ -83,6 +83,36 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     useEffect(() => { load() // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fornitore.id, anno])
 
+    // Auto-sync fatture da Aruba quando si apre un fornitore (throttle 5 min per
+    // non riscaricare ad ogni navigazione). Va fino a 12 mesi indietro per
+    // coprire tutto il 2026 — i dati partono da 01/26.
+    useEffect(() => {
+        const key = `dr7_fornitore_sync_${fornitore.id}`
+        const last = parseInt(localStorage.getItem(key) || '0')
+        if (Date.now() - last < 5 * 60 * 1000) return // already synced recently
+
+        ;(async () => {
+            try {
+                const res = await fetch('/.netlify/functions/sync-fornitore-invoices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fornitore_id: fornitore.id, months: 12 }),
+                })
+                const json = await res.json()
+                if (res.ok && json.success) {
+                    localStorage.setItem(key, String(Date.now()))
+                    if ((json.inserted || 0) > 0) {
+                        // Reload local view if new fatture appeared
+                        load()
+                    }
+                }
+            } catch (err) {
+                console.warn('[fornitore-simple] auto-sync fatture failed:', err)
+            }
+        })()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fornitore.id])
+
     const bolle = useMemo(() => docs.filter(d => d.tipo === 'ddt' || d.tipo === 'bolla'), [docs])
     const fatture = useMemo(() => docs.filter(d => d.tipo === 'fattura'), [docs])
     const daApprovare = useMemo(
@@ -225,7 +255,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     }
 
     const annoOptions: number[] = []
-    for (let y = today.getFullYear() + 1; y >= 2020; y--) annoOptions.push(y)
+    for (let y = today.getFullYear() + 1; y >= 2026; y--) annoOptions.push(y)
 
     return (
         <div className="space-y-4">
