@@ -22,15 +22,19 @@ export default function Login() {
     setLoading(true)
 
     try {
+      // Mobile keyboards (iOS especially) auto-capitalize the first letter
+      // and may insert trailing spaces. Supabase auth.email is case-sensitive
+      // for lookup, so always normalize before sending.
+      const normalizedEmail = email.trim().toLowerCase()
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: normalizedEmail,
         password,
       })
 
       if (error) throw error
 
       if (data.session) {
-        logAdminAction('login', 'session', undefined, { email })
+        logAdminAction('login', 'session', undefined, { email: normalizedEmail })
         navigate('/admin')
       }
     } catch (err: unknown) {
@@ -47,7 +51,7 @@ export default function Login() {
     setForgotLoading(true)
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim().toLowerCase(), {
         redirectTo: `${window.location.origin}/reset-password`,
       })
       if (error) throw error
@@ -97,6 +101,10 @@ export default function Login() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     autoComplete="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    inputMode="email"
                     className="w-full pl-11 pr-4 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-white/[0.06] transition-all"
                     placeholder="admin@dr7empire.com"
                   />
@@ -190,6 +198,11 @@ export default function Login() {
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
                   required
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="email"
                   className="w-full pl-11 pr-4 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-white/[0.06] transition-all"
                   placeholder="La tua email"
                 />
