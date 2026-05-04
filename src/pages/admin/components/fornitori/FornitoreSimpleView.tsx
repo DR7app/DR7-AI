@@ -50,6 +50,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
     const [loading, setLoading] = useState(false)
     const [showUpload, setShowUpload] = useState(false)        // simple bolla upload (PDF only)
+    const [showManualEntry, setShowManualEntry] = useState(false)  // full form for new doc, no file required
     const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)  // edit modal for existing docs
     const [paymentDoc, setPaymentDoc] = useState<FornitoreDocument | null>(null)
     const [crossCheckRunning, setCrossCheckRunning] = useState(false)
@@ -517,6 +518,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 <FornitoreBollaUpload
                     fornitore={fornitore}
                     onClose={() => setShowUpload(false)}
+                    onManualEntry={() => { setShowUpload(false); setShowManualEntry(true) }}
                     onSaved={async (opts) => {
                         setShowUpload(false)
                         await load()
@@ -527,6 +529,14 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                             await runManualCrossCheck()
                         }
                     }}
+                />
+            )}
+
+            {showManualEntry && (
+                <FornitoreDocumentUpload
+                    fornitore={fornitore}
+                    onClose={() => setShowManualEntry(false)}
+                    onSaved={() => { setShowManualEntry(false); load() }}
                 />
             )}
 

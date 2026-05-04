@@ -58,10 +58,11 @@ function isoMonthRange(year: number, monthIdxOneBased: number) {
   }
 }
 
-function extractFromXml(b64: string): { amount: number | null; date: string; number: string } {
+function extractFromXml(b64: string): { amount: number | null; date: string; number: string; dueDate: string } {
   let amount: number | null = null
   let date = ''
   let number = ''
+  let dueDate = ''
   try {
     const xml = Buffer.from(b64, 'base64').toString('utf-8')
     const flat = xml.replace(/<\/?[a-zA-Z0-9_-]+:/g, m => m.replace(/[a-zA-Z0-9_-]+:/, ''))
@@ -78,8 +79,20 @@ function extractFromXml(b64: string): { amount: number | null; date: string; num
     }
     const mn = flat.match(/<Numero>\s*([^<]+?)\s*<\/Numero>/)
     if (mn) number = mn[1].trim()
+    // FatturaPA: DataScadenzaPagamento inside DettaglioPagamento. May appear
+    // multiple times for installments — pick the latest so the alert fires
+    // only after every installment is past due.
+    const allDue = [...flat.matchAll(/<DataScadenzaPagamento>\s*([0-9T:.+\-]+)\s*<\/DataScadenzaPagamento>/gi)]
+    if (allDue.length > 0) {
+      const candidates = allDue.map(m => {
+        let d = m[1]
+        if (d.includes('T')) d = d.split('T')[0]
+        return d
+      }).filter(Boolean).sort()
+      dueDate = candidates[candidates.length - 1] || ''
+    }
   } catch { /* ignore */ }
-  return { amount, date, number }
+  return { amount, date, number, dueDate }
 }
 
 export const handler: Handler = async (event) => {
@@ -175,6 +188,7 @@ export const handler: Handler = async (event) => {
         let amount: number | null = null
         let date = ''
         let number = ''
+        let dueDate = ''
 
         // Try JSON fields first
         const candidates = [detail, detail?.metadata, detail?.invoice, detail?.fattura].filter(Boolean)
@@ -192,13 +206,20 @@ export const handler: Handler = async (event) => {
           }
           const num = src.documentNumber || src.invoiceNumber || src.numeroDocumento || src.numero
           if (num && !number) number = String(num)
+          const due = src.dueDate || src.dataScadenza || src.dataScadenzaPagamento || src.scadenza
+          if (due && !dueDate) {
+            let d = String(due)
+            if (d.includes('T')) d = d.split('T')[0]
+            dueDate = d
+          }
         }
         // Fallback: parse XML
-        if ((amount == null || !date || !number) && fileBase64) {
+        if ((amount == null || !date || !number || !dueDate) && fileBase64) {
           const x = extractFromXml(fileBase64)
           if (amount == null) amount = x.amount
           if (!date) date = x.date
           if (!number) number = x.number
+          if (!dueDate) dueDate = x.dueDate
         }
 
         if (!number || !date || amount == null) {

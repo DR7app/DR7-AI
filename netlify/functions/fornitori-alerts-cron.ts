@@ -90,8 +90,12 @@ const handler: Handler = async () => {
         return { statusCode: 500, body: error.message }
     }
 
+    // Skip already-paid / archived / blocked fatture — only alert on the
+    // ones that are still actually outstanding.
+    const unpaidStati = new Set(['caricato', 'verificato', 'in_verifica', 'anomalia', 'approvato', 'pagabile'])
     for (const f of fatture || []) {
         if (!f.data_scadenza) continue
+        if (!unpaidStati.has(f.stato)) continue
         const fornitoreNome = f.fornitori?.nome || 'fornitore'
         const scad = new Date(f.data_scadenza)
         scad.setHours(0, 0, 0, 0)

@@ -13,6 +13,11 @@ interface Props {
      * parent should then run the cross-check.
      */
     onSaved: (opts?: { triggerCompare?: boolean }) => void
+    /**
+     * Called when the user clicks "Inserimento manuale" — the parent should
+     * close this modal and open the full edit form for a brand new document.
+     */
+    onManualEntry?: () => void
 }
 
 interface PendingItem {
@@ -25,7 +30,7 @@ interface PendingItem {
 // fattura manuale. Tipo e nome custom selezionabili. Numero/data/importo
 // auto-compilati con default ragionevoli; l'AI estrae i dati strutturati
 // dopo l'upload, e l'operatore puo' modificare manualmente.
-export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Props) {
+export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, onManualEntry }: Props) {
     const [tipo, setTipo] = useState<DocumentTipo>('bolla')
     const [customName, setCustomName] = useState('')
     const [items, setItems] = useState<PendingItem[]>([])
@@ -237,23 +242,35 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
                     </div>
                 )}
 
-                <div className="flex flex-wrap items-center justify-end gap-2 mt-5">
-                    <Button variant="secondary" onClick={onClose} disabled={uploading}>Chiudi</Button>
-                    {hasPending && (
-                        <>
-                            <Button variant="secondary" onClick={() => handleUploadAll(false)} disabled={uploading}>
-                                {uploading ? 'Caricamento…' : 'Carica'}
+                <div className="flex flex-wrap items-center justify-between gap-2 mt-5">
+                    {onManualEntry && !hasPending && !hasDone ? (
+                        <button
+                            type="button"
+                            onClick={onManualEntry}
+                            disabled={uploading}
+                            className="text-xs underline text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-50"
+                        >
+                            Inserimento manuale (senza file)
+                        </button>
+                    ) : <span />}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="secondary" onClick={onClose} disabled={uploading}>Chiudi</Button>
+                        {hasPending && (
+                            <>
+                                <Button variant="secondary" onClick={() => handleUploadAll(false)} disabled={uploading}>
+                                    {uploading ? 'Caricamento…' : 'Carica'}
+                                </Button>
+                                <Button onClick={() => handleUploadAll(true)} disabled={uploading}>
+                                    {uploading ? 'Caricamento…' : 'Carica e confronta'}
+                                </Button>
+                            </>
+                        )}
+                        {!hasPending && hasDone && (
+                            <Button onClick={() => { onSaved({ triggerCompare: true }); onClose() }}>
+                                Fine e confronta
                             </Button>
-                            <Button onClick={() => handleUploadAll(true)} disabled={uploading}>
-                                {uploading ? 'Caricamento…' : 'Carica e confronta'}
-                            </Button>
-                        </>
-                    )}
-                    {!hasPending && hasDone && (
-                        <Button onClick={() => { onSaved({ triggerCompare: true }); onClose() }}>
-                            Fine e confronta
-                        </Button>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

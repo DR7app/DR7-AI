@@ -535,18 +535,67 @@ export default function DashboardTab() {
                   </div>
                 </div>
               </div>
-              {/* Cash netto + Operatività */}
+              {/* Cash netto */}
               <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-[#19C2D6]/20">
                 <p className="text-[10px] uppercase tracking-widest text-[#19C2D6] font-semibold mb-2">Cash Netto</p>
                 <p className={`text-3xl font-bold leading-tight ${cashNetto >= 0 ? 'text-[#19C2D6]' : 'text-red-400'}`}>€ {fmt(cashNetto)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">Entrate − Uscite (cash flow)</p>
                 <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Prenotazioni</span><span className="text-theme-text-primary">{mr.noleggio.prenotazioniCount} <span className="text-red-300/70">({mr.noleggio.prenotazioniAnnullateCount} ann.)</span></span></div>
-                  <div className="flex justify-between"><span>Lavaggi</span><span className="text-theme-text-primary">{mr.lavaggio.count}</span></div>
-                  <div className="flex justify-between"><span>Nuovi clienti</span><span className="text-theme-text-primary">+{mr.clienti.nuoviMese}</span></div>
-                  <div className="flex justify-between"><span>Preventivi</span><span className="text-theme-text-primary">{mr.preventivi.total} <span className="text-emerald-300/70">({mr.preventivi.conversionRate}%)</span></span></div>
+                  <div className="flex justify-between"><span>Fatturato</span><span className="text-theme-text-primary">€ {fmt(d.revenue.currentMonth)}</span></div>
+                  <div className="flex justify-between"><span>Costi totali</span><span className="text-theme-text-primary">€ {fmt(uscitePagate)}</span></div>
+                  <div className="flex justify-between"><span>Margine</span><span className="text-theme-text-primary">€ {fmt(d.revenue.currentMonth - uscitePagate)}</span></div>
                   <div className="flex justify-between pt-1 border-t border-[#19C2D6]/20 mt-1">
-                    <span>Insoluti / Danni</span><span className={(insolutiTot + danniTot) > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>€ {fmt(insolutiTot + danniTot)}</span>
+                    <span>vs mese scorso</span>
+                    <Trend value={d.revenue.changePercent} size="sm" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Second row — operations / customers / risks */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
+              {/* Operatività */}
+              <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-blue-500/20">
+                <p className="text-[10px] uppercase tracking-widest text-blue-300 font-semibold mb-2">Operatività</p>
+                <p className="text-3xl font-bold text-blue-400 leading-tight">{d.fleet.occupationRate}%</p>
+                <p className="text-xs text-theme-text-muted mt-1">Occupazione flotta</p>
+                <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
+                  <div className="flex justify-between"><span>Prenotazioni</span><span className="text-theme-text-primary">{mr.noleggio.prenotazioniCount}</span></div>
+                  <div className="flex justify-between"><span>Annullate</span><span className={mr.noleggio.prenotazioniAnnullateCount > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>{mr.noleggio.prenotazioniAnnullateCount} (€ {fmt(mr.noleggio.prenotazioniAnnullateValue)})</span></div>
+                  <div className="flex justify-between"><span>Lavaggi</span><span className="text-theme-text-primary">{mr.lavaggio.count}</span></div>
+                  <div className="flex justify-between pt-1 border-t border-blue-500/20 mt-1">
+                    <span>Conversion bookings</span><span className="text-theme-text-primary">{d.bookings.conversionRate}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Clienti & Preventivi */}
+              <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-purple-500/20">
+                <p className="text-[10px] uppercase tracking-widest text-purple-300 font-semibold mb-2">Clienti</p>
+                <p className="text-3xl font-bold text-purple-400 leading-tight">+{mr.clienti.nuoviMese}</p>
+                <p className="text-xs text-theme-text-muted mt-1">Nuovi clienti nel mese</p>
+                <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
+                  <div className="flex justify-between"><span>Attivi nel mese</span><span className="text-theme-text-primary">{mr.clienti.attiviMese}</span></div>
+                  <div className="flex justify-between"><span>Totale clienti</span><span className="text-theme-text-primary">{fmt(mr.clienti.totale)}</span></div>
+                  <div className="flex justify-between"><span>Preventivi</span><span className="text-theme-text-primary">{mr.preventivi.total}</span></div>
+                  <div className="flex justify-between pt-1 border-t border-purple-500/20 mt-1">
+                    <span>Conversion preventivi</span>
+                    <span className={mr.preventivi.conversionRate >= 50 ? 'text-emerald-300' : 'text-amber-300'}>{mr.preventivi.conversionRate}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rischi & Alert */}
+              <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-amber-500/20">
+                <p className="text-[10px] uppercase tracking-widest text-amber-300 font-semibold mb-2">Rischi & Alert</p>
+                <p className={`text-3xl font-bold leading-tight ${(insolutiTot + danniTot + mr.fornitori.scaduto) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>€ {fmt(insolutiTot + danniTot + mr.fornitori.scaduto)}</p>
+                <p className="text-xs text-theme-text-muted mt-1">Insoluti + Danni + Scaduto fornitori</p>
+                <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
+                  <div className="flex justify-between"><span>Insoluti</span><span className={insolutiTot > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>€ {fmt(insolutiTot)} ({mr.penaliDanni.insolutiCount})</span></div>
+                  <div className="flex justify-between"><span>Danni</span><span className={danniTot > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmt(danniTot)} ({mr.penaliDanni.danniCount})</span></div>
+                  <div className="flex justify-between"><span>Scaduto fornitori</span><span className={mr.fornitori.scaduto > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmt(mr.fornitori.scaduto)}</span></div>
+                  <div className="flex justify-between pt-1 border-t border-amber-500/20 mt-1">
+                    <span>Anomalie aperte</span><span className={mr.fornitori.alertsOpen > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>{mr.fornitori.alertsOpen}</span>
                   </div>
                 </div>
               </div>
