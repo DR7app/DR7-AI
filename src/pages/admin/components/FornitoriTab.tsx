@@ -3,7 +3,10 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import FornitoreSimpleView from './fornitori/FornitoreSimpleView'
+import FornitoriRegistroMensile from './fornitori/FornitoriRegistroMensile'
 import type { Fornitore } from './fornitori/types'
+
+type View = 'lista' | 'registro'
 
 interface FornitoreRow extends Fornitore {
     bolleCount: number
@@ -29,6 +32,7 @@ export default function FornitoriTab() {
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     const [selected, setSelected] = useState<Fornitore | null>(null)
+    const [view, setView] = useState<View>('lista')
     const [importing, setImporting] = useState(false)
     const [lastSync, setLastSync] = useState<number | null>(() => {
         const v = localStorage.getItem(LAST_SYNC_KEY)
@@ -190,14 +194,32 @@ export default function FornitoriTab() {
 
     return (
         <div className="space-y-4">
-            <div>
-                <h2 className="text-2xl font-semibold text-theme-text-primary">Fornitori</h2>
-                <p className="text-xs text-theme-text-muted">
-                    {importing
-                        ? 'Sincronizzazione automatica da Aruba in corso…'
-                        : `Sincronizzato automaticamente da Aruba ${fmtRelative(lastSync)}`}
-                </p>
+            <div className="flex items-end justify-between flex-wrap gap-3">
+                <div>
+                    <h2 className="text-2xl font-semibold text-theme-text-primary">Fornitori</h2>
+                    <p className="text-xs text-theme-text-muted">
+                        {importing
+                            ? 'Sincronizzazione automatica da Aruba in corso…'
+                            : `Sincronizzato automaticamente da Aruba ${fmtRelative(lastSync)}`}
+                    </p>
+                </div>
+                <div className="flex gap-1 bg-theme-bg-tertiary rounded p-1">
+                    <button onClick={() => setView('lista')}
+                        className={`text-sm px-3 py-1.5 rounded ${view === 'lista' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
+                        Lista fornitori
+                    </button>
+                    <button onClick={() => setView('registro')}
+                        className={`text-sm px-3 py-1.5 rounded ${view === 'registro' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
+                        Registro mensile
+                    </button>
+                </div>
             </div>
+
+            {view === 'registro' && (
+                <FornitoriRegistroMensile onOpenFornitore={setSelected} />
+            )}
+
+            {view === 'lista' && (<>
 
             <div className="flex flex-wrap items-center gap-2">
                 <div className="flex-1 min-w-[240px]">
@@ -272,6 +294,8 @@ export default function FornitoriTab() {
                     </ul>
                 )}
             </div>
+
+            </>)}
         </div>
     )
 }
