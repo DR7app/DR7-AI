@@ -201,7 +201,7 @@ export default function OperatoriTab() {
   const [teamCounts, setTeamCounts] = useState<Map<string, number>>(new Map())
   const [loading, setLoading] = useState(true)
   const [logsLoading, setLogsLoading] = useState(false)
-  const [aggLoading, setAggLoading] = useState(false)
+  const [, setAggLoading] = useState(false)
   const [aggTruncated, setAggTruncated] = useState(false)
   const [dateFrom, setDateFrom] = useState(startOfMonthISO(new Date()))
   const [dateTo, setDateTo] = useState(todayISO())
@@ -399,7 +399,6 @@ export default function OperatoriTab() {
       `Operatore: ${selected.nome || selected.email}\n` +
       `Periodo: ${dateFrom} → ${dateTo}\n` +
       `Giorni attivi: ${stats.activeDays}\n` +
-      `Ore stimate: ${stats.totalHours.toFixed(1)} h\n` +
       `Attività totali: ${stats.totalActivities}\n` +
       `Importo movimentato: ${eur(stats.totalAmount)}\n\n` +
       `Insight: ${insight}\n\n` +
@@ -491,7 +490,7 @@ export default function OperatoriTab() {
             </Section>
 
             {/* SECTION 2 — KPI PRINCIPALI */}
-            <Section title="KPI principali" subtitle={`Totale: ${stats.totalActivities} attività · ${stats.activeDays} giorni attivi · ${stats.totalHours.toFixed(1)} h stimate`}>
+            <Section title="KPI principali" subtitle={`Totale: ${stats.totalActivities} attività · ${stats.activeDays} giorni attivi`}>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {KPI_DEFS.map(c => (
                   <KpiTile key={c.key} label={c.label} emoji={c.emoji} value={stats.byCategory.get(c.key) || 0} />
@@ -499,66 +498,24 @@ export default function OperatoriTab() {
               </div>
             </Section>
 
-            {/* SECTION 3 — PRESENZE E ORE LAVORATE */}
-            <Section title="Presenze e ore lavorate" subtitle="Stimate da prima→ultima attività di ogni giorno (sistema di timbratura ufficiale arriva in Fase C)">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-xs">
-                <StatTile label="Giorni attivi" value={String(stats.activeDays)} />
-                <StatTile label="Ore stimate" value={`${stats.totalHours.toFixed(1)} h`} />
-                <StatTile label="Media giornaliera" value={`${stats.activeDays > 0 ? (stats.totalHours / stats.activeDays).toFixed(1) : '0.0'} h`} />
-                <StatTile label="Picco settimana" value={`${weekHours(stats.days).toFixed(1)} h`} hint="ultima settimana attiva" />
-              </div>
-              {aggLoading ? <div className="text-theme-text-muted text-center py-6 text-sm">Caricamento…</div> :
-                stats.days.length === 0 ? <div className="text-theme-text-muted text-center py-6 text-sm">Nessuna giornata attiva nel periodo.</div> :
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-theme-border text-theme-text-muted text-left">
-                        <th className="py-2 px-3 font-medium">Giorno</th>
-                        <th className="py-2 px-3 font-medium">Ingresso</th>
-                        <th className="py-2 px-3 font-medium">Uscita</th>
-                        <th className="py-2 px-3 font-medium">Pause</th>
-                        <th className="py-2 px-3 font-medium">Ore stimate</th>
-                        <th className="py-2 px-3 font-medium">Attività</th>
-                        <th className="py-2 px-3 font-medium">Stato</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stats.days.map(d => (
-                        <tr key={d.day} className="border-b border-theme-border/50">
-                          <td className="py-2 px-3 text-theme-text-primary font-medium">{formatDay(d.first)}</td>
-                          <td className="py-2 px-3 text-theme-text-secondary">{formatTime(d.first)}</td>
-                          <td className="py-2 px-3 text-theme-text-secondary">{formatTime(d.last)}</td>
-                          <td className="py-2 px-3 text-theme-text-muted text-xs">— <span className="text-[10px]">(Fase C)</span></td>
-                          <td className="py-2 px-3 text-theme-text-primary">{d.hours.toFixed(1)} h</td>
-                          <td className="py-2 px-3 text-theme-text-secondary">{d.count}</td>
-                          <td className="py-2 px-3"><span className="inline-block px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">Attivo</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t border-theme-border font-medium text-theme-text-primary">
-                        <td className="py-2 px-3">Totale</td>
-                        <td className="py-2 px-3 text-xs text-theme-text-muted" colSpan={3}>{stats.activeDays} giorni</td>
-                        <td className="py-2 px-3">{stats.totalHours.toFixed(1)} h</td>
-                        <td className="py-2 px-3">{stats.totalActivities}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              }
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                <PlaceholderRow label="Ferie" value="0" tag="Fase C" />
-                <PlaceholderRow label="Permessi" value="0" tag="Fase C" />
-                <PlaceholderRow label="Malattia" value="0" tag="Fase C" />
-                <PlaceholderRow label="Straordinari ufficiali" value="0" tag="Fase C" />
+            {/* SECTION 3 — PRESENZE E ORE LAVORATE
+                Le ore non si ricavano piu' dal log attivita' (induceva in
+                errore: ore "stimate" comparivano anche per giorni in cui
+                l'admin non aveva timbrato). Per gli orari reali vai su
+                Report -> Rilevazione Orari, che legge timesheet_entries. */}
+            <Section title="Presenze e ore lavorate" subtitle="Le ore reali si gestiscono in Rilevazione Orari (manuale)">
+              <div className="bg-theme-bg-secondary border border-theme-border rounded p-4 text-sm text-theme-text-secondary">
+                Per vedere o registrare gli orari (entrata, pause, uscita), apri
+                <strong className="text-theme-text-primary"> Report → Rilevazione Orari</strong>{' '}
+                oppure clicca sull'icona orologio "I miei orari" nella sidebar.
+                Solo Valerio e Ilenia vedono i report di tutti gli operatori; gli
+                altri admin vedono solo i propri.
               </div>
             </Section>
 
             {/* SECTION 4 — PRODUTTIVITÀ */}
             <Section title="Produttività" subtitle={stats.peakDay ? `Picco: ${formatDay(stats.peakDay.day + 'T12:00:00')} con ${stats.peakDay.count} attività` : 'Distribuzione attività per giorno'}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-xs">
-                <StatTile label="Attività/ora lavorata" value={stats.totalHours > 0 ? (stats.totalActivities / stats.totalHours).toFixed(1) : '0.0'} />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-xs">
                 <StatTile label="Media giornaliera" value={stats.activeDays > 0 ? (stats.totalActivities / stats.activeDays).toFixed(1) : '0.0'} hint="attività/giorno" />
                 <StatTile label="Vs media team" value={teamAvg > 0 ? `${((myCount / teamAvg - 1) * 100).toFixed(0)}%` : '—'} hint={`team: ${teamAvg.toFixed(0)} att.`} />
                 <StatTile label="Vs mese prec." value={prevStats.totalActivities > 0 ? `${((stats.totalActivities / prevStats.totalActivities - 1) * 100).toFixed(0)}%` : '—'} hint={`prec: ${prevStats.totalActivities} att.`} />
@@ -605,10 +562,9 @@ export default function OperatoriTab() {
               </div>
             </Section>
 
-            {/* SECTION 7 — CONTROLLO PRESENZA + ATTIVITÀ */}
-            <Section title="Controllo presenza vs attività" subtitle="Incrocio tra ore stimate e attività svolte">
-              <CrossCheckList days={stats.days} totalHours={stats.totalHours} totalActivities={stats.totalActivities} />
-            </Section>
+            {/* SECTION 7 — rimossa: il cross-check usava ore stimate dal log
+                attivita', che la direzione ha chiesto di non mostrare. Le ore
+                reali sono in Rilevazione Orari. */}
 
             {/* SECTION 8 — INSIGHT FINALE AUTOMATICO */}
             <Section title="Insight automatico" subtitle="Sintesi generata dai KPI del periodo">
@@ -624,7 +580,6 @@ export default function OperatoriTab() {
                 <PayrollRow label="Dipendente" value={selected.nome || selected.email} />
                 <PayrollRow label="Sede" value="—" tag="Fase B" />
                 <PayrollRow label="Giorni lavorati" value={String(stats.activeDays)} />
-                <PayrollRow label="Ore stimate" value={`${stats.totalHours.toFixed(1)} h`} />
                 <PayrollRow label="Ore ordinarie" value="—" tag="Fase C" />
                 <PayrollRow label="Straordinari" value="—" tag="Fase C" />
                 <PayrollRow label="Assenze" value="—" tag="Fase C" />
@@ -743,11 +698,10 @@ export default function OperatoriTab() {
             <Section title="Riepilogo periodo">
               <SummaryRow label="Periodo" value={`${dateFrom} → ${dateTo}`} />
               <SummaryRow label="Giorni attivi" value={String(stats.activeDays)} />
-              <SummaryRow label="Ore stimate" value={`${stats.totalHours.toFixed(1)} h`} />
               <SummaryRow label="Attività totali" value={String(stats.totalActivities)} />
               <SummaryRow label="Movimentato" value={eur(stats.totalAmount)} />
               <SummaryRow label="Media team" value={`${teamAvg.toFixed(0)} att.`} />
-              <SummaryRow label="Mese precedente" value={`${prevStats.totalActivities} att. · ${prevStats.totalHours.toFixed(1)} h`} />
+              <SummaryRow label="Mese precedente" value={`${prevStats.totalActivities} att.`} />
             </Section>
 
             {/* DISTRIBUZIONE */}
@@ -843,16 +797,6 @@ function computeStats(logs: LogEntry[]): Stats {
   return { byCategory, days, totalHours, totalActivities, activeDays, avgPerDay, peakDay, totalAmount, economic }
 }
 
-function weekHours(days: DayAgg[]): number {
-  // sum hours for the most recent 7-day window present in the data
-  if (days.length === 0) return 0
-  const sorted = [...days].sort((a, b) => b.day.localeCompare(a.day))
-  const latest = new Date(sorted[0].day)
-  const cutoff = new Date(latest); cutoff.setDate(cutoff.getDate() - 6)
-  const cutoffKey = cutoff.toLocaleDateString('en-CA', { timeZone: ROME_TZ })
-  return sorted.filter(d => d.day >= cutoffKey).reduce((s, d) => s + d.hours, 0)
-}
-
 // ─── Alert engine ─────────────────────────────────────────────────────────
 
 interface Alert { severity: 'low' | 'med' | 'high'; title: string; detail: string }
@@ -939,7 +883,7 @@ function qualityBadgeClass(label: Quality['label']): string {
 function buildInsight(stats: Stats, prev: Stats, alerts: Alert[], teamAvg: number, myCount: number): string {
   if (stats.totalActivities === 0) return 'Nessuna attività registrata nel periodo selezionato.'
 
-  const productive = stats.totalHours > 0 && (stats.totalActivities / stats.totalHours) >= 5
+  const productive = stats.activeDays > 0 && (stats.totalActivities / stats.activeDays) >= 8
   const consistent = stats.activeDays >= 15
   const vsTeam = teamAvg > 0 ? myCount / teamAvg : 1
   const vsPrev = prev.totalActivities > 0 ? stats.totalActivities / prev.totalActivities : 1
@@ -955,12 +899,12 @@ function buildInsight(stats: Stats, prev: Stats, alerts: Alert[], teamAvg: numbe
   if (productive && vsPrev > 1.2)
     return `Trend positivo: produttività in crescita del ${(vsPrev * 100 - 100).toFixed(0)}% rispetto al mese precedente.`
   if (!productive && consistent)
-    return `Buona presenza ma bassa produttività media (${(stats.totalActivities / Math.max(1, stats.totalHours)).toFixed(1)} att./ora). Verificare distribuzione del lavoro.`
+    return `Buona presenza ma bassa produttività media (${(stats.totalActivities / Math.max(1, stats.activeDays)).toFixed(1)} att./giorno). Verificare distribuzione del lavoro.`
   if (vsTeam < 0.7 && consistent)
     return `Operatore presente ma sotto la media team (${(vsTeam * 100).toFixed(0)}% del team). Possibile redistribuzione carico.`
   if (stats.activeDays < 5)
     return `Periodo con presenza ridotta: ${stats.activeDays} giorni attivi. Verificare ferie/permessi.`
-  return `Operatore regolare: ${stats.totalActivities} attività in ${stats.activeDays} giorni, ${stats.totalHours.toFixed(1)} h stimate.`
+  return `Operatore regolare: ${stats.totalActivities} attività in ${stats.activeDays} giorni.`
 }
 
 // ─── Subcomponents ────────────────────────────────────────────────────────
@@ -1075,15 +1019,6 @@ function ProfileFieldEditable({
   )
 }
 
-function PlaceholderRow({ label, value, tag }: { label: string; value: string; tag?: string }) {
-  return (
-    <div className="flex items-center justify-between bg-theme-bg-tertiary/30 border border-theme-border rounded-lg px-3 py-2">
-      <span className="text-theme-text-muted">{label}</span>
-      <span className="flex items-center gap-2"><span className="text-theme-text-secondary">{value}</span>{tag && <span className="text-[9px] text-amber-500">{tag}</span>}</span>
-    </div>
-  )
-}
-
 function PayrollRow({ label, value, tag }: { label: string; value: string; tag?: string }) {
   return (
     <div className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg px-3 py-2">
@@ -1122,37 +1057,6 @@ function ProductivityChart({ days }: { days: DayAgg[] }) {
           </div>
         )
       })}
-    </div>
-  )
-}
-
-function CrossCheckList({ days, totalHours, totalActivities }: { days: DayAgg[]; totalHours: number; totalActivities: number }) {
-  const ratio = totalHours > 0 ? totalActivities / totalHours : 0
-  const bands = days.map(d => {
-    const r = d.hours > 0 ? d.count / d.hours : 0
-    let level: 'Alta' | 'Normale' | 'Bassa' | 'Anomala'
-    if (d.hours >= 6 && d.count <= 3) level = 'Anomala'
-    else if (r >= 5) level = 'Alta'
-    else if (r >= 1.5) level = 'Normale'
-    else level = 'Bassa'
-    return { ...d, ratio: r, level }
-  })
-  return (
-    <div>
-      <div className="flex items-center gap-3 mb-3 text-sm">
-        <span className="text-theme-text-muted">Globale:</span>
-        <span className="font-medium text-theme-text-primary">{ratio.toFixed(1)} att./h stimata</span>
-        <span className="text-xs text-theme-text-muted">({totalActivities} att. in {totalHours.toFixed(1)} h)</span>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-        {bands.slice(0, 8).map(b => (
-          <div key={b.day} className="flex items-center justify-between bg-theme-bg-tertiary/30 rounded-lg px-3 py-2">
-            <span className="text-theme-text-muted">{formatDay(b.first)}</span>
-            <span className="text-theme-text-secondary">{b.hours.toFixed(1)} h · {b.count} att.</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] ${b.level === 'Alta' ? 'bg-emerald-100 text-emerald-700' : b.level === 'Normale' ? 'bg-sky-100 text-sky-700' : b.level === 'Bassa' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{b.level}</span>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
