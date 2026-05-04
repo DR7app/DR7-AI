@@ -3241,6 +3241,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     if (isSubmitting) return
 
+    // OTP gate — modifying a PAID or CONFIRMED rental requires direzione approval
+    // (Valerio & Ilenia bypass server-side via DIREZIONE_EMAILS). The gate is
+    // skipped entirely if the operator has already approved this session OR if
+    // the toggle is OFF in Gestione OTP (handled inside requestOverride).
+    if (editingId && !hasOverride('paid_rental_modify')) {
+      const original = bookings.find(b => b.id === editingId)
+      if (original) {
+        const PAID = ['paid', 'completed', 'succeeded']
+        const CONFIRMED = ['confirmed', 'confermata', 'active', 'in_corso']
+        const isPaid = PAID.includes((original.payment_status || '').toLowerCase())
+        const isConfirmed = CONFIRMED.includes((original.status || '').toLowerCase())
+        if (isPaid || isConfirmed) {
+          requestOverride(
+            'paid_rental_modify',
+            'Modifica o spostamento di una prenotazione pagata o confermata: serve OTP della direzione.',
+            `booking_edit_${editingId}`,
+          )
+          return
+        }
+      }
+    }
+
     // VALIDATION LOGIC
     if (!skipValidation) {
       let missing: string[] = []

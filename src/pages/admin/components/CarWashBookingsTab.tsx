@@ -3025,6 +3025,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <div className="p-6 border-t border-theme-border flex gap-3">
                 <button
                   onClick={async () => {
+                    // OTP gate — modificare un lavaggio/meccanica già paid o
+                    // confirmed richiede OTP della direzione (Valerio + Ilenia
+                    // bypassano server-side). Se è già stato approvato per la
+                    // sessione, hasOverride passa subito.
+                    {
+                      const PAID = ['paid', 'completed', 'succeeded']
+                      const CONFIRMED = ['confirmed', 'confermata', 'active', 'in_corso']
+                      const isPaid = PAID.includes((editingBooking?.payment_status || '').toLowerCase())
+                      const isConfirmed = CONFIRMED.includes((editingBooking?.status || '').toLowerCase())
+                      if ((isPaid || isConfirmed) && !override.hasOverride('paid_wash_modify')) {
+                        override.requestOverride(
+                          'paid_wash_modify',
+                          'Modifica o spostamento di un lavaggio/meccanica pagato o confermato: serve OTP della direzione.',
+                          `wash_edit_${editingBooking?.id}`,
+                        )
+                        return
+                      }
+                    }
                     try {
                       // Rebuild cart items from edit selections (with price options + quantities)
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
