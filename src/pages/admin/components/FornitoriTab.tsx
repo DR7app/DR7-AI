@@ -211,22 +211,24 @@ export default function FornitoriTab() {
                             if (importing) return
                             setImporting(true)
                             try {
-                                const res = await fetch('/.netlify/functions/fornitori-fatture-sync-cron', { method: 'POST' })
-                                const json = await res.json().catch(() => ({}))
-                                if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
-                                const disc = json.autoDiscover || {}
+                                // Background function: 15-min timeout, risponde
+                                // 202 Accepted subito; il lavoro continua dietro.
+                                const res = await fetch('/.netlify/functions/fornitori-fatture-sync-background', { method: 'POST' })
+                                if (res.status !== 202 && !res.ok) {
+                                    const txt = await res.text().catch(() => '')
+                                    throw new Error(`HTTP ${res.status}${txt ? ' — ' + txt.slice(0, 120) : ''}`)
+                                }
                                 alert(
-                                    `Sync completato:\n` +
-                                    `- Fornitori auto-creati da Aruba: ${disc.created || 0}\n` +
-                                    `- Fatture importate: ${json.inserted || 0}\n` +
-                                    `- Fornitori sincronizzati: ${json.synced || 0}\n` +
-                                    `- Falliti: ${json.failed || 0}`
+                                    'Sincronizzazione avviata in background.\n\n' +
+                                    'Aruba ha molti fornitori e fatture: il lavoro impiega 1-3 minuti.\n' +
+                                    'Tra qualche minuto ricarica la pagina per vedere i nuovi documenti.'
                                 )
                                 setLastSync(Date.now())
-                                load()
+                                // Auto-refresh dopo 90s per pescare le nuove fatture
+                                setTimeout(() => load(), 90_000)
                             } catch (err) {
                                 const msg = err instanceof Error ? err.message : String(err)
-                                alert('Sync fallito: ' + msg)
+                                alert('Avvio sync fallito: ' + msg)
                             } finally {
                                 setImporting(false)
                             }
