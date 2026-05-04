@@ -446,9 +446,19 @@ export default function DashboardTab() {
 
       {/* ========== KPI STRIP — 5 cards (Rentora design v1) ========== */}
       {(() => {
-        const fatturato = d.revenue.currentMonth
+        // Fatturato is derived from the SAME monthly-report endpoint that
+        // Report Noleggio + Report Lavaggio call (canonical). Falls back to
+        // dashboard's own calc if monthlyReports is missing.
+        // monthlyReports.noleggio.ricavoTotale already includes rental + penali
+        // + danni (sum from monthly-report totalRevenue), so just add lavaggi.
+        const mr = d.monthlyReports
+        const fatturato = mr
+          ? mr.noleggio.ricavoTotale + mr.lavaggio.ricavoTotale
+          : d.revenue.currentMonth
         const incassato = d.revenue.incassato
-        const incassatoPct = d.revenue.incassatoPercent
+        // If Fatturato came from canonical reports, recompute incassato % from it
+        // so the sub-text matches what's shown.
+        const incassatoPct = fatturato > 0 ? Math.round((incassato / fatturato) * 100) : d.revenue.incassatoPercent
         // Cash-flow from the manual Fornitori module (operator-confirmed paid).
         // Falls back to Aruba SDI invoices only if no Fornitori data yet.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
