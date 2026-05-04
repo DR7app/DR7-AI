@@ -4376,7 +4376,7 @@ function FeeListEditor({
                   value={it.label}
                   onChange={(e) => patchItem(idx, { label: e.target.value })}
                   placeholder={`Nome ${itemNoun}`}
-                  className="flex-1 min-w-0 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+                  className="flex-1 min-w-0 bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 transition-colors"
                 />
                 <div className="relative w-32 flex-shrink-0">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
