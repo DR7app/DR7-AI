@@ -272,7 +272,7 @@ export const handler: Handler = async (event) => {
           }
         } else {
           inserted++
-          existingKey.set(dedupeKey, { id: '', aruba_filename: m.filename })
+          existingKey.set(dedupeKey, { id: '', aruba_filename: m.filename, data_scadenza: dueDate || null })
         }
       } catch (e: any) {
         failed++

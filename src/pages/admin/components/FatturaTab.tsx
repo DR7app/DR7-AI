@@ -10,6 +10,7 @@ interface Invoice {
   id: string
   numero_fattura: string
   data_emissione: string
+  data_scadenza?: string | null
   importo_totale: number
   stato: string
   customer_name: string
@@ -49,6 +50,42 @@ interface InvoiceItem {
 
 // Solo questi due account possono cambiare lo stato di pagamento delle fatture
 const PAYMENT_MANAGERS = ['valerio@dr7.app', 'ilenia@dr7.app']
+
+// Default scadenza fattura quando non e' specificata: 30 giorni dall'emissione
+const DEFAULT_PAYMENT_TERM_DAYS = 30
+
+function getInvoiceDueDate(inv: { data_emissione: string; data_scadenza?: string | null }): Date | null {
+  if (inv.data_scadenza) {
+    const d = new Date(inv.data_scadenza)
+    if (!isNaN(d.getTime())) return d
+  }
+  if (inv.data_emissione) {
+    const d = new Date(inv.data_emissione)
+    if (!isNaN(d.getTime())) {
+      d.setDate(d.getDate() + DEFAULT_PAYMENT_TERM_DAYS)
+      return d
+    }
+  }
+  return null
+}
+
+function isInvoiceOverdue(inv: { data_emissione: string; data_scadenza?: string | null; stato: string }): boolean {
+  if (inv.stato === 'paid' || inv.stato === 'cancelled') return false
+  const due = getInvoiceDueDate(inv)
+  if (!due) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return due < today
+}
+
+function daysOverdue(inv: { data_emissione: string; data_scadenza?: string | null }): number {
+  const due = getInvoiceDueDate(inv)
+  if (!due) return 0
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  due.setHours(0, 0, 0, 0)
+  return Math.max(0, Math.floor((today.getTime() - due.getTime()) / 86400000))
+}
 
 export default function FatturaTab() {
   const [view, setView] = useState<'emesse' | 'ricevute'>('emesse')
@@ -424,6 +461,11 @@ export default function FatturaTab() {
                       }`}>
                       {invoice.stato === 'paid' ? 'Pagata' : invoice.stato === 'pending' ? 'In attesa' : 'Scaduta'}
                     </span>
+                    {isInvoiceOverdue(invoice) && (
+                      <span className="px-2 py-1 rounded text-xs font-bold bg-red-700/90 text-white animate-pulse" title={`Scaduta da ${daysOverdue(invoice)} giorni — pagamento non ricevuto`}>
+                        ⚠ SCADUTA · {daysOverdue(invoice)}g
+                      </span>
+                    )}
                     {canManagePayments && (
                       <button
                         type="button"
