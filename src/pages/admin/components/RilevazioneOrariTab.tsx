@@ -62,8 +62,8 @@ export default function RilevazioneOrariTab() {
     const [refDate, setRefDate] = useState(new Date())
     const [loading, setLoading] = useState(true)
     const [showAddOp, setShowAddOp] = useState(false)
-    const [submitting, setSubmitting] = useState<string | null>(null)
-    const [now, setNow] = useState(new Date())
+    const [editMyDay, setEditMyDay] = useState(false)
+    const [, setNow] = useState(new Date())
 
     const [dailyRows, setDailyRows] = useState<DayRow[]>([])
     const [periodRows, setPeriodRows] = useState<{ operatore: Operatore; daysData: Map<string, number> }[]>([])
@@ -185,23 +185,6 @@ export default function RilevazioneOrariTab() {
     const myRow = dailyRows.find(r => r.operatore.id === me?.id) || null
     const myStato: DayRow['stato'] = myRow?.stato || 'fuori'
 
-    async function clockIn(tipo: 'entrata' | 'pausa_inizio' | 'pausa_fine' | 'uscita') {
-        if (!me) return
-        setSubmitting(tipo)
-        try {
-            const { error } = await supabase
-                .from('timesheet_entries')
-                .insert({ operatore_id: me.id, tipo, timestamp: new Date().toISOString() })
-            if (error) throw error
-            await load()
-            toast.success(`${labelTipo(tipo)} registrata`)
-        } catch (err) {
-            toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
-        } finally {
-            setSubmitting(null)
-        }
-    }
-
     function downloadCsv() {
         if (view === 'giornaliera') {
             const headers = ['Operatore', 'Ruolo', 'Stato', 'Entrata', 'Uscita Pausa', 'Rientro Pausa', 'Uscita', 'Pause #', 'Ore Lavorate', 'Pausa Tot']
@@ -258,47 +241,32 @@ export default function RilevazioneOrariTab() {
                 </div>
             </div>
 
-            {/* Self clock-in widget — only for the logged-in user */}
+            {/* Self profile card — click avatar / button to open the time-entry modal */}
             {me ? (
-                <div className="bg-gradient-to-br from-amber-50 to-stone-100 dark:from-amber-950/30 dark:to-stone-900/30 rounded-xl border border-amber-300 dark:border-amber-800 p-5">
-                    <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                        <div>
-                            <p className="text-sm text-theme-text-secondary">I tuoi orari di oggi</p>
+                <div
+                    onClick={() => setEditMyDay(true)}
+                    className="bg-gradient-to-br from-amber-50 to-stone-100 dark:from-amber-950/30 dark:to-stone-900/30 rounded-xl border border-amber-300 dark:border-amber-800 p-5 cursor-pointer hover:shadow-md transition"
+                    title="Clicca per inserire i tuoi orari"
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="flex-shrink-0 w-14 h-14 rounded-full bg-amber-600 text-white flex items-center justify-center text-xl font-bold">
+                            {(me.nome[0] || '?').toUpperCase()}{(me.cognome?.[0] || '').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm text-theme-text-secondary">I tuoi orari di oggi — clicca per inserire/modificare</p>
                             <p className="text-xl font-bold text-theme-text-primary">{me.nome} {me.cognome || ''}</p>
+                            <div className="flex flex-wrap gap-3 mt-1 text-xs text-theme-text-muted">
+                                <span>Entrata: <strong className="font-mono text-theme-text-primary">{fmtTime(myRow?.entrata || null)}</strong></span>
+                                <span>Pause: <strong className="text-theme-text-primary">{myRow?.pausa_inizi.length || 0}</strong></span>
+                                <span>Uscita: <strong className="font-mono text-theme-text-primary">{fmtTime(myRow?.uscita || null)}</strong></span>
+                                <span>Ore: <strong className="text-theme-text-primary">{fmtMin(myRow?.minuti_lavorati || 0)}</strong></span>
+                            </div>
                         </div>
-                        <div className="text-right">
-                            <p className="text-xs text-theme-text-muted">Stato</p>
+                        <div className="text-right flex flex-col items-end gap-2">
                             <StatoLabel s={myStato} large />
+                            <span className="text-xs text-amber-700 dark:text-amber-300 underline">Inserisci orari →</span>
                         </div>
                     </div>
-
-                    <div className="flex flex-wrap gap-2 mb-3">
-                        {myStato === 'fuori' && (
-                            <ClockButton onClick={() => clockIn('entrata')} loading={submitting === 'entrata'} primary>Entrata</ClockButton>
-                        )}
-                        {myStato === 'lavoro' && (
-                            <>
-                                <ClockButton onClick={() => clockIn('pausa_inizio')} loading={submitting === 'pausa_inizio'}>Inizio Pausa</ClockButton>
-                                <ClockButton onClick={() => clockIn('uscita')} loading={submitting === 'uscita'} danger>Uscita</ClockButton>
-                            </>
-                        )}
-                        {myStato === 'pausa' && (
-                            <ClockButton onClick={() => clockIn('pausa_fine')} loading={submitting === 'pausa_fine'} primary>Fine Pausa</ClockButton>
-                        )}
-                        {myStato === 'finito' && (
-                            <p className="text-sm text-emerald-700 dark:text-emerald-300 font-semibold">Giornata chiusa. Buon riposo!</p>
-                        )}
-                    </div>
-
-                    {myRow && (
-                        <div className="text-xs text-theme-text-muted flex flex-wrap gap-4">
-                            <span>Entrata: <strong className="font-mono">{fmtTime(myRow.entrata)}</strong></span>
-                            <span>Pause: <strong>{myRow.pausa_inizi.length}</strong></span>
-                            <span>Uscita: <strong className="font-mono">{fmtTime(myRow.uscita)}</strong></span>
-                            <span>Ore oggi: <strong>{fmtMin(myRow.minuti_lavorati)}</strong></span>
-                            <span className="ml-auto">Aggiornato {now.toLocaleTimeString('it-IT', { timeZone: ROME_TZ, hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                    )}
                 </div>
             ) : (
                 <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4 text-center">
@@ -422,12 +390,17 @@ export default function RilevazioneOrariTab() {
             {showAddOp && (
                 <AddOperatoreModal onClose={() => setShowAddOp(false)} onSaved={() => { setShowAddOp(false); load(); toast.success('Operatore aggiunto') }} />
             )}
+
+            {editMyDay && me && (
+                <MyDayEditorModal
+                    operatore={me}
+                    data={toRomeDate(refDate)}
+                    onClose={() => setEditMyDay(false)}
+                    onSaved={() => { setEditMyDay(false); load(); toast.success('Orari aggiornati') }}
+                />
+            )}
         </div>
     )
-}
-
-function labelTipo(t: 'entrata' | 'pausa_inizio' | 'pausa_fine' | 'uscita'): string {
-    return t === 'entrata' ? 'Entrata' : t === 'pausa_inizio' ? 'Inizio pausa' : t === 'pausa_fine' ? 'Fine pausa' : 'Uscita'
 }
 
 function StatoLabel({ s, large }: { s: DayRow['stato']; large?: boolean }) {
@@ -439,26 +412,6 @@ function StatoLabel({ s, large }: { s: DayRow['stato']; large?: boolean }) {
     }
     const m = map[s]
     return <span className={`px-2 py-0.5 rounded ${large ? 'text-sm font-semibold' : 'text-xs'} ${m.cls}`}>{m.label}</span>
-}
-
-function ClockButton({ children, onClick, loading, primary, danger }: {
-    children: React.ReactNode
-    onClick: () => void
-    loading?: boolean
-    primary?: boolean
-    danger?: boolean
-}) {
-    const cls = primary
-        ? 'bg-amber-600 hover:bg-amber-700 text-white'
-        : danger
-            ? 'bg-stone-700 hover:bg-stone-800 text-white'
-            : 'bg-white hover:bg-stone-50 text-stone-800 border border-stone-300'
-    return (
-        <button onClick={onClick} disabled={loading}
-            className={`flex-1 min-w-[140px] py-3 rounded-lg text-sm font-semibold transition shadow-sm disabled:opacity-50 ${cls}`}>
-            {loading ? '…' : children}
-        </button>
-    )
 }
 
 function AddOperatoreModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
@@ -528,6 +481,213 @@ function Field({ label, value, onChange, type = 'text', placeholder }: {
             <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
                 className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary" />
         </label>
+    )
+}
+
+interface BreakSlot { id?: string; pausa_inizio?: string; pausa_fine?: string }
+
+/**
+ * Modal — l'utente connesso edita i propri orari del giorno.
+ * Carica gli eventi esistenti, permette di modificare gli orari (HH:MM),
+ * aggiungere/rimuovere pause, salvare.
+ */
+function MyDayEditorModal({ operatore, data, onClose, onSaved }: {
+    operatore: Operatore
+    data: string  // YYYY-MM-DD
+    onClose: () => void
+    onSaved: () => void
+}) {
+    const [entrata, setEntrata] = useState('')
+    const [uscita, setUscita] = useState('')
+    const [pause, setPause] = useState<BreakSlot[]>([])
+    const [note, setNote] = useState('')
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        ;(async () => {
+            const { data: entries } = await supabase
+                .from('timesheet_entries')
+                .select('id, tipo, timestamp')
+                .eq('operatore_id', operatore.id)
+                .eq('data', data)
+                .order('timestamp', { ascending: true })
+            const list = (entries || []) as { id: string; tipo: string; timestamp: string }[]
+
+            const isoToHHMM = (iso: string) => new Date(iso).toLocaleTimeString('it-IT', { timeZone: ROME_TZ, hour: '2-digit', minute: '2-digit' })
+
+            const e = list.find(x => x.tipo === 'entrata')
+            if (e) setEntrata(isoToHHMM(e.timestamp))
+            const u = [...list].reverse().find(x => x.tipo === 'uscita')
+            if (u) setUscita(isoToHHMM(u.timestamp))
+
+            const pInizi = list.filter(x => x.tipo === 'pausa_inizio')
+            const pFini = list.filter(x => x.tipo === 'pausa_fine')
+            const slots: BreakSlot[] = []
+            for (let i = 0; i < Math.max(pInizi.length, pFini.length); i++) {
+                slots.push({
+                    pausa_inizio: pInizi[i] ? isoToHHMM(pInizi[i].timestamp) : '',
+                    pausa_fine: pFini[i] ? isoToHHMM(pFini[i].timestamp) : '',
+                })
+            }
+            if (slots.length === 0) slots.push({ pausa_inizio: '', pausa_fine: '' })
+            setPause(slots)
+
+            // Day note
+            const { data: noteRow } = await supabase
+                .from('timesheet_day_notes')
+                .select('nota')
+                .eq('operatore_id', operatore.id)
+                .eq('data', data)
+                .maybeSingle()
+            if (noteRow?.nota) setNote(noteRow.nota)
+
+            setLoading(false)
+        })()
+    }, [operatore.id, data])
+
+    function hhmmToISO(hhmm: string, dateStr: string): string | null {
+        if (!/^\d{2}:\d{2}$/.test(hhmm)) return null
+        // Build ISO timestamp in Europe/Rome on the given date
+        const [h, m] = hhmm.split(':').map(Number)
+        const d = new Date(`${dateStr}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`)
+        // Adjust for Rome offset — quick trick: compute offset relative to UTC
+        const romeStr = d.toLocaleString('en-US', { timeZone: ROME_TZ, hour12: false })
+        const utcStr = d.toLocaleString('en-US', { timeZone: 'UTC', hour12: false })
+        const offsetMs = new Date(romeStr).getTime() - new Date(utcStr).getTime()
+        return new Date(d.getTime() - offsetMs).toISOString()
+    }
+
+    async function handleSave() {
+        setSaving(true)
+        try {
+            // Cancello tutto e re-inserisco — semplice e atomico per l'utente.
+            const { error: delErr } = await supabase
+                .from('timesheet_entries')
+                .delete()
+                .eq('operatore_id', operatore.id)
+                .eq('data', data)
+            if (delErr) throw delErr
+
+            const inserts: { operatore_id: string; tipo: string; timestamp: string }[] = []
+            if (entrata) {
+                const ts = hhmmToISO(entrata, data)
+                if (ts) inserts.push({ operatore_id: operatore.id, tipo: 'entrata', timestamp: ts })
+            }
+            for (const p of pause) {
+                if (p.pausa_inizio) {
+                    const ts = hhmmToISO(p.pausa_inizio, data)
+                    if (ts) inserts.push({ operatore_id: operatore.id, tipo: 'pausa_inizio', timestamp: ts })
+                }
+                if (p.pausa_fine) {
+                    const ts = hhmmToISO(p.pausa_fine, data)
+                    if (ts) inserts.push({ operatore_id: operatore.id, tipo: 'pausa_fine', timestamp: ts })
+                }
+            }
+            if (uscita) {
+                const ts = hhmmToISO(uscita, data)
+                if (ts) inserts.push({ operatore_id: operatore.id, tipo: 'uscita', timestamp: ts })
+            }
+            if (inserts.length > 0) {
+                const { error: insErr } = await supabase.from('timesheet_entries').insert(inserts)
+                if (insErr) throw insErr
+            }
+
+            // Note del giorno (upsert)
+            if (note.trim()) {
+                const { error: noteErr } = await supabase
+                    .from('timesheet_day_notes')
+                    .upsert({ operatore_id: operatore.id, data, nota: note.trim() }, { onConflict: 'operatore_id,data' })
+                if (noteErr) console.warn('[my-day] note save error', noteErr)
+            } else {
+                await supabase.from('timesheet_day_notes')
+                    .delete()
+                    .eq('operatore_id', operatore.id)
+                    .eq('data', data)
+            }
+
+            onSaved()
+        } catch (err) {
+            alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-lg w-full p-6 max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-semibold text-theme-text-primary mb-1">I miei orari — {operatore.nome} {operatore.cognome || ''}</h3>
+                <p className="text-xs text-theme-text-muted mb-4">{new Date(data).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: 'numeric', month: 'long' })}</p>
+
+                {loading ? (
+                    <p className="text-theme-text-muted">Caricamento…</p>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                            <label className="block">
+                                <span className="text-xs text-theme-text-secondary">Entrata</span>
+                                <input type="time" value={entrata} onChange={e => setEntrata(e.target.value)}
+                                    className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                            </label>
+                            <label className="block">
+                                <span className="text-xs text-theme-text-secondary">Uscita</span>
+                                <input type="time" value={uscita} onChange={e => setUscita(e.target.value)}
+                                    className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                            </label>
+                        </div>
+
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-theme-text-primary">Pause</span>
+                                <button onClick={() => setPause([...pause, { pausa_inizio: '', pausa_fine: '' }])}
+                                    className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary text-theme-text-secondary hover:text-theme-text-primary">
+                                    + Aggiungi pausa
+                                </button>
+                            </div>
+                            <div className="space-y-2">
+                                {pause.map((p, i) => (
+                                    <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                                        <label className="block">
+                                            <span className="text-xs text-theme-text-muted">Inizio pausa {i + 1}</span>
+                                            <input type="time" value={p.pausa_inizio || ''} onChange={e => {
+                                                const next = [...pause]
+                                                next[i] = { ...next[i], pausa_inizio: e.target.value }
+                                                setPause(next)
+                                            }} className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                                        </label>
+                                        <label className="block">
+                                            <span className="text-xs text-theme-text-muted">Fine pausa {i + 1}</span>
+                                            <input type="time" value={p.pausa_fine || ''} onChange={e => {
+                                                const next = [...pause]
+                                                next[i] = { ...next[i], pausa_fine: e.target.value }
+                                                setPause(next)
+                                            }} className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                                        </label>
+                                        <button onClick={() => setPause(pause.filter((_, j) => j !== i))}
+                                            className="px-2 py-2 text-red-400 hover:text-red-300" title="Rimuovi">×</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <label className="block">
+                            <span className="text-xs text-theme-text-secondary">Note (opzionale)</span>
+                            <textarea value={note} onChange={e => setNote(e.target.value)}
+                                rows={2} placeholder="Es: Lavoro da casa / Ferie / Permesso medico"
+                                className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm" />
+                        </label>
+                    </div>
+                )}
+
+                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-theme-border">
+                    <Button variant="secondary" onClick={onClose} disabled={saving}>Annulla</Button>
+                    <Button onClick={handleSave} disabled={loading || saving}>
+                        {saving ? 'Salvataggio…' : 'Salva orari'}
+                    </Button>
+                </div>
+            </div>
+        </div>
     )
 }
 
