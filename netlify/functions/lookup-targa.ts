@@ -1,7 +1,41 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
+import { createClient } from '@supabase/supabase-js'
 
 const OPENAPI_TOKEN = process.env.OPENAPI_AUTOMOTIVE_TOKEN || ''
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null
+
+interface PlateRow {
+  plate: string
+  brand: string | null
+  model: string | null
+  make_model: string | null
+  description: string | null
+  year: string | null
+  fuel: string | null
+  power_cv: string | null
+  displacement: string | null
+  doors: string | null
+  source: string
+}
+
+function rowToResponse(row: PlateRow, fromCache: boolean) {
+  return {
+    targa: row.plate,
+    brand: row.brand || '',
+    model: row.model || '',
+    makeModel: row.make_model || '',
+    description: row.description || '',
+    year: row.year || '',
+    fuel: row.fuel || '',
+    powerCV: row.power_cv || '',
+    displacement: row.displacement || '',
+    doors: row.doors || '',
+    cached: fromCache,
+  }
+}
 
 export const handler: Handler = async (event) => {
   const headers = {
@@ -24,12 +58,34 @@ export const handler: Handler = async (event) => {
 
     const cleanTarga = targa.toUpperCase().replace(/[\s\-]/g, '')
 
+    // ── 1. Cache-first ────────────────────────────────────────────────────────
+    if (supabase) {
+      const { data: cached } = await supabase
+        .from('vehicle_plate_cache')
+        .select('*')
+        .eq('plate', cleanTarga)
+        .maybeSingle<PlateRow>()
+
+      if (cached) {
+        // Atomic counter + last_seen_at bump. Fire-and-forget; never blocks
+        // the operator's UI even if the RPC fails (cache still served).
+        supabase.rpc('increment_plate_lookup_count', { p_plate: cleanTarga })
+          .then(({ error }) => { if (error) console.warn('[lookup-targa] increment RPC failed:', error.message) }, () => {/* swallow */})
+
+        console.log('[lookup-targa] Cache HIT:', cleanTarga, '→', cached.brand, cached.model)
+        return { statusCode: 200, headers, body: JSON.stringify(rowToResponse(cached, true)) }
+      }
+    } else {
+      console.warn('[lookup-targa] Supabase not configured — cache disabled')
+    }
+
+    // ── 2. Cache miss → openapi.com ───────────────────────────────────────────
     if (!OPENAPI_TOKEN) {
       console.error('[lookup-targa] OPENAPI_AUTOMOTIVE_TOKEN not configured')
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Servizio temporaneamente non disponibile.' }) }
     }
 
-    console.log('[lookup-targa] Looking up plate:', cleanTarga)
+    console.log('[lookup-targa] Cache MISS:', cleanTarga, '→ calling openapi.com')
 
     const res = await fetch(`https://automotive.openapi.com/IT-car/${cleanTarga}`, {
       headers: { 'Authorization': `Bearer ${OPENAPI_TOKEN}` },
@@ -40,7 +96,6 @@ export const handler: Handler = async (event) => {
     if (res.status === 404) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Targa non trovata' }) }
     }
-
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       console.error('[lookup-targa] OpenAPI error', res.status, body)
@@ -53,28 +108,38 @@ export const handler: Handler = async (event) => {
     }
 
     const car = json.data
-    const str = (v: unknown): string => (v == null ? '' : String(v))
+    const str = (v: unknown): string | null => (v == null || v === '' ? null : String(v))
     const brand = str(car.CarMake)
     const model = str(car.CarModel)
+    const makeModel = [brand, model].filter(Boolean).join(' ')
+
+    const newRow: PlateRow = {
+      plate: cleanTarga,
+      brand,
+      model,
+      make_model: makeModel || null,
+      description: str(car.Description),
+      year: str(car.RegistrationYear),
+      fuel: str(car.FuelType),
+      power_cv: str(car.PowerCV),
+      displacement: str(car.EngineSize),
+      doors: str(car.NumberOfDoors),
+      source: 'openapi',
+    }
+
+    // ── 3. Save to cache (fire-and-forget; don't block the operator's UI) ─────
+    if (supabase) {
+      supabase
+        .from('vehicle_plate_cache')
+        .upsert(newRow, { onConflict: 'plate' })
+        .then(({ error }) => {
+          if (error) console.error('[lookup-targa] Cache save failed:', error.message)
+          else console.log('[lookup-targa] Cached:', cleanTarga)
+        }, () => {/* swallow */})
+    }
 
     console.log('[lookup-targa] Success:', brand, model)
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        targa: cleanTarga,
-        brand,
-        model,
-        makeModel: (brand + ' ' + model).trim(),
-        description: str(car.Description),
-        year: str(car.RegistrationYear),
-        fuel: str(car.FuelType),
-        powerCV: str(car.PowerCV),
-        displacement: str(car.EngineSize),
-        doors: str(car.NumberOfDoors),
-      }),
-    }
+    return { statusCode: 200, headers, body: JSON.stringify(rowToResponse(newRow, false)) }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
     console.error('[lookup-targa] error:', msg)
