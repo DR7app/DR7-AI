@@ -12,15 +12,28 @@ interface Vehicle {
   plate: string | null
   status: 'available' | 'unavailable' | 'rented' | 'maintenance' | 'retired'
   daily_rate: number
-  category: 'exotic' | 'urban' | 'aziendali' | null
+  // category id is whatever the operator typed in Centralina Pro > Categorie & Fascia.
+  // The legacy seeds 'exotic' / 'urban' / 'aziendali' still work; new ids are accepted.
+  category: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: Record<string, any> | null
   created_at: string
   updated_at: string
 }
 
+interface ProCategory { id: string; label: string }
+
+// Default categories shown until the live Centralina Pro list loads (and as a
+// safety net if the operator never opened Centralina Pro yet).
+const FALLBACK_CATEGORIES: ProCategory[] = [
+  { id: 'exotic', label: 'Exotic Supercars' },
+  { id: 'urban', label: 'Urban' },
+  { id: 'aziendali', label: 'Aziendali' },
+]
+
 export default function VehiclesTab() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [categories, setCategories] = useState<ProCategory[]>(FALLBACK_CATEGORIES)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -58,6 +71,34 @@ export default function VehiclesTab() {
 
   useEffect(() => {
     loadVehicles()
+  }, [])
+
+  // Categories live in centralina_pro_config.config.categories (Centralina Pro
+  // > Categorie & Fascia is the single source of truth). We subscribe so any
+  // add/rename/delete done there propagates here within a couple of seconds.
+  useEffect(() => {
+    let cancelled = false
+    async function loadCategories() {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      if (cancelled) return
+      const cfg = (data?.config as { categories?: ProCategory[] } | null) || null
+      const list = Array.isArray(cfg?.categories) && cfg.categories.length > 0 ? cfg.categories : FALLBACK_CATEGORIES
+      setCategories(list)
+    }
+    loadCategories()
+    const channel = supabase
+      .channel('vehicles-categories-sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
+        const cfg = (payload.new as { config?: { categories?: ProCategory[] } } | undefined)?.config
+        const list = Array.isArray(cfg?.categories) && cfg.categories.length > 0 ? cfg.categories : FALLBACK_CATEGORIES
+        setCategories(list)
+      })
+      .subscribe()
+    return () => { cancelled = true; supabase.removeChannel(channel) }
   }, [])
 
   async function loadVehicles() {
@@ -556,6 +597,16 @@ export default function VehiclesTab() {
   const urbanCount = urbanVehicles.length
   const aziendaliCount = aziendaliVehicles.length
 
+  // Any category added in Centralina Pro beyond the three legacy ones gets its
+  // own section below the main three so newly-added categories aren't invisible.
+  const LEGACY_IDS = new Set(['exotic', 'urban', 'aziendali'])
+  const extraSections = categories
+    .filter(c => !LEGACY_IDS.has(c.id))
+    .map(c => ({
+      category: c,
+      vehicles: vehicles.filter(v => v.category === c.id).filter(searchFilter),
+    }))
+
   if (loading) {
     return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
   }
@@ -711,11 +762,16 @@ export default function VehiclesTab() {
               required
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              options={[
-                { value: 'exotic', label: 'Exotic Supercars' },
-                { value: 'urban', label: 'Urban' },
-                { value: 'aziendali', label: 'Aziendali' }
-              ]}
+              options={(() => {
+                const opts = categories.map(c => ({ value: c.id, label: c.label }))
+                // If we're editing a vehicle whose category was renamed/deleted in
+                // Centralina Pro, keep the current value selectable so the operator
+                // doesn't accidentally clear it just by opening the form.
+                if (formData.category && !opts.some(o => o.value === formData.category)) {
+                  opts.push({ value: formData.category, label: `${formData.category} (non in Centralina Pro)` })
+                }
+                return opts
+              })()}
             />
             <Select
               label="Stato"
@@ -1408,6 +1464,53 @@ export default function VehiclesTab() {
           </div>
         </div>
       </div>
+
+      {/* Extra categories — anything the operator added in Centralina Pro
+          beyond the three legacy categories (exotic / urban / aziendali) gets
+          its own simple section so vehicles assigned there are still visible. */}
+      {extraSections.map(section => (
+        <div key={section.category.id} className="mb-8">
+          <div className="bg-theme-bg-secondary rounded-lg p-4 mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold text-theme-text-primary">
+              {section.category.label}
+              <span className="ml-2 text-sm text-theme-text-muted">({section.vehicles.length} veicoli)</span>
+            </h3>
+          </div>
+          <div className="bg-theme-bg-secondary rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-theme-bg-tertiary border-b border-theme-border">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Veicolo</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Targa</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Stato</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Tariffa</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase">Azioni</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-theme-border">
+                {section.vehicles.map(vehicle => (
+                  <tr key={vehicle.id} className="hover:bg-theme-bg-hover/40 transition-colors">
+                    <td className="px-4 py-3 text-sm text-theme-text-primary font-medium">{vehicle.display_name}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-secondary font-mono">{vehicle.plate || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-secondary">{vehicle.status}</td>
+                    <td className="px-4 py-3 text-sm text-theme-text-secondary tabular-nums">€{Number(vehicle.daily_rate).toLocaleString('it-IT')}/g</td>
+                    <td className="px-4 py-3 text-right">
+                      <Button onClick={() => handleEdit(vehicle)}>Modifica</Button>
+                    </td>
+                  </tr>
+                ))}
+                {section.vehicles.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-theme-text-muted">
+                      Nessun veicolo in {section.category.label}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
