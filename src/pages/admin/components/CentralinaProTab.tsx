@@ -80,8 +80,16 @@ type ExperienceService = {
 }
 
 type ServiziConfig = {
+  // Section titles (editable from admin) — fall back to defaults when missing
+  experience_title?: string
+  experience_subtitle?: string
+  dr7_flex_title?: string
+  lavaggio_title?: string
+  delivery_title?: string
+  second_driver_title?: string
   experience: ExperienceService[]
   dr7_flex: {
+    enabled?: boolean // false = entire block hidden everywhere (admin + website)
     daily_price: number | ''
     refund_percent: number | ''
     tier_restriction: string // '' = all fasce, otherwise fascia.id
@@ -104,6 +112,7 @@ const INITIAL_SERVIZI: ServiziConfig = {
     { id: 'chauffeur_vip', name: 'Noleggio con autista + itinerario VIP', price: 189, unit: 'per_hour', is_active: true, tier_only: '' },
   ],
   dr7_flex: {
+    enabled: true,
     daily_price: 19.9,
     refund_percent: 90,
     tier_restriction: 'A',
@@ -2730,18 +2739,24 @@ function ServiziSection({
     <div className="space-y-6">
       {/* Servizi Experience */}
       <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
-        <header className="px-5 pt-5 pb-3 flex items-center justify-between">
-          <div>
-            <h2 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
-              Servizi Experience
-            </h2>
-            <p className="text-[13px] text-[#6e6e73] mt-0.5">
-              Servizi extra opzionali
-            </p>
+        <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <input
+              value={servizi.experience_title ?? 'Servizi Experience'}
+              onChange={(e) => setServizi({ ...servizi, experience_title: e.target.value })}
+              className="w-full bg-transparent outline-none text-[17px] font-semibold text-[#1d1d1f] tracking-tight focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+              placeholder="Titolo sezione"
+            />
+            <input
+              value={servizi.experience_subtitle ?? 'Servizi extra opzionali'}
+              onChange={(e) => setServizi({ ...servizi, experience_subtitle: e.target.value })}
+              className="w-full bg-transparent outline-none text-[13px] text-[#6e6e73] mt-0.5 focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+              placeholder="Sottotitolo"
+            />
           </div>
           <button
             onClick={addExp}
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors shrink-0"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -2825,12 +2840,49 @@ function ServiziSection({
         </ul>
       </section>
 
-      {/* DR7 Flex */}
+      {/* DR7 Flex — deletable block (toggle enabled). When disabled the block
+           collapses to a one-line "Riattiva" placeholder and the website wizard
+           hides the option entirely (read via configOverlay.dr7Flex.enabled). */}
+      {servizi.dr7_flex.enabled === false ? (
+        <section className="bg-white rounded-2xl border border-dashed border-black/15 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 flex items-center justify-between gap-3">
+            <div className="text-[13px] text-[#6e6e73]">
+              <strong className="text-[#1d1d1f]">{servizi.dr7_flex_title ?? 'DR7 Flex — Cancellazione Premium'}</strong> — disattivato.
+            </div>
+            <button
+              onClick={() => setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, enabled: true } })}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Riattiva
+            </button>
+          </div>
+        </section>
+      ) : (
       <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
-        <header className="px-5 pt-5 pb-3">
-          <h2 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
-            DR7 Flex — Cancellazione Premium
-          </h2>
+        <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
+          <input
+            value={servizi.dr7_flex_title ?? 'DR7 Flex — Cancellazione Premium'}
+            onChange={(e) => setServizi({ ...servizi, dr7_flex_title: e.target.value })}
+            className="flex-1 bg-transparent outline-none text-[17px] font-semibold text-[#1d1d1f] tracking-tight focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+            placeholder="Titolo sezione"
+          />
+          <button
+            onClick={() => {
+              if (confirm('Rimuovere il blocco DR7 Flex? Non sarà più offerto in fase di prenotazione (potrai sempre riattivarlo).')) {
+                setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, enabled: false } })
+              }
+            }}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all shrink-0"
+            aria-label="Rimuovi blocco DR7 Flex"
+            title="Rimuovi blocco"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+            </svg>
+          </button>
         </header>
 
         <div className="px-5 pb-5 space-y-4">
@@ -2907,14 +2959,18 @@ function ServiziSection({
           </label>
         </div>
       </section>
+      )}
 
       {/* Simple services: 3-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Pulizia Finale */}
         <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-3">
-            Pulizia Finale
-          </h3>
+          <input
+            value={servizi.lavaggio_title ?? 'Pulizia Finale'}
+            onChange={(e) => setServizi({ ...servizi, lavaggio_title: e.target.value })}
+            className="w-full bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] mb-3 focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+            placeholder="Titolo"
+          />
           <label className="block mb-3">
             <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
               Tariffa
@@ -2949,9 +3005,12 @@ function ServiziSection({
 
         {/* Consegna a Domicilio */}
         <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-3">
-            Consegna a Domicilio
-          </h3>
+          <input
+            value={servizi.delivery_title ?? 'Consegna a Domicilio'}
+            onChange={(e) => setServizi({ ...servizi, delivery_title: e.target.value })}
+            className="w-full bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] mb-3 focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+            placeholder="Titolo"
+          />
           <label className="block">
             <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
               Prezzo per km
@@ -2980,9 +3039,12 @@ function ServiziSection({
 
         {/* Secondo Guidatore */}
         <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-3">
-            Secondo Guidatore
-          </h3>
+          <input
+            value={servizi.second_driver_title ?? 'Secondo Guidatore'}
+            onChange={(e) => setServizi({ ...servizi, second_driver_title: e.target.value })}
+            className="w-full bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] mb-3 focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+            placeholder="Titolo"
+          />
           <div className="space-y-2">
             {fasce.map((f) => (
               <div key={f.id} className="flex items-center gap-3">
