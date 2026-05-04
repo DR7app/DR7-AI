@@ -613,14 +613,28 @@ function MyDayEditorModal({ operatore, data, onClose, onSaved }: {
 
     function hhmmToISO(hhmm: string, dateStr: string): string | null {
         if (!/^\d{2}:\d{2}$/.test(hhmm)) return null
-        // Build ISO timestamp in Europe/Rome on the given date
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null
         const [h, m] = hhmm.split(':').map(Number)
-        const d = new Date(`${dateStr}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`)
-        // Adjust for Rome offset — quick trick: compute offset relative to UTC
-        const romeStr = d.toLocaleString('en-US', { timeZone: ROME_TZ, hour12: false })
-        const utcStr = d.toLocaleString('en-US', { timeZone: 'UTC', hour12: false })
-        const offsetMs = new Date(romeStr).getTime() - new Date(utcStr).getTime()
-        return new Date(d.getTime() - offsetMs).toISOString()
+        const [year, month, day] = dateStr.split('-').map(Number)
+        const utcGuess = new Date(Date.UTC(year, month - 1, day, h, m, 0))
+        const fmt = new Intl.DateTimeFormat('en-US', {
+            timeZone: ROME_TZ,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false,
+        })
+        const parts = Object.fromEntries(fmt.formatToParts(utcGuess).map(p => [p.type, p.value]))
+        const romeHour = parts.hour === '24' ? 0 : parseInt(parts.hour, 10)
+        const romeAsUTC = Date.UTC(
+            parseInt(parts.year, 10),
+            parseInt(parts.month, 10) - 1,
+            parseInt(parts.day, 10),
+            romeHour,
+            parseInt(parts.minute, 10),
+            parseInt(parts.second, 10),
+        )
+        const offsetMs = romeAsUTC - utcGuess.getTime()
+        return new Date(utcGuess.getTime() - offsetMs).toISOString()
     }
 
     async function handleSave() {
