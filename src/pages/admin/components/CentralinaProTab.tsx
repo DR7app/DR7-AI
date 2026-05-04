@@ -4363,74 +4363,45 @@ function FeeListEditor({
       <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
         <ul className="divide-y divide-black/5">
           {items.map((it, idx) => (
-            // NB: chiave SOLO per indice, non includere it.id. Quando l'admin
-            // modifica l'ID nel campo testo, includere it.id nella key fa
-            // cambiare la key ad ogni keystroke → React smonta e rimonta il
-            // <li> → l'input perde il focus dopo ogni lettera. Gli item non
-            // vengono mai riordinati, solo aggiunti in coda o rimossi, quindi
-            // l'indice e' una chiave stabile abbastanza per questa lista.
-            <li key={idx} className="px-5 py-4 group">
-              <div className="flex items-start gap-3 mb-3">
-                <label className="inline-flex items-center cursor-pointer pt-0.5">
-                  <input
-                    type="checkbox"
-                    checked={it.enabled !== false}
-                    onChange={(e) => patchItem(idx, { enabled: e.target.checked })}
-                    className="w-4 h-4 accent-[#007aff]"
-                  />
-                </label>
+            // NB: chiave SOLO per indice. Includere it.id farebbe cambiare
+            // la key ad ogni keystroke (vedi commit precedente).
+            // L'ID interno e' nascosto all'admin: viene generato via uid()
+            // alla creazione e mai modificato, ma resta nei dati per
+            // matching cart/cronologia in PenaltyModal e DanniModal.
+            // Anche `description` (vuoto) ed `enabled` (true) restano nei
+            // dati per compatibilita' con il modale ma non si vedono qui.
+            <li key={idx} className="px-5 py-3 group">
+              <div className="flex items-center gap-3">
                 <input
                   value={it.label}
                   onChange={(e) => patchItem(idx, { label: e.target.value })}
-                  placeholder="Etichetta penale"
-                  className="flex-1 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] rounded-lg px-2 py-1 -mx-2 transition-colors"
+                  placeholder={`Nome ${itemNoun}`}
+                  className="flex-1 min-w-0 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] rounded-lg px-2 py-1.5 -mx-2 transition-colors"
                 />
+                <div className="relative w-32 flex-shrink-0">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={it.amount}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      patchItem(idx, { amount: v === '' ? '' : Number(v) })
+                    }}
+                    placeholder="0"
+                    className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-1.5 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  />
+                </div>
                 <button
                   onClick={() => removeItem(idx)}
-                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-7 h-7 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
                   aria-label="Rimuovi"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
                   </svg>
                 </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 ml-7">
-                <label className="block">
-                  <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">ID</span>
-                  <input
-                    value={it.id}
-                    onChange={(e) => patchItem(idx, { id: e.target.value })}
-                    className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[13px] font-mono text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-                  />
-                </label>
-                <label className="block">
-                  <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Importo</span>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={it.amount}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        patchItem(idx, { amount: v === '' ? '' : Number(v) })
-                      }}
-                      className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-                    />
-                  </div>
-                </label>
-                <label className="block">
-                  <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Descrizione</span>
-                  <input
-                    value={it.description}
-                    onChange={(e) => patchItem(idx, { description: e.target.value })}
-                    placeholder="Es. €/giorno, Per pneumatico…"
-                    className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-                  />
-                </label>
               </div>
             </li>
           ))}
