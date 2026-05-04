@@ -41,7 +41,20 @@ interface DashboardData {
     lavaggio: { ricavoTotale: number; count: number; link: string }
     clienti: { nuoviMese: number; attiviMese: number; totale: number; changePercent: number; link: string }
     penaliDanni: { danniTotale: number; danniCount: number; insolutiTotale: number; insolutiCount: number; link: string }
-    preventivi: { total: number; accettati: number; rifiutatiCount: number; conversionRate: number; motivoCounts: { cauzione: number; prezzo: number; non_specificato: number }; link: string }
+    preventivi: {
+      total: number; accettati: number; rifiutatiCount: number; conversionRate: number;
+      motivoCounts: { cauzione: number; prezzo: number; non_specificato: number };
+      link: string
+      salvati?: number
+      scadutiCount?: number
+      valorePotenzialePerso?: number
+      valoreAccettato?: number
+      topVehicles?: Array<{ vehicle: string; count: number; converted: number; conversionRate: number; lostValue: number }>
+      topPeriodi?: Array<{ periodo: string; count: number }>
+      fasceConversione?: Array<{ range: string; total: number; converted: number; conversionRate: number }>
+      topPerdite?: Array<{ id: string; vehicle: string; pickup: string; dropoff: string; days: number; value: number; motivo: string | null; status: string }>
+      azioniSuggerite?: string[]
+    }
     fornitori: { pagatoMese: number; daPagare: number; scaduto: number; alertsOpen: number; link: string }
   }
 }
@@ -600,6 +613,154 @@ export default function DashboardTab() {
                 </div>
               </div>
             </div>
+          </div>
+        )
+      })()}
+
+      {/* ========== REPORT PREVENTIVI (Overview / Domanda / Conversione / Perdite / Azioni) ========== */}
+      {d.monthlyReports && (() => {
+        const p = d.monthlyReports.preventivi
+        const hasAnalytics = (p.topVehicles?.length ?? 0) > 0 || (p.topPeriodi?.length ?? 0) > 0 || (p.topPerdite?.length ?? 0) > 0 || (p.azioniSuggerite?.length ?? 0) > 0
+        if (p.total === 0 && !hasAnalytics) return null
+        const monthLabel = d.period.month
+        return (
+          <div>
+            <SectionHeader title="Report Preventivi" subtitle={`Analisi domanda → conversione → perdite · ${monthLabel} (esclusi operatori test)`} />
+
+            {/* 1. OVERVIEW */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+              <StatCard label="Preventivi totali" value={String(p.total)} />
+              <StatCard label="Salvati" value={String(p.salvati ?? 0)} sub="bozza · inviato" />
+              <StatCard label="Convertiti" value={String(p.accettati)} accent="green" />
+              <StatCard label="Rifiutati" value={String(p.rifiutatiCount)} sub={`${p.scadutiCount ?? 0} scaduti`} accent="red" />
+              <StatCard label="Conversion rate" value={`${p.conversionRate}%`} accent={p.conversionRate >= 30 ? 'green' : p.conversionRate >= 15 ? 'orange' : 'red'} />
+              <StatCard label="Valore perso" value={`€ ${fmt(p.valorePotenzialePerso ?? 0)}`} sub="potenziale" accent="orange" />
+            </div>
+
+            {/* 2. DOMANDA + 3. CONVERSIONE side-by-side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
+              {/* DOMANDA */}
+              <div className="bg-theme-bg-secondary/60 rounded-xl p-5 border border-blue-500/20">
+                <h4 className="text-sm font-bold text-blue-300 uppercase tracking-wide mb-3">Domanda</h4>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="text-xs text-theme-text-muted uppercase mb-1">Top veicoli richiesti</p>
+                    {(p.topVehicles ?? []).slice(0, 5).length === 0 ? (
+                      <p className="text-xs text-theme-text-muted italic">Nessun dato</p>
+                    ) : (p.topVehicles ?? []).slice(0, 5).map((v, i) => (
+                      <div key={i} className="flex justify-between items-center py-1 text-xs">
+                        <span className="text-theme-text-primary truncate pr-2">{v.vehicle}</span>
+                        <span className="text-theme-text-muted whitespace-nowrap">{v.count} richieste</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="pt-3 border-t border-theme-border">
+                    <p className="text-xs text-theme-text-muted uppercase mb-1">Top periodi (mese pickup)</p>
+                    {(p.topPeriodi ?? []).slice(0, 5).length === 0 ? (
+                      <p className="text-xs text-theme-text-muted italic">Nessun dato</p>
+                    ) : (p.topPeriodi ?? []).slice(0, 5).map((per, i) => (
+                      <div key={i} className="flex justify-between items-center py-1 text-xs">
+                        <span className="text-theme-text-primary">{per.periodo}</span>
+                        <span className="text-theme-text-muted">{per.count} preventivi</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* CONVERSIONE */}
+              <div className="bg-theme-bg-secondary/60 rounded-xl p-5 border border-emerald-500/20">
+                <h4 className="text-sm font-bold text-emerald-300 uppercase tracking-wide mb-3">Conversione</h4>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="text-xs text-theme-text-muted uppercase mb-1">Per veicolo (richieste → prenotazioni)</p>
+                    {(p.topVehicles ?? []).slice(0, 5).length === 0 ? (
+                      <p className="text-xs text-theme-text-muted italic">Nessun dato</p>
+                    ) : (p.topVehicles ?? []).slice(0, 5).map((v, i) => (
+                      <div key={i} className="flex justify-between items-center py-1 text-xs">
+                        <span className="text-theme-text-primary truncate pr-2">{v.vehicle}</span>
+                        <span className="text-theme-text-muted whitespace-nowrap">
+                          {v.converted}/{v.count} ·
+                          <span className={`ml-1 font-semibold ${v.conversionRate >= 30 ? 'text-emerald-300' : v.conversionRate >= 15 ? 'text-amber-300' : 'text-red-300'}`}>
+                            {v.conversionRate}%
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="pt-3 border-t border-theme-border">
+                    <p className="text-xs text-theme-text-muted uppercase mb-1">Per fascia prezzo</p>
+                    {(p.fasceConversione ?? []).length === 0 ? (
+                      <p className="text-xs text-theme-text-muted italic">Nessun dato</p>
+                    ) : (p.fasceConversione ?? []).map((f, i) => (
+                      <div key={i} className="flex justify-between items-center py-1 text-xs">
+                        <span className="text-theme-text-primary">€ {f.range}</span>
+                        <span className="text-theme-text-muted whitespace-nowrap">
+                          {f.converted}/{f.total} ·
+                          <span className={`ml-1 font-semibold ${f.conversionRate >= 30 ? 'text-emerald-300' : f.conversionRate >= 15 ? 'text-amber-300' : 'text-red-300'}`}>
+                            {f.conversionRate}%
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. PERDITE */}
+            <div className="bg-theme-bg-secondary/60 rounded-xl p-5 border border-red-500/20 mt-3">
+              <h4 className="text-sm font-bold text-red-300 uppercase tracking-wide mb-3">Perdite — preventivi non convertiti</h4>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
+                {/* Top non convertiti */}
+                <div className="lg:col-span-2">
+                  <p className="text-theme-text-muted uppercase mb-2">Top per valore</p>
+                  {(p.topPerdite ?? []).length === 0 ? (
+                    <p className="text-theme-text-muted italic">Nessun preventivo perso</p>
+                  ) : (p.topPerdite ?? []).map((l, i) => (
+                    <div key={i} className="flex justify-between items-start py-1.5 border-b border-theme-border last:border-0">
+                      <div className="flex-1 pr-3">
+                        <p className="text-theme-text-primary font-medium truncate">{l.vehicle}</p>
+                        <p className="text-theme-text-muted">
+                          {l.pickup ? new Date(l.pickup).toLocaleDateString('it-IT') : '?'}
+                          {l.dropoff && ` → ${new Date(l.dropoff).toLocaleDateString('it-IT')}`}
+                          {l.days && ` · ${l.days}gg`}
+                          {l.motivo && ` · motivo: ${l.motivo}`}
+                        </p>
+                      </div>
+                      <span className="text-red-300 font-semibold whitespace-nowrap">€ {fmt(l.value)}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Motivo abbandono */}
+                <div>
+                  <p className="text-theme-text-muted uppercase mb-2">Motivo (rifiutati)</p>
+                  <div className="space-y-1">
+                    <div className="flex justify-between"><span>Cauzione</span><span className="text-theme-text-primary">{p.motivoCounts.cauzione}</span></div>
+                    <div className="flex justify-between"><span>Prezzo</span><span className="text-theme-text-primary">{p.motivoCounts.prezzo}</span></div>
+                    <div className="flex justify-between"><span>Non specificato</span><span className="text-theme-text-muted">{p.motivoCounts.non_specificato}</span></div>
+                    <div className="flex justify-between pt-1 border-t border-theme-border mt-1">
+                      <span>Scaduti (timeout)</span><span className="text-amber-300">{p.scadutiCount ?? 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. AZIONI SUGGERITE */}
+            {(p.azioniSuggerite ?? []).length > 0 && (
+              <div className="bg-amber-500/5 rounded-xl p-5 border border-amber-500/30 mt-3">
+                <h4 className="text-sm font-bold text-amber-300 uppercase tracking-wide mb-3">Azioni Suggerite</h4>
+                <ul className="space-y-2">
+                  {(p.azioniSuggerite ?? []).map((a, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-theme-text-primary">
+                      <span className="text-amber-400 mt-0.5">→</span>
+                      <span>{a}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )
       })()}

@@ -983,20 +983,40 @@ export const handler: Handler = async (event) => {
     ])
 
     // ============================================================
-    // PREVENTIVI rollup for the month (lightweight — uses dedicated query)
+    // PREVENTIVI rollup for the month — Overview/Domanda/Conversione/Perdite/Azioni
+    // Built from existing fields only (no event tracking yet).
     // ============================================================
     const preventiviSummary = await safe('preventivi', async () => {
+      // Exclude preventivi created by ophe@dr7.app — those are
+      // operator/test entries, not real customer demand.
+      const EXCLUDE_OPERATORS = ['ophe@dr7.app']
       const { data: prevs } = await supabase
         .from('preventivi')
-        .select('id, status, total_final, total_amount, motivo_rifiuto, created_at')
+        .select('id, status, total_final, total_amount, motivo_rifiuto, motivo_rifiuto_note, created_at, created_by, vehicle_name, vehicle_category, vehicle_plate, pickup_date, dropoff_date, rental_days, booking_id')
         .gte('created_at', monthStartISO + 'T00:00:00')
         .lte('created_at', monthEndISO + 'T23:59:59')
-      const list = prevs || []
+        .not('created_by', 'in', `(${EXCLUDE_OPERATORS.map(e => `"${e}"`).join(',')})`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const list: any[] = prevs || []
       const total = list.length
-      const accettati = list.filter(p => p.status === 'accettato' || p.status === 'convertito').length
+
+      // STATUS BUCKETS
+      // Salvato = bozza|inviato (work in progress)
+      // Convertito = accettato OR booking_id present (became a booking)
+      // Rifiutato/Scaduto = lost
+      const salvati = list.filter(p => p.status === 'bozza' || p.status === 'inviato').length
+      const accettati = list.filter(p => p.status === 'accettato' || p.status === 'convertito' || !!p.booking_id).length
       const rifiutati = list.filter(p => p.status === 'rifiutato')
+      const scaduti = list.filter(p => p.status === 'scaduto')
       const rifiutatiCount = rifiutati.length
+      const scadutiCount = scaduti.length
       const conv = total > 0 ? Math.round((accettati / total) * 100) : 0
+
+      const sumValore = (xs: any[]) => xs.reduce((s, p) => s + (Number(p.total_final) || 0), 0)
+      const valorePotenzialePerso = sumValore([...rifiutati, ...scaduti])
+      const valoreAccettato = sumValore(list.filter(p => p.status === 'accettato' || p.status === 'convertito' || !!p.booking_id))
+
+      // MOTIVO ABBANDONO BUCKETS (existing motivo_rifiuto field)
       const motivoCounts: Record<string, number> = { cauzione: 0, prezzo: 0, non_specificato: 0 }
       for (const p of rifiutati) {
         const m = (p.motivo_rifiuto || '').toLowerCase()
@@ -1004,8 +1024,140 @@ export const handler: Handler = async (event) => {
         else if (m === 'prezzo') motivoCounts.prezzo++
         else motivoCounts.non_specificato++
       }
-      return { total, accettati, rifiutatiCount, conversionRate: conv, motivoCounts }
-    }, { total: 0, accettati: 0, rifiutatiCount: 0, conversionRate: 0, motivoCounts: { cauzione: 0, prezzo: 0, non_specificato: 0 } })
+
+      // DOMANDA — top vehicles by # preventivi
+      const vehicleAgg = new Map<string, { count: number; converted: number; lostValue: number }>()
+      for (const p of list) {
+        const key = p.vehicle_name || 'Sconosciuto'
+        const cur = vehicleAgg.get(key) || { count: 0, converted: 0, lostValue: 0 }
+        cur.count += 1
+        const isConverted = p.status === 'accettato' || p.status === 'convertito' || !!p.booking_id
+        if (isConverted) cur.converted += 1
+        if (p.status === 'rifiutato' || p.status === 'scaduto') cur.lostValue += Number(p.total_final) || 0
+        vehicleAgg.set(key, cur)
+      }
+      const topVehicles = Array.from(vehicleAgg.entries())
+        .map(([nome, v]) => ({
+          vehicle: nome,
+          count: v.count,
+          converted: v.converted,
+          conversionRate: v.count > 0 ? Math.round((v.converted / v.count) * 100) : 0,
+          lostValue: Math.round(v.lostValue * 100) / 100,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10)
+
+      // DOMANDA — top periodi (pickup month bucket)
+      const periodAgg = new Map<string, number>()
+      for (const p of list) {
+        if (!p.pickup_date) continue
+        const d = new Date(p.pickup_date)
+        const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        periodAgg.set(k, (periodAgg.get(k) || 0) + 1)
+      }
+      const topPeriodi = Array.from(periodAgg.entries())
+        .map(([periodo, count]) => ({ periodo, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6)
+
+      // CONVERSIONE per fascia prezzo
+      const fasce = [
+        { label: '0-100', min: 0, max: 100 },
+        { label: '100-300', min: 100, max: 300 },
+        { label: '300-1000', min: 300, max: 1000 },
+        { label: '1000+', min: 1000, max: Infinity },
+      ]
+      const fasceAgg = fasce.map(f => {
+        const inFascia = list.filter(p => {
+          const v = Number(p.total_final) || 0
+          return v >= f.min && v < f.max
+        })
+        const accInFascia = inFascia.filter(p => p.status === 'accettato' || p.status === 'convertito' || !!p.booking_id).length
+        return {
+          range: f.label,
+          total: inFascia.length,
+          converted: accInFascia,
+          conversionRate: inFascia.length > 0 ? Math.round((accInFascia / inFascia.length) * 100) : 0,
+        }
+      }).filter(f => f.total > 0)
+
+      // PERDITE — top preventivi non convertiti by value
+      const topPerdite = [...rifiutati, ...scaduti]
+        .sort((a, b) => (Number(b.total_final) || 0) - (Number(a.total_final) || 0))
+        .slice(0, 8)
+        .map(p => ({
+          id: p.id,
+          vehicle: p.vehicle_name || 'Sconosciuto',
+          pickup: p.pickup_date,
+          dropoff: p.dropoff_date,
+          days: p.rental_days,
+          value: Math.round((Number(p.total_final) || 0) * 100) / 100,
+          motivo: p.motivo_rifiuto || null,
+          status: p.status,
+        }))
+
+      // AZIONI SUGGERITE — rule-based
+      const azioni: string[] = []
+      // Rule 1: vehicle with high demand but low conversion
+      for (const v of topVehicles) {
+        if (v.count >= 5 && v.conversionRate < 30) {
+          azioni.push(`${v.vehicle}: alta domanda (${v.count}) ma conversione bassa (${v.conversionRate}%) → verifica pricing o condizioni`)
+        }
+      }
+      // Rule 2: motivo rifiuto skewed
+      if (rifiutatiCount >= 3) {
+        const dominante = motivoCounts.cauzione > motivoCounts.prezzo ? 'cauzione' : motivoCounts.prezzo > 0 ? 'prezzo' : null
+        if (dominante === 'cauzione' && motivoCounts.cauzione >= rifiutatiCount * 0.5) {
+          azioni.push(`Molti preventivi rifiutati per cauzione (${motivoCounts.cauzione}/${rifiutatiCount}) → considera "No Cauzione" più aggressivo o ridurre l'importo richiesto`)
+        }
+        if (dominante === 'prezzo' && motivoCounts.prezzo >= rifiutatiCount * 0.5) {
+          azioni.push(`Molti preventivi rifiutati per prezzo (${motivoCounts.prezzo}/${rifiutatiCount}) → rivedi pricing su questi veicoli`)
+        }
+      }
+      // Rule 3: large potential value being lost
+      if (valorePotenzialePerso > 1000 && total >= 5) {
+        azioni.push(`€${Math.round(valorePotenzialePerso)} di valore potenziale perso questo mese (${rifiutatiCount + scadutiCount} preventivi) → analizza Top Perdite`)
+      }
+      // Rule 4: high-demand future period
+      if (topPeriodi.length > 0) {
+        const top = topPeriodi[0]
+        if (top.count >= Math.max(5, total * 0.3)) {
+          azioni.push(`Periodo ${top.periodo}: ${top.count} preventivi richiesti → valuta aumentare disponibilità flotta o pricing dinamico`)
+        }
+      }
+      // Rule 5: scaduti (timeouts)
+      if (scadutiCount >= 3) {
+        azioni.push(`${scadutiCount} preventivi scaduti senza risposta → invio follow-up automatico potrebbe recuperarli`)
+      }
+
+      return {
+        // Legacy fields (kept for monthlyReports.preventivi compatibility)
+        total,
+        accettati,
+        rifiutatiCount,
+        conversionRate: conv,
+        motivoCounts,
+        // New analytics fields
+        salvati,
+        scadutiCount,
+        valorePotenzialePerso: Math.round(valorePotenzialePerso * 100) / 100,
+        valoreAccettato: Math.round(valoreAccettato * 100) / 100,
+        topVehicles,
+        topPeriodi,
+        fasceConversione: fasceAgg,
+        topPerdite,
+        azioniSuggerite: azioni,
+      }
+    }, {
+      total: 0, accettati: 0, rifiutatiCount: 0, conversionRate: 0,
+      motivoCounts: { cauzione: 0, prezzo: 0, non_specificato: 0 },
+      salvati: 0, scadutiCount: 0, valorePotenzialePerso: 0, valoreAccettato: 0,
+      topVehicles: [] as Array<{ vehicle: string; count: number; converted: number; conversionRate: number; lostValue: number }>,
+      topPeriodi: [] as Array<{ periodo: string; count: number }>,
+      fasceConversione: [] as Array<{ range: string; total: number; converted: number; conversionRate: number }>,
+      topPerdite: [] as Array<{ id: string; vehicle: string; pickup: string; dropoff: string; days: number; value: number; motivo: string | null; status: string }>,
+      azioniSuggerite: [] as string[],
+    })
 
     // ============================================================
     // MONTHLY REPORTS — rollup for the "Riassunto Mensile" view.
