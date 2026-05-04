@@ -452,7 +452,7 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-2 mb-1">
             <button
-              onClick={() => setShowMyOrari(true)}
+              onClick={() => { setSidebarOpen(false); setShowMyOrari(true); }}
               title="I miei orari — inserisci/modifica i tuoi orari di oggi"
               className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-theme-text-secondary hover:text-amber-400 hover:bg-theme-bg-hover transition-colors"
             >

@@ -251,7 +251,7 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
             <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-lg w-full p-6 max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-1">
                     <h3 className="text-xl font-semibold text-theme-text-primary">I miei orari</h3>
