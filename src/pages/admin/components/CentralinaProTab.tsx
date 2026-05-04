@@ -4395,7 +4395,7 @@ function FeeListEditor({
                 </div>
                 <button
                   onClick={() => removeItem(idx)}
-                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                  className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-colors"
                   aria-label="Rimuovi"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
