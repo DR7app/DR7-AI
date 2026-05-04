@@ -1170,10 +1170,21 @@ export const handler: Handler = async (event) => {
       ? `${event.headers['x-forwarded-proto']}://${event.headers.host}`
       : process.env.URL || ''
 
+    // Forward the caller's Authorization header so the monthly-report endpoint
+    // (which has requireAuth) lets us through. Without this the internal call
+    // 401's, dashboard falls back to its own calc, and the numbers drift from
+    // what Report Noleggio shows. THIS WAS THE BUG.
+    const authHeader = event.headers.authorization || event.headers.Authorization || ''
+
     const [noleggioCanonical, lavaggioCanonical] = await Promise.all([
       safe('monthly-report:vehicles', async () => {
-        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&month=${month}`)
-        if (!r.ok) return null
+        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&month=${month}`, {
+          headers: { Authorization: authHeader },
+        })
+        if (!r.ok) {
+          console.warn(`[dashboard-kpi] monthly-report:vehicles returned ${r.status}`)
+          return null
+        }
         return await r.json() as {
           totalRevenue?: number
           totalRentalRevenue?: number
@@ -1184,8 +1195,13 @@ export const handler: Handler = async (event) => {
         }
       }, null as null | Record<string, unknown>),
       safe('monthly-report:washes', async () => {
-        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=washes&month=${month}`)
-        if (!r.ok) return null
+        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=washes&month=${month}`, {
+          headers: { Authorization: authHeader },
+        })
+        if (!r.ok) {
+          console.warn(`[dashboard-kpi] monthly-report:washes returned ${r.status}`)
+          return null
+        }
         return await r.json() as {
           washRevenue?: number
           billableWashesCount?: number
