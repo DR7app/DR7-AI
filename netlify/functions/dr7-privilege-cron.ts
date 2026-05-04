@@ -15,10 +15,15 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const PAID_STATUSES = ["paid", "completed", "succeeded"];
 
-// HARD KILL SWITCH — set to true to re-enable the cron.
-// Disabilitato dopo invio massivo non voluto. NON RIATTIVARE senza
-// prima verificare che backfill di vecchi pagamenti non parta di colpo.
-const DR7_PRIVILEGE_ENABLED = false;
+// HARD KILL SWITCH — flip to false to disable.
+const DR7_PRIVILEGE_ENABLED = true;
+
+// Activation cutoff — solo le prenotazioni con appointment_date >= questa data
+// sono eleggibili. Questo previene il backfill di pagamenti storici quando
+// si ri-attiva il cron. Settare alla data del deploy che ha riattivato il
+// flusso. NON spostare indietro senza pulire dr7_privilege_sent_at sui
+// vecchi record o ti ritrovi con invii massivi.
+const ACTIVATION_DATE = "2026-05-04T00:00:00Z";
 
 export const handler: Handler = async () => {
     if (!DR7_PRIVILEGE_ENABLED) {
@@ -32,9 +37,13 @@ export const handler: Handler = async () => {
         auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Pick eligible CAR WASH bookings: paid, no privilege yet.
-    // 30-day window keeps the scan small + avoids spamming old rows.
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    // Pick eligible CAR WASH bookings:
+    //  - paid
+    //  - created_at >= ACTIVATION_DATE per non backfillare i pagamenti
+    //    storici quando si riattiva il cron
+    //  - dr7_privilege_sent_at NULL (idempotenza — invio una volta sola)
+    // Trigger: appena il lavaggio risulta pagato (anche prima dell'appuntamento),
+    // come richiesto dal flusso "DR7 Privilege — Post-Pagamento Lavaggio".
     const { data: bookings, error: bErr } = await sb
         .from("bookings")
         .select(
@@ -43,7 +52,7 @@ export const handler: Handler = async () => {
         .eq("service_type", "car_wash")
         .in("payment_status", PAID_STATUSES)
         .is("dr7_privilege_sent_at", null)
-        .gte("created_at", since)
+        .gte("created_at", ACTIVATION_DATE)
         .neq("customer_name", "Lavaggio Rientro")
         .limit(50);
 

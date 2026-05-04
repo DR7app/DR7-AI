@@ -950,6 +950,26 @@ const handler: Handler = async (event) => {
                 const isWashOrMech = booking.service_type === 'car_wash' || booking.service_type === 'mechanical_service' || booking.service_type === 'mechanical' || booking.vehicle_type === 'car_wash' || booking.vehicle_type === 'mechanical' || booking.booking_details?.type === 'car_wash' || booking.booking_details?.type === 'mechanical' || booking.booking_details?.service_type === 'car_wash'
                 if (isWashOrMech) {
                     console.log(`[nexi-payment-callback] Skipping contract for non-car booking (type: ${booking.vehicle_type || booking.booking_details?.type})`);
+
+                    // DR7 Privilege per LAVAGGIO — invia codice sconto subito
+                    // dopo la conferma del pagamento. Solo per car_wash (non
+                    // mechanical). Idempotente via dr7_privilege_sent_at.
+                    const isCarWash = booking.service_type === 'car_wash' || booking.booking_details?.type === 'car_wash' || booking.booking_details?.service_type === 'car_wash'
+                    if (isCarWash) {
+                        try {
+                            const { sendDr7Privilege } = await import('./utils/dr7Privilege')
+                            const result = await sendDr7Privilege(supabase, booking as any, 'lavaggio')
+                            if (result.sent) {
+                                console.log(`[nexi-payment-callback] ✅ DR7 Privilege lavaggio sent: ${result.code}`)
+                            } else if (result.skipped) {
+                                console.log(`[nexi-payment-callback] DR7 Privilege lavaggio skipped: ${result.skipped}`)
+                            } else if (result.error) {
+                                console.warn(`[nexi-payment-callback] DR7 Privilege lavaggio failed: ${result.error}`)
+                            }
+                        } catch (privErr: any) {
+                            console.error('[nexi-payment-callback] ⚠️ DR7 Privilege lavaggio error:', privErr.message)
+                        }
+                    }
                 } else try {
                     const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
                     const contractRes = await fetch(`${baseUrl}/.netlify/functions/generate-contract`, {

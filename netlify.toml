@@ -91,9 +91,10 @@
 
 # DR7 Privilege — DISABILITATO dopo invio massivo non voluto.
 # Lo schedule è commentato così Netlify NON registra il cron.
-# Per riattivare: scommenta + flippa DR7_PRIVILEGE_ENABLED nel file.
-# [functions."dr7-privilege-cron"]
-#   schedule = "*/5 * * * *"
+# DR7 Privilege — niente cron periodico: il codice viene inviato
+# real-time dal callback Nexi (e da segna-pagato admin) appena la
+# fattura risulta pagata. La function dr7-privilege-cron resta
+# disponibile come catch-all manuale.
 
 # SPA catch-all: ONLY for non-asset routes
 # Netlify serves existing files first, then applies redirects.

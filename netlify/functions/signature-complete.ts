@@ -597,10 +597,10 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // DR7 Privilege — DISABILITATO dopo invio massivo non voluto.
-        // Per riattivare: rimuovere il guard sotto e flippare
-        // DR7_PRIVILEGE_ENABLED in dr7-privilege-cron.ts.
-        const DR7_PRIVILEGE_ENABLED = false
+        // DR7 Privilege per noleggio — invio dopo firma contratto.
+        // Trigger per-event (la firma e' sempre nuova), quindi nessun rischio
+        // di backfill come per il cron lavaggi.
+        const DR7_PRIVILEGE_ENABLED = true
         if (DR7_PRIVILEGE_ENABLED && contract?.booking_id) {
             try {
                 const { data: bookingRow } = await supabase
