@@ -89,6 +89,12 @@
 [functions."rental-extension-supercar-cron"]
   schedule = "0 16,17 * * *"
 
+# DR7 Privilege — codice sconto 10% post-pagamento lavaggio (15gg).
+# Polls car_wash bookings paid but not yet rewarded. Idempotent.
+# (Noleggio is handled inline in signature-complete.ts after firma contratto.)
+[functions."dr7-privilege-cron"]
+  schedule = "*/5 * * * *"
+
 # SPA catch-all: ONLY for non-asset routes
 # Netlify serves existing files first, then applies redirects.
 # When a fingerprinted chunk is missing (stale HTML after deploy),

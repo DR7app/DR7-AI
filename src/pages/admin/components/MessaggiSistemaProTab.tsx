@@ -140,11 +140,13 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
   {
     label: 'Marketing',
     templates: [
-      { key: 'pro_marketing_recensione', label: 'Richiesta Recensione', description: 'Richiesta di recensione dopo il servizio' },
-      { key: 'pro_marketing_compleanno', label: 'Messaggio Compleanno', description: 'Auguri di compleanno al cliente' },
-      { key: 'pro_marketing_referral',   label: 'Codice Referral',      description: 'Invio codice referral al cliente' },
-      { key: 'pro_marketing_rinnovo',    label: 'Promemoria Rinnovo',   description: 'Promemoria rinnovo membership DR7 Club' },
-      { key: 'pro_wallet_bonus_cliente', label: 'Bonus Wallet Cliente', description: 'Notifica bonus wallet accreditato al cliente' },
+      { key: 'pro_marketing_recensione',     label: 'Richiesta Recensione',                    description: 'Richiesta di recensione dopo il servizio' },
+      { key: 'pro_marketing_compleanno',     label: 'Messaggio Compleanno',                    description: 'Auguri di compleanno al cliente' },
+      { key: 'pro_marketing_referral',       label: 'Codice Referral',                         description: 'Invio codice referral al cliente' },
+      { key: 'pro_marketing_rinnovo',        label: 'Promemoria Rinnovo',                      description: 'Promemoria rinnovo membership DR7 Club' },
+      { key: 'pro_wallet_bonus_cliente',     label: 'Bonus Wallet Cliente',                    description: 'Notifica bonus wallet accreditato al cliente' },
+      { key: 'pro_dr7_privilege_noleggio',   label: 'DR7 Privilege — Post-Pagamento Noleggio', description: 'Inviato automaticamente dopo firma contratto noleggio. Variabili: {nome}, {codice_supercar}' },
+      { key: 'pro_dr7_privilege_lavaggio',   label: 'DR7 Privilege — Post-Pagamento Lavaggio', description: 'Inviato automaticamente quando un lavaggio viene marcato come pagato. Variabili: {nome}, {codice_lavaggio}' },
     ],
   },
   {

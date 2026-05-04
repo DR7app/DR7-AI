@@ -597,6 +597,31 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // DR7 Privilege — codice sconto 10% post-firma noleggio (15gg validità).
+        // Idempotente via bookings.dr7_privilege_sent_at.
+        if (contract?.booking_id) {
+            try {
+                const { data: bookingRow } = await supabase
+                    .from('bookings')
+                    .select('id, service_type, customer_name, customer_phone, customer_email, vehicle_plate, booking_details, dr7_privilege_sent_at')
+                    .eq('id', contract.booking_id)
+                    .maybeSingle()
+                if (bookingRow && bookingRow.service_type !== 'car_wash' && bookingRow.service_type !== 'mechanical') {
+                    const { sendDr7Privilege } = await import('./utils/dr7Privilege')
+                    const result = await sendDr7Privilege(supabase, bookingRow, 'noleggio')
+                    if (result.sent) {
+                        console.log(`[signature-complete] ✅ DR7 Privilege code sent: ${result.code}`)
+                    } else if (result.skipped) {
+                        console.log(`[signature-complete] DR7 Privilege skipped: ${result.skipped}`)
+                    } else {
+                        console.warn(`[signature-complete] DR7 Privilege failed: ${result.error}`)
+                    }
+                }
+            } catch (privErr: any) {
+                console.error('[signature-complete] ⚠️ DR7 Privilege error:', privErr.message)
+            }
+        }
+
         return {
             statusCode: 200,
             body: JSON.stringify({
