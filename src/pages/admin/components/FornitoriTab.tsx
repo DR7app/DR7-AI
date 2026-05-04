@@ -32,7 +32,9 @@ export default function FornitoriTab() {
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     const [selected, setSelected] = useState<Fornitore | null>(null)
-    const [view, setView] = useState<View>('lista')
+    // Default 'registro' — l'utente entra tipicamente per pianificare bolle e
+    // pagamenti del mese, non per sfogliare l'anagrafica.
+    const [view, setView] = useState<View>('registro')
     const [importing, setImporting] = useState(false)
     const [lastSync, setLastSync] = useState<number | null>(() => {
         const v = localStorage.getItem(LAST_SYNC_KEY)
