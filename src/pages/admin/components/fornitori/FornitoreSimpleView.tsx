@@ -41,10 +41,11 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const isAuthorizedByRole = canViewFinancials && isValerioOrIlenia
 
     const [anno, setAnno] = useState(today.getFullYear())
-    // Default sul mese corrente — l'utente sale tipicamente per gestire il mese
-    // attuale (carica bolle del mese, controlla incrocio col mese, paga il mese).
-    // Selettore "Tutti i mesi" disponibile per la vista annuale.
-    const [mese, setMese] = useState<number | 'tutti'>(today.getMonth() + 1)
+    // Default "tutti i mesi" — il count nella lista mostra TUTTE le fatture
+    // dell'anno; aprire il fornitore senza vederle perche' il mese di default
+    // era quello corrente confondeva gli admin. L'utente puo' restringere
+    // tramite il selettore mese quando vuole.
+    const [mese, setMese] = useState<number | 'tutti'>('tutti')
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
     const [loading, setLoading] = useState(false)
