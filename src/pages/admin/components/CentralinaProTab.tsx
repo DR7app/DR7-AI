@@ -4317,7 +4317,13 @@ function FeeListEditor({
       <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
         <ul className="divide-y divide-black/5">
           {items.map((it, idx) => (
-            <li key={`${it.id}-${idx}`} className="px-5 py-4 group">
+            // NB: chiave SOLO per indice, non includere it.id. Quando l'admin
+            // modifica l'ID nel campo testo, includere it.id nella key fa
+            // cambiare la key ad ogni keystroke → React smonta e rimonta il
+            // <li> → l'input perde il focus dopo ogni lettera. Gli item non
+            // vengono mai riordinati, solo aggiunti in coda o rimossi, quindi
+            // l'indice e' una chiave stabile abbastanza per questa lista.
+            <li key={idx} className="px-5 py-4 group">
               <div className="flex items-start gap-3 mb-3">
                 <label className="inline-flex items-center cursor-pointer pt-0.5">
                   <input

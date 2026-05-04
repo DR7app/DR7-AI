@@ -1008,23 +1008,69 @@ export const handler: Handler = async (event) => {
     }, { total: 0, accettati: 0, rifiutatiCount: 0, conversionRate: 0, motivoCounts: { cauzione: 0, prezzo: 0, non_specificato: 0 } })
 
     // ============================================================
-    // MONTHLY REPORTS — rollup for the new "Riassunto Mensile" view.
-    // One entry per Report tab so Dashboard and Reports stay coherent.
+    // MONTHLY REPORTS — rollup for the "Riassunto Mensile" view.
+    // CANONICAL: call the same monthly-report endpoint that ReportsTab
+    // and ReportLavaggioTab use, so Dashboard and Reports always agree
+    // on the totals. If the call fails we fall back to the locally
+    // computed numbers so the dashboard never goes blank.
     // ============================================================
+    const reportOrigin = event.headers['x-forwarded-proto'] && event.headers.host
+      ? `${event.headers['x-forwarded-proto']}://${event.headers.host}`
+      : process.env.URL || ''
+
+    const [noleggioCanonical, lavaggioCanonical] = await Promise.all([
+      safe('monthly-report:vehicles', async () => {
+        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&month=${month}`)
+        if (!r.ok) return null
+        return await r.json() as {
+          totalRevenue?: number
+          totalRentalRevenue?: number
+          totalPenaltyRevenue?: number
+          totalDanniRevenue?: number
+          vehicleCount?: number
+          totalBookingsFound?: number
+        }
+      }, null as null | Record<string, unknown>),
+      safe('monthly-report:washes', async () => {
+        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=washes&month=${month}`)
+        if (!r.ok) return null
+        return await r.json() as {
+          washRevenue?: number
+          billableWashesCount?: number
+          avgWashesPerDay?: number
+          internalWashesCount?: number
+        }
+      }, null as null | Record<string, unknown>),
+    ])
+
     const monthlyReports = {
       noleggio: {
-        ricavoTotale: response.revenue.currentMonth,
+        // Canonical revenue from monthly-report endpoint (same numbers
+        // ReportsTab shows). Falls back to local computation if endpoint
+        // unreachable.
+        ricavoTotale: noleggioCanonical?.totalRevenue !== undefined
+          ? Number(noleggioCanonical.totalRevenue)
+          : response.revenue.currentMonth,
         ricavoMesePrev: response.revenue.previousMonth,
         ricavoChangePercent: response.revenue.changePercent,
-        prenotazioniCount: confirmedBookings + pendingBookings,
+        prenotazioniCount: noleggioCanonical?.totalBookingsFound !== undefined
+          ? Number(noleggioCanonical.totalBookingsFound)
+          : confirmedBookings + pendingBookings,
         prenotazioniAnnullateCount: response.revenue.cancelledRentalsCount,
         prenotazioniAnnullateValue: response.revenue.cancelledRentalsTotal,
         link: 'reports',
+        canonical: !!noleggioCanonical,
       },
       lavaggio: {
-        ricavoTotale: response.revenue.washTotal,
-        count: response.revenue.washCount,
+        // Canonical wash revenue + count from monthly-report?type=washes
+        ricavoTotale: lavaggioCanonical?.washRevenue !== undefined
+          ? Number(lavaggioCanonical.washRevenue)
+          : response.revenue.washTotal,
+        count: lavaggioCanonical?.billableWashesCount !== undefined
+          ? Number(lavaggioCanonical.billableWashesCount)
+          : response.revenue.washCount,
         link: 'report-lavaggio',
+        canonical: !!lavaggioCanonical,
       },
       clienti: {
         nuoviMese: response.customers.newThisMonth,
