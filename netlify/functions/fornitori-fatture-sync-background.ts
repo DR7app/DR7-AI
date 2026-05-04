@@ -1,19 +1,20 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { searchIncomingInvoices } from './aruba-utils'
+import { syncOneFornitore } from './sync-fornitore-invoices'
 
 /**
- * Cron notturno + entry point manuale (chiamato anche via fetch dal bottone
- * "Scopri & sincronizza tutto" della tab Fornitori).
+ * Background function (15 min timeout): chiamata dal bottone
+ * "Scopri & Sincronizza tutto" e dal cron notturno.
  *
  * 1. Auto-discover: scarica le fatture Aruba degli ultimi 12 mesi e
- *    crea automaticamente uno stub fornitore per ogni P.IVA mai vista
- *    (nome dal sender description, attivo=true, da completare manualmente).
- * 2. Per OGNI fornitore (anche quelli appena creati), chiama internamente
- *    sync-fornitore-invoices così le fatture vengono importate in
- *    fornitore_documents e appaiono nel Registro mensile.
+ *    crea automaticamente uno stub fornitore per ogni P.IVA mai vista.
+ * 2. Per OGNI fornitore (incluso quelli appena creati), sincronizza le
+ *    fatture INLINE chiamando syncOneFornitore (no HTTP fetch ->
+ *    nessun timeout sync di Netlify a livello sub-call).
  *
- * Schedule: ogni notte alle 03:00 Rome.
+ * Background functions: rispondono 202 subito; il lavoro continua
+ * dietro le quinte fino a 15 minuti.
  */
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -37,7 +38,6 @@ interface AutoDiscoverResult {
 async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
     const result: AutoDiscoverResult = { scanned: 0, created: 0, duplicateSkipped: 0 }
 
-    // 1. Existing fornitori P.IVAs (normalized) — used as exclusion set
     const { data: existing } = await supabase.from('fornitori').select('id, piva')
     const knownPivas = new Set<string>()
     for (const f of existing || []) {
@@ -45,7 +45,6 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
         if (v) knownPivas.add(v)
     }
 
-    // 2. Pull recent SDI invoices from Aruba (paginated)
     const start = new Date()
     start.setMonth(start.getMonth() - DISCOVER_MONTHS_BACK)
     const startISO = start.toISOString().split('T')[0] + 'T00:00:00.000+02:00'
@@ -67,13 +66,12 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
             allInvoices.push(...items)
             if (items.length < 100) break
         } catch (e) {
-            console.warn('[fornitori-cron] aruba search err:', (e as Error).message)
+            console.warn('[fornitori-bg] aruba search err:', (e as Error).message)
             break
         }
     }
     result.scanned = allInvoices.length
 
-    // 3. Group by normalized P.IVA, pick best display name per group
     const byPiva = new Map<string, { piva: string; nome: string }>()
     for (const inv of allInvoices) {
         const rawId = inv.senderId || inv.sender?.id || ''
@@ -91,7 +89,6 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
         }
     }
 
-    // 4. Insert stub fornitori for unknown P.IVAs
     for (const stub of byPiva.values()) {
         const { error: insErr } = await supabase
             .from('fornitori')
@@ -102,11 +99,10 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
                 note: '[auto-creato dal sync Aruba — completare anagrafica]',
             })
         if (insErr) {
-            // 23505 = unique violation (race), already exists — count as skipped
             if ((insErr as { code?: string }).code === '23505') {
                 result.duplicateSkipped++
             } else {
-                console.warn(`[fornitori-cron] insert stub failed for ${stub.piva}:`, insErr.message)
+                console.warn(`[fornitori-bg] insert stub failed for ${stub.piva}:`, insErr.message)
             }
         } else {
             result.created++
@@ -117,26 +113,23 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
 }
 
 const handler: Handler = async () => {
-    const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
     const startedAt = Date.now()
 
-    // Step 1 — auto-discover unknown fornitori from Aruba SDI
     let discover: AutoDiscoverResult = { scanned: 0, created: 0, duplicateSkipped: 0 }
     try {
         discover = await autoDiscoverFornitoriFromAruba()
-        console.log('[fornitori-fatture-sync-cron] auto-discover:', discover)
+        console.log('[fornitori-bg] auto-discover:', discover)
     } catch (err) {
-        console.error('[fornitori-fatture-sync-cron] auto-discover failed:', err)
+        console.error('[fornitori-bg] auto-discover failed:', err)
     }
 
-    // Step 2 — load (now expanded) fornitori list and sync each one
     const { data: fornitori, error } = await supabase
         .from('fornitori')
         .select('id, nome')
         .eq('attivo', true)
 
     if (error) {
-        console.error('[fornitori-fatture-sync-cron] query error', error)
+        console.error('[fornitori-bg] query error', error)
         return { statusCode: 500, body: error.message }
     }
 
@@ -146,25 +139,21 @@ const handler: Handler = async () => {
 
     for (const f of fornitori || []) {
         try {
-            const res = await fetch(`${baseUrl}/.netlify/functions/sync-fornitore-invoices`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fornitore_id: f.id, months: SYNC_MONTHS }),
-            })
-            const json = await res.json().catch(() => ({}))
-            if (res.ok && json.success) {
+            // Inline call: niente HTTP, niente timeout sync di Netlify per call.
+            const result = await syncOneFornitore(f.id, SYNC_MONTHS)
+            if (result.success) {
                 synced++
-                inserted += (json.inserted || 0)
+                inserted += (result.inserted || 0)
             } else {
                 failed++
-                console.warn(`[fornitori-fatture-sync-cron] ${f.nome}: ${json.error || res.status}`)
+                console.warn(`[fornitori-bg] ${f.nome}: ${result.error}`)
             }
         } catch (err) {
             failed++
-            console.warn(`[fornitori-fatture-sync-cron] ${f.nome} error:`, err)
+            console.warn(`[fornitori-bg] ${f.nome} error:`, err)
         }
-        // Throttle: 500ms tra una chiamata e l'altra per non sovraccaricare Aruba
-        await new Promise(r => setTimeout(r, 500))
+        // Throttle leggero per non saturare Aruba SDI
+        await new Promise(r => setTimeout(r, 200))
     }
 
     const durationSec = Math.round((Date.now() - startedAt) / 1000)
@@ -176,7 +165,7 @@ const handler: Handler = async () => {
         durationSec,
         autoDiscover: discover,
     }
-    console.log('[fornitori-fatture-sync-cron]', summary)
+    console.log('[fornitori-bg] done', summary)
 
     return { statusCode: 200, body: JSON.stringify({ ok: true, ...summary }) }
 }

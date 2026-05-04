@@ -95,37 +95,34 @@ function extractFromXml(b64: string): { amount: number | null; date: string; num
   return { amount, date, number, dueDate }
 }
 
-export const handler: Handler = async (event) => {
-  const headers = {
-    'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json'
+export interface SyncResult {
+  success: boolean
+  error?: string
+  fornitore?: string
+  matched?: number
+  inserted?: number
+  skipped?: number
+  failed?: number
+  months_scanned?: number
+}
+
+/**
+ * Core sync: scarica le fatture Aruba di un fornitore e le inserisce in DB.
+ * Esportata cosi' la background function bulk puo' chiamarla inline senza
+ * passare per HTTP (e quindi senza incappare nel timeout sync di Netlify).
+ */
+export async function syncOneFornitore(fornitoreId: string, monthsBack = 12): Promise<SyncResult> {
+  monthsBack = Math.min(Math.max(monthsBack || 12, 1), 12)
+  const { data: fornitore, error: fornErr } = await supabase
+    .from('fornitori')
+    .select('id, nome, piva')
+    .eq('id', fornitoreId)
+    .single()
+  if (fornErr || !fornitore) {
+    return { success: false, error: 'Fornitore non trovato' }
   }
 
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' }
-  if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ success: false, error: 'Method not allowed' }) }
-
-  try {
-    const body = JSON.parse(event.body || '{}')
-    const fornitoreId: string = body.fornitore_id
-    // Cap a 12 mesi — sopra rischiamo il timeout Netlify (26s) perche' Aruba
-    // restituisce fino a 100 fatture/page × 20 pagine/mese.
-    const monthsBack: number = Math.min(Math.max(parseInt(body.months) || 12, 1), 12)
-    if (!fornitoreId) {
-      return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'fornitore_id required' }) }
-    }
-
-    const { data: fornitore, error: fornErr } = await supabase
-      .from('fornitori')
-      .select('id, nome, piva')
-      .eq('id', fornitoreId)
-      .single()
-    if (fornErr || !fornitore) {
-      return { statusCode: 404, headers, body: JSON.stringify({ success: false, error: 'Fornitore non trovato' }) }
-    }
-
-    const piva = normalizeVat(fornitore.piva)
+  const piva = normalizeVat(fornitore.piva)
     const nameNorm = normalizeName(fornitore.nome)
 
     // Aggregate Aruba invoices for last N months that match this fornitore
@@ -280,22 +277,43 @@ export const handler: Handler = async (event) => {
       }
     }
 
+  return {
+    success: true,
+    fornitore: fornitore.nome,
+    matched: matched.length,
+    inserted,
+    skipped,
+    failed,
+    months_scanned: monthsBack,
+  }
+}
+
+export const handler: Handler = async (event) => {
+  const headers = {
+    'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' }
+  if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ success: false, error: 'Method not allowed' }) }
+  try {
+    const body = JSON.parse(event.body || '{}')
+    const fornitoreId: string = body.fornitore_id
+    const monthsBack: number = parseInt(body.months) || 12
+    if (!fornitoreId) {
+      return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'fornitore_id required' }) }
+    }
+    const result = await syncOneFornitore(fornitoreId, monthsBack)
     return {
-      statusCode: 200, headers,
-      body: JSON.stringify({
-        success: true,
-        fornitore: fornitore.nome,
-        matched: matched.length,
-        inserted,
-        skipped,
-        failed,
-        months_scanned: monthsBack,
-      })
+      statusCode: result.success ? 200 : 500,
+      headers,
+      body: JSON.stringify(result),
     }
   } catch (err: any) {
     return {
       statusCode: 500, headers,
-      body: JSON.stringify({ success: false, error: err?.message || String(err) })
+      body: JSON.stringify({ success: false, error: err?.message || String(err) }),
     }
   }
 }
