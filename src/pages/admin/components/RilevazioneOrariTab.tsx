@@ -126,31 +126,36 @@ export default function RilevazioneOrariTab() {
                         await supabase.from('operatori_persone').update({ user_id: user.id }).eq('id', linkable.id)
                     }
                 }
-                // bootstrap dalla tabella admins se non esiste
+                // auto-create se non esiste (prova admins.nome, fallback email-local)
                 if (opList.length === 0 && user.email) {
-                    const { data: adminRow } = await supabase
-                        .from('admins')
-                        .select('nome, email')
-                        .ilike('email', user.email)
-                        .maybeSingle()
-                    if (adminRow) {
-                        const fullName = (adminRow.nome || '').trim()
-                        const [nome, ...rest] = fullName.split(/\s+/)
-                        const cognome = rest.join(' ') || null
-                        const { data: created } = await supabase
-                            .from('operatori_persone')
-                            .insert({
-                                nome: nome || user.email.split('@')[0],
-                                cognome,
-                                email: user.email.toLowerCase(),
-                                user_id: user.id,
-                                ore_target_giornaliere: 8,
-                                attivo: true,
-                            })
-                            .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
-                            .single()
-                        if (created) opList = [created as Operatore]
-                    }
+                    let fullName = ''
+                    try {
+                        const { data: adminRow } = await supabase
+                            .from('admins')
+                            .select('nome')
+                            .ilike('email', user.email)
+                            .maybeSingle()
+                        fullName = (adminRow?.nome || '').trim()
+                    } catch { /* admins RLS-blocked: ignoro */ }
+
+                    const local = user.email.split('@')[0]
+                    const fallback = local.charAt(0).toUpperCase() + local.slice(1).toLowerCase()
+                    const [nome, ...rest] = (fullName || fallback).split(/\s+/)
+                    const cognome = rest.join(' ') || null
+
+                    const { data: created } = await supabase
+                        .from('operatori_persone')
+                        .insert({
+                            nome: nome || fallback,
+                            cognome,
+                            email: user.email.toLowerCase(),
+                            user_id: user.id,
+                            ore_target_giornaliere: 8,
+                            attivo: true,
+                        })
+                        .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
+                        .single()
+                    if (created) opList = [created as Operatore]
                 }
             }
 

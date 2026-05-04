@@ -86,38 +86,47 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                 }
             }
 
-            // 3) bootstrap dalla tabella admins: se sei un admin, ti creo
-            //    automaticamente la riga operatore con nome dall'admin.
+            // 3) niente match: auto-creo la riga operatore con email + nome
+            //    di default (admins se accessibile, altrimenti email-local).
             if (!opRow && user.email) {
-                const { data: adminRow } = await supabase
-                    .from('admins')
-                    .select('nome, email')
-                    .ilike('email', user.email)
-                    .maybeSingle()
-                if (adminRow) {
-                    const fullName = (adminRow.nome || '').trim()
-                    const [nome, ...rest] = fullName.split(/\s+/)
-                    const cognome = rest.join(' ') || null
-                    const { data: created } = await supabase
-                        .from('operatori_persone')
-                        .insert({
-                            nome: nome || (user.email.split('@')[0]),
-                            cognome,
-                            email: user.email.toLowerCase(),
-                            user_id: user.id,
-                            ore_target_giornaliere: 8,
-                            attivo: true,
-                        })
-                        .select('id, nome, cognome, user_id')
-                        .single()
-                    if (created) opRow = created
+                let fullName = ''
+                try {
+                    const { data: adminRow } = await supabase
+                        .from('admins')
+                        .select('nome')
+                        .ilike('email', user.email)
+                        .maybeSingle()
+                    fullName = (adminRow?.nome || '').trim()
+                } catch { /* admins RLS-blocked: ignoro */ }
+
+                const local = user.email.split('@')[0]
+                const fallback = local.charAt(0).toUpperCase() + local.slice(1).toLowerCase()
+                const [nome, ...rest] = (fullName || fallback).split(/\s+/)
+                const cognome = rest.join(' ') || null
+
+                const { data: created, error: insErr } = await supabase
+                    .from('operatori_persone')
+                    .insert({
+                        nome: nome || fallback,
+                        cognome,
+                        email: user.email.toLowerCase(),
+                        user_id: user.id,
+                        ore_target_giornaliere: 8,
+                        attivo: true,
+                    })
+                    .select('id, nome, cognome, user_id')
+                    .single()
+                if (insErr) {
+                    toast.error('Errore creazione profilo: ' + insErr.message)
+                    setLoading(false)
+                    setUnregistered(true)
+                    setRegNome(fallback)
+                    return
                 }
+                opRow = created
             }
 
             if (!opRow) {
-                const local = (user.email || '').split('@')[0]
-                const guess = local.charAt(0).toUpperCase() + local.slice(1).toLowerCase()
-                setRegNome(guess)
                 setLoading(false)
                 setUnregistered(true)
                 return
