@@ -810,12 +810,15 @@ async function generateWashReport(
 ) {
   const { data: washBookings, error: washError } = await supabase
     .from('bookings')
-    .select('id, service_name, price_total, status, payment_status, booking_details, vehicle_name, appointment_date')
+    .select('id, service_name, price_total, status, payment_status, booking_details, vehicle_name, vehicle_plate, appointment_date')
     .eq('service_type', 'car_wash')
     .gte('appointment_date', monthStartISO + 'T00:00:00')
     .lte('appointment_date', monthEndISO + 'T23:59:59')
     .in('status', ['confirmed', 'confermata', 'completed', 'in_corso'])
-    .not('vehicle_plate', 'in', '("TEST000","TEST002")')
+    // Test plate filter — must allow NULL plates (website-booked carwashes
+    // don't set vehicle_plate). SQL NOT IN excludes NULL silently, so we
+    // wrap with an OR clause that explicitly accepts IS NULL.
+    .or('vehicle_plate.is.null,vehicle_plate.not.in.(TEST000,TEST002)')
 
   if (washError) throw washError
 
