@@ -4,6 +4,7 @@ import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { normalizeBooking, computeLanes, type CalendarEvent } from '../../../utils/calendarLogic'
 import { TEST_PLATE_FILTER } from '../../../utils/testPlates'
+import { isReportableRentalBooking, prorateRevenueForMonth, getOccupiedDaysInMonth } from '../../../utils/monthlyBookingMath'
 import BookingDetailsPanel from './BookingDetailsPanel'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -340,32 +341,38 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-theme-text-muted">Questo Mese:</span>
-            <span className="text-dr7-gold font-bold text-sm">
-              {bookings.filter(b => {
-                const bookingDate = new Date(b.pickup_date)
-                return bookingDate.getMonth() === currentDate.getMonth() &&
-                  bookingDate.getFullYear() === currentDate.getFullYear()
-              }).length} noleggi
-            </span>
-          </div>
-          {canViewFinancials && !hideFinancials && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-theme-text-muted">Fatturato:</span>
-              <span className="text-green-400 font-bold text-sm">
-                <FinancialData type="total">
-                  €{(bookings
-                    .filter(b => {
-                      const bookingDate = new Date(b.pickup_date)
-                      return bookingDate.getMonth() === currentDate.getMonth() &&
-                        bookingDate.getFullYear() === currentDate.getFullYear()
-                    })
-                    .reduce((sum, b) => sum + (b.price_total || 0), 0) / 100).toFixed(2)}
-                </FinancialData>
-              </span>
-            </div>
-          )}
+          {(() => {
+            // Match Report Noleggio exactly: any booking active in this month counts,
+            // and revenue is prorated by days-in-month for cross-month rentals.
+            const monthYear = currentRomeComponents.year
+            const monthNum = currentRomeComponents.month + 1
+            const activeInMonth = bookings.filter(b =>
+              isReportableRentalBooking(b) &&
+              getOccupiedDaysInMonth(b.pickup_date, b.dropoff_date, monthYear, monthNum, daysInMonth) > 0
+            )
+            const fatturatoMese = activeInMonth.reduce(
+              (sum, b) => sum + prorateRevenueForMonth(b, monthYear, monthNum, daysInMonth),
+              0,
+            )
+            return (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-theme-text-muted">Questo Mese:</span>
+                  <span className="text-dr7-gold font-bold text-sm">{activeInMonth.length} noleggi</span>
+                </div>
+                {canViewFinancials && !hideFinancials && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-theme-text-muted">Fatturato:</span>
+                    <span className="text-green-400 font-bold text-sm">
+                      <FinancialData type="total">
+                        €{fatturatoMese.toFixed(2)}
+                      </FinancialData>
+                    </span>
+                  </div>
+                )}
+              </>
+            )
+          })()}
           {canViewFinancials && (
             <button
               onClick={() => setHideFinancials(!hideFinancials)}
