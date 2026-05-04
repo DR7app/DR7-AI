@@ -7,6 +7,7 @@ import RentalTabs from './components/RentalTabs'
 import { useBirthdayCount } from './components/BirthdaysTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import AlarmInventoryModal from '../../components/admin/AlarmInventoryModal'
+import MyDayEditorModal from './components/MyDayEditorModal'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
 import lazyWithRetry from '../../utils/lazyWithRetry'
@@ -45,7 +46,6 @@ const TrusteraTab = lazyWithRetry(() => import('./components/TrusteraTab'))
 const CarWashCatalogTab = lazyWithRetry(() => import('./components/CarWashCatalogTab'))
 const OperatoriTab = lazyWithRetry(() => import('./components/OperatoriTab'))
 const RilevazioneOrariTab = lazyWithRetry(() => import('./components/RilevazioneOrariTab'))
-const MyDayEditorModal = lazyWithRetry(() => import('./components/MyDayEditorModal'))
 const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
 // RevenuePricingTab removed — replaced by CentralinaProTab
 const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreventiviTab'))
@@ -705,9 +705,7 @@ export default function AdminDashboard() {
       />
 
       {showMyOrari && (
-        <Suspense fallback={null}>
-          <MyDayEditorModal onClose={() => setShowMyOrari(false)} />
-        </Suspense>
+        <MyDayEditorModal onClose={() => setShowMyOrari(false)} />
       )}
 
       {showPasswordModal && (
