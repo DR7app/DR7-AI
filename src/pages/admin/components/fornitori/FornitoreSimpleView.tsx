@@ -387,7 +387,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
             {/* STEP 1 — Carica bolle */}
             <Step n={1} title="Carica bolle" desc={`${bolle.length} caricate · ${fmtEUR(bolle.reduce((s, b) => s + Number(b.importo_totale || 0), 0))} totale`}>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <Button onClick={() => setShowUpload(true)}>+ Carica bolla</Button>
+                    <Button onClick={() => setShowUpload(true)}>+ Carica documento</Button>
                     {loading && <span className="text-xs text-theme-text-muted">Caricamento…</span>}
                 </div>
                 <CompactDocList docs={bolle.slice(0, 10)} viewFile={viewFile}
@@ -517,7 +517,16 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 <FornitoreBollaUpload
                     fornitore={fornitore}
                     onClose={() => setShowUpload(false)}
-                    onSaved={() => { setShowUpload(false); load() }}
+                    onSaved={async (opts) => {
+                        setShowUpload(false)
+                        await load()
+                        if (opts?.triggerCompare) {
+                            // Piccolo delay per dare tempo all'AI di estrarre gli importi
+                            // dei nuovi documenti prima del controllo incrociato.
+                            await new Promise(r => setTimeout(r, 800))
+                            await runManualCrossCheck()
+                        }
+                    }}
                 />
             )}
 

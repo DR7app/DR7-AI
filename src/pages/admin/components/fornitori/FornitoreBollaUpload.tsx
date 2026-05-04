@@ -1,13 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../../../supabaseClient'
 import Button from '../Button'
-import { hashFile } from './types'
-import type { Fornitore } from './types'
+import { hashFile, DOCUMENT_TIPO_LABELS } from './types'
+import type { Fornitore, DocumentTipo } from './types'
 
 interface Props {
     fornitore: Fornitore
     onClose: () => void
-    onSaved: () => void
+    /**
+     * Called after at least one file uploaded successfully.
+     * triggerCompare=true if the user clicked "Carica e confronta" — the
+     * parent should then run the cross-check.
+     */
+    onSaved: (opts?: { triggerCompare?: boolean }) => void
 }
 
 interface PendingItem {
@@ -16,11 +21,13 @@ interface PendingItem {
     error?: string
 }
 
-// Minimal "drop a PDF, done" upload for bolle / DDT.
-// No mandatory fields — numero, data, importo are auto-filled with safe defaults
-// so the operator just picks files and clicks Carica. They can edit metadata
-// later from the regular document edit modal if needed.
+// Upload documenti fornitore — bolla / DDT / nota credito / ricevuta /
+// fattura manuale. Tipo e nome custom selezionabili. Numero/data/importo
+// auto-compilati con default ragionevoli; l'AI estrae i dati strutturati
+// dopo l'upload, e l'operatore puo' modificare manualmente.
 export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Props) {
+    const [tipo, setTipo] = useState<DocumentTipo>('bolla')
+    const [customName, setCustomName] = useState('')
     const [items, setItems] = useState<PendingItem[]>([])
     const [uploading, setUploading] = useState(false)
     const fileRef = useRef<HTMLInputElement>(null)
@@ -64,9 +71,18 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
             const hash = await hashFile(file)
             const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] || 'bin').toLowerCase()
             const baseName = file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 100)
-            const numero = baseName || `BOLLA-${Date.now()}`
+            // Se l'utente ha scritto un nome custom usiamo quello; se ci sono
+            // piu' file aggiungiamo un suffisso per non fare collidere il
+            // numero_documento.
+            const numero = (() => {
+                const n = customName.trim()
+                if (n) {
+                    return items.length > 1 ? `${n}-${index + 1}` : n
+                }
+                return baseName || `${tipo.toUpperCase()}-${Date.now()}`
+            })()
             const today = new Date().toISOString().slice(0, 10)
-            const safeName = `bolla-${numero.replace(/[^\w-]/g, '_')}-${Date.now()}.${ext}`
+            const safeName = `${tipo}-${numero.replace(/[^\w-]/g, '_')}-${Date.now()}.${ext}`
             const yy = today.slice(0, 4)
             const mm = today.slice(5, 7)
             const path = `fornitori/${fornitore.id}/${yy}/${mm}/${safeName}`
@@ -80,7 +96,7 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
                 .from('fornitore_documents')
                 .insert({
                     fornitore_id: fornitore.id,
-                    tipo: 'bolla',
+                    tipo,
                     numero_documento: numero,
                     data_documento: today,
                     importo_totale: 0,
@@ -113,22 +129,22 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
         }
     }
 
-    async function handleUploadAll() {
+    async function handleUploadAll(triggerCompare: boolean) {
         const toUpload = items.map((it, i) => ({ it, i })).filter(({ it }) => it.status === 'pending')
-        if (toUpload.length === 0) return
+        if (toUpload.length === 0) {
+            // Nothing to upload — close + maybe trigger compare anyway
+            onSaved({ triggerCompare })
+            onClose()
+            return
+        }
         setUploading(true)
         for (const { it, i } of toUpload) {
             await uploadOne(it, i)
         }
         setUploading(false)
-        const allDoneOrSkipped = items.every(it => it.status === 'done' || it.status === 'error')
-        if (allDoneOrSkipped) {
-            onSaved()
-        }
-    }
-
-    function handleDone() {
-        onSaved()
+        // Sempre notifica il padre — alcuni file potrebbero essere falliti ma
+        // gli altri sono stati caricati.
+        onSaved({ triggerCompare })
         onClose()
     }
 
@@ -140,13 +156,42 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
             <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-lg w-full p-6"
                 onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-semibold text-theme-text-primary">Carica Bolle (PDF)</h3>
+                    <h3 className="text-xl font-semibold text-theme-text-primary">Carica documento</h3>
                     <button onClick={onClose} disabled={uploading}
                         className="text-theme-text-muted text-2xl leading-none hover:text-theme-text-primary disabled:opacity-50">×</button>
                 </div>
 
-                <p className="text-sm text-theme-text-muted mb-4">
-                    Trascina o seleziona uno o più PDF. Numero, data e importo sono assegnati automaticamente — puoi editarli dopo dal documento.
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                    <label className="block">
+                        <span className="text-xs text-theme-text-secondary">Tipo</span>
+                        <select
+                            value={tipo}
+                            onChange={e => setTipo(e.target.value as DocumentTipo)}
+                            disabled={uploading}
+                            className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
+                        >
+                            <option value="bolla">{DOCUMENT_TIPO_LABELS.bolla}</option>
+                            <option value="ddt">{DOCUMENT_TIPO_LABELS.ddt}</option>
+                            <option value="fattura">{DOCUMENT_TIPO_LABELS.fattura}</option>
+                            <option value="nota_credito">{DOCUMENT_TIPO_LABELS.nota_credito}</option>
+                            <option value="ricevuta_pagamento">{DOCUMENT_TIPO_LABELS.ricevuta_pagamento}</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-theme-text-secondary">Nome / Numero (opzionale)</span>
+                        <input
+                            type="text"
+                            value={customName}
+                            onChange={e => setCustomName(e.target.value)}
+                            disabled={uploading}
+                            placeholder="Es: 2026/045 — lascia vuoto per usare il nome file"
+                            className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
+                        />
+                    </label>
+                </div>
+
+                <p className="text-xs text-theme-text-muted mb-3">
+                    Data e importi vengono compilati automaticamente dall'AI dopo l'upload — puoi modificarli dal pulsante <strong>Modifica</strong> sulla riga.
                 </p>
 
                 <div
@@ -192,15 +237,22 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved }: Pr
                     </div>
                 )}
 
-                <div className="flex items-center justify-end gap-2 mt-5">
+                <div className="flex flex-wrap items-center justify-end gap-2 mt-5">
                     <Button variant="secondary" onClick={onClose} disabled={uploading}>Chiudi</Button>
                     {hasPending && (
-                        <Button onClick={handleUploadAll} disabled={uploading}>
-                            {uploading ? 'Caricamento…' : `Carica ${items.filter(it => it.status === 'pending').length} PDF`}
-                        </Button>
+                        <>
+                            <Button variant="secondary" onClick={() => handleUploadAll(false)} disabled={uploading}>
+                                {uploading ? 'Caricamento…' : 'Carica'}
+                            </Button>
+                            <Button onClick={() => handleUploadAll(true)} disabled={uploading}>
+                                {uploading ? 'Caricamento…' : 'Carica e confronta'}
+                            </Button>
+                        </>
                     )}
                     {!hasPending && hasDone && (
-                        <Button onClick={handleDone}>Fine</Button>
+                        <Button onClick={() => { onSaved({ triggerCompare: true }); onClose() }}>
+                            Fine e confronta
+                        </Button>
                     )}
                 </div>
             </div>
