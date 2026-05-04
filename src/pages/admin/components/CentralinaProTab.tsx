@@ -1680,7 +1680,53 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     diffInsuranceList(cat.label, '', cat.all, prevCat.all, out)
   })
 
+  // Penali & Danni — stessa shape (PenaliConfig = Record<categoryId, item[]>),
+  // diff condiviso. Senza questo blocco la save bar mostrava "0 modifiche da
+  // salvare" anche dopo aver editato un danno o una penale, anche se la save
+  // funzionava lo stesso (handleSave include sempre penali+danni nello snapshot).
+  diffFeeListConfig('Penali', current.penali, saved.penali, out)
+  diffFeeListConfig('Danni', current.danni, saved.danni, out)
+
   return out
+}
+
+/** Diff per PenaliConfig / DanniConfig (Record<categoryId, item[]>). Mostra
+    aggiunte / rimozioni / modifiche di label / importo / descrizione / enabled
+    per ogni categoria, prefissate da "Penali" o "Danni". */
+function diffFeeListConfig(
+  prefix: string,
+  current: PenaliConfig,
+  saved: PenaliConfig,
+  out: string[],
+): void {
+  const categoryIds = new Set([...Object.keys(current || {}), ...Object.keys(saved || {})])
+  categoryIds.forEach((catId) => {
+    const cur = (current?.[catId] ?? []) as PenaliItem[]
+    const prev = (saved?.[catId] ?? []) as PenaliItem[]
+    const prevById = new Map(prev.map((p) => [p.id, p]))
+    const curById = new Map(cur.map((c) => [c.id, c]))
+
+    cur.forEach((it) => {
+      if (!prevById.has(it.id)) {
+        out.push(`${prefix} / ${catId}: aggiunto "${it.label || '(senza nome)'}"`)
+      }
+    })
+    prev.forEach((it) => {
+      if (!curById.has(it.id)) {
+        out.push(`${prefix} / ${catId}: rimosso "${it.label}"`)
+      }
+    })
+    cur.forEach((it) => {
+      const p = prevById.get(it.id)
+      if (!p) return
+      if (p.label !== it.label) out.push(`${prefix} / ${catId}: "${p.label}" rinominato in "${it.label}"`)
+      if (p.amount !== it.amount) out.push(`${prefix} / ${catId} / ${it.label}: importo €${p.amount} → €${it.amount}`)
+      if ((p.description || '') !== (it.description || '')) out.push(`${prefix} / ${catId} / ${it.label}: descrizione modificata`)
+      if ((p.enabled !== false) !== (it.enabled !== false)) {
+        out.push(`${prefix} / ${catId} / ${it.label}: ${it.enabled !== false ? 'abilitato' : 'disabilitato'}`)
+      }
+    })
+  })
 }
 
 function diffInsuranceList(
