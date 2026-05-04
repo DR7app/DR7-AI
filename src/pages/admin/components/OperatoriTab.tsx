@@ -251,17 +251,25 @@ export default function OperatoriTab() {
     setAggLogs(aggData || [])
     if (count && count > AGG_HARD_LIMIT) setAggTruncated(true)
 
-    // 2. Team comparison: counts per admin in same period
-    const { data: teamData } = await supabase
-      .from('admin_activity_log')
-      .select('admin_id')
-      .gte('created_at', fromIso).lte('created_at', toIso)
-      .limit(50000)
-    const counts = new Map<string, number>()
-    for (const row of teamData || []) {
-      counts.set(row.admin_id, (counts.get(row.admin_id) || 0) + 1)
+    // 2. Team comparison: counts per admin in same period.
+    //    Solo direzione (Valerio/Ilenia): per gli altri non carichiamo nulla
+    //    cosi' "Vs media team" resta a "—" (privacy report).
+    const { data: { user } } = await supabase.auth.getUser()
+    const isDirection = ['valerio@dr7.app', 'ilenia@dr7.app'].includes((user?.email || '').toLowerCase())
+    if (isDirection) {
+        const { data: teamData } = await supabase
+          .from('admin_activity_log')
+          .select('admin_id')
+          .gte('created_at', fromIso).lte('created_at', toIso)
+          .limit(50000)
+        const counts = new Map<string, number>()
+        for (const row of teamData || []) {
+          counts.set(row.admin_id, (counts.get(row.admin_id) || 0) + 1)
+        }
+        setTeamCounts(counts)
+    } else {
+        setTeamCounts(new Map())
     }
-    setTeamCounts(counts)
 
     // 3. Previous month for selected admin
     const prev = previousMonthRange()
@@ -287,15 +295,24 @@ export default function OperatoriTab() {
   async function loadAdmins() {
     setLoading(true)
     const ADMIN_ORDER = ['Valerio', 'Ilenia', 'Salvatore', 'Ophélie', 'Davide']
+    // Privacy: ognuno vede SOLO il proprio report. Solo Valerio e Ilenia
+    // (direzione) vedono i report di tutti.
+    const { data: { user } } = await supabase.auth.getUser()
+    const myEmail = (user?.email || '').toLowerCase()
+    const isDirection = ['valerio@dr7.app', 'ilenia@dr7.app'].includes(myEmail)
+
     const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno')
     if (data) {
-      data.sort((a, b) => {
+      const filtered = isDirection
+        ? data
+        : data.filter(a => (a.email || '').toLowerCase() === myEmail)
+      filtered.sort((a, b) => {
         const ai = ADMIN_ORDER.indexOf(a.nome || '')
         const bi = ADMIN_ORDER.indexOf(b.nome || '')
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
       })
-      setAdmins(data)
-      if (!selectedAdmin && data.length > 0) setSelectedAdmin(data[0].id)
+      setAdmins(filtered)
+      if (!selectedAdmin && filtered.length > 0) setSelectedAdmin(filtered[0].id)
     }
     setLoading(false)
   }
