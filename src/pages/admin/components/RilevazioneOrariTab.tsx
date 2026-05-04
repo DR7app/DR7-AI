@@ -104,16 +104,29 @@ export default function RilevazioneOrariTab() {
         try {
             const { data: { user } } = await supabase.auth.getUser()
 
-            // Privacy: ognuno vede solo i propri orari. Carico SOLO la riga
-            // dell'operatore collegato all'auth user corrente.
-            const { data: ops } = user
-                ? await supabase
+            // Privacy: ognuno vede solo i propri orari. Cerco la riga collegata
+            // all'auth user, con fallback per email se user_id non e' linkato.
+            let opList: Operatore[] = []
+            if (user) {
+                const { data: byId } = await supabase
                     .from('operatori_persone')
                     .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
                     .eq('attivo', true)
                     .eq('user_id', user.id)
-                : { data: [] }
-            const opList = (ops || []) as Operatore[]
+                opList = (byId || []) as Operatore[]
+                if (opList.length === 0 && user.email) {
+                    const { data: byEmail } = await supabase
+                        .from('operatori_persone')
+                        .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
+                        .eq('attivo', true)
+                        .ilike('email', user.email)
+                    opList = (byEmail || []) as Operatore[]
+                    const linkable = opList.find(o => !o.user_id)
+                    if (linkable) {
+                        await supabase.from('operatori_persone').update({ user_id: user.id }).eq('id', linkable.id)
+                    }
+                }
+            }
 
             const myRow = opList[0] || null
             setMe(myRow)

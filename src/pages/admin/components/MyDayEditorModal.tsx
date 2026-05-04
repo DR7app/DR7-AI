@@ -61,11 +61,32 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) { setLoading(false); setUnregistered(true); return }
             setAuthEmail(user.email || '')
-            const { data: opRow } = await supabase
+
+            // 1) cerca per user_id
+            let { data: opRow } = await supabase
                 .from('operatori_persone')
-                .select('id, nome, cognome')
+                .select('id, nome, cognome, user_id')
                 .eq('user_id', user.id)
                 .maybeSingle()
+
+            // 2) fallback per email (riga creata senza link al login Supabase)
+            if (!opRow && user.email) {
+                const { data: byEmail } = await supabase
+                    .from('operatori_persone')
+                    .select('id, nome, cognome, user_id')
+                    .ilike('email', user.email)
+                    .maybeSingle()
+                if (byEmail) {
+                    opRow = byEmail
+                    if (!byEmail.user_id) {
+                        // auto-link al login attuale
+                        await supabase.from('operatori_persone')
+                            .update({ user_id: user.id })
+                            .eq('id', byEmail.id)
+                    }
+                }
+            }
+
             if (!opRow) {
                 const local = (user.email || '').split('@')[0]
                 const guess = local.charAt(0).toUpperCase() + local.slice(1).toLowerCase()
