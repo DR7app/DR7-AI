@@ -205,15 +205,48 @@ export default function FornitoriTab() {
                             : `Sincronizzato automaticamente da Aruba ${fmtRelative(lastSync)}`}
                     </p>
                 </div>
-                <div className="flex gap-1 bg-theme-bg-tertiary rounded p-1">
-                    <button onClick={() => setView('lista')}
-                        className={`text-sm px-3 py-1.5 rounded ${view === 'lista' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
-                        Lista fornitori
+                <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                        onClick={async () => {
+                            if (importing) return
+                            setImporting(true)
+                            try {
+                                const res = await fetch('/.netlify/functions/fornitori-fatture-sync-cron', { method: 'POST' })
+                                const json = await res.json().catch(() => ({}))
+                                if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+                                const disc = json.autoDiscover || {}
+                                alert(
+                                    `Sync completato:\n` +
+                                    `- Fornitori auto-creati da Aruba: ${disc.created || 0}\n` +
+                                    `- Fatture importate: ${json.inserted || 0}\n` +
+                                    `- Fornitori sincronizzati: ${json.synced || 0}\n` +
+                                    `- Falliti: ${json.failed || 0}`
+                                )
+                                setLastSync(Date.now())
+                                load()
+                            } catch (err) {
+                                const msg = err instanceof Error ? err.message : String(err)
+                                alert('Sync fallito: ' + msg)
+                            } finally {
+                                setImporting(false)
+                            }
+                        }}
+                        disabled={importing}
+                        className="text-sm px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50"
+                        title="Scarica le fatture Aruba degli ultimi 12 mesi e crea automaticamente i fornitori sconosciuti"
+                    >
+                        {importing ? 'Sincronizzo…' : 'Scopri & Sincronizza tutto'}
                     </button>
-                    <button onClick={() => setView('registro')}
-                        className={`text-sm px-3 py-1.5 rounded ${view === 'registro' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
-                        Registro mensile
-                    </button>
+                    <div className="flex gap-1 bg-theme-bg-tertiary rounded p-1">
+                        <button onClick={() => setView('lista')}
+                            className={`text-sm px-3 py-1.5 rounded ${view === 'lista' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
+                            Lista fornitori
+                        </button>
+                        <button onClick={() => setView('registro')}
+                            className={`text-sm px-3 py-1.5 rounded ${view === 'registro' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
+                            Registro mensile
+                        </button>
+                    </div>
                 </div>
             </div>
 
