@@ -961,6 +961,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const customer = customers.find(c => c.id === formData.customer_id)
     if (!customer) throw new Error('Cliente non trovato')
 
+    // ===== OTP GATE: Conferma Prenotazione Lavaggio (toggle Gestione OTP) =====
+    // La prenotazione carwash entra di default in stato 'confirmed'. Se l'OTP
+    // per quest'azione e' attivo (system_otp_overrides.is_required=true)
+    // chiediamo OTP. useLimitationOverride bypassa server-side se il toggle e'
+    // OFF, quindi quando off questa chiamata non blocca nulla.
+    if (!override.hasOverride('prenotazione_lavaggio_conferma')) {
+      override.requestOverride('prenotazione_lavaggio_conferma', 'Conferma prenotazione lavaggio richiede autorizzazione direzionale')
+      return
+    }
+
     // Validate customer has all required fields for fattura
     try {
       const custResp = await authFetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)

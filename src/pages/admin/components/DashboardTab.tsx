@@ -544,25 +544,25 @@ export default function DashboardTab() {
               {/* Entrate */}
               <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-emerald-500/20">
                 <p className="text-[10px] uppercase tracking-widest text-emerald-300 font-semibold mb-2">Entrate (totali attività)</p>
-                <p className="text-3xl font-bold text-emerald-400 leading-tight">€ {fmt(entrate)}</p>
+                <p className="text-3xl font-bold text-emerald-400 leading-tight">€ {fmtDec(entrate)}</p>
                 <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Noleggio</span><span className="text-theme-text-primary">€ {fmt(mr.noleggio.ricavoTotale)}</span></div>
-                  <div className="flex justify-between"><span>Lavaggi</span><span className="text-theme-text-primary">€ {fmt(mr.lavaggio.ricavoTotale)}</span></div>
-                  <div className="flex justify-between"><span>Meccanica</span><span className="text-theme-text-primary">€ {fmt(meccanica)}</span></div>
-                  <div className="flex justify-between text-[10px] text-theme-text-muted/80"><span>(di cui Penali+Danni nel Noleggio)</span><span>€ {fmt(insolutiTot + danniTot)}</span></div>
+                  <div className="flex justify-between"><span>Noleggio</span><span className="text-theme-text-primary">€ {fmtDec(mr.noleggio.ricavoTotale)}</span></div>
+                  <div className="flex justify-between"><span>Lavaggi</span><span className="text-theme-text-primary">€ {fmtDec(mr.lavaggio.ricavoTotale)}</span></div>
+                  <div className="flex justify-between"><span>Meccanica</span><span className="text-theme-text-primary">€ {fmtDec(meccanica)}</span></div>
+                  <div className="flex justify-between text-[10px] text-theme-text-muted/80"><span>(di cui Penali+Danni nel Noleggio)</span><span>€ {fmtDec(insolutiTot + danniTot)}</span></div>
                   <div className="flex justify-between pt-1 border-t border-emerald-500/20 mt-1">
-                    <span>Incassato</span><span className="text-emerald-300">€ {fmt(d.revenue.incassato)}</span>
+                    <span>Incassato</span><span className="text-emerald-300">€ {fmtDec(d.revenue.incassato)}</span>
                   </div>
                 </div>
               </div>
               {/* Uscite */}
               <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-red-500/20">
                 <p className="text-[10px] uppercase tracking-widest text-red-300 font-semibold mb-2">Uscite</p>
-                <p className="text-3xl font-bold text-red-400 leading-tight">€ {fmt(uscitePagate)}</p>
+                <p className="text-3xl font-bold text-red-400 leading-tight">€ {fmtDec(uscitePagate)}</p>
                 <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Pagato fornitori</span><span className="text-theme-text-primary">€ {fmt(mr.fornitori.pagatoMese)}</span></div>
-                  <div className="flex justify-between"><span>Da pagare</span><span className="text-amber-300">€ {fmt(mr.fornitori.daPagare)}</span></div>
-                  <div className="flex justify-between"><span>Scaduto</span><span className={mr.fornitori.scaduto > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmt(mr.fornitori.scaduto)}</span></div>
+                  <div className="flex justify-between"><span>Pagato fornitori</span><span className="text-theme-text-primary">€ {fmtDec(mr.fornitori.pagatoMese)}</span></div>
+                  <div className="flex justify-between"><span>Da pagare</span><span className="text-amber-300">€ {fmtDec(mr.fornitori.daPagare)}</span></div>
+                  <div className="flex justify-between"><span>Scaduto</span><span className={mr.fornitori.scaduto > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmtDec(mr.fornitori.scaduto)}</span></div>
                   <div className="flex justify-between pt-1 border-t border-red-500/20 mt-1">
                     <span>Alert aperti</span><span className={mr.fornitori.alertsOpen > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>{mr.fornitori.alertsOpen}</span>
                   </div>
@@ -571,12 +571,12 @@ export default function DashboardTab() {
               {/* Cash netto */}
               <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-[#19C2D6]/20">
                 <p className="text-[10px] uppercase tracking-widest text-[#19C2D6] font-semibold mb-2">Cash Netto</p>
-                <p className={`text-3xl font-bold leading-tight ${cashNetto >= 0 ? 'text-[#19C2D6]' : 'text-red-400'}`}>€ {fmt(cashNetto)}</p>
+                <p className={`text-3xl font-bold leading-tight ${cashNetto >= 0 ? 'text-[#19C2D6]' : 'text-red-400'}`}>€ {fmtDec(cashNetto)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">Entrate − Uscite (cash flow)</p>
                 <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Fatturato</span><span className="text-theme-text-primary">€ {fmt(d.revenue.currentMonth)}</span></div>
-                  <div className="flex justify-between"><span>Costi totali</span><span className="text-theme-text-primary">€ {fmt(uscitePagate)}</span></div>
-                  <div className="flex justify-between"><span>Margine</span><span className="text-theme-text-primary">€ {fmt(d.revenue.currentMonth - uscitePagate)}</span></div>
+                  <div className="flex justify-between"><span>Fatturato</span><span className="text-theme-text-primary">€ {fmtDec(d.revenue.currentMonth)}</span></div>
+                  <div className="flex justify-between"><span>Costi totali</span><span className="text-theme-text-primary">€ {fmtDec(uscitePagate)}</span></div>
+                  <div className="flex justify-between"><span>Margine</span><span className="text-theme-text-primary">€ {fmtDec(d.revenue.currentMonth - uscitePagate)}</span></div>
                   <div className="flex justify-between pt-1 border-t border-[#19C2D6]/20 mt-1">
                     <span>vs mese scorso</span>
                     <Trend value={d.revenue.changePercent} size="sm" />
@@ -594,7 +594,7 @@ export default function DashboardTab() {
                 <p className="text-xs text-theme-text-muted mt-1">Occupazione flotta</p>
                 <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
                   <div className="flex justify-between"><span>Prenotazioni</span><span className="text-theme-text-primary">{mr.noleggio.prenotazioniCount}</span></div>
-                  <div className="flex justify-between"><span>Annullate</span><span className={mr.noleggio.prenotazioniAnnullateCount > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>{mr.noleggio.prenotazioniAnnullateCount} (€ {fmt(mr.noleggio.prenotazioniAnnullateValue)})</span></div>
+                  <div className="flex justify-between"><span>Annullate</span><span className={mr.noleggio.prenotazioniAnnullateCount > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>{mr.noleggio.prenotazioniAnnullateCount} (€ {fmtDec(mr.noleggio.prenotazioniAnnullateValue)})</span></div>
                   <div className="flex justify-between"><span>Lavaggi</span><span className="text-theme-text-primary">{mr.lavaggio.count}</span></div>
                   <div className="flex justify-between pt-1 border-t border-blue-500/20 mt-1">
                     <span>Conversion bookings</span><span className="text-theme-text-primary">{d.bookings.conversionRate}%</span>
@@ -621,12 +621,12 @@ export default function DashboardTab() {
               {/* Rischi & Alert */}
               <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-amber-500/20">
                 <p className="text-[10px] uppercase tracking-widest text-amber-300 font-semibold mb-2">Rischi & Alert</p>
-                <p className={`text-3xl font-bold leading-tight ${(insolutiTot + danniTot + mr.fornitori.scaduto) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>€ {fmt(insolutiTot + danniTot + mr.fornitori.scaduto)}</p>
+                <p className={`text-3xl font-bold leading-tight ${(insolutiTot + danniTot + mr.fornitori.scaduto) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>€ {fmtDec(insolutiTot + danniTot + mr.fornitori.scaduto)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">Insoluti + Danni + Scaduto fornitori</p>
                 <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Insoluti</span><span className={insolutiTot > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>€ {fmt(insolutiTot)} ({mr.penaliDanni.insolutiCount})</span></div>
-                  <div className="flex justify-between"><span>Danni</span><span className={danniTot > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmt(danniTot)} ({mr.penaliDanni.danniCount})</span></div>
-                  <div className="flex justify-between"><span>Scaduto fornitori</span><span className={mr.fornitori.scaduto > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmt(mr.fornitori.scaduto)}</span></div>
+                  <div className="flex justify-between"><span>Insoluti</span><span className={insolutiTot > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>€ {fmtDec(insolutiTot)} ({mr.penaliDanni.insolutiCount})</span></div>
+                  <div className="flex justify-between"><span>Danni</span><span className={danniTot > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmtDec(danniTot)} ({mr.penaliDanni.danniCount})</span></div>
+                  <div className="flex justify-between"><span>Scaduto fornitori</span><span className={mr.fornitori.scaduto > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmtDec(mr.fornitori.scaduto)}</span></div>
                   <div className="flex justify-between pt-1 border-t border-amber-500/20 mt-1">
                     <span>Anomalie aperte</span><span className={mr.fornitori.alertsOpen > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>{mr.fornitori.alertsOpen}</span>
                   </div>
@@ -654,7 +654,7 @@ export default function DashboardTab() {
               <StatCard label="Convertiti" value={String(p.accettati)} accent="green" />
               <StatCard label="Rifiutati" value={String(p.rifiutatiCount)} sub={`${p.scadutiCount ?? 0} scaduti`} accent="red" />
               <StatCard label="Conversion rate" value={`${p.conversionRate}%`} accent={p.conversionRate >= 30 ? 'green' : p.conversionRate >= 15 ? 'orange' : 'red'} />
-              <StatCard label="Valore perso" value={`€ ${fmt(p.valorePotenzialePerso ?? 0)}`} sub="potenziale" accent="orange" />
+              <StatCard label="Valore perso" value={`€ ${fmtDec(p.valorePotenzialePerso ?? 0)}`} sub="potenziale" accent="orange" />
             </div>
 
             {/* 2. DOMANDA + 3. CONVERSIONE side-by-side */}
@@ -748,7 +748,7 @@ export default function DashboardTab() {
                           {l.motivo && ` · motivo: ${l.motivo}`}
                         </p>
                       </div>
-                      <span className="text-red-300 font-semibold whitespace-nowrap">€ {fmt(l.value)}</span>
+                      <span className="text-red-300 font-semibold whitespace-nowrap">€ {fmtDec(l.value)}</span>
                     </div>
                   ))}
                 </div>
@@ -999,8 +999,8 @@ export default function DashboardTab() {
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Noleggio</p>
                 <span className="text-theme-text-muted text-xs group-hover:text-[#19C2D6]">Apri →</span>
               </div>
-              <p className="text-2xl font-bold text-[#19C2D6]">€ {fmt(d.monthlyReports.noleggio.ricavoTotale)}</p>
-              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.noleggio.prenotazioniCount} prenotazioni · {d.monthlyReports.noleggio.prenotazioniAnnullateCount} annullate (€ {fmt(d.monthlyReports.noleggio.prenotazioniAnnullateValue)})</p>
+              <p className="text-2xl font-bold text-[#19C2D6]">€ {fmtDec(d.monthlyReports.noleggio.ricavoTotale)}</p>
+              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.noleggio.prenotazioniCount} prenotazioni · {d.monthlyReports.noleggio.prenotazioniAnnullateCount} annullate (€ {fmtDec(d.monthlyReports.noleggio.prenotazioniAnnullateValue)})</p>
             </button>
 
             {/* LAVAGGIO */}
@@ -1012,7 +1012,7 @@ export default function DashboardTab() {
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Lavaggio</p>
                 <span className="text-theme-text-muted text-xs group-hover:text-blue-400">Apri →</span>
               </div>
-              <p className="text-2xl font-bold text-blue-400">€ {fmt(d.monthlyReports.lavaggio.ricavoTotale)}</p>
+              <p className="text-2xl font-bold text-blue-400">€ {fmtDec(d.monthlyReports.lavaggio.ricavoTotale)}</p>
               <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.lavaggio.count} lavaggi nel mese</p>
             </button>
 
@@ -1038,7 +1038,7 @@ export default function DashboardTab() {
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Penali & Danni</p>
                 <span className="text-theme-text-muted text-xs group-hover:text-red-400">Apri →</span>
               </div>
-              <p className="text-2xl font-bold text-red-400">€ {fmt(d.monthlyReports.penaliDanni.danniTotale + d.monthlyReports.penaliDanni.insolutiTotale)}</p>
+              <p className="text-2xl font-bold text-red-400">€ {fmtDec(d.monthlyReports.penaliDanni.danniTotale + d.monthlyReports.penaliDanni.insolutiTotale)}</p>
               <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.penaliDanni.danniCount} danni · {d.monthlyReports.penaliDanni.insolutiCount} insoluti</p>
             </button>
 
@@ -1067,9 +1067,9 @@ export default function DashboardTab() {
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Fornitori</p>
                 <span className="text-theme-text-muted text-xs group-hover:text-purple-400">Apri →</span>
               </div>
-              <p className="text-2xl font-bold text-purple-400">€ {fmt(d.monthlyReports.fornitori.daPagare)}</p>
+              <p className="text-2xl font-bold text-purple-400">€ {fmtDec(d.monthlyReports.fornitori.daPagare)}</p>
               <p className="text-xs text-theme-text-muted mt-1">
-                Da pagare · pagato € {fmt(d.monthlyReports.fornitori.pagatoMese)}
+                Da pagare · pagato € {fmtDec(d.monthlyReports.fornitori.pagatoMese)}
                 {d.monthlyReports.fornitori.alertsOpen > 0 && ` · ${d.monthlyReports.fornitori.alertsOpen} alert`}
               </p>
             </button>
@@ -1187,7 +1187,7 @@ export default function DashboardTab() {
               </div>
               <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
                 <p className="text-xs text-theme-text-muted uppercase tracking-wide">Margine Netto Cash</p>
-                <p className="text-xl font-semibold text-emerald-400 mt-1">€ {fmt(margineNetto)}</p>
+                <p className="text-xl font-semibold text-emerald-400 mt-1">€ {fmtDec(margineNetto)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">Fatturato − Pagato</p>
               </div>
               <button

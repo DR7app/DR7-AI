@@ -4144,6 +4144,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
+      // ===== OTP GATE: Conferma Prenotazione (toggle in Gestione OTP) =====
+      // Quando l'admin spunta "Conferma Prenotazione" e l'OTP per questa
+      // azione e' attivo (system_otp_overrides.is_required=true) chiediamo
+      // OTP della direzione. useLimitationOverride bypassa server-side se
+      // il toggle e' OFF, quindi quando off questa chiamata non blocca nulla.
+      if (confirmBooking && !hasOverride('prenotazione_noleggio_conferma')) {
+        requestOverride('prenotazione_noleggio_conferma', 'Conferma prenotazione noleggio richiede autorizzazione direzionale')
+        setIsSubmitting(false)
+        return
+      }
+
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
       // Note: vehicle is already declared above in scheduling validation block
 
