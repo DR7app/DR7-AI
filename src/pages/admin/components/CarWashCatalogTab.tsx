@@ -59,6 +59,14 @@ export default function CarWashCatalogTab() {
   const newImageRef = useRef<HTMLInputElement>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
 
+  // Prime Flex (protezione cancellazione lavaggio): prezzo unico modificabile
+  // dall'admin, letto dal sito (CarWashBookingPage) tramite centralina_pro_config.
+  // Default 4.90 — combacia col fallback hardcoded sul sito per backwards-compat.
+  const PRIME_FLEX_DEFAULT = 4.90
+  const [primeFlexPrice, setPrimeFlexPrice] = useState<string>(PRIME_FLEX_DEFAULT.toFixed(2))
+  const [primeFlexSavedPrice, setPrimeFlexSavedPrice] = useState<number>(PRIME_FLEX_DEFAULT)
+  const [primeFlexSaving, setPrimeFlexSaving] = useState(false)
+
   async function uploadImage(file: File, target: 'new' | 'edit') {
     if (!file.type.startsWith('image/')) { toast.error('Solo file immagine (PNG, JPG)'); return }
     setUploadingImage(true)
@@ -86,7 +94,65 @@ export default function CarWashCatalogTab() {
 
   useEffect(() => {
     loadServices()
+    loadPrimeFlex()
   }, [])
+
+  // Legge il prezzo Prime Flex corrente da centralina_pro_config. Il sito
+  // fa la stessa lettura: cosi' admin e website restano sempre allineati.
+  // Path: centralina_pro_config.config.servizi.prime_flex.price (number).
+  async function loadPrimeFlex() {
+    try {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      const cfg = (data?.config || {}) as Record<string, unknown>
+      const servizi = (cfg.servizi || {}) as Record<string, unknown>
+      const pf = (servizi.prime_flex || {}) as Record<string, unknown>
+      const price = typeof pf.price === 'number' ? pf.price : Number(pf.price)
+      const finalPrice = Number.isFinite(price) && price >= 0 ? price : PRIME_FLEX_DEFAULT
+      setPrimeFlexPrice(finalPrice.toFixed(2))
+      setPrimeFlexSavedPrice(finalPrice)
+    } catch (e) {
+      console.warn('[CarWashCatalog] loadPrimeFlex fallback to default:', e)
+    }
+  }
+
+  // Salva solo il prezzo Prime Flex. Patch chirurgica su servizi.prime_flex
+  // (preserva il resto della config esistente). Niente upsert nuovo: facciamo
+  // SELECT, merge, UPDATE per non sovrascrivere campi che non gestiamo qui.
+  async function savePrimeFlex() {
+    const parsed = parseFloat(primeFlexPrice)
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      toast.error('Prezzo non valido')
+      return
+    }
+    setPrimeFlexSaving(true)
+    try {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      const cfg = (data?.config || {}) as Record<string, unknown>
+      const servizi = { ...((cfg.servizi as Record<string, unknown>) || {}) }
+      const prevFlex = (servizi.prime_flex as Record<string, unknown>) || {}
+      servizi.prime_flex = { ...prevFlex, price: parsed, enabled: true }
+      const nextCfg = { ...cfg, servizi }
+      const { error } = await supabase
+        .from('centralina_pro_config')
+        .upsert({ id: 'main', config: nextCfg }, { onConflict: 'id' })
+      if (error) throw error
+      setPrimeFlexSavedPrice(parsed)
+      setPrimeFlexPrice(parsed.toFixed(2))
+      toast.success('Prime Flex salvato')
+    } catch (err: unknown) {
+      toast.error('Errore salvataggio Prime Flex: ' + (err as Error).message)
+    } finally {
+      setPrimeFlexSaving(false)
+    }
+  }
 
   async function loadServices() {
     setLoading(true)
@@ -251,6 +317,53 @@ export default function CarWashCatalogTab() {
           </button>
         </div>
       </div>
+
+      {/* Prime Flex — protezione cancellazione (add-on, non un servizio
+          della tabella car_wash_services). Unico prezzo modificabile,
+          letto dal sito CarWashBookingPage. Storage:
+          centralina_pro_config.config.servizi.prime_flex.price */}
+      {(() => {
+        const parsed = parseFloat(primeFlexPrice)
+        const dirty = Number.isFinite(parsed) && parsed !== primeFlexSavedPrice
+        return (
+          <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-theme-text-primary">
+                  Prime Flex — Protezione Cancellazione
+                </h3>
+                <p className="text-sm text-theme-text-muted mt-1">
+                  Add-on opzionale sul checkout lavaggio: il cliente puo' annullare fino al giorno
+                  dell'appuntamento e ricevere il 90% come credito DR7 Wallet. Il prezzo qui sotto
+                  e' quello mostrato sul sito.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-theme-text-muted pointer-events-none">€</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={primeFlexPrice}
+                    onChange={(e) => setPrimeFlexPrice(e.target.value)}
+                    className="w-32 bg-theme-bg-primary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-sm text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                    placeholder="0.00"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={savePrimeFlex}
+                  disabled={primeFlexSaving || !dirty}
+                  className="px-4 py-2 rounded-full text-sm font-medium bg-dr7-gold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {primeFlexSaving ? 'Salvo...' : 'Salva'}
+                </button>
+              </div>
+            </div>
+          </section>
+        )
+      })()}
 
       {/* New Service Form */}
       {showNewForm && (
