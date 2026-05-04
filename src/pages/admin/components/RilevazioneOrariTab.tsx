@@ -51,6 +51,7 @@ export default function RilevazioneOrariTab() {
     const [refDate, setRefDate] = useState(new Date())
     const [loading, setLoading] = useState(true)
     const [showAddOp, setShowAddOp] = useState(false)
+    const [editingDay, setEditingDay] = useState<{ operatore: Operatore; data: string } | null>(null)
 
     // Daily/weekly/monthly data — for daily it's one DayRow per operator,
     // for weekly/monthly it's a per-operator total per day.

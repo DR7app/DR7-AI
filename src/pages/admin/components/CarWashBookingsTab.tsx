@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
@@ -188,6 +188,41 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // Foreign plate flow (Targa Estera) — requires OTP per category
   const [showForeignPlateModal, setShowForeignPlateModal] = useState(false)
   const [pendingForeignCategory, setPendingForeignCategory] = useState<'urban' | 'maxi' | null>(null)
+
+  // Buffer for an edit-click blocked by the paid_wash_modify OTP gate.
+  // Resumed by the useEffect below once the override is approved.
+  const pendingEditBookingRef = useRef<CarWashBooking | null>(null)
+
+  // Centralized "Modifica" handler — gates paid/confirmed bookings behind OTP
+  // (Valerio + Ilenia bypass server-side automatically).
+  function openEditBooking(booking: CarWashBooking, opts?: { skipOtpGate?: boolean }) {
+    if (!opts?.skipOtpGate) {
+      const PAID = ['paid', 'completed', 'succeeded']
+      const CONFIRMED = ['confirmed', 'confermata', 'active', 'in_corso']
+      const isPaid = PAID.includes((booking.payment_status || '').toLowerCase())
+      const isConfirmed = CONFIRMED.includes((booking.status || '').toLowerCase())
+      if ((isPaid || isConfirmed) && !override.hasOverride('paid_wash_modify')) {
+        pendingEditBookingRef.current = booking
+        override.requestOverride(
+          'paid_wash_modify',
+          'Modifica o spostamento di un lavaggio/meccanica pagato o confermato: serve OTP della direzione.',
+          `wash_edit_${booking.id}`,
+        )
+        return
+      }
+    }
+    setEditingBooking(booking)
+  }
+
+  // Resume edit once OTP has been approved.
+  useEffect(() => {
+    const pending = pendingEditBookingRef.current
+    if (pending && override.overrideCodes.has('paid_wash_modify')) {
+      pendingEditBookingRef.current = null
+      openEditBooking(pending, { skipOtpGate: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [override.overrideCodes])
 
   useEffect(() => {
     if (pendingForeignCategory && override.hasOverride('foreign_plate_carwash')) {
@@ -2523,7 +2558,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
-                          <button onClick={() => setEditingBooking(booking)} className="px-3 py-1.5 bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold rounded-full text-xs font-medium transition-colors min-h-[44px]">Modifica</button>
+                          <button onClick={() => openEditBooking(booking)} className="px-3 py-1.5 bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold rounded-full text-xs font-medium transition-colors min-h-[44px]">Modifica</button>
                           <button onClick={() => handleGenerateInvoice(booking)} disabled={generatingInvoice} className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold'} rounded-full text-xs font-medium transition-colors min-h-[44px]`}>
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
@@ -2639,7 +2674,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {/* Action buttons */}
                     <div className="px-4 pb-4 flex gap-2">
                       <button
-                        onClick={() => setEditingBooking(booking)}
+                        onClick={() => openEditBooking(booking)}
                         className="flex-1 py-2.5 rounded-xl bg-dr7-gold/10 hover:bg-dr7-gold/20 text-dr7-gold text-xs font-semibold transition-all active:scale-[0.98]"
                       >
                         Modifica

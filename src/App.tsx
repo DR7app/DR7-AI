@@ -16,7 +16,6 @@ const AdminRoute = lazyWithRetry(() => import('./components/AdminRoute'))
 const ReferralPage = lazyWithRetry(() => import('./pages/ReferralPage'))
 const FirmaPage = lazyWithRetry(() => import('./pages/FirmaPage'))
 const RegistrazioneClientePage = lazyWithRetry(() => import('./pages/RegistrazioneClientePage'))
-const TimesheetPage = lazyWithRetry(() => import('./pages/TimesheetPage'))
 
 function App() {
   return (
@@ -56,7 +55,6 @@ function App() {
             <Route path="/referral" element={<ReferralPage />} />
             <Route path="/firma/:token" element={<FirmaPage />} />
             <Route path="/registrazione-cliente/:token" element={<RegistrazioneClientePage />} />
-            <Route path="/timesheet" element={<TimesheetPage />} />
             <Route
               path="/admin"
               element={

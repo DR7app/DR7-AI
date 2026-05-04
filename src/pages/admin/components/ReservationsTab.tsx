@@ -427,11 +427,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     hasOverride,
     consumeAllOverrides,
     activeOverrides,
+    overrideCodes,
     draftSessionId,
     flowType,
     newSession,
     getOverrideAuditSnapshot,
   } = useLimitationOverride()
+
+  // Buffer for an edit-click that's been blocked by the OTP gate. When the
+  // direzione approves the OTP, the useEffect below replays the edit.
+  const pendingEditBookingRef = useRef<Booking | null>(null)
+
+  // Resume an edit that was blocked by the OTP gate, once the override has
+  // been approved (overrideCodes contains the code).
+  useEffect(() => {
+    const pending = pendingEditBookingRef.current
+    if (pending && overrideCodes.has('paid_rental_modify')) {
+      pendingEditBookingRef.current = null
+      handleEditBooking(pending, { skipOtpGate: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overrideCodes])
 
   // Missing Data Modal State
   const [showMissingDataModal, setShowMissingDataModal] = useState(false)
@@ -2508,11 +2524,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
 
-  function handleEditBooking(booking: Booking) {
+  function handleEditBooking(booking: Booking, _opts?: { skipOtpGate?: boolean }) {
     // Only handle car rental bookings - car wash bookings are in CarWashBookingsTab
     if (booking.service_type === 'car_wash') {
       alert('Le prenotazioni lavaggio devono essere modificate nella tab "Prenotazioni Lavaggio"')
       return
+    }
+
+    // OTP gate — paid or confirmed rental requires direzione approval BEFORE
+    // opening the edit form. Buffer the booking, request OTP, and the
+    // useEffect on overrideCodes resumes the edit once approved. Valerio &
+    // Ilenia bypass server-side automatically.
+    if (!_opts?.skipOtpGate) {
+      const PAID = ['paid', 'completed', 'succeeded']
+      const CONFIRMED = ['confirmed', 'confermata', 'active', 'in_corso']
+      const isPaid = PAID.includes((booking.payment_status || '').toLowerCase())
+      const isConfirmed = CONFIRMED.includes((booking.status || '').toLowerCase())
+      if ((isPaid || isConfirmed) && !hasOverride('paid_rental_modify')) {
+        pendingEditBookingRef.current = booking
+        requestOverride(
+          'paid_rental_modify',
+          'Modifica o spostamento di una prenotazione pagata o confermata: serve OTP della direzione.',
+          `booking_edit_${booking.id}`,
+        )
+        return
+      }
     }
 
     // Set flag to suppress initial availability check
