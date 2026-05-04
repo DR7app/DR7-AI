@@ -44,6 +44,7 @@ const CargosTab = lazyWithRetry(() => import('./components/CargosTab'))
 const TrusteraTab = lazyWithRetry(() => import('./components/TrusteraTab'))
 const CarWashCatalogTab = lazyWithRetry(() => import('./components/CarWashCatalogTab'))
 const OperatoriTab = lazyWithRetry(() => import('./components/OperatoriTab'))
+const RilevazioneOrariTab = lazyWithRetry(() => import('./components/RilevazioneOrariTab'))
 const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
 // RevenuePricingTab removed — replaced by CentralinaProTab
 const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreventiviTab'))
@@ -60,7 +61,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'campaign-center' | 'gestione-otp' | 'verifica-documenti' | 'fornitori'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'campaign-center' | 'gestione-otp' | 'verifica-documenti' | 'fornitori'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -253,6 +254,7 @@ export default function AdminDashboard() {
       { tab: 'report-penali-danni', label: 'Penali & Danni' },
       { tab: 'report-preventivi', label: 'Preventivi' },
       { tab: 'operatori', label: 'Operatori', superadminOnly: true },
+      { tab: 'rilevazione-orari', label: 'Rilevazione Orari' },
       { tab: 'dashboard-kpi', label: 'Dashboard' },
     ] },
     { name: 'Comunicazione', tabs: [
@@ -337,6 +339,7 @@ export default function AdminDashboard() {
     'scadenze': 'Scadenze',
     'fattura': 'Fattura',
     'operatori': 'Operatori',
+    'rilevazione-orari': 'Rilevazione Orari',
     'dashboard-kpi': 'Dashboard',
   }
 
@@ -656,6 +659,7 @@ export default function AdminDashboard() {
           {activeTab === 'com-chatgpt' && <PlaceholderTab title="Chat GPT" />}
           {activeTab === 'com-aruba' && <PlaceholderTab title="Aruba" />}
           {activeTab === 'operatori' && adminRole === 'superadmin' && <OperatoriTab />}
+          {activeTab === 'rilevazione-orari' && <RilevazioneOrariTab />}
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
           {activeTab === 'centralina-pro' && <CentralinaProTab />}
           {activeTab === 'maxi-promo-gap' && <MaxiPromoGapTab />}
