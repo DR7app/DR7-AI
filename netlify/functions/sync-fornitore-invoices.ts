@@ -166,15 +166,15 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // Fetch existing fornitore_documents to dedupe and to backfill aruba_filename
+    // Fetch existing fornitore_documents to dedupe and to backfill aruba_filename / data_scadenza
     const { data: existingDocs } = await supabase
       .from('fornitore_documents')
-      .select('id, numero_documento, data_documento, file_url, aruba_filename')
+      .select('id, numero_documento, data_documento, data_scadenza, file_url, aruba_filename')
       .eq('fornitore_id', fornitoreId)
       .eq('tipo', 'fattura')
-    const existingKey = new Map<string, { id: string; aruba_filename: string | null }>()
+    const existingKey = new Map<string, { id: string; aruba_filename: string | null; data_scadenza: string | null }>()
     for (const d of existingDocs || []) {
-      existingKey.set(`${d.numero_documento}|${d.data_documento}`, { id: d.id, aruba_filename: d.aruba_filename })
+      existingKey.set(`${d.numero_documento}|${d.data_documento}`, { id: d.id, aruba_filename: d.aruba_filename, data_scadenza: d.data_scadenza })
     }
 
     let inserted = 0
@@ -238,12 +238,12 @@ export const handler: Handler = async (event) => {
         const dedupeKey = `${number}|${date}`
         const existing = existingKey.get(dedupeKey)
         if (existing) {
-          // Backfill aruba_filename if missing on the existing row
-          if (!existing.aruba_filename) {
-            await supabase
-              .from('fornitore_documents')
-              .update({ aruba_filename: m.filename })
-              .eq('id', existing.id)
+          // Backfill aruba_filename + data_scadenza if missing on the existing row
+          const patch: Record<string, unknown> = {}
+          if (!existing.aruba_filename) patch.aruba_filename = m.filename
+          if (dueDate && !existing.data_scadenza) patch.data_scadenza = dueDate
+          if (Object.keys(patch).length > 0) {
+            await supabase.from('fornitore_documents').update(patch).eq('id', existing.id)
           }
           skipped++
           continue
@@ -256,6 +256,7 @@ export const handler: Handler = async (event) => {
             tipo: 'fattura',
             numero_documento: number,
             data_documento: date,
+            data_scadenza: dueDate || null,
             importo_totale: amount,
             note: `Sincronizzata da Aruba`,
             stato: 'caricato',
