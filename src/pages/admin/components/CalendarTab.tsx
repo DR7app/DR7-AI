@@ -58,6 +58,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  // Canonical monthly fatturato — same number Report Noleggio + Dashboard show
+  const [canonicalFatturato, setCanonicalFatturato] = useState<number | null>(null)
 
   // Scroll Sync Refs
   const gridRef = useRef<HTMLDivElement>(null)
@@ -179,7 +181,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   // --- Date Logic ---
   const currentRomeComponents = useMemo(() => {
     // Current view context (Rome Time)
-    // We treat 'currentDate' as the state container. 
+    // We treat 'currentDate' as the state container.
     // To match the utils logic, we extract the year/month we want to display.
     // If currentDate is local browser time, we just take getFullYear/getMonth.
     return {
@@ -187,6 +189,31 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       month: currentDate.getMonth() // 0-indexed
     }
   }, [currentDate])
+
+  // Fetch canonical Fatturato from monthly-report endpoint so Calendar shows
+  // the SAME number as Report Noleggio and Dashboard (rental + penali + danni).
+  // Re-fetched whenever the month changes.
+  useEffect(() => {
+    let cancelled = false
+    async function loadCanonical() {
+      try {
+        const yyyymm = `${currentRomeComponents.year}-${String(currentRomeComponents.month + 1).padStart(2, '0')}`
+        const res = await authFetch(`/.netlify/functions/monthly-report?type=vehicles&month=${yyyymm}`)
+        if (!res.ok) {
+          if (!cancelled) setCanonicalFatturato(null)
+          return
+        }
+        const json = await res.json()
+        if (!cancelled) {
+          setCanonicalFatturato(typeof json.totalRevenue === 'number' ? json.totalRevenue : null)
+        }
+      } catch {
+        if (!cancelled) setCanonicalFatturato(null)
+      }
+    }
+    loadCanonical()
+    return () => { cancelled = true }
+  }, [currentRomeComponents.year, currentRomeComponents.month])
 
   const daysInMonth = useMemo(() => {
     // 0-indexed month for Date constructor is correct
@@ -342,18 +369,20 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
         <div className="flex items-center gap-4">
           {(() => {
-            // Match Report Noleggio exactly: any booking active in this month counts,
-            // and revenue is prorated by days-in-month for cross-month rentals.
             const monthYear = currentRomeComponents.year
             const monthNum = currentRomeComponents.month + 1
             const activeInMonth = bookings.filter(b =>
               isReportableRentalBooking(b) &&
               getOccupiedDaysInMonth(b.pickup_date, b.dropoff_date, monthYear, monthNum, daysInMonth) > 0
             )
-            const fatturatoMese = activeInMonth.reduce(
+            // Use canonical totalRevenue from monthly-report endpoint (rental +
+            // penali + danni). Falls back to local proration of price_total
+            // (rental only, no penali/danni) if the endpoint hasn't returned yet.
+            const localFallback = activeInMonth.reduce(
               (sum, b) => sum + prorateRevenueForMonth(b, monthYear, monthNum, daysInMonth),
               0,
             )
+            const fatturatoMese = canonicalFatturato !== null ? canonicalFatturato : localFallback
             return (
               <>
                 <div className="flex items-center gap-1.5">

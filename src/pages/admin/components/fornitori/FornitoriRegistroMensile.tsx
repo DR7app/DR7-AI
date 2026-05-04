@@ -250,12 +250,12 @@ export default function FornitoriRegistroMensile({ onOpenFornitore }: Props) {
                                     <td className="px-3 py-2 text-right text-theme-text-primary font-semibold">{fmtEUR(f.importo_totale)}</td>
                                     <td className="px-3 py-2 text-center">
                                         {noBolle ? (
-                                            <span className="px-2 py-0.5 rounded text-xs bg-orange-900/30 text-orange-300 border border-orange-800/40">
+                                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500 text-black">
                                                 0 — mancano
                                             </span>
                                         ) : (
-                                            <span className="text-xs text-theme-text-secondary">
-                                                {agg.count} ({fmtEUR(agg.totale)})
+                                            <span className="text-xs text-theme-text-primary font-semibold">
+                                                {agg.count} <span className="text-theme-text-muted font-normal">({fmtEUR(agg.totale)})</span>
                                             </span>
                                         )}
                                     </td>
