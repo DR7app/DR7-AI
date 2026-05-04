@@ -15,19 +15,25 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const PAID_STATUSES = ["paid", "completed", "succeeded"];
 
-// HARD KILL SWITCH — flip to false to disable.
-const DR7_PRIVILEGE_ENABLED = true;
+// HARD KILL SWITCH — disabilitato di default per evitare invii massivi.
+// Per riattivare il batch run servono ENTRAMBI:
+//   1. flippare DR7_PRIVILEGE_ENABLED = true qui sotto
+//   2. settare DR7_PRIVILEGE_BATCH_ALLOWED=true come env Netlify
+// La doppia condizione e' deliberata: il flusso normale e' event-driven
+// (CarWashBookingsTab / UnpaidBookingsTab / nexi-payment-callback chiamano
+// sendDr7Privilege direttamente). Questo cron e' SOLO un catch-all manuale.
+const DR7_PRIVILEGE_ENABLED = false;
 
-// Activation cutoff — solo le prenotazioni con appointment_date >= questa data
-// sono eleggibili. Questo previene il backfill di pagamenti storici quando
-// si ri-attiva il cron. Settare alla data del deploy che ha riattivato il
-// flusso. NON spostare indietro senza pulire dr7_privilege_sent_at sui
-// vecchi record o ti ritrovi con invii massivi.
 const ACTIVATION_DATE = "2026-05-04T00:00:00Z";
 
 export const handler: Handler = async () => {
     if (!DR7_PRIVILEGE_ENABLED) {
         return { statusCode: 200, body: JSON.stringify({ disabled: true, reason: "DR7_PRIVILEGE_ENABLED=false" }) };
+    }
+    // Second gate: env var must be explicitly set. Belt + suspenders against
+    // accidental re-runs (the batch on 2026-05-04 sent 39 messages by mistake).
+    if (process.env.DR7_PRIVILEGE_BATCH_ALLOWED !== "true") {
+        return { statusCode: 200, body: JSON.stringify({ disabled: true, reason: "DR7_PRIVILEGE_BATCH_ALLOWED env not set" }) };
     }
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
         return { statusCode: 500, body: JSON.stringify({ error: "Supabase non configurato" }) };
