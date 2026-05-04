@@ -79,11 +79,38 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                 if (byEmail) {
                     opRow = byEmail
                     if (!byEmail.user_id) {
-                        // auto-link al login attuale
                         await supabase.from('operatori_persone')
                             .update({ user_id: user.id })
                             .eq('id', byEmail.id)
                     }
+                }
+            }
+
+            // 3) bootstrap dalla tabella admins: se sei un admin, ti creo
+            //    automaticamente la riga operatore con nome dall'admin.
+            if (!opRow && user.email) {
+                const { data: adminRow } = await supabase
+                    .from('admins')
+                    .select('nome, email')
+                    .ilike('email', user.email)
+                    .maybeSingle()
+                if (adminRow) {
+                    const fullName = (adminRow.nome || '').trim()
+                    const [nome, ...rest] = fullName.split(/\s+/)
+                    const cognome = rest.join(' ') || null
+                    const { data: created } = await supabase
+                        .from('operatori_persone')
+                        .insert({
+                            nome: nome || (user.email.split('@')[0]),
+                            cognome,
+                            email: user.email.toLowerCase(),
+                            user_id: user.id,
+                            ore_target_giornaliere: 8,
+                            attivo: true,
+                        })
+                        .select('id, nome, cognome, user_id')
+                        .single()
+                    if (created) opRow = created
                 }
             }
 
