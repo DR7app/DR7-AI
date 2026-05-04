@@ -44,6 +44,11 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
     const dataRef = data || toRomeDate()
     const [me, setMe] = useState<Operatore | null>(null)
     const [unregistered, setUnregistered] = useState(false)
+    const [authEmail, setAuthEmail] = useState<string>('')
+    const [regNome, setRegNome] = useState('')
+    const [regCognome, setRegCognome] = useState('')
+    const [registering, setRegistering] = useState(false)
+    const [reloadKey, setReloadKey] = useState(0)
     const [entrata, setEntrata] = useState('')
     const [uscita, setUscita] = useState('')
     const [pause, setPause] = useState<BreakSlot[]>([{}])
@@ -55,12 +60,20 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
         ;(async () => {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) { setLoading(false); setUnregistered(true); return }
+            setAuthEmail(user.email || '')
             const { data: opRow } = await supabase
                 .from('operatori_persone')
                 .select('id, nome, cognome')
                 .eq('user_id', user.id)
                 .maybeSingle()
-            if (!opRow) { setLoading(false); setUnregistered(true); return }
+            if (!opRow) {
+                const local = (user.email || '').split('@')[0]
+                const guess = local.charAt(0).toUpperCase() + local.slice(1).toLowerCase()
+                setRegNome(guess)
+                setLoading(false)
+                setUnregistered(true)
+                return
+            }
             setMe(opRow as Operatore)
 
             const { data: entries } = await supabase
@@ -97,7 +110,33 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
 
             setLoading(false)
         })()
-    }, [dataRef])
+    }, [dataRef, reloadKey])
+
+    async function handleRegister() {
+        if (!regNome.trim()) { toast.error('Inserisci il tuo nome'); return }
+        setRegistering(true)
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) throw new Error('Non sei autenticato')
+            const { error } = await supabase.from('operatori_persone').insert({
+                nome: regNome.trim(),
+                cognome: regCognome.trim() || null,
+                email: (user.email || '').toLowerCase(),
+                user_id: user.id,
+                ore_target_giornaliere: 8,
+                attivo: true,
+            })
+            if (error) throw error
+            toast.success('Profilo creato')
+            setUnregistered(false)
+            setReloadKey(k => k + 1)
+            setLoading(true)
+        } catch (err) {
+            toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setRegistering(false)
+        }
+    }
 
     async function handleSave() {
         if (!me) return
@@ -168,8 +207,26 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                 {loading && <p className="text-theme-text-muted">Caricamento…</p>}
 
                 {!loading && unregistered && (
-                    <div className="bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-800 rounded p-4 text-sm text-amber-900 dark:text-amber-100">
-                        Il tuo account non è registrato come operatore. Vai su <strong>Report → Rilevazione Orari</strong> e clicca <strong>+ Operatore</strong> spuntando "Sono io" per crearti il profilo.
+                    <div className="space-y-3">
+                        <div className="bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-800 rounded p-3 text-xs text-amber-900 dark:text-amber-100">
+                            Prima volta qui: crea il tuo profilo per poter registrare i tuoi orari.
+                        </div>
+                        <div className="space-y-2">
+                            <label className="block">
+                                <span className="text-xs text-theme-text-secondary">Nome *</span>
+                                <input value={regNome} onChange={e => setRegNome(e.target.value)}
+                                    className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                            </label>
+                            <label className="block">
+                                <span className="text-xs text-theme-text-secondary">Cognome</span>
+                                <input value={regCognome} onChange={e => setRegCognome(e.target.value)}
+                                    className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                            </label>
+                            <p className="text-xs text-theme-text-muted">Email login: <span className="font-mono">{authEmail || '—'}</span></p>
+                        </div>
+                        <Button onClick={handleRegister} disabled={registering}>
+                            {registering ? 'Creazione…' : 'Crea il mio profilo'}
+                        </Button>
                     </div>
                 )}
 
