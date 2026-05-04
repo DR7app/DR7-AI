@@ -142,7 +142,8 @@ export async function sendDr7Privilege(
     // Insert into discount_codes
     const validFrom = new Date()
     const validUntil = new Date(validFrom.getTime() + 15 * 24 * 60 * 60 * 1000)
-    const scope = kind === "noleggio" ? ["noleggio"] : ["lavaggi"]
+    // 10% sconto valido su qualsiasi servizio (noleggio + lavaggio + altro)
+    const scope = ["tutti"]
     const { error: insErr } = await sb.from("discount_codes").insert({
         code,
         code_type: "codice_sconto",

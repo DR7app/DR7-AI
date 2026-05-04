@@ -1158,15 +1158,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
     const skipFattura = formData.payment_method === 'Wallet' || formData.payment_method === 'Gift Card'
 
-    // DR7 Privilege — fire-and-forget. Backend is idempotent (dr7_privilege_sent_at)
-    // so this is safe even if the booking is later edited / re-saved.
-    if (isPaid && data?.id) {
-      authFetch('/.netlify/functions/trigger-dr7-privilege', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: data.id, kind: 'lavaggio' }),
-      }).catch(() => { /* non-blocking */ })
-    }
     if (isPaid && !skipFattura) {
       try {
         const invoiceResponse = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
@@ -1370,6 +1361,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     } catch (whatsappError) {
       console.error('⚠️ WhatsApp notification failed:', whatsappError)
+    }
+
+    // DR7 Privilege — fire-and-forget AFTER the conferma lavaggio so the
+    // privilege code lands on WhatsApp after the booking confirmation, not
+    // before. Backend is idempotent (dr7_privilege_sent_at).
+    if (isPaid && data?.id) {
+      authFetch('/.netlify/functions/trigger-dr7-privilege', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: data.id, kind: 'lavaggio' }),
+      }).catch(() => { /* non-blocking */ })
     }
 
     // Add to Google Calendar
