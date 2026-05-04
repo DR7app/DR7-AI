@@ -206,6 +206,14 @@ export const handler: Handler = async (event) => {
           continue
         }
 
+        // Skip fatture pre-2026: i clienti DR7 partono 01/26.
+        // Aruba scansiona 12 mesi indietro per pagare bene il matching, ma
+        // non vogliamo trascinare dati 2025 nelle viste fornitori.
+        if (date < '2026-01-01') {
+          skipped++
+          continue
+        }
+
         const dedupeKey = `${number}|${date}`
         const existing = existingKey.get(dedupeKey)
         if (existing) {

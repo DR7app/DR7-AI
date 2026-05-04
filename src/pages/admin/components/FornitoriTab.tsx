@@ -52,10 +52,15 @@ export default function FornitoriTab() {
                 counts[r.id] = { ...r, bolleCount: 0, fattureCount: 0, daApprovareCount: 0, daPagareCount: 0, lastDocAt: null }
             }
             if (ids.length > 0) {
+                // Conto solo i documenti dal 2026 in avanti — i clienti DR7
+                // partono 01/26. La sync da Aruba scansiona 12 mesi indietro
+                // quindi puo' trascinarsi roba di fine 2025 che non vogliamo
+                // contare ne' mostrare nella tab fornitori.
                 const { data: docs } = await supabase
                     .from('fornitore_documents')
                     .select('fornitore_id, tipo, stato, data_documento')
                     .in('fornitore_id', ids)
+                    .gte('periodo_anno', 2026)
                 for (const d of (docs || []) as { fornitore_id: string; tipo: string; stato: string; data_documento: string | null }[]) {
                     const row = counts[d.fornitore_id]
                     if (!row) continue
