@@ -7180,24 +7180,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     })
                   })()}
                 </div>
-                {/* DR7 FLEX — only Fascia A */}
-                {(!customerTier || customerTier.tier === 'TIER_2') && (
-                  <div className={`mt-3 flex items-center gap-2 p-3 rounded-lg border ${formData.dr7_flex ? 'border-green-500 bg-green-900/10' : 'border-theme-border'}`}>
-                    <input
-                      type="checkbox"
-                      id="dr7_flex"
-                      checked={formData.dr7_flex}
-                      onChange={(e) => setFormData(prev => ({ ...prev, dr7_flex: e.target.checked }))}
-                      className="w-4 h-4 text-green-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-green-500"
-                    />
-                    <label htmlFor="dr7_flex" className="text-sm text-theme-text-secondary cursor-pointer flex-1">
-                      DR7 FLEX — Cancellazione Premium (+€{CFG_DR7_FLEX_PER_DAY.toFixed(2)}/giorno)
-                    </label>
-                  </div>
-                )}
-                {customerTier?.tier === 'TIER_1' && (
-                  <p className="text-xs text-amber-400 mt-2">DR7 FLEX non disponibile per Fascia B</p>
-                )}
+                {/* DR7 FLEX rimosso come addon dedicato — ora è un servizio
+                    in EXPERIENCE_SERVICES via Centralina Pro. */}
               </div>
 
               <Input
