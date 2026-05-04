@@ -446,14 +446,17 @@ export default function DashboardTab() {
 
       {/* ========== KPI STRIP — 5 cards (Rentora design v1) ========== */}
       {(() => {
-        // Fatturato is derived from the SAME monthly-report endpoint that
-        // Report Noleggio + Report Lavaggio call (canonical). Falls back to
-        // dashboard's own calc if monthlyReports is missing.
-        // monthlyReports.noleggio.ricavoTotale already includes rental + penali
-        // + danni (sum from monthly-report totalRevenue), so just add lavaggi.
+        // Fatturato = SINTESI di TUTTE le attività, not just noleggio.
+        //   Noleggio (rental + penali + danni) — from monthly-report?type=vehicles (canonical)
+        //   Lavaggi — from monthly-report?type=washes (canonical)
+        //   Meccanica — from primeWash.bySource.meccanica (only place it's tracked)
+        // Each piece comes from the same source the corresponding Report tab uses.
         const mr = d.monthlyReports
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const primeWash = (d as any).primeWash as { revenue?: number; bySource?: { lavaggi?: number; meccanica?: number } } | undefined
+        const meccanica = primeWash?.bySource?.meccanica ?? 0
         const fatturato = mr
-          ? mr.noleggio.ricavoTotale + mr.lavaggio.ricavoTotale
+          ? mr.noleggio.ricavoTotale + mr.lavaggio.ricavoTotale + meccanica
           : d.revenue.currentMonth
         const incassato = d.revenue.incassato
         // If Fatturato came from canonical reports, recompute incassato % from it
@@ -520,9 +523,16 @@ export default function DashboardTab() {
       {/* ========== SINTESI DEL MESE ========== */}
       {d.monthlyReports && (() => {
         const mr = d.monthlyReports
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const primeWash = (d as any).primeWash as { revenue?: number; bySource?: { lavaggi?: number; meccanica?: number } } | undefined
+        const meccanica = primeWash?.bySource?.meccanica ?? 0
+        // mr.noleggio.ricavoTotale already includes rental + penali + danni
+        // (it's totalRevenue from monthly-report, not just rental).
+        // mr.lavaggio.ricavoTotale is car_wash only — meccanica added separately.
         const entrate =
           mr.noleggio.ricavoTotale +
-          mr.lavaggio.ricavoTotale
+          mr.lavaggio.ricavoTotale +
+          meccanica
         const uscitePagate = mr.fornitori.pagatoMese
         const cashNetto = entrate - uscitePagate
         const insolutiTot = mr.penaliDanni.insolutiTotale
@@ -533,13 +543,13 @@ export default function DashboardTab() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
               {/* Entrate */}
               <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-emerald-500/20">
-                <p className="text-[10px] uppercase tracking-widest text-emerald-300 font-semibold mb-2">Entrate</p>
+                <p className="text-[10px] uppercase tracking-widest text-emerald-300 font-semibold mb-2">Entrate (totali attività)</p>
                 <p className="text-3xl font-bold text-emerald-400 leading-tight">€ {fmt(entrate)}</p>
                 <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
                   <div className="flex justify-between"><span>Noleggio</span><span className="text-theme-text-primary">€ {fmt(mr.noleggio.ricavoTotale)}</span></div>
                   <div className="flex justify-between"><span>Lavaggi</span><span className="text-theme-text-primary">€ {fmt(mr.lavaggio.ricavoTotale)}</span></div>
-                  <div className="flex justify-between"><span>Penali</span><span className="text-theme-text-primary">€ {fmt(mr.penaliDanni.danniTotale + mr.penaliDanni.insolutiTotale - danniTot)}</span></div>
-                  <div className="flex justify-between"><span>Danni</span><span className="text-theme-text-primary">€ {fmt(danniTot)}</span></div>
+                  <div className="flex justify-between"><span>Meccanica</span><span className="text-theme-text-primary">€ {fmt(meccanica)}</span></div>
+                  <div className="flex justify-between text-[10px] text-theme-text-muted/80"><span>(di cui Penali+Danni nel Noleggio)</span><span>€ {fmt(insolutiTot + danniTot)}</span></div>
                   <div className="flex justify-between pt-1 border-t border-emerald-500/20 mt-1">
                     <span>Incassato</span><span className="text-emerald-300">€ {fmt(d.revenue.incassato)}</span>
                   </div>
