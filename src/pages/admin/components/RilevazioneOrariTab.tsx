@@ -104,15 +104,18 @@ export default function RilevazioneOrariTab() {
         try {
             const { data: { user } } = await supabase.auth.getUser()
 
-            const { data: ops } = await supabase
-                .from('operatori_persone')
-                .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
-                .eq('attivo', true)
-                .order('cognome', { ascending: true })
+            // Privacy: ognuno vede solo i propri orari. Carico SOLO la riga
+            // dell'operatore collegato all'auth user corrente.
+            const { data: ops } = user
+                ? await supabase
+                    .from('operatori_persone')
+                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
+                    .eq('attivo', true)
+                    .eq('user_id', user.id)
+                : { data: [] }
             const opList = (ops || []) as Operatore[]
 
-            // Current user as operatore
-            const myRow = opList.find(o => o.user_id === user?.id) || null
+            const myRow = opList[0] || null
             setMe(myRow)
 
             if (view === 'giornaliera') {
@@ -233,7 +236,7 @@ export default function RilevazioneOrariTab() {
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 className="text-2xl font-semibold text-theme-text-primary">Rilevazione Orari</h2>
-                    <p className="text-xs text-theme-text-muted">Ognuno registra solo i propri orari. La tabella sotto mostra il team in lettura.</p>
+                    <p className="text-xs text-theme-text-muted">Vedi solo i tuoi orari. Nessun altro può vedere il tuo report.</p>
                 </div>
                 <div className="flex gap-2">
                     <Button variant="secondary" onClick={() => setShowAddOp(true)}>+ Operatore</Button>
