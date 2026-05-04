@@ -597,9 +597,11 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // DR7 Privilege — codice sconto 10% post-firma noleggio (15gg validità).
-        // Idempotente via bookings.dr7_privilege_sent_at.
-        if (contract?.booking_id) {
+        // DR7 Privilege — DISABILITATO dopo invio massivo non voluto.
+        // Per riattivare: rimuovere il guard sotto e flippare
+        // DR7_PRIVILEGE_ENABLED in dr7-privilege-cron.ts.
+        const DR7_PRIVILEGE_ENABLED = false
+        if (DR7_PRIVILEGE_ENABLED && contract?.booking_id) {
             try {
                 const { data: bookingRow } = await supabase
                     .from('bookings')

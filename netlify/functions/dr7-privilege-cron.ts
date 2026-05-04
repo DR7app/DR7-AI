@@ -15,7 +15,15 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const PAID_STATUSES = ["paid", "completed", "succeeded"];
 
+// HARD KILL SWITCH — set to true to re-enable the cron.
+// Disabilitato dopo invio massivo non voluto. NON RIATTIVARE senza
+// prima verificare che backfill di vecchi pagamenti non parta di colpo.
+const DR7_PRIVILEGE_ENABLED = false;
+
 export const handler: Handler = async () => {
+    if (!DR7_PRIVILEGE_ENABLED) {
+        return { statusCode: 200, body: JSON.stringify({ disabled: true, reason: "DR7_PRIVILEGE_ENABLED=false" }) };
+    }
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
         return { statusCode: 500, body: JSON.stringify({ error: "Supabase non configurato" }) };
     }
