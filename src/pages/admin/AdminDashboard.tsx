@@ -45,6 +45,7 @@ const TrusteraTab = lazyWithRetry(() => import('./components/TrusteraTab'))
 const CarWashCatalogTab = lazyWithRetry(() => import('./components/CarWashCatalogTab'))
 const OperatoriTab = lazyWithRetry(() => import('./components/OperatoriTab'))
 const RilevazioneOrariTab = lazyWithRetry(() => import('./components/RilevazioneOrariTab'))
+const MyDayEditorModal = lazyWithRetry(() => import('./components/MyDayEditorModal'))
 const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
 // RevenuePricingTab removed — replaced by CentralinaProTab
 const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreventiviTab'))
@@ -105,6 +106,7 @@ export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
   const [showAlarmInventory, setShowAlarmInventory] = useState(false)
+  const [showMyOrari, setShowMyOrari] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -448,6 +450,19 @@ export default function AdminDashboard() {
               </svg>
             </button>
           </div>
+          <div className="flex items-center gap-2 mb-1">
+            <button
+              onClick={() => setShowMyOrari(true)}
+              title="I miei orari — inserisci/modifica i tuoi orari di oggi"
+              className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-theme-text-secondary hover:text-amber-400 hover:bg-theme-bg-hover transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
+              </svg>
+              I miei orari
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); }}
@@ -688,6 +703,12 @@ export default function AdminDashboard() {
         audioEnabled={alarmState.audioEnabled}
         onEnableAudio={enableAudio}
       />
+
+      {showMyOrari && (
+        <Suspense fallback={null}>
+          <MyDayEditorModal onClose={() => setShowMyOrari(false)} />
+        </Suspense>
+      )}
 
       {showPasswordModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
