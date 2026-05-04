@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 import Button from './Button'
 
 interface Operatore {
@@ -57,6 +58,12 @@ type ViewMode = 'giornaliera' | 'settimanale' | 'mensile'
  *   on own rows. Other rows are read-only.
  */
 export default function RilevazioneOrariTab() {
+    const { adminName, adminEmail } = useAdminRole()
+    // Solo Valerio e Ilenia vedono tutti i report. Tutti gli altri admin
+    // (incluso Ophe) vedono solo i propri orari.
+    const adminTokens = ((adminName || '') + ' ' + (adminEmail || '')).toLowerCase()
+    const isValerioOrIlenia = adminTokens.includes('valerio') || adminTokens.includes('ilenia')
+
     const [me, setMe] = useState<Operatore | null>(null)
     const [view, setView] = useState<ViewMode>('giornaliera')
     const [refDate, setRefDate] = useState(new Date())
@@ -104,10 +111,17 @@ export default function RilevazioneOrariTab() {
         try {
             const { data: { user } } = await supabase.auth.getUser()
 
-            // Privacy: ognuno vede solo i propri orari. Cerco la riga collegata
-            // all'auth user, con fallback per email se user_id non e' linkato.
             let opList: Operatore[] = []
-            if (user) {
+
+            if (isValerioOrIlenia) {
+                // Direzione: vede TUTTI gli operatori
+                const { data: ops } = await supabase
+                    .from('operatori_persone')
+                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
+                    .eq('attivo', true)
+                    .order('cognome', { ascending: true })
+                opList = (ops || []) as Operatore[]
+            } else if (user) {
                 const { data: byId } = await supabase
                     .from('operatori_persone')
                     .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
@@ -159,7 +173,11 @@ export default function RilevazioneOrariTab() {
                 }
             }
 
-            const myRow = opList[0] || null
+            const myRow = user
+                ? (opList.find(o => o.user_id === user.id)
+                    || (user.email ? opList.find(o => (o.email || '').toLowerCase() === user.email!.toLowerCase()) : null)
+                    || null)
+                : null
             setMe(myRow)
 
             if (view === 'giornaliera') {
