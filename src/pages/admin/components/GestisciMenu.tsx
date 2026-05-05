@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 
 export type GestisciAction = {
@@ -36,33 +37,63 @@ interface Props {
  */
 export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm' }: Props) {
     const [open, setOpen] = useState(false)
-    const [openUp, setOpenUp] = useState(false)
+    // Coordinate viewport calcolate dal trigger. Il menu viene poi
+    // renderizzato in un Portal con position: fixed cosi' sfugge a
+    // qualunque overflow:auto/hidden in un antenato (es. la tabella
+    // Prenotazioni Noleggio ha overflow-x-auto sul wrapper, e per
+    // la spec CSS basta UN asse 'auto' per clippare anche l'altro
+    // — il dropdown 'absolute' rimaneva tagliato dentro la riga).
+    const [coords, setCoords] = useState<{ top: number; right: number; openUp: boolean } | null>(null)
     const wrapRef = useRef<HTMLDivElement>(null)
     const btnRef = useRef<HTMLButtonElement>(null)
+    const menuRef = useRef<HTMLDivElement>(null)
+
+    function recalcCoords() {
+        if (!btnRef.current) return
+        const r = btnRef.current.getBoundingClientRect()
+        const spaceBelow = window.innerHeight - r.bottom
+        const openUp = spaceBelow < 280
+        setCoords({
+            top: openUp ? r.top : r.bottom,
+            right: window.innerWidth - r.right,
+            openUp,
+        })
+    }
 
     useEffect(() => {
         if (!open) return
         const onDoc = (e: MouseEvent) => {
-            if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+            const target = e.target as Node
+            if (wrapRef.current?.contains(target)) return
+            if (menuRef.current?.contains(target)) return
+            setOpen(false)
         }
         const onEsc = (e: KeyboardEvent) => {
             if (e.key === 'Escape') setOpen(false)
         }
+        // Riposiziona se l'utente scrolla la pagina o la tabella —
+        // 'true' come terzo arg cattura anche gli scroll dei figli.
+        const onReposition = () => recalcCoords()
         document.addEventListener('mousedown', onDoc)
         document.addEventListener('keydown', onEsc)
+        window.addEventListener('scroll', onReposition, true)
+        window.addEventListener('resize', onReposition)
         return () => {
             document.removeEventListener('mousedown', onDoc)
             document.removeEventListener('keydown', onEsc)
+            window.removeEventListener('scroll', onReposition, true)
+            window.removeEventListener('resize', onReposition)
         }
+    }, [open])
+
+    // Calcola le coords subito dopo l'apertura, prima del paint, per
+    // evitare un flash a (0,0).
+    useLayoutEffect(() => {
+        if (open) recalcCoords()
     }, [open])
 
     const handleToggle = (e: React.MouseEvent) => {
         e.stopPropagation()
-        if (!open && btnRef.current) {
-            const r = btnRef.current.getBoundingClientRect()
-            const spaceBelow = window.innerHeight - r.bottom
-            setOpenUp(spaceBelow < 280)
-        }
         setOpen(o => !o)
     }
 
@@ -92,11 +123,19 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
                 </svg>
             </button>
 
-            {open && (
+            {open && coords && createPortal(
                 <div
+                    ref={menuRef}
                     role="menu"
                     onClick={(e) => e.stopPropagation()}
-                    className={`absolute right-0 z-50 min-w-[200px] rounded-xl border border-theme-border bg-theme-bg-secondary shadow-2xl py-1 ${openUp ? 'bottom-full mb-2' : 'top-full mt-2'}`}
+                    style={{
+                        position: 'fixed',
+                        top: coords.openUp ? undefined : coords.top + 8,
+                        bottom: coords.openUp ? window.innerHeight - coords.top + 8 : undefined,
+                        right: coords.right,
+                        zIndex: 9999,
+                    }}
+                    className="min-w-[200px] rounded-xl border border-theme-border bg-theme-bg-secondary shadow-2xl py-1"
                 >
                     {visibleSections.map((sec, si) => (
                         <div key={si} className={si > 0 ? 'border-t border-theme-border mt-1 pt-1' : ''}>
@@ -124,7 +163,8 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
                             ))}
                         </div>
                     ))}
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     )
