@@ -146,7 +146,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
             })
         })
         return all
-    }, [crosscheck])
+    }, [crosscheck, mese])
 
     const fatturaById = useMemo(() => {
         const m = new Map<string, FornitoreDocument>()
