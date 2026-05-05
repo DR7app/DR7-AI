@@ -63,6 +63,24 @@ export default function NexiTab() {
     const [cardsLoading, setCardsLoading] = useState(true)
     const [backfillRunning, setBackfillRunning] = useState(false)
 
+    // Search bar — filtra carte tokenizzate e transazioni per nome cliente,
+    // email, order_id (booking id) o numero contratto. Permette di capire
+    // a colpo d'occhio chi ha gia' una carta on file (= candidato per
+    // rentale senza cauzione).
+    const [search, setSearch] = useState('')
+    const filterMatches = (haystacks: (string | null | undefined)[], needle: string) => {
+        const q = needle.trim().toLowerCase()
+        if (!q) return true
+        return haystacks.some(h => (h || '').toLowerCase().includes(q))
+    }
+    const filteredCards = tokenizedCards.filter(c => filterMatches(
+        [c.full_name, c.email, c.phone, c.masked_pan, c.contract_id], search
+    ))
+    const filteredTransactions = transactions.filter(tx => filterMatches(
+        [tx.customer_email, tx.order_id, tx.description, tx.booking?.customer_name, tx.booking?.vehicle_name, tx.contract_id, tx.booking_id],
+        search
+    ))
+
     async function runBackfill() {
         // Two-step: dry run first to count, then ask for confirm before applying.
         setBackfillRunning(true)
@@ -339,17 +357,31 @@ export default function NexiTab() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-center gap-3">
                 <h2 className="text-2xl font-bold text-theme-text-primary">Transazioni Nexi</h2>
-                <button
-                    onClick={fetchTransactions}
-                    className="p-2 hover:bg-theme-text-primary/5 rounded-full transition-colors"
-                    title="Aggiorna"
-                >
-                    <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                        type="search"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Cerca per cliente, email, prenotazione, order ID, contratto…"
+                        className="px-3 py-2 text-sm bg-theme-text-primary/5 border border-theme-border/50 rounded-lg w-72 text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold"
+                    />
+                    {search && (
+                        <button onClick={() => setSearch('')}
+                            className="text-xs px-2 py-2 rounded text-theme-text-muted hover:text-theme-text-primary"
+                            title="Cancella ricerca">×</button>
+                    )}
+                    <button
+                        onClick={fetchTransactions}
+                        className="p-2 hover:bg-theme-text-primary/5 rounded-full transition-colors"
+                        title="Aggiorna"
+                    >
+                        <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             {/* Carte Tokenizzate */}
@@ -357,7 +389,9 @@ export default function NexiTab() {
                 <div className="px-6 py-3 bg-theme-bg-primary/20 border-b border-theme-border/50 flex justify-between items-center">
                     <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Carte Tokenizzate</h3>
                     <div className="flex items-center gap-3">
-                        <span className="text-xs text-theme-text-muted">{tokenizedCards.length} carte</span>
+                        <span className="text-xs text-theme-text-muted">
+                            {search ? `${filteredCards.length}/${tokenizedCards.length}` : tokenizedCards.length} carte
+                        </span>
                         <button
                             onClick={runBackfill}
                             disabled={backfillRunning}
@@ -371,11 +405,13 @@ export default function NexiTab() {
                 </div>
                 {cardsLoading ? (
                     <div className="px-6 py-8 text-center text-theme-text-muted text-sm">Caricamento...</div>
-                ) : tokenizedCards.length === 0 ? (
-                    <div className="px-6 py-8 text-center text-theme-text-muted text-sm">Nessuna carta tokenizzata</div>
+                ) : filteredCards.length === 0 ? (
+                    <div className="px-6 py-8 text-center text-theme-text-muted text-sm">
+                        {search ? `Nessuna carta corrisponde a "${search}"` : 'Nessuna carta tokenizzata'}
+                    </div>
                 ) : (
                     <div className="divide-y divide-white/5">
-                        {tokenizedCards.map((card) => (
+                        {filteredCards.map((card) => (
                             <div key={card.id} className="px-6 py-3 flex items-center justify-between gap-4">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
@@ -514,9 +550,11 @@ export default function NexiTab() {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold mx-auto mb-4"></div>
                     <p className="text-theme-text-muted">Caricamento transazioni...</p>
                 </div>
-            ) : transactions.length === 0 ? (
+            ) : filteredTransactions.length === 0 ? (
                 <div className="text-center py-12 bg-theme-text-primary/5 rounded-xl border border-theme-border/50">
-                    <p className="text-theme-text-muted">Nessuna transazione trovata</p>
+                    <p className="text-theme-text-muted">
+                        {search ? `Nessuna transazione corrisponde a "${search}"` : 'Nessuna transazione trovata'}
+                    </p>
                 </div>
             ) : (
                 <div className="bg-theme-text-primary/5 rounded-xl border border-theme-border/50 overflow-hidden">
@@ -534,7 +572,7 @@ export default function NexiTab() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {transactions.map((tx) => (
+                                {filteredTransactions.map((tx) => (
                                     <tr key={tx.id} className="hover:bg-theme-text-primary/5 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="text-theme-text-primary font-mono text-sm">

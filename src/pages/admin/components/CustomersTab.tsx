@@ -97,6 +97,14 @@ interface Customer {
         luogo?: string
       }
     }
+    // Carta salvata in Nexi (tokenizzata): se presente, possiamo addebitare
+    // direttamente senza chiedere cauzione fisica al cliente.
+    nexi_contract_id?: string
+    nexi_card_masked_pan?: string
+    nexi_card_circuit?: string
+    nexi_card_brand?: string
+    nexi_card_type?: string
+    nexi_contract_updated?: string
   }
 }
 
@@ -1918,6 +1926,46 @@ export default function CustomersTab() {
               </div>
 
 
+              {/* Carta salvata in Nexi (tokenizzata).
+                  Se presente, possiamo addebitare direttamente: il cliente
+                  e' candidato per noleggio SENZA cauzione fisica. */}
+              {viewingCustomerDetails.metadata?.nexi_contract_id && (
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-3 flex items-center justify-between border-b border-emerald-200 dark:border-emerald-900 pb-2">
+                    <span>Carta salvata (Nexi)</span>
+                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                      Sicuro per senza cauzione
+                    </span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-theme-text-muted text-xs">Numero (mascherato):</span>
+                      <p className="font-mono font-semibold text-theme-text-primary">
+                        {viewingCustomerDetails.metadata.nexi_card_masked_pan || '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-theme-text-muted text-xs">Circuito / Brand:</span>
+                      <p className="font-medium text-theme-text-primary">
+                        {[viewingCustomerDetails.metadata.nexi_card_circuit, viewingCustomerDetails.metadata.nexi_card_brand].filter(Boolean).join(' · ') || '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-theme-text-muted text-xs">Tipo carta:</span>
+                      <p className="font-medium text-theme-text-primary">
+                        {viewingCustomerDetails.metadata.nexi_card_type || '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-theme-text-muted text-xs">Contract ID:</span>
+                      <p className="font-mono text-[11px] text-theme-text-secondary break-all">
+                        {viewingCustomerDetails.metadata.nexi_contract_id}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Note */}
               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {(viewingCustomerDetails.notes || (viewingCustomerDetails.metadata as any)?.note || (viewingCustomerDetails as any).note) && (
@@ -2470,6 +2518,12 @@ export default function CustomersTab() {
                   <div className="text-sm font-semibold text-theme-text-primary truncate flex items-center gap-1.5">
                     <span className="truncate">{customer.full_name}</span>
                     <ClientStatusBadge tier={customer.status ?? undefined} customerId={customer.id} userId={customer.user_id} email={customer.email} />
+                    {customer.metadata?.nexi_contract_id && (
+                      <span title={`Carta salvata: ${customer.metadata.nexi_card_masked_pan || 'on file'} — candidato per noleggio senza cauzione`}
+                        className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 flex-shrink-0">
+                        CARTA
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                     {customer.tipo_cliente && (
