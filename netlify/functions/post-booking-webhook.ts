@@ -33,7 +33,7 @@ export const handler: Handler = async (event) => {
     // Verify booking exists
     const { data: booking } = await supabase
       .from('bookings')
-      .select('id, vehicle_type, service_type, booking_details, payment_status')
+      .select('id, vehicle_type, service_type, booking_details, payment_status, payment_method')
       .eq('id', bookingId)
       .single()
 
@@ -89,6 +89,35 @@ export const handler: Handler = async (event) => {
         }
       } catch (e: any) {
         console.error(`[post-booking-webhook] Fattura error:`, e.message)
+      }
+    }
+
+    // 3. DR7 Privilege — invia codice sconto subito dopo la conferma del
+    //    pagamento, indipendentemente dal metodo (Credit Wallet, Contanti,
+    //    POS, Bonifico, Nexi, ecc). Idempotente via dr7_privilege_sent_at.
+    const isPaid = booking.payment_status === 'paid' || booking.payment_status === 'succeeded' || booking.payment_status === 'completed'
+    if (isPaid) {
+      try {
+        // Re-fetch con i campi richiesti da sendDr7Privilege
+        const { data: bookingFull } = await supabase
+          .from('bookings')
+          .select('id, service_type, customer_name, customer_phone, customer_email, vehicle_plate, booking_details, dr7_privilege_sent_at')
+          .eq('id', bookingId)
+          .maybeSingle()
+        if (bookingFull) {
+          const { sendDr7Privilege } = await import('./utils/dr7Privilege')
+          const kind = isWashOrMech ? 'lavaggio' : 'noleggio'
+          const result = await sendDr7Privilege(supabase, bookingFull as any, kind)
+          if (result.sent) {
+            console.log(`[post-booking-webhook] ✅ DR7 Privilege ${kind} sent: ${result.code}`)
+          } else if (result.skipped) {
+            console.log(`[post-booking-webhook] DR7 Privilege ${kind} skipped: ${result.skipped}`)
+          } else if (result.error) {
+            console.warn(`[post-booking-webhook] DR7 Privilege ${kind} failed: ${result.error}`)
+          }
+        }
+      } catch (e: any) {
+        console.error('[post-booking-webhook] ⚠️ DR7 Privilege error:', e.message)
       }
     }
 
