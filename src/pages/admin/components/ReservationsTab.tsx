@@ -3247,30 +3247,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (customerPhone) {
               const bookingRef = extendingBooking.id.substring(0, 8).toUpperCase()
               try {
-                // Extension-specific copy: don't reuse 'payment_link_customer'
-                // (that template says "prenotazione registrata" + "lo slot
-                // potrebbe essere assegnato ad altri" — wrong wording for an
-                // extension where the booking already exists).
                 const expiryLabel = `${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}`
-                const extPayMsg =
-`Salve ${custName},
-
-L'estensione della sua prenotazione #${bookingRef} è stata registrata.
-
-Per confermarla, completi il pagamento di €${additionalAmount.toFixed(2)} cliccando qui:
-${linkData.paymentUrl}
-
-Il link scade tra ${expiryLabel}. In assenza di pagamento, l'estensione non verrà confermata.
-
-Grazie,
-DR7`
+                // Pass every common name placeholder variant — admin's
+                // template in Messaggi di Sistema Pro can use {nome},
+                // {customer_name}, {cliente}, etc. Without aliasing, only
+                // the variant that matches the template ever resolves and
+                // the others get sent literally to the customer.
                 const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     customPhone: customerPhone,
-                    customMessage: extPayMsg,
-                    type: 'Estensione - Pay by Link'
+                    templateKey: 'payment_link_customer',
+                    templateVars: {
+                      '{nome}': custName,
+                      '{customer_name}': custName,
+                      '{cliente}': custName,
+                      '{name}': custName,
+                      '{booking_id}': bookingRef,
+                      '{total}': additionalAmount.toFixed(2),
+                      '{payment_link}': linkData.paymentUrl,
+                      '{expiry}': expiryLabel,
+                    }
                   })
                 })
                 const waJson = await waRes.json().catch(() => ({}))
