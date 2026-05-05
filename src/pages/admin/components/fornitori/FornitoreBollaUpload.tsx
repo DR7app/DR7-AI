@@ -203,7 +203,8 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => !uploading && onClose()}>
+        <>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => !uploading && !otpOpen && onClose()}>
             <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-lg w-full p-6"
                 onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
@@ -318,21 +319,24 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
                     </div>
                 </div>
             </div>
-
-            <LimitationOverrideModal
-                isOpen={otpOpen}
-                limitationCode="fornitore_doc_no_file"
-                limitationMessage={`Autorizza inserimento ${DOCUMENT_TIPO_LABELS[tipo]} senza file allegato per ${fornitore.nome}.`}
-                actionContext={`fornitore_doc_otp_${fornitore.id}_${tipo}`}
-                draftSessionId={`fornitore-${fornitore.id}-otp-${Date.now()}`}
-                flowType="fornitori"
-                onClose={() => setOtpOpen(false)}
-                onCancel={() => setOtpOpen(false)}
-                onOverrideApproved={(overrideId) => {
-                    setOtpOpen(false)
-                    confirmWithoutFile(overrideId)
-                }}
-            />
         </div>
+
+        {/* OTP modal renderizzato fuori dall'overlay di Carica documento per
+            evitare che i click bubble all'onClick={onClose} del padre.
+            Pattern visto in PreventiviTab. */}
+        <LimitationOverrideModal
+            isOpen={otpOpen}
+            limitationCode="fornitore_doc_no_file"
+            limitationMessage={`Autorizza inserimento ${DOCUMENT_TIPO_LABELS[tipo]} senza file allegato per ${fornitore.nome}.`}
+            actionContext={`fornitore_doc_otp_${fornitore.id}_${tipo}`}
+            draftSessionId={`fornitore-${fornitore.id}-otp-${Date.now()}`}
+            flowType="fornitori"
+            onCancel={() => setOtpOpen(false)}
+            onOverrideApproved={(overrideId) => {
+                setOtpOpen(false)
+                confirmWithoutFile(overrideId)
+            }}
+        />
+        </>
     )
 }
