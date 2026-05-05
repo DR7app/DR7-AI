@@ -316,7 +316,14 @@ export default function UnpaidBookingsTab() {
         }
       }
       // Filter out test plates in JS (NULL-safe: NULL plates pass through).
-      const data = merged.filter(b => !isTestPlate(b.vehicle_plate))
+      // Exception: test bookings created on/after TEST_VISIBLE_FROM ARE shown
+      // in Da Saldare so the team can validate extension/da-saldare flows on
+      // TEST000 / TEST002 without polluting the tab with legacy test data.
+      const TEST_VISIBLE_FROM = '2026-05-05T00:00:00Z'
+      const data = merged.filter(b => {
+        if (!isTestPlate(b.vehicle_plate)) return true
+        return !!b.created_at && b.created_at >= TEST_VISIBLE_FROM
+      })
       const error = null as null | { message: string }
 
       if (error) throw error
