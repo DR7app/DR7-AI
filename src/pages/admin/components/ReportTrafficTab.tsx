@@ -219,7 +219,7 @@ export default function ReportTrafficTab() {
         <div>
           <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-2">
             <span className="inline-block w-2 h-6 rounded-full bg-gradient-to-b from-cyan-400 via-fuchsia-500 to-emerald-400" />
-            Rendimento Google
+            Rendimento Sito
           </h1>
           <p className="text-xs text-theme-text-muted mt-1">
             Performance complessiva del traffico Google su dr7empire.com — Analytics, Search Console, Business Profile.
