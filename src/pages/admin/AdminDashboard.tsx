@@ -56,6 +56,7 @@ const PromoIncassiTab = lazyWithRetry(() => import('./components/PromoIncassiTab
 const CampaignCenterTab = lazyWithRetry(() => import('./components/CampaignCenterTab'))
 const GestioneOtpTab = lazyWithRetry(() => import('./components/GestioneOtpTab'))
 const DocumentsVerificationTab = lazyWithRetry(() => import('./components/DocumentsVerificationTab'))
+const EMTNTab = lazyWithRetry(() => import('./components/EMTNTab'))
 
 const TabLoader = () => (
   <div className="flex items-center justify-center py-12">
@@ -662,7 +663,7 @@ export default function AdminDashboard() {
           {activeTab === 'gestione-multe' && <GestioneMulteTab />}
           {activeTab === 'cargos' && <CargosTab />}
           {activeTab === 'trustera' && <TrusteraTab />}
-          {activeTab === 'emtn' && <PlaceholderTab title="E.M.T.N." subtitle="In Lavorazione" />}
+          {activeTab === 'emtn' && <EMTNTab />}
           {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && (isTabRestricted('report-lavaggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportLavaggioTab />)}

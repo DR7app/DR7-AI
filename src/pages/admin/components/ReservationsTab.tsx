@@ -3023,6 +3023,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         bookingUpdate.vehicle_plate = newVehicle.plate || newVehicle.targa || ''
       }
 
+      // If the extension is NOT paid upfront (da saldare or pay-by-link
+      // pending), the booking now owes more than was actually paid.
+      // Force payment_status='pending' so it shows up in Da Saldare /
+      // UnpaidBookingsTab. We never auto-upgrade to 'paid' here — that
+      // happens via the Nexi callback or a manual "Segna Pagato".
+      if (additionalAmount > 0 && extendData.extension_payment_status !== 'paid') {
+        bookingUpdate.payment_status = 'pending'
+      }
+
       // Update the booking directly - NO validation checks
       const { error: updateError } = await supabase
         .from('bookings')
