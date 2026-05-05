@@ -389,7 +389,10 @@ export default function UnpaidBookingsTab() {
 
         const extensions = booking.booking_details?.extension_history || []
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')) return true
+        if (extensions.some((ext: any) => {
+            const ps = (ext.payment_status || '').toString()
+            return !isPaid(ps) // undefined / pending / partial / nexi_pay_by_link / qualsiasi non-paid trigger
+        })) return true
 
         const penalties = booking.booking_details?.penalties || []
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
