@@ -424,9 +424,15 @@ export function isVehicleAvailable(
         logger.log(`[CROSS-GAP] Other booking id=${booking.id?.substring(0,8)} plate=${booking.vehicle_plate} pickup=${new Date(otherPickup).toISOString()} dropoff=${new Date(otherDropoff).toISOString()}`)
 
         for (const [myLabel, myTime, otherLabel, otherTime] of pairs) {
-            const diffMin = Math.abs(myTime - otherTime) / 60000
+            const diffMs = Math.abs(myTime - otherTime)
+            const diffMin = diffMs / 60000
             logger.log(`[CROSS-GAP]   ${myLabel} vs ${otherLabel}: ${diffMin.toFixed(1)} min`)
-            if (Math.abs(myTime - otherTime) < crossGapMs) {
+            // Diff esattamente 0 = stesso slot (es. due ritiri programmati alle
+            // 10:30): DR7 gestisce questi in batch nello stesso slot, NON e'
+            // un conflitto. Il gap di 15 min serve solo per evitare che due
+            // operazioni accadano A 1-14 minuti di distanza, dove lo staff
+            // non riuscirebbe a coprirle entrambe.
+            if (diffMs > 0 && diffMs < crossGapMs) {
                 const otherTimeFmt = new Date(otherTime).toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
                 const plateInfo = booking.vehicle_plate || booking.vehicle_name || 'altro veicolo'
                 logger.log(`[CROSS-GAP] CONFLICT: ${myLabel} within 15 min of ${otherLabel} (${diffMin.toFixed(1)} min), booking ${booking.id?.substring(0,8)}`)

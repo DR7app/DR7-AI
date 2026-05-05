@@ -970,7 +970,27 @@ const handler: Handler = async (event) => {
                             console.error('[nexi-payment-callback] ⚠️ DR7 Privilege lavaggio error:', privErr.message)
                         }
                     }
-                } else try {
+                } else {
+                    // DR7 Privilege per NOLEGGIO — invia codice subito al
+                    // pagamento (in passato partiva solo dopo la firma del
+                    // contratto). Idempotente via dr7_privilege_sent_at:
+                    // se signature-complete prova a re-inviare, viene
+                    // skippato grazie al flag.
+                    try {
+                        const { sendDr7Privilege } = await import('./utils/dr7Privilege')
+                        const result = await sendDr7Privilege(supabase, booking as any, 'noleggio')
+                        if (result.sent) {
+                            console.log(`[nexi-payment-callback] ✅ DR7 Privilege noleggio sent: ${result.code}`)
+                        } else if (result.skipped) {
+                            console.log(`[nexi-payment-callback] DR7 Privilege noleggio skipped: ${result.skipped}`)
+                        } else if (result.error) {
+                            console.warn(`[nexi-payment-callback] DR7 Privilege noleggio failed: ${result.error}`)
+                        }
+                    } catch (privErr: any) {
+                        console.error('[nexi-payment-callback] ⚠️ DR7 Privilege noleggio error:', privErr.message)
+                    }
+
+                    try {
                     const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
                     const contractRes = await fetch(`${baseUrl}/.netlify/functions/generate-contract`, {
                         method: 'POST',
@@ -1009,8 +1029,9 @@ const handler: Handler = async (event) => {
                     } else {
                         console.error('[nexi-payment-callback] Contract generation failed:', contractData.error || contractData);
                     }
-                } catch (contractErr) {
-                    console.error('[nexi-payment-callback] Contract/signing error:', contractErr);
+                    } catch (contractErr) {
+                        console.error('[nexi-payment-callback] Contract/signing error:', contractErr);
+                    }
                 }
 
                 // Auto-generate fattura for paid booking
