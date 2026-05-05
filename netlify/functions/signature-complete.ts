@@ -559,6 +559,35 @@ export const handler: Handler = async (event) => {
                 }
             }
 
+            // DR7 Privilege per noleggio — DEVE girare PRIMA delle altre code
+            // di rete (admin notification, CARGOS) cosi' un loro hang/timeout
+            // non impedisce mai l'invio del codice. Caso reale: contratto
+            // firmato (signed_pdf_url presente) ma dr7_privilege_sent_at
+            // restava NULL quando la chiamata a CARGOS si protraeva oltre il
+            // limite del runtime. Idempotente via dr7_privilege_sent_at.
+            if (contract?.booking_id) {
+                try {
+                    const { data: bookingRow } = await supabase
+                        .from('bookings')
+                        .select('id, service_type, customer_name, customer_phone, customer_email, vehicle_plate, booking_details, dr7_privilege_sent_at')
+                        .eq('id', contract.booking_id)
+                        .maybeSingle()
+                    if (bookingRow && bookingRow.service_type !== 'car_wash' && bookingRow.service_type !== 'mechanical') {
+                        const { sendDr7Privilege } = await import('./utils/dr7Privilege')
+                        const result = await sendDr7Privilege(supabase, bookingRow, 'noleggio')
+                        if (result.sent) {
+                            console.log(`[signature-complete] ✅ DR7 Privilege code sent: ${result.code}`)
+                        } else if (result.skipped) {
+                            console.log(`[signature-complete] DR7 Privilege skipped: ${result.skipped}`)
+                        } else {
+                            console.warn(`[signature-complete] DR7 Privilege failed: ${result.error}`)
+                        }
+                    }
+                } catch (privErr: any) {
+                    console.error('[signature-complete] ⚠️ DR7 Privilege error:', privErr.message)
+                }
+            }
+
             // Admin notification via Green API. Note: if ADMIN_PHONE is the
             // Green API instance number itself, the message will not be
             // delivered (Green API cannot send to its own number).
@@ -594,33 +623,6 @@ export const handler: Handler = async (event) => {
                 }
             } catch (cargosErr: any) {
                 console.error('[signature-complete] ⚠️ CARGOS auto-send error:', cargosErr.message)
-            }
-        }
-
-        // DR7 Privilege per noleggio — invio dopo firma contratto.
-        // Trigger per-event (la firma e' sempre nuova), quindi nessun rischio
-        // di backfill come per il cron lavaggi.
-        const DR7_PRIVILEGE_ENABLED = true
-        if (DR7_PRIVILEGE_ENABLED && contract?.booking_id) {
-            try {
-                const { data: bookingRow } = await supabase
-                    .from('bookings')
-                    .select('id, service_type, customer_name, customer_phone, customer_email, vehicle_plate, booking_details, dr7_privilege_sent_at')
-                    .eq('id', contract.booking_id)
-                    .maybeSingle()
-                if (bookingRow && bookingRow.service_type !== 'car_wash' && bookingRow.service_type !== 'mechanical') {
-                    const { sendDr7Privilege } = await import('./utils/dr7Privilege')
-                    const result = await sendDr7Privilege(supabase, bookingRow, 'noleggio')
-                    if (result.sent) {
-                        console.log(`[signature-complete] ✅ DR7 Privilege code sent: ${result.code}`)
-                    } else if (result.skipped) {
-                        console.log(`[signature-complete] DR7 Privilege skipped: ${result.skipped}`)
-                    } else {
-                        console.warn(`[signature-complete] DR7 Privilege failed: ${result.error}`)
-                    }
-                }
-            } catch (privErr: any) {
-                console.error('[signature-complete] ⚠️ DR7 Privilege error:', privErr.message)
             }
         }
 

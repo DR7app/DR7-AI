@@ -66,6 +66,28 @@ export const handler: Handler = async (event) => {
         return { statusCode: 200, headers, body: JSON.stringify({ sent: false, skipped: "not_carwash" }) }
     }
 
+    // Per noleggio richiediamo che il contratto sia stato firmato. Cosi' questa
+    // funzione e' usabile come fallback/lookup: la chiami quando vuoi (signature-
+    // complete, ContrattoTab, ReservationsTab refresh, ecc.) e fa partire il
+    // codice solo se il cliente ha effettivamente firmato. Idempotente via
+    // dr7_privilege_sent_at — non c'e' rischio di doppio invio.
+    if (kind === "noleggio") {
+        const { data: contract } = await sb
+            .from("contracts")
+            .select("id, signed_pdf_url")
+            .eq("booking_id", bookingId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        if (!contract?.signed_pdf_url) {
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({ sent: false, skipped: "contract_not_signed" }),
+            }
+        }
+    }
+
     const result = await sendDr7Privilege(sb, booking, kind)
     return {
         statusCode: 200,
