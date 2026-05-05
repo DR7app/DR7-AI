@@ -256,6 +256,9 @@ const handler: Handler = async (event) => {
           vehicle_name: booking.vehicle_name || '',
           plate: booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '',
           pickup_location: booking.pickup_location || '',
+          // Fallback su pickup_location se dropoff non e' stato modificato:
+          // tipicamente il cliente ritira e riconsegna nello stesso posto.
+          dropoff_location: booking.dropoff_location || booking.pickup_location || '',
           insurance: await (async () => {
             const insId = booking.booking_details?.insuranceOption || booking.insurance_option || '';
             if (!insId) return 'N/A';
