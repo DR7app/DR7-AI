@@ -157,28 +157,32 @@ export default function ReportTrafficTab() {
 
       {/* Setup banner — shown only when env vars missing */}
       {showBanner && (
-        <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4">
-          <div className="text-sm font-semibold text-amber-300 mb-2">Configurazione Google Analytics richiesta</div>
-          <div className="text-xs text-amber-200/80 leading-relaxed">
-            Per popolare questo report, imposta in Netlify env del progetto admin le seguenti variabili:
+        <div className="bg-amber-500/15 border-2 border-amber-500 rounded-xl p-4 text-amber-900 dark:text-amber-100">
+          <div className="text-base font-bold mb-2 flex items-center gap-2">
+            <span className="text-xl">⚠️</span>
+            Configurazione Google Analytics richiesta
           </div>
-          <ul className="mt-2 space-y-1">
+          <div className="text-sm leading-relaxed mb-3 opacity-90">
+            Imposta in Netlify env (admin site) queste variabili:
+          </div>
+          <ul className="space-y-1.5 mb-3">
             {data!.missing.map(m => (
-              <li key={m} className="text-xs font-mono text-amber-100 bg-amber-500/10 px-2 py-1 rounded">{m}</li>
+              <li key={m} className="text-sm font-mono font-bold bg-amber-600 text-white px-3 py-1.5 rounded inline-block mr-2">{m}</li>
             ))}
           </ul>
-          <div className="mt-3 text-[11px] text-amber-200/70 leading-relaxed">
-            <strong>GA4_PROPERTY_ID</strong>: numerico, lo trovi in Analytics → Admin → Property settings → Property details.<br/>
-            <strong>GA4_CLIENT_EMAIL</strong> + <strong>GA4_PRIVATE_KEY</strong>: i due campi <code>client_email</code> e <code>private_key</code> presi dal JSON del service account (più compatti del JSON intero, sotto al limite 4KB di Lambda). In alternativa <code>GA4_SERVICE_ACCOUNT_JSON</code> con il JSON completo, se c'è spazio sotto il limite.
+          <div className="text-xs leading-relaxed space-y-1.5 opacity-90">
+            <div><strong>GA4_PROPERTY_ID</strong> — numerico (es. <code className="font-mono bg-amber-600/20 px-1 rounded">14813314951</code>), lo trovi in Analytics → Admin → Property settings.</div>
+            <div><strong>GA4_CLIENT_EMAIL</strong> — copia il campo <code className="font-mono bg-amber-600/20 px-1 rounded">client_email</code> dal JSON del service account (es. <code className="font-mono bg-amber-600/20 px-1 rounded">dr7-analytics@…iam.gserviceaccount.com</code>).</div>
+            <div><strong>GA4_PRIVATE_KEY</strong> — copia il campo <code className="font-mono bg-amber-600/20 px-1 rounded">private_key</code> dal JSON, da <code>-----BEGIN PRIVATE KEY-----</code> a <code>-----END PRIVATE KEY-----</code> incluso.</div>
           </div>
         </div>
       )}
 
       {/* Warnings — shown when configured but data is unusual */}
       {showWarnings && !showBanner && (
-        <div className="bg-cyan-500/10 border border-cyan-500/40 rounded-xl p-3 space-y-1">
+        <div className="bg-cyan-500/15 border-2 border-cyan-500 rounded-xl p-3 space-y-1 text-cyan-900 dark:text-cyan-100">
           {data!.warnings.map((w, i) => (
-            <div key={i} className="text-[11px] text-cyan-200">• {w}</div>
+            <div key={i} className="text-sm font-medium">• {w}</div>
           ))}
         </div>
       )}
