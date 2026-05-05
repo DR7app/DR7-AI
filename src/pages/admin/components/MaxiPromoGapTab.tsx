@@ -196,6 +196,9 @@ export default function MaxiPromoGapTab() {
 
     useEffect(() => { loadSettings() }, [loadSettings])
     useEffect(() => { loadStats() }, [loadStats])
+    // Auto-detect dei gap al primo mount: cosi' la tab non mostra zeri vuoti
+    // appena entri. Si rilancia comunque cliccando "Aggiorna gap".
+    useEffect(() => { detectGaps() }, [detectGaps])
 
     async function saveSettings() {
         if (draftMode === 'pilot' && !draftPhone.trim()) {
@@ -300,13 +303,23 @@ export default function MaxiPromoGapTab() {
 
             {/* TOP KPI ROW */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                <KpiTile label="Gap Rilevati Oggi" value={String(gapRilevatiOggi)} sub="cliccare 'Aggiorna gap'" tone="amber" icon="warn" />
-                <KpiTile label="Valore Potenziale" value={eur(valorePotenziale)} sub="totale del giorno" tone="emerald" icon="euro" />
-                <KpiTile label="Messaggi Inviati" value={String(messaggiInviati)} sub="nel periodo" tone="sky" icon="send" />
-                <KpiTile label="Conversioni" value={String(convertedCount)} sub="prenotazioni" tone="primary" icon="check" />
-                <KpiTile label="Tasso Riempimento" value={`${tassoRiempimento}%`} sub="conv / inviati" tone={tassoRiempimento >= 20 ? 'emerald' : 'amber'} icon="trend" />
-                <KpiTile label="Fatturato Generato" value={eur(convertedRevenue)} sub="da maxi promo" tone="emerald" icon="cash" />
+                <KpiTile label="Gap Rilevati Domani" value={detecting ? '…' : String(gapRilevatiOggi)} sub={gapRilevatiOggi > 0 ? 'opportunita\' aperte' : 'nessun gap rilevato'} tone="amber" icon="warn" />
+                <KpiTile label="Valore Potenziale" value={eur(valorePotenziale)} sub={gapRilevatiOggi > 0 ? `${gapRilevatiOggi} veicoli scontati` : 'attendi gap di 1 giorno'} tone="emerald" icon="euro" />
+                <KpiTile label="Messaggi Inviati" value={String(messaggiInviati)} sub={messaggiInviati > 0 ? `nel periodo (${range})` : 'cron ancora inattivo'} tone="sky" icon="send" />
+                <KpiTile label="Conversioni" value={String(convertedCount)} sub={convertedCount > 0 ? 'prenotazioni post-msg' : 'nessuna conv. tracciata'} tone="primary" icon="check" />
+                <KpiTile label="Tasso Riempimento" value={messaggiInviati > 0 ? `${tassoRiempimento}%` : '—'} sub={messaggiInviati > 0 ? 'conv / inviati' : 'serve almeno 1 invio'} tone={tassoRiempimento >= 20 ? 'emerald' : 'amber'} icon="trend" />
+                <KpiTile label="Fatturato Generato" value={eur(convertedRevenue)} sub={convertedRevenue > 0 ? 'da maxi promo' : 'nessuna conv. ancora'} tone="emerald" icon="cash" />
             </div>
+
+            {/* HINT quando il cron e' OFF e niente dati */}
+            {settings?.mode === 'off' && messaggiInviati === 0 && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3">
+                    <span>
+                        Il cron Maxi Promo Gap e' attualmente <strong>OFF</strong>: nessun messaggio viene inviato e i KPI restano vuoti.
+                        Per popolare il report, attiva <strong>Pilot</strong> o <strong>Broadcast</strong> nel pannello "Automazione Intelligente" qui sotto.
+                    </span>
+                </div>
+            )}
 
             {/* MAIN GRID: table + sidebar */}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
@@ -424,15 +437,15 @@ export default function MaxiPromoGapTab() {
                         <h3 className="text-sm font-semibold text-theme-text-primary mb-2">Anteprima Messaggio WhatsApp</h3>
                         <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-lg p-3 text-xs text-theme-text-primary">
                             <p className="font-mono whitespace-pre-line leading-relaxed">
-                                {`Ciao {first_name}! 👋
+                                {`Ciao {first_name},
 
-Abbiamo un'offerta speciale per te:
+abbiamo un'offerta speciale per te:
 
-🚗 {vehicle_specs}
-📅 Disponibile il {date_gap_long}
-💰 -30% sul prezzo standard
+Auto: {vehicle_specs}
+Disponibile il {date_gap_long}
+-30% sul prezzo standard
 
-Prenota ora e approfitta di 1 giorno esperienza di qualità! 🎯`}
+Prenota ora — 1 giorno di esperienza in DR7.`}
                             </p>
                         </div>
                         <p className="text-[10px] text-theme-text-muted mt-2">

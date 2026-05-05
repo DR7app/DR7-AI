@@ -224,7 +224,6 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
                             <option value="bolla">{DOCUMENT_TIPO_LABELS.bolla}</option>
                             <option value="proforma">{DOCUMENT_TIPO_LABELS.proforma}</option>
                             <option value="preventivo">{DOCUMENT_TIPO_LABELS.preventivo}</option>
-                            <option value="ricevuta_pagamento">{DOCUMENT_TIPO_LABELS.ricevuta_pagamento}</option>
                         </select>
                     </label>
                     <label className="block">
@@ -293,9 +292,10 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
                             type="button"
                             onClick={() => setOtpOpen(true)}
                             disabled={uploading || confirmingOtp}
-                            className="text-xs underline text-dr7-gold hover:opacity-80 disabled:opacity-50"
+                            title="Inserisce il documento senza file allegato — invia un OTP a Valerio per autorizzazione"
+                            className="px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 text-xs font-semibold hover:opacity-80 disabled:opacity-50"
                         >
-                            {confirmingOtp ? 'Conferma in corso…' : 'Autorizza con OTP'}
+                            {confirmingOtp ? 'Conferma in corso…' : 'Autorizza con OTP (senza file)'}
                         </button>
                     ) : <span />}
                     <div className="flex flex-wrap items-center gap-2">
