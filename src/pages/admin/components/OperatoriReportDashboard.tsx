@@ -698,3 +698,162 @@ function CostiPersonale({ orePeriodoMin, operatoriCount }: { orePeriodoMin: numb
         </ChartCard>
     )
 }
+
+// ─── MANAGE OPERATORI (CRUD per direzione) ───────────────────────────────
+
+function ManageOperatoriPanel({ operatori, onChanged }: { operatori: Operatore[]; onChanged: () => void }) {
+    const [showAdd, setShowAdd] = useState(false)
+    const [busyId, setBusyId] = useState<string | null>(null)
+
+    async function deactivateOperatore(op: Operatore) {
+        if (!confirm(`Disattivare ${op.nome} ${op.cognome || ''}?\n\nLa riga viene marcata come non attiva: gli orari storici restano in archivio, ma non potra' piu' registrare nuovi orari.`)) return
+        setBusyId(op.id)
+        try {
+            const { error } = await supabase
+                .from('operatori_persone')
+                .update({ attivo: false })
+                .eq('id', op.id)
+            if (error) throw error
+            onChanged()
+        } catch (err) {
+            alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setBusyId(null)
+        }
+    }
+
+    return (
+        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4">
+            <div className="flex items-center justify-between mb-3">
+                <div>
+                    <h3 className="text-base font-semibold text-theme-text-primary">Gestisci Operatori</h3>
+                    <p className="text-[10px] text-theme-text-muted">Solo direzione: aggiungi o disattiva i collaboratori del team.</p>
+                </div>
+                <button onClick={() => setShowAdd(true)}
+                    className="px-3 py-1.5 rounded bg-dr7-gold text-black text-xs font-semibold hover:opacity-90">
+                    + Nuovo Operatore
+                </button>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                    <thead className="text-theme-text-muted text-xs">
+                        <tr className="border-b border-theme-border">
+                            <th className="text-left py-2 font-medium">Nome</th>
+                            <th className="text-left py-2 font-medium">Email</th>
+                            <th className="text-left py-2 font-medium">Ruolo</th>
+                            <th className="text-right py-2 font-medium">Target/giorno</th>
+                            <th className="text-center py-2 font-medium">Account collegato</th>
+                            <th className="text-right py-2 font-medium w-24">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-theme-border/50">
+                        {operatori.length === 0 && (
+                            <tr><td colSpan={6} className="text-center py-6 text-theme-text-muted">Nessun operatore.</td></tr>
+                        )}
+                        {operatori.map(op => (
+                            <tr key={op.id}>
+                                <td className="py-2 text-theme-text-primary font-medium">{op.nome} {op.cognome || ''}</td>
+                                <td className="py-2 text-theme-text-secondary text-xs font-mono">{op.email}</td>
+                                <td className="py-2 text-theme-text-secondary text-xs">{op.ruolo || '—'}</td>
+                                <td className="py-2 text-right tabular-nums">{op.ore_target_giornaliere}h</td>
+                                <td className="py-2 text-center text-xs">
+                                    {op.user_id ? (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Collegato</span>
+                                    ) : (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Non collegato</span>
+                                    )}
+                                </td>
+                                <td className="py-2 text-right">
+                                    <button onClick={() => deactivateOperatore(op)} disabled={busyId === op.id}
+                                        className="text-xs px-2 py-1 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                                        title="Disattiva — non elimina lo storico">
+                                        {busyId === op.id ? '…' : 'Disattiva'}
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {showAdd && (
+                <AddOperatoreInlineModal
+                    onClose={() => setShowAdd(false)}
+                    onSaved={() => { setShowAdd(false); onChanged() }}
+                />
+            )}
+        </div>
+    )
+}
+
+function AddOperatoreInlineModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+    const [nome, setNome] = useState('')
+    const [cognome, setCognome] = useState('')
+    const [email, setEmail] = useState('')
+    const [ruolo, setRuolo] = useState('')
+    const [oreTarget, setOreTarget] = useState('8')
+    const [saving, setSaving] = useState(false)
+
+    async function save() {
+        if (!nome.trim() || !email.trim()) {
+            alert('Nome e email sono obbligatori')
+            return
+        }
+        setSaving(true)
+        try {
+            const { error } = await supabase.from('operatori_persone').insert({
+                nome: nome.trim(),
+                cognome: cognome.trim() || null,
+                email: email.trim().toLowerCase(),
+                ruolo: ruolo.trim() || null,
+                ore_target_giornaliere: parseFloat(oreTarget) || 8,
+                attivo: true,
+            })
+            if (error) throw error
+            onSaved()
+        } catch (err) {
+            alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-semibold text-theme-text-primary mb-4">Nuovo Operatore</h3>
+                <div className="space-y-3">
+                    <Field label="Nome *" value={nome} onChange={setNome} placeholder="Es. Salvatore" />
+                    <Field label="Cognome" value={cognome} onChange={setCognome} placeholder="Es. Saja" />
+                    <Field label="Email *" value={email} onChange={setEmail} type="email" placeholder="nome@dr7.app" />
+                    <Field label="Ruolo" value={ruolo} onChange={setRuolo} placeholder="Es. Receptionist, Operativo" />
+                    <Field label="Ore target/giorno" value={oreTarget} onChange={setOreTarget} type="number" />
+                </div>
+                <p className="text-[10px] text-theme-text-muted mt-3">
+                    L'operatore potra' collegare il suo account Supabase Auth automaticamente alla prima apertura di "I miei orari"
+                    (match per email).
+                </p>
+                <div className="flex justify-end gap-2 mt-4">
+                    <button onClick={onClose} disabled={saving}
+                        className="px-4 py-2 text-sm rounded text-theme-text-secondary hover:bg-theme-bg-tertiary">Annulla</button>
+                    <button onClick={save} disabled={saving}
+                        className="px-4 py-2 text-sm rounded bg-dr7-gold text-black font-semibold hover:opacity-90 disabled:opacity-50">
+                        {saving ? 'Salvataggio…' : 'Crea'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function Field({ label, value, onChange, type = 'text', placeholder }: {
+    label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string
+}) {
+    return (
+        <label className="block">
+            <span className="text-xs text-theme-text-secondary">{label}</span>
+            <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+                className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary" />
+        </label>
+    )
+}
