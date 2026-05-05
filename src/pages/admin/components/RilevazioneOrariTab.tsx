@@ -447,6 +447,30 @@ export default function RilevazioneOrariTab() {
                 const targetMin = periodRows.reduce((s, r) => s + Math.round((r.operatore.ore_target_giornaliere || 8) * 60) * periodRange.days.length, 0)
                 const saldoMin = totMin - targetMin
                 const giornateAttive = periodRows.reduce((s, r) => s + Array.from(r.daysData.values()).filter(v => v > 0).length, 0)
+                // Trend: minuti totali per giorno (sommati su tutti gli operatori visibili)
+                const trendData = periodRange.days.map(d => ({
+                    day: d,
+                    minutes: periodRows.reduce((s, r) => s + (r.daysData.get(d) || 0), 0),
+                }))
+                // Top operatori per ore lavorate (utile solo per direzione: Ophe vede una sola riga)
+                const topData = [...periodRows]
+                    .map(r => ({
+                        nome: `${r.operatore.nome} ${r.operatore.cognome || ''}`.trim(),
+                        minutes: Array.from(r.daysData.values()).reduce((a, b) => a + b, 0),
+                    }))
+                    .filter(x => x.minutes > 0)
+                    .sort((a, b) => b.minutes - a.minutes)
+                    .slice(0, 5)
+                // Distribuzione per ruolo
+                const ruoloMap = new Map<string, number>()
+                for (const r of periodRows) {
+                    const min = Array.from(r.daysData.values()).reduce((a, b) => a + b, 0)
+                    if (min === 0) continue
+                    const k = (r.operatore.ruolo || '—').trim() || '—'
+                    ruoloMap.set(k, (ruoloMap.get(k) || 0) + min)
+                }
+                const ruoloData = Array.from(ruoloMap.entries()).map(([nome, minutes]) => ({ nome, minutes }))
+                const showTeamCharts = periodRows.length > 1
                 return <>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
                     <KpiCard label="Ore Totali" value={fmtMin(totMin)} sub={fmtMinShort(totMin)} tone="primary" />
@@ -454,6 +478,25 @@ export default function RilevazioneOrariTab() {
                     <KpiCard label="Saldo" value={(saldoMin >= 0 ? '+' : '-') + fmtMin(Math.abs(saldoMin))} sub={fmtMinShort(Math.abs(saldoMin))} tone={saldoMin >= 0 ? 'emerald' : 'amber'} />
                     <KpiCard label="Giornate Attive" value={String(giornateAttive)} tone="sky" />
                 </div>
+
+                <div className={`grid grid-cols-1 ${showTeamCharts ? 'lg:grid-cols-2' : ''} gap-3 mb-3`}>
+                    <ChartCard title="Andamento ore" subtitle="Ore lavorate per giorno nel periodo">
+                        <TrendLineChart data={trendData} />
+                    </ChartCard>
+                    {showTeamCharts && (
+                        <ChartCard title="Top operatori" subtitle="Per ore lavorate nel periodo">
+                            <TopBarsChart data={topData} />
+                        </ChartCard>
+                    )}
+                </div>
+
+                {showTeamCharts && ruoloData.length > 1 && (
+                    <div className="mb-3">
+                        <ChartCard title="Distribuzione per ruolo" subtitle="Ore lavorate raggruppate per ruolo">
+                            <DonutChart data={ruoloData} />
+                        </ChartCard>
+                    </div>
+                )}
                 <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-theme-bg-tertiary text-theme-text-secondary">
@@ -510,6 +553,129 @@ export default function RilevazioneOrariTab() {
                     onSaved={() => { setEditMyDay(false); load(); toast.success('Orari aggiornati') }}
                 />
             )}
+        </div>
+    )
+}
+
+function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+    return (
+        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4">
+            <div className="flex items-baseline justify-between mb-3">
+                <h4 className="text-sm font-semibold text-theme-text-primary">{title}</h4>
+                {subtitle && <span className="text-[10px] text-theme-text-muted">{subtitle}</span>}
+            </div>
+            {children}
+        </div>
+    )
+}
+
+function TrendLineChart({ data }: { data: { day: string; minutes: number }[] }) {
+    if (data.length === 0) return <div className="text-theme-text-muted text-sm py-6 text-center">Nessun dato.</div>
+    const max = Math.max(...data.map(d => d.minutes), 60)
+    const W = 600
+    const H = 160
+    const PAD = 28
+    const stepX = (W - PAD * 2) / Math.max(1, data.length - 1)
+    const points = data.map((d, i) => {
+        const x = PAD + i * stepX
+        const y = H - PAD - ((d.minutes / max) * (H - PAD * 2))
+        return { x, y, day: d.day, min: d.minutes }
+    })
+    const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+    const areaPath = `${path} L ${points[points.length - 1].x} ${H - PAD} L ${points[0].x} ${H - PAD} Z`
+    return (
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44" role="img" aria-label="Andamento ore">
+            <defs>
+                <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#19C2D6" stopOpacity="0.35" />
+                    <stop offset="100%" stopColor="#19C2D6" stopOpacity="0" />
+                </linearGradient>
+            </defs>
+            {[0, 0.25, 0.5, 0.75, 1].map((t, i) => {
+                const y = H - PAD - t * (H - PAD * 2)
+                return <line key={i} x1={PAD} x2={W - PAD} y1={y} y2={y} stroke="currentColor" strokeOpacity="0.08" strokeDasharray="2 3" />
+            })}
+            <path d={areaPath} fill="url(#trendGrad)" />
+            <path d={path} fill="none" stroke="#19C2D6" strokeWidth="2" />
+            {points.map((p, i) => (
+                <g key={i}>
+                    <circle cx={p.x} cy={p.y} r={3} fill="#19C2D6" />
+                    <title>{`${p.day}: ${fmtMin(p.min)} (${p.min} min)`}</title>
+                </g>
+            ))}
+            {points.map((p, i) => i % Math.ceil(points.length / 8) === 0 ? (
+                <text key={`l-${i}`} x={p.x} y={H - 8} fontSize="9" textAnchor="middle" fill="currentColor" fillOpacity="0.5">
+                    {p.day.slice(5)}
+                </text>
+            ) : null)}
+            <text x={PAD - 4} y={PAD} fontSize="9" textAnchor="end" fill="currentColor" fillOpacity="0.5">{fmtMin(max)}</text>
+            <text x={PAD - 4} y={H - PAD + 3} fontSize="9" textAnchor="end" fill="currentColor" fillOpacity="0.5">0</text>
+        </svg>
+    )
+}
+
+function TopBarsChart({ data }: { data: { nome: string; minutes: number }[] }) {
+    if (data.length === 0) return <div className="text-theme-text-muted text-sm py-6 text-center">Nessun dato.</div>
+    const max = Math.max(...data.map(d => d.minutes), 1)
+    return (
+        <div className="space-y-2">
+            {data.map(d => {
+                const pct = (d.minutes / max) * 100
+                return (
+                    <div key={d.nome}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-theme-text-secondary truncate pr-2">{d.nome}</span>
+                            <span className="text-theme-text-muted whitespace-nowrap">{fmtMin(d.minutes)} <span className="opacity-60">· {d.minutes} min</span></span>
+                        </div>
+                        <div className="h-2 bg-theme-bg-tertiary rounded-full overflow-hidden">
+                            <div className="h-full bg-dr7-gold transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
+function DonutChart({ data }: { data: { nome: string; minutes: number }[] }) {
+    const total = data.reduce((s, d) => s + d.minutes, 0)
+    if (total === 0) return <div className="text-theme-text-muted text-sm py-6 text-center">Nessun dato.</div>
+    const PALETTE = ['#19C2D6', '#F59E0B', '#10B981', '#8B5CF6', '#EF4444', '#3B82F6', '#EC4899', '#06B6D4']
+    const R_OUTER = 70, R_INNER = 42, CX = 90, CY = 90
+    let startAngle = -Math.PI / 2
+    const arcs = data.map((d, i) => {
+        const angle = (d.minutes / total) * Math.PI * 2
+        const endAngle = startAngle + angle
+        const x1 = CX + R_OUTER * Math.cos(startAngle), y1 = CY + R_OUTER * Math.sin(startAngle)
+        const x2 = CX + R_OUTER * Math.cos(endAngle), y2 = CY + R_OUTER * Math.sin(endAngle)
+        const x3 = CX + R_INNER * Math.cos(endAngle), y3 = CY + R_INNER * Math.sin(endAngle)
+        const x4 = CX + R_INNER * Math.cos(startAngle), y4 = CY + R_INNER * Math.sin(startAngle)
+        const large = angle > Math.PI ? 1 : 0
+        const path = `M ${x1} ${y1} A ${R_OUTER} ${R_OUTER} 0 ${large} 1 ${x2} ${y2} L ${x3} ${y3} A ${R_INNER} ${R_INNER} 0 ${large} 0 ${x4} ${y4} Z`
+        const arc = { path, color: PALETTE[i % PALETTE.length], nome: d.nome, minutes: d.minutes, pct: (d.minutes / total) * 100 }
+        startAngle = endAngle
+        return arc
+    })
+    return (
+        <div className="flex items-center gap-4">
+            <svg viewBox="0 0 180 180" className="w-40 h-40 flex-shrink-0">
+                {arcs.map((a, i) => (
+                    <path key={i} d={a.path} fill={a.color}>
+                        <title>{`${a.nome}: ${fmtMin(a.minutes)} (${a.pct.toFixed(0)}%)`}</title>
+                    </path>
+                ))}
+                <text x={CX} y={CY - 4} textAnchor="middle" fontSize="11" fill="currentColor" fillOpacity="0.6">Totale</text>
+                <text x={CX} y={CY + 12} textAnchor="middle" fontSize="13" fontWeight="bold" fill="currentColor">{fmtMin(total)}</text>
+            </svg>
+            <div className="flex-1 space-y-1.5 text-xs">
+                {arcs.map((a, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: a.color }} />
+                        <span className="text-theme-text-secondary flex-1 truncate">{a.nome}</span>
+                        <span className="text-theme-text-muted whitespace-nowrap">{fmtMin(a.minutes)} <span className="opacity-60">({a.pct.toFixed(0)}%)</span></span>
+                    </div>
+                ))}
+            </div>
         </div>
     )
 }
