@@ -396,6 +396,11 @@ export default function OperatoriReportDashboard() {
                 <MiniStat label="Straordinari Oggi" value={fmtMin(oreStraordOggiMin)} sub={`${oreStraordOggiMin} min`} tone={oreStraordOggiMin > 0 ? 'sky' : 'muted'} />
             </div>
 
+            {/* GESTISCI OPERATORI — solo direzione (Valerio/Ilenia) */}
+            {isDirezione && (
+                <ManageOperatoriPanel operatori={operatori} onChanged={load} />
+            )}
+
             {/* BOTTOM WIDGETS — solo direzione */}
             {isDirezione && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

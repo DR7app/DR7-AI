@@ -37,18 +37,6 @@ const handler: Handler = async (event) => {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  // Ensure table exists (idempotent — uses RPC or direct SQL via REST).
-  // Schema: app_secrets(key text primary key, value jsonb, updated_at timestamptz default now())
-  // If creation fails (already exists), proceed.
-  await supabase.rpc('exec_sql', {
-    sql: `create table if not exists public.app_secrets (
-      key text primary key,
-      value jsonb not null,
-      updated_at timestamptz not null default now()
-    );
-    alter table public.app_secrets enable row level security;`,
-  }).catch(() => { /* RPC may not exist; we'll try the upsert anyway */ })
-
   // Bootstrap auth: allow first write, require token afterwards.
   const { data: existing } = await supabase
     .from('app_secrets')
