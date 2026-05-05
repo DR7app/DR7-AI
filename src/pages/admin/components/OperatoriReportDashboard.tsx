@@ -344,8 +344,8 @@ export default function OperatoriReportDashboard() {
                                         </td>
                                         <td className="py-2 text-theme-text-secondary text-xs">{r.operatore.ruolo || '—'}</td>
                                         <td className="py-2 font-mono text-xs">{fmtTime(r.entrata)}</td>
-                                        <td className="py-2 font-mono text-xs">{fmtTime(r.pausa_inizi[0] || null)}</td>
-                                        <td className="py-2 font-mono text-xs">{fmtTime(r.pausa_fini[0] || null)}</td>
+                                        <td className="py-2 font-mono text-xs">{r.pausa_inizi.length > 0 ? r.pausa_inizi.map(fmtTime).join(' · ') : '—'}</td>
+                                        <td className="py-2 font-mono text-xs">{r.pausa_fini.length > 0 ? r.pausa_fini.map(fmtTime).join(' · ') : '—'}</td>
                                         <td className="py-2 font-mono text-xs">{fmtTime(r.uscita)}</td>
                                         <td className="py-2 text-center text-xs">{r.pausa_inizi.length}</td>
                                         <td className="py-2 text-right tabular-nums">
