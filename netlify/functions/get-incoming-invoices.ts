@@ -202,9 +202,21 @@ export const handler: Handler = async (event) => {
 
     const filteredByMode = mode === 'all' ? parsed : parsed.filter(i => i.is_tracked)
 
+    // Aruba SDI filters incoming invoices by DELIVERY date (data ricezione),
+    // not by EMISSION date (data fattura). Risultato: fatture emesse a fine
+    // aprile ma consegnate all'SDI il 1-2 maggio finiscono nel filtro
+    // "Maggio 2026". Per allinearci al resto del modulo Fornitori (che
+    // filtra per periodo_anno/periodo_mese derivati da data_documento),
+    // post-filtriamo per emission date. Se invoiceDate manca (rarissimo,
+    // raw response Aruba senza documentDate), teniamo la riga per evitare
+    // di nasconderla.
+    const filteredByMonth = month
+      ? filteredByMode.filter(i => !i.invoiceDate || i.invoiceDate.startsWith(month))
+      : filteredByMode
+
     // No server-side enrichment — would blow Netlify's 10s timeout for many rows.
     // The UI calls /get-incoming-invoice-detail per row to populate amount/date/number.
-    const invoices = filteredByMode
+    const invoices = filteredByMonth
 
     // Sort by date descending
     invoices.sort((a: any, b: any) => (b.invoiceDate || '').localeCompare(a.invoiceDate || ''))
