@@ -80,20 +80,41 @@ const handler: Handler = async (event) => {
         let rendered = tpl.message_body;
         if (templateVars && typeof templateVars === 'object') {
           // Normalise each key: strip optional leading/trailing braces and any
-          // surrounding whitespace, then substitute EVERY brace-wrapped form
-          // the template may contain:
-          //   {name}  {{name}}  { name }   *{name}*
-          // Also handles callers that pass bare keys (`'name'`) OR wrapped
-          // keys (`'{name}'`). Prevents silent leaks where a caller sends one
-          // convention but the template expects the other.
+          // surrounding whitespace, then substitute EVERY wrapped form the
+          // template may contain:
+          //   {name}  {{name}}  { name }  (name)  ( name )  *{name}*
+          // We support BOTH curly braces AND parentheses because admins
+          // naturally write "(nome)" in Italian copy. Also handles callers
+          // that pass bare keys (`'name'`) OR wrapped keys (`'{name}'`).
+          //
+          // Aliases: caller passes `customer_name` but Italian template
+          // says `{nome}` (or vice versa) — we expand each var to its
+          // common synonyms so neither side has to know the other's
+          // convention. Prevents silent "Salve (nome)," leaks.
+          const ALIASES: Record<string, string[]> = {
+            customer_name: ['nome', 'cliente', 'fullName', 'full_name', 'firstName'],
+            nome:          ['customer_name', 'cliente', 'fullName', 'full_name', 'firstName'],
+            firstName:     ['nome', 'customer_name', 'cliente'],
+            full_name:     ['customer_name', 'nome', 'cliente', 'fullName'],
+            email:         ['customer_email'],
+            customer_email:['email'],
+            phone:         ['telefono', 'customer_phone'],
+            customer_phone:['telefono', 'phone'],
+            booking_id:    ['ref', 'reference', 'codice'],
+          };
           const escRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const replaceFor = (key: string, value: string) => {
+            // {key}, {{key}}, ${key}, % key %  → all curly variants
+            rendered = rendered.replace(new RegExp(`\\{\\{?\\s*${escRx(key)}\\s*\\}?\\}`, 'g'), value);
+            // (key), ( key ) → parens variant (Italian admin templates)
+            rendered = rendered.replace(new RegExp(`\\(\\s*${escRx(key)}\\s*\\)`, 'g'), value);
+          };
           for (const [rawKey, val] of Object.entries(templateVars)) {
             const cleanKey = String(rawKey).replace(/^\s*\{+\s*|\s*\}+\s*$/g, '').trim();
             if (!cleanKey) continue;
-            // Match {key}, {{key}}, { key }, etc.
-            rendered = rendered.replace(new RegExp(`\\{\\s*${escRx(cleanKey)}\\s*\\}`, 'g'), String(val ?? ''));
-            // Match accidental double-brace {{key}} → some templates were pasted that way
-            rendered = rendered.replace(new RegExp(`\\{\\{\\s*${escRx(cleanKey)}\\s*\\}\\}`, 'g'), String(val ?? ''));
+            const value = String(val ?? '');
+            replaceFor(cleanKey, value);
+            for (const alias of ALIASES[cleanKey] || []) replaceFor(alias, value);
           }
         }
         // OPT-IN wrapper: only attach header/footer when this specific
