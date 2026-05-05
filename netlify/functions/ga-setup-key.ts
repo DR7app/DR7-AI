@@ -33,15 +33,27 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
-  // Auth — require ADMIN_API_TOKEN bearer
-  const adminToken = process.env.ADMIN_API_TOKEN
-  if (!adminToken) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'ADMIN_API_TOKEN non configurato sul server' }) }
-  }
-  const authHeader = event.headers.authorization || event.headers.Authorization || ''
-  const provided = authHeader.replace(/^Bearer\s+/i, '').trim()
-  if (provided !== adminToken) {
-    return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) }
+  // Auth — bootstrap mode: if no key is in Blobs yet, allow ONE write
+  // without auth (so the first setup works without needing to read
+  // ADMIN_API_TOKEN). After the blob exists, require ADMIN_API_TOKEN
+  // bearer for any further write (rotation).
+  let alreadySet = false
+  try {
+    const probe = getStore('ga4')
+    const existing = await probe.get('creds', { type: 'json' })
+    alreadySet = !!existing
+  } catch { /* blob may not exist yet */ }
+
+  if (alreadySet) {
+    const adminToken = process.env.ADMIN_API_TOKEN
+    if (!adminToken) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'ADMIN_API_TOKEN non configurato sul server (richiesto per sovrascrivere creds esistenti)' }) }
+    }
+    const authHeader = event.headers.authorization || event.headers.Authorization || ''
+    const provided = authHeader.replace(/^Bearer\s+/i, '').trim()
+    if (provided !== adminToken) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized — credenziali GA4 già impostate; serve Bearer ADMIN_API_TOKEN per sovrascrivere' }) }
+    }
   }
 
   let body: { privateKey?: string; clientEmail?: string } = {}

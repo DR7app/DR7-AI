@@ -62,8 +62,6 @@ async function sendGreenApi(phone: string, message: string): Promise<void> {
     if (!res.ok || result.error) throw new Error(result.error || `Green API ${res.status}`)
 }
 
-const TEST_PLATES = new Set(["TEST000", "TEST002"])
-
 /**
  * Generate + send a DR7 Privilege code for a single booking. Idempotent: if
  * dr7_privilege_sent_at is already set, returns skipped without doing anything.
@@ -75,16 +73,16 @@ export async function sendDr7Privilege(
     booking: BookingLike,
     kind: PrivilegeKind,
 ): Promise<PrivilegeResult> {
+    const tag = `[dr7Privilege ${kind} booking=${(booking.id || '').slice(0, 8)}]`
     if (booking.dr7_privilege_sent_at) {
+        console.log(`${tag} skip: already_sent`)
         return { sent: false, skipped: "already_sent" }
     }
 
-    // Skip test plates
-    const plate = (booking.vehicle_plate || "").replace(/\s/g, "").toUpperCase()
-    if (TEST_PLATES.has(plate)) return { sent: false, skipped: "test_plate" }
-
-    // Skip "Lavaggio Rientro" pseudo-bookings
+    // Skip "Lavaggio Rientro" pseudo-bookings (DB trigger crea queste righe
+    // fittizie per tracciare il rientro veicolo, non il cliente).
     if ((booking.customer_name || "").toLowerCase() === "lavaggio rientro") {
+        console.log(`${tag} skip: lavaggio_rientro`)
         return { sent: false, skipped: "lavaggio_rientro" }
     }
 
@@ -93,6 +91,7 @@ export async function sendDr7Privilege(
     const detailsPhone = (booking.booking_details as any)?.customer?.phone
     const phone = normalizePhone(booking.customer_phone || detailsPhone)
     if (!phone || phone.length < 10) {
+        console.log(`${tag} error: invalid_phone raw=${booking.customer_phone || detailsPhone}`)
         return { sent: false, error: "invalid_phone" }
     }
 

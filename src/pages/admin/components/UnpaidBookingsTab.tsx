@@ -489,16 +489,13 @@ export default function UnpaidBookingsTab() {
         const isCarWash = st === 'car_wash'
         logger.log('[updatePaymentStatus] service_type:', st, 'isCarRental:', isCarRental, 'isCarWash:', isCarWash)
 
-        // DR7 Privilege — fire-and-forget SOLO per car wash sul pagamento.
-        // Per noleggio il codice parte dopo la firma del contratto, non
-        // sul pagamento (richiesta utente). Backend e' comunque idempotente
-        // via dr7_privilege_sent_at, quindi anche se in futuro si triggera
-        // da piu' punti non c'e' rischio di doppio invio.
-        if (newStatus === 'paid' && isCarWash) {
+        // DR7 Privilege — fire-and-forget sul pagamento per QUALSIASI servizio
+        // (car wash + noleggio). Backend e' idempotente via dr7_privilege_sent_at.
+        if (newStatus === 'paid') {
           fetch('/.netlify/functions/trigger-dr7-privilege', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId, kind: 'lavaggio' }),
+            body: JSON.stringify({ bookingId, kind: isCarWash ? 'lavaggio' : 'noleggio' }),
           }).catch(() => { /* non-blocking */ })
         }
 

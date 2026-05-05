@@ -5153,10 +5153,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // NOTA — DR7 Privilege noleggio NON viene triggerato qui.
-      // Per noleggio il codice parte SOLO dopo la firma del contratto via
-      // signature-complete (utils/dr7Privilege). Per car wash invece parte
-      // sul pagamento (CarWashBookingsTab + UnpaidBookingsTab).
+      // DR7 Privilege noleggio — fire-and-forget quando il booking diventa
+      // "paid" da Modifica → Salva. Backend (utils/dr7Privilege) e'
+      // idempotente via dr7_privilege_sent_at, quindi se UnpaidBookingsTab
+      // o CarWashBookingsTab triggerano dopo, il backend ignora il duplicato.
+      const shouldFirePrivilege = formData.payment_status === 'paid'
+        && insertedBooking?.id
+        && (!editingId || justMarkedPaid)
+      if (shouldFirePrivilege) {
+        authFetch('/.netlify/functions/trigger-dr7-privilege', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: insertedBooking.id, kind: 'noleggio' }),
+        }).catch(() => { /* non-blocking */ })
+      }
 
       // ── Edit flow: send pay-by-link for any remaining balance ──
       // Covers every "customer still owes something" case after an edit:
