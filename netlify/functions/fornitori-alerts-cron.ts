@@ -154,17 +154,18 @@ const handler: Handler = async () => {
                 fornitore_id: f.fornitore_id,
                 document_id: f.id,
                 tipo: 'bolle_mancanti',
-                severity: 'error',
-                messaggio: `Fattura n.${f.numero_documento} di ${fornitoreNome} senza DDT/bolle nel mese — pagamento bloccato`,
+                severity: 'warning',
+                messaggio: `Fattura n.${f.numero_documento} di ${fornitoreNome} senza DDT/bolle nel mese — verificare`,
             })
-            if (created) {
-                bolleMancCount++
-                // Block payment
-                await supabase.from('fornitore_documents')
-                    .update({ stato: 'bloccato' })
-                    .eq('id', f.id)
-                    .eq('stato', f.stato) // optimistic
-            }
+            if (created) bolleMancCount++
+            // NOTE (Apr 2026): non auto-blocchiamo piu' la fattura.
+            // Tanti fornitori (SaaS / servizi / utenze: Openapi, hosting,
+            // telefonia, ecc.) non emettono mai un DDT, quindi la logica
+            // "no DDT -> bloccato" nascondeva fatture legittime in tutti
+            // i view (Panoramica, Registro Mensile, Scadenziario, Detail).
+            // Caso reale: Openapi SpA AV-BU-47531 sparita dalla tab.
+            // L'alert basta a segnalare il caso; il blocco lo decide
+            // l'operatore manualmente quando serve davvero.
         }
     }
 
