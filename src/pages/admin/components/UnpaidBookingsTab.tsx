@@ -482,14 +482,16 @@ export default function UnpaidBookingsTab() {
         const isCarWash = st === 'car_wash'
         logger.log('[updatePaymentStatus] service_type:', st, 'isCarRental:', isCarRental, 'isCarWash:', isCarWash)
 
-        // DR7 Privilege per LAVAGGIO — fire-and-forget when admin marks paid.
-        // Backend (utils/dr7Privilege) is idempotent via dr7_privilege_sent_at.
-        // Triggers on every payment method (Wallet, Contanti, POS, Bonifico, etc).
-        if (isCarWash && newStatus === 'paid') {
+        // DR7 Privilege — fire-and-forget quando l'admin marca paid, per
+        // QUALSIASI servizio (lavaggio E noleggio). Backend
+        // (utils/dr7Privilege) e' idempotente via dr7_privilege_sent_at e
+        // funziona con ogni metodo di pagamento (Wallet, Contanti, POS,
+        // Bonifico, Nexi, ecc).
+        if (newStatus === 'paid') {
           fetch('/.netlify/functions/trigger-dr7-privilege', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId, kind: 'lavaggio' }),
+            body: JSON.stringify({ bookingId, kind: isCarWash ? 'lavaggio' : 'noleggio' }),
           }).catch(() => { /* non-blocking */ })
         }
 

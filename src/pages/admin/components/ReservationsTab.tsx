@@ -3120,26 +3120,35 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             ? newVehicle.display_name
             : (extendingBooking.vehicle_name || 'N/A')
 
+          // Per le estensioni mandiamo al cliente lo STESSO template della
+          // conferma noleggio (pro_conferma_noleggio) — l'utente non vuole un
+          // messaggio "Modifica" o "Estensione" separato, ma la conferma
+          // riepilogativa con i nuovi dati. Passiamo l'oggetto booking
+          // aggiornato cosi' send-whatsapp-notification popola tutte le var.
+          void customerFirstName; void vehicleNameForMsg; void extraDaysCount  // var non usate sotto
+          const updatedBooking = {
+            ...extendingBooking,
+            ...(newVehicle ? {
+              vehicle_id: newVehicle.id,
+              vehicle_name: newVehicle.display_name,
+              vehicle_plate: newVehicle.plate || newVehicle.targa || '',
+            } : {}),
+            dropoff_date: newDropoffDateTime.toISOString(),
+            booking_details: updatedBookingDetails,
+            isEdit: false, // forza il template rental_new (conferma) invece di rental_modified
+          }
           const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               customPhone: customerPhone,
-              templateKey: 'pro_estensione_noleggio',
-              templateVars: {
-                customer_name: customerFirstName,
-                vehicle_name: vehicleNameForMsg,
-                new_dropoff_date: newDropoffStr,
-                new_dropoff_time: newTimeStr,
-                extra_days: String(extraDaysCount),
-                extra_cost: additionalAmount.toFixed(2),
-              },
+              booking: updatedBooking,
               skipHeader: true,
             })
           })
           const waResult = await waResp.json().catch(() => ({}))
           if (!waResp.ok || waResult?.skipped) {
-            toast.error('Template mancante in Messaggi di Sistema Pro: pro_estensione_noleggio')
+            toast.error('Template mancante in Messaggi di Sistema Pro: pro_conferma_noleggio')
           } else {
             logger.log('[handleConfirmExtend] ✅ WhatsApp customer notification sent to', customerPhone)
           }
