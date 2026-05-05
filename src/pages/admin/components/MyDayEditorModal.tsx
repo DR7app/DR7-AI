@@ -287,6 +287,8 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
             }
 
             toast.success('Orari salvati')
+            // Notifica i report aperti (es. Operatori dashboard) di ricaricarsi
+            try { window.dispatchEvent(new CustomEvent('timesheet:saved')) } catch { /* noop */ }
             onSaved?.()
             onClose()
         } catch (err) {

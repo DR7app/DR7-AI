@@ -195,6 +195,13 @@ export default function OperatoriReportDashboard() {
 
     useEffect(() => { load() }, [load])
 
+    // Auto-refresh quando l'utente salva orari dal modal (sidebar clock).
+    useEffect(() => {
+        const onSaved = () => load()
+        window.addEventListener('timesheet:saved', onSaved)
+        return () => window.removeEventListener('timesheet:saved', onSaved)
+    }, [load])
+
     const operatoriTotali = operatori.length
     const attiviOggi = dailyRows.filter(r => r.stato !== 'fuori').length
     const oreLavorateOggiMin = dailyRows.reduce((s, r) => s + r.minuti_lavorati, 0)
@@ -230,13 +237,19 @@ export default function OperatoriReportDashboard() {
                             : 'Vista personale: vedi solo i tuoi dati. Solo Valerio e Ilenia vedono i report di tutti.'}
                     </p>
                 </div>
-                <div className="flex gap-1 bg-theme-bg-tertiary rounded p-1 text-xs">
-                    {(['oggi', '7gg', '30gg', 'mese'] as Range[]).map(r => (
-                        <button key={r} onClick={() => setRange(r)}
-                            className={`px-3 py-1 rounded ${range === r ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
-                            {r === 'oggi' ? 'Oggi' : r === '7gg' ? '7 giorni' : r === '30gg' ? '30 giorni' : 'Mese corrente'}
-                        </button>
-                    ))}
+                <div className="flex items-center gap-2">
+                    <div className="flex gap-1 bg-theme-bg-tertiary rounded p-1 text-xs">
+                        {(['oggi', '7gg', '30gg', 'mese'] as Range[]).map(r => (
+                            <button key={r} onClick={() => setRange(r)}
+                                className={`px-3 py-1 rounded ${range === r ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
+                                {r === 'oggi' ? 'Oggi' : r === '7gg' ? '7 giorni' : r === '30gg' ? '30 giorni' : 'Mese corrente'}
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={() => exportCsv(operatori, periodMinutesByOp, periodRange.days, periodMinutesByDay)}
+                        className="text-xs px-3 py-1.5 rounded border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover">
+                        Scarica CSV
+                    </button>
                 </div>
             </div>
 
@@ -599,6 +612,40 @@ function ObjectiveCard({ oreSettimana, targetSettimana }: { oreSettimana: number
             </div>
         </ChartCard>
     )
+}
+
+function exportCsv(
+    operatori: Operatore[],
+    byOp: { id: string; nome: string; minutes: number }[],
+    days: string[],
+    byDay: { day: string; minutes: number }[],
+) {
+    const headers = ['Operatore', 'Ruolo', 'Email', 'Ore Totali', 'Minuti Totali', 'Giornate Attive']
+    const rows: string[][] = operatori.map(op => {
+        const min = byOp.find(x => x.id === op.id)?.minutes || 0
+        const giornate = days.filter(d => {
+            // proxy: la riga ha minuti se compare in byDay con somma > 0; per accuratezza usare RPC per giorno
+            return byDay.find(x => x.day === d && x.minutes > 0)
+        }).length
+        return [
+            `${op.nome} ${op.cognome || ''}`.trim(),
+            op.ruolo || '',
+            op.email,
+            `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m`,
+            String(min),
+            String(giornate),
+        ]
+    })
+    const csv = [headers, ...rows]
+        .map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `operatori_${days[0] || 'export'}_${days[days.length - 1] || ''}.csv`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 function CostiPersonale({ orePeriodoMin, operatoriCount }: { orePeriodoMin: number; operatoriCount: number }) {

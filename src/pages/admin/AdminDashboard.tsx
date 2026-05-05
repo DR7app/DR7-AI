@@ -255,8 +255,7 @@ export default function AdminDashboard() {
       { tab: 'report-clienti', label: 'Clienti' },
       { tab: 'report-penali-danni', label: 'Penali & Danni' },
       { tab: 'report-preventivi', label: 'Preventivi' },
-      { tab: 'operatori', label: 'Operatori', superadminOnly: true },
-      { tab: 'rilevazione-orari', label: 'Rilevazione Orari' },
+      { tab: 'operatori', label: 'Operatori' },
       { tab: 'dashboard-kpi', label: 'Dashboard' },
     ] },
     { name: 'Comunicazione', tabs: [

@@ -8,9 +8,6 @@ import FornitoreBollaUpload from './FornitoreBollaUpload'
 import LimitationOverrideModal from '../../../../components/LimitationOverrideModal'
 import { runCrosscheck, applyCrosscheckToFatture } from './FornitoreCrosscheck'
 import {
-    DOCUMENT_TIPO_LABELS,
-    DOCUMENT_STATO_LABELS,
-    DOCUMENT_STATO_COLORS,
     MESI_IT,
     fmtEUR,
     fmtDateIT,
@@ -48,7 +45,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const [mese, setMese] = useState<number | 'tutti'>('tutti')
     const [docs, setDocs] = useState<FornitoreDocument[]>([])
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
-    const [loading, setLoading] = useState(false)
+    const [, setLoading] = useState(false)
     const [showUpload, setShowUpload] = useState(false)        // simple bolla upload (PDF only)
     // Per-row upload: when set, the upload modal opens pre-linked to this
     // fattura via fattura_collegata_id, so the controllo incrociato can
@@ -264,20 +261,6 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
         if (error) { alert('Errore: ' + error.message); return }
         setPaymentDoc(null)
         load()
-    }
-
-    async function deleteDoc(doc: FornitoreDocument) {
-        if (!confirm(`Eliminare definitivamente questo documento (${doc.numero_documento})?`)) return
-        try {
-            if (doc.file_url) {
-                await supabase.storage.from('fornitori-documents').remove([doc.file_url])
-            }
-            const { error } = await supabase.from('fornitore_documents').delete().eq('id', doc.id)
-            if (error) throw error
-            load()
-        } catch (err) {
-            alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
-        }
     }
 
     async function viewFile(doc: FornitoreDocument) {
@@ -638,41 +621,6 @@ function Step({ title, desc, tone, locked, lockedAction, children }: {
                 {children}
             </div>
         </div>
-    )
-}
-
-function CompactDocList({ docs, viewFile, onEdit, onDelete }: {
-    docs: FornitoreDocument[]
-    viewFile: (d: FornitoreDocument) => void
-    onEdit: (d: FornitoreDocument) => void
-    onDelete: (d: FornitoreDocument) => void
-}) {
-    if (docs.length === 0) {
-        return <p className="text-sm text-theme-text-muted">Nessuna bolla per questo periodo.</p>
-    }
-    return (
-        <ul className="space-y-1">
-            {docs.map(d => (
-                <li key={d.id} className="text-sm flex items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
-                    <span className="text-xs uppercase font-mono px-1.5 py-0.5 rounded bg-theme-bg-tertiary text-theme-text-secondary">{DOCUMENT_TIPO_LABELS[d.tipo]}</span>
-                    <span className="font-mono text-xs">{d.numero_documento}</span>
-                    <span className="text-xs text-theme-text-muted">{fmtDateIT(d.data_documento)}</span>
-                    <span className="ml-auto font-semibold">{fmtEUR(d.importo_totale)}</span>
-                    <span className={`px-2 py-0.5 rounded text-xs ${DOCUMENT_STATO_COLORS[d.stato]}`}>{DOCUMENT_STATO_LABELS[d.stato]}</span>
-                    {d.file_url && (
-                        <button onClick={() => viewFile(d)} className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
-                            Vedi
-                        </button>
-                    )}
-                    <button onClick={() => onEdit(d)} className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
-                        Modifica
-                    </button>
-                    <button onClick={() => onDelete(d)} className="text-xs px-2 py-1 rounded bg-red-700 hover:bg-red-600 text-white" title="Elimina">
-                        ×
-                    </button>
-                </li>
-            ))}
-        </ul>
     )
 }
 
