@@ -57,7 +57,8 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const [crossCheckRunning, setCrossCheckRunning] = useState(false)
     const [otpUnlocked, setOtpUnlocked] = useState(false)
     const [otpOpen, setOtpOpen] = useState(false)
-    const draftSessionId = useRef(`fornitori-${fornitore.id}-${Date.now()}`).current
+    // draft_session_id deve essere UUID (constraint Postgres su limitation_overrides)
+    const draftSessionId = useRef(crypto.randomUUID()).current
 
     // L'utente puo' usare step 3/4 se e' tra gli autorizzati di base oppure
     // se ha sbloccato la sessione tramite OTP override (verifica via mail).

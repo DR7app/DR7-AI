@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { supabase } from '../../../../supabaseClient'
 import Button from '../Button'
 import LimitationOverrideModal from '../../../../components/LimitationOverrideModal'
@@ -45,6 +45,9 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
     const [otpOpen, setOtpOpen] = useState(false)
     const [confirmingOtp, setConfirmingOtp] = useState(false)
     const fileRef = useRef<HTMLInputElement>(null)
+    // draft_session_id deve essere UUID (constraint Postgres su limitation_overrides).
+    // Stesso pattern di PreventiviTab.
+    const draftSessionId = useMemo(() => crypto.randomUUID(), [])
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !uploading) onClose() }
@@ -329,7 +332,7 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
             limitationCode="fornitore_doc_no_file"
             limitationMessage={`Autorizza inserimento ${DOCUMENT_TIPO_LABELS[tipo]} senza file allegato per ${fornitore.nome}.`}
             actionContext={`fornitore_doc_otp_${fornitore.id}_${tipo}`}
-            draftSessionId={`fornitore-${fornitore.id}-otp-${Date.now()}`}
+            draftSessionId={draftSessionId}
             flowType="fornitori"
             onCancel={() => setOtpOpen(false)}
             onOverrideApproved={(overrideId) => {
