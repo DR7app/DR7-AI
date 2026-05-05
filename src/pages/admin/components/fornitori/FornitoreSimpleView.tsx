@@ -50,6 +50,10 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const [crosscheck, setCrosscheck] = useState<Map<number, CrosscheckRow[]>>(new Map())
     const [loading, setLoading] = useState(false)
     const [showUpload, setShowUpload] = useState(false)        // simple bolla upload (PDF only)
+    // Per-row upload: when set, the upload modal opens pre-linked to this
+    // fattura via fattura_collegata_id, so the controllo incrociato can
+    // match per-fattura instead of relying on the same-month bulk dump.
+    const [uploadForFatturaId, setUploadForFatturaId] = useState<string | null>(null)
     const [showManualEntry, setShowManualEntry] = useState(false)  // full form for new doc, no file required
     const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)  // edit modal for existing docs
     const [paymentDoc, setPaymentDoc] = useState<FornitoreDocument | null>(null)
@@ -385,20 +389,52 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 </div>
             </div>
 
-            {/* STEP 1 — Carica bolle */}
-            <Step n={1} title="Carica bolle" desc={`${bolle.length} caricate · ${fmtEUR(bolle.reduce((s, b) => s + Number(b.importo_totale || 0), 0))} totale`}>
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <Button onClick={() => setShowUpload(true)}>+ Carica documento</Button>
-                    {loading && <span className="text-xs text-theme-text-muted">Caricamento…</span>}
-                </div>
-                <CompactDocList docs={bolle.slice(0, 10)} viewFile={viewFile}
-                    onEdit={(d) => setEditingDoc(d)}
-                    onDelete={deleteDoc} />
-                {bolle.length > 10 && <p className="text-xs text-theme-text-muted mt-2">… e altre {bolle.length - 10} bolle</p>}
+            {/* Fatture del periodo — ogni riga ha il suo "+ Carica documento"
+                che apre il modal pre-linkato alla fattura tramite
+                fattura_collegata_id. Niente piu' bulk-upload mensile. */}
+            <Step title="Fatture del periodo" desc={`${fatture.length} fattur${fatture.length === 1 ? 'a' : 'e'} · ${fmtEUR(fatture.reduce((s, f) => s + Number(f.importo_totale || 0), 0))} totale`}>
+                {fatture.length === 0 ? (
+                    <p className="text-sm text-theme-text-muted">Nessuna fattura per questo periodo.</p>
+                ) : (
+                    <ul className="space-y-1">
+                        {fatture.map(f => {
+                            const linkedBolle = bolle.filter(b => b.fattura_collegata_id === f.id)
+                            const linkedTotal = linkedBolle.reduce((s, b) => s + Number(b.importo_totale || 0), 0)
+                            const fAmount = Number(f.importo_totale || 0)
+                            const delta = fAmount - linkedTotal
+                            const matched = linkedBolle.length > 0 && Math.abs(delta) < 0.01
+                            return (
+                                <li key={f.id} className="text-sm flex flex-wrap items-center gap-3 px-3 py-2 rounded bg-theme-bg-tertiary/50">
+                                    <span className="font-mono">{f.numero_documento}</span>
+                                    <span className="text-xs text-theme-text-muted">{fmtDateIT(f.data_documento)}</span>
+                                    <span className="ml-auto">Fattura: <strong>{fmtEUR(fAmount)}</strong></span>
+                                    <span className="text-theme-text-muted">Bolle ({linkedBolle.length}): <strong>{fmtEUR(linkedTotal)}</strong></span>
+                                    {linkedBolle.length > 0 && (
+                                        <span className={`text-xs px-2 py-0.5 rounded ${matched ? 'bg-emerald-700/30 text-emerald-300' : 'bg-amber-700/30 text-amber-300'}`}>
+                                            Δ {fmtEUR(delta)}
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={() => setUploadForFatturaId(f.id)}
+                                        className="text-xs px-2 py-1 rounded bg-dr7-gold text-black font-semibold hover:opacity-90"
+                                    >
+                                        + Carica documento
+                                    </button>
+                                    {canViewDoc(f) && (
+                                        <button onClick={() => viewFile(f)}
+                                            className="text-xs px-2 py-1 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary">
+                                            Vedi fattura
+                                        </button>
+                                    )}
+                                </li>
+                            )
+                        })}
+                    </ul>
+                )}
             </Step>
 
-            {/* STEP 2 — Controllo incrociato */}
-            <Step n={2} title="Controllo incrociato"
+            {/* Controllo incrociato */}
+            <Step title="Controllo incrociato"
                 desc={tutteAnomalie.length > 0
                     ? `${tutteAnomalie.length} anomali${tutteAnomalie.length === 1 ? 'a' : 'e'} · ${countOk} fatture OK`
                     : `${countOk} fatture verificate ${countOk > 0 ? '✓' : ''}`}
@@ -436,8 +472,8 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 )}
             </Step>
 
-            {/* STEP 3 — Approvazione */}
-            <Step n={3} title="Approvazione" desc={`${daApprovare.length} fattur${daApprovare.length === 1 ? 'a' : 'e'} da approvare`}
+            {/* Approvazione */}
+            <Step title="Approvazione" desc={`${daApprovare.length} fattur${daApprovare.length === 1 ? 'a' : 'e'} da approvare`}
                 locked={!canApproveAndPay}
                 lockedAction={!canApproveAndPay && (
                     <button onClick={() => setOtpOpen(true)}
@@ -478,8 +514,8 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 )}
             </Step>
 
-            {/* STEP 4 — Pagamento */}
-            <Step n={4} title="Pagamento" desc={`${daPagare.length} fattur${daPagare.length === 1 ? 'a' : 'e'} da pagare`}
+            {/* Pagamento */}
+            <Step title="Pagamento" desc={`${daPagare.length} fattur${daPagare.length === 1 ? 'a' : 'e'} da pagare`}
                 locked={!canApproveAndPay}
                 lockedAction={!canApproveAndPay && (
                     <button onClick={() => setOtpOpen(true)}
@@ -514,13 +550,15 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 )}
             </Step>
 
-            {showUpload && (
+            {(showUpload || uploadForFatturaId) && (
                 <FornitoreBollaUpload
                     fornitore={fornitore}
-                    onClose={() => setShowUpload(false)}
-                    onManualEntry={() => { setShowUpload(false); setShowManualEntry(true) }}
+                    fatturaId={uploadForFatturaId || undefined}
+                    onClose={() => { setShowUpload(false); setUploadForFatturaId(null) }}
+                    onManualEntry={() => { setShowUpload(false); setUploadForFatturaId(null); setShowManualEntry(true) }}
                     onSaved={async (opts) => {
                         setShowUpload(false)
+                        setUploadForFatturaId(null)
                         await load()
                         if (opts?.triggerCompare) {
                             // Piccolo delay per dare tempo all'AI di estrarre gli importi
@@ -571,8 +609,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     )
 }
 
-function Step({ n, title, desc, tone, locked, lockedAction, children }: {
-    n: number
+function Step({ title, desc, tone, locked, lockedAction, children }: {
     title: string
     desc: string
     tone?: 'ok' | 'warning'
@@ -586,9 +623,11 @@ function Step({ n, title, desc, tone, locked, lockedAction, children }: {
     return (
         <div className={`rounded-lg border p-4 relative ${locked ? 'border-theme-border bg-theme-bg-tertiary/40' : toneCls}`}>
             <div className="flex items-center gap-3 mb-3">
-                <span className={`flex-shrink-0 w-8 h-8 rounded-full font-bold flex items-center justify-center ${locked ? 'bg-theme-bg-tertiary text-theme-text-muted' : 'bg-dr7-gold text-black'}`}>
-                    {locked ? '🔒' : n}
-                </span>
+                {locked && (
+                    <span className="flex-shrink-0 w-8 h-8 rounded-full font-bold flex items-center justify-center bg-theme-bg-tertiary text-theme-text-muted">
+                        🔒
+                    </span>
+                )}
                 <div className="flex-1 min-w-0">
                     <p className={`text-sm font-semibold ${locked ? 'text-theme-text-muted' : 'text-theme-text-primary'}`}>{title}</p>
                     <p className="text-xs text-theme-text-muted">{desc}</p>

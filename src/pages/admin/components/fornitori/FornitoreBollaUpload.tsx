@@ -18,6 +18,12 @@ interface Props {
      * close this modal and open the full edit form for a brand new document.
      */
     onManualEntry?: () => void
+    /**
+     * Optional. When set, every uploaded document is auto-linked to this
+     * fattura via fattura_collegata_id, so the controllo incrociato can
+     * match per-fattura instead of per-month.
+     */
+    fatturaId?: string
 }
 
 interface PendingItem {
@@ -30,7 +36,7 @@ interface PendingItem {
 // fattura manuale. Tipo e nome custom selezionabili. Numero/data/importo
 // auto-compilati con default ragionevoli; l'AI estrae i dati strutturati
 // dopo l'upload, e l'operatore puo' modificare manualmente.
-export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, onManualEntry }: Props) {
+export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, onManualEntry, fatturaId }: Props) {
     const [tipo, setTipo] = useState<DocumentTipo>('bolla')
     const [customName, setCustomName] = useState('')
     const [items, setItems] = useState<PendingItem[]>([])
@@ -108,6 +114,9 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, onMa
                     file_url: path,
                     file_name: file.name,
                     file_hash: hash,
+                    // Auto-link to the fattura when the modal was opened
+                    // from a specific fattura row (per-row "+ Carica" button).
+                    ...(fatturaId ? { fattura_collegata_id: fatturaId } : {}),
                 })
                 .select('id')
                 .single()
