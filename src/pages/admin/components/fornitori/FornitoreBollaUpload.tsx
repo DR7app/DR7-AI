@@ -181,17 +181,34 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
         setConfirmingOtp(true)
         try {
             const today = new Date().toISOString().slice(0, 10)
-            const numero = customName.trim() || `${tipo.toUpperCase()}-OTP-${Date.now()}`
+            const numero = customName.trim() || `OTP-${Date.now()}`
+
+            // Se la dispensa OTP e' legata a una fattura specifica, leggo
+            // l'importo della fattura e lo replico sulla bolla virtuale.
+            // Cosi' il crosscheck (Σ bolle - fattura) chiude a 0 e la
+            // fattura passa a 'verificato' senza anomalie.
+            let importoMatch = 0
+            if (fatturaId) {
+                const { data: fatt } = await supabase
+                    .from('fornitore_documents')
+                    .select('importo_totale')
+                    .eq('id', fatturaId)
+                    .maybeSingle()
+                importoMatch = Number(fatt?.importo_totale) || 0
+            }
+
             const { error: insErr } = await supabase
                 .from('fornitore_documents')
                 .insert({
                     fornitore_id: fornitore.id,
-                    tipo,
+                    // Forziamo 'bolla' cosi' la riga conta nel crosscheck
+                    // (la SQL function somma solo ddt + bolla per il delta).
+                    tipo: 'bolla',
                     numero_documento: numero,
                     data_documento: today,
-                    importo_totale: 0,
+                    importo_totale: importoMatch,
                     stato: 'verificato',
-                    note: `Autorizzato con OTP — override ${overrideId.slice(0, 8)}`,
+                    note: `Autorizzato con OTP — override ${overrideId.slice(0, 8)} (procedura senza documento)`,
                     ...(fatturaId ? { fattura_collegata_id: fatturaId } : {}),
                 })
             if (insErr) {
@@ -330,7 +347,7 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
         <LimitationOverrideModal
             isOpen={otpOpen}
             limitationCode="fornitore_doc_no_file"
-            limitationMessage={`Autorizza inserimento ${DOCUMENT_TIPO_LABELS[tipo]} senza file allegato per ${fornitore.nome}.`}
+            limitationMessage={`Autorizza a procedere senza inserimento documento per ${fornitore.nome}. La fattura collegata verra' chiusa con 0 anomalie.`}
             actionContext={`fornitore_doc_otp_${fornitore.id}_${tipo}`}
             draftSessionId={draftSessionId}
             flowType="fornitori"
