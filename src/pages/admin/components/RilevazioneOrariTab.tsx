@@ -793,8 +793,8 @@ interface BreakSlot { id?: string; pausa_inizio?: string; pausa_fine?: string }
  * Carica gli eventi esistenti, permette di modificare gli orari (HH:MM),
  * aggiungere/rimuovere pause, salvare.
  */
-function MyDayEditorModal({ operatore, data, onClose, onSaved }: {
-    operatore: Operatore
+export function MyDayEditorModal({ operatore, data, onClose, onSaved }: {
+    operatore: { id: string; nome: string; cognome: string | null }
     data: string  // YYYY-MM-DD
     onClose: () => void
     onSaved: () => void

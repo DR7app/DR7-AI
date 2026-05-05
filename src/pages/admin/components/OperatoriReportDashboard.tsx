@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { MyDayEditorModal } from './RilevazioneOrariTab'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -66,6 +67,7 @@ export default function OperatoriReportDashboard() {
     const [periodMinutesByOp, setPeriodMinutesByOp] = useState<{ id: string; nome: string; minutes: number }[]>([])
     const [bookingsCount, setBookingsCount] = useState({ rentals: 0, washes: 0, fatture: 0, totFatture: 0 })
     const [loading, setLoading] = useState(true)
+    const [editingDay, setEditingDay] = useState<string | null>(null)
 
     const periodRange = useMemo(() => {
         const end = new Date()
@@ -323,11 +325,12 @@ export default function OperatoriReportDashboard() {
                                 <th className="text-right py-2 font-medium">Ore Lav.</th>
                                 <th className="text-right py-2 font-medium">Straord.</th>
                                 <th className="text-center py-2 font-medium">Stato</th>
+                                <th className="text-right py-2 font-medium"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-theme-border/50">
                             {dailyRows.length === 0 && (
-                                <tr><td colSpan={10} className="text-center py-6 text-theme-text-muted">Nessun operatore.</td></tr>
+                                <tr><td colSpan={11} className="text-center py-6 text-theme-text-muted">Nessun operatore.</td></tr>
                             )}
                             {dailyRows.map(r => {
                                 const isMine = r.operatore.id === me?.id
@@ -353,6 +356,17 @@ export default function OperatoriReportDashboard() {
                                             <span className={straord > 0 ? 'text-sky-500 font-semibold' : 'text-theme-text-muted text-xs'}>{fmtMin(straord)}</span>
                                         </td>
                                         <td className="py-2 text-center"><StatoLabel s={r.stato} /></td>
+                                        <td className="py-2 text-right">
+                                            {isMine && (
+                                                <button
+                                                    onClick={() => setEditingDay(dataDay)}
+                                                    className="text-[11px] px-2 py-1 rounded bg-dr7-gold text-black hover:opacity-90 font-medium"
+                                                    title="Modifica i miei orari per questa giornata"
+                                                >
+                                                    Modifica
+                                                </button>
+                                            )}
+                                        </td>
                                     </tr>
                                 )
                             })}
@@ -360,6 +374,19 @@ export default function OperatoriReportDashboard() {
                     </table>
                 </div>
             </div>
+
+            {editingDay && me && (
+                <MyDayEditorModal
+                    operatore={{ id: me.id, nome: me.nome, cognome: me.cognome }}
+                    data={editingDay}
+                    onClose={() => setEditingDay(null)}
+                    onSaved={() => {
+                        setEditingDay(null)
+                        // Re-trigger the data load (dashboard listens for this event)
+                        window.dispatchEvent(new CustomEvent('timesheet:saved'))
+                    }}
+                />
+            )}
 
             {/* MINI STATS ROW */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
