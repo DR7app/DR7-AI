@@ -10,7 +10,7 @@
 import { Handler } from '@netlify/functions'
 import { requireAuth } from './require-auth'
 import {
-    audit, clientIp, getServiceSupabase, jsonResponse, requireActiveBooking,
+    audit, clientIp, getServiceSupabase, jsonResponse,
 } from './utils/emtn'
 
 const ALLOWED_TYPES = ['UNPAID_DAMAGE', 'INSOLVENCY', 'NON_RETURN', 'THEFT_REPORTED', 'LEGAL_EVENT']
@@ -30,7 +30,6 @@ export const handler: Handler = async (event) => {
     if (!body) return jsonResponse(400, { error: 'JSON body invalido' }, origin)
 
     const clientId = String(body.clientId || '').trim()
-    const bookingId = String(body.bookingId || '').trim() || null
     const type = String(body.type || '').toUpperCase()
     const headline = String(body.headline || '').trim()
     const description = String(body.description || '').trim()
@@ -44,12 +43,6 @@ export const handler: Handler = async (event) => {
     if (!headline || headline.length < 5) return jsonResponse(400, { error: 'Titolo troppo breve (min 5 caratteri)' }, origin)
     if (!description || description.length < 20) return jsonResponse(400, { error: 'Descrizione troppo breve (min 20 caratteri)' }, origin)
 
-    const gate = await requireActiveBooking(sb, bookingId)
-    if (gate.error) {
-        await audit(sb, { operatorId, operatorEmail, clientId, action: 'REPORT_EVENT', success: false, ip, userAgent: ua, metadata: { reason: gate.error } })
-        return jsonResponse(403, { error: gate.error }, origin)
-    }
-
     const { data: created, error: insErr } = await sb
         .from('emtn_events')
         .insert({
@@ -61,18 +54,17 @@ export const handler: Handler = async (event) => {
             occurred_at: occurredAt,
             created_by_operator_id: operatorId,
             created_by_email: operatorEmail || null,
-            booking_id: bookingId,
         })
         .select('id, status, created_at')
         .single()
 
     if (insErr || !created) {
-        await audit(sb, { operatorId, operatorEmail, clientId, bookingId, action: 'REPORT_EVENT', success: false, ip, userAgent: ua, metadata: { reason: 'insert_failed', error: insErr?.message } })
+        await audit(sb, { operatorId, operatorEmail, clientId, action: 'REPORT_EVENT', success: false, ip, userAgent: ua, metadata: { reason: 'insert_failed', error: insErr?.message } })
         return jsonResponse(500, { error: 'Creazione evento fallita' }, origin)
     }
 
     await audit(sb, {
-        operatorId, operatorEmail, clientId, bookingId, action: 'REPORT_EVENT',
+        operatorId, operatorEmail, clientId, action: 'REPORT_EVENT',
         success: true, ip, userAgent: ua,
         metadata: { event_id: created.id, type },
     })

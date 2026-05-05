@@ -11,7 +11,7 @@ import { Handler } from '@netlify/functions'
 import { requireAuth } from './require-auth'
 import {
     audit, clientIp, getServiceSupabase, isReportUnlocked,
-    jsonResponse, requireActiveBooking,
+    jsonResponse,
 } from './utils/emtn'
 
 export const handler: Handler = async (event) => {
@@ -29,20 +29,14 @@ export const handler: Handler = async (event) => {
     if (!body) return jsonResponse(400, { error: 'JSON body invalido' }, origin)
 
     const clientId = String(body.clientId || '').trim()
-    const bookingId = String(body.bookingId || '').trim() || null
     const ip = clientIp(event.headers as Record<string, string | undefined>)
     const ua = event.headers['user-agent'] || null
 
     if (!clientId) return jsonResponse(400, { error: 'clientId obbligatorio' }, origin)
-    const gate = await requireActiveBooking(sb, bookingId)
-    if (gate.error) {
-        await audit(sb, { operatorId, operatorEmail, clientId, action: 'VIEW_REPORT', success: false, ip, userAgent: ua, metadata: { reason: gate.error } })
-        return jsonResponse(403, { error: gate.error }, origin)
-    }
 
     const unlocked = await isReportUnlocked(sb, operatorId, clientId)
     if (!unlocked) {
-        await audit(sb, { operatorId, operatorEmail, clientId, bookingId, action: 'VIEW_REPORT', success: false, ip, userAgent: ua, metadata: { reason: 'no_otp' } })
+        await audit(sb, { operatorId, operatorEmail, clientId, action: 'VIEW_REPORT', success: false, ip, userAgent: ua, metadata: { reason: 'no_otp' } })
         return jsonResponse(403, { error: 'Autorizzazione cliente non verificata' }, origin)
     }
 
@@ -52,7 +46,7 @@ export const handler: Handler = async (event) => {
         .eq('id', clientId)
         .maybeSingle()
     if (!client) {
-        await audit(sb, { operatorId, operatorEmail, clientId, bookingId, action: 'VIEW_REPORT', success: false, ip, userAgent: ua, metadata: { reason: 'client_not_found' } })
+        await audit(sb, { operatorId, operatorEmail, clientId, action: 'VIEW_REPORT', success: false, ip, userAgent: ua, metadata: { reason: 'client_not_found' } })
         return jsonResponse(404, { error: 'Cliente non trovato' }, origin)
     }
 
@@ -82,7 +76,7 @@ export const handler: Handler = async (event) => {
         .limit(20)
 
     await audit(sb, {
-        operatorId, operatorEmail, clientId, bookingId, action: 'VIEW_REPORT',
+        operatorId, operatorEmail, clientId, action: 'VIEW_REPORT',
         success: true, ip, userAgent: ua,
     })
 

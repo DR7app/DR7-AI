@@ -26,7 +26,6 @@ interface Props {
     client: EMTNClient
     stats: EMTNStats | null
     riskBand: 'green' | 'yellow' | 'red'
-    bookingId: string
 }
 
 function fmt(d?: string | null): string {
@@ -38,7 +37,7 @@ function initials(n?: string | null, c?: string | null): string {
     return ((n || '').trim().charAt(0) + (c || '').trim().charAt(0)).toUpperCase() || '?'
 }
 
-export default function EMTNClientCard({ client, stats, riskBand, bookingId }: Props) {
+export default function EMTNClientCard({ client, stats, riskBand }: Props) {
     const fullName = [client.nome, client.cognome].filter(Boolean).join(' ') || 'Cliente identificato'
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5">
@@ -61,10 +60,6 @@ export default function EMTNClientCard({ client, stats, riskBand, bookingId }: P
                             <div className="flex justify-between">
                                 <span className="text-theme-text-muted">Cliente dal</span>
                                 <span className="text-theme-text-primary">{fmt(client.created_at)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-theme-text-muted">Booking riferimento</span>
-                                <span className="text-theme-text-primary font-mono">{bookingId.slice(0, 8)}…</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-theme-text-muted">Ultima attivita</span>

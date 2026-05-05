@@ -9,7 +9,6 @@ const CF_REGEX = /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/
 
 export interface EMTNSearchPayload {
     codiceFiscale: string
-    bookingId: string
     nome?: string
     cognome?: string
 }
@@ -18,19 +17,16 @@ interface Props {
     onSearch: (payload: EMTNSearchPayload) => Promise<void> | void
     searching?: boolean
     error?: string | null
-    /** Booking id pre-popolato (es. apertura del tab da una prenotazione). */
-    initialBookingId?: string
 }
 
-export default function EMTNSearch({ onSearch, searching, error, initialBookingId }: Props) {
+export default function EMTNSearch({ onSearch, searching, error }: Props) {
     const [cf, setCf] = useState('')
-    const [bookingId, setBookingId] = useState(initialBookingId || '')
     const [nome, setNome] = useState('')
     const [cognome, setCognome] = useState('')
     const [localError, setLocalError] = useState<string | null>(null)
 
     const cfValid = CF_REGEX.test(cf.trim().toUpperCase())
-    const canSubmit = !!bookingId.trim() && cfValid && !searching
+    const canSubmit = cfValid && !searching
 
     async function submit(e: React.FormEvent) {
         e.preventDefault()
@@ -39,13 +35,8 @@ export default function EMTNSearch({ onSearch, searching, error, initialBookingI
             setLocalError('Codice Fiscale non valido (formato AAAAAA00A00A000A)')
             return
         }
-        if (!bookingId.trim()) {
-            setLocalError('Booking ID obbligatorio: l\'accesso EMTN richiede una prenotazione attiva')
-            return
-        }
         await onSearch({
             codiceFiscale: cf.trim().toUpperCase(),
-            bookingId: bookingId.trim(),
             nome: nome.trim() || undefined,
             cognome: cognome.trim() || undefined,
         })
@@ -57,11 +48,11 @@ export default function EMTNSearch({ onSearch, searching, error, initialBookingI
                 <div>
                     <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Ricerca Cliente</h3>
                     <p className="text-xs text-theme-text-muted mt-0.5">
-                        Codice Fiscale + Booking ID. Senza booking attivo l&apos;accesso EMTN e&apos; bloccato.
+                        Inserisci il Codice Fiscale per consultare la rete EMTN.
                     </p>
                 </div>
             </div>
-            <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+            <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                 <input
                     type="text"
                     value={cf}
@@ -71,13 +62,6 @@ export default function EMTNSearch({ onSearch, searching, error, initialBookingI
                     autoCapitalize="characters"
                     spellCheck={false}
                     aria-invalid={cf.length > 0 && !cfValid}
-                />
-                <input
-                    type="text"
-                    value={bookingId}
-                    onChange={(e) => setBookingId(e.target.value)}
-                    placeholder="Booking ID *"
-                    className="sm:col-span-2 bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold/40 font-mono"
                 />
                 <input
                     type="text"
@@ -96,9 +80,9 @@ export default function EMTNSearch({ onSearch, searching, error, initialBookingI
                 <button
                     type="submit"
                     disabled={!canSubmit}
-                    className="sm:col-span-6 bg-dr7-gold text-theme-bg-primary text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="bg-dr7-gold text-theme-bg-primary text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                    {searching ? 'Verifica EMTN…' : 'Verifica EMTN'}
+                    {searching ? 'Verifica…' : 'Verifica EMTN'}
                 </button>
             </form>
             {(localError || error) && (

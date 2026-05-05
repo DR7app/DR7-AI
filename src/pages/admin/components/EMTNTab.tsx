@@ -30,14 +30,12 @@ interface SearchResponse {
     message: string
     reportUnlocked: boolean
     recentEvents: Array<{ id: string; type: string; status: string; headline: string; occurred_at?: string; created_at: string }>
-    booking: { id: string; customer_name?: string; vehicle_plate?: string; pickup_date?: string; status?: string }
 }
 
 export default function EMTNTab() {
     const [searching, setSearching] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [data, setData] = useState<SearchResponse | null>(null)
-    const [bookingIdContext, setBookingIdContext] = useState<string>('')
 
     const [authOpen, setAuthOpen] = useState(false)
     const [reportOpen, setReportOpen] = useState(false)
@@ -46,7 +44,6 @@ export default function EMTNTab() {
         if (!data) return
         await runSearch({
             codiceFiscale: data.client.codice_fiscale,
-            bookingId: bookingIdContext,
             nome: data.client.nome || undefined,
             cognome: data.client.cognome || undefined,
         })
@@ -65,7 +62,6 @@ export default function EMTNTab() {
             const body = await res.json()
             if (!res.ok) throw new Error(body.error || 'Lookup fallita')
             setData(body as SearchResponse)
-            setBookingIdContext(payload.bookingId)
         } catch (err) {
             setError((err as Error).message)
         } finally {
@@ -94,7 +90,6 @@ export default function EMTNTab() {
                         client={data.client}
                         stats={data.stats}
                         riskBand={data.riskBand}
-                        bookingId={bookingIdContext}
                     />
 
                     {/* Riga azioni rapide: 2 + Risk Report */}
@@ -195,14 +190,12 @@ export default function EMTNTab() {
                         onClose={() => setAuthOpen(false)}
                         onVerified={refresh}
                         clientId={data.client.id}
-                        bookingId={bookingIdContext}
                     />
                     <EMTNEventReportModal
                         open={reportOpen}
                         onClose={() => setReportOpen(false)}
                         onCreated={refresh}
                         clientId={data.client.id}
-                        bookingId={bookingIdContext}
                     />
                 </>
             )}

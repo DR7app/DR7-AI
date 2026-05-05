@@ -5153,6 +5153,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
+      // NOTA — DR7 Privilege noleggio NON viene triggerato qui.
+      // Per noleggio il codice parte SOLO dopo la firma del contratto via
+      // signature-complete (utils/dr7Privilege). Per car wash invece parte
+      // sul pagamento (CarWashBookingsTab + UnpaidBookingsTab).
+
       // ── Edit flow: send pay-by-link for any remaining balance ──
       // Covers every "customer still owes something" case after an edit:
       //   • Originally fully PAID + price went up     → link for (new - old)

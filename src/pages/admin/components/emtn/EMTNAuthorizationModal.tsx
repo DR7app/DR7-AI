@@ -14,7 +14,6 @@ interface Props {
     onClose: () => void
     onVerified: () => void
     clientId: string
-    bookingId: string
     defaultEmail?: string
     defaultPhone?: string
 }
@@ -22,7 +21,7 @@ interface Props {
 type Step = 'channels' | 'code' | 'done'
 
 export default function EMTNAuthorizationModal({
-    open, onClose, onVerified, clientId, bookingId, defaultEmail, defaultPhone,
+    open, onClose, onVerified, clientId, defaultEmail, defaultPhone,
 }: Props) {
     const [step, setStep] = useState<Step>('channels')
     const [email, setEmail] = useState(defaultEmail || '')
@@ -60,7 +59,7 @@ export default function EMTNAuthorizationModal({
             const res = await authFetch('/.netlify/functions/emtn-otp-request', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ clientId, bookingId, email: email || null, phone: phone || null }),
+                body: JSON.stringify({ clientId, email: email || null, phone: phone || null }),
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Invio OTP fallito')

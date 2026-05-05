@@ -23,10 +23,9 @@ interface Props {
     onClose: () => void
     onCreated: (eventId: string) => void
     clientId: string
-    bookingId: string
 }
 
-export default function EMTNEventReportModal({ open, onClose, onCreated, clientId, bookingId }: Props) {
+export default function EMTNEventReportModal({ open, onClose, onCreated, clientId }: Props) {
     const [type, setType] = useState<string>('UNPAID_DAMAGE')
     const [headline, setHeadline] = useState('')
     const [description, setDescription] = useState('')
@@ -68,7 +67,7 @@ export default function EMTNEventReportModal({ open, onClose, onCreated, clientI
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    clientId, bookingId, type,
+                    clientId, type,
                     headline: headline.trim(), description: description.trim(), occurredAt,
                 }),
             })

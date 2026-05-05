@@ -19,7 +19,6 @@ import {
     isValidCF,
     jsonResponse,
     normalizeCF,
-    requireActiveBooking,
 } from './utils/emtn'
 
 export const handler: Handler = async (event) => {
@@ -37,21 +36,13 @@ export const handler: Handler = async (event) => {
     if (!body) return jsonResponse(400, { error: 'JSON body invalido' }, origin)
 
     const cf = normalizeCF(String(body.codiceFiscale || ''))
-    const bookingId = String(body.bookingId || '').trim() || null
     const ip = clientIp(event.headers as Record<string, string | undefined>)
     const ua = event.headers['user-agent'] || null
 
-    // Hard rule 1: CF obbligatorio e formalmente valido.
+    // Hard rule: CF obbligatorio e formalmente valido.
     if (!isValidCF(cf)) {
         await audit(sb, { operatorId, operatorEmail, action: 'SEARCH', success: false, ip, userAgent: ua, metadata: { reason: 'invalid_cf', cf } })
         return jsonResponse(400, { error: 'Codice fiscale mancante o invalido' }, origin)
-    }
-
-    // Hard rule 2: booking_id obbligatorio + valido.
-    const gate = await requireActiveBooking(sb, bookingId)
-    if (gate.error) {
-        await audit(sb, { operatorId, operatorEmail, action: 'SEARCH', success: false, ip, userAgent: ua, metadata: { reason: 'no_booking', cf, bookingId } })
-        return jsonResponse(403, { error: gate.error }, origin)
     }
 
     // Find or create client.
@@ -104,7 +95,7 @@ export const handler: Handler = async (event) => {
 
     await audit(sb, {
         operatorId, operatorEmail, action: 'SEARCH', success: true, ip, userAgent: ua,
-        clientId: client!.id, bookingId, metadata: { unlocked },
+        clientId: client!.id, metadata: { unlocked },
     })
 
     // Risk band derivata application-side dalle stats.
@@ -125,6 +116,5 @@ export const handler: Handler = async (event) => {
         message,
         reportUnlocked: unlocked,
         recentEvents,
-        booking: gate.booking,
     }, origin)
 }

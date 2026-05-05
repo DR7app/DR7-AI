@@ -63,14 +63,14 @@ export const handler: Handler = async (event) => {
     }
 
     if (new Date(req.expires_at).getTime() <= Date.now()) {
-        await audit(sb, { operatorId, operatorEmail, clientId: req.client_id, bookingId: req.booking_id, action: 'VERIFY_OTP', success: false, ip, userAgent: ua, metadata: { reason: 'expired' } })
+        await audit(sb, { operatorId, operatorEmail, clientId: req.client_id, action: 'VERIFY_OTP', success: false, ip, userAgent: ua, metadata: { reason: 'expired' } })
         return jsonResponse(410, { error: 'OTP scaduto' }, origin)
     }
 
     if ((req.attempts || 0) >= MAX_ATTEMPTS) {
         // Invalida l'OTP e blocca.
         await sb.from('emtn_otp_requests').update({ expires_at: new Date().toISOString() }).eq('id', req.id)
-        await audit(sb, { operatorId, operatorEmail, clientId: req.client_id, bookingId: req.booking_id, action: 'VERIFY_OTP', success: false, ip, userAgent: ua, metadata: { reason: 'max_attempts' } })
+        await audit(sb, { operatorId, operatorEmail, clientId: req.client_id, action: 'VERIFY_OTP', success: false, ip, userAgent: ua, metadata: { reason: 'max_attempts' } })
         return jsonResponse(429, { error: 'Troppi tentativi. Richiedi un nuovo OTP.' }, origin)
     }
 
@@ -79,7 +79,7 @@ export const handler: Handler = async (event) => {
         await sb.from('emtn_otp_requests')
             .update({ attempts: (req.attempts || 0) + 1 })
             .eq('id', req.id)
-        await audit(sb, { operatorId, operatorEmail, clientId: req.client_id, bookingId: req.booking_id, action: 'VERIFY_OTP', success: false, ip, userAgent: ua, metadata: { reason: 'wrong_code', attempts: (req.attempts || 0) + 1 } })
+        await audit(sb, { operatorId, operatorEmail, clientId: req.client_id, action: 'VERIFY_OTP', success: false, ip, userAgent: ua, metadata: { reason: 'wrong_code', attempts: (req.attempts || 0) + 1 } })
         return jsonResponse(401, { error: 'Codice non valido' }, origin)
     }
 

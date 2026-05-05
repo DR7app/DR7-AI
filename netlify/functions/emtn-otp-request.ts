@@ -18,7 +18,6 @@ import {
     getServiceSupabase,
     hashOtpCode,
     jsonResponse,
-    requireActiveBooking,
 } from './utils/emtn'
 
 const OTP_TTL_MINUTES = 10
@@ -38,7 +37,6 @@ export const handler: Handler = async (event) => {
     if (!body) return jsonResponse(400, { error: 'JSON body invalido' }, origin)
 
     const clientId = String(body.clientId || '').trim()
-    const bookingId = String(body.bookingId || '').trim() || null
     const email = body.email ? String(body.email).trim() : null
     const phone = body.phone ? String(body.phone).trim() : null
 
@@ -51,11 +49,6 @@ export const handler: Handler = async (event) => {
     if (!email && !phone) {
         return jsonResponse(400, { error: 'Almeno uno tra email e phone richiesto' }, origin)
     }
-    const gate = await requireActiveBooking(sb, bookingId)
-    if (gate.error) {
-        await audit(sb, { operatorId, operatorEmail, clientId, action: 'REQUEST_OTP', success: false, ip, userAgent: ua, metadata: { reason: gate.error } })
-        return jsonResponse(403, { error: gate.error }, origin)
-    }
 
     // Genera codice + hash.
     const code = generateOtpCode()
@@ -67,7 +60,6 @@ export const handler: Handler = async (event) => {
         .insert({
             client_id: clientId,
             operator_id: operatorId,
-            booking_id: bookingId,
             email,
             phone,
             otp_code_hash: codeHash,
@@ -77,7 +69,7 @@ export const handler: Handler = async (event) => {
         .single()
 
     if (insErr || !row) {
-        await audit(sb, { operatorId, operatorEmail, clientId, bookingId, action: 'REQUEST_OTP', success: false, ip, userAgent: ua, metadata: { reason: 'insert_failed' } })
+        await audit(sb, { operatorId, operatorEmail, clientId, action: 'REQUEST_OTP', success: false, ip, userAgent: ua, metadata: { reason: 'insert_failed' } })
         return jsonResponse(500, { error: 'OTP request fallita' }, origin)
     }
 
@@ -148,12 +140,12 @@ export const handler: Handler = async (event) => {
         // Soft fail: il record OTP esiste ma nessun canale ha funzionato.
         // Lo marchiamo come fallito invalidando expires_at, e segnaliamo errore.
         await sb.from('emtn_otp_requests').update({ expires_at: new Date().toISOString() }).eq('id', row.id)
-        await audit(sb, { operatorId, operatorEmail, clientId, bookingId, action: 'REQUEST_OTP', success: false, ip, userAgent: ua, metadata: { errors } })
+        await audit(sb, { operatorId, operatorEmail, clientId, action: 'REQUEST_OTP', success: false, ip, userAgent: ua, metadata: { errors } })
         return jsonResponse(502, { error: 'Invio OTP fallito su tutti i canali', details: errors }, origin)
     }
 
     await audit(sb, {
-        operatorId, operatorEmail, clientId, bookingId, action: 'REQUEST_OTP',
+        operatorId, operatorEmail, clientId, action: 'REQUEST_OTP',
         success: true, ip, userAgent: ua,
         metadata: { otp_request_id: row.id, sent_via: sentVia, soft_errors: errors },
     })
