@@ -40,7 +40,11 @@ function fmtMin(min: number): string {
     if (min === 0) return '—'
     const h = Math.floor(min / 60)
     const m = min % 60
-    return `${h}:${String(m).padStart(2, '0')}`
+    return `${h}h ${String(m).padStart(2, '0')}m`
+}
+function fmtMinShort(min: number): string {
+    if (min === 0) return '—'
+    return `${min} min`
 }
 
 type ViewMode = 'giornaliera' | 'settimanale' | 'mensile'
@@ -363,7 +367,23 @@ export default function RilevazioneOrariTab() {
 
             {loading && <p className="text-theme-text-muted text-sm">Caricamento…</p>}
 
-            {!loading && view === 'giornaliera' && (
+            {!loading && view === 'giornaliera' && (() => {
+                const presentiCount = dailyRows.filter(r => r.stato !== 'fuori').length
+                const assentiCount = dailyRows.filter(r => r.stato === 'fuori').length
+                const totMinLavorati = dailyRows.reduce((s, r) => s + r.minuti_lavorati, 0)
+                const totMinPausa = dailyRows.reduce((s, r) => s + r.minuti_pausa, 0)
+                const totStraordinari = dailyRows.reduce((s, r) => {
+                    const target = Math.round((r.operatore.ore_target_giornaliere || 8) * 60)
+                    return s + Math.max(0, r.minuti_lavorati - target)
+                }, 0)
+                return <>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
+                    <KpiCard label="Presenti" value={String(presentiCount)} tone="emerald" />
+                    <KpiCard label="Assenti" value={String(assentiCount)} tone="muted" />
+                    <KpiCard label="Ore Lavorate Oggi" value={fmtMin(totMinLavorati)} sub={fmtMinShort(totMinLavorati)} tone="primary" />
+                    <KpiCard label="Pausa Totale" value={fmtMin(totMinPausa)} sub={fmtMinShort(totMinPausa)} tone="amber" />
+                    <KpiCard label="Straordinari" value={fmtMin(totStraordinari)} sub={fmtMinShort(totStraordinari)} tone={totStraordinari > 0 ? 'sky' : 'muted'} />
+                </div>
                 <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-theme-bg-tertiary text-theme-text-secondary">
@@ -377,14 +397,17 @@ export default function RilevazioneOrariTab() {
                                 <th className="text-center px-3 py-2">Pause</th>
                                 <th className="text-right px-3 py-2">Ore Lav.</th>
                                 <th className="text-right px-3 py-2">Pausa</th>
+                                <th className="text-right px-3 py-2">Straord.</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-theme-border">
                             {dailyRows.length === 0 && (
-                                <tr><td colSpan={9} className="text-center py-6 text-theme-text-muted">Nessun operatore attivo.</td></tr>
+                                <tr><td colSpan={10} className="text-center py-6 text-theme-text-muted">Nessun operatore attivo.</td></tr>
                             )}
                             {dailyRows.map(r => {
                                 const isMine = r.operatore.id === me?.id
+                                const target = Math.round((r.operatore.ore_target_giornaliere || 8) * 60)
+                                const straord = Math.max(0, r.minuti_lavorati - target)
                                 return (
                                     <tr key={r.operatore.id} className={isMine ? 'bg-amber-50/40 dark:bg-amber-950/20' : ''}>
                                         <td className="px-3 py-2 text-theme-text-primary font-semibold">
@@ -398,17 +421,39 @@ export default function RilevazioneOrariTab() {
                                         <td className="px-3 py-2 font-mono text-xs">{fmtTime(r.pausa_fini[0] || null)}</td>
                                         <td className="px-3 py-2 font-mono text-xs">{fmtTime(r.uscita)}</td>
                                         <td className="px-3 py-2 text-center text-xs">{r.pausa_inizi.length}</td>
-                                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtMin(r.minuti_lavorati)}</td>
-                                        <td className="px-3 py-2 text-right text-theme-text-muted text-xs tabular-nums">{fmtMin(r.minuti_pausa)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">
+                                            <div className="font-semibold">{fmtMin(r.minuti_lavorati)}</div>
+                                            <div className="text-[10px] text-theme-text-muted">{r.minuti_lavorati} min</div>
+                                        </td>
+                                        <td className="px-3 py-2 text-right tabular-nums">
+                                            <div className="text-theme-text-muted text-xs">{fmtMin(r.minuti_pausa)}</div>
+                                            <div className="text-[10px] text-theme-text-muted">{r.minuti_pausa} min</div>
+                                        </td>
+                                        <td className="px-3 py-2 text-right tabular-nums">
+                                            <div className={straord > 0 ? 'text-sky-500 font-semibold' : 'text-theme-text-muted text-xs'}>{fmtMin(straord)}</div>
+                                            {straord > 0 && <div className="text-[10px] text-theme-text-muted">{straord} min</div>}
+                                        </td>
                                     </tr>
                                 )
                             })}
                         </tbody>
                     </table>
                 </div>
-            )}
+                </>
+            })()}
 
-            {!loading && view !== 'giornaliera' && (
+            {!loading && view !== 'giornaliera' && (() => {
+                const totMin = periodRows.reduce((s, r) => s + Array.from(r.daysData.values()).reduce((a, b) => a + b, 0), 0)
+                const targetMin = periodRows.reduce((s, r) => s + Math.round((r.operatore.ore_target_giornaliere || 8) * 60) * periodRange.days.length, 0)
+                const saldoMin = totMin - targetMin
+                const giornateAttive = periodRows.reduce((s, r) => s + Array.from(r.daysData.values()).filter(v => v > 0).length, 0)
+                return <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                    <KpiCard label="Ore Totali" value={fmtMin(totMin)} sub={fmtMinShort(totMin)} tone="primary" />
+                    <KpiCard label="Target Periodo" value={fmtMin(targetMin)} sub={fmtMinShort(targetMin)} tone="muted" />
+                    <KpiCard label="Saldo" value={(saldoMin >= 0 ? '+' : '-') + fmtMin(Math.abs(saldoMin))} sub={fmtMinShort(Math.abs(saldoMin))} tone={saldoMin >= 0 ? 'emerald' : 'amber'} />
+                    <KpiCard label="Giornate Attive" value={String(giornateAttive)} tone="sky" />
+                </div>
                 <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-theme-bg-tertiary text-theme-text-secondary">
@@ -450,7 +495,8 @@ export default function RilevazioneOrariTab() {
                         </tbody>
                     </table>
                 </div>
-            )}
+                </>
+            })()}
 
             {showAddOp && (
                 <AddOperatoreModal onClose={() => setShowAddOp(false)} onSaved={() => { setShowAddOp(false); load(); toast.success('Operatore aggiunto') }} />
@@ -464,6 +510,31 @@ export default function RilevazioneOrariTab() {
                     onSaved={() => { setEditMyDay(false); load(); toast.success('Orari aggiornati') }}
                 />
             )}
+        </div>
+    )
+}
+
+type KpiTone = 'emerald' | 'amber' | 'sky' | 'primary' | 'muted'
+function KpiCard({ label, value, sub, tone = 'primary' }: { label: string; value: string; sub?: string; tone?: KpiTone }) {
+    const ring = {
+        emerald: 'border-emerald-300 dark:border-emerald-800',
+        amber: 'border-amber-300 dark:border-amber-800',
+        sky: 'border-sky-300 dark:border-sky-800',
+        primary: 'border-theme-border',
+        muted: 'border-theme-border',
+    }[tone]
+    const valueColor = {
+        emerald: 'text-emerald-500',
+        amber: 'text-amber-500',
+        sky: 'text-sky-500',
+        primary: 'text-theme-text-primary',
+        muted: 'text-theme-text-muted',
+    }[tone]
+    return (
+        <div className={`bg-theme-bg-secondary rounded-lg border ${ring} p-3 text-center`}>
+            <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">{label}</div>
+            <div className={`text-base font-bold mt-1 ${valueColor}`}>{value}</div>
+            {sub && <div className="text-[10px] text-theme-text-muted mt-0.5">{sub}</div>}
         </div>
     )
 }

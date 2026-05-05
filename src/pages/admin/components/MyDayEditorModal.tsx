@@ -13,6 +13,19 @@ interface Operatore {
 
 interface BreakSlot { pausa_inizio?: string; pausa_fine?: string }
 
+function hhmmToMinutes(hhmm: string): number | null {
+    if (!/^\d{2}:\d{2}$/.test(hhmm)) return null
+    const [h, m] = hhmm.split(':').map(Number)
+    return h * 60 + m
+}
+
+function fmtDuration(totalMin: number): string {
+    if (totalMin <= 0) return '0h 00m'
+    const h = Math.floor(totalMin / 60)
+    const m = totalMin % 60
+    return `${h}h ${String(m).padStart(2, '0')}m`
+}
+
 function toRomeDate(d: Date = new Date()): string {
     return d.toLocaleDateString('en-CA', { timeZone: ROME_TZ })
 }
@@ -74,6 +87,20 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
     const [note, setNote] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+
+    // Calcolo live di pausa totale + lavoro netto/lordo (in minuti)
+    const livePausaMin = pause.reduce((sum, p) => {
+        const a = hhmmToMinutes(p.pausa_inizio || '')
+        const b = hhmmToMinutes(p.pausa_fine || '')
+        if (a == null || b == null || b <= a) return sum
+        return sum + (b - a)
+    }, 0)
+    const liveEntrataMin = hhmmToMinutes(entrata)
+    const liveUscitaMin = hhmmToMinutes(uscita)
+    const liveLordoMin = liveEntrataMin != null && liveUscitaMin != null && liveUscitaMin > liveEntrataMin
+        ? liveUscitaMin - liveEntrataMin
+        : 0
+    const liveNettoMin = Math.max(0, liveLordoMin - livePausaMin)
 
     useEffect(() => {
         ;(async () => {
@@ -363,6 +390,25 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                                     rows={2} placeholder="Es: Lavoro da casa / Ferie / Permesso medico"
                                     className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm" />
                             </label>
+
+                            {/* Riepilogo live: aggiornato man mano che digiti gli orari */}
+                            <div className="bg-theme-bg-tertiary rounded-lg border border-theme-border p-3 grid grid-cols-3 gap-2 text-center">
+                                <div>
+                                    <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">Lavoro netto</div>
+                                    <div className="text-sm font-semibold text-emerald-500 mt-0.5">{fmtDuration(liveNettoMin)}</div>
+                                    <div className="text-[10px] text-theme-text-muted">{liveNettoMin} min</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">Pausa totale</div>
+                                    <div className="text-sm font-semibold text-amber-500 mt-0.5">{fmtDuration(livePausaMin)}</div>
+                                    <div className="text-[10px] text-theme-text-muted">{livePausaMin} min</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">Lavoro lordo</div>
+                                    <div className="text-sm font-semibold text-theme-text-primary mt-0.5">{fmtDuration(liveLordoMin)}</div>
+                                    <div className="text-[10px] text-theme-text-muted">{liveLordoMin} min</div>
+                                </div>
+                            </div>
                         </div>
                     </>
                 )}
