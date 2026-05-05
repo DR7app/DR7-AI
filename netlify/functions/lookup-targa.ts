@@ -127,15 +127,19 @@ export const handler: Handler = async (event) => {
       source: 'openapi',
     }
 
-    // ── 3. Save to cache (fire-and-forget; don't block the operator's UI) ─────
+    // ── 3. Save to cache — MUST AWAIT.
+    // Fire-and-forget here is unsafe on Netlify Functions / AWS Lambda:
+    // once we `return`, the runtime freezes the container and the pending
+    // upsert is dropped. The symptom: same plate gets charged on openapi.com
+    // every time it's looked up, even though it "should be cached".
+    // Real bug we hit (Apr 2026): FD966GF charged on 2026-05-04 AND 2026-05-05
+    // because the first day's cache write was abandoned.
     if (supabase) {
-      supabase
+      const { error: cacheErr } = await supabase
         .from('vehicle_plate_cache')
         .upsert(newRow, { onConflict: 'plate' })
-        .then(({ error }) => {
-          if (error) console.error('[lookup-targa] Cache save failed:', error.message)
-          else console.log('[lookup-targa] Cached:', cleanTarga)
-        }, () => {/* swallow */})
+      if (cacheErr) console.error('[lookup-targa] Cache save failed:', cacheErr.message)
+      else console.log('[lookup-targa] Cached:', cleanTarga)
     }
 
     console.log('[lookup-targa] Success:', brand, model)
