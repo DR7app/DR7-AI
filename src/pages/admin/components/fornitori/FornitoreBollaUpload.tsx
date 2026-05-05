@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../../../supabaseClient'
 import Button from '../Button'
+import LimitationOverrideModal from '../../../../components/LimitationOverrideModal'
 import { hashFile, DOCUMENT_TIPO_LABELS } from './types'
 import type { Fornitore, DocumentTipo } from './types'
 
@@ -36,11 +37,13 @@ interface PendingItem {
 // fattura manuale. Tipo e nome custom selezionabili. Numero/data/importo
 // auto-compilati con default ragionevoli; l'AI estrae i dati strutturati
 // dopo l'upload, e l'operatore puo' modificare manualmente.
-export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, onManualEntry, fatturaId }: Props) {
+export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatturaId }: Props) {
     const [tipo, setTipo] = useState<DocumentTipo>('bolla')
     const [customName, setCustomName] = useState('')
     const [items, setItems] = useState<PendingItem[]>([])
     const [uploading, setUploading] = useState(false)
+    const [otpOpen, setOtpOpen] = useState(false)
+    const [confirmingOtp, setConfirmingOtp] = useState(false)
     const fileRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
@@ -165,6 +168,40 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, onMa
     const hasPending = items.some(i => i.status === 'pending')
     const hasDone = items.some(i => i.status === 'done')
 
+    /**
+     * OTP-authorized confirm WITHOUT a file. Used quando il fornitore ha
+     * ammesso verbalmente il documento ma non c'e' carta — il direttore
+     * (Valerio) autorizza via OTP e il documento finisce in DB con
+     * stato='verificato' senza bisogno di upload.
+     */
+    async function confirmWithoutFile(overrideId: string) {
+        setConfirmingOtp(true)
+        try {
+            const today = new Date().toISOString().slice(0, 10)
+            const numero = customName.trim() || `${tipo.toUpperCase()}-OTP-${Date.now()}`
+            const { error: insErr } = await supabase
+                .from('fornitore_documents')
+                .insert({
+                    fornitore_id: fornitore.id,
+                    tipo,
+                    numero_documento: numero,
+                    data_documento: today,
+                    importo_totale: 0,
+                    stato: 'verificato',
+                    note: `Autorizzato con OTP — override ${overrideId.slice(0, 8)}`,
+                    ...(fatturaId ? { fattura_collegata_id: fatturaId } : {}),
+                })
+            if (insErr) {
+                alert('Errore inserimento: ' + insErr.message)
+                return
+            }
+            onSaved({ triggerCompare: true })
+            onClose()
+        } finally {
+            setConfirmingOtp(false)
+        }
+    }
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => !uploading && onClose()}>
             <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-lg w-full p-6"
@@ -185,9 +222,8 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, onMa
                             className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
                         >
                             <option value="bolla">{DOCUMENT_TIPO_LABELS.bolla}</option>
-                            <option value="ddt">{DOCUMENT_TIPO_LABELS.ddt}</option>
-                            <option value="fattura">{DOCUMENT_TIPO_LABELS.fattura}</option>
-                            <option value="nota_credito">{DOCUMENT_TIPO_LABELS.nota_credito}</option>
+                            <option value="proforma">{DOCUMENT_TIPO_LABELS.proforma}</option>
+                            <option value="preventivo">{DOCUMENT_TIPO_LABELS.preventivo}</option>
                             <option value="ricevuta_pagamento">{DOCUMENT_TIPO_LABELS.ricevuta_pagamento}</option>
                         </select>
                     </label>
@@ -252,18 +288,18 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, onMa
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-5">
-                    {onManualEntry && !hasPending && !hasDone ? (
+                    {!hasPending && !hasDone ? (
                         <button
                             type="button"
-                            onClick={onManualEntry}
-                            disabled={uploading}
-                            className="text-xs underline text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-50"
+                            onClick={() => setOtpOpen(true)}
+                            disabled={uploading || confirmingOtp}
+                            className="text-xs underline text-dr7-gold hover:opacity-80 disabled:opacity-50"
                         >
-                            Inserimento manuale (senza file)
+                            {confirmingOtp ? 'Conferma in corso…' : 'Autorizza con OTP'}
                         </button>
                     ) : <span />}
                     <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="secondary" onClick={onClose} disabled={uploading}>Chiudi</Button>
+                        <Button variant="secondary" onClick={onClose} disabled={uploading || confirmingOtp}>Chiudi</Button>
                         {hasPending && (
                             <>
                                 <Button variant="secondary" onClick={() => handleUploadAll(false)} disabled={uploading}>
@@ -282,6 +318,21 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, onMa
                     </div>
                 </div>
             </div>
+
+            <LimitationOverrideModal
+                isOpen={otpOpen}
+                limitationCode="fornitore_doc_no_file"
+                limitationMessage={`Autorizza inserimento ${DOCUMENT_TIPO_LABELS[tipo]} senza file allegato per ${fornitore.nome}.`}
+                actionContext={`fornitore_doc_otp_${fornitore.id}_${tipo}`}
+                draftSessionId={`fornitore-${fornitore.id}-otp-${Date.now()}`}
+                flowType="fornitori"
+                onClose={() => setOtpOpen(false)}
+                onCancel={() => setOtpOpen(false)}
+                onOverrideApproved={(overrideId) => {
+                    setOtpOpen(false)
+                    confirmWithoutFile(overrideId)
+                }}
+            />
         </div>
     )
 }

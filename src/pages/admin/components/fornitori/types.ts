@@ -1,4 +1,4 @@
-export type DocumentTipo = 'ddt' | 'bolla' | 'fattura' | 'nota_credito' | 'ricevuta_pagamento'
+export type DocumentTipo = 'ddt' | 'bolla' | 'fattura' | 'nota_credito' | 'ricevuta_pagamento' | 'proforma' | 'preventivo'
 
 export type DocumentStato =
     | 'caricato'
@@ -95,6 +95,8 @@ export const DOCUMENT_TIPO_LABELS: Record<DocumentTipo, string> = {
     fattura: 'Fattura',
     nota_credito: 'Nota Credito',
     ricevuta_pagamento: 'Ricevuta',
+    proforma: 'Proforma',
+    preventivo: 'Preventivo',
 }
 
 export const DOCUMENT_STATO_LABELS: Record<DocumentStato, string> = {
