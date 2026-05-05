@@ -3185,8 +3185,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Generate Nexi Pay by Link for extension
+      // Generate Nexi Pay by Link for extension.
+      // Defensive: 1) we DO know if the link generation succeeded; 2) we DO
+      // check the WhatsApp send result; 3) on ANY failure (no phone, template
+      // disabled, Green API offline, link gen error) we copy the link to the
+      // clipboard and show a yellow warning so the admin sends it manually.
       if (extendData.extension_payment_status === 'nexi_pay_by_link' && additionalAmount > 0) {
+        let nexiLink: string | null = null
+        let waSent = false
+        let waReason = ''
         try {
           let customerPhone = extendingBooking.customer_phone || extendingBooking.booking_details?.customer?.phone
           const custEmail = extendingBooking.customer_email || extendingBooking.booking_details?.customer?.email
@@ -3214,10 +3221,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               paymentPurpose: 'extension',
             }),
           })
-          const linkData = await linkRes.json()
+          const linkData = await linkRes.json().catch(() => ({}))
 
           if (linkRes.ok && linkData.paymentUrl) {
-            // Store link on booking
+            nexiLink = linkData.paymentUrl
+            // Persist the link on the booking BEFORE attempting WhatsApp, so
+            // even if everything below fails the admin can still find it.
             await supabase.from('bookings').update({
               booking_details: {
                 ...updatedBookingDetails,
@@ -3228,27 +3237,67 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             if (customerPhone) {
               const bookingRef = extendingBooking.id.substring(0, 8).toUpperCase()
-              await fetch('/.netlify/functions/send-whatsapp-notification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  customPhone: customerPhone,
-                  templateKey: 'payment_link_customer',
-                  templateVars: { '{customer_name}': custName, '{booking_id}': bookingRef, '{total}': additionalAmount.toFixed(2), '{payment_link}': linkData.paymentUrl, '{expiry}': `${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}` }
+              try {
+                const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    customPhone: customerPhone,
+                    templateKey: 'payment_link_customer',
+                    templateVars: { '{customer_name}': custName, '{booking_id}': bookingRef, '{total}': additionalAmount.toFixed(2), '{payment_link}': linkData.paymentUrl, '{expiry}': `${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}` }
+                  })
                 })
-              })
+                const waJson = await waRes.json().catch(() => ({}))
+                if (!waRes.ok) {
+                  waReason = `server: ${waJson.message || waJson.error || waRes.status}`
+                } else if (waJson.skipped) {
+                  // send-whatsapp-notification returns 200 + skipped:true when
+                  // template disabled, missing, or Green API not configured.
+                  waReason = `template/Green API: ${waJson.reason || waJson.message || 'skipped'}`
+                } else {
+                  waSent = true
+                }
+              } catch (waErr: unknown) {
+                waReason = waErr instanceof Error ? waErr.message : String(waErr)
+              }
+            } else {
+              waReason = 'cliente senza numero di telefono'
             }
-
-            // Skip navigator.clipboard — Safari throws NotAllowedError after the
-            // awaited WhatsApp fetch because the user-gesture context is lost.
-            toast.success(`Pay by Link estensione inviato! €${additionalAmount.toFixed(2)} (validità ${expirationHours}h)`)
           } else {
+            // Nexi link generation failed
             toast.error('Errore Pay by Link: ' + (linkData.error || 'Errore'))
           }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (linkErr: any) {
           console.error('[handleConfirmExtend] Pay by Link error:', linkErr)
           toast.error('Errore Pay by Link: ' + linkErr.message)
+        }
+
+        // Final feedback. Three outcomes:
+        //   1) link generated AND WhatsApp queued → success
+        //   2) link generated, WhatsApp NOT delivered → warn + copy to clipboard
+        //   3) link generation itself failed → already shown above (toast.error)
+        if (nexiLink) {
+          if (waSent) {
+            toast.success(`Pay by Link estensione inviato via WhatsApp! €${additionalAmount.toFixed(2)}`)
+          } else {
+            // Copy link via DOM fallback (Safari blocks navigator.clipboard
+            // after async fetch — exec falls back to a hidden textarea).
+            try {
+              const ta = document.createElement('textarea')
+              ta.value = nexiLink
+              ta.style.position = 'fixed'
+              ta.style.opacity = '0'
+              document.body.appendChild(ta)
+              ta.select()
+              document.execCommand('copy')
+              document.body.removeChild(ta)
+            } catch { /* ignore — link is on the booking anyway */ }
+            toast(
+              `Link generato MA WhatsApp non inviato (${waReason}). Link copiato negli appunti — invialo manualmente al cliente.`,
+              { icon: '⚠️', duration: 9000, style: { background: '#78350f', color: '#fef3c7', maxWidth: '480px' } }
+            )
+          }
         }
       }
 
