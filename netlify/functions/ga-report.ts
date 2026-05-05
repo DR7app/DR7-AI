@@ -66,11 +66,20 @@ const handler: Handler = async (event) => {
   const range = (event.queryStringParameters?.range || '28d') as '7d' | '28d' | '90d'
 
   const propertyId = process.env.GA4_PROPERTY_ID
+  // Two ways to pass credentials, to fit under AWS Lambda's 4KB env cap:
+  //   A) GA4_SERVICE_ACCOUNT_JSON — the full JSON (~2.3KB)
+  //   B) GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY — only the two fields actually
+  //      used by the JWT auth (~1.8KB total, saves ~500B)
   const credsRaw = process.env.GA4_SERVICE_ACCOUNT_JSON
+  const splitEmail = process.env.GA4_CLIENT_EMAIL
+  const splitKey = process.env.GA4_PRIVATE_KEY
+
+  const hasFull = !!credsRaw
+  const hasSplit = !!splitEmail && !!splitKey
 
   const missing: string[] = []
   if (!propertyId) missing.push('GA4_PROPERTY_ID')
-  if (!credsRaw) missing.push('GA4_SERVICE_ACCOUNT_JSON')
+  if (!hasFull && !hasSplit) missing.push('GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY (oppure GA4_SERVICE_ACCOUNT_JSON)')
 
   const empty: ReportPayload = {
     configured: false,
@@ -89,21 +98,39 @@ const handler: Handler = async (event) => {
     return { statusCode: 200, headers, body: JSON.stringify(empty) }
   }
 
-  let credentials: { client_email?: string; private_key?: string } = {}
-  try {
-    credentials = JSON.parse(credsRaw!)
-  } catch {
+  let clientEmail: string | undefined
+  let privateKey: string | undefined
+  if (hasFull) {
+    try {
+      const j = JSON.parse(credsRaw!)
+      clientEmail = j.client_email
+      privateKey = j.private_key
+    } catch {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ ...empty, warnings: ['GA4_SERVICE_ACCOUNT_JSON non è un JSON valido'] }),
+      }
+    }
+  } else {
+    clientEmail = splitEmail
+    // Netlify env values lose literal newlines in some inputs — accept both
+    // \n and real newlines in the private_key.
+    privateKey = splitKey?.replace(/\\n/g, '\n')
+  }
+
+  if (!clientEmail || !privateKey) {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ ...empty, warnings: ['GA4_SERVICE_ACCOUNT_JSON non è un JSON valido'] }),
+      body: JSON.stringify({ ...empty, warnings: ['client_email o private_key mancanti dopo il parsing'] }),
     }
   }
 
   try {
     const auth = new google.auth.JWT({
-      email: credentials.client_email,
-      key: credentials.private_key,
+      email: clientEmail,
+      key: privateKey,
       scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
     })
     const analytics = google.analyticsdata({ version: 'v1beta', auth })

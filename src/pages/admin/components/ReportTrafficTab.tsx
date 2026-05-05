@@ -169,7 +169,7 @@ export default function ReportTrafficTab() {
           </ul>
           <div className="mt-3 text-[11px] text-amber-200/70 leading-relaxed">
             <strong>GA4_PROPERTY_ID</strong>: numerico, lo trovi in Analytics → Admin → Property settings → Property details.<br/>
-            <strong>GA4_SERVICE_ACCOUNT_JSON</strong>: incolla l'intero JSON di un service account che abbia accesso "Viewer" alla property GA4 (Admin → Property Access Management).
+            <strong>GA4_CLIENT_EMAIL</strong> + <strong>GA4_PRIVATE_KEY</strong>: i due campi <code>client_email</code> e <code>private_key</code> presi dal JSON del service account (più compatti del JSON intero, sotto al limite 4KB di Lambda). In alternativa <code>GA4_SERVICE_ACCOUNT_JSON</code> con il JSON completo, se c'è spazio sotto il limite.
           </div>
         </div>
       )}
