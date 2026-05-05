@@ -281,30 +281,31 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     console.error('⚠️ Failed to create calendar event:', calendarError)
                 }
 
-                // Send WhatsApp confirmation to customer
+                // Send WhatsApp confirmation to customer via Pro template
+                // (pro_conferma_meccanica). Passing the booking object lets
+                // send-whatsapp-notification auto-resolve the right template
+                // and inject all variables ({nome}, {servizio}, {date}, {time},
+                // {total}, {pagamento}, {note}, ecc).
                 const custPhone = customerInfo?.phone
                 if (custPhone) {
                     try {
-                        const custFirstName = customerInfo?.full_name?.split(' ')[0] || 'Cliente'
-                        const fmtDate = new Date(`${formData.appointment_date}T${formData.appointment_time}:00`)
-                            .toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
-                        const totalEur = formData.price_total.toFixed(2)
-
-                        const custMsg = `Salve ${custFirstName},\n\n`
-                            + `Confermiamo il suo appuntamento.\n\n`
-                            + `*NUOVA PRENOTAZIONE MECCANICA*\n\n`
-                            + `*ID:* ${insertedBooking.id.slice(0, 8).toUpperCase()}\n`
-                            + `*Servizio:* ${formData.service_name}\n`
-                            + `*Data e Ora:* ${fmtDate} alle ${formData.appointment_time}\n`
-                            + `*Totale:* €${totalEur}\n`
-                            + `*Pagamento:* ${formData.payment_status === 'paid' ? 'Pagato' : 'Da pagare'}\n`
-                            + `*Note:* ${formData.notes || '-'}\n\n`
-                            + `Cordiali Saluti,\nDR7`
-
                         await fetch('/.netlify/functions/send-whatsapp-notification', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ customMessage: custMsg, customPhone: custPhone })
+                            body: JSON.stringify({
+                                booking: {
+                                    ...insertedBooking,
+                                    // Force the template router to pick
+                                    // mechanical_new_customer. The DB column
+                                    // is 'mechanical_service' but the
+                                    // notification function expects
+                                    // 'mechanical' to route correctly.
+                                    service_type: 'mechanical',
+                                    customer_name: customerInfo?.full_name || insertedBooking.customer_name,
+                                    customer_phone: custPhone,
+                                },
+                                customPhone: custPhone,
+                            }),
                         })
                         logger.log('✅ WhatsApp mechanical booking confirmation sent to', custPhone)
                     } catch (waError) {
