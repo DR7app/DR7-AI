@@ -19,6 +19,7 @@
     "@tailwindcss/postcss": "^4.1.14",
     "dotenv": "^17.2.3",
     "framer-motion": "^12.23.26",
+    "googleapis": "^171.4.0",
     "jszip": "^3.10.1",
     "node-fetch": "^2.7.0",
     "nodemailer": "^7.0.11",
