@@ -321,12 +321,17 @@ const handler: Handler = async (event) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     console.error('[ga-report] error:', err)
+    // configured = credentials are loaded (any of the 3 sources) AND we have a
+    // property ID. Distinct from "API call worked" — that's reported via
+    // warnings. Without this distinction, the page wrongly shows "Configurazione
+    // richiesta" whenever the GA Data API itself errors out.
+    const credsLoaded = !!clientEmail && !!privateKey
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         ...empty,
-        configured: !!propertyId && !!credsRaw,
+        configured: !!propertyId && credsLoaded,
         warnings: [`Errore Google Analytics Data API: ${err?.message || String(err)}`],
       }),
     }
