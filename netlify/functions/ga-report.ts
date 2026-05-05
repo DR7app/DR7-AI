@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { google } from 'googleapis'
+import { getStore } from '@netlify/blobs'
 
 // Fetches the data backing the "Rendimento Sito" tab from Google Analytics 4.
 // Returns ONLY real numbers. If env vars are missing, returns a structured
@@ -66,20 +67,39 @@ const handler: Handler = async (event) => {
   const range = (event.queryStringParameters?.range || '28d') as '7d' | '28d' | '90d'
 
   const propertyId = process.env.GA4_PROPERTY_ID
-  // Two ways to pass credentials, to fit under AWS Lambda's 4KB env cap:
-  //   A) GA4_SERVICE_ACCOUNT_JSON — the full JSON (~2.3KB)
-  //   B) GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY — only the two fields actually
-  //      used by the JWT auth (~1.8KB total, saves ~500B)
+  // Three credential sources, in priority order. The first two stay as
+  // fallback for setups that fit under AWS Lambda's 4KB env cap; the
+  // third (Netlify Blobs) is what we use on DR7 because the existing
+  // env vars + the ~1.7KB private key push us over the limit.
+  //   A) GA4_SERVICE_ACCOUNT_JSON env  (full JSON, ~2.3KB)
+  //   B) GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY env  (~1.8KB)
+  //   C) Netlify Blobs store="ga4" key="creds"   (no env footprint)
   const credsRaw = process.env.GA4_SERVICE_ACCOUNT_JSON
   const splitEmail = process.env.GA4_CLIENT_EMAIL
   const splitKey = process.env.GA4_PRIVATE_KEY
 
+  let blobEmail: string | undefined
+  let blobKey: string | undefined
+  try {
+    const store = getStore('ga4')
+    const stored = await store.get('creds', { type: 'json' }) as { privateKey?: string; clientEmail?: string } | null
+    if (stored) {
+      blobKey = stored.privateKey || undefined
+      blobEmail = stored.clientEmail || undefined
+    }
+  } catch {
+    // Blobs not configured / not reachable — silently fall through to env.
+  }
+
   const hasFull = !!credsRaw
   const hasSplit = !!splitEmail && !!splitKey
+  const hasBlob = !!blobKey
 
   const missing: string[] = []
   if (!propertyId) missing.push('GA4_PROPERTY_ID')
-  if (!hasFull && !hasSplit) missing.push('GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY (oppure GA4_SERVICE_ACCOUNT_JSON)')
+  if (!hasFull && !hasSplit && !hasBlob) {
+    missing.push('credenziali GA4 (chiama POST /.netlify/functions/ga-setup-key per caricarle in Netlify Blobs, oppure imposta GA4_CLIENT_EMAIL+GA4_PRIVATE_KEY)')
+  }
 
   const empty: ReportPayload = {
     configured: false,
@@ -112,11 +132,13 @@ const handler: Handler = async (event) => {
         body: JSON.stringify({ ...empty, warnings: ['GA4_SERVICE_ACCOUNT_JSON non è un JSON valido'] }),
       }
     }
-  } else {
+  } else if (hasSplit) {
     clientEmail = splitEmail
-    // Netlify env values lose literal newlines in some inputs — accept both
-    // \n and real newlines in the private_key.
     privateKey = splitKey?.replace(/\\n/g, '\n')
+  } else {
+    // From Netlify Blobs (preferred for DR7).
+    clientEmail = blobEmail || splitEmail
+    privateKey = blobKey
   }
 
   if (!clientEmail || !privateKey) {
