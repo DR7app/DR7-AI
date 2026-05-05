@@ -23,6 +23,26 @@ import EMTNAuthorizationModal from './emtn/EMTNAuthorizationModal'
 import EMTNEventReportModal from './emtn/EMTNEventReportModal'
 import EMTNStatusBadge, { statusToVariant } from './emtn/EMTNStatusBadge'
 
+interface DR7HistoryItem {
+    bookingId: string
+    vehicle?: string | null
+    date?: string | null
+    label: string
+    amount: number
+    quantity: number
+    paid: boolean
+    note?: string
+}
+interface DR7History {
+    totalBookings: number
+    regularBookings: number
+    damages: DR7HistoryItem[]
+    penalties: DR7HistoryItem[]
+    unpaidDamageTotal: number
+    unpaidPenaltyTotal: number
+    lastBookingDate?: string | null
+}
+
 interface SearchResponse {
     client: EMTNClient
     stats: EMTNStats | null
@@ -30,6 +50,7 @@ interface SearchResponse {
     message: string
     reportUnlocked: boolean
     recentEvents: Array<{ id: string; type: string; status: string; headline: string; occurred_at?: string; created_at: string }>
+    dr7History?: DR7History
 }
 
 export default function EMTNTab() {
@@ -147,6 +168,78 @@ export default function EMTNTab() {
                             )}
                         </div>
                     </div>
+
+                    {/* Cronologia DR7 — sempre visibile all'admin DR7
+                        (e' la tua propria base dati su questo cliente). */}
+                    {data.dr7History && (data.dr7History.totalBookings > 0 || data.dr7History.damages.length > 0 || data.dr7History.penalties.length > 0) && (
+                        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5">
+                            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                <div>
+                                    <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Cronologia DR7</h3>
+                                    <p className="text-xs text-theme-text-muted mt-0.5">
+                                        Record interno DR7: {data.dr7History.totalBookings} prenotazion{data.dr7History.totalBookings === 1 ? 'e' : 'i'}, {data.dr7History.damages.length} dann{data.dr7History.damages.length === 1 ? 'o' : 'i'}, {data.dr7History.penalties.length} penal{data.dr7History.penalties.length === 1 ? 'e' : 'i'}.
+                                    </p>
+                                </div>
+                                {(data.dr7History.unpaidDamageTotal + data.dr7History.unpaidPenaltyTotal) > 0 && (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium border border-red-500/40 bg-red-500/10 text-red-400">
+                                        Non pagato: €{(data.dr7History.unpaidDamageTotal + data.dr7History.unpaidPenaltyTotal).toFixed(2)}
+                                    </span>
+                                )}
+                            </div>
+
+                            {data.dr7History.damages.length > 0 && (
+                                <div className="mb-4">
+                                    <h4 className="text-[11px] font-semibold text-theme-text-secondary mb-2">Danni ({data.dr7History.damages.length})</h4>
+                                    <ul className="divide-y divide-theme-border">
+                                        {data.dr7History.damages.slice(0, 20).map((d, i) => (
+                                            <li key={`d-${i}`} className="py-2 flex items-center justify-between gap-3">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm text-theme-text-primary truncate">{d.label}</p>
+                                                    <p className="text-[11px] text-theme-text-muted">
+                                                        {d.vehicle || '—'} · {d.date ? new Date(d.date).toLocaleDateString('it-IT') : '—'} · booking {d.bookingId.slice(0, 8)}…
+                                                    </p>
+                                                </div>
+                                                <div className="text-right flex-shrink-0">
+                                                    <div className="text-sm font-semibold text-theme-text-primary tabular-nums">€{d.amount.toFixed(2)}</div>
+                                                    <span className={`text-[10px] uppercase tracking-wider ${d.paid ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                        {d.paid ? 'Pagato' : 'Non pagato'}
+                                                    </span>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {data.dr7History.penalties.length > 0 && (
+                                <div>
+                                    <h4 className="text-[11px] font-semibold text-theme-text-secondary mb-2">Penali ({data.dr7History.penalties.length})</h4>
+                                    <ul className="divide-y divide-theme-border">
+                                        {data.dr7History.penalties.slice(0, 20).map((p, i) => (
+                                            <li key={`p-${i}`} className="py-2 flex items-center justify-between gap-3">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm text-theme-text-primary truncate">{p.label}</p>
+                                                    <p className="text-[11px] text-theme-text-muted">
+                                                        {p.vehicle || '—'} · {p.date ? new Date(p.date).toLocaleDateString('it-IT') : '—'} · booking {p.bookingId.slice(0, 8)}…
+                                                    </p>
+                                                </div>
+                                                <div className="text-right flex-shrink-0">
+                                                    <div className="text-sm font-semibold text-theme-text-primary tabular-nums">€{p.amount.toFixed(2)}</div>
+                                                    <span className={`text-[10px] uppercase tracking-wider ${p.paid ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                        {p.paid ? 'Pagato' : 'Non pagato'}
+                                                    </span>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            <p className="text-[10px] text-theme-text-muted mt-3">
+                                Suggerimento: per portare un danno non saldato dentro la rete EMTN, clicca &quot;Segnala evento&quot; e copia i dettagli rilevanti nella descrizione.
+                            </p>
+                        </section>
+                    )}
 
                     {/* Cronologia eventi (visibile solo se sbloccato dal server) */}
                     {data.reportUnlocked && (
