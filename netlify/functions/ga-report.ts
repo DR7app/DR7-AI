@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { google } from 'googleapis'
-import { getStore } from '@netlify/blobs'
+import { createClient } from '@supabase/supabase-js'
 
 // Fetches the data backing the "Rendimento Sito" tab from Google Analytics 4.
 // Returns ONLY real numbers. If env vars are missing, returns a structured
@@ -80,15 +80,26 @@ const handler: Handler = async (event) => {
 
   let blobEmail: string | undefined
   let blobKey: string | undefined
-  try {
-    const store = getStore('ga4')
-    const stored = await store.get('creds', { type: 'json' }) as { privateKey?: string; clientEmail?: string } | null
-    if (stored) {
-      blobKey = stored.privateKey || undefined
-      blobEmail = stored.clientEmail || undefined
-    }
-  } catch {
-    // Blobs not configured / not reachable — silently fall through to env.
+  // Read GA creds from Supabase app_secrets (persistent storage that
+  // doesn't count against the 4KB Lambda env-var cap).
+  const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
+  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  if (SUPABASE_URL && SUPABASE_KEY) {
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+      const { data } = await supabase
+        .from('app_secrets')
+        .select('value')
+        .eq('key', 'ga4_creds')
+        .maybeSingle()
+      if (data?.value) {
+        const v = data.value as { privateKey?: string; clientEmail?: string }
+        blobKey = v.privateKey || undefined
+        blobEmail = v.clientEmail || undefined
+      }
+    } catch { /* table may not exist yet */ }
   }
 
   const hasFull = !!credsRaw

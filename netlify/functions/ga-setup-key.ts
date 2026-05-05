@@ -1,25 +1,21 @@
 import { Handler } from '@netlify/functions'
-import { getStore } from '@netlify/blobs'
+import { createClient } from '@supabase/supabase-js'
 
-// One-shot endpoint to load the GA4 service-account private key into
-// Netlify Blobs. Bypasses the 4KB Lambda env-var cap that prevents
-// putting the ~1.7KB private key in regular env vars alongside the
-// rest of DR7's existing secrets.
+// One-shot endpoint to store GA4 service-account credentials in Supabase
+// (table app_secrets). We use Supabase instead of Netlify Blobs because:
+//   1. AWS Lambda's 4KB env-var cap doesn't allow the ~1.7KB private key
+//      alongside DR7's existing 40+ env vars.
+//   2. Netlify Blobs auto-config doesn't kick in for v1 lambda-style
+//      functions in this project (returns "environment not configured").
 //
-// Usage (from your machine, once):
-//   curl -X POST https://admin.dr7empire.com/.netlify/functions/ga-setup-key \
-//     -H "Authorization: Bearer $ADMIN_API_TOKEN" \
-//     -H "Content-Type: application/json" \
-//     -d "$(jq -Rs '{privateKey: .}' < private-key.txt)"
+// Bootstrap mode: first write requires no auth (so we can populate the
+// secret without having ADMIN_API_TOKEN handy on the client side).
+// Subsequent writes (rotation) require Bearer ADMIN_API_TOKEN.
 //
-// Or send the JSON service-account file directly:
-//   curl -X POST https://admin.dr7empire.com/.netlify/functions/ga-setup-key \
-//     -H "Authorization: Bearer $ADMIN_API_TOKEN" \
-//     -H "Content-Type: application/json" \
-//     -d "$(cat dr7-reviews-XXXXX.json | jq -c '{privateKey: .private_key, clientEmail: .client_email}')"
-//
-// Stored under store="ga4", key="creds" as JSON {privateKey, clientEmail}.
-// Idempotent — overwrites on each call.
+// Body: { "privateKey": "-----BEGIN PRIVATE KEY-----\n...", "clientEmail": "..." }
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 const handler: Handler = async (event) => {
   const headers = {
@@ -33,21 +29,39 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
-  // Auth — bootstrap mode: if no key is in Blobs yet, allow ONE write
-  // without auth (so the first setup works without needing to read
-  // ADMIN_API_TOKEN). After the blob exists, require ADMIN_API_TOKEN
-  // bearer for any further write (rotation).
-  let alreadySet = false
-  try {
-    const probe = getStore('ga4')
-    const existing = await probe.get('creds', { type: 'json' })
-    alreadySet = !!existing
-  } catch { /* blob may not exist yet */ }
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Supabase env mancante' }) }
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+
+  // Ensure table exists (idempotent — uses RPC or direct SQL via REST).
+  // Schema: app_secrets(key text primary key, value jsonb, updated_at timestamptz default now())
+  // If creation fails (already exists), proceed.
+  await supabase.rpc('exec_sql', {
+    sql: `create table if not exists public.app_secrets (
+      key text primary key,
+      value jsonb not null,
+      updated_at timestamptz not null default now()
+    );
+    alter table public.app_secrets enable row level security;`,
+  }).catch(() => { /* RPC may not exist; we'll try the upsert anyway */ })
+
+  // Bootstrap auth: allow first write, require token afterwards.
+  const { data: existing } = await supabase
+    .from('app_secrets')
+    .select('key')
+    .eq('key', 'ga4_creds')
+    .maybeSingle()
+
+  const alreadySet = !!existing
 
   if (alreadySet) {
     const adminToken = process.env.ADMIN_API_TOKEN
     if (!adminToken) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'ADMIN_API_TOKEN non configurato sul server (richiesto per sovrascrivere creds esistenti)' }) }
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'ADMIN_API_TOKEN non configurato (richiesto per sovrascrivere creds esistenti)' }) }
     }
     const authHeader = event.headers.authorization || event.headers.Authorization || ''
     const provided = authHeader.replace(/^Bearer\s+/i, '').trim()
@@ -67,29 +81,33 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'privateKey mancante nel body' }) }
   }
   if (!body.privateKey.includes('BEGIN PRIVATE KEY')) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'privateKey non sembra una chiave PEM (manca BEGIN PRIVATE KEY)' }) }
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'privateKey non sembra una chiave PEM' }) }
   }
 
-  try {
-    const store = getStore('ga4')
-    await store.setJSON('creds', {
-      privateKey: body.privateKey.replace(/\\n/g, '\n'),
-      clientEmail: body.clientEmail || null,
-      updatedAt: new Date().toISOString(),
-    })
+  const value = {
+    privateKey: body.privateKey.replace(/\\n/g, '\n'),
+    clientEmail: body.clientEmail || null,
+  }
+
+  const { error } = await supabase
+    .from('app_secrets')
+    .upsert({ key: 'ga4_creds', value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+
+  if (error) {
     return {
-      statusCode: 200,
+      statusCode: 500,
       headers,
       body: JSON.stringify({
-        ok: true,
-        message: 'Credenziali GA4 salvate in Netlify Blobs',
-        clientEmail: body.clientEmail || null,
+        error: error.message,
+        hint: error.code === '42P01' ? 'Crea la tabella app_secrets in Supabase: create table public.app_secrets (key text primary key, value jsonb not null, updated_at timestamptz default now()); alter table public.app_secrets enable row level security;' : undefined,
       }),
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    console.error('[ga-setup-key]', err)
-    return { statusCode: 500, headers, body: JSON.stringify({ error: err?.message || String(err) }) }
+  }
+
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({ ok: true, message: 'Credenziali GA4 salvate in Supabase app_secrets', clientEmail: value.clientEmail }),
   }
 }
 
