@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
+import OperatoriReportDashboard from './OperatoriReportDashboard'
 
 interface Admin {
   id: string
@@ -193,6 +194,26 @@ function previousMonthRange(): { from: string; to: string } {
 const AGG_HARD_LIMIT = 5000  // cap aggregation fetch to avoid OOM
 
 export default function OperatoriTab() {
+  const [view, setView] = useState<'dashboard' | 'audit'>('dashboard')
+  if (view === 'dashboard') {
+    return (
+      <div className="space-y-3">
+        <div className="flex justify-end">
+          <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
+            <button onClick={() => setView('dashboard')}
+              className="px-3 py-1.5 rounded-full bg-dr7-gold text-black font-semibold">Dashboard</button>
+            <button onClick={() => setView('audit')}
+              className="px-3 py-1.5 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Audit log</button>
+          </div>
+        </div>
+        <OperatoriReportDashboard />
+      </div>
+    )
+  }
+  return <AuditLogView onSwitchView={() => setView('dashboard')} />
+}
+
+function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
   const [admins, setAdmins] = useState<Admin[]>([])
   const [selectedAdmin, setSelectedAdmin] = useState<string | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])           // paginated detail
@@ -445,6 +466,10 @@ export default function OperatoriTab() {
             ] as const).map(p => (
               <button key={p.k} onClick={() => setPeriodPreset(p.k)} className="px-3 py-1.5 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover transition-colors">{p.l}</button>
             ))}
+          </div>
+          <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
+            <button onClick={onSwitchView} className="px-3 py-1.5 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Dashboard</button>
+            <button className="px-3 py-1.5 rounded-full bg-dr7-gold text-black font-semibold">Audit log</button>
           </div>
           <button onClick={exportCSV} disabled={!selected || aggLogs.length === 0} className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-medium hover:opacity-90 disabled:opacity-30 transition-opacity">Esporta CSV</button>
           <button onClick={() => window.print()} disabled={!selected} className="px-4 py-2 text-sm rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-30">Stampa / PDF</button>
