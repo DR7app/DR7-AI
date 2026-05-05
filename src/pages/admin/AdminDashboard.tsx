@@ -37,6 +37,7 @@ const ScadenzeTab = lazyWithRetry(() => import('./components/ScadenzeTab'))
 const ReportsTab = lazyWithRetry(() => import('./components/ReportsTab'))
 const ReportLavaggioTab = lazyWithRetry(() => import('./components/ReportLavaggioTab'))
 const ReportClientiTab = lazyWithRetry(() => import('./components/ReportClientiTab'))
+const ReportTrafficTab = lazyWithRetry(() => import('./components/ReportTrafficTab'))
 const ReportPenaliDanniTab = lazyWithRetry(() => import('./components/ReportPenaliDanniTab'))
 const ReferralProgramTab = lazyWithRetry(() => import('./components/ReferralProgramTab'))
 const CodiciScontoTab = lazyWithRetry(() => import('./components/CodiciScontoTab'))
@@ -62,7 +63,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'campaign-center' | 'gestione-otp' | 'verifica-documenti' | 'fornitori'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'campaign-center' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -126,7 +127,7 @@ export default function AdminDashboard() {
 
   // RBAC: tabs restricted to superadmin
   const financialTabs: TabType[] = ['fattura', 'nexi', 'unpaid', 'cauzioni']
-  const adminOnlyTabs: TabType[] = ['reports', 'report-noleggio', 'report-lavaggio', 'report-clienti']
+  const adminOnlyTabs: TabType[] = ['reports', 'report-noleggio', 'report-lavaggio', 'report-clienti', 'report-traffic']
   const isTabRestricted = (tab: TabType) => {
     // Don't lock the user out while the role is still loading — defaults
     // are role='admin', canViewFinancials=false, which would briefly flash
@@ -255,6 +256,7 @@ export default function AdminDashboard() {
       { tab: 'report-clienti', label: 'Clienti' },
       { tab: 'report-penali-danni', label: 'Penali & Danni' },
       { tab: 'report-preventivi', label: 'Preventivi' },
+      { tab: 'report-traffic', label: 'Traffic Website' },
       { tab: 'operatori', label: 'Operatori' },
       { tab: 'dashboard-kpi', label: 'Dashboard' },
     ] },
@@ -326,6 +328,7 @@ export default function AdminDashboard() {
     'report-noleggio': 'Report Noleggio',
     'report-lavaggio': 'Report Lavaggio',
     'report-clienti': 'Report Clienti',
+    'report-traffic': 'Report Traffic Website',
     'report-penali-danni': 'Report Penali & Danni',
     'customer-wallet': 'Credit Wallet',
     'site-users': 'Iscritti al Sito',
@@ -664,6 +667,7 @@ export default function AdminDashboard() {
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && (isTabRestricted('report-lavaggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportLavaggioTab />)}
           {activeTab === 'report-clienti' && (isTabRestricted('report-clienti') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportClientiTab />)}
+          {activeTab === 'report-traffic' && (isTabRestricted('report-traffic') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportTrafficTab />)}
           {activeTab === 'report-penali-danni' && <ReportPenaliDanniTab />}
           {activeTab === 'com-email' && <PlaceholderTab title="E-mail" />}
           {activeTab === 'com-pec' && <PlaceholderTab title="PEC" />}
