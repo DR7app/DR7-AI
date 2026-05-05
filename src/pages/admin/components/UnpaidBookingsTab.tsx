@@ -388,11 +388,11 @@ export default function UnpaidBookingsTab() {
         if (!isPaid(booking.payment_status)) return true
 
         const extensions = booking.booking_details?.extension_history || []
+        // Only NEW extensions explicitly marked as unpaid trigger Da Saldare.
+        // Legacy extensions saved before payment_status tracking existed have
+        // undefined and must NOT be treated as unpaid (they were paid).
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (extensions.some((ext: any) => {
-            const ps = (ext.payment_status || '').toString()
-            return !isPaid(ps) // undefined / pending / partial / nexi_pay_by_link / qualsiasi non-paid trigger
-        })) return true
+        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')) return true
 
         const penalties = booking.booking_details?.penalties || []
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

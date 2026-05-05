@@ -3023,15 +3023,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         bookingUpdate.vehicle_plate = newVehicle.plate || newVehicle.targa || ''
       }
 
-      // If the extension is NOT paid upfront (da saldare or pay-by-link
-      // pending), the booking now owes more than was actually paid.
-      // Force payment_status='pending' so it shows up in Da Saldare /
-      // UnpaidBookingsTab. We never auto-upgrade to 'paid' here — that
-      // happens via the Nexi callback or a manual "Segna Pagato".
-      if (additionalAmount > 0 && extendData.extension_payment_status !== 'paid') {
-        bookingUpdate.payment_status = 'pending'
-      }
-
       // Update the booking directly - NO validation checks
       const { error: updateError } = await supabase
         .from('bookings')
@@ -3256,13 +3247,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (customerPhone) {
               const bookingRef = extendingBooking.id.substring(0, 8).toUpperCase()
               try {
+                // Extension-specific copy: don't reuse 'payment_link_customer'
+                // (that template says "prenotazione registrata" + "lo slot
+                // potrebbe essere assegnato ad altri" — wrong wording for an
+                // extension where the booking already exists).
+                const expiryLabel = `${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}`
+                const extPayMsg =
+`Salve ${custName},
+
+L'estensione della sua prenotazione #${bookingRef} è stata registrata.
+
+Per confermarla, completi il pagamento di €${additionalAmount.toFixed(2)} cliccando qui:
+${linkData.paymentUrl}
+
+Il link scade tra ${expiryLabel}. In assenza di pagamento, l'estensione non verrà confermata.
+
+Grazie,
+DR7`
                 const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     customPhone: customerPhone,
-                    templateKey: 'payment_link_customer',
-                    templateVars: { '{customer_name}': custName, '{booking_id}': bookingRef, '{total}': additionalAmount.toFixed(2), '{payment_link}': linkData.paymentUrl, '{expiry}': `${expirationHours} ${expirationHours === 1 ? 'ora' : 'ore'}` }
+                    customMessage: extPayMsg,
+                    type: 'Estensione - Pay by Link'
                   })
                 })
                 const waJson = await waRes.json().catch(() => ({}))
