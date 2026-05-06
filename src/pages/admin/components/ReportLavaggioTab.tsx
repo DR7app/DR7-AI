@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import toast from 'react-hot-toast'
+import { supabase } from '../../../supabaseClient'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 
 interface WashTypeBreakdown {
   type: string
@@ -35,6 +38,100 @@ export default function ReportLavaggioTab() {
   const [error, setError] = useState('')
   const [washData, setWashData] = useState<WashReportData | null>(null)
 
+  // Cost bar — Spesa merce/prodotti (fattura fornitori categoria 'lavaggio_prodotti')
+  // + Stipendio Lavaggista (editable solo da superadmin, persisted per mese in
+  // centralina_pro_config.config.lavaggio.stipendi_mensili[YYYY-MM]).
+  const { role: adminRole } = useAdminRole()
+  const isSuperadmin = adminRole === 'superadmin'
+  const [spesaMerce, setSpesaMerce] = useState<number>(0)
+  const [costsLoading, setCostsLoading] = useState(false)
+  const [stipendio, setStipendio] = useState<number>(0)
+  const [stipendioInput, setStipendioInput] = useState<string>('')
+  const [stipendioEditing, setStipendioEditing] = useState(false)
+  const [stipendioSaving, setStipendioSaving] = useState(false)
+
+  const loadCosts = useCallback(async () => {
+    setCostsLoading(true)
+    try {
+      const [year, month] = selectedMonth.split('-').map(Number)
+      const monthStart = `${selectedMonth}-01`
+      const lastDay = new Date(year, month, 0).getDate()
+      const monthEnd = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`
+
+      // 1. Spesa merce — fornitori categoria lavaggio_prodotti, fatture nel mese (per data_documento)
+      const { data: fornitori } = await supabase
+        .from('fornitori')
+        .select('id')
+        .eq('categoria_merce', 'lavaggio_prodotti')
+      const ids = (fornitori || []).map(f => f.id)
+      let spesa = 0
+      if (ids.length > 0) {
+        const { data: fatture } = await supabase
+          .from('fornitore_documents')
+          .select('importo_totale')
+          .in('fornitore_id', ids)
+          .eq('tipo', 'fattura')
+          .gte('data_documento', monthStart)
+          .lte('data_documento', monthEnd)
+        spesa = (fatture || []).reduce((s, d: { importo_totale: number | string | null }) => s + (Number(d.importo_totale) || 0), 0)
+      }
+      setSpesaMerce(spesa)
+
+      // 2. Stipendio lavaggista per il mese
+      const { data: cfgRow } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      const cfg = (cfgRow?.config || {}) as Record<string, unknown>
+      const lav = (cfg.lavaggio || {}) as Record<string, unknown>
+      const stip = (lav.stipendi_mensili || {}) as Record<string, number>
+      const value = Number(stip[selectedMonth] ?? 0) || 0
+      setStipendio(value)
+      setStipendioInput(value.toFixed(2))
+    } catch (err) {
+      console.error('[ReportLavaggio] loadCosts error:', err)
+    } finally {
+      setCostsLoading(false)
+    }
+  }, [selectedMonth])
+
+  useEffect(() => { loadCosts() }, [loadCosts])
+
+  async function saveStipendio() {
+    const parsed = parseFloat(stipendioInput.replace(',', '.'))
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      toast.error('Importo non valido')
+      return
+    }
+    setStipendioSaving(true)
+    try {
+      const { data: cfgRow } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      const cfg = (cfgRow?.config || {}) as Record<string, unknown>
+      const lav = { ...((cfg.lavaggio as Record<string, unknown>) || {}) }
+      const stipendi = { ...((lav.stipendi_mensili as Record<string, number>) || {}) }
+      stipendi[selectedMonth] = parsed
+      lav.stipendi_mensili = stipendi
+      const nextCfg = { ...cfg, lavaggio: lav }
+      const { error } = await supabase
+        .from('centralina_pro_config')
+        .upsert({ id: 'main', config: nextCfg }, { onConflict: 'id' })
+      if (error) throw error
+      setStipendio(parsed)
+      setStipendioEditing(false)
+      toast.success('Stipendio salvato')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore salvataggio: ' + msg)
+    } finally {
+      setStipendioSaving(false)
+    }
+  }
+
   async function fetchReport() {
     setLoading(true)
     setError('')
@@ -56,6 +153,79 @@ export default function ReportLavaggioTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-theme-text-primary">Report Lavaggio</h2>
+      </div>
+
+      {/* Cost Bar — Spesa merce + Stipendio Lavaggista (per mese selezionato) */}
+      <div className="bg-theme-bg-secondary/50 backdrop-blur-sm rounded-xl border border-theme-border p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Spesa Merce */}
+          <div className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-theme-text-muted uppercase tracking-wider">Spesa Merce / Prodotti</p>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">Fatture fornitori categoria Lavaggio</p>
+              </div>
+              <span className="text-[10px] text-theme-text-muted">{selectedMonth}</span>
+            </div>
+            <p className="text-2xl font-bold text-red-400 mt-2 tabular-nums">
+              {costsLoading ? '...' : formatCurrency(spesaMerce)}
+            </p>
+          </div>
+
+          {/* Stipendio Lavaggista */}
+          <div className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-theme-text-muted uppercase tracking-wider">Stipendio Lavaggista</p>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">
+                  {isSuperadmin ? 'Modificabile dall\'amministratore' : 'Solo amministratore può modificare'}
+                </p>
+              </div>
+              <span className="text-[10px] text-theme-text-muted">{selectedMonth}</span>
+            </div>
+            {stipendioEditing && isSuperadmin ? (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={stipendioInput}
+                  onChange={e => setStipendioInput(e.target.value)}
+                  className="flex-1 px-3 py-1.5 bg-theme-bg-secondary border border-theme-border rounded text-theme-text-primary text-lg font-bold tabular-nums"
+                  autoFocus
+                />
+                <button
+                  onClick={saveStipendio}
+                  disabled={stipendioSaving}
+                  className="px-3 py-1.5 bg-dr7-gold text-white text-xs font-semibold rounded hover:opacity-90 disabled:opacity-50"
+                >
+                  {stipendioSaving ? '...' : 'Salva'}
+                </button>
+                <button
+                  onClick={() => { setStipendioEditing(false); setStipendioInput(stipendio.toFixed(2)) }}
+                  disabled={stipendioSaving}
+                  className="px-3 py-1.5 bg-theme-bg-tertiary text-theme-text-muted text-xs font-semibold rounded hover:bg-theme-bg-secondary disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-2xl font-bold text-theme-text-primary tabular-nums">
+                  {costsLoading ? '...' : formatCurrency(stipendio)}
+                </p>
+                {isSuperadmin && (
+                  <button
+                    onClick={() => setStipendioEditing(true)}
+                    className="text-xs px-3 py-1 bg-dr7-gold/20 text-dr7-gold rounded hover:bg-dr7-gold/30"
+                  >
+                    Modifica
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Controls */}
