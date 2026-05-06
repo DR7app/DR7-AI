@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { google } from 'googleapis'
 
 /**
  * Endpoint diagnostico per capire perche' ga-report non pesca i dati
@@ -46,6 +47,49 @@ const handler: Handler = async () => {
         } catch (e) {
             out.appSecretsTable.error = e instanceof Error ? e.message : String(e)
         }
+    }
+
+    // Test the actual GA call with OAuth to see what fails
+    out.gaCallTest = { attempted: false, success: false, error: null as string | null, sampleData: null as any }
+    const propertyId = process.env.GA4_PROPERTY_ID
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
+    if (url && key && propertyId && clientId && clientSecret) {
+        try {
+            const sb = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+            const { data: tokenRow } = await sb
+                .from('app_secrets')
+                .select('value')
+                .eq('key', 'ga4_oauth_refresh_token')
+                .maybeSingle()
+            const refreshToken = (tokenRow?.value as any)?.refresh_token
+            if (!refreshToken) {
+                out.gaCallTest.error = 'no refresh_token in app_secrets'
+            } else {
+                out.gaCallTest.attempted = true
+                const oauth2 = new google.auth.OAuth2(clientId, clientSecret)
+                oauth2.setCredentials({ refresh_token: refreshToken })
+                const analytics = google.analyticsdata({ version: 'v1beta', auth: oauth2 as any })
+                const resp = await analytics.properties.runReport({
+                    property: `properties/${propertyId}`,
+                    requestBody: {
+                        dateRanges: [{ startDate: '28daysAgo', endDate: 'today' }],
+                        metrics: [{ name: 'sessions' }, { name: 'screenPageViews' }, { name: 'totalUsers' }],
+                    },
+                })
+                out.gaCallTest.success = true
+                out.gaCallTest.sampleData = {
+                    rowCount: resp.data.rowCount,
+                    metricHeaders: resp.data.metricHeaders?.map((m: any) => m.name),
+                    firstRow: resp.data.rows?.[0]?.metricValues?.map((v: any) => v.value),
+                    propertyQuota: resp.data.propertyQuota || null,
+                }
+            }
+        } catch (e: any) {
+            out.gaCallTest.error = (e?.message || String(e)) + (e?.code ? ` [code: ${e.code}]` : '')
+        }
+    } else {
+        out.gaCallTest.error = 'missing required env vars'
     }
 
     return {
