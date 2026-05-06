@@ -158,6 +158,43 @@ export default function FatturaTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Riconciliazione bulk con Aruba — utile quando il polling è in ritardo
+  // e admin vede stati diversi tra dashboard Aruba e admin (es: 29 scartate
+  // su Aruba ma admin badge ne mostra 3). Una sola invocazione scarica
+  // la lista outgoing da Aruba (paginata) e allinea tutto.
+  async function reconcileWithAruba() {
+    setRefreshingAll(true)
+    try {
+      const res = await authFetch('/.netlify/functions/reconcile-sdi-statuses', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        toast.error('Riconciliazione fallita: ' + (json.error || 'errore sconosciuto'))
+        return
+      }
+      const accepted = (json.transitions || []).filter((t: { to: string }) => t.to === 'accepted').length
+      const rejected = (json.transitions || []).filter((t: { to: string }) => t.to === 'rejected').length
+      const sent = (json.transitions || []).filter((t: { to: string }) => t.to === 'sent').length
+      const error = (json.transitions || []).filter((t: { to: string }) => t.to === 'error').length
+      const parts: string[] = []
+      if (accepted) parts.push(`${accepted} accettate`)
+      if (rejected) parts.push(`${rejected} scartate`)
+      if (error) parts.push(`${error} errore`)
+      if (sent) parts.push(`${sent} inviate`)
+      toast.success(
+        json.updated > 0
+          ? `Riconciliazione: ${parts.join(', ')} su ${json.totalRemote} fatture Aruba`
+          : `Già allineato: ${json.totalRemote} fatture Aruba verificate`,
+        { duration: 6000 }
+      )
+      await loadInvoices()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore riconciliazione: ' + msg)
+    } finally {
+      setRefreshingAll(false)
+    }
+  }
+
   // Marca la notifica SDI come "vista" — toglie il badge dalla sidebar e
   // dal sub-tab Fattura senza dover risolvere/reinviare la fattura.
   // Si resetta automaticamente al prossimo passaggio in rejected/scartata/error
@@ -457,6 +494,14 @@ export default function FatturaTab() {
               title="Interroga Aruba e aggiorna lo stato SDI di tutte le fatture in attesa"
             >
               {refreshingAll ? 'Aggiornamento…' : 'Aggiorna stati SDI'}
+            </button>
+            <button
+              onClick={() => reconcileWithAruba()}
+              disabled={refreshingAll}
+              className="px-4 py-2 rounded-full font-medium transition-colors bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 flex items-center gap-2"
+              title="Scarica lista completa da Aruba e allinea TUTTI gli stati (per recuperare disallineamenti)"
+            >
+              Riconcilia con Aruba
             </button>
             <button
               onClick={() => {

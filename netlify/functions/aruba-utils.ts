@@ -150,6 +150,61 @@ export async function checkArubaStatus(filename: string): Promise<any> {
 }
 
 /**
+ * Search OUTGOING (active) invoices from Aruba — same pattern as the
+ * incoming search but on /services/invoice/out/findByUsername. Returns
+ * a paginated list with each invoice's current SDI status. Used by the
+ * bulk reconciler so we don't have to poll fattura-by-fattura when
+ * Aruba already exposes the whole list in one call.
+ */
+export async function searchOutgoingInvoices(params: {
+    startDate?: string
+    endDate?: string
+    page?: number
+    pageSize?: number
+}): Promise<any> {
+    const token = await getArubaToken()
+
+    const queryParams = new URLSearchParams()
+    queryParams.set('username', USERNAME)
+    if (params.page != null) queryParams.set('page', String(params.page))
+    if (params.pageSize != null) {
+        queryParams.set('pageSize', String(params.pageSize))
+        queryParams.set('size', String(params.pageSize))
+    }
+    if (params.startDate) queryParams.set('startDate', params.startDate)
+    if (params.endDate) queryParams.set('endDate', params.endDate)
+
+    let response: Response | null = null
+    const MAX_ATTEMPTS = 5
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        response = await fetch(`${ARUBA_API_URL}/services/invoice/out/findByUsername?${queryParams}`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+        })
+        if (response.status !== 429) break
+        const wait = Math.min(2000 * Math.pow(2, attempt), 8000) + Math.floor(Math.random() * 500)
+        console.warn(`[Aruba] 429 on out/findByUsername, retry in ${wait}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`)
+        await new Promise(r => setTimeout(r, wait))
+    }
+    if (!response) throw new Error('Aruba out/findByUsername: no response')
+    if (response.status === 429) {
+        throw new Error('Aruba ha limitato le richieste (429). Riprova tra qualche minuto.')
+    }
+    if (!response.ok) {
+        const text = await response.text()
+        const cleanText = text
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+        const snippet = cleanText.length > 200 ? cleanText.slice(0, 200) + '...' : cleanText
+        throw new Error(`Aruba Outgoing Search Failed: ${response.status}${snippet ? ' — ' + snippet : ''}`)
+    }
+    return response.json()
+}
+
+/**
  * Search incoming (passive) invoices from Aruba
  * Based on official docs: POST /services/invoice/in/findByUsername
  */
