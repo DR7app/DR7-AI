@@ -114,6 +114,13 @@ export default function ReportTrafficTab() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
+  // Quando atterriamo qui con ?ga_oauth=connected (subito dopo l'OAuth
+  // callback), il refresh token e' appena stato salvato in app_secrets.
+  // Forziamo un refetch e dopo puliamo la query string cosi' un reload
+  // manuale non ri-trigghera il banner di successo.
+  const oauthFlag = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('ga_oauth')
+    : null
   useEffect(() => {
     let abort = false
     setLoading(true)
@@ -122,9 +129,19 @@ export default function ReportTrafficTab() {
       .then(r => r.json())
       .then((p: ReportPayload) => { if (!abort) setData(p) })
       .catch(e => { if (!abort) setErr(String(e?.message || e)) })
-      .finally(() => { if (!abort) setLoading(false) })
+      .finally(() => {
+        if (abort) return
+        setLoading(false)
+        if (oauthFlag === 'connected' && typeof window !== 'undefined') {
+          try {
+            const u = new URL(window.location.href)
+            u.searchParams.delete('ga_oauth')
+            window.history.replaceState({}, '', u.toString())
+          } catch { /* ignore */ }
+        }
+      })
     return () => { abort = true }
-  }, [range])
+  }, [range, oauthFlag])
 
   const totalSessions = useMemo(
     () => (data?.distribution || []).reduce((s, c) => s + c.value, 0),

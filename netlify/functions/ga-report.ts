@@ -292,7 +292,13 @@ const handler: Handler = async (event) => {
     privateKey = blobKey?.replace(/\\n/g, '\n')
   }
 
-  if (!clientEmail || !privateKey) {
+  // BUG FIX: questo gate richiedeva clientEmail+privateKey anche quando
+  // l'utente aveva configurato SOLO OAuth (refresh token). Risultato: pur
+  // avendo completato il flusso OAuth, ga-report ricadeva sempre su
+  // 'internal' con warning 'client_email o private_key mancanti'. Ora
+  // saltiamo il gate quando hasOAuth e' true — la JWT path non parte
+  // comunque (line 311 controlla hasOAuth).
+  if (!hasOAuth && (!clientEmail || !privateKey)) {
     return {
       statusCode: 200,
       headers,
@@ -302,6 +308,10 @@ const handler: Handler = async (event) => {
       }),
     }
   }
+  // Log esplicito per debug Netlify: vediamo a colpo d'occhio quale path
+  // sta usando la function quando il dato sembra strano.
+  console.log('[ga-report] auth path:', hasOAuth ? 'oauth-user' : 'service-account-jwt',
+    { hasOAuth, hasFull, hasSplit, hasBlob, oauthLookupError })
 
   try {
     // Auth: preferiamo OAuth (account utente) se disponibile, altrimenti

@@ -73,6 +73,15 @@ export default function AdminDashboard() {
   // is read here and rendered transparently.
   const ACTIVE_TAB_KEY = 'dr7_admin_active_tab'
   const readSavedTab = (): TabType => {
+    // Override via query string: dopo un OAuth callback (?ga_oauth=connected
+    // o ?ga_oauth_error=...) forziamo la tab Rendimento Sito altrimenti
+    // l'utente atterra sulla tab default e non vede l'esito.
+    try {
+      const qs = new URLSearchParams(window.location.search)
+      if (qs.get('ga_oauth') === 'connected' || qs.get('ga_oauth_error')) {
+        return 'report-traffic' as TabType
+      }
+    } catch { /* ignore */ }
     try {
       const saved = sessionStorage.getItem(ACTIVE_TAB_KEY)
       if (saved) return saved as TabType
