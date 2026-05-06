@@ -53,7 +53,6 @@ const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreve
 const CentralinaProTab = lazyWithRetry(() => import('./components/CentralinaProTab'))
 const MaxiPromoGapTab = lazyWithRetry(() => import('./components/MaxiPromoGapTab'))
 const PromoIncassiTab = lazyWithRetry(() => import('./components/PromoIncassiTab'))
-const CampaignCenterTab = lazyWithRetry(() => import('./components/CampaignCenterTab'))
 const GestioneOtpTab = lazyWithRetry(() => import('./components/GestioneOtpTab'))
 const DocumentsVerificationTab = lazyWithRetry(() => import('./components/DocumentsVerificationTab'))
 const EMTNTab = lazyWithRetry(() => import('./components/EMTNTab'))
@@ -64,7 +63,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'campaign-center' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'reviews' | 'fleet' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -288,9 +287,6 @@ export default function AdminDashboard() {
     ] },
     { name: 'E.M.T.N.', tabs: [
       { tab: 'emtn', label: 'E.M.T.N.' },
-    ] },
-    { name: 'Campaign Center', tabs: [
-      { tab: 'campaign-center', label: 'Campaign Center' },
     ] },
   ]
   const sectionForActiveTab = SECTIONS.find(s => s.tabs.some(t => t.tab === activeTab)) || null
@@ -683,7 +679,6 @@ export default function AdminDashboard() {
           {activeTab === 'centralina-pro' && <CentralinaProTab />}
           {activeTab === 'maxi-promo-gap' && <MaxiPromoGapTab />}
           {activeTab === 'promo-incassi' && <PromoIncassiTab />}
-          {activeTab === 'campaign-center' && <CampaignCenterTab />}
           {activeTab === 'gestione-otp' && <GestioneOtpTab />}
           {activeTab === 'verifica-documenti' && <DocumentsVerificationTab />}
           {activeTab === 'fornitori' && <FornitoriTab />}
