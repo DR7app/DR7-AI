@@ -475,27 +475,12 @@ const handler: Handler = async (event) => {
     // conversioni) significa che il tracking non e' arrivato o non c'e'
     // ancora nessuna visita: fa piu' senso mostrare i dati interni del
     // CRM cosi' la tab e' utile, invece di tante caselle 0.
-    const allEmpty = sessions === 0 && pageviews === 0 && users === 0 && bookings === 0 && calls === 0
-    if (allEmpty) {
-      const fallback = await buildInternalFallback(range)
-      const payload: ReportPayload = {
-        configured: true,
-        missing: [],
-        range,
-        kpis: fallback.kpis,
-        traffic,
-        distribution,
-        funnel,
-        topPages,
-        fetchedAt: new Date().toISOString(),
-        warnings: [
-          'GA4 risponde ma non ha ancora dati di traffico — fallback su dati operativi interni DR7.',
-          ...fallback.warnings,
-        ],
-        dataSource: 'internal',
-      }
-      return { statusCode: 200, headers, body: JSON.stringify(payload) }
-    }
+    // GA4 ha risposto correttamente. Se i numeri sono tutti 0 vuol dire
+    // che il sito NON sta inviando eventi a GA4 (snippet mancante o
+    // non installato sul dominio configurato). Mostriamo i veri 0 con
+    // un avviso esplicito: e' un problema di tracking sul sito, non
+    // di accesso GA4. Niente fallback — se ci scambiamo dati operativi
+    // si confonde la diagnosi.
 
     const payload: ReportPayload = {
       configured: true,
