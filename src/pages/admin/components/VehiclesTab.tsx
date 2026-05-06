@@ -895,8 +895,8 @@ export default function VehiclesTab() {
                       const { data: urlData } = supabase.storage.from('vehicle-images').getPublicUrl(path)
                       setFormData(prev => ({ ...prev, image_url: urlData?.publicUrl || '' }))
                     } catch (err) {
-                      const msg = err instanceof Error ? err.message : String(err)
-                      alert('Errore caricamento: ' + msg)
+                      console.error('Vehicle image upload failed:', err)
+                      alert('Errore caricamento: ' + extractErrorMessage(err))
                     } finally {
                       setUploadingImage(false)
                       if (imageInputRef.current) imageInputRef.current.value = ''
