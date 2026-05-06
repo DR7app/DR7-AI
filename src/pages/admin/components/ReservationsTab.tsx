@@ -328,34 +328,22 @@ interface Booking {
   } | any
 }
 
-// Builds a human-readable diff between the original booking and the form
-// state at Salva time. Used to populate the OTP-authorization email so
-// direzione sees the actual modification (e.g. "Ritiro: 10/05 10:00 →
-// 12/05 10:00") before approving. Includes only fields that changed,
-// plus customer + booking ID for context.
+// Builds a human-readable diff by comparing the snapshot of formData
+// captured when the booking was opened for edit against the live
+// formData at Salva time. Snapshot-vs-current diffing avoids false
+// positives caused by booking_details key mismatches (camelCase vs
+// snake_case, multi-shape deposit fields, etc.) and only surfaces
+// fields the operator actually changed.
 function buildBookingEditDiff(
-  original: Booking,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  form: Record<string, any>,
+  before: Record<string, any>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  after: Record<string, any>,
+  customerName: string,
+  bookingId: string,
   vehicles: Vehicle[],
 ): Array<{ label: string; value: string }> {
   const rows: Array<{ label: string; value: string }> = []
-  const tz = 'Europe/Rome'
-
-  const fmtDateTime = (iso: string | null | undefined) => {
-    if (!iso) return '—'
-    try {
-      return new Date(iso).toLocaleString('it-IT', {
-        timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      })
-    } catch { return String(iso) }
-  }
-
-  const composeFormDateTime = (date: string, time: string) => {
-    if (!date) return ''
-    return `${date} ${time || '00:00'}`
-  }
 
   const fmtFormDateTime = (date: string, time: string) => {
     if (!date) return '—'
@@ -370,92 +358,68 @@ function buildBookingEditDiff(
     return `€${num.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
-  const customerName = original.customer_name
-    || original.booking_details?.customer?.fullName
-    || original.booking_details?.customer?.name
-    || '—'
-  rows.push({ label: 'Cliente', value: String(customerName) })
-  rows.push({ label: 'Prenotazione', value: original.id.slice(0, 8) })
-
-  // Vehicle change
-  if (form.vehicle_id && form.vehicle_id !== original.vehicle_id) {
-    const oldVeh = vehicles.find(v => v.id === original.vehicle_id)?.display_name
-      || original.vehicle_name || '—'
-    const newVeh = vehicles.find(v => v.id === form.vehicle_id)?.display_name || '—'
-    rows.push({ label: 'Veicolo', value: `${oldVeh} → ${newVeh}` })
+  const numEq = (a: unknown, b: unknown) => {
+    const na = parseFloat(String(a ?? 0))
+    const nb = parseFloat(String(b ?? 0))
+    if (!Number.isFinite(na) || !Number.isFinite(nb)) return String(a ?? '') === String(b ?? '')
+    return Math.abs(na - nb) < 0.005
   }
 
-  // Pickup date/time
-  const newPickupCompose = composeFormDateTime(form.pickup_date, form.pickup_time)
-  const origPickupRome = original.pickup_date
-    ? new Date(original.pickup_date).toLocaleString('sv-SE', { timeZone: tz }).replace('T', ' ').slice(0, 16)
-    : ''
-  if (newPickupCompose && newPickupCompose !== origPickupRome) {
+  const strEq = (a: unknown, b: unknown) => String(a ?? '') === String(b ?? '')
+  const vehName = (id: unknown) => vehicles.find(v => v.id === id)?.display_name || '—'
+
+  rows.push({ label: 'Cliente', value: customerName || '—' })
+  rows.push({ label: 'Prenotazione', value: bookingId.slice(0, 8) })
+
+  if (!strEq(before.vehicle_id, after.vehicle_id)) {
+    rows.push({ label: 'Veicolo', value: `${vehName(before.vehicle_id)} → ${vehName(after.vehicle_id)}` })
+  }
+
+  if (!strEq(before.pickup_date, after.pickup_date) || !strEq(before.pickup_time, after.pickup_time)) {
     rows.push({
       label: 'Ritiro',
-      value: `${fmtDateTime(original.pickup_date)} → ${fmtFormDateTime(form.pickup_date, form.pickup_time)}`,
+      value: `${fmtFormDateTime(before.pickup_date, before.pickup_time)} → ${fmtFormDateTime(after.pickup_date, after.pickup_time)}`,
     })
   }
 
-  // Return date/time
-  const newReturnCompose = composeFormDateTime(form.return_date, form.return_time)
-  const origReturnRome = original.dropoff_date
-    ? new Date(original.dropoff_date).toLocaleString('sv-SE', { timeZone: tz }).replace('T', ' ').slice(0, 16)
-    : ''
-  if (newReturnCompose && newReturnCompose !== origReturnRome) {
+  if (!strEq(before.return_date, after.return_date) || !strEq(before.return_time, after.return_time)) {
     rows.push({
       label: 'Riconsegna',
-      value: `${fmtDateTime(original.dropoff_date)} → ${fmtFormDateTime(form.return_date, form.return_time)}`,
+      value: `${fmtFormDateTime(before.return_date, before.return_time)} → ${fmtFormDateTime(after.return_date, after.return_time)}`,
     })
   }
 
-  // Pickup location
-  if (form.pickup_location && form.pickup_location !== original.pickup_location) {
-    rows.push({ label: 'Luogo ritiro', value: `${original.pickup_location || '—'} → ${form.pickup_location}` })
+  if (!strEq(before.pickup_location, after.pickup_location)) {
+    rows.push({ label: 'Luogo ritiro', value: `${before.pickup_location || '—'} → ${after.pickup_location || '—'}` })
   }
-  if (form.dropoff_location && form.dropoff_location !== original.dropoff_location) {
-    rows.push({ label: 'Luogo riconsegna', value: `${original.dropoff_location || '—'} → ${form.dropoff_location}` })
-  }
-
-  // Total amount (price_total stored in cents on Booking, form.total_amount in euros as string)
-  const origTotalEur = (original.price_total || 0) / 100
-  const newTotalEur = parseFloat(String(form.total_amount ?? 0))
-  if (Number.isFinite(newTotalEur) && Math.abs(newTotalEur - origTotalEur) > 0.005) {
-    rows.push({ label: 'Importo totale', value: `${eur(origTotalEur)} → ${eur(newTotalEur)}` })
+  if (!strEq(before.dropoff_location, after.dropoff_location)) {
+    rows.push({ label: 'Luogo riconsegna', value: `${before.dropoff_location || '—'} → ${after.dropoff_location || '—'}` })
   }
 
-  // Amount paid
-  const origPaid = (original.booking_details?.amount_paid ?? 0) as number
-  const newPaid = parseFloat(String(form.amount_paid ?? 0))
-  if (Number.isFinite(newPaid) && Math.abs(newPaid - origPaid) > 0.005) {
-    rows.push({ label: 'Importo pagato', value: `${eur(origPaid)} → ${eur(newPaid)}` })
+  if (!numEq(before.total_amount, after.total_amount)) {
+    rows.push({ label: 'Importo totale', value: `${eur(before.total_amount)} → ${eur(after.total_amount)}` })
+  }
+  if (!numEq(before.amount_paid, after.amount_paid)) {
+    rows.push({ label: 'Importo pagato', value: `${eur(before.amount_paid)} → ${eur(after.amount_paid)}` })
   }
 
-  // Status
-  if (form.status && form.status !== original.status) {
-    rows.push({ label: 'Stato', value: `${original.status || '—'} → ${form.status}` })
+  if (!strEq(before.status, after.status)) {
+    rows.push({ label: 'Stato', value: `${before.status || '—'} → ${after.status || '—'}` })
   }
-
-  // Payment status
-  if (form.payment_status && form.payment_status !== original.payment_status) {
-    rows.push({ label: 'Pagamento', value: `${original.payment_status || '—'} → ${form.payment_status}` })
+  if (!strEq(before.payment_status, after.payment_status)) {
+    rows.push({ label: 'Pagamento', value: `${before.payment_status || '—'} → ${after.payment_status || '—'}` })
   }
-
-  // Payment method
-  if (form.payment_method && form.payment_method !== original.payment_method) {
-    rows.push({ label: 'Metodo pagamento', value: `${original.payment_method || '—'} → ${form.payment_method}` })
+  if (!strEq(before.payment_method, after.payment_method)) {
+    rows.push({ label: 'Metodo pagamento', value: `${before.payment_method || '—'} → ${after.payment_method || '—'}` })
   }
-
-  // Insurance
-  const origInsurance = original.booking_details?.insurance_option || original.booking_details?.insurance || ''
-  if (form.insurance_option && form.insurance_option !== origInsurance) {
-    rows.push({ label: 'Assicurazione', value: `${origInsurance || '—'} → ${form.insurance_option}` })
+  if (!strEq(before.insurance_option, after.insurance_option)) {
+    rows.push({ label: 'Assicurazione', value: `${before.insurance_option || '—'} → ${after.insurance_option || '—'}` })
   }
-
-  // Deposit
-  const origDeposit = original.booking_details?.deposit ?? original.booking_details?.cauzione ?? ''
-  if (form.deposit !== undefined && String(form.deposit) !== String(origDeposit)) {
-    rows.push({ label: 'Cauzione', value: `${origDeposit || '—'} → ${form.deposit}` })
+  if (!numEq(before.deposit, after.deposit)) {
+    rows.push({ label: 'Cauzione', value: `${eur(before.deposit)} → ${eur(after.deposit)}` })
+  }
+  if (!strEq(before.deposit_status, after.deposit_status)) {
+    rows.push({ label: 'Stato cauzione', value: `${before.deposit_status || '—'} → ${after.deposit_status || '—'}` })
   }
 
   if (rows.length <= 2) {
@@ -576,6 +540,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // useEffect below replays processBookingSubmission with the same args,
   // so the operator doesn't have to re-click Salva.
   const pendingSubmitRef = useRef<{ skipValidation: boolean; overrideCustomerId?: string } | null>(null)
+
+  // Snapshot of formData captured when the operator opens an existing
+  // booking for edit. Diffed against live formData at Salva time so the
+  // OTP email shows only what the operator actually changed.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const editFormSnapshotRef = useRef<Record<string, any> | null>(null)
 
   // Diff (changed fields) computed at Salva time and shown in the OTP
   // email to direzione + saved on the limitation_overrides record.
@@ -2848,7 +2818,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const pickupLoc = booking.booking_details?.pickupLocation || 'dr7_office'
     const dropoffLoc = booking.booking_details?.dropoffLocation || 'dr7_office'
 
-    setFormData({
+    const editSnap = {
       ...formData,
       customer_id: customerId,
       // CRITICAL FIX: Preserve original vehicle_id even if vehicle not found in current vehicles array
@@ -2991,7 +2961,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Experience Services & DR7 Flex
       experience_services: booking.booking_details?.experience_services || {},
       dr7_flex: booking.booking_details?.dr7_flex || false,
-    })
+    }
+    setFormData(editSnap)
+    // Snapshot the populated form state. processBookingSubmission diffs
+    // it against the live formData at Salva time, so the OTP email shows
+    // only fields actually modified by the operator (not parsing/format
+    // differences between booking_details shapes and the form's keys).
+    editFormSnapshotRef.current = editSnap
 
     // Restore tier from booking_details or re-compute from customer
     if (booking.booking_details?.driver_tier && booking.booking_details?.driver_age != null && booking.booking_details?.driver_license_years != null) {
@@ -3493,7 +3469,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const isConfirmed = CONFIRMED.includes((original.status || '').toLowerCase())
         if (isPaid || isConfirmed) {
           pendingSubmitRef.current = { skipValidation, overrideCustomerId }
-          setOverrideDetails(buildBookingEditDiff(original, formData, vehicles))
+          // Customer name from the customers list (most reliable) with
+          // fallback chain to the booking row itself.
+          const cust = customers.find(c => c.id === formData.customer_id)
+          const customerName = cust?.full_name
+            || original.customer_name
+            || original.booking_details?.customer?.fullName
+            || original.booking_details?.customer?.name
+            || '—'
+          // Diff snapshot vs current. If snapshot is somehow missing
+          // (defensive), fall back to diffing current against itself
+          // which yields just customer + booking ID rows.
+          const before = editFormSnapshotRef.current || formData
+          setOverrideDetails(buildBookingEditDiff(before, formData, String(customerName), original.id, vehicles))
           requestOverride(
             'paid_rental_modify',
             'Modifica di una prenotazione pagata o confermata: serve OTP della direzione.',
@@ -5515,6 +5503,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   function resetForm() {
     setCustomerTier(null)
+    editFormSnapshotRef.current = null
     setFormData({
       customer_id: '',
       vehicle_id: '',
@@ -5806,6 +5795,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           onClose={closeLimitation}
           onCancel={() => {
             pendingSubmitRef.current = null
+            editFormSnapshotRef.current = null
             setOverrideDetails(undefined)
             cancelLimitation()
             resetForm()
