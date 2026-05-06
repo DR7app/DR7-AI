@@ -31,9 +31,8 @@ export default function FornitoriTab() {
     const [fornitori, setFornitori] = useState<FornitoreRow[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
-    const [, setCategoryFilter] = useState<string>('')
-    const [, setCategoryOptions] = useState<{ slug: string; label: string }[]>([])
-    void setCategoryFilter; void setCategoryOptions
+    const [categoryFilter, setCategoryFilter] = useState<string>('')
+    const [categoryOptions, setCategoryOptions] = useState<{ slug: string; label: string }[]>([])
     const [selected, setSelected] = useState<Fornitore | null>(null)
     // Default 'registro' — l'utente entra tipicamente per pianificare bolle e
     // pagamenti del mese, non per sfogliare l'anagrafica.
@@ -137,13 +136,18 @@ export default function FornitoriTab() {
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase()
-        const base = q
+        let base = q
             ? fornitori.filter(f =>
                 f.nome.toLowerCase().includes(q) ||
                 (f.piva || '').toLowerCase().includes(q) ||
                 (f.categoria_merce || '').toLowerCase().includes(q)
             )
             : fornitori
+        if (categoryFilter === '__none__') {
+            base = base.filter(f => !f.categoria_merce)
+        } else if (categoryFilter) {
+            base = base.filter(f => f.categoria_merce === categoryFilter)
+        }
 
         const sorted = [...base]
         switch (sortKey) {
@@ -174,7 +178,7 @@ export default function FornitoriTab() {
                 break
         }
         return sorted
-    }, [fornitori, search, sortKey])
+    }, [fornitori, search, categoryFilter, sortKey])
 
     async function importFromAruba(opts: { silent?: boolean } = {}) {
         setImporting(true)
@@ -297,6 +301,18 @@ export default function FornitoriTab() {
                     />
                 </div>
                 <select
+                    value={categoryFilter}
+                    onChange={e => setCategoryFilter(e.target.value)}
+                    className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                    title="Filtra per categoria"
+                >
+                    <option value="">Tutte le categorie</option>
+                    {categoryOptions.map(c => (
+                        <option key={c.slug} value={c.slug}>{c.label}</option>
+                    ))}
+                    <option value="__none__">— Senza categoria —</option>
+                </select>
+                <select
                     value={sortKey}
                     onChange={e => setSortKey(e.target.value as SortKey)}
                     className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
@@ -316,8 +332,8 @@ export default function FornitoriTab() {
                 )}
                 {!loading && filtered.length === 0 && (
                     <div className="px-4 py-6 text-center text-theme-text-muted text-sm">
-                        {search
-                            ? 'Nessun fornitore corrisponde alla ricerca'
+                        {search || categoryFilter
+                            ? 'Nessun fornitore corrisponde a ricerca/filtro'
                             : 'Nessun fornitore. Clicca "Sincronizza da Aruba" per importarli automaticamente.'}
                     </div>
                 )}
