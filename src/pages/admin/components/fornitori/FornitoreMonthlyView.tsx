@@ -44,7 +44,7 @@ export default function FornitoreMonthlyView({ fornitore }: Props) {
             // Run cross-check
             const cc = await runCrosscheck(fornitore.id, anno, mese)
             setCrosscheck(cc)
-            await applyCrosscheckToFatture(cc, rows)
+            await applyCrosscheckToFatture(cc, rows, { fornitoreNome: fornitore.nome, anno, mese })
             // Reload to get updated stati
             const { data: data2 } = await supabase
                 .from('fornitore_documents')

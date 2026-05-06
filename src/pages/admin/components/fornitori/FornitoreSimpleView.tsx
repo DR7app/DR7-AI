@@ -228,7 +228,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                     totalRows += cc.length
                     totalAnomalie += cc.filter(r => r.stato_calcolato === 'anomalia').length
                     totalOk += cc.filter(r => r.stato_calcolato === 'verificato').length
-                    await applyCrosscheckToFatture(cc, fatture)
+                    await applyCrosscheckToFatture(cc, fatture, { fornitoreNome: fornitore.nome, anno, mese: m })
                 }
             }
             setCrosscheck(map)

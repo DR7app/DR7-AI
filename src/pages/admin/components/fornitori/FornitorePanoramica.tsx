@@ -82,7 +82,7 @@ export default function FornitorePanoramica({ fornitore }: Props) {
             for (let m = 1; m <= 12; m++) {
                 const cc = await runCrosscheck(fornitore.id, anno, m)
                 if (cc.length === 0) continue
-                await applyCrosscheckToFatture(cc, fatture)
+                await applyCrosscheckToFatture(cc, fatture, { fornitoreNome: fornitore.nome, anno, mese: m })
                 monthsRun++
                 totalAnomalies += cc.filter(r => r.stato_calcolato === 'anomalia').length
             }
