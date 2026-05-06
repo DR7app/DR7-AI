@@ -182,10 +182,13 @@ const OLD_TO_PRO: Record<string, string> = {
   admin_no_cauzione_request: 'pro_richiesta_otp',
 
   // Marketing & Wallet — review body lives in pro_promemoria_firma,
-  // wallet bonus body lives in pro_richiesta_documenti
+  // wallet cashback body lives in the dedicated pro_wallet_bonus_cliente
+  // template (admin fills it in from Messaggi di Sistema Pro → "Bonus
+  // Wallet Cliente"). Variables: {custName}, {cardLabel}, {percentLabel},
+  // {bonusEur}, {newBalance}.
   review_request_whatsapp: 'pro_promemoria_firma',
   birthday_message: 'pro_marketing_compleanno',
-  wallet_bonus_credit: 'pro_richiesta_documenti',
+  wallet_bonus_credit: 'pro_wallet_bonus_cliente',
 
   // Fidelity Card — voucher message fired at 250 punti.
   // Body lives in `pro_fidelity_voucher` so admin can edit it from
