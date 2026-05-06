@@ -199,9 +199,9 @@ const handler: Handler = async (event) => {
   const hasFull = !!credsRaw
   const hasSplit = !!splitEmail && !!splitKey
   const hasBlob = !!blobKey
-  const hasOAuth = !!oauthRefreshToken
-    && !!process.env.GOOGLE_OAUTH_CLIENT_ID
-    && !!process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  const oauthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
+  const oauthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
+  const hasOAuth = !!oauthRefreshToken && !!oauthClientId && !!oauthClientSecret
 
   const missing: string[] = []
   if (!propertyId) missing.push('GA4_PROPERTY_ID')
@@ -282,11 +282,9 @@ const handler: Handler = async (event) => {
     // che rifiuta certi email di service account.
     let auth: any
     if (hasOAuth) {
-      const oauth2 = new google.auth.OAuth2(
-        process.env.GOOGLE_OAUTH_CLIENT_ID,
-        process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-        process.env.GOOGLE_OAUTH_REDIRECT_URI,
-      )
+      const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI
+        || (process.env.URL ? `${process.env.URL}/.netlify/functions/ga-oauth-callback` : undefined)
+      const oauth2 = new google.auth.OAuth2(oauthClientId, oauthClientSecret, redirectUri)
       oauth2.setCredentials({ refresh_token: oauthRefreshToken })
       auth = oauth2
     } else {

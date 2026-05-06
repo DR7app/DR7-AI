@@ -12,9 +12,10 @@ import { createClient } from '@supabase/supabase-js'
  * GA Data API come se fosse l'admin connesso.
  */
 
-const CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID
-const CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+const CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
+const CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
 const REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI
+    || (process.env.URL ? `${process.env.URL}/.netlify/functions/ga-oauth-callback` : undefined)
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''

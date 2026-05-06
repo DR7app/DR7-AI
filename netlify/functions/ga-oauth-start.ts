@@ -16,9 +16,13 @@ import { google } from 'googleapis'
  * di ricevere SEMPRE un refresh_token (anche su riconnessioni).
  */
 
-const CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID
-const CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+// Riusiamo gli OAuth client gia' configurati per altre integrazioni Google
+// (Calendar, ecc.) cosi' non serve aggiungere nuove env var. Cerchiamo in
+// ordine: GOOGLE_OAUTH_* (specifico) → GOOGLE_* (condiviso, gia' presente).
+const CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
+const CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
 const REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI
+    || (process.env.URL ? `${process.env.URL}/.netlify/functions/ga-oauth-callback` : undefined)
 
 const handler: Handler = async () => {
     if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
