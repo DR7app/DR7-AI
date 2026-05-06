@@ -328,6 +328,143 @@ interface Booking {
   } | any
 }
 
+// Builds a human-readable diff between the original booking and the form
+// state at Salva time. Used to populate the OTP-authorization email so
+// direzione sees the actual modification (e.g. "Ritiro: 10/05 10:00 →
+// 12/05 10:00") before approving. Includes only fields that changed,
+// plus customer + booking ID for context.
+function buildBookingEditDiff(
+  original: Booking,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  form: Record<string, any>,
+  vehicles: Vehicle[],
+): Array<{ label: string; value: string }> {
+  const rows: Array<{ label: string; value: string }> = []
+  const tz = 'Europe/Rome'
+
+  const fmtDateTime = (iso: string | null | undefined) => {
+    if (!iso) return '—'
+    try {
+      return new Date(iso).toLocaleString('it-IT', {
+        timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+    } catch { return String(iso) }
+  }
+
+  const composeFormDateTime = (date: string, time: string) => {
+    if (!date) return ''
+    return `${date} ${time || '00:00'}`
+  }
+
+  const fmtFormDateTime = (date: string, time: string) => {
+    if (!date) return '—'
+    const [y, m, d] = date.split('-')
+    if (!y || !m || !d) return `${date} ${time || ''}`
+    return `${d}/${m}/${y}, ${time || '00:00'}`
+  }
+
+  const eur = (n: unknown) => {
+    const num = typeof n === 'number' ? n : parseFloat(String(n ?? 0))
+    if (!Number.isFinite(num)) return '—'
+    return `€${num.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
+
+  const customerName = original.customer_name
+    || original.booking_details?.customer?.fullName
+    || original.booking_details?.customer?.name
+    || '—'
+  rows.push({ label: 'Cliente', value: String(customerName) })
+  rows.push({ label: 'Prenotazione', value: original.id.slice(0, 8) })
+
+  // Vehicle change
+  if (form.vehicle_id && form.vehicle_id !== original.vehicle_id) {
+    const oldVeh = vehicles.find(v => v.id === original.vehicle_id)?.display_name
+      || original.vehicle_name || '—'
+    const newVeh = vehicles.find(v => v.id === form.vehicle_id)?.display_name || '—'
+    rows.push({ label: 'Veicolo', value: `${oldVeh} → ${newVeh}` })
+  }
+
+  // Pickup date/time
+  const newPickupCompose = composeFormDateTime(form.pickup_date, form.pickup_time)
+  const origPickupRome = original.pickup_date
+    ? new Date(original.pickup_date).toLocaleString('sv-SE', { timeZone: tz }).replace('T', ' ').slice(0, 16)
+    : ''
+  if (newPickupCompose && newPickupCompose !== origPickupRome) {
+    rows.push({
+      label: 'Ritiro',
+      value: `${fmtDateTime(original.pickup_date)} → ${fmtFormDateTime(form.pickup_date, form.pickup_time)}`,
+    })
+  }
+
+  // Return date/time
+  const newReturnCompose = composeFormDateTime(form.return_date, form.return_time)
+  const origReturnRome = original.dropoff_date
+    ? new Date(original.dropoff_date).toLocaleString('sv-SE', { timeZone: tz }).replace('T', ' ').slice(0, 16)
+    : ''
+  if (newReturnCompose && newReturnCompose !== origReturnRome) {
+    rows.push({
+      label: 'Riconsegna',
+      value: `${fmtDateTime(original.dropoff_date)} → ${fmtFormDateTime(form.return_date, form.return_time)}`,
+    })
+  }
+
+  // Pickup location
+  if (form.pickup_location && form.pickup_location !== original.pickup_location) {
+    rows.push({ label: 'Luogo ritiro', value: `${original.pickup_location || '—'} → ${form.pickup_location}` })
+  }
+  if (form.dropoff_location && form.dropoff_location !== original.dropoff_location) {
+    rows.push({ label: 'Luogo riconsegna', value: `${original.dropoff_location || '—'} → ${form.dropoff_location}` })
+  }
+
+  // Total amount (price_total stored in cents on Booking, form.total_amount in euros as string)
+  const origTotalEur = (original.price_total || 0) / 100
+  const newTotalEur = parseFloat(String(form.total_amount ?? 0))
+  if (Number.isFinite(newTotalEur) && Math.abs(newTotalEur - origTotalEur) > 0.005) {
+    rows.push({ label: 'Importo totale', value: `${eur(origTotalEur)} → ${eur(newTotalEur)}` })
+  }
+
+  // Amount paid
+  const origPaid = (original.booking_details?.amount_paid ?? 0) as number
+  const newPaid = parseFloat(String(form.amount_paid ?? 0))
+  if (Number.isFinite(newPaid) && Math.abs(newPaid - origPaid) > 0.005) {
+    rows.push({ label: 'Importo pagato', value: `${eur(origPaid)} → ${eur(newPaid)}` })
+  }
+
+  // Status
+  if (form.status && form.status !== original.status) {
+    rows.push({ label: 'Stato', value: `${original.status || '—'} → ${form.status}` })
+  }
+
+  // Payment status
+  if (form.payment_status && form.payment_status !== original.payment_status) {
+    rows.push({ label: 'Pagamento', value: `${original.payment_status || '—'} → ${form.payment_status}` })
+  }
+
+  // Payment method
+  if (form.payment_method && form.payment_method !== original.payment_method) {
+    rows.push({ label: 'Metodo pagamento', value: `${original.payment_method || '—'} → ${form.payment_method}` })
+  }
+
+  // Insurance
+  const origInsurance = original.booking_details?.insurance_option || original.booking_details?.insurance || ''
+  if (form.insurance_option && form.insurance_option !== origInsurance) {
+    rows.push({ label: 'Assicurazione', value: `${origInsurance || '—'} → ${form.insurance_option}` })
+  }
+
+  // Deposit
+  const origDeposit = original.booking_details?.deposit ?? original.booking_details?.cauzione ?? ''
+  if (form.deposit !== undefined && String(form.deposit) !== String(origDeposit)) {
+    rows.push({ label: 'Cauzione', value: `${origDeposit || '—'} → ${form.deposit}` })
+  }
+
+  if (rows.length <= 2) {
+    rows.push({ label: 'Modifica', value: 'Nessuna variazione rilevata sui campi principali' })
+  }
+
+  return rows
+}
+
 // Helper function to calculate car wash end time based on actual service durations
 function calculateCarWashEndTime(appointmentDate: string, appointmentTime: string, priceTotal: number): string {
   // Map prices to actual durations (in hours) from the main website
@@ -434,17 +571,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     getOverrideAuditSnapshot,
   } = useLimitationOverride()
 
-  // Buffer for an edit-click that's been blocked by the OTP gate. When the
-  // direzione approves the OTP, the useEffect below replays the edit.
-  const pendingEditBookingRef = useRef<Booking | null>(null)
+  // Buffer for a Salva click on a paid/confirmed booking that's been
+  // blocked by the OTP gate. When direzione approves the OTP, the
+  // useEffect below replays processBookingSubmission with the same args,
+  // so the operator doesn't have to re-click Salva.
+  const pendingSubmitRef = useRef<{ skipValidation: boolean; overrideCustomerId?: string } | null>(null)
 
-  // Resume an edit that was blocked by the OTP gate, once the override has
-  // been approved (overrideCodes contains the code).
+  // Diff (changed fields) computed at Salva time and shown in the OTP
+  // email to direzione + saved on the limitation_overrides record.
+  const [overrideDetails, setOverrideDetails] = useState<Array<{ label: string; value: string }> | undefined>(undefined)
+
+  // Resume submission once the override is approved (overrideCodes
+  // contains 'paid_rental_modify').
   useEffect(() => {
-    const pending = pendingEditBookingRef.current
+    const pending = pendingSubmitRef.current
     if (pending && overrideCodes.has('paid_rental_modify')) {
-      pendingEditBookingRef.current = null
-      handleEditBooking(pending, { skipOtpGate: true })
+      pendingSubmitRef.current = null
+      processBookingSubmission(pending.skipValidation, pending.overrideCustomerId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overrideCodes])
@@ -2524,32 +2667,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
 
-  function handleEditBooking(booking: Booking, _opts?: { skipOtpGate?: boolean }) {
+  function handleEditBooking(booking: Booking) {
     // Only handle car rental bookings - car wash bookings are in CarWashBookingsTab
     if (booking.service_type === 'car_wash') {
       alert('Le prenotazioni lavaggio devono essere modificate nella tab "Prenotazioni Lavaggio"')
       return
     }
 
-    // OTP gate — paid or confirmed rental requires direzione approval BEFORE
-    // opening the edit form. Buffer the booking, request OTP, and the
-    // useEffect on overrideCodes resumes the edit once approved. Valerio &
-    // Ilenia bypass server-side automatically.
-    if (!_opts?.skipOtpGate) {
-      const PAID = ['paid', 'completed', 'succeeded']
-      const CONFIRMED = ['confirmed', 'confermata', 'active', 'in_corso']
-      const isPaid = PAID.includes((booking.payment_status || '').toLowerCase())
-      const isConfirmed = CONFIRMED.includes((booking.status || '').toLowerCase())
-      if ((isPaid || isConfirmed) && !hasOverride('paid_rental_modify')) {
-        pendingEditBookingRef.current = booking
-        requestOverride(
-          'paid_rental_modify',
-          'Modifica o spostamento di una prenotazione pagata o confermata: serve OTP della direzione.',
-          `booking_edit_${booking.id}`,
-        )
-        return
-      }
-    }
+    // OTP gate is NOT here anymore — modifying a paid/confirmed booking
+    // opens the form immediately. The OTP is requested at save time
+    // (processBookingSubmission) so the email to direzione can include
+    // the actual diff of what changed.
 
     // Set flag to suppress initial availability check
     isInitialEditLoad.current = true
@@ -3354,6 +3482,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // (Valerio & Ilenia bypass server-side via DIREZIONE_EMAILS). The gate is
     // skipped entirely if the operator has already approved this session OR if
     // the toggle is OFF in Gestione OTP (handled inside requestOverride).
+    // The email to direzione includes the diff of what is changing so they
+    // see the actual modification before approving.
     if (editingId && !hasOverride('paid_rental_modify')) {
       const original = bookings.find(b => b.id === editingId)
       if (original) {
@@ -3362,9 +3492,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const isPaid = PAID.includes((original.payment_status || '').toLowerCase())
         const isConfirmed = CONFIRMED.includes((original.status || '').toLowerCase())
         if (isPaid || isConfirmed) {
+          pendingSubmitRef.current = { skipValidation, overrideCustomerId }
+          setOverrideDetails(buildBookingEditDiff(original, formData, vehicles))
           requestOverride(
             'paid_rental_modify',
-            'Modifica o spostamento di una prenotazione pagata o confermata: serve OTP della direzione.',
+            'Modifica di una prenotazione pagata o confermata: serve OTP della direzione.',
             `booking_edit_${editingId}`,
           )
           return
@@ -5669,9 +5801,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           actionContext={limitationState.actionContext}
           draftSessionId={draftSessionId}
           flowType={flowType}
+          details={limitationState.limitationCode === 'paid_rental_modify' ? overrideDetails : undefined}
           showNotes={limitationState.limitationCode === 'paid_rental_modify'}
           onClose={closeLimitation}
           onCancel={() => {
+            pendingSubmitRef.current = null
+            setOverrideDetails(undefined)
             cancelLimitation()
             resetForm()
             setEditingId(null)
