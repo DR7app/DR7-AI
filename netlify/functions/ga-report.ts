@@ -238,9 +238,12 @@ const handler: Handler = async (event) => {
     clientEmail = splitEmail
     privateKey = splitKey?.replace(/\\n/g, '\n')
   } else {
-    // From Netlify Blobs (preferred for DR7).
+    // From Netlify Blobs (preferred for DR7). Bug fix: il path env-var
+    // fa replace(\\n, \n), questo path no — se la chiave era stata
+    // salvata con escape letterali \n (capita con i form multi-line)
+    // la firma JWT falliva con 'Invalid JWT Signature'.
     clientEmail = blobEmail || splitEmail
-    privateKey = blobKey
+    privateKey = blobKey?.replace(/\\n/g, '\n')
   }
 
   if (!clientEmail || !privateKey) {
