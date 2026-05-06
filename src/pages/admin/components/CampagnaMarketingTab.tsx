@@ -131,15 +131,14 @@ export default function CampagnaMarketingTab() {
 
     const [scheduledCampaigns, setScheduledCampaigns] = useState<CampaignRow[]>([])
 
-    // Edit-modal state for clicking a campaign on the calendar — setters
-    // populated when user clicks a row; reads (modal UI) not yet wired.
-    // Discard read side until the modal is reintroduced.
-    const [, setEditing] = useState<CampaignRow | null>(null)
-    const [, setEditDate] = useState('')
-    const [, setEditTime] = useState('')
-    const [, setEditRecurrence] = useState<RecurrenceType>('none')
-    const [, setEditInterval] = useState(1)
-    const [, setEditEndDate] = useState('')
+    // Edit-modal state for clicking a campaign on the calendar
+    const [editing, setEditing] = useState<CampaignRow | null>(null)
+    const [editDate, setEditDate] = useState('')
+    const [editTime, setEditTime] = useState('')
+    const [editRecurrence, setEditRecurrence] = useState<RecurrenceType>('none')
+    const [editInterval, setEditInterval] = useState(1)
+    const [editEndDate, setEditEndDate] = useState('')
+    const [savingEdit, setSavingEdit] = useState(false)
 
     const clientStatus = useClientStatus()
 
@@ -464,7 +463,6 @@ export default function CampagnaMarketingTab() {
         }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     function openEditModal(campaign: ScheduledCampaign) {
         const row = scheduledCampaigns.find(c => c.id === campaign.id) || null
         if (!row) return
@@ -476,9 +474,68 @@ export default function CampagnaMarketingTab() {
         setEditEndDate(row.recurrence_end_at ? isoToRomeDate(row.recurrence_end_at) : '')
     }
 
-    // handleSaveEdit / handleCancelSchedule removed (unused) — re-add when
-    // the campaign edit modal is integrated. Their original logic updated
-    // marketing_campaigns.scheduled_at / recurrence / cancelled_at.
+    async function handleSaveEdit() {
+        if (!editing) return
+        if (!editDate || !editTime) return toast.error('Data/ora obbligatorie')
+        const newScheduledIso = romeLocalToISO(editDate, editTime)
+        if (!newScheduledIso) return toast.error('Data/ora non valide')
+        let newEndIso: string | null = null
+        if (editRecurrence !== 'none') {
+            if (!editEndDate) return toast.error('Data fine ricorrenza obbligatoria')
+            newEndIso = romeLocalToISO(editEndDate, '23:59')
+            if (!newEndIso) return toast.error('Data fine ricorrenza non valida')
+            if (new Date(newEndIso).getTime() <= new Date(newScheduledIso).getTime()) {
+                return toast.error('La fine ricorrenza deve essere dopo la prima esecuzione')
+            }
+            if (editInterval < 1) return toast.error('Intervallo ricorrenza non valido')
+        }
+
+        setSavingEdit(true)
+        try {
+            const { error } = await supabase
+                .from('marketing_campaigns')
+                .update({
+                    scheduled_at: newScheduledIso,
+                    recurrence_type: editRecurrence,
+                    recurrence_interval: editInterval,
+                    recurrence_end_at: newEndIso,
+                })
+                .eq('id', editing.id)
+            if (error) throw error
+            toast.success('Programmazione aggiornata')
+            setEditing(null)
+            loadScheduledCampaigns()
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Errore: ${msg}`)
+        } finally {
+            setSavingEdit(false)
+        }
+    }
+
+    async function handleCancelSchedule() {
+        if (!editing) return
+        if (!confirm('Annullare definitivamente questa programmazione? Le esecuzioni future non partiranno.')) return
+        setSavingEdit(true)
+        try {
+            const { error } = await supabase
+                .from('marketing_campaigns')
+                .update({
+                    cancelled_at: new Date().toISOString(),
+                    status: 'cancelled',
+                })
+                .eq('id', editing.id)
+            if (error) throw error
+            toast.success('Programmazione annullata')
+            setEditing(null)
+            loadScheduledCampaigns()
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Errore: ${msg}`)
+        } finally {
+            setSavingEdit(false)
+        }
+    }
 
     // Drives chunked sending: calls the chunk endpoint repeatedly until
     // 'done: true'. Updates a toast with live progress so the operator
@@ -529,6 +586,7 @@ export default function CampagnaMarketingTab() {
     }
 
     // @ts-expect-error -- kept for future re-enable; deliberately unused while CAMPAIGN_SENDS_ENABLED is false
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async function _handleResume(campaign: CampaignRow) {
         const { count: retryable } = await supabase
             .from('marketing_campaign_recipients')
@@ -752,13 +810,106 @@ export default function CampagnaMarketingTab() {
                         </div>
                     </div>
 
+                    {/* Scheduling section */}
+                    <div className="pt-2 border-t border-theme-border space-y-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={scheduleEnabled}
+                                onChange={(e) => setScheduleEnabled(e.target.checked)}
+                            />
+                            <span className="text-sm font-medium text-theme-text-secondary">
+                                Programma invio (data, ora, ricorrenza)
+                            </span>
+                        </label>
+
+                        {scheduleEnabled && (
+                            <div className="space-y-3 pl-6 border-l-2 border-dr7-gold/40">
+                                <div className="text-xs text-theme-text-muted bg-theme-bg-secondary/40 p-2 rounded">
+                                    Gli invii programmati ricalcolano i destinatari ad ogni esecuzione in base ai filtri attivi (Blacklist / Member / Elite / New entry / DR7 Club). La selezione manuale dei clienti viene ignorata.
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-theme-text-secondary mb-1">Data di invio</label>
+                                        <input
+                                            type="date"
+                                            value={scheduleDate}
+                                            onChange={(e) => setScheduleDate(e.target.value)}
+                                            className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-theme-text-secondary mb-1">Orario (Europe/Rome)</label>
+                                        <input
+                                            type="time"
+                                            value={scheduleTime}
+                                            onChange={(e) => setScheduleTime(e.target.value)}
+                                            className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Ricorrenza</label>
+                                    <select
+                                        value={recurrenceType}
+                                        onChange={(e) => setRecurrenceType(e.target.value as RecurrenceType)}
+                                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                    >
+                                        {(Object.keys(RECURRENCE_LABELS) as RecurrenceType[]).map(k => (
+                                            <option key={k} value={k}>{RECURRENCE_LABELS[k]}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {recurrenceType !== 'none' && (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-secondary mb-1">Ogni</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    value={recurrenceInterval}
+                                                    onChange={(e) => setRecurrenceInterval(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                                                    className="w-20 bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                                />
+                                                <span className="text-xs text-theme-text-muted">
+                                                    {recurrenceType === 'daily' && 'giorno/i'}
+                                                    {recurrenceType === 'weekly' && 'settimana/e'}
+                                                    {recurrenceType === 'monthly' && 'mese/i'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-secondary mb-1">Fine ricorrenza</label>
+                                            <input
+                                                type="date"
+                                                value={recurrenceEndDate}
+                                                onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                                                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     <div className="flex items-center justify-between pt-2 border-t border-theme-border">
                         <div className="text-sm text-theme-text-muted">
-                            Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span>
+                            {scheduleEnabled
+                                ? <>Modalità: <span className="font-bold text-dr7-gold">Programmazione</span></>
+                                : <>Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span></>
+                            }
                         </div>
-                        <Button onClick={handleSend} disabled>
-                            Invio sospeso
-                        </Button>
+                        {scheduleEnabled ? (
+                            <Button onClick={handleSend}>
+                                {recurrenceType === 'none' ? 'Programma invio' : 'Salva ricorrenza'}
+                            </Button>
+                        ) : (
+                            <Button onClick={handleSend} disabled>
+                                Invio sospeso
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -985,6 +1136,101 @@ export default function CampagnaMarketingTab() {
                     </table>
                 )}
             </div>
+
+            {editing && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+                    onClick={() => !savingEdit && setEditing(null)}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-theme-bg-tertiary border border-theme-border rounded-lg w-full max-w-md p-5 space-y-4"
+                    >
+                        <div>
+                            <h3 className="text-lg font-semibold text-theme-text-primary">{editing.title}</h3>
+                            <p className="text-xs text-theme-text-muted mt-1">
+                                Programmazione esistente — modifica data, ora, ricorrenza o annulla.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Data</label>
+                                <input
+                                    type="date"
+                                    value={editDate}
+                                    onChange={(e) => setEditDate(e.target.value)}
+                                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Orario</label>
+                                <input
+                                    type="time"
+                                    value={editTime}
+                                    onChange={(e) => setEditTime(e.target.value)}
+                                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-theme-text-secondary mb-1">Ricorrenza</label>
+                            <select
+                                value={editRecurrence}
+                                onChange={(e) => setEditRecurrence(e.target.value as RecurrenceType)}
+                                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                            >
+                                {(Object.keys(RECURRENCE_LABELS) as RecurrenceType[]).map(k => (
+                                    <option key={k} value={k}>{RECURRENCE_LABELS[k]}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {editRecurrence !== 'none' && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Ogni</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={editInterval}
+                                        onChange={(e) => setEditInterval(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Fine</label>
+                                    <input
+                                        type="date"
+                                        value={editEndDate}
+                                        onChange={(e) => setEditEndDate(e.target.value)}
+                                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-2 border-t border-theme-border">
+                            <button
+                                onClick={handleCancelSchedule}
+                                disabled={savingEdit}
+                                className="text-sm text-red-400 hover:text-red-300 disabled:opacity-50"
+                            >
+                                Annulla programmazione
+                            </button>
+                            <div className="flex gap-2">
+                                <Button variant="secondary" onClick={() => setEditing(null)} disabled={savingEdit}>
+                                    Chiudi
+                                </Button>
+                                <Button onClick={handleSaveEdit} disabled={savingEdit}>
+                                    {savingEdit ? 'Salvataggio...' : 'Salva'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
