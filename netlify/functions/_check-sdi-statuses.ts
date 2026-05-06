@@ -29,12 +29,26 @@ export interface PollResult {
     unknownStatuses?: { numero: string; remoteStatus: string }[]
 }
 
+// Aruba rate-limits aggressively (HTTP 429 "Troppe richieste") if we
+// burst-fire 100+ requests. Empirically 200ms between calls + max 30 per
+// invocation stays safe within the 10s Netlify timeout AND keeps Aruba happy.
+// Multiple invocations (cron every 30 min + manual button + 60s auto from
+// FatturaTab) catch up on the rest in a few cycles, oldest-first.
+const ARUBA_THROTTLE_MS = 200
+const MAX_PER_INVOCATION = 30
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
 export async function pollAllPendingSdi(): Promise<PollResult> {
     const { data: pendingInvoices, error: fetchError } = await supabase
         .from('fatture')
-        .select('id, xml_filename, aruba_upload_filename, sdi_status, numero_fattura')
+        .select('id, xml_filename, aruba_upload_filename, sdi_status, numero_fattura, sdi_sent_at')
+        // Oldest sdi_sent_at first → we don't leave ancient sending invoices
+        // perpetually behind newer ones each invocation.
         .in('sdi_status', ['sending', 'sent'])
         .not('xml_filename', 'is', null)
+        .order('sdi_sent_at', { ascending: true, nullsFirst: true })
+        .limit(MAX_PER_INVOCATION)
 
     if (fetchError) {
         throw new Error(`DB fetch error: ${fetchError.message}`)
@@ -49,7 +63,9 @@ export async function pollAllPendingSdi(): Promise<PollResult> {
     const errorSamples: NonNullable<PollResult['errorSamples']> = []
     const unknownStatuses: NonNullable<PollResult['unknownStatuses']> = []
 
-    for (const invoice of pendingInvoices) {
+    for (let i = 0; i < pendingInvoices.length; i++) {
+        const invoice = pendingInvoices[i]
+        if (i > 0) await sleep(ARUBA_THROTTLE_MS) // throttle between Aruba calls
         const lookupFilename = invoice.aruba_upload_filename || invoice.xml_filename
         try {
             const remoteInvoice = await checkArubaStatus(lookupFilename)
@@ -57,22 +73,32 @@ export async function pollAllPendingSdi(): Promise<PollResult> {
             const invoiceStatus = invoiceObj.status || invoiceObj.invoiceStatus || ''
             const remoteStatus = invoiceStatus.toLowerCase().trim()
 
-            // Aruba canonical statuses (it_IT). Mapping covers all cases
-            // observed plus the aliases SDI uses pre-Aruba parsing.
-            //   - in_elaborazione / inviata / spedita     -> sent
-            //   - consegnata / consegnato                 -> accepted
-            //   - scartata / mancata consegna             -> rejected
-            //   - errore elaborazione / errore_consegna   -> error
-            // Anything else is captured in unknownStatuses so we can map it
-            // explicitly instead of leaving fatture stuck on "Invio…".
+            // Aruba/SDI canonical statuses (it_IT). Mapping per fiscal
+            // semantics — what counts as "valid invoice on file":
+            //   accepted = SDI accepted it (regardless of recipient PEC delivery)
+            //   rejected = SDI scartata for content errors → NEED resend
+            //   error    = pipeline error
+            //   sent     = still in flight (SDI hasn't responded yet)
+            //
+            // Important: "mancata consegna" / "non consegnata" mean SDI
+            // accepted the invoice but couldn't deliver to recipient PEC —
+            // fiscally this is FINE (invoice is on file at AdE), so map to
+            // accepted, NOT rejected. Previous code treated these as rejected,
+            // confusing admins into resending perfectly valid fatture.
             let sdiStatus = invoice.sdi_status
-            if (remoteStatus === 'consegnata' || remoteStatus === 'consegnato') {
+            if (
+                remoteStatus === 'consegnata' ||
+                remoteStatus === 'consegnato' ||
+                remoteStatus === 'mancata consegna' ||
+                remoteStatus === 'mancata_consegna' ||
+                remoteStatus === 'non consegnata' ||
+                remoteStatus === 'non_consegnata' ||
+                remoteStatus === 'non consegnato'
+            ) {
                 sdiStatus = 'accepted'
             } else if (
                 remoteStatus === 'scartata' ||
-                remoteStatus === 'rifiutata' ||
-                remoteStatus === 'mancata consegna' ||
-                remoteStatus === 'mancata_consegna'
+                remoteStatus === 'rifiutata'
             ) {
                 sdiStatus = 'rejected'
             } else if (
