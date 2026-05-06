@@ -131,15 +131,15 @@ export default function CampagnaMarketingTab() {
 
     const [scheduledCampaigns, setScheduledCampaigns] = useState<CampaignRow[]>([])
 
-    // Edit-modal state for clicking a campaign on the calendar
-    const [editing, setEditing] = useState<CampaignRow | null>(null)
-    const [editDate, setEditDate] = useState('')
-    const [editTime, setEditTime] = useState('')
-    const [editRecurrence, setEditRecurrence] = useState<RecurrenceType>('none')
-    const [editInterval, setEditInterval] = useState(1)
-    const [editEndDate, setEditEndDate] = useState('')
-    const [, setSavingEdit] = useState(false)
-    void setSavingEdit
+    // Edit-modal state for clicking a campaign on the calendar — setters
+    // populated when user clicks a row; reads (modal UI) not yet wired.
+    // Discard read side until the modal is reintroduced.
+    const [, setEditing] = useState<CampaignRow | null>(null)
+    const [, setEditDate] = useState('')
+    const [, setEditTime] = useState('')
+    const [, setEditRecurrence] = useState<RecurrenceType>('none')
+    const [, setEditInterval] = useState(1)
+    const [, setEditEndDate] = useState('')
 
     const clientStatus = useClientStatus()
 
@@ -476,72 +476,9 @@ export default function CampagnaMarketingTab() {
         setEditEndDate(row.recurrence_end_at ? isoToRomeDate(row.recurrence_end_at) : '')
     }
 
-    // @ts-expect-error TS6133 — kept for upcoming UI; suppressed til wired
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async function handleSaveEdit() {
-        if (!editing) return
-        if (!editDate || !editTime) return toast.error('Data/ora obbligatorie')
-        const newScheduledIso = romeLocalToISO(editDate, editTime)
-        if (!newScheduledIso) return toast.error('Data/ora non valide')
-        let newEndIso: string | null = null
-        if (editRecurrence !== 'none') {
-            if (!editEndDate) return toast.error('Data fine ricorrenza obbligatoria')
-            newEndIso = romeLocalToISO(editEndDate, '23:59')
-            if (!newEndIso) return toast.error('Data fine ricorrenza non valida')
-            if (new Date(newEndIso).getTime() <= new Date(newScheduledIso).getTime()) {
-                return toast.error('La fine ricorrenza deve essere dopo la prima esecuzione')
-            }
-            if (editInterval < 1) return toast.error('Intervallo ricorrenza non valido')
-        }
-
-        setSavingEdit(true)
-        try {
-            const { error } = await supabase
-                .from('marketing_campaigns')
-                .update({
-                    scheduled_at: newScheduledIso,
-                    recurrence_type: editRecurrence,
-                    recurrence_interval: editInterval,
-                    recurrence_end_at: newEndIso,
-                })
-                .eq('id', editing.id)
-            if (error) throw error
-            toast.success('Programmazione aggiornata')
-            setEditing(null)
-            loadScheduledCampaigns()
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            toast.error(`Errore: ${msg}`)
-        } finally {
-            setSavingEdit(false)
-        }
-    }
-
-    // @ts-expect-error TS6133 — kept for upcoming UI; suppressed til wired
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async function handleCancelSchedule() {
-        if (!editing) return
-        if (!confirm('Annullare definitivamente questa programmazione? Le esecuzioni future non partiranno.')) return
-        setSavingEdit(true)
-        try {
-            const { error } = await supabase
-                .from('marketing_campaigns')
-                .update({
-                    cancelled_at: new Date().toISOString(),
-                    status: 'cancelled',
-                })
-                .eq('id', editing.id)
-            if (error) throw error
-            toast.success('Programmazione annullata')
-            setEditing(null)
-            loadScheduledCampaigns()
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            toast.error(`Errore: ${msg}`)
-        } finally {
-            setSavingEdit(false)
-        }
-    }
+    // handleSaveEdit / handleCancelSchedule removed (unused) — re-add when
+    // the campaign edit modal is integrated. Their original logic updated
+    // marketing_campaigns.scheduled_at / recurrence / cancelled_at.
 
     // Drives chunked sending: calls the chunk endpoint repeatedly until
     // 'done: true'. Updates a toast with live progress so the operator

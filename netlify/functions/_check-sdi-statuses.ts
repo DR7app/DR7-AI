@@ -123,9 +123,19 @@ export async function pollAllPendingSdi(): Promise<PollResult> {
             }
 
             if (sdiStatus !== invoice.sdi_status) {
+                // When transitioning INTO a state that needs admin attention,
+                // reset the "seen" flag so the dashboard badge/notification
+                // re-appears even if admin had previously dismissed an older
+                // rejection on the same fattura.
+                const needsAttention = sdiStatus === 'rejected' || sdiStatus === 'scartata' || sdiStatus === 'error'
+                const update: Record<string, unknown> = {
+                    sdi_status: sdiStatus,
+                    sdi_response: remoteInvoice,
+                }
+                if (needsAttention) update.sdi_notification_seen = false
                 await supabase
                     .from('fatture')
-                    .update({ sdi_status: sdiStatus, sdi_response: remoteInvoice })
+                    .update(update)
                     .eq('id', invoice.id)
                 await supabase.from('invoice_status_logs').insert({
                     invoice_id: invoice.id,

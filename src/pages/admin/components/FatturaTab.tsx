@@ -31,6 +31,7 @@ interface Invoice {
   sdi_status?: 'draft' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'scartata' | 'error'
   sdi_id?: string
   sdi_sent_at?: string
+  sdi_notification_seen?: boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sdi_response?: any
   customer_sdi_code?: string
@@ -156,6 +157,23 @@ export default function FatturaTab() {
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Marca la notifica SDI come "vista" — toglie il badge dalla sidebar e
+  // dal sub-tab Fattura senza dover risolvere/reinviare la fattura.
+  // Si resetta automaticamente al prossimo passaggio in rejected/scartata/error
+  // (gestito server-side in _check-sdi-statuses.ts).
+  async function markNotificationSeen(invoice: Invoice) {
+    const { error } = await supabase
+      .from('fatture')
+      .update({ sdi_notification_seen: true })
+      .eq('id', invoice.id)
+    if (error) {
+      toast.error('Errore: ' + error.message)
+      return
+    }
+    setInvoices(prev => prev.map(i => i.id === invoice.id ? { ...i, sdi_notification_seen: true } : i))
+    toast.success('Notifica segnata come vista')
+  }
 
   async function togglePagato(invoice: Invoice) {
     if (!canManagePayments) {
@@ -558,6 +576,24 @@ export default function FatturaTab() {
                                     'Bozza'}
                       </span>
                     )}
+                    {/* Vista — dismisses the dashboard notification badge for
+                        rejected/scartata/error fatture. Auto-resets on next
+                        rejection (server-side in _check-sdi-statuses.ts). */}
+                    {invoice.sdi_status && ['rejected', 'scartata', 'error'].includes(invoice.sdi_status) && !invoice.sdi_notification_seen && (
+                      <button
+                        type="button"
+                        onClick={() => markNotificationSeen(invoice)}
+                        className="px-2 py-1 rounded text-xs font-semibold border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+                        title="Segna la notifica come vista (toglie il badge dalla sidebar)"
+                      >
+                        Vista
+                      </button>
+                    )}
+                    {invoice.sdi_notification_seen && invoice.sdi_status && ['rejected', 'scartata', 'error'].includes(invoice.sdi_status) && (
+                      <span className="px-2 py-1 rounded text-xs text-theme-text-muted italic" title="Notifica già visualizzata">
+                        ✓ Vista
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
                     <div>
@@ -639,7 +675,8 @@ export default function FatturaTab() {
 }
 
 // Badge counter — fatture con stato SDI problematico (rejected/scartata/error)
-// che richiedono intervento (reinvio o nota di credito).
+// che richiedono intervento (reinvio o nota di credito) E non ancora
+// dismissate dall'admin via bottone "Vista".
 // Polling ogni 60s + realtime sul cambio sdi_status.
 // eslint-disable-next-line react-refresh/only-export-components
 export function useFatturaScartataCount() {
@@ -652,6 +689,7 @@ export function useFatturaScartataCount() {
         .from('fatture')
         .select('id', { count: 'exact', head: true })
         .in('sdi_status', ['rejected', 'scartata', 'error'])
+        .eq('sdi_notification_seen', false)
       if (!cancelled && typeof n === 'number') setCount(n)
     }
     load()

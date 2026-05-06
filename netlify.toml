@@ -89,6 +89,11 @@
 [functions."rental-extension-supercar-cron"]
   schedule = "0 16,17 * * *"
 
+# Marketing campaigns — every 5 min, materialise scheduled/recurring campaigns
+# whose scheduled_at has passed and pump the chunked send loop server-side.
+[functions."process-scheduled-campaigns-cron"]
+  schedule = "*/5 * * * *"
+
 # DR7 Privilege — DISABILITATO dopo invio massivo non voluto.
 # Lo schedule è commentato così Netlify NON registra il cron.
 # DR7 Privilege — niente cron periodico: il codice viene inviato
