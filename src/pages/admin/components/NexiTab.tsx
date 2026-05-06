@@ -80,9 +80,6 @@ export default function NexiTab() {
         [tx.customer_email, tx.order_id, tx.description, tx.booking?.customer_name, tx.booking?.vehicle_name, tx.contract_id, tx.booking_id],
         search
     ))
-    const filteredAddebiti = allAddebiti.filter(a => filterMatches(
-        [a.customer_name, a.customer_email, a.causale, a.contract_id], search
-    ))
 
     async function runBackfill() {
         // Two-step: dry run first to count, then ask for confirm before applying.
@@ -146,6 +143,9 @@ export default function NexiTab() {
 
     // All pending addebiti
     const [allAddebiti, setAllAddebiti] = useState<PendingAddebito[]>([])
+    const filteredAddebiti = allAddebiti.filter(a => filterMatches(
+        [a.customer_name, a.customer_email, a.causale, a.contract_id], search
+    ))
 
     useEffect(() => {
         fetchTransactions()
