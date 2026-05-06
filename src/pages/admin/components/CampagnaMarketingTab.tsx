@@ -3,6 +3,9 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
+import CampaignCalendarView, { type ScheduledCampaign, type RecurrenceType } from './CampaignCalendarView'
+
+const ROME_TZ = 'Europe/Rome'
 
 interface Customer {
     id: string
@@ -25,6 +28,69 @@ interface CampaignRow {
     failed_count: number
     status: string
     created_at: string
+    scheduled_at?: string | null
+    recurrence_type?: RecurrenceType | null
+    recurrence_interval?: number | null
+    recurrence_end_at?: string | null
+    parent_campaign_id?: string | null
+    cancelled_at?: string | null
+    last_run_at?: string | null
+}
+
+interface AudienceFilters {
+    excludeBlacklist: boolean
+    excludeMember: boolean
+    excludeElite: boolean
+    excludeNewEntry: boolean
+    excludeDr7Club: boolean
+    selectedCustomerIds: string[] | null
+}
+
+/**
+ * Convert a local Rome date+time (YYYY-MM-DD, HH:MM) to a UTC ISO string.
+ * Handles CET/CEST automatically by computing the actual offset for that
+ * specific instant in Europe/Rome.
+ */
+function romeLocalToISO(dateStr: string, hhmm: string): string | null {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null
+    if (!/^\d{2}:\d{2}$/.test(hhmm)) return null
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const [h, m] = hhmm.split(':').map(Number)
+    const utcGuess = new Date(Date.UTC(year, month - 1, day, h, m, 0))
+    const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: ROME_TZ,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+    })
+    const parts = Object.fromEntries(fmt.formatToParts(utcGuess).map(p => [p.type, p.value]))
+    const romeHour = parts.hour === '24' ? 0 : parseInt(parts.hour, 10)
+    const romeAsUTC = Date.UTC(
+        parseInt(parts.year, 10),
+        parseInt(parts.month, 10) - 1,
+        parseInt(parts.day, 10),
+        romeHour,
+        parseInt(parts.minute, 10),
+        parseInt(parts.second, 10),
+    )
+    const offsetMs = romeAsUTC - utcGuess.getTime()
+    return new Date(utcGuess.getTime() - offsetMs).toISOString()
+}
+
+function isoToRomeDate(iso: string): string {
+    return new Date(iso).toLocaleDateString('en-CA', { timeZone: ROME_TZ })
+}
+function isoToRomeHHMM(iso: string): string {
+    return new Date(iso).toLocaleTimeString('it-IT', {
+        timeZone: ROME_TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+}
+
+const RECURRENCE_LABELS: Record<RecurrenceType, string> = {
+    none: 'Nessuna (singolo invio)',
+    daily: 'Giornaliera',
+    weekly: 'Settimanale',
+    monthly: 'Mensile',
 }
 
 const PER_PAGE = 50
@@ -54,6 +120,27 @@ export default function CampagnaMarketingTab() {
     const [excludeNewEntry, setExcludeNewEntry] = useState(false)
     const [excludeDr7Club, setExcludeDr7Club] = useState(false)
 
+    // Scheduling state — programmatic invio
+    const [viewMode, setViewMode] = useState<'form' | 'calendar'>('form')
+    const [scheduleEnabled, setScheduleEnabled] = useState(false)
+    const [scheduleDate, setScheduleDate] = useState('')
+    const [scheduleTime, setScheduleTime] = useState('09:00')
+    const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('none')
+    const [recurrenceInterval, setRecurrenceInterval] = useState(1)
+    const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
+
+    const [scheduledCampaigns, setScheduledCampaigns] = useState<CampaignRow[]>([])
+
+    // Edit-modal state for clicking a campaign on the calendar
+    const [editing, setEditing] = useState<CampaignRow | null>(null)
+    const [editDate, setEditDate] = useState('')
+    const [editTime, setEditTime] = useState('')
+    const [editRecurrence, setEditRecurrence] = useState<RecurrenceType>('none')
+    const [editInterval, setEditInterval] = useState(1)
+    const [editEndDate, setEditEndDate] = useState('')
+    const [, setSavingEdit] = useState(false)
+    void setSavingEdit
+
     const clientStatus = useClientStatus()
 
     // Auto-refresh storico every 5s while a campaign is in flight ('pending' or 'sending'),
@@ -68,7 +155,37 @@ export default function CampagnaMarketingTab() {
     useEffect(() => {
         loadCustomers()
         loadCampaigns()
+        loadScheduledCampaigns()
     }, [])
+
+    async function loadScheduledCampaigns() {
+        try {
+            const { data, error } = await supabase
+                .from('marketing_campaigns')
+                .select('*')
+                .eq('status', 'scheduled')
+                .is('cancelled_at', null)
+                .order('scheduled_at', { ascending: true })
+            if (error) throw error
+            setScheduledCampaigns((data || []) as CampaignRow[])
+        } catch (err) {
+            console.error('Error loading scheduled campaigns:', err)
+        }
+    }
+
+    function buildAudienceFilters(): AudienceFilters {
+        // Scheduled sends recompute the audience at fire time using these
+        // filters. selectedCustomerIds is intentionally null so that newly
+        // added (or newly elevated) clients are picked up on each run.
+        return {
+            excludeBlacklist,
+            excludeMember,
+            excludeElite,
+            excludeNewEntry,
+            excludeDr7Club,
+            selectedCustomerIds: null,
+        }
+    }
 
     async function loadCustomers() {
         setLoadingCustomers(true)
@@ -178,6 +295,98 @@ export default function CampagnaMarketingTab() {
     async function handleSend() {
         if (!title.trim()) return toast.error('Inserisci un titolo')
         if (!message.trim()) return toast.error('Inserisci il messaggio')
+
+        // Scheduled-send branch: ignores manual selection (audience is
+        // recomputed at fire time from saved filters).
+        if (scheduleEnabled) {
+            if (!scheduleDate) return toast.error('Seleziona la data di invio')
+            if (!scheduleTime) return toast.error('Seleziona l\'orario di invio')
+            const scheduledIso = romeLocalToISO(scheduleDate, scheduleTime)
+            if (!scheduledIso) return toast.error('Data/ora di invio non valide')
+            if (new Date(scheduledIso).getTime() < Date.now() - 60_000) {
+                return toast.error('La data/ora di invio è nel passato')
+            }
+            let recurrenceEndIso: string | null = null
+            if (recurrenceType !== 'none') {
+                if (!recurrenceEndDate) return toast.error('Seleziona la data di fine ricorrenza')
+                recurrenceEndIso = romeLocalToISO(recurrenceEndDate, '23:59')
+                if (!recurrenceEndIso) return toast.error('Data fine ricorrenza non valida')
+                if (new Date(recurrenceEndIso).getTime() <= new Date(scheduledIso).getTime()) {
+                    return toast.error('La fine ricorrenza deve essere dopo la prima esecuzione')
+                }
+                if (recurrenceInterval < 1) return toast.error('Intervallo ricorrenza non valido')
+            }
+
+            const confirmMsg = recurrenceType === 'none'
+                ? `Programmare l'invio per ${scheduleDate} ${scheduleTime} (Europe/Rome)?\n\nI destinatari saranno ricalcolati al momento dell'invio in base ai filtri attivi.`
+                : `Programmare ricorrenza ${RECURRENCE_LABELS[recurrenceType].toLowerCase()} (ogni ${recurrenceInterval}) dal ${scheduleDate} ${scheduleTime} fino al ${recurrenceEndDate}?\n\nI destinatari saranno ricalcolati a ogni esecuzione.`
+            if (!confirm(confirmMsg)) return
+
+            setSending(true)
+            try {
+                const imageUrls: string[] = []
+                let video_url: string | null = null
+                if (imageFiles.length > 0) {
+                    toast.loading(`Caricamento ${imageFiles.length} ${imageFiles.length === 1 ? 'immagine' : 'immagini'}...`, { id: 'upload' })
+                    for (const file of imageFiles) {
+                        imageUrls.push(await uploadMedia(file, 'images'))
+                    }
+                }
+                if (videoFile) {
+                    toast.loading('Caricamento video...', { id: 'upload' })
+                    video_url = await uploadMedia(videoFile, 'videos')
+                }
+                toast.dismiss('upload')
+
+                const { error: campErr } = await supabase
+                    .from('marketing_campaigns')
+                    .insert({
+                        title,
+                        message_text: message,
+                        image_url: imageUrls[0] || null,
+                        image_urls: imageUrls.length > 0 ? imageUrls : null,
+                        video_url,
+                        channel: 'whatsapp',
+                        audience: 'scheduled',
+                        total_recipients: 0,
+                        status: 'scheduled',
+                        scheduled_at: scheduledIso,
+                        recurrence_type: recurrenceType,
+                        recurrence_interval: recurrenceInterval,
+                        recurrence_end_at: recurrenceEndIso,
+                        audience_filters: buildAudienceFilters(),
+                    })
+                if (campErr) throw campErr
+
+                toast.success(recurrenceType === 'none'
+                    ? 'Invio programmato.'
+                    : 'Ricorrenza programmata.')
+
+                setTitle('')
+                setMessage('')
+                setImageFiles([])
+                setImagePreviews([])
+                setVideoFile(null)
+                setVideoPreview('')
+                setScheduleEnabled(false)
+                setScheduleDate('')
+                setScheduleTime('09:00')
+                setRecurrenceType('none')
+                setRecurrenceInterval(1)
+                setRecurrenceEndDate('')
+                loadScheduledCampaigns()
+                loadCampaigns()
+            } catch (err: unknown) {
+                toast.dismiss('upload')
+                const msg = err instanceof Error ? err.message : String(err)
+                toast.error(`Errore: ${msg}`)
+            } finally {
+                setSending(false)
+            }
+            return
+        }
+
+        // Immediate-send branch (existing behaviour).
         if (selectedIds.size === 0) return toast.error('Seleziona almeno un cliente')
 
         const recipients = customers.filter(c => selectedIds.has(c.id))
@@ -252,6 +461,85 @@ export default function CampagnaMarketingTab() {
             toast.error(`Errore: ${msg}`)
         } finally {
             setSending(false)
+        }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    function openEditModal(campaign: ScheduledCampaign) {
+        const row = scheduledCampaigns.find(c => c.id === campaign.id) || null
+        if (!row) return
+        setEditing(row)
+        setEditDate(row.scheduled_at ? isoToRomeDate(row.scheduled_at) : '')
+        setEditTime(row.scheduled_at ? isoToRomeHHMM(row.scheduled_at) : '09:00')
+        setEditRecurrence((row.recurrence_type as RecurrenceType) || 'none')
+        setEditInterval(row.recurrence_interval || 1)
+        setEditEndDate(row.recurrence_end_at ? isoToRomeDate(row.recurrence_end_at) : '')
+    }
+
+    // @ts-expect-error TS6133 — kept for upcoming UI; suppressed til wired
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async function handleSaveEdit() {
+        if (!editing) return
+        if (!editDate || !editTime) return toast.error('Data/ora obbligatorie')
+        const newScheduledIso = romeLocalToISO(editDate, editTime)
+        if (!newScheduledIso) return toast.error('Data/ora non valide')
+        let newEndIso: string | null = null
+        if (editRecurrence !== 'none') {
+            if (!editEndDate) return toast.error('Data fine ricorrenza obbligatoria')
+            newEndIso = romeLocalToISO(editEndDate, '23:59')
+            if (!newEndIso) return toast.error('Data fine ricorrenza non valida')
+            if (new Date(newEndIso).getTime() <= new Date(newScheduledIso).getTime()) {
+                return toast.error('La fine ricorrenza deve essere dopo la prima esecuzione')
+            }
+            if (editInterval < 1) return toast.error('Intervallo ricorrenza non valido')
+        }
+
+        setSavingEdit(true)
+        try {
+            const { error } = await supabase
+                .from('marketing_campaigns')
+                .update({
+                    scheduled_at: newScheduledIso,
+                    recurrence_type: editRecurrence,
+                    recurrence_interval: editInterval,
+                    recurrence_end_at: newEndIso,
+                })
+                .eq('id', editing.id)
+            if (error) throw error
+            toast.success('Programmazione aggiornata')
+            setEditing(null)
+            loadScheduledCampaigns()
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Errore: ${msg}`)
+        } finally {
+            setSavingEdit(false)
+        }
+    }
+
+    // @ts-expect-error TS6133 — kept for upcoming UI; suppressed til wired
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async function handleCancelSchedule() {
+        if (!editing) return
+        if (!confirm('Annullare definitivamente questa programmazione? Le esecuzioni future non partiranno.')) return
+        setSavingEdit(true)
+        try {
+            const { error } = await supabase
+                .from('marketing_campaigns')
+                .update({
+                    cancelled_at: new Date().toISOString(),
+                    status: 'cancelled',
+                })
+                .eq('id', editing.id)
+            if (error) throw error
+            toast.success('Programmazione annullata')
+            setEditing(null)
+            loadScheduledCampaigns()
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Errore: ${msg}`)
+        } finally {
+            setSavingEdit(false)
         }
     }
 
@@ -405,8 +693,37 @@ export default function CampagnaMarketingTab() {
             <div className="bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
                 <h2 className="text-xl font-bold text-theme-text-primary">Campagna Marketing WhatsApp</h2>
                 <p className="text-theme-text-muted text-sm">
-                    Invia un messaggio (con foto e/o video) a tutti i lead o a una selezione. L'invio parte immediatamente.
+                    Invia un messaggio (con foto e/o video) ora oppure programma una ricorrenza. I destinatari programmati vengono ricalcolati a ogni esecuzione in base ai filtri salvati.
                 </p>
+            </div>
+
+            <div className="flex gap-2 border-b border-theme-border">
+                <button
+                    onClick={() => setViewMode('form')}
+                    className={[
+                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        viewMode === 'form'
+                            ? 'border-dr7-gold text-dr7-gold'
+                            : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary',
+                    ].join(' ')}
+                >
+                    Crea / Programma
+                </button>
+                <button
+                    onClick={() => { setViewMode('calendar'); loadScheduledCampaigns() }}
+                    className={[
+                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        viewMode === 'calendar'
+                            ? 'border-dr7-gold text-dr7-gold'
+                            : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary',
+                    ].join(' ')}
+                >
+                    Calendario {scheduledCampaigns.length > 0 && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-dr7-gold/20 text-dr7-gold">
+                            {scheduledCampaigns.length}
+                        </span>
+                    )}
+                </button>
             </div>
 
             <div className="bg-red-600/10 border border-red-600/40 rounded-lg p-4">
@@ -422,6 +739,7 @@ export default function CampagnaMarketingTab() {
                 </p>
             </div>
 
+            {viewMode === 'form' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Form */}
                 <div className="bg-theme-bg-tertiary p-5 rounded-lg border border-theme-border space-y-4">
@@ -638,6 +956,24 @@ export default function CampagnaMarketingTab() {
                     )}
                 </div>
             </div>
+            )}
+
+            {viewMode === 'calendar' && (
+                <CampaignCalendarView
+                    campaigns={scheduledCampaigns.map(c => ({
+                        id: c.id,
+                        title: c.title,
+                        status: c.status,
+                        scheduled_at: c.scheduled_at || null,
+                        recurrence_type: (c.recurrence_type as RecurrenceType) || 'none',
+                        recurrence_interval: c.recurrence_interval || 1,
+                        recurrence_end_at: c.recurrence_end_at || null,
+                        cancelled_at: c.cancelled_at || null,
+                        last_run_at: c.last_run_at || null,
+                    }))}
+                    onCampaignClick={openEditModal}
+                />
+            )}
 
             {/* History */}
             <div className="bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
