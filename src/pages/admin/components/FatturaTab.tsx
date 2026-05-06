@@ -96,6 +96,10 @@ export default function FatturaTab() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [filterSdi, setFilterSdi] = useState<'all' | 'sending' | 'sent' | 'accepted' | 'rejected' | 'error' | 'draft'>('all')
+  const [filterTipo, setFilterTipo] = useState<'all' | 'fattura' | 'nota_credito'>('all')
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('')
+  const [filterDateTo, setFilterDateTo] = useState<string>('')
   const [creatingNdc, setCreatingNdc] = useState<string | null>(null)
   const [currentEmail, setCurrentEmail] = useState<string | null>(null)
   const canManagePayments = !!currentEmail && PAYMENT_MANAGERS.includes(currentEmail.toLowerCase())
@@ -533,14 +537,72 @@ export default function FatturaTab() {
       {/* Empty header replaced above; the rest of Emesse UI follows */}
 
       {/* Search Bar */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border space-y-3">
         <input
           type="text"
-          placeholder="Cerca cliente..."
+          placeholder="Cerca per cliente, numero fattura o email..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
         />
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col">
+            <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Stato SDI</label>
+            <select
+              value={filterSdi}
+              onChange={e => setFilterSdi(e.target.value as typeof filterSdi)}
+              className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+            >
+              <option value="all">Tutti</option>
+              <option value="rejected">Scartata</option>
+              <option value="accepted">Accettata SDI</option>
+              <option value="sent">Inviata SDI</option>
+              <option value="sending">Invio…</option>
+              <option value="error">Errore SDI</option>
+              <option value="draft">Bozza</option>
+            </select>
+          </div>
+          <div className="flex flex-col">
+            <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Tipo</label>
+            <select
+              value={filterTipo}
+              onChange={e => setFilterTipo(e.target.value as typeof filterTipo)}
+              className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+            >
+              <option value="all">Tutti</option>
+              <option value="fattura">Solo Fatture</option>
+              <option value="nota_credito">Solo Note Credito</option>
+            </select>
+          </div>
+          <div className="flex flex-col">
+            <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Da</label>
+            <input
+              type="date"
+              value={filterDateFrom}
+              onChange={e => setFilterDateFrom(e.target.value)}
+              className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">A</label>
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={e => setFilterDateTo(e.target.value)}
+              className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+            />
+          </div>
+          {(filterSdi !== 'all' || filterTipo !== 'all' || filterDateFrom || filterDateTo || searchQuery) && (
+            <button
+              onClick={() => {
+                setFilterSdi('all'); setFilterTipo('all'); setFilterDateFrom(''); setFilterDateTo(''); setSearchQuery('')
+              }}
+              className="px-3 py-2 rounded text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-border"
+            >
+              Pulisci filtri
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Invoices List */}
@@ -552,13 +614,38 @@ export default function FatturaTab() {
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {invoices.filter(invoice => {
-            if (!searchQuery) return true
-            const query = searchQuery.toLowerCase()
-            return (
-              invoice.customer_name.toLowerCase().includes(query) ||
-              invoice.numero_fattura.toLowerCase().includes(query) ||
-              (invoice.customer_email && invoice.customer_email.toLowerCase().includes(query))
-            )
+            // Text search (cliente / numero / email)
+            if (searchQuery) {
+              const query = searchQuery.toLowerCase()
+              const matchesText = (
+                invoice.customer_name.toLowerCase().includes(query) ||
+                invoice.numero_fattura.toLowerCase().includes(query) ||
+                (invoice.customer_email && invoice.customer_email.toLowerCase().includes(query))
+              )
+              if (!matchesText) return false
+            }
+            // SDI status — 'rejected' include anche legacy 'scartata'
+            if (filterSdi !== 'all') {
+              const status = invoice.sdi_status || 'draft'
+              if (filterSdi === 'rejected') {
+                if (status !== 'rejected' && status !== 'scartata') return false
+              } else if (status !== filterSdi) {
+                return false
+              }
+            }
+            // Tipo — fattura vs nota credito (la nota di credito ha tipo_fattura set)
+            if (filterTipo !== 'all') {
+              const isNotaCredito = invoice.tipo_fattura === 'nota_credito' || invoice.tipo_fattura === 'TD04'
+              if (filterTipo === 'nota_credito' && !isNotaCredito) return false
+              if (filterTipo === 'fattura' && isNotaCredito) return false
+            }
+            // Date range — confronto su YYYY-MM-DD per evitare problemi TZ
+            if (filterDateFrom || filterDateTo) {
+              const issueDate = (invoice.data_emissione || '').slice(0, 10)
+              if (filterDateFrom && issueDate < filterDateFrom) return false
+              if (filterDateTo && issueDate > filterDateTo) return false
+            }
+            return true
           }).map((invoice) => (
             <div key={invoice.id} className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
               <div className="flex justify-between items-start">
