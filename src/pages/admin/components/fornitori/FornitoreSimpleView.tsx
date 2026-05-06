@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../../supabaseClient'
 import { useAdminRole } from '../../../../hooks/useAdminRole'
 import Button from '../Button'
+import FornitoreForm from './FornitoreForm'
 import FornitoreDocumentUpload from './FornitoreDocumentUpload'
 import FornitoreBollaUpload from './FornitoreBollaUpload'
 import LimitationOverrideModal from '../../../../components/LimitationOverrideModal'
@@ -53,6 +54,8 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
     const [uploadForFatturaId, setUploadForFatturaId] = useState<string | null>(null)
     const [showManualEntry, setShowManualEntry] = useState(false)  // full form for new doc, no file required
     const [editingDoc, setEditingDoc] = useState<FornitoreDocument | null>(null)  // edit modal for existing docs
+    const [editingAnagrafica, setEditingAnagrafica] = useState(false)  // edit modal for fornitore anagrafica (categoria, piva, etc.)
+    const [currentFornitore, setCurrentFornitore] = useState<Fornitore>(fornitore)
     const [paymentDoc, setPaymentDoc] = useState<FornitoreDocument | null>(null)
     const [crossCheckRunning, setCrossCheckRunning] = useState(false)
     const [otpUnlocked, setOtpUnlocked] = useState(false)
@@ -347,14 +350,24 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
             <div className="bg-theme-bg-secondary p-4 rounded-lg border border-theme-border flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <button onClick={onBack} className="text-xs text-theme-text-muted hover:text-theme-text-primary">← Tutti i fornitori</button>
-                    <h2 className="text-xl font-semibold text-theme-text-primary">{fornitore.nome}</h2>
+                    <h2 className="text-xl font-semibold text-theme-text-primary">{currentFornitore.nome}</h2>
                     <div className="flex flex-wrap gap-3 mt-1 text-xs text-theme-text-secondary">
-                        {fornitore.piva && <span>P.IVA {fornitore.piva}</span>}
-                        {fornitore.condizioni_pagamento && <span>{fornitore.condizioni_pagamento}</span>}
-                        {fornitore.email && <span>{fornitore.email}</span>}
+                        {currentFornitore.piva && <span>P.IVA {currentFornitore.piva}</span>}
+                        {currentFornitore.categoria_merce
+                            ? <span className="px-2 py-0.5 rounded bg-dr7-gold/15 text-dr7-gold border border-dr7-gold/30">{currentFornitore.categoria_merce}</span>
+                            : <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">Senza categoria</span>}
+                        {currentFornitore.condizioni_pagamento && <span>{currentFornitore.condizioni_pagamento}</span>}
+                        {currentFornitore.email && <span>{currentFornitore.email}</span>}
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setEditingAnagrafica(true)}
+                        className="text-xs px-3 py-1.5 rounded bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold border border-dr7-gold/30 font-semibold"
+                        title="Modifica anagrafica (categoria, P.IVA, condizioni…)"
+                    >
+                        Modifica anagrafica
+                    </button>
                     <button
                         onClick={forceResyncFromAruba}
                         className="text-xs px-3 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-tertiary/70 text-theme-text-primary border border-theme-border"
@@ -576,6 +589,14 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
 
             {paymentDoc && (
                 <PaymentModal doc={paymentDoc} onClose={() => setPaymentDoc(null)} onConfirm={recordPayment} />
+            )}
+
+            {editingAnagrafica && (
+                <FornitoreForm
+                    fornitore={currentFornitore}
+                    onClose={() => setEditingAnagrafica(false)}
+                    onSaved={(f) => { setCurrentFornitore(f); setEditingAnagrafica(false) }}
+                />
             )}
 
             <LimitationOverrideModal

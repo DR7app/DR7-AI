@@ -11,8 +11,14 @@ interface Props {
     onSaved: (f: Fornitore) => void
 }
 
+// Sentinel value used to distinguish "+ Aggiungi nuova categoria" from a real
+// slug. Picked because '__' prefix is not a valid auto-generated slug.
+const ADD_CATEGORY_SENTINEL = '__add_category__'
+
 // Fallback categories if the DB lookup fails (e.g. table missing). Real categories
 // come from public.fornitore_categorie loaded in the component.
+// IMPORTANT: keep ADD_CATEGORY_SENTINEL as last entry so users can always
+// create a new category, even before/while the DB query resolves.
 const CATEGORIE_FALLBACK = [
     { value: '', label: '-- categoria --' },
     { value: 'carburante', label: 'Carburante' },
@@ -26,6 +32,7 @@ const CATEGORIE_FALLBACK = [
     { value: 'consulenze', label: 'Consulenze' },
     { value: 'noleggio_attrezzature', label: 'Noleggio attrezzature' },
     { value: 'altro', label: 'Altro' },
+    { value: ADD_CATEGORY_SENTINEL, label: '+ Aggiungi nuova categoria…' },
 ]
 
 const CONDIZIONI = [
@@ -40,10 +47,6 @@ const CONDIZIONI = [
     { value: 'rid_sdd', label: 'RID / SDD' },
     { value: 'altro', label: 'Altro' },
 ]
-
-// Sentinel value used to distinguish "+ Aggiungi nuova categoria" from a real
-// slug. Picked because '__' prefix is not a valid auto-generated slug.
-const ADD_CATEGORY_SENTINEL = '__add_category__'
 
 function slugifyCategory(label: string): string {
     return label
@@ -78,7 +81,7 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
         }
         // Always offer inline "add new category" at the end
         opts.push({ value: ADD_CATEGORY_SENTINEL, label: '+ Aggiungi nuova categoria…' })
-        if (opts.length > 2) setCATEGORIE(opts)
+        setCATEGORIE(opts)
     }
 
     useEffect(() => {
