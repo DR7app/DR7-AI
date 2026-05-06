@@ -105,10 +105,13 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
 
         ;(async () => {
             try {
+                // Auto-sync su mount: copertura 3 mesi per stare sotto i 26s
+                // di timeout sync di Netlify. Lo scan completo (12 mesi) viene
+                // fatto dal cron notturno fornitori-fatture-sync-background.
                 const res = await fetch('/.netlify/functions/sync-fornitore-invoices', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fornitore_id: fornitore.id, months: 12 }),
+                    body: JSON.stringify({ fornitore_id: fornitore.id, months: 3 }),
                 })
                 const json = await res.json()
                 if (res.ok && json.success) {
