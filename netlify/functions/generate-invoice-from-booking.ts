@@ -881,9 +881,12 @@ async function handleWalletPurchaseFattura(
             total: netUnit,
         }]
         const subtotal = netUnit
-        const vatAmount = Number((netUnit * (vatRate / 100)).toFixed(2))
+        // GROSS-inclusive: total MUST equal paidAmount exactly. Computing VAT
+        // as `gross - net` absorbs the GROSS→NET rounding error (1 cent) into
+        // the VAT field instead of the total, so the customer's €2000 stays €2000.
+        const total = paidAmount
+        const vatAmount = Number((total - subtotal).toFixed(2))
         const exemptAmount = 0
-        const total = Number((subtotal + vatAmount).toFixed(2))
 
         // 5. Generate unique invoice number (atomic RPC + retry loop, like booking flow)
         const currentYear = new Date().getFullYear()
