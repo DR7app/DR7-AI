@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import FornitoreSimpleView from './fornitori/FornitoreSimpleView'
 import FornitoriRegistroMensile from './fornitori/FornitoriRegistroMensile'
+import FornitoreForm from './fornitori/FornitoreForm'
 import type { Fornitore } from './fornitori/types'
 
 type View = 'lista' | 'registro'
@@ -34,10 +35,11 @@ export default function FornitoriTab() {
     const [categoryFilter, setCategoryFilter] = useState<string>('')
     const [categoryOptions, setCategoryOptions] = useState<{ slug: string; label: string }[]>([])
     const [selected, setSelected] = useState<Fornitore | null>(null)
-    // Default 'registro' — l'utente entra tipicamente per pianificare bolle e
-    // pagamenti del mese, non per sfogliare l'anagrafica.
-    const [view, setView] = useState<View>('registro')
+    // Default 'lista' — l'utente apre Fornitori tipicamente per cercare/aggiungere
+    // un fornitore prima ancora che per pianificare il pagamento mensile.
+    const [view, setView] = useState<View>('lista')
     const [importing, setImporting] = useState(false)
+    const [creating, setCreating] = useState(false)
     const [lastSync, setLastSync] = useState<number | null>(() => {
         const v = localStorage.getItem(LAST_SYNC_KEY)
         return v ? parseInt(v) : null
@@ -241,6 +243,13 @@ export default function FornitoriTab() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <button
+                        onClick={() => setCreating(true)}
+                        className="text-sm px-3 py-1.5 rounded bg-dr7-gold hover:opacity-90 text-white font-semibold"
+                        title="Aggiungi un fornitore manualmente"
+                    >
+                        + Aggiungi fornitore
+                    </button>
+                    <button
                         onClick={async () => {
                             if (importing) return
                             setImporting(true)
@@ -379,6 +388,17 @@ export default function FornitoriTab() {
             </div>
 
             </>)}
+
+            {creating && (
+                <FornitoreForm
+                    onClose={() => setCreating(false)}
+                    onSaved={(f) => {
+                        setCreating(false)
+                        load()
+                        setSelected(f)
+                    }}
+                />
+            )}
         </div>
     )
 }

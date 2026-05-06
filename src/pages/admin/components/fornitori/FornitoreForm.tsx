@@ -41,6 +41,19 @@ const CONDIZIONI = [
     { value: 'altro', label: 'Altro' },
 ]
 
+// Sentinel value used to distinguish "+ Aggiungi nuova categoria" from a real
+// slug. Picked because '__' prefix is not a valid auto-generated slug.
+const ADD_CATEGORY_SENTINEL = '__add_category__'
+
+function slugifyCategory(label: string): string {
+    return label
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '') // strip accents
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 50)
+}
+
 export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
     const isEdit = !!fornitore
     const [saving, setSaving] = useState(false)
@@ -48,25 +61,65 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
     const [errorCopied, setErrorCopied] = useState(false)
     const [CATEGORIE, setCATEGORIE] = useState(CATEGORIE_FALLBACK)
 
+    const loadCategorie = async (legacySlug?: string | null) => {
+        const { data, error } = await supabase
+            .from('fornitore_categorie')
+            .select('slug, label, attiva')
+            .order('sort_order', { ascending: true })
+        if (error || !data) return
+        const opts = [{ value: '', label: '-- categoria --' }]
+        for (const c of data as { slug: string; label: string; attiva: boolean }[]) {
+            if (!c.attiva && c.slug !== legacySlug) continue
+            opts.push({ value: c.slug, label: c.label + (c.attiva ? '' : ' (disattivata)') })
+        }
+        // Include legacy slug if not in table
+        if (legacySlug && !data.some((c: any) => c.slug === legacySlug)) {
+            opts.push({ value: legacySlug, label: `${legacySlug} (legacy)` })
+        }
+        // Always offer inline "add new category" at the end
+        opts.push({ value: ADD_CATEGORY_SENTINEL, label: '+ Aggiungi nuova categoria…' })
+        if (opts.length > 2) setCATEGORIE(opts)
+    }
+
     useEffect(() => {
-        ;(async () => {
-            const { data, error } = await supabase
-                .from('fornitore_categorie')
-                .select('slug, label, attiva')
-                .order('sort_order', { ascending: true })
-            if (error || !data) return
-            const opts = [{ value: '', label: '-- categoria --' }]
-            for (const c of data as { slug: string; label: string; attiva: boolean }[]) {
-                if (!c.attiva && c.slug !== fornitore?.categoria_merce) continue
-                opts.push({ value: c.slug, label: c.label + (c.attiva ? '' : ' (disattivata)') })
-            }
-            // Include legacy slug if not in table
-            if (fornitore?.categoria_merce && !data.some((c: any) => c.slug === fornitore.categoria_merce)) {
-                opts.push({ value: fornitore.categoria_merce, label: `${fornitore.categoria_merce} (legacy)` })
-            }
-            if (opts.length > 1) setCATEGORIE(opts)
-        })()
+        loadCategorie(fornitore?.categoria_merce)
     }, [fornitore?.categoria_merce])
+
+    async function handleCategoryChange(value: string) {
+        if (value !== ADD_CATEGORY_SENTINEL) {
+            setData(d => ({ ...d, categoria_merce: value }))
+            return
+        }
+        const label = window.prompt('Nome della nuova categoria (es. "Assicurazioni"):')?.trim()
+        if (!label) return
+        const slug = slugifyCategory(label)
+        if (!slug) {
+            alert('Nome non valido — usa lettere o numeri.')
+            return
+        }
+        // Compute next sort_order so new one appears at the end
+        const { data: existing } = await supabase
+            .from('fornitore_categorie')
+            .select('sort_order')
+            .order('sort_order', { ascending: false })
+            .limit(1)
+        const nextOrder = ((existing?.[0]?.sort_order as number | undefined) ?? 0) + 10
+        const { error } = await supabase
+            .from('fornitore_categorie')
+            .insert({ slug, label, attiva: true, sort_order: nextOrder })
+        if (error) {
+            // Slug already exists → just select it
+            if (error.code === '23505') {
+                await loadCategorie(fornitore?.categoria_merce)
+                setData(d => ({ ...d, categoria_merce: slug }))
+                return
+            }
+            alert('Errore creando categoria: ' + error.message)
+            return
+        }
+        await loadCategorie(fornitore?.categoria_merce)
+        setData(d => ({ ...d, categoria_merce: slug }))
+    }
     const [data, setData] = useState({
         nome: fornitore?.nome || '',
         piva: fornitore?.piva || '',
@@ -218,7 +271,7 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
                         <Input label="IBAN" value={data.iban}
                             onChange={e => setData({ ...data, iban: e.target.value })} placeholder="IT60 X054 2811 1010 0000 0123 456" />
                         <Select label="Categoria merce" value={data.categoria_merce}
-                            onChange={e => setData({ ...data, categoria_merce: e.target.value })}
+                            onChange={e => handleCategoryChange(e.target.value)}
                             options={CATEGORIE} />
                         <Select label="Condizioni pagamento" value={data.condizioni_pagamento}
                             onChange={e => setData({ ...data, condizioni_pagamento: e.target.value })}
