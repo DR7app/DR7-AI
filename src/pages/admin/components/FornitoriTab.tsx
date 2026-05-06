@@ -31,6 +31,9 @@ export default function FornitoriTab() {
     const [fornitori, setFornitori] = useState<FornitoreRow[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
+    const [, setCategoryFilter] = useState<string>('')
+    const [, setCategoryOptions] = useState<{ slug: string; label: string }[]>([])
+    void setCategoryFilter; void setCategoryOptions
     const [selected, setSelected] = useState<Fornitore | null>(null)
     // Default 'registro' — l'utente entra tipicamente per pianificare bolle e
     // pagamenti del mese, non per sfogliare l'anagrafica.
@@ -101,6 +104,33 @@ export default function FornitoriTab() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    // Carica le categorie dal master (stessa sorgente di FornitoreForm) per
+    // popolare il filtro. Tiene solo le attive ma include anche eventuali slug
+    // legacy presenti nei fornitori correnti, così non si perde nessuna riga.
+    useEffect(() => {
+        ;(async () => {
+            const { data } = await supabase
+                .from('fornitore_categorie')
+                .select('slug, label, attiva')
+                .order('sort_order', { ascending: true })
+            const opts: { slug: string; label: string }[] = []
+            const seen = new Set<string>()
+            for (const c of (data || []) as { slug: string; label: string; attiva: boolean }[]) {
+                if (!c.attiva) continue
+                opts.push({ slug: c.slug, label: c.label })
+                seen.add(c.slug)
+            }
+            // Include slug legacy presenti nei fornitori ma non nel master
+            for (const f of fornitori) {
+                if (f.categoria_merce && !seen.has(f.categoria_merce)) {
+                    opts.push({ slug: f.categoria_merce, label: `${f.categoria_merce} (legacy)` })
+                    seen.add(f.categoria_merce)
+                }
+            }
+            setCategoryOptions(opts)
+        })()
+    }, [fornitori])
 
     type SortKey = 'nome' | 'fatture' | 'bolle' | 'pendenti' | 'recente'
     const [sortKey, setSortKey] = useState<SortKey>('nome')

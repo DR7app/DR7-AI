@@ -83,15 +83,18 @@ function Card({ title, right, children, className = '' }: { title: string; right
   )
 }
 
-function KpiTile({ label, value, delta, valueClass = 'text-theme-text-primary', format = 'int' }: {
-  label: string; value: number; delta?: number; valueClass?: string; format?: 'int' | 'eur'
+function KpiTile({ label, value, delta, sub, valueClass = 'text-theme-text-primary', format = 'int' }: {
+  label: string; value: number | string; delta?: number; sub?: string; valueClass?: string; format?: 'int' | 'eur'
 }) {
+  const isString = typeof value === 'string'
   return (
     <div className="bg-theme-bg-secondary/70 border border-theme-border rounded-xl p-3 flex flex-col gap-1 min-w-0">
       <div className="text-[10px] uppercase tracking-wider text-theme-text-muted truncate">{label}</div>
-      <div className={`text-xl font-bold ${valueClass} tabular-nums`}>{format === 'eur' ? fmtEur(value) : fmtInt(value)}</div>
+      <div className={`text-xl font-bold ${valueClass} tabular-nums`}>
+        {isString ? value : (format === 'eur' ? fmtEur(value as number) : fmtInt(value as number))}
+      </div>
       <div className={`text-[11px] font-medium ${delta != null ? deltaCls(delta) : 'text-theme-text-muted'}`}>
-        {delta != null ? deltaStr(delta) : '—'}
+        {sub ? sub : (delta != null ? deltaStr(delta) : '—')}
       </div>
     </div>
   )
@@ -254,12 +257,29 @@ export default function ReportTrafficTab() {
 
       {/* KPI strip — uses ONLY real numbers from GA */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiTile label="Visite" value={data?.kpis?.visits ?? 0} delta={data?.kpis?.delta_visits} valueClass="text-cyan-400" />
-        <KpiTile label="Pagine viste" value={data?.kpis?.pageviews ?? 0} delta={data?.kpis?.delta_pageviews} valueClass="text-fuchsia-400" />
-        <KpiTile label="Utenti" value={data?.kpis?.users ?? 0} delta={data?.kpis?.delta_users} valueClass="text-emerald-400" />
-        <KpiTile label="Click telefono" value={data?.kpis?.calls ?? 0} valueClass="text-orange-400" />
-        <KpiTile label="Prenotazioni" value={data?.kpis?.bookings ?? 0} valueClass="text-violet-400" />
-        <KpiTile label="Fatturato GA" value={data?.kpis?.revenue ?? 0} valueClass="text-dr7-gold" format="eur" />
+        {/* Quando i numeri vengono dalla nostra DB invece che da GA4
+            rietichettiamo esplicitamente cosi' nessuno crede di vedere
+            traffico web. Le KPI di traffico (Visite, Pagine viste,
+            Utenti) non hanno senso in quel caso e mostrano '—'. */}
+        {data?.dataSource === 'internal' ? (
+          <>
+            <KpiTile label="Visite (web)" value={'—'} sub="GA4 da configurare" valueClass="text-theme-text-muted" />
+            <KpiTile label="Pagine viste (web)" value={'—'} sub="GA4 da configurare" valueClass="text-theme-text-muted" />
+            <KpiTile label="Utenti (web)" value={'—'} sub="GA4 da configurare" valueClass="text-theme-text-muted" />
+            <KpiTile label="Clienti con telefono" value={data?.kpis?.calls ?? 0} sub="da CRM" valueClass="text-orange-400" />
+            <KpiTile label="Prenotazioni create" value={data?.kpis?.bookings ?? 0} delta={data?.kpis?.delta_visits} sub="da CRM" valueClass="text-violet-400" />
+            <KpiTile label="Fatturato pagato" value={data?.kpis?.revenue ?? 0} sub="da CRM" valueClass="text-dr7-gold" format="eur" />
+          </>
+        ) : (
+          <>
+            <KpiTile label="Visite" value={data?.kpis?.visits ?? 0} delta={data?.kpis?.delta_visits} valueClass="text-cyan-400" />
+            <KpiTile label="Pagine viste" value={data?.kpis?.pageviews ?? 0} delta={data?.kpis?.delta_pageviews} valueClass="text-fuchsia-400" />
+            <KpiTile label="Utenti" value={data?.kpis?.users ?? 0} delta={data?.kpis?.delta_users} valueClass="text-emerald-400" />
+            <KpiTile label="Click telefono" value={data?.kpis?.calls ?? 0} valueClass="text-orange-400" />
+            <KpiTile label="Prenotazioni" value={data?.kpis?.bookings ?? 0} valueClass="text-violet-400" />
+            <KpiTile label="Fatturato GA" value={data?.kpis?.revenue ?? 0} valueClass="text-dr7-gold" format="eur" />
+          </>
+        )}
       </div>
 
       {/* Row 2: Traffic over time + Distribution + Funnel */}
