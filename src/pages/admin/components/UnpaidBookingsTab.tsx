@@ -1245,17 +1245,29 @@ export default function UnpaidBookingsTab() {
       const details = booking.booking_details || {}
       const currentPaid = details.amountPaid || 0
       const newPaid = currentPaid + Math.round(amount * 100)
+      const isFullyPaid = newPaid >= booking.price_total
 
       const { error } = await supabase
         .from('bookings')
         .update({
           booking_details: { ...details, amountPaid: newPaid },
-          payment_status: newPaid >= booking.price_total ? 'paid' : 'partial'
+          payment_status: isFullyPaid ? 'paid' : 'partial'
         })
         .eq('id', bookingId)
 
       if (error) throw error
       toast.success('Pagamento parziale registrato')
+
+      // DR7 Privilege — fire when partial completes the full balance.
+      if (isFullyPaid) {
+        const isCarWash = booking.service_type === 'car_wash'
+        fetch('/.netlify/functions/trigger-dr7-privilege', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId, kind: isCarWash ? 'lavaggio' : 'noleggio' }),
+        }).catch(() => { /* non-blocking */ })
+      }
+
       setPartialPayItemKey(null)
       loadUnpaidBookings()
     } catch (err: unknown) {
@@ -1425,6 +1437,17 @@ export default function UnpaidBookingsTab() {
       toast.success('Tutto segnato come pagato!')
       logAdminAction('mark_booking_extensions_paid', 'booking', booking.id, buildBookingContext(booking))
 
+      // DR7 Privilege — fire-and-forget. Backend (utils/dr7Privilege) is
+      // idempotent via dr7_privilege_sent_at.
+      {
+        const isCarWash = booking.service_type === 'car_wash'
+        fetch('/.netlify/functions/trigger-dr7-privilege', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: booking.id, kind: isCarWash ? 'lavaggio' : 'noleggio' }),
+        }).catch(() => { /* non-blocking */ })
+      }
+
       loadUnpaidBookings()
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
@@ -1571,6 +1594,13 @@ export default function UnpaidBookingsTab() {
         if (paymentMethod) noleggioUpdate.payment_method = paymentMethod
         await supabase.from('bookings').update(noleggioUpdate).eq('id', bookingId)
 
+        // DR7 Privilege — fire-and-forget per noleggio. Backend idempotente.
+        fetch('/.netlify/functions/trigger-dr7-privilege', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId, kind: 'noleggio' }),
+        }).catch(() => { /* non-blocking */ })
+
         // Each newly-paid rental needs its contract regenerated and the firma
         // link re-sent to the customer. Same pipeline used by the single-booking
         // "Segna Pagato" path (updatePaymentStatus). Best-effort — any failure
@@ -1604,6 +1634,13 @@ export default function UnpaidBookingsTab() {
         const pwUpdate: Record<string, unknown> = { payment_status: 'paid', status: 'confirmed' }
         if (paymentMethod) pwUpdate.payment_method = paymentMethod
         await supabase.from('bookings').update(pwUpdate).eq('id', pwId)
+
+        // DR7 Privilege — fire-and-forget per lavaggio. Backend idempotente.
+        fetch('/.netlify/functions/trigger-dr7-privilege', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: pwId, kind: 'lavaggio' }),
+        }).catch(() => { /* non-blocking */ })
       }
 
       for (const [bookingId, { booking, indices }] of penaliBookingUpdates) {
