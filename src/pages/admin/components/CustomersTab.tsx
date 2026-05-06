@@ -1362,6 +1362,65 @@ export default function CustomersTab() {
     }
   }
 
+  // Sends the "Promozione a ELITE" / "Promozione a MEMBER" template from
+  // Messaggi di Sistema Pro (matched by LABEL — admin-created templates have
+  // auto-generated keys). No fallback body: if the template is missing or
+  // disabled, nothing is sent.
+  async function sendStatusPromotionMessage(
+    customer: Customer | undefined,
+    newStatus: 'blacklist' | 'member' | 'elite' | null
+  ) {
+    if (!customer) return
+    if (newStatus !== 'member' && newStatus !== 'elite') return
+    const rawPhone = customer.phone || customer.telefono
+    if (!rawPhone) return
+
+    const targetLabel = newStatus === 'elite' ? 'Promozione a ELITE' : 'Promozione a MEMBER'
+
+    try {
+      const { data: rows } = await supabase
+        .from('system_messages')
+        .select('message_body, is_enabled, updated_at, label')
+        .ilike('label', targetLabel)
+        .like('message_key', 'pro_%')
+        .order('updated_at', { ascending: false })
+      const tpl = (rows || []).find(r => r.is_enabled !== false && r.message_body) || null
+      if (!tpl?.message_body) {
+        logger.warn(`[CustomersTab] Template "${targetLabel}" non trovato o disattivato — nessun messaggio inviato`)
+        return
+      }
+
+      const firstName = customer.nome || (customer.full_name || '').split(' ')[0] || ''
+      const message = tpl.message_body.replace(/\{nome\}/g, firstName)
+      if (!message.trim()) return
+
+      let phone = rawPhone.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
+      if (phone.startsWith('00')) phone = phone.substring(2)
+      if (phone.length === 10) phone = '39' + phone
+
+      const resp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customPhone: phone, customMessage: message, skipHeader: true })
+      })
+      const result = await resp.json().catch(() => ({}))
+      if (resp.ok && result?.success) {
+        await supabase.from('sent_messages_log').insert({
+          customer_id: customer.id,
+          customer_name: customer.full_name,
+          customer_phone: phone,
+          message_text: message,
+          template_label: targetLabel,
+          status: 'sent',
+        })
+      } else {
+        logger.warn(`[CustomersTab] Invio "${targetLabel}" fallito:`, result)
+      }
+    } catch (e) {
+      logger.warn(`[CustomersTab] Errore invio "${targetLabel}":`, e)
+    }
+  }
+
   async function handleUpdateCustomerStatus(customerId: string, newStatus: 'blacklist' | 'member' | 'elite' | null) {
     const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
       newStatus === 'elite' ? 'Elite' :
@@ -1393,6 +1452,11 @@ export default function CustomersTab() {
         (newStatus ?? 'new')
       )
       refreshClientStatus()
+
+      // Fire-and-forget WhatsApp notification when promoting to Member/Elite.
+      // Body comes from "Promozione a MEMBER" / "Promozione a ELITE" in
+      // Messaggi di Sistema Pro (matched by label).
+      void sendStatusPromotionMessage(target, newStatus)
 
       alert(`Status aggiornato a: ${statusLabel}`)
     } catch (error: unknown) {
@@ -1426,12 +1490,28 @@ export default function CustomersTab() {
         selectedCustomerIds.has(c.id) ? { ...c, status: newStatus } : c
       ))
       const tier = (newStatus ?? 'new')
+      const promotedTargets: Customer[] = []
       customers.forEach(c => {
         if (selectedCustomerIds.has(c.id)) {
           setClientStatusTier({ customerId: c.id, userId: c.user_id, email: c.email, phone: c.phone }, tier)
+          if (newStatus === 'member' || newStatus === 'elite') promotedTargets.push(c)
         }
       })
       refreshClientStatus()
+
+      // Fire-and-forget WhatsApp notifications for bulk promotion. Body from
+      // Messaggi di Sistema Pro template matched by label. Anti-spam delay
+      // between sends matches MessaggiSistemaProTab pacing (1.5s).
+      if (promotedTargets.length > 0) {
+        void (async () => {
+          for (let i = 0; i < promotedTargets.length; i++) {
+            await sendStatusPromotionMessage(promotedTargets[i], newStatus)
+            if (i < promotedTargets.length - 1) {
+              await new Promise(r => setTimeout(r, 1500))
+            }
+          }
+        })()
+      }
 
       // Clear selection
       setSelectedCustomerIds(new Set())
