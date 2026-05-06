@@ -187,17 +187,40 @@ export default function ReportTrafficTab() {
       )}
 
       {/* Internal data fallback banner — quando GA4 non e' raggiungibile
-          mostriamo una nota chiara cosi' il direttore sa che i numeri
-          arrivano dalla nostra DB, non da GA4. */}
+          mostriamo una nota chiara + bottone per connettere Google account
+          via OAuth (alternativa al service account problematico). */}
       {data?.dataSource === 'internal' && (
-        <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 text-amber-900 dark:text-amber-100 text-sm">
+        <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 text-amber-900 dark:text-amber-100 text-sm">
           <div className="font-semibold mb-1">Dati interni DR7 (GA4 non raggiungibile)</div>
-          <p className="text-xs leading-relaxed opacity-90">
-            Questi numeri vengono dalla nostra DB Supabase: prenotazioni create,
-            clienti registrati, fatturato pagato — NON sono visite/pageview di
-            traffico web. Per vedere il traffico vero (chi entra sul sito, da
-            dove, quante pagine guardano) serve risolvere il problema di accesso GA4 nel banner sottostante.
+          <p className="text-xs leading-relaxed opacity-90 mb-3">
+            Questi numeri vengono dalla nostra DB: prenotazioni, clienti, fatturato.
+            NON sono dati di traffico web. Per vedere il traffico reale (visite,
+            pagine, sorgenti) connetti il tuo account Google direttamente qui sotto —
+            nessun service account, nessun checkbox di GA da spuntare.
           </p>
+          <a
+            href="/.netlify/functions/ga-oauth-start"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 rounded-full text-sm font-semibold text-amber-900 dark:text-amber-100 hover:bg-amber-50 dark:hover:bg-amber-900/60 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M12 11v2h5.5c-.2 1.4-1.6 4-5.5 4-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.4l2.6-2.5C16.9 2.5 14.7 1.5 12 1.5 6.2 1.5 1.5 6.2 1.5 12S6.2 22.5 12 22.5c6.1 0 10.1-4.3 10.1-10.3 0-.7-.1-1.2-.2-1.7H12z"/></svg>
+            Connetti il mio account Google
+          </a>
+          <p className="text-[10px] mt-2 opacity-70">
+            Apriamo Google → tu acconsenti con <strong>dubai.rent7.0srl@gmail.com</strong> →
+            torni qui automaticamente. I dati GA4 reali appaiono entro 30 secondi.
+          </p>
+        </div>
+      )}
+
+      {/* Successo o errore OAuth dopo callback */}
+      {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ga_oauth') === 'connected' && (
+        <div className="bg-emerald-500/15 border border-emerald-500 rounded-xl p-3 text-emerald-900 dark:text-emerald-100 text-sm">
+          Account Google connesso. Ricarico i dati…
+        </div>
+      )}
+      {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ga_oauth_error') && (
+        <div className="bg-red-500/15 border border-red-500 rounded-xl p-3 text-red-900 dark:text-red-100 text-sm">
+          Connessione fallita: {new URLSearchParams(window.location.search).get('ga_oauth_error')}
         </div>
       )}
 

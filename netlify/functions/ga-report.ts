@@ -158,6 +158,12 @@ const handler: Handler = async (event) => {
 
   let blobEmail: string | undefined
   let blobKey: string | undefined
+  // OAuth refresh token (preferito quando il service account non funziona):
+  // l'admin connette il proprio Google account dal pulsante in UI e da li'
+  // in poi tutte le chiamate GA usano quel token. Non c'e' problema con
+  // 'questo email non corrisponde a un account Google' perche' e' una
+  // identita' Gmail vera, non un service account.
+  let oauthRefreshToken: string | undefined
   // Read GA creds from Supabase app_secrets (persistent storage that
   // doesn't count against the 4KB Lambda env-var cap).
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
@@ -167,15 +173,25 @@ const handler: Handler = async (event) => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
         auth: { autoRefreshToken: false, persistSession: false },
       })
-      const { data } = await supabase
+      const { data: credsData } = await supabase
         .from('app_secrets')
         .select('value')
         .eq('key', 'ga4_creds')
         .maybeSingle()
-      if (data?.value) {
-        const v = data.value as { privateKey?: string; clientEmail?: string }
+      if (credsData?.value) {
+        const v = credsData.value as { privateKey?: string; clientEmail?: string }
         blobKey = v.privateKey || undefined
         blobEmail = v.clientEmail || undefined
+      }
+      // OAuth refresh token (preferito se presente)
+      const { data: oauthData } = await supabase
+        .from('app_secrets')
+        .select('value')
+        .eq('key', 'ga4_oauth_refresh_token')
+        .maybeSingle()
+      if (oauthData?.value) {
+        const v = oauthData.value as { refresh_token?: string }
+        oauthRefreshToken = v.refresh_token || undefined
       }
     } catch { /* table may not exist yet */ }
   }
@@ -183,11 +199,14 @@ const handler: Handler = async (event) => {
   const hasFull = !!credsRaw
   const hasSplit = !!splitEmail && !!splitKey
   const hasBlob = !!blobKey
+  const hasOAuth = !!oauthRefreshToken
+    && !!process.env.GOOGLE_OAUTH_CLIENT_ID
+    && !!process.env.GOOGLE_OAUTH_CLIENT_SECRET
 
   const missing: string[] = []
   if (!propertyId) missing.push('GA4_PROPERTY_ID')
-  if (!hasFull && !hasSplit && !hasBlob) {
-    missing.push('credenziali GA4 (chiama POST /.netlify/functions/ga-setup-key per caricarle in Netlify Blobs, oppure imposta GA4_CLIENT_EMAIL+GA4_PRIVATE_KEY)')
+  if (!hasFull && !hasSplit && !hasBlob && !hasOAuth) {
+    missing.push('credenziali GA4 (clicca "Connetti Google" in Rendimento Sito per autenticarti col tuo account, oppure carica un service account)')
   }
 
   const empty: ReportPayload = {
@@ -258,11 +277,25 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    const auth = new google.auth.JWT({
-      email: clientEmail,
-      key: privateKey,
-      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
-    })
+    // Auth: preferiamo OAuth (account utente) se disponibile, altrimenti
+    // fallback su service account JWT. OAuth bypassa il problema di GA4
+    // che rifiuta certi email di service account.
+    let auth: any
+    if (hasOAuth) {
+      const oauth2 = new google.auth.OAuth2(
+        process.env.GOOGLE_OAUTH_CLIENT_ID,
+        process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+        process.env.GOOGLE_OAUTH_REDIRECT_URI,
+      )
+      oauth2.setCredentials({ refresh_token: oauthRefreshToken })
+      auth = oauth2
+    } else {
+      auth = new google.auth.JWT({
+        email: clientEmail,
+        key: privateKey,
+        scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+      })
+    }
     const analytics = google.analyticsdata({ version: 'v1beta', auth })
 
     const dates = rangeToDates(range)
