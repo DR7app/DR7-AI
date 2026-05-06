@@ -5657,7 +5657,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           />
         )}
 
-        {/* Limitation Override Modal (OTP director approval) */}
+        {/* Limitation Override Modal (OTP director approval).
+            requireNotes: per le modifiche di prenotazioni noleggio
+            (paid_rental_modify) l'operatore deve scrivere una motivazione
+            che viene mostrata nell'email a Valerio e salvata nel log
+            attività operatori. */}
         <LimitationOverrideModal
           isOpen={limitationState.isOpen}
           limitationCode={limitationState.limitationCode}
@@ -5665,6 +5669,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           actionContext={limitationState.actionContext}
           draftSessionId={draftSessionId}
           flowType={flowType}
+          requireNotes={limitationState.limitationCode === 'paid_rental_modify'}
           onClose={closeLimitation}
           onCancel={() => {
             cancelLimitation()

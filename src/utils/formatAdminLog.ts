@@ -266,7 +266,15 @@ export function formatAdminLog(log: AdminLogEntry): { title: string; meta: strin
     case 'cassa_cauzione':
       return { title: 'Cauzione (cassa)', meta: joinParts(cust, d.amount && eur(d.amount), d.type) }
     case 'limitation_override_approved':
-      return { title: 'Limitazione sbloccata via OTP', meta: joinParts(d.target, d.reason) }
+      return {
+        title: 'Limitazione sbloccata via OTP',
+        meta: joinParts(
+          d.limitation_code,
+          d.notes && `Note: "${String(d.notes).slice(0, 120)}${String(d.notes).length > 120 ? '…' : ''}"`,
+          d.target,
+          d.reason,
+        ),
+      }
 
     // ─── Centralina Pro ──────────────────────────────────────────────────
     case 'centralina_pro_updated':

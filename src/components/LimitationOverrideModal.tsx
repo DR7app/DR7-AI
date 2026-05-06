@@ -17,9 +17,15 @@ interface LimitationOverrideModalProps {
    * Vengono renderizzati come tabella nella mail.
    */
   details?: Record<string, string | number | null | undefined> | Array<{ label: string; value: string }>
+  /**
+   * Quando true, l'operatore deve compilare un campo "Note" obbligatorio
+   * prima di poter inviare la richiesta OTP. Le note vengono incluse
+   * nell'email alla direzione e salvate nel log attività operatori.
+   */
+  requireNotes?: boolean
   onClose?: () => void
   onCancel?: () => void
-  onOverrideApproved: (overrideId: string) => void
+  onOverrideApproved: (overrideId: string, notes?: string) => void
 }
 
 type Step = 'blocked' | 'otp-sent' | 'verified'
@@ -32,6 +38,7 @@ export default function LimitationOverrideModal({
   draftSessionId,
   flowType,
   details,
+  requireNotes = false,
   onClose: _onClose,
   onCancel,
   onOverrideApproved,
@@ -41,6 +48,7 @@ export default function LimitationOverrideModal({
   const [verifying, setVerifying] = useState(false)
   const [overrideId, setOverrideId] = useState<string | null>(null)
   const [otpCode, setOtpCode] = useState('')
+  const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const otpInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -54,6 +62,7 @@ export default function LimitationOverrideModal({
       setStep('blocked')
       setOverrideId(null)
       setOtpCode('')
+      setNotes('')
       setError(null)
       setSending(false)
       setVerifying(false)
@@ -70,6 +79,10 @@ export default function LimitationOverrideModal({
   }, [otpCode, step])
 
   async function sendOtp() {
+    if (requireNotes && notes.trim() === '') {
+      setError('Le note sono obbligatorie per richiedere l\'autorizzazione.')
+      return
+    }
     setSending(true)
     setError(null)
     try {
@@ -84,6 +97,7 @@ export default function LimitationOverrideModal({
           draftSessionId,
           flowType,
           details,
+          notes: notes.trim() || undefined,
         })
       })
       const data = await res.json()
@@ -97,7 +111,7 @@ export default function LimitationOverrideModal({
       if (data.autoApproved) {
         setStep('verified')
         toast.success('Approvato direttamente (direzione)')
-        onOverrideApproved(data.overrideId)
+        onOverrideApproved(data.overrideId, notes.trim() || undefined)
         return
       }
       setStep('otp-sent')
@@ -130,7 +144,7 @@ export default function LimitationOverrideModal({
       toast.success('Autorizzazione concessa solo per questo evento.')
       // Auto-close after 1.5s so the user sees the confirmation
       setTimeout(() => {
-        onOverrideApproved(overrideId!)
+        onOverrideApproved(overrideId!, notes.trim() || undefined)
       }, 1500)
     } catch {
       setError('Verifica non riuscita, riprova')
@@ -224,6 +238,25 @@ export default function LimitationOverrideModal({
             <p className="text-[11px] text-theme-text-muted mt-1.5 font-mono">{limitationCode}</p>
           </div>
 
+          {/* Notes textarea — required when requireNotes=true. Le note vengono
+              incluse nell'email alla direzione e nel log attività operatori. */}
+          {step === 'blocked' && requireNotes && (
+            <div className="mb-5">
+              <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1.5">
+                Note operatore <span className="text-theme-error">*</span>
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="Spiega il motivo della modifica (es. cliente ha chiesto cambio data, errore nel veicolo, ecc.)"
+                className="w-full px-3 py-2.5 rounded-xl border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:outline-none transition-all resize-none"
+              />
+              <p className="text-[11px] text-theme-text-muted mt-1.5 text-right">{notes.length}/500</p>
+            </div>
+          )}
+
           {step === 'otp-sent' && (
             <div className="mb-2">
               <input
@@ -263,8 +296,8 @@ export default function LimitationOverrideModal({
                 )}
                 <button
                   onClick={sendOtp}
-                  disabled={sending}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[44px] bg-dr7-gold text-white rounded-xl transition-all disabled:opacity-50 text-sm font-semibold shadow-lg shadow-dr7-gold/20"
+                  disabled={sending || (requireNotes && notes.trim() === '')}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[44px] bg-dr7-gold text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold shadow-lg shadow-dr7-gold/20"
                 >
                   {!sending && (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>

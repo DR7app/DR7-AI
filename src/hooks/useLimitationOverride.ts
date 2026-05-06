@@ -15,6 +15,7 @@ interface OverrideEntry {
   limitationCode: string
   limitationMessage: string
   approvedAt: string
+  notes?: string
 }
 
 /**
@@ -106,13 +107,14 @@ export function useLimitationOverride() {
     })
   }, [])
 
-  const handleOverrideApproved = useCallback((overrideId: string) => {
+  const handleOverrideApproved = useCallback((overrideId: string, notes?: string) => {
     const code = limitationState.limitationCode
     overrideMap.current.set(code, {
       overrideId,
       limitationCode: code,
       limitationMessage: limitationState.limitationMessage,
       approvedAt: new Date().toISOString(),
+      notes,
     })
     setOverrideCodes(new Set(overrideMap.current.keys()))
 
@@ -123,6 +125,7 @@ export function useLimitationOverride() {
       action_context: limitationState.actionContext,
       draft_session_id: draftSessionIdRef.current,
       flow_type: flowTypeRef.current,
+      ...(notes ? { notes } : {}),
     })
 
     setLimitationState(prev => ({ ...prev, isOpen: false }))
@@ -185,6 +188,7 @@ export function useLimitationOverride() {
       limitationCode: e.limitationCode,
       limitationMessage: e.limitationMessage,
       approvedAt: e.approvedAt,
+      ...(e.notes ? { notes: e.notes } : {}),
       draftSessionId: draftSessionIdRef.current,
     }))
   }, [])

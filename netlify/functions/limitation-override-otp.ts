@@ -41,11 +41,15 @@ export const handler: Handler = async (event) => {
 
     // ── SEND OTP ──
     if (action === 'send') {
-      const { limitationCode, limitationMessage, actionContext, draftSessionId, flowType, details } = body
+      const { limitationCode, limitationMessage, actionContext, draftSessionId, flowType, details, notes } = body
       // `details` (opzionale): array di { label, value } o oggetto piatto
       // Es: [ { label: 'Cliente', value: 'Mario Rossi' }, { label: 'Veicolo', value: 'BMW X5' } ]
       // O equivalente: { Cliente: 'Mario Rossi', Veicolo: 'BMW X5' }
       // Vengono mostrati nella mail come tabella sotto la 'Limitazione'.
+      // `notes` (opzionale ma obbligatorio per modifiche prenotazioni):
+      // motivazione testo libero scritta dall'operatore. Mostrata nell'email
+      // alla direzione e salvata in metadata per il log attività.
+      const trimmedNotes = typeof notes === 'string' ? notes.trim().slice(0, 500) : ''
 
       if (!limitationCode || !limitationMessage) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing limitationCode or limitationMessage' }) }
@@ -86,6 +90,7 @@ export const handler: Handler = async (event) => {
             requested_by: authUser!.email,
             draft_session_id: draftSessionId,
             flow_type: flowType || 'booking_create',
+            ...(trimmedNotes ? { notes: trimmedNotes } : {}),
             ...(isSelfApproval ? { auto_approved: true, reason: 'requestor is OTP recipient' } : {})
           }
         })
@@ -143,6 +148,13 @@ export const handler: Handler = async (event) => {
            </div>`
         : ''
 
+      const notesHtml = trimmedNotes
+        ? `<div style="background:#fff8e1;border:1px solid #d4af37;border-radius:8px;padding:16px;margin:20px 0;">
+             <p style="margin:0 0 8px;color:#7a5f00;font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">Note operatore</p>
+             <p style="margin:0;color:#212529;font-size:14px;line-height:1.5;white-space:pre-wrap;">${escapeHtml(trimmedNotes)}</p>
+           </div>`
+        : ''
+
       const resend = new Resend(apiKey)
       const { error: emailError } = await resend.emails.send({
         from: 'DR7 Empire <info@dr7.app>',
@@ -159,6 +171,7 @@ export const handler: Handler = async (event) => {
               <p style="margin: 8px 0 0; color: #856404;">${escapeHtml(limitationMessage)}</p>
             </div>
             ${detailsTableHtml}
+            ${notesHtml}
             <table style="width: 100%; margin: 20px 0; font-size: 13px; color: #6c757d;">
               <tr><td style="padding: 4px 0; font-weight: 600;">Codice tecnico:</td><td style="font-family:monospace;">${escapeHtml(limitationCode)}</td></tr>
               <tr><td style="padding: 4px 0; font-weight: 600;">Richiesto da:</td><td>${escapeHtml(authUser!.email || 'Operatore')}</td></tr>
