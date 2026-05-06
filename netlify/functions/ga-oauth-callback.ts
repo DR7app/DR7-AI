@@ -27,7 +27,7 @@ const handler: Handler = async (event) => {
     if (error) {
         return {
             statusCode: 302,
-            headers: { Location: `/admin/rendimento-sito?ga_oauth_error=${encodeURIComponent(error)}` },
+            headers: { Location: `/admin?ga_oauth_error=${encodeURIComponent(error)}` },
             body: '',
         }
     }
@@ -50,7 +50,7 @@ const handler: Handler = async (event) => {
             // dovrebbe sempre arrivare.
             return {
                 statusCode: 302,
-                headers: { Location: '/admin/rendimento-sito?ga_oauth_error=no_refresh_token' },
+                headers: { Location: '/admin?ga_oauth_error=no_refresh_token' },
                 body: '',
             }
         }
@@ -77,21 +77,21 @@ const handler: Handler = async (event) => {
             console.error('[ga-oauth-callback] upsert error:', upsertErr)
             return {
                 statusCode: 302,
-                headers: { Location: `/admin/rendimento-sito?ga_oauth_error=${encodeURIComponent('save_failed: ' + upsertErr.message)}` },
+                headers: { Location: `/admin?ga_oauth_error=${encodeURIComponent('save_failed: ' + upsertErr.message)}` },
                 body: '',
             }
         }
 
         return {
             statusCode: 302,
-            headers: { Location: '/admin/rendimento-sito?ga_oauth=connected' },
+            headers: { Location: '/admin?ga_oauth=connected' },
             body: '',
         }
     } catch (err: any) {
         console.error('[ga-oauth-callback] error:', err)
         return {
             statusCode: 302,
-            headers: { Location: `/admin/rendimento-sito?ga_oauth_error=${encodeURIComponent(err?.message || 'unknown')}` },
+            headers: { Location: `/admin?ga_oauth_error=${encodeURIComponent(err?.message || 'unknown')}` },
             body: '',
         }
     }

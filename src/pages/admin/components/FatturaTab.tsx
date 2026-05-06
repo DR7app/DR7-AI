@@ -99,11 +99,62 @@ export default function FatturaTab() {
   const [currentEmail, setCurrentEmail] = useState<string | null>(null)
   const canManagePayments = !!currentEmail && PAYMENT_MANAGERS.includes(currentEmail.toLowerCase())
   const [updatingStato, setUpdatingStato] = useState<string | null>(null)
+  const [refreshingAll, setRefreshingAll] = useState(false)
+  const [lastSdiRefresh, setLastSdiRefresh] = useState<number | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setCurrentEmail(data.session?.user?.email || null)
     })
+  }, [])
+
+  // Refresh stati SDI per TUTTE le fatture in 'sending'/'sent' su Aruba e
+  // ricarica la lista. Manuale (bottone) o automatico (mount + ogni 60s).
+  // Throttle: salta se l'ultima chiamata è < 30s fa, per non sparare richieste
+  // ad Aruba a ogni focus.
+  async function refreshAllSdi(opts: { silent?: boolean } = {}) {
+    const now = Date.now()
+    if (lastSdiRefresh && now - lastSdiRefresh < 30_000) {
+      if (!opts.silent) toast('Aggiornato di recente, riprova tra qualche secondo')
+      return
+    }
+    setRefreshingAll(true)
+    setLastSdiRefresh(now)
+    try {
+      const res = await authFetch('/.netlify/functions/check-sdi-statuses', { method: 'POST' })
+      const json = await res.json()
+      if (!opts.silent) {
+        if (json.updated > 0) {
+          const accepted = (json.transitions || []).filter((t: { to: string }) => t.to === 'accepted').length
+          const rejected = (json.transitions || []).filter((t: { to: string }) => t.to === 'rejected').length
+          const sent = (json.transitions || []).filter((t: { to: string }) => t.to === 'sent').length
+          const parts: string[] = []
+          if (accepted) parts.push(`${accepted} accettate`)
+          if (rejected) parts.push(`${rejected} scartate`)
+          if (sent) parts.push(`${sent} inviate`)
+          toast.success(`Stati aggiornati: ${parts.join(', ') || json.updated + ' fatture'}`)
+        } else if (json.checked > 0) {
+          toast(`Verificate ${json.checked} fatture, nessun cambio di stato.`)
+        } else {
+          toast('Nessuna fattura in attesa di risposta SDI.')
+        }
+      }
+      await loadInvoices()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!opts.silent) toast.error('Errore aggiornamento: ' + msg)
+      else console.warn('[FatturaTab] silent SDI refresh failed:', msg)
+    } finally {
+      setRefreshingAll(false)
+    }
+  }
+
+  // Auto-refresh: una volta al mount + ogni 60s mentre la tab è aperta.
+  useEffect(() => {
+    refreshAllSdi({ silent: true })
+    const id = setInterval(() => refreshAllSdi({ silent: true }), 60_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function togglePagato(invoice: Invoice) {
@@ -380,7 +431,15 @@ export default function FatturaTab() {
           </div>
         </div>
         {view === 'emesse' && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => refreshAllSdi()}
+              disabled={refreshingAll}
+              className="px-4 py-2 rounded-full font-medium transition-colors bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 flex items-center gap-2"
+              title="Interroga Aruba e aggiorna lo stato SDI di tutte le fatture in attesa"
+            >
+              {refreshingAll ? 'Aggiornamento…' : 'Aggiorna stati SDI'}
+            </button>
             <button
               onClick={() => {
                 setMultiSelectMode(!multiSelectMode)
@@ -577,4 +636,36 @@ export default function FatturaTab() {
       )}
     </div>
   )
+}
+
+// Badge counter — fatture con stato SDI problematico (rejected/scartata/error)
+// che richiedono intervento (reinvio o nota di credito).
+// Polling ogni 60s + realtime sul cambio sdi_status.
+// eslint-disable-next-line react-refresh/only-export-components
+export function useFatturaScartataCount() {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { count: n } = await supabase
+        .from('fatture')
+        .select('id', { count: 'exact', head: true })
+        .in('sdi_status', ['rejected', 'scartata', 'error'])
+      if (!cancelled && typeof n === 'number') setCount(n)
+    }
+    load()
+    const id = setInterval(load, 60_000)
+    const channel = supabase
+      .channel('fattura-scartata-count')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fatture' }, load)
+      .subscribe()
+    return () => {
+      cancelled = true
+      clearInterval(id)
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  return count
 }

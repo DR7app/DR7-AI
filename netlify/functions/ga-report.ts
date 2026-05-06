@@ -164,6 +164,7 @@ const handler: Handler = async (event) => {
   // 'questo email non corrisponde a un account Google' perche' e' una
   // identita' Gmail vera, non un service account.
   let oauthRefreshToken: string | undefined
+  let oauthLookupError: string | undefined
   // Read GA creds from Supabase app_secrets (persistent storage that
   // doesn't count against the 4KB Lambda env-var cap).
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
@@ -184,16 +185,19 @@ const handler: Handler = async (event) => {
         blobEmail = v.clientEmail || undefined
       }
       // OAuth refresh token (preferito se presente)
-      const { data: oauthData } = await supabase
+      const { data: oauthData, error: oauthErr } = await supabase
         .from('app_secrets')
         .select('value')
         .eq('key', 'ga4_oauth_refresh_token')
         .maybeSingle()
+      if (oauthErr) oauthLookupError = oauthErr.message
       if (oauthData?.value) {
         const v = oauthData.value as { refresh_token?: string }
         oauthRefreshToken = v.refresh_token || undefined
       }
-    } catch { /* table may not exist yet */ }
+    } catch (e) {
+      oauthLookupError = e instanceof Error ? e.message : String(e)
+    }
   }
 
   const hasFull = !!credsRaw
@@ -202,6 +206,29 @@ const handler: Handler = async (event) => {
   const oauthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
   const oauthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
   const hasOAuth = !!oauthRefreshToken && !!oauthClientId && !!oauthClientSecret
+
+  // Diagnostic log on every call — printed BEFORE we decide auth path so the
+  // Netlify function logs always show exactly which credentials were resolved
+  // and which path will be taken. Never logs secret values, only presence.
+  console.log('[ga-report] creds-resolution', {
+    propertyIdSet: !!propertyId,
+    hasFull,
+    hasSplit,
+    hasBlob,
+    oauth: {
+      refreshTokenFromSupabase: !!oauthRefreshToken,
+      refreshTokenSrc: oauthRefreshToken ? 'app_secrets.ga4_oauth_refresh_token' : null,
+      clientIdSrc: process.env.GOOGLE_OAUTH_CLIENT_ID
+        ? 'GOOGLE_OAUTH_CLIENT_ID'
+        : process.env.GOOGLE_CLIENT_ID ? 'GOOGLE_CLIENT_ID (legacy)' : null,
+      clientSecretSrc: process.env.GOOGLE_OAUTH_CLIENT_SECRET
+        ? 'GOOGLE_OAUTH_CLIENT_SECRET'
+        : process.env.GOOGLE_CLIENT_SECRET ? 'GOOGLE_CLIENT_SECRET (legacy)' : null,
+      hasOAuth,
+    },
+    oauthLookupError: oauthLookupError || null,
+    chosenPath: hasOAuth ? 'oauth' : (hasFull || hasSplit || hasBlob) ? 'jwt-service-account' : 'none',
+  })
 
   const missing: string[] = []
   if (!propertyId) missing.push('GA4_PROPERTY_ID')
@@ -287,12 +314,14 @@ const handler: Handler = async (event) => {
       const oauth2 = new google.auth.OAuth2(oauthClientId, oauthClientSecret, redirectUri)
       oauth2.setCredentials({ refresh_token: oauthRefreshToken })
       auth = oauth2
+      console.log('[ga-report] using OAuth user-account auth')
     } else {
       auth = new google.auth.JWT({
         email: clientEmail,
         key: privateKey,
         scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
       })
+      console.log('[ga-report] using service-account JWT auth', { clientEmail })
     }
     const analytics = google.analyticsdata({ version: 'v1beta', auth })
 

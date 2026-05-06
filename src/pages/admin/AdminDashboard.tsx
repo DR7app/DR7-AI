@@ -5,6 +5,7 @@ import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import RentalTabs from './components/RentalTabs'
 import { useBirthdayCount } from './components/BirthdaysTab'
+import { useFatturaScartataCount } from './components/FatturaTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import AlarmInventoryModal from '../../components/admin/AlarmInventoryModal'
 import MyDayEditorModal from './components/MyDayEditorModal'
@@ -122,6 +123,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
+  const scartataCount = useFatturaScartataCount()
   const { role: adminRole, canViewFinancials, loading: roleLoading } = useAdminRole()
   const { theme, toggleTheme } = useTheme()
 
@@ -390,6 +392,7 @@ export default function AdminDashboard() {
             const firstTab = visibleTabs[0].tab
             const sectionActive = isSectionActive(section.name)
             const showBirthdayBadge = section.name === 'Marketing' && birthdayCount > 0
+            const showScartataBadge = section.name === 'Amministrazione' && scartataCount > 0
             return (
               <button
                 key={section.name}
@@ -407,6 +410,11 @@ export default function AdminDashboard() {
                 </span>
                 {showBirthdayBadge && (
                   <span className="bg-dr7-gold/20 text-dr7-gold text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2">{birthdayCount}</span>
+                )}
+                {showScartataBadge && (
+                  <span className="bg-red-500/30 text-red-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2" title={`${scartataCount} fattur${scartataCount === 1 ? 'a scartata' : 'e scartate'} / errore SDI`}>
+                    {scartataCount}
+                  </span>
                 )}
               </button>
             )
@@ -596,6 +604,11 @@ export default function AdminDashboard() {
                       }`}
                     >
                       {t.label}
+                      {t.tab === 'fattura' && scartataCount > 0 && (
+                        <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500/30 text-red-300 text-[10px] font-bold align-middle">
+                          {scartataCount}
+                        </span>
+                      )}
                       {isActive && (
                         <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-primary-dark via-primary to-primary-light" />
                       )}
