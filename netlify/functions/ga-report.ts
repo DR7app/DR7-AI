@@ -25,7 +25,7 @@ interface KpiBlock {
 interface ReportPayload {
   configured: boolean
   missing: string[]
-  range: '7d' | '28d' | '90d'
+  range: '7d' | '28d' | '90d' | '180d' | '365d'
   kpis: KpiBlock | null
   traffic: SeriesPoint[]
   distribution: ChannelSlice[]
@@ -62,7 +62,7 @@ async function buildInternalFallback(range: string): Promise<{ kpis: KpiBlock; w
   }
   try {
     const sb = createClient(supabaseUrlEnv, supabaseKeyEnv)
-    const days = range === '7d' ? 7 : range === '90d' ? 90 : 28
+    const days = range === '7d' ? 7 : range === '90d' ? 90 : range === '180d' ? 180 : range === '365d' ? 365 : 28
     const now = new Date()
     const start = new Date(now.getTime() - days * 86400000).toISOString()
     const prevStart = new Date(now.getTime() - days * 2 * 86400000).toISOString()
@@ -114,7 +114,7 @@ async function buildInternalFallback(range: string): Promise<{ kpis: KpiBlock; w
 }
 
 function rangeToDates(range: string): { startDate: string; endDate: string; prevStart: string; prevEnd: string } {
-  const days = range === '7d' ? 7 : range === '90d' ? 90 : 28
+  const days = range === '7d' ? 7 : range === '90d' ? 90 : range === '180d' ? 180 : range === '365d' ? 365 : 28
   return {
     startDate: `${days}daysAgo`,
     endDate: 'today',

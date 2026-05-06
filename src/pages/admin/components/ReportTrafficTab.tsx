@@ -30,7 +30,7 @@ interface TopPage { page: string; sessions: number; pageviews: number }
 interface ReportPayload {
   configured: boolean
   missing: string[]
-  range: '7d' | '28d' | '90d'
+  range: '7d' | '28d' | '90d' | '180d' | '365d'
   kpis: KpiBlock | null
   traffic: SeriesPoint[]
   distribution: ChannelSlice[]
@@ -49,6 +49,8 @@ const RANGES = [
   { key: '7d',  label: '7 giorni' },
   { key: '28d', label: '28 giorni' },
   { key: '90d', label: '90 giorni' },
+  { key: '180d', label: '6 mesi' },
+  { key: '365d', label: '1 anno' },
 ] as const
 type RangeKey = typeof RANGES[number]['key']
 
