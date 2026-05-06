@@ -29,13 +29,17 @@ export interface PollResult {
     unknownStatuses?: { numero: string; remoteStatus: string }[]
 }
 
-// Aruba rate-limits aggressively (HTTP 429 "Troppe richieste") if we
-// burst-fire 100+ requests. Empirically 200ms between calls + max 30 per
-// invocation stays safe within the 10s Netlify timeout AND keeps Aruba happy.
-// Multiple invocations (cron every 30 min + manual button + 60s auto from
-// FatturaTab) catch up on the rest in a few cycles, oldest-first.
-const ARUBA_THROTTLE_MS = 200
-const MAX_PER_INVOCATION = 30
+// Aruba rate-limits aggressively (HTTP 429 "Troppe richieste"). Empirical
+// data from production triggers:
+//   - 30 req @ 200ms = 27/30 errored out (429)
+//   - 30 req @ 0ms   = 165/180 errored out (429)
+// Aruba's bucket appears to refresh ~1 req/sec. Using 1200ms throttle
+// + 7 per invocation = ~8.4s, fits within 10s Netlify timeout AND stays
+// within Aruba's tolerance. Multiple invocations (cron 30min + auto-refresh
+// every 60s from FatturaTab) catch up the backlog. With 180 stuck:
+// 180/7 = ~26 cycles; at 1 cycle/min from FatturaTab, ~26 minutes to clear.
+const ARUBA_THROTTLE_MS = 1200
+const MAX_PER_INVOCATION = 7
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -156,6 +160,13 @@ export async function pollAllPendingSdi(): Promise<PollResult> {
                     filename: lookupFilename || '(missing)',
                     error: msg.slice(0, 200),
                 })
+            }
+            // If Aruba is rate-limiting, stop the loop early — banging more
+            // requests against a bucket that just rejected us only deepens
+            // the cooldown. Next invocation (cron / auto-refresh) retries.
+            if (msg.includes('429')) {
+                console.warn('[SDI Poll] Aruba rate-limited (429); aborting batch early')
+                break
             }
         }
     }
