@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { detectCardType, logCardAttempt, voidNexiTransaction, cancelBooking, notifyPrepaidBlocked } from './prepaid-card-guard';
 import { renderTemplate } from './utils/messageTemplates';
+import { getClubCashbackPct } from './utils/dr7ClubCashback';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -1104,35 +1105,39 @@ const handler: Handler = async (event) => {
                     }).eq('id', booking.id)
 
                     // Don't continue with bonus — payment refused
-                } else if ((isCredito || isDebito) && isInitialBooking && isEligibleService) {
-                    // CREDIT WALLET BONUS: credito 6%, debito 3%
-                    // Only for initial car rental + lavaggio bookings
-                    const percentage = isCredito ? 0.06 : 0.03;
-                    const bonusCents = Math.round(paidCents * percentage);
-                    const bonusEur = (bonusCents / 100).toFixed(2);
-                    const percentLabel = isCredito ? '6%' : '3%';
-                    const cardLabel = isCredito ? 'carta di credito' : 'carta di debito';
-
-                    console.log(`[nexi-payment-callback] ${cardLabel} bonus: €${bonusEur} (${percentLabel} of €${amountEur})`);
-
-                    try {
-                        // Find user_id for credit wallet (user_credit_balance)
-                        let userId = booking.user_id;
-
-                        // If no user_id on booking, look up by email in auth.users
-                        if (!userId) {
-                            const custEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase().trim();
-                            if (custEmail) {
-                                const { data: authUsers } = await supabase.auth.admin.listUsers();
-                                const matchedUser = authUsers?.users?.find((u: any) =>
-                                    u.email?.toLowerCase().trim() === custEmail
-                                );
-                                if (matchedUser) {
-                                    userId = matchedUser.id;
-                                    console.log(`[nexi-payment-callback] Found auth user by email: ${custEmail} → ${userId}`);
-                                }
+                } else if (isCredito || isDebito) {
+                    // DR7 CLUB TIER CASHBACK: Access 2% / Black 3% / Signature 4%
+                    // Applies to ALL card payments (booking, extension, topup, danni, etc.)
+                    // Only granted to active DR7 Club members. Non-Club: no cashback.
+                    // Stored in user_credit_balance with reference_type='card_bonus'
+                    // so daily interest accrual excludes it from principal.
+                    let userId = booking.user_id;
+                    if (!userId) {
+                        const custEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase().trim();
+                        if (custEmail) {
+                            const { data: authUsers } = await supabase.auth.admin.listUsers();
+                            const matchedUser = authUsers?.users?.find((u: any) =>
+                                u.email?.toLowerCase().trim() === custEmail
+                            );
+                            if (matchedUser) {
+                                userId = matchedUser.id;
+                                console.log(`[nexi-payment-callback] Found auth user by email: ${custEmail} → ${userId}`);
                             }
                         }
+                    }
+
+                    const cashbackPct = userId ? await getClubCashbackPct(supabase, userId) : null;
+
+                    if (cashbackPct == null) {
+                        console.log(`[nexi-payment-callback] No active DR7 Club for user ${userId || '(unknown)'} — skipping cashback`);
+                    } else try {
+                        const percentage = cashbackPct / 100;
+                        const bonusCents = Math.round(paidCents * percentage);
+                        const bonusEur = (bonusCents / 100).toFixed(2);
+                        const percentLabel = `${cashbackPct}%`;
+                        const cardLabel = isCredito ? 'carta di credito' : 'carta di debito';
+
+                        console.log(`[nexi-payment-callback] DR7 Club cashback ${percentLabel} (${cardLabel}): €${bonusEur} of €${amountEur} for ${paymentPurpose}`);
 
                         if (userId) {
                             // Get or create credit balance
