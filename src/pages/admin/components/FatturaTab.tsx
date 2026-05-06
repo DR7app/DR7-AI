@@ -151,13 +151,11 @@ export default function FatturaTab() {
     }
   }
 
-  // Auto-refresh: una volta al mount + ogni 60s mentre la tab è aperta.
-  useEffect(() => {
-    refreshAllSdi({ silent: true })
-    const id = setInterval(() => refreshAllSdi({ silent: true }), 60_000)
-    return () => clearInterval(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // No auto-refresh: l'utente non vuole che la tab si auto-aggiorni mentre
+  // sta lavorando (la lista che si ricarica interrompe il flusso). Il
+  // refresh stati SDI è solo manuale via i bottoni "Aggiorna stati SDI" /
+  // "Riconcilia con Aruba". Il cron server-side (ogni 30 min) tiene
+  // comunque allineato il DB in background.
 
   // Riconciliazione bulk con Aruba — utile quando il polling è in ritardo
   // e admin vede stati diversi tra dashboard Aruba e admin (es: 29 scartate
@@ -616,7 +614,7 @@ export default function FatturaTab() {
                         {invoice.sdi_status === 'accepted' ? 'Accettata SDI' :
                           invoice.sdi_status === 'sent' ? 'Inviata SDI' :
                             invoice.sdi_status === 'sending' ? 'Invio...' :
-                              invoice.sdi_status === 'rejected' ? 'Rifiutata' :
+                              invoice.sdi_status === 'rejected' ? 'Scartata' :
                                 invoice.sdi_status === 'scartata' ? 'Scartata' :
                                   invoice.sdi_status === 'error' ? 'Errore SDI' :
                                     'Bozza'}
