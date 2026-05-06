@@ -25,6 +25,8 @@ export interface PollResult {
     updated: number
     errors: number
     transitions: { id: string; numero: string; from: string; to: string }[]
+    errorSamples?: { numero: string; filename: string; error: string }[]
+    unknownStatuses?: { numero: string; remoteStatus: string }[]
 }
 
 export async function pollAllPendingSdi(): Promise<PollResult> {
@@ -44,20 +46,55 @@ export async function pollAllPendingSdi(): Promise<PollResult> {
     let updated = 0
     let errors = 0
     const transitions: PollResult['transitions'] = []
+    const errorSamples: NonNullable<PollResult['errorSamples']> = []
+    const unknownStatuses: NonNullable<PollResult['unknownStatuses']> = []
 
     for (const invoice of pendingInvoices) {
+        const lookupFilename = invoice.aruba_upload_filename || invoice.xml_filename
         try {
-            const lookupFilename = invoice.aruba_upload_filename || invoice.xml_filename
             const remoteInvoice = await checkArubaStatus(lookupFilename)
             const invoiceObj = remoteInvoice.invoices?.[0] || remoteInvoice
             const invoiceStatus = invoiceObj.status || invoiceObj.invoiceStatus || ''
-            const remoteStatus = invoiceStatus.toLowerCase()
+            const remoteStatus = invoiceStatus.toLowerCase().trim()
 
+            // Aruba canonical statuses (it_IT). Mapping covers all cases
+            // observed plus the aliases SDI uses pre-Aruba parsing.
+            //   - in_elaborazione / inviata / spedita     -> sent
+            //   - consegnata / consegnato                 -> accepted
+            //   - scartata / mancata consegna             -> rejected
+            //   - errore elaborazione / errore_consegna   -> error
+            // Anything else is captured in unknownStatuses so we can map it
+            // explicitly instead of leaving fatture stuck on "Invio…".
             let sdiStatus = invoice.sdi_status
-            if (remoteStatus === 'consegnata') sdiStatus = 'accepted'
-            else if (remoteStatus === 'scartata' || remoteStatus === 'mancata consegna') sdiStatus = 'rejected'
-            else if (remoteStatus === 'errore elaborazione') sdiStatus = 'error'
-            else if (remoteStatus === 'inviata') sdiStatus = 'sent'
+            if (remoteStatus === 'consegnata' || remoteStatus === 'consegnato') {
+                sdiStatus = 'accepted'
+            } else if (
+                remoteStatus === 'scartata' ||
+                remoteStatus === 'rifiutata' ||
+                remoteStatus === 'mancata consegna' ||
+                remoteStatus === 'mancata_consegna'
+            ) {
+                sdiStatus = 'rejected'
+            } else if (
+                remoteStatus === 'errore elaborazione' ||
+                remoteStatus === 'errore_consegna' ||
+                remoteStatus === 'errore'
+            ) {
+                sdiStatus = 'error'
+            } else if (
+                remoteStatus === 'inviata' ||
+                remoteStatus === 'spedita' ||
+                remoteStatus === 'in_elaborazione' ||
+                remoteStatus === 'in elaborazione' ||
+                remoteStatus === 'ricevuta' ||
+                remoteStatus === 'in_consegna'
+            ) {
+                sdiStatus = 'sent'
+            } else if (remoteStatus) {
+                if (unknownStatuses.length < 8) {
+                    unknownStatuses.push({ numero: invoice.numero_fattura, remoteStatus })
+                }
+            }
 
             if (sdiStatus !== invoice.sdi_status) {
                 await supabase
@@ -77,8 +114,23 @@ export async function pollAllPendingSdi(): Promise<PollResult> {
             const msg = err instanceof Error ? err.message : String(err)
             console.error(`[SDI Poll] error on ${invoice.numero_fattura}:`, msg)
             errors++
+            if (errorSamples.length < 10) {
+                errorSamples.push({
+                    numero: invoice.numero_fattura,
+                    filename: lookupFilename || '(missing)',
+                    error: msg.slice(0, 200),
+                })
+            }
         }
     }
 
-    return { success: true, checked: pendingInvoices.length, updated, errors, transitions }
+    return {
+        success: true,
+        checked: pendingInvoices.length,
+        updated,
+        errors,
+        transitions,
+        ...(errorSamples.length > 0 ? { errorSamples } : {}),
+        ...(unknownStatuses.length > 0 ? { unknownStatuses } : {}),
+    }
 }
