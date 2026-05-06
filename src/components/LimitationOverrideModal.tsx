@@ -9,6 +9,14 @@ interface LimitationOverrideModalProps {
   actionContext?: string
   draftSessionId: string
   flowType: string
+  /**
+   * Dettagli aggiuntivi inclusi nell'email OTP a Valerio. Permettono al
+   * destinatario di capire ESATTAMENTE cosa sta autorizzando senza dover
+   * aprire il sistema. Esempi: { 'Cliente': 'Mario Rossi', 'Veicolo':
+   * 'BMW X5 (BMW001)', 'Importo': '€450', 'Note': 'Modifica data ritiro' }.
+   * Vengono renderizzati come tabella nella mail.
+   */
+  details?: Record<string, string | number | null | undefined> | Array<{ label: string; value: string }>
   onClose?: () => void
   onCancel?: () => void
   onOverrideApproved: (overrideId: string) => void
@@ -23,6 +31,7 @@ export default function LimitationOverrideModal({
   actionContext,
   draftSessionId,
   flowType,
+  details,
   onClose: _onClose,
   onCancel,
   onOverrideApproved,
@@ -74,6 +83,7 @@ export default function LimitationOverrideModal({
           actionContext: actionContext || `${limitationCode}_${Date.now()}`,
           draftSessionId,
           flowType,
+          details,
         })
       })
       const data = await res.json()

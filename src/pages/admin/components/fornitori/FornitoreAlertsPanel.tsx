@@ -97,7 +97,7 @@ export default function FornitoreAlertsPanel({ fornitore }: Props) {
                         : ''
                     const dataScadenza = md.data_scadenza as string | undefined
                     const giorniMancanti = typeof md.giorni_mancanti === 'number' ? md.giorni_mancanti as number : null
-                    const importoScaduto = typeof md.importo as number | undefined === 'number' ? md.importo as number : null
+                    const importoScaduto = typeof md.importo === 'number' ? md.importo as number : null
 
                     const chips: Array<{ label: string; value: string; tone?: 'warn' | 'err' | 'ok' }> = []
                     if (fNum) chips.push({ label: 'Fattura', value: `n.${fNum}` })

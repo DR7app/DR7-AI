@@ -41,7 +41,11 @@ export const handler: Handler = async (event) => {
 
     // ── SEND OTP ──
     if (action === 'send') {
-      const { limitationCode, limitationMessage, actionContext, draftSessionId, flowType } = body
+      const { limitationCode, limitationMessage, actionContext, draftSessionId, flowType, details } = body
+      // `details` (opzionale): array di { label, value } o oggetto piatto
+      // Es: [ { label: 'Cliente', value: 'Mario Rossi' }, { label: 'Veicolo', value: 'BMW X5' } ]
+      // O equivalente: { Cliente: 'Mario Rossi', Veicolo: 'BMW X5' }
+      // Vengono mostrati nella mail come tabella sotto la 'Limitazione'.
 
       if (!limitationCode || !limitationMessage) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing limitationCode or limitationMessage' }) }
@@ -109,6 +113,36 @@ export const handler: Handler = async (event) => {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'RESEND_API_KEY not configured' }) }
       }
 
+      // Normalizza `details` in array di righe label/value
+      const escapeHtml = (s: unknown) => String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+      const detailRows: Array<{ label: string; value: string }> = []
+      if (Array.isArray(details)) {
+        for (const d of details) {
+          if (d && typeof d === 'object' && d.label) {
+            detailRows.push({ label: String(d.label), value: String(d.value ?? '') })
+          }
+        }
+      } else if (details && typeof details === 'object') {
+        for (const [k, v] of Object.entries(details as Record<string, unknown>)) {
+          if (v == null || v === '') continue
+          detailRows.push({ label: k, value: String(v) })
+        }
+      }
+      const detailsTableHtml = detailRows.length > 0
+        ? `<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;margin:20px 0;">
+             <p style="margin:0 0 10px;color:#495057;font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">Dettaglio richiesta</p>
+             <table style="width:100%;font-size:14px;color:#212529;border-collapse:collapse;">
+               ${detailRows.map(r => `
+                 <tr>
+                   <td style="padding:6px 8px 6px 0;font-weight:600;color:#495057;width:40%;vertical-align:top;border-bottom:1px solid #e9ecef;">${escapeHtml(r.label)}:</td>
+                   <td style="padding:6px 0;color:#212529;border-bottom:1px solid #e9ecef;">${escapeHtml(r.value)}</td>
+                 </tr>`).join('')}
+             </table>
+           </div>`
+        : ''
+
       const resend = new Resend(apiKey)
       const { error: emailError } = await resend.emails.send({
         from: 'DR7 Empire <info@dr7.app>',
@@ -122,20 +156,22 @@ export const handler: Handler = async (event) => {
             <h2 style="color: #111; text-align: center;">Autorizzazione Direzionale</h2>
             <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 16px; margin: 20px 0;">
               <p style="margin: 0; color: #856404; font-weight: 600;">Limitazione:</p>
-              <p style="margin: 8px 0 0; color: #856404;">${limitationMessage}</p>
+              <p style="margin: 8px 0 0; color: #856404;">${escapeHtml(limitationMessage)}</p>
             </div>
-            <table style="width: 100%; margin: 20px 0; font-size: 14px; color: #333;">
-              <tr><td style="padding: 6px 0; font-weight: 600;">Codice:</td><td>${limitationCode}</td></tr>
-              <tr><td style="padding: 6px 0; font-weight: 600;">Richiesto da:</td><td>${authUser!.email || 'Operatore'}</td></tr>
-              <tr><td style="padding: 6px 0; font-weight: 600;">Sessione:</td><td>${draftSessionId.substring(0, 8)}</td></tr>
-              <tr><td style="padding: 6px 0; font-weight: 600;">Scadenza OTP:</td><td>${OTP_TTL_MINUTES} minuti</td></tr>
+            ${detailsTableHtml}
+            <table style="width: 100%; margin: 20px 0; font-size: 13px; color: #6c757d;">
+              <tr><td style="padding: 4px 0; font-weight: 600;">Codice tecnico:</td><td style="font-family:monospace;">${escapeHtml(limitationCode)}</td></tr>
+              <tr><td style="padding: 4px 0; font-weight: 600;">Richiesto da:</td><td>${escapeHtml(authUser!.email || 'Operatore')}</td></tr>
+              ${actionContext ? `<tr><td style="padding: 4px 0; font-weight: 600;">Contesto:</td><td style="font-family:monospace;font-size:12px;">${escapeHtml(actionContext)}</td></tr>` : ''}
+              <tr><td style="padding: 4px 0; font-weight: 600;">Sessione:</td><td style="font-family:monospace;font-size:12px;">${escapeHtml(draftSessionId.substring(0, 8))}</td></tr>
+              <tr><td style="padding: 4px 0; font-weight: 600;">Scadenza OTP:</td><td>${OTP_TTL_MINUTES} minuti</td></tr>
             </table>
             <div style="text-align: center; margin: 30px 0;">
               <div style="display: inline-block; background: #f5f5f5; padding: 20px 40px; border-radius: 12px; letter-spacing: 8px; font-size: 32px; font-weight: 700; color: #111; border: 2px solid #d4af37;">
                 ${code}
               </div>
             </div>
-            <p style="text-align: center; color: #666; font-size: 13px;">Comunica questo codice all'operatore per autorizzare l'eccezione.</p>
+            <p style="text-align: center; color: #666; font-size: 13px;">Comunica questo codice all'operatore SOLO se autorizzi l'azione descritta sopra.</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
             <p style="color: #999; font-size: 11px; text-align: center;">Dubai rent 7.0 S.p.A. - www.dr7empire.com</p>
           </div>
