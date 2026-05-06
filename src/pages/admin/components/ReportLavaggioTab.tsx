@@ -39,10 +39,13 @@ export default function ReportLavaggioTab() {
   const [washData, setWashData] = useState<WashReportData | null>(null)
 
   // Cost bar — Spesa merce/prodotti (fattura fornitori categoria 'lavaggio_prodotti')
-  // + Stipendio Lavaggista (editable solo da superadmin, persisted per mese in
-  // centralina_pro_config.config.lavaggio.stipendi_mensili[YYYY-MM]).
-  const { role: adminRole } = useAdminRole()
-  const isSuperadmin = adminRole === 'superadmin'
+  // + Stipendio Lavaggista (editable solo dalla direzione: Valerio + Ilenia,
+  // stessa coppia che gate altri flussi sensibili — OperatoriTab, GestioneOtp,
+  // CarWashBookingsTab, PreventiviTab).
+  // Persisted per mese in centralina_pro_config.config.lavaggio.stipendi_mensili[YYYY-MM].
+  const STIPENDIO_EDITORS = ['valerio@dr7.app', 'ilenia@dr7.app']
+  const { adminEmail } = useAdminRole()
+  const canEditStipendio = STIPENDIO_EDITORS.includes((adminEmail || '').toLowerCase())
   const [spesaMerce, setSpesaMerce] = useState<number>(0)
   const [costsLoading, setCostsLoading] = useState(false)
   const [stipendio, setStipendio] = useState<number>(0)
@@ -97,6 +100,14 @@ export default function ReportLavaggioTab() {
   }, [selectedMonth])
 
   useEffect(() => { loadCosts() }, [loadCosts])
+
+  // Auto-load washData on month change so the 4 KPI cards (Lavaggi Tot,
+  // Lavaggi Fatt, Ricavo, Margine Reale) restano sempre popolate senza
+  // dover cliccare "Genera Report" prima.
+  useEffect(() => {
+    fetchReport()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth])
 
   async function saveStipendio() {
     const parsed = parseFloat(stipendioInput.replace(',', '.'))
@@ -155,6 +166,40 @@ export default function ReportLavaggioTab() {
         <h2 className="text-2xl font-bold text-theme-text-primary">Report Lavaggio</h2>
       </div>
 
+      {/* KPI Bar — 4 cards: Lavaggi Tot, Lavaggi Fatt, Ricavo, Margine Reale */}
+      {(() => {
+        const lavaggiFatt = washData?.billableWashesCount || 0
+        const lavaggiTot = lavaggiFatt + (washData?.internalWashesCount || 0)
+        const ricavo = washData?.washRevenue || 0
+        const margineReale = ricavo - spesaMerce - stipendio
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+              <p className="text-[10px] text-theme-text-muted uppercase tracking-wider">Lavaggi Tot</p>
+              <p className="text-3xl font-bold text-theme-text-primary mt-1 tabular-nums">{lavaggiTot}</p>
+              <p className="text-[10px] text-theme-text-muted mt-0.5">Fatturabili + Rientro</p>
+            </div>
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+              <p className="text-[10px] text-theme-text-muted uppercase tracking-wider">Lavaggi Fatt</p>
+              <p className="text-3xl font-bold text-theme-text-primary mt-1 tabular-nums">{lavaggiFatt}</p>
+              <p className="text-[10px] text-theme-text-muted mt-0.5">Fatturabili</p>
+            </div>
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+              <p className="text-[10px] text-theme-text-muted uppercase tracking-wider">Ricavo</p>
+              <p className="text-3xl font-bold text-dr7-gold mt-1 tabular-nums">{formatCurrency(ricavo)}</p>
+              <p className="text-[10px] text-theme-text-muted mt-0.5">Mese selezionato</p>
+            </div>
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+              <p className="text-[10px] text-theme-text-muted uppercase tracking-wider">Margine Reale</p>
+              <p className={`text-3xl font-bold mt-1 tabular-nums ${margineReale >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {formatCurrency(margineReale)}
+              </p>
+              <p className="text-[10px] text-theme-text-muted mt-0.5">Ricavo − Merce − Stipendio</p>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Cost Bar — Spesa merce + Stipendio Lavaggista (per mese selezionato) */}
       <div className="bg-theme-bg-secondary/50 backdrop-blur-sm rounded-xl border border-theme-border p-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -178,12 +223,12 @@ export default function ReportLavaggioTab() {
               <div>
                 <p className="text-xs text-theme-text-muted uppercase tracking-wider">Stipendio Lavaggista</p>
                 <p className="text-[10px] text-theme-text-muted mt-0.5">
-                  {isSuperadmin ? 'Modificabile dall\'amministratore' : 'Solo amministratore può modificare'}
+                  {canEditStipendio ? 'Modificabile dalla direzione' : 'Modificabile solo da Valerio o Ilenia'}
                 </p>
               </div>
               <span className="text-[10px] text-theme-text-muted">{selectedMonth}</span>
             </div>
-            {stipendioEditing && isSuperadmin ? (
+            {stipendioEditing && canEditStipendio ? (
               <div className="flex items-center gap-2 mt-2">
                 <input
                   type="number"
@@ -214,7 +259,7 @@ export default function ReportLavaggioTab() {
                 <p className="text-2xl font-bold text-theme-text-primary tabular-nums">
                   {costsLoading ? '...' : formatCurrency(stipendio)}
                 </p>
-                {isSuperadmin && (
+                {canEditStipendio && (
                   <button
                     onClick={() => setStipendioEditing(true)}
                     className="text-xs px-3 py-1 bg-dr7-gold/20 text-dr7-gold rounded hover:bg-dr7-gold/30"
@@ -262,20 +307,10 @@ export default function ReportLavaggioTab() {
       {/* Wash Report */}
       {washData && (
         <div className="space-y-4">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <p className="text-xs text-theme-text-muted">Lavaggi Fatturabili</p>
-              <p className="text-2xl font-bold text-theme-text-primary">{washData.billableWashesCount}</p>
-            </div>
-            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <p className="text-xs text-theme-text-muted">Ricavo Lavaggi</p>
-              <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(washData.washRevenue)}</p>
-            </div>
-            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <p className="text-xs text-theme-text-muted">Media Lavaggi / Giorno</p>
-              <p className="text-2xl font-bold text-theme-text-primary">{washData.avgWashesPerDay}</p>
-            </div>
+          {/* Media Lavaggi/Giorno */}
+          <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 inline-block">
+            <p className="text-xs text-theme-text-muted">Media Lavaggi / Giorno</p>
+            <p className="text-2xl font-bold text-theme-text-primary">{washData.avgWashesPerDay}</p>
           </div>
 
           {/* Breakdown by Type */}
