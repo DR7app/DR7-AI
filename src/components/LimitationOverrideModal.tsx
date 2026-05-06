@@ -18,11 +18,11 @@ interface LimitationOverrideModalProps {
    */
   details?: Record<string, string | number | null | undefined> | Array<{ label: string; value: string }>
   /**
-   * Quando true, l'operatore deve compilare un campo "Note" obbligatorio
-   * prima di poter inviare la richiesta OTP. Le note vengono incluse
-   * nell'email alla direzione e salvate nel log attività operatori.
+   * Quando true, mostra un campo "Note operatore" opzionale. Il testo
+   * viene incluso nell'email alla direzione e salvato nel log attività
+   * operatori. Lasciato vuoto, la richiesta passa comunque.
    */
-  requireNotes?: boolean
+  showNotes?: boolean
   onClose?: () => void
   onCancel?: () => void
   onOverrideApproved: (overrideId: string, notes?: string) => void
@@ -38,7 +38,7 @@ export default function LimitationOverrideModal({
   draftSessionId,
   flowType,
   details,
-  requireNotes = false,
+  showNotes = false,
   onClose: _onClose,
   onCancel,
   onOverrideApproved,
@@ -79,10 +79,6 @@ export default function LimitationOverrideModal({
   }, [otpCode, step])
 
   async function sendOtp() {
-    if (requireNotes && notes.trim() === '') {
-      setError('Le note sono obbligatorie per richiedere l\'autorizzazione.')
-      return
-    }
     setSending(true)
     setError(null)
     try {
@@ -238,12 +234,13 @@ export default function LimitationOverrideModal({
             <p className="text-[11px] text-theme-text-muted mt-1.5 font-mono">{limitationCode}</p>
           </div>
 
-          {/* Notes textarea — required when requireNotes=true. Le note vengono
-              incluse nell'email alla direzione e nel log attività operatori. */}
-          {step === 'blocked' && requireNotes && (
+          {/* Notes textarea — opzionale. Quando compilato, il testo viene
+              mostrato nell'email alla direzione e salvato nel log attività
+              operatori. Lasciato vuoto, la richiesta procede comunque. */}
+          {step === 'blocked' && showNotes && (
             <div className="mb-5">
               <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1.5">
-                Note operatore <span className="text-theme-error">*</span>
+                Note operatore <span className="text-theme-text-muted normal-case tracking-normal">(opzionale)</span>
               </label>
               <textarea
                 value={notes}
@@ -296,8 +293,8 @@ export default function LimitationOverrideModal({
                 )}
                 <button
                   onClick={sendOtp}
-                  disabled={sending || (requireNotes && notes.trim() === '')}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[44px] bg-dr7-gold text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold shadow-lg shadow-dr7-gold/20"
+                  disabled={sending}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[44px] bg-dr7-gold text-white rounded-xl transition-all disabled:opacity-50 text-sm font-semibold shadow-lg shadow-dr7-gold/20"
                 >
                   {!sending && (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
