@@ -6,6 +6,27 @@ import Button from './Button'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { logger } from '../../../utils/logger'
 
+// Estrae un messaggio leggibile da qualunque shape di errore (Error,
+// PostgrestError di Supabase, oggetto generico). Senza questa logica
+// l'alert mostrava "[object Object]" perche\' Supabase tira oggetti
+// piatti che non sono istanze di Error.
+function extractErrorMessage(error: unknown): string {
+  if (!error) return 'Errore sconosciuto'
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  if (typeof error === 'object') {
+    const e = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+    const parts: string[] = []
+    if (typeof e.message === 'string' && e.message) parts.push(e.message)
+    if (typeof e.details === 'string' && e.details) parts.push(e.details)
+    if (typeof e.hint === 'string' && e.hint) parts.push(`hint: ${e.hint}`)
+    if (typeof e.code === 'string' && e.code) parts.push(`(${e.code})`)
+    if (parts.length) return parts.join(' — ')
+    try { return JSON.stringify(error) } catch { return String(error) }
+  }
+  return String(error)
+}
+
 interface Vehicle {
   id: string
   display_name: string
@@ -155,11 +176,12 @@ export default function VehiclesTab() {
         ? (vehicles.find(v => v.id === editingId)?.metadata || {})
         : {}
 
+      const parsedRate = Number.parseFloat(formData.daily_rate)
       const dataToSave = {
         display_name: formData.display_name,
         plate: formData.plate || null,
         status: formData.status,
-        daily_rate: parseFloat(formData.daily_rate),
+        daily_rate: Number.isFinite(parsedRate) ? parsedRate : 0,
         category: formData.category,
         metadata: {
           ...existingMetadata,
@@ -231,9 +253,8 @@ export default function VehiclesTab() {
       resetForm()
       loadVehicles()
     } catch (error: unknown) {
-      const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to save vehicle:', error)
-      alert('Impossibile salvare il veicolo: ' + (_errMsg || JSON.stringify(error)))
+      alert('Impossibile salvare il veicolo: ' + extractErrorMessage(error))
     }
   }
 
