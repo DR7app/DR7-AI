@@ -42,6 +42,7 @@ interface ReportPayload {
     serviceAccountEmail: string
     propertyId: string
   } | null
+  dataSource?: 'ga4' | 'internal'
 }
 
 const RANGES = [
@@ -179,6 +180,21 @@ export default function ReportTrafficTab() {
             <div><strong>GA4_CLIENT_EMAIL</strong> — copia il campo <code className="font-mono bg-amber-600/20 px-1 rounded">client_email</code> dal JSON del service account (es. <code className="font-mono bg-amber-600/20 px-1 rounded">dr7-analytics@…iam.gserviceaccount.com</code>).</div>
             <div><strong>GA4_PRIVATE_KEY</strong> — copia il campo <code className="font-mono bg-amber-600/20 px-1 rounded">private_key</code> dal JSON, da <code>-----BEGIN PRIVATE KEY-----</code> a <code>-----END PRIVATE KEY-----</code> incluso.</div>
           </div>
+        </div>
+      )}
+
+      {/* Internal data fallback banner — quando GA4 non e' raggiungibile
+          mostriamo una nota chiara cosi' il direttore sa che i numeri
+          arrivano dalla nostra DB, non da GA4. */}
+      {data?.dataSource === 'internal' && (
+        <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 text-amber-900 dark:text-amber-100 text-sm">
+          <div className="font-semibold mb-1">Dati interni DR7 (GA4 non raggiungibile)</div>
+          <p className="text-xs leading-relaxed opacity-90">
+            Questi numeri vengono dalla nostra DB Supabase: prenotazioni create,
+            clienti registrati, fatturato pagato — NON sono visite/pageview di
+            traffico web. Per vedere il traffico vero (chi entra sul sito, da
+            dove, quante pagine guardano) serve risolvere il problema di accesso GA4 nel banner sottostante.
+          </p>
         </div>
       )}
 

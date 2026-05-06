@@ -40,6 +40,77 @@ interface ReportPayload {
     serviceAccountEmail: string
     propertyId: string
   } | null
+  // Sorgente dati: 'ga4' = numeri reali da Google Analytics; 'internal' =
+  // fallback su Supabase (bookings/customers/fatture) quando GA4 non e'
+  // raggiungibile. La UI mostra un badge per non confondere le due cose.
+  dataSource?: 'ga4' | 'internal'
+}
+
+// Fallback: quando GA4 non risponde (errore permessi, env mancanti, ecc.)
+// popoliamo i KPI con dati interni della nostra DB Supabase, cosi' la tab
+// non resta mai vuota. NON sono dati di traffico web — sono operatività
+// DR7 (prenotazioni, clienti, fatturato). Marcati come dataSource='internal'.
+async function buildInternalFallback(range: string): Promise<{ kpis: KpiBlock; warnings: string[] }> {
+  const supabaseUrlEnv = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseKeyEnv = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const empty: KpiBlock = {
+    visits: 0, pageviews: 0, users: 0, bookings: 0, calls: 0, revenue: 0,
+    delta_visits: 0, delta_pageviews: 0, delta_users: 0,
+  }
+  if (!supabaseUrlEnv || !supabaseKeyEnv) {
+    return { kpis: empty, warnings: ['Fallback non disponibile: SUPABASE non configurato.'] }
+  }
+  try {
+    const sb = createClient(supabaseUrlEnv, supabaseKeyEnv)
+    const days = range === '7d' ? 7 : range === '90d' ? 90 : 28
+    const now = new Date()
+    const start = new Date(now.getTime() - days * 86400000).toISOString()
+    const prevStart = new Date(now.getTime() - days * 2 * 86400000).toISOString()
+    const prevEnd = start
+
+    // Bookings nel periodo + nel periodo precedente
+    const [{ count: bookCur }, { count: bookPrev }, { data: paidBookings }, { count: customersCur }] = await Promise.all([
+      sb.from('bookings').select('id', { count: 'exact', head: true }).gte('created_at', start),
+      sb.from('bookings').select('id', { count: 'exact', head: true }).gte('created_at', prevStart).lt('created_at', prevEnd),
+      sb.from('bookings').select('price_total, payment_status').gte('created_at', start).limit(2000),
+      sb.from('customers_extended').select('id', { count: 'exact', head: true }).gte('created_at', start),
+    ])
+    const isPaid = (s?: string | null) => s === 'paid' || s === 'completed' || s === 'succeeded'
+    const revenue = (paidBookings || []).reduce((acc: number, b: { price_total?: number | null; payment_status?: string | null }) =>
+      isPaid(b.payment_status) ? acc + (Number(b.price_total) || 0) / 100 : acc, 0)
+
+    // I "click telefono" (calls) li proxy come clienti UNICI con telefono nel periodo
+    const { data: phones } = await sb
+      .from('customers_extended')
+      .select('telefono')
+      .not('telefono', 'is', null)
+      .gte('created_at', start)
+      .limit(5000)
+    const calls = new Set((phones || []).map((p: { telefono?: string | null }) => (p.telefono || '').trim()).filter(Boolean)).size
+
+    const cur = bookCur || 0
+    const prev = bookPrev || 0
+    const deltaPct = prev > 0 ? ((cur - prev) / prev) * 100 : 0
+
+    return {
+      kpis: {
+        visits: cur,         // proxy: prenotazioni create
+        pageviews: cur * 5,  // stima: ~5 pagine viste per booking creato
+        users: customersCur || 0,
+        bookings: cur,
+        calls,
+        revenue,
+        delta_visits: deltaPct,
+        delta_pageviews: deltaPct,
+        delta_users: deltaPct,
+      },
+      warnings: [
+        'GA4 non raggiungibile — i numeri sotto sono dati operativi interni (prenotazioni/clienti/fatturato), NON traffico web. Riconfigura GA4 per dati di traffico reale.',
+      ],
+    }
+  } catch (e) {
+    return { kpis: empty, warnings: [`Fallback interno fallito: ${e instanceof Error ? e.message : String(e)}`] }
+  }
 }
 
 function rangeToDates(range: string): { startDate: string; endDate: string; prevStart: string; prevEnd: string } {
@@ -133,7 +204,17 @@ const handler: Handler = async (event) => {
   }
 
   if (missing.length > 0) {
-    return { statusCode: 200, headers, body: JSON.stringify(empty) }
+    const fallback = await buildInternalFallback(range)
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        ...empty,
+        kpis: fallback.kpis,
+        dataSource: 'internal',
+        warnings: fallback.warnings,
+      }),
+    }
   }
 
   let clientEmail: string | undefined
@@ -147,7 +228,10 @@ const handler: Handler = async (event) => {
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ ...empty, warnings: ['GA4_SERVICE_ACCOUNT_JSON non è un JSON valido'] }),
+        body: JSON.stringify({
+          ...empty,
+          ...(await buildInternalFallback(range).then(f => ({ kpis: f.kpis, dataSource: 'internal' as const, warnings: ['GA4_SERVICE_ACCOUNT_JSON non è un JSON valido', ...f.warnings] }))),
+        }),
       }
     }
   } else if (hasSplit) {
@@ -163,7 +247,10 @@ const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ ...empty, warnings: ['client_email o private_key mancanti dopo il parsing'] }),
+      body: JSON.stringify({
+        ...empty,
+        ...(await buildInternalFallback(range).then(f => ({ kpis: f.kpis, dataSource: 'internal' as const, warnings: ['client_email o private_key mancanti dopo il parsing', ...f.warnings] }))),
+      }),
     }
   }
 
@@ -338,13 +425,18 @@ const handler: Handler = async (event) => {
     // come Viewer/Analyst nella property GA4. Lo intercettiamo per dare
     // istruzioni operative invece di un messaggio API criptico.
     const isPermissionError = /sufficient permissions|PERMISSION_DENIED|permission_denied|403/i.test(errMsg)
+
+    // Fallback su dati interni Supabase: la tab non resta mai vuota.
+    const fallback = await buildInternalFallback(range)
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         ...empty,
         configured: !!propertyId && credsLoaded,
-        warnings: [`Errore Google Analytics Data API: ${errMsg}`],
+        kpis: fallback.kpis,
+        dataSource: 'internal',
+        warnings: [`Errore Google Analytics Data API: ${errMsg}`, ...fallback.warnings],
         permissionIssue: isPermissionError && clientEmail && propertyId
           ? { serviceAccountEmail: clientEmail, propertyId }
           : null,
