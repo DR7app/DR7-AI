@@ -212,6 +212,26 @@ export default function FornitoriTab() {
         }
     }
 
+    // Update categoria_merce inline da una row della lista. Niente apertura
+    // detail: l'utente vede subito il cambio nella riga.
+    async function updateRowCategory(id: string, newSlug: string) {
+        const value = newSlug || null
+        const prev = fornitori.find(f => f.id === id)?.categoria_merce
+        // Optimistic UI
+        setFornitori(prevList => prevList.map(f => f.id === id ? { ...f, categoria_merce: newSlug || null } as FornitoreRow : f))
+        const { error } = await supabase
+            .from('fornitori')
+            .update({ categoria_merce: value })
+            .eq('id', id)
+        if (error) {
+            // Revert
+            setFornitori(prevList => prevList.map(f => f.id === id ? { ...f, categoria_merce: prev ?? null } as FornitoreRow : f))
+            toast.error('Errore aggiornamento categoria: ' + error.message)
+        } else {
+            toast.success('Categoria aggiornata')
+        }
+    }
+
     function fmtRelative(ms: number | null): string {
         if (!ms) return 'mai'
         const diff = Math.floor((Date.now() - ms) / 1000)
@@ -351,34 +371,61 @@ export default function FornitoriTab() {
                         {filtered.map(f => {
                             const todoCount = f.daApprovareCount + f.daPagareCount
                             return (
-                                <li key={f.id}>
+                                <li key={f.id} className="flex items-center gap-4 px-4 py-3 hover:bg-theme-bg-tertiary/30 transition-colors">
+                                    <div
+                                        onClick={() => setSelected(f)}
+                                        className="flex-1 min-w-0 cursor-pointer"
+                                    >
+                                        <p className="text-theme-text-primary font-semibold truncate">{f.nome}</p>
+                                        <p className="text-xs text-theme-text-muted truncate">
+                                            {f.piva ? `P.IVA ${f.piva}` : '— P.IVA non impostata'}
+                                        </p>
+                                    </div>
+                                    {/* Category inline editor — stopPropagation so picking
+                                        a category doesn't also open the detail view. */}
+                                    <select
+                                        value={f.categoria_merce || ''}
+                                        onClick={e => e.stopPropagation()}
+                                        onChange={e => updateRowCategory(f.id, e.target.value)}
+                                        className={`text-xs px-2 py-1 rounded border focus:outline-none ${
+                                            f.categoria_merce
+                                                ? 'bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30'
+                                                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                        }`}
+                                        title="Cambia categoria"
+                                    >
+                                        <option value="">— senza categoria —</option>
+                                        {categoryOptions.map(c => (
+                                            <option key={c.slug} value={c.slug}>{c.label}</option>
+                                        ))}
+                                        {f.categoria_merce && !categoryOptions.some(c => c.slug === f.categoria_merce) && (
+                                            <option value={f.categoria_merce}>{f.categoria_merce} (legacy)</option>
+                                        )}
+                                    </select>
+                                    <div
+                                        onClick={() => setSelected(f)}
+                                        className="text-xs text-theme-text-secondary text-right space-y-0.5 hidden sm:block cursor-pointer"
+                                    >
+                                        <div>{f.bolleCount} bolle · {f.fattureCount} fatture</div>
+                                        {todoCount > 0 && (
+                                            <div className="text-amber-400 font-semibold">
+                                                {f.daApprovareCount > 0 && <>{f.daApprovareCount} da approvare</>}
+                                                {f.daApprovareCount > 0 && f.daPagareCount > 0 && ' · '}
+                                                {f.daPagareCount > 0 && <>{f.daPagareCount} da pagare</>}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {todoCount > 0 && (
+                                        <span className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-600 text-white text-xs font-bold">
+                                            {todoCount}
+                                        </span>
+                                    )}
                                     <button
                                         onClick={() => setSelected(f)}
-                                        className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-theme-bg-tertiary/30 transition-colors"
+                                        className="text-theme-text-muted hover:text-theme-text-primary px-2"
+                                        title="Apri dettagli"
                                     >
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-theme-text-primary font-semibold truncate">{f.nome}</p>
-                                            <p className="text-xs text-theme-text-muted truncate">
-                                                {f.piva ? `P.IVA ${f.piva}` : '— P.IVA non impostata'}
-                                                {f.categoria_merce && <span className="ml-2">{f.categoria_merce}</span>}
-                                            </p>
-                                        </div>
-                                        <div className="text-xs text-theme-text-secondary text-right space-y-0.5 hidden sm:block">
-                                            <div>{f.bolleCount} bolle · {f.fattureCount} fatture</div>
-                                            {todoCount > 0 && (
-                                                <div className="text-amber-400 font-semibold">
-                                                    {f.daApprovareCount > 0 && <>{f.daApprovareCount} da approvare</>}
-                                                    {f.daApprovareCount > 0 && f.daPagareCount > 0 && ' · '}
-                                                    {f.daPagareCount > 0 && <>{f.daPagareCount} da pagare</>}
-                                                </div>
-                                            )}
-                                        </div>
-                                        {todoCount > 0 && (
-                                            <span className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-600 text-white text-xs font-bold">
-                                                {todoCount}
-                                            </span>
-                                        )}
-                                        <span className="text-theme-text-muted">→</span>
+                                        →
                                     </button>
                                 </li>
                             )
