@@ -101,6 +101,7 @@ export default function FatturaTab() {
   const canManagePayments = !!currentEmail && PAYMENT_MANAGERS.includes(currentEmail.toLowerCase())
   const [updatingStato, setUpdatingStato] = useState<string | null>(null)
   const [refreshingAll, setRefreshingAll] = useState(false)
+  const [reconciling, setReconciling] = useState(false)
   const [lastSdiRefresh, setLastSdiRefresh] = useState<number | null>(null)
 
   useEffect(() => {
@@ -163,7 +164,7 @@ export default function FatturaTab() {
   // su Aruba ma admin badge ne mostra 3). Una sola invocazione scarica
   // la lista outgoing da Aruba (paginata) e allinea tutto.
   async function reconcileWithAruba() {
-    setRefreshingAll(true)
+    setReconciling(true)
     try {
       const res = await authFetch('/.netlify/functions/reconcile-sdi-statuses', { method: 'POST' })
       const json = await res.json()
@@ -191,7 +192,7 @@ export default function FatturaTab() {
       const msg = err instanceof Error ? err.message : String(err)
       toast.error('Errore riconciliazione: ' + msg)
     } finally {
-      setRefreshingAll(false)
+      setReconciling(false)
     }
   }
 
@@ -497,11 +498,11 @@ export default function FatturaTab() {
             </button>
             <button
               onClick={() => reconcileWithAruba()}
-              disabled={refreshingAll}
+              disabled={reconciling}
               className="px-4 py-2 rounded-full font-medium transition-colors bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 flex items-center gap-2"
               title="Scarica lista completa da Aruba e allinea TUTTI gli stati (per recuperare disallineamenti)"
             >
-              Riconcilia con Aruba
+              {reconciling ? 'Riconciliazione…' : 'Riconcilia con Aruba'}
             </button>
             <button
               onClick={() => {

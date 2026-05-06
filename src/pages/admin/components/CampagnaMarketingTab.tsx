@@ -721,19 +721,6 @@ export default function CampagnaMarketingTab() {
                 </button>
             </div>
 
-            <div className="bg-red-600/10 border border-red-600/40 rounded-lg p-4">
-                <p className="text-red-400 font-semibold text-sm">
-                    Invio campagne sospeso temporaneamente
-                </p>
-                <p className="text-red-300/80 text-xs mt-1">
-                    L'ultimo invio di massa ha attivato l'anti-spam di WhatsApp e disconnesso l'istanza Green API.
-                    Riconnetti l'istanza (console.green-api.com → Scan QR) e poi riattiva l'invio rimuovendo il blocco
-                    in <code className="bg-black/30 px-1 rounded">netlify/functions/send-whatsapp-campaign-chunk.ts</code>
-                    (<code className="bg-black/30 px-1 rounded">CAMPAIGN_SENDS_ENABLED = true</code>).
-                    Quando riattivato l'invio sarà a 1 messaggio ogni 7 secondi per evitare un nuovo ban.
-                </p>
-            </div>
-
             {viewMode === 'form' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Form */}
