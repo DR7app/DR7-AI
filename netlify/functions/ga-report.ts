@@ -398,6 +398,32 @@ const handler: Handler = async (event) => {
     if (sessions === 0) warnings.push('Nessuna visita registrata nel periodo selezionato — verifica che lo snippet GA4 sia attivo su dr7empire.com.')
     if (bookings === 0 && calls === 0) warnings.push('Nessun evento di conversione (booking_completed, phone_call) tracciato in GA4. Aggiungi gtag("event", "booking_completed", {value:...}) sui form di prenotazione per vederli qui.')
 
+    // Se GA4 risponde ma con TUTTO a zero (sessions, pageviews, users e
+    // conversioni) significa che il tracking non e' arrivato o non c'e'
+    // ancora nessuna visita: fa piu' senso mostrare i dati interni del
+    // CRM cosi' la tab e' utile, invece di tante caselle 0.
+    const allEmpty = sessions === 0 && pageviews === 0 && users === 0 && bookings === 0 && calls === 0
+    if (allEmpty) {
+      const fallback = await buildInternalFallback(range)
+      const payload: ReportPayload = {
+        configured: true,
+        missing: [],
+        range,
+        kpis: fallback.kpis,
+        traffic,
+        distribution,
+        funnel,
+        topPages,
+        fetchedAt: new Date().toISOString(),
+        warnings: [
+          'GA4 risponde ma non ha ancora dati di traffico — fallback su dati operativi interni DR7.',
+          ...fallback.warnings,
+        ],
+        dataSource: 'internal',
+      }
+      return { statusCode: 200, headers, body: JSON.stringify(payload) }
+    }
+
     const payload: ReportPayload = {
       configured: true,
       missing: [],
@@ -409,6 +435,7 @@ const handler: Handler = async (event) => {
       topPages,
       fetchedAt: new Date().toISOString(),
       warnings,
+      dataSource: 'ga4',
     }
 
     return { statusCode: 200, headers, body: JSON.stringify(payload) }
