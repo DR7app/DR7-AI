@@ -27,11 +27,43 @@ interface FattureRow {
     fornitore_id: string
     numero_documento: string
     data_scadenza: string | null
+    data_documento: string | null
     importo_totale: number
     stato: string
     periodo_anno: number
     periodo_mese: number
     fornitori?: { nome: string } | null
+}
+
+interface DigestItem {
+    nome: string
+    numero: string
+    importo: number
+    days: number
+    scadenza: string | null
+}
+
+function fmtEUR(n: number): string {
+    return n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function renderSection(title: string, icon: string, items: DigestItem[], formatLine: (it: DigestItem) => string): string[] {
+    if (items.length === 0) return []
+    const total = items.reduce((s, it) => s + it.importo, 0)
+    const MAX = 10
+    const lines: string[] = []
+    lines.push('')
+    lines.push(`${icon} *${title}* (${items.length}, tot €${fmtEUR(total)})`)
+    const sorted = [...items].sort((a, b) => b.importo - a.importo)
+    for (const it of sorted.slice(0, MAX)) {
+        lines.push(formatLine(it))
+    }
+    if (sorted.length > MAX) {
+        const rest = sorted.length - MAX
+        const restTot = sorted.slice(MAX).reduce((s, it) => s + it.importo, 0)
+        lines.push(`  …e altre ${rest} per €${fmtEUR(restTot)}`)
+    }
+    return lines
 }
 
 async function ensureAlert(params: {
@@ -77,10 +109,18 @@ const handler: Handler = async () => {
     let imminenteCount = 0
     let bolleMancCount = 0
 
+    // Per-section item lists used by the WhatsApp digest below. We populate
+    // these alongside the alert-creation logic so the digest can show actual
+    // fatture (numero, fornitore, importo, giorni) instead of just counts.
+    const scaduteItems: DigestItem[] = []
+    const oggiItems: DigestItem[] = []
+    const imminentiItems: DigestItem[] = []
+    const bolleMancItems: DigestItem[] = []
+
     // 1. Scadute / oggi / imminenti — all open fatture with data_scadenza
     const { data: fatture, error } = await supabase
         .from('fornitore_documents')
-        .select('id, fornitore_id, numero_documento, data_scadenza, importo_totale, stato, periodo_anno, periodo_mese, fornitori:fornitori(nome)')
+        .select('id, fornitore_id, numero_documento, data_scadenza, data_documento, importo_totale, stato, periodo_anno, periodo_mese, fornitori:fornitori(nome)')
         .eq('tipo', 'fattura')
         .not('data_scadenza', 'is', null)
         .not('stato', 'in', '(pagato,archiviato,bloccato)')
@@ -100,6 +140,13 @@ const handler: Handler = async () => {
         const scad = new Date(f.data_scadenza)
         scad.setHours(0, 0, 0, 0)
         const days = Math.ceil((scad.getTime() - new Date(todayISO).getTime()) / 86400000)
+        const item: DigestItem = {
+            nome: fornitoreNome,
+            numero: f.numero_documento,
+            importo: Number(f.importo_totale) || 0,
+            days,
+            scadenza: f.data_scadenza,
+        }
         if (days < 0) {
             const created = await ensureAlert({
                 fornitore_id: f.fornitore_id,
@@ -110,6 +157,7 @@ const handler: Handler = async () => {
                 metadata: { days_overdue: -days, scadenza: f.data_scadenza },
             })
             if (created) scadutaCount++
+            scaduteItems.push(item)
         } else if (days === 0) {
             const created = await ensureAlert({
                 fornitore_id: f.fornitore_id,
@@ -120,6 +168,7 @@ const handler: Handler = async () => {
                 metadata: { scadenza: f.data_scadenza },
             })
             if (created) oggiCount++
+            oggiItems.push(item)
         } else if (days <= 7) {
             const created = await ensureAlert({
                 fornitore_id: f.fornitore_id,
@@ -130,6 +179,7 @@ const handler: Handler = async () => {
                 metadata: { days_until: days, scadenza: f.data_scadenza },
             })
             if (created) imminenteCount++
+            imminentiItems.push(item)
         }
     }
 
@@ -158,6 +208,13 @@ const handler: Handler = async () => {
                 messaggio: `Fattura n.${f.numero_documento} di ${fornitoreNome} senza DDT/bolle nel mese — verificare`,
             })
             if (created) bolleMancCount++
+            bolleMancItems.push({
+                nome: fornitoreNome,
+                numero: f.numero_documento,
+                importo: Number(f.importo_totale) || 0,
+                days: 0,
+                scadenza: f.data_scadenza,
+            })
             // NOTE (Apr 2026): non auto-blocchiamo piu' la fattura.
             // Tanti fornitori (SaaS / servizi / utenze: Openapi, hosting,
             // telefonia, ecc.) non emettono mai un DDT, quindi la logica
@@ -177,16 +234,34 @@ const handler: Handler = async () => {
     }
     console.log('[fornitori-alerts-cron]', summary)
 
-    // Daily digest WhatsApp
-    const total = scadutaCount + oggiCount + imminenteCount + bolleMancCount
-    if (total > 0 && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-        const lines = [
-            '*FORNITORI — Alert giornalieri*',
-            scadutaCount > 0 ? `Scadute (in ritardo): ${scadutaCount}` : null,
-            oggiCount > 0 ? `Scadenza oggi: ${oggiCount}` : null,
-            imminenteCount > 0 ? `Scadenza in arrivo (<= 7gg): ${imminenteCount}` : null,
-            bolleMancCount > 0 ? `Fatture bloccate (bolle mancanti): ${bolleMancCount}` : null,
-        ].filter(Boolean)
+    // Daily digest WhatsApp — versione dettagliata: per ogni sezione mostra
+    // numero fattura, fornitore, importo e info scadenza, ordinato per
+    // importo decrescente. Cap a 10 righe per sezione per non saturare il
+    // messaggio; il resto va in "…e altre N per €X".
+    const allItems = [...scaduteItems, ...oggiItems, ...imminentiItems, ...bolleMancItems]
+    if (allItems.length > 0 && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+        const totaleEsposizione = scaduteItems.reduce((s, it) => s + it.importo, 0)
+            + oggiItems.reduce((s, it) => s + it.importo, 0)
+            + imminentiItems.reduce((s, it) => s + it.importo, 0)
+        const oggiStr = today.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' })
+
+        const lines: string[] = []
+        lines.push(`*FORNITORI — Alert giornalieri ${oggiStr}*`)
+        lines.push(`Esposizione complessiva (scadute + oggi + 7gg): *€${fmtEUR(totaleEsposizione)}*`)
+
+        lines.push(...renderSection('Scadute (in ritardo)', '🔴', scaduteItems, it =>
+            `• ${it.nome} — n.${it.numero} · €${fmtEUR(it.importo)} · scaduta da ${-it.days}gg`
+        ))
+        lines.push(...renderSection('Scadono oggi', '🟠', oggiItems, it =>
+            `• ${it.nome} — n.${it.numero} · €${fmtEUR(it.importo)}`
+        ))
+        lines.push(...renderSection('In arrivo (≤ 7gg)', '🟡', imminentiItems, it =>
+            `• ${it.nome} — n.${it.numero} · €${fmtEUR(it.importo)} · tra ${it.days}gg (${it.scadenza || '—'})`
+        ))
+        lines.push(...renderSection('Senza DDT/bolle', '⚠️', bolleMancItems, it =>
+            `• ${it.nome} — n.${it.numero} · €${fmtEUR(it.importo)}`
+        ))
+
         const body = lines.join('\n')
         try {
             await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
