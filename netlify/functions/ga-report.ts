@@ -33,6 +33,13 @@ interface ReportPayload {
   topPages: TopPage[]
   fetchedAt: string
   warnings: string[]
+  // Quando l'API risponde 403 PERMISSION_DENIED valorizziamo questo blocco
+  // cosi' la UI puo' mostrare istruzioni mirate (aggiungere il
+  // service account email come Viewer in GA4 → Property Access Management).
+  permissionIssue?: {
+    serviceAccountEmail: string
+    propertyId: string
+  } | null
 }
 
 function rangeToDates(range: string): { startDate: string; endDate: string; prevStart: string; prevEnd: string } {
@@ -326,13 +333,21 @@ const handler: Handler = async (event) => {
     // warnings. Without this distinction, the page wrongly shows "Configurazione
     // richiesta" whenever the GA Data API itself errors out.
     const credsLoaded = !!clientEmail && !!privateKey
+    const errMsg = err?.message || String(err)
+    // PERMISSION_DENIED 403: il service account NON e' stato aggiunto
+    // come Viewer/Analyst nella property GA4. Lo intercettiamo per dare
+    // istruzioni operative invece di un messaggio API criptico.
+    const isPermissionError = /sufficient permissions|PERMISSION_DENIED|permission_denied|403/i.test(errMsg)
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         ...empty,
         configured: !!propertyId && credsLoaded,
-        warnings: [`Errore Google Analytics Data API: ${err?.message || String(err)}`],
+        warnings: [`Errore Google Analytics Data API: ${errMsg}`],
+        permissionIssue: isPermissionError && clientEmail && propertyId
+          ? { serviceAccountEmail: clientEmail, propertyId }
+          : null,
       }),
     }
   }

@@ -38,6 +38,10 @@ interface ReportPayload {
   topPages: TopPage[]
   fetchedAt: string
   warnings: string[]
+  permissionIssue?: {
+    serviceAccountEmail: string
+    propertyId: string
+  } | null
 }
 
 const RANGES = [
@@ -178,8 +182,41 @@ export default function ReportTrafficTab() {
         </div>
       )}
 
+      {/* Permission denied banner — actionable instructions per
+          aggiungere il service account come Viewer in GA4. */}
+      {data?.permissionIssue && (
+        <div className="bg-rose-500/10 border-2 border-rose-500 rounded-xl p-4 text-rose-900 dark:text-rose-100">
+          <div className="text-base font-bold mb-2">
+            GA4: il service account non ha accesso alla property {data.permissionIssue.propertyId}
+          </div>
+          <p className="text-sm mb-3 opacity-90">
+            Le credenziali sono configurate correttamente ma Google Analytics
+            non riconosce ancora il nostro account come autorizzato a leggere
+            i dati. Devi aggiungerlo come <strong>Viewer</strong> nella property GA4.
+          </p>
+          <div className="text-xs leading-relaxed space-y-1.5 opacity-90 mb-3">
+            <div><strong>1.</strong> Apri Google Analytics → entra nella property <code className="font-mono bg-rose-500/20 px-1 rounded">{data.permissionIssue.propertyId}</code> (DR7 Empire).</div>
+            <div><strong>2.</strong> Vai su <strong>Admin (rotellina) → Property settings → Property Access Management</strong>.</div>
+            <div><strong>3.</strong> Clicca <strong>+ Add user</strong>, incolla l'email qui sotto, ruolo <strong>Viewer</strong>, deseleziona "Notify by email".</div>
+            <div><strong>4.</strong> Salva. Torna qui e ricarica la pagina (1-2 min per la propagazione).</div>
+          </div>
+          <div className="bg-rose-600 text-white rounded-lg p-3 flex items-center justify-between gap-3">
+            <code className="font-mono text-sm break-all">{data.permissionIssue.serviceAccountEmail}</code>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard?.writeText(data.permissionIssue!.serviceAccountEmail)
+              }}
+              className="px-3 py-1 rounded bg-white text-rose-700 text-xs font-bold hover:bg-rose-50 flex-shrink-0"
+            >
+              Copia email
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Warnings — shown when configured but data is unusual */}
-      {showWarnings && !showBanner && (
+      {showWarnings && !showBanner && !data?.permissionIssue && (
         <div className="bg-cyan-500/15 border-2 border-cyan-500 rounded-xl p-3 space-y-1 text-cyan-900 dark:text-cyan-100">
           {data!.warnings.map((w, i) => (
             <div key={i} className="text-sm font-medium">• {w}</div>
