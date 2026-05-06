@@ -707,6 +707,54 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
               {/* Right: Documents + Risk + Insight */}
               <div className="space-y-4">
+                {/* Carta Tokenizzata Nexi — mirrors the "Carte Tokenizzate" block in Tab Nexi,
+                    filtered to this single customer. Source: customers_extended.metadata. */}
+                {(() => {
+                  const m = customer.metadata || {}
+                  const contractId: string = m.nexi_contract_id || ''
+                  if (!contractId) {
+                    return (
+                      <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
+                        <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-2">Carta Tokenizzata</h4>
+                        <p className="text-xs text-theme-text-muted">Nessuna carta tokenizzata su file</p>
+                      </div>
+                    )
+                  }
+                  const maskedPan: string = m.nexi_card_masked_pan || ''
+                  const circuit: string = m.nexi_card_circuit || ''
+                  const cardType: string = m.nexi_card_type || ''
+                  const updated: string = m.nexi_contract_updated || ''
+                  return (
+                    <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
+                      <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Carta Tokenizzata</h4>
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        {maskedPan && (
+                          <span className="font-mono text-sm text-theme-text-primary">{maskedPan}</span>
+                        )}
+                        {circuit && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30 uppercase">
+                            {circuit}
+                          </span>
+                        )}
+                        {cardType && (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                            cardType === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
+                            cardType === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
+                            cardType === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
+                            'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                          }`}>
+                            {cardType}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-theme-text-muted">
+                        <span className="font-mono">ID: ...{contractId.slice(-8)}</span>
+                        {updated && <span className="ml-2">{fmtDate(updated)}</span>}
+                      </div>
+                    </div>
+                  )
+                })()}
+
                 {/* Documenti */}
                 <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
                   <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Documenti</h4>
