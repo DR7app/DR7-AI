@@ -888,15 +888,11 @@ export default function CampagnaMarketingTab() {
                                 : <>Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span></>
                             }
                         </div>
-                        {scheduleEnabled ? (
-                            <Button onClick={handleSend}>
-                                {recurrenceType === 'none' ? 'Programma invio' : 'Salva ricorrenza'}
-                            </Button>
-                        ) : (
-                            <Button onClick={handleSend} disabled>
-                                Invio sospeso
-                            </Button>
-                        )}
+                        <Button onClick={handleSend}>
+                            {scheduleEnabled
+                                ? (recurrenceType === 'none' ? 'Programma invio' : 'Salva ricorrenza')
+                                : 'Invia ora'}
+                        </Button>
                     </div>
                 </div>
 
