@@ -43,7 +43,12 @@ const handler: Handler = async () => {
     const url = oauth.generateAuthUrl({
         access_type: 'offline',
         prompt: 'consent',
-        scope: ['https://www.googleapis.com/auth/analytics.readonly'],
+        // analytics.readonly: Rendimento Sito (visite/pagine viste)
+        // business.manage: Google Business Profile (chiamate, indicazioni, click sito)
+        scope: [
+            'https://www.googleapis.com/auth/analytics.readonly',
+            'https://www.googleapis.com/auth/business.manage',
+        ],
         include_granted_scopes: true,
     })
 

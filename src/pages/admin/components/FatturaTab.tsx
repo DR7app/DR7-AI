@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -100,6 +100,17 @@ export default function FatturaTab() {
   const [filterTipo, setFilterTipo] = useState<'all' | 'fattura' | 'nota_credito'>('all')
   const [filterDateFrom, setFilterDateFrom] = useState<string>('')
   const [filterDateTo, setFilterDateTo] = useState<string>('')
+  const [filterCliente, setFilterCliente] = useState<string>('all')
+
+  // Lista clienti unici dalle fatture caricate, alfabetica.
+  const clientiOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const inv of invoices) {
+      const name = (inv.customer_name || '').trim()
+      if (name) set.add(name)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }))
+  }, [invoices])
   const [creatingNdc, setCreatingNdc] = useState<string | null>(null)
   const [currentEmail, setCurrentEmail] = useState<string | null>(null)
   const canManagePayments = !!currentEmail && PAYMENT_MANAGERS.includes(currentEmail.toLowerCase())
@@ -547,6 +558,19 @@ export default function FatturaTab() {
         />
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex flex-col">
+            <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Cliente</label>
+            <select
+              value={filterCliente}
+              onChange={e => setFilterCliente(e.target.value)}
+              className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm min-w-[180px]"
+            >
+              <option value="all">Tutti i clienti</option>
+              {clientiOptions.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col">
             <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Stato SDI</label>
             <select
               value={filterSdi}
@@ -592,10 +616,10 @@ export default function FatturaTab() {
               className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
             />
           </div>
-          {(filterSdi !== 'all' || filterTipo !== 'all' || filterDateFrom || filterDateTo || searchQuery) && (
+          {(filterSdi !== 'all' || filterTipo !== 'all' || filterCliente !== 'all' || filterDateFrom || filterDateTo || searchQuery) && (
             <button
               onClick={() => {
-                setFilterSdi('all'); setFilterTipo('all'); setFilterDateFrom(''); setFilterDateTo(''); setSearchQuery('')
+                setFilterSdi('all'); setFilterTipo('all'); setFilterCliente('all'); setFilterDateFrom(''); setFilterDateTo(''); setSearchQuery('')
               }}
               className="px-3 py-2 rounded text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-border"
             >
@@ -614,6 +638,8 @@ export default function FatturaTab() {
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {invoices.filter(invoice => {
+            // Cliente dropdown — match esatto sul nome
+            if (filterCliente !== 'all' && invoice.customer_name !== filterCliente) return false
             // Text search (cliente / numero / email)
             if (searchQuery) {
               const query = searchQuery.toLowerCase()
