@@ -621,9 +621,9 @@ export default function FatturaTab() {
                       </span>
                     )}
                     {/* Vista — dismisses the dashboard notification badge for
-                        rejected/scartata/error fatture. Auto-resets on next
-                        rejection (server-side in _check-sdi-statuses.ts). */}
-                    {invoice.sdi_status && ['rejected', 'scartata', 'error'].includes(invoice.sdi_status) && !invoice.sdi_notification_seen && (
+                        scartate (rejected/scartata) fatture. Auto-resets on
+                        next scarto (server-side in _check-sdi-statuses.ts). */}
+                    {invoice.sdi_status && ['rejected', 'scartata'].includes(invoice.sdi_status) && !invoice.sdi_notification_seen && (
                       <button
                         type="button"
                         onClick={() => markNotificationSeen(invoice)}
@@ -633,7 +633,7 @@ export default function FatturaTab() {
                         Vista
                       </button>
                     )}
-                    {invoice.sdi_notification_seen && invoice.sdi_status && ['rejected', 'scartata', 'error'].includes(invoice.sdi_status) && (
+                    {invoice.sdi_notification_seen && invoice.sdi_status && ['rejected', 'scartata'].includes(invoice.sdi_status) && (
                       <span className="px-2 py-1 rounded text-xs text-theme-text-muted italic" title="Notifica già visualizzata">
                         ✓ Vista
                       </span>
@@ -718,9 +718,10 @@ export default function FatturaTab() {
   )
 }
 
-// Badge counter — fatture con stato SDI problematico (rejected/scartata/error)
-// che richiedono intervento (reinvio o nota di credito) E non ancora
-// dismissate dall'admin via bottone "Vista".
+// Badge counter — SOLO fatture scartate da SDI (rejected/scartata) E non
+// ancora dismissate dall'admin via bottone "Vista". Errori di pipeline
+// ('error') sono esclusi: non sono scarti SDI veri, sono fallimenti
+// upload/network che si risolvono col Reinvia.
 // Polling ogni 60s + realtime sul cambio sdi_status.
 // eslint-disable-next-line react-refresh/only-export-components
 export function useFatturaScartataCount() {
@@ -732,7 +733,7 @@ export function useFatturaScartataCount() {
       const { count: n } = await supabase
         .from('fatture')
         .select('id', { count: 'exact', head: true })
-        .in('sdi_status', ['rejected', 'scartata', 'error'])
+        .in('sdi_status', ['rejected', 'scartata'])
         .eq('sdi_notification_seen', false)
       if (!cancelled && typeof n === 'number') setCount(n)
     }

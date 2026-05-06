@@ -127,11 +127,10 @@ export async function pollAllPendingSdi(): Promise<PollResult> {
             }
 
             if (sdiStatus !== invoice.sdi_status) {
-                // When transitioning INTO a state that needs admin attention,
-                // reset the "seen" flag so the dashboard badge/notification
-                // re-appears even if admin had previously dismissed an older
-                // rejection on the same fattura.
-                const needsAttention = sdiStatus === 'rejected' || sdiStatus === 'scartata' || sdiStatus === 'error'
+                // Reset the "seen" flag SOLO quando passiamo a scartata
+                // (rejected/scartata): l'utente vuole essere notificato solo
+                // di scarti SDI veri, non di errori di pipeline ('error').
+                const needsAttention = sdiStatus === 'rejected' || sdiStatus === 'scartata'
                 const update: Record<string, unknown> = {
                     sdi_status: sdiStatus,
                     sdi_response: remoteInvoice,

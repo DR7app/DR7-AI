@@ -421,7 +421,7 @@ export default function AdminDashboard() {
                   <span className="bg-dr7-gold/20 text-dr7-gold text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2">{birthdayCount}</span>
                 )}
                 {showScartataBadge && (
-                  <span className="bg-red-500/30 text-red-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2" title={`${scartataCount} fattur${scartataCount === 1 ? 'a scartata' : 'e scartate'} / errore SDI`}>
+                  <span className="bg-red-500/30 text-red-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2" title={`${scartataCount} fattur${scartataCount === 1 ? 'a scartata' : 'e scartate'} dal SDI`}>
                     {scartataCount}
                   </span>
                 )}

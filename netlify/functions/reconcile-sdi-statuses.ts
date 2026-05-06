@@ -101,7 +101,8 @@ export const handler: Handler = async () => {
         // new transition into rejected/error so the dashboard badge fires.
         for (const [id, { to }] of updates) {
             const update: Record<string, unknown> = { sdi_status: to }
-            if (to === 'rejected' || to === 'error') update.sdi_notification_seen = false
+            // Notifica solo per scarti SDI veri, non per errori pipeline.
+            if (to === 'rejected') update.sdi_notification_seen = false
             const { error } = await supabase.from('fatture').update(update).eq('id', id)
             if (error) console.warn('[reconcile-sdi] update failed', id, error.message)
         }
