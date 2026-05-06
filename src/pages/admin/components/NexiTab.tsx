@@ -80,6 +80,9 @@ export default function NexiTab() {
         [tx.customer_email, tx.order_id, tx.description, tx.booking?.customer_name, tx.booking?.vehicle_name, tx.contract_id, tx.booking_id],
         search
     ))
+    const filteredAddebiti = allAddebiti.filter(a => filterMatches(
+        [a.customer_name, a.customer_email, a.causale, a.contract_id], search
+    ))
 
     async function runBackfill() {
         // Two-step: dry run first to count, then ask for confirm before applying.
@@ -452,14 +455,14 @@ export default function NexiTab() {
             </div>
 
             {/* Stato Addebiti */}
-            {allAddebiti.length > 0 && (
+            {filteredAddebiti.length > 0 && (
                 <div className="bg-theme-text-primary/5 rounded-xl border border-theme-border/50 overflow-hidden">
                     <div className="px-6 py-3 bg-theme-bg-primary/20 border-b border-theme-border/50 flex justify-between items-center">
                         <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Stato Addebiti</h3>
                         <button onClick={fetchAllAddebiti} className="text-xs text-theme-text-muted hover:text-dr7-gold">Aggiorna</button>
                     </div>
                     <div className="divide-y divide-white/5">
-                        {allAddebiti.map((a) => {
+                        {filteredAddebiti.map((a) => {
                             const statusColors: Record<string, string> = {
                                 email_sent: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
                                 second_email_sent: 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
