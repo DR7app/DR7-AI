@@ -621,10 +621,23 @@ export default function VehiclesTab() {
   // Any category added in Centralina Pro beyond the three legacy ones gets its
   // own section below the main three so newly-added categories aren't invisible.
   const LEGACY_IDS = new Set(['exotic', 'urban', 'aziendali'])
+  // Color palette ciclato per le categorie custom in modo che ogni
+  // categoria abbia il suo pill colorato come Urban/Exotic/Aziendali.
+  const EXTRA_PALETTES = [
+    { wrapBg: 'bg-emerald-900/30', pillBg: 'bg-emerald-900', pillText: 'text-emerald-200' },
+    { wrapBg: 'bg-sky-900/30',     pillBg: 'bg-sky-900',     pillText: 'text-sky-200' },
+    { wrapBg: 'bg-rose-900/30',    pillBg: 'bg-rose-900',    pillText: 'text-rose-200' },
+    { wrapBg: 'bg-fuchsia-900/30', pillBg: 'bg-fuchsia-900', pillText: 'text-fuchsia-200' },
+    { wrapBg: 'bg-amber-900/30',   pillBg: 'bg-amber-900',   pillText: 'text-amber-200' },
+    { wrapBg: 'bg-lime-900/30',    pillBg: 'bg-lime-900',    pillText: 'text-lime-200' },
+    { wrapBg: 'bg-teal-900/30',    pillBg: 'bg-teal-900',    pillText: 'text-teal-200' },
+    { wrapBg: 'bg-indigo-900/30',  pillBg: 'bg-indigo-900',  pillText: 'text-indigo-200' },
+  ]
   const extraSections = categories
     .filter(c => !LEGACY_IDS.has(c.id))
-    .map(c => ({
+    .map((c, i) => ({
       category: c,
+      palette: EXTRA_PALETTES[i % EXTRA_PALETTES.length],
       vehicles: vehicles.filter(v => v.category === c.id).filter(searchFilter),
     }))
 
@@ -1486,52 +1499,152 @@ export default function VehiclesTab() {
         </div>
       </div>
 
-      {/* Extra categories — anything the operator added in Centralina Pro
-          beyond the three legacy categories (exotic / urban / aziendali) gets
-          its own simple section so vehicles assigned there are still visible. */}
-      {extraSections.map(section => (
-        <div key={section.category.id} className="mb-8">
-          <div className="bg-theme-bg-secondary rounded-lg p-4 mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold text-theme-text-primary">
-              {section.category.label}
-              <span className="ml-2 text-sm text-theme-text-muted">({section.vehicles.length} veicoli)</span>
-            </h3>
-          </div>
-          <div className="bg-theme-bg-secondary rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-theme-bg-tertiary border-b border-theme-border">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Veicolo</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Targa</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Stato</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase">Tariffa</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase">Azioni</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-theme-border">
-                {section.vehicles.map(vehicle => (
-                  <tr key={vehicle.id} className="hover:bg-theme-bg-hover/40 transition-colors">
-                    <td className="px-4 py-3 text-sm text-theme-text-primary font-medium">{vehicle.display_name}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary font-mono">{vehicle.plate || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">{vehicle.status}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary tabular-nums">€{Number(vehicle.daily_rate).toLocaleString('it-IT')}/g</td>
-                    <td className="px-4 py-3 text-right">
-                      <Button onClick={() => handleEdit(vehicle)}>Modifica</Button>
-                    </td>
-                  </tr>
+      {/* Categorie custom — qualsiasi categoria aggiunta in Centralina Pro
+          oltre alle tre legacy (exotic / urban / aziendali) viene renderizzata
+          con la stessa card+tabella delle legacy: pill colorato in header,
+          7 colonne (Nome, Targa, Stato, CV, Anno, Tariffa, Azioni), vista
+          mobile a card, bulk select, pulsanti Modifica / Sync / Elimina. */}
+      {extraSections.length > 0 && (
+        <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {extraSections.map(section => (
+            <div key={section.category.id} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+              <div className={`${section.palette.wrapBg} px-4 py-3 border-b border-theme-border`}>
+                <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
+                  <span className={`px-3 py-1 ${section.palette.pillBg} ${section.palette.pillText} rounded text-sm`}>
+                    {section.category.label}
+                  </span>
+                  <span className="text-sm text-theme-text-muted">({section.vehicles.length} veicoli)</span>
+                </h3>
+              </div>
+              {/* Mobile Card View */}
+              <div className="lg:hidden divide-y divide-theme-border">
+                {section.vehicles.map((vehicle) => (
+                  <div key={vehicle.id} className={`p-3 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20' : ''}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {multiSelectMode && (
+                          <input
+                            type="checkbox"
+                            checked={selectedVehicles.has(vehicle.id)}
+                            onChange={() => toggleVehicleSelection(vehicle.id)}
+                            className="w-5 h-5 flex-shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
+                          <div className="text-xs text-theme-text-muted">
+                            {vehicle.plate || '-'}
+                            {(vehicle.metadata as { cv?: number } | null)?.cv && <span className="ml-2">{(vehicle.metadata as { cv?: number }).cv} CV</span>}
+                            {(vehicle.metadata as { model_year?: number } | null)?.model_year && <span className="ml-2">{(vehicle.metadata as { model_year?: number }).model_year}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-sm font-medium text-theme-text-primary">€{vehicle.daily_rate}</div>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block mt-1 ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                          vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
+                            vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
+                              vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
+                                'bg-theme-bg-tertiary text-theme-text-secondary'
+                        }`}>
+                          {vehicle.status === 'available' ? 'Disponibile' :
+                            vehicle.status === 'unavailable' ? 'Non Disp.' :
+                              vehicle.status === 'rented' ? 'Noleggiato' :
+                                vehicle.status === 'maintenance' ? 'Manut.' : 'Ritirato'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-2 px-3 flex-1">Modifica</Button>
+                      <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800">Sync</Button>
+                      <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">×</Button>
+                    </div>
+                  </div>
                 ))}
                 {section.vehicles.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-theme-text-muted">
-                      Nessun veicolo in {section.category.label}
-                    </td>
-                  </tr>
+                  <div className="p-8 text-center text-theme-text-muted">
+                    Nessun veicolo in {section.category.label}
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              {/* Desktop Table */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full min-w-[600px]">
+                  <thead>
+                    <tr>
+                      {multiSelectMode && (
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
+                          <input
+                            type="checkbox"
+                            checked={section.vehicles.length > 0 && section.vehicles.every(v => selectedVehicles.has(v.id))}
+                            onChange={() => toggleSelectCategory(section.vehicles)}
+                            className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
+                          />
+                        </th>
+                      )}
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">CV</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Anno</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.vehicles.map((vehicle) => (
+                      <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
+                        {multiSelectMode && (
+                          <td className="px-4 py-3 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={selectedVehicles.has(vehicle.id)}
+                              onChange={() => toggleVehicleSelection(vehicle.id)}
+                              className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
+                            />
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
+                        <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
+                            vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
+                              vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
+                                vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
+                                  'bg-theme-bg-tertiary text-theme-text-secondary'
+                            }`}>
+                            {vehicle.status === 'available' ? 'Disponibile' :
+                              vehicle.status === 'unavailable' ? 'Non Disponibile' :
+                                vehicle.status === 'rented' ? 'Noleggiato' :
+                                  vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as { cv?: number } | null)?.cv || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as { model_year?: number } | null)?.model_year || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <div className="flex gap-2">
+                            <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-1 px-3">Modifica</Button>
+                            <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800" title="Sincronizza con Google Calendar">📅 Sync</Button>
+                            <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">×</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {section.vehicles.length === 0 && (
+                      <tr>
+                        <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
+                          Nessun veicolo in {section.category.label}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   )
 }
