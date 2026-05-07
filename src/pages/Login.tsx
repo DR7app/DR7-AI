@@ -82,7 +82,7 @@ export default function Login() {
           </div>
 
           {!showForgot ? (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
               {/* Email */}
               <div>
                 <label htmlFor="email" className="block text-[11px] font-bold uppercase tracking-wider text-dr7-gold mb-2">
@@ -100,7 +100,10 @@ export default function Login() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    autoComplete="email"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
@@ -129,7 +132,14 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    autoComplete="current-password"
+                    // No autofill / no save — admin shared accounts su
+                    // device condivisi non devono lasciare credenziali
+                    // memorizzate dal browser. autoComplete="off" + opt-out
+                    // espliciti per i password manager piu' diffusi.
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                     className="w-full pl-11 pr-12 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-white/[0.06] transition-all"
                     placeholder="••••••••"
                   />

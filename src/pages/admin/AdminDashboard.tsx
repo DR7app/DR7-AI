@@ -741,7 +741,7 @@ export default function AdminDashboard() {
                 </svg>
               </button>
             </div>
-            <form onSubmit={handleChangePassword} className="space-y-4">
+            <form onSubmit={handleChangePassword} className="space-y-4" autoComplete="off">
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nuova password</label>
                 <input
@@ -750,6 +750,10 @@ export default function AdminDashboard() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   minLength={6}
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                   className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all"
                   placeholder="Min. 6 caratteri"
                 />
@@ -762,6 +766,10 @@ export default function AdminDashboard() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={6}
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                   className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all"
                   placeholder="Ripeti password"
                 />
