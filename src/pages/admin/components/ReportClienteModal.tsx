@@ -355,6 +355,80 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
   const chartMax = Math.max(...monthlyData.map(m => m.total), 1)
 
+  // Client Score: 0-100 derivato da riskScore (0-10)
+  const clientScore = useMemo(() => Math.round(riskScore * 10), [riskScore])
+  const clientScoreLabel = useMemo(() => {
+    if (clientScore >= 90) return { label: 'Eccellente', color: '#22C55E' }
+    if (clientScore >= 75) return { label: 'Ottimo', color: '#3B82F6' }
+    if (clientScore >= 50) return { label: 'Discreto', color: '#F59E0B' }
+    return { label: 'Critico', color: '#EF4444' }
+  }, [clientScore])
+
+  // Veicoli utilizzati — deduplicati da bookings (per plate quando presente,
+  // altrimenti per nome). Conta utilizzi e tiene l'ultima data.
+  const uniqueVehicles = useMemo(() => {
+    const map = new Map<string, { name: string; plate: string | null; uses: number; lastUsed: string }>()
+    for (const b of bookings) {
+      if (!b.vehicle_name) continue
+      const key = (b.vehicle_plate || b.vehicle_name).toLowerCase().trim()
+      const existing = map.get(key)
+      if (existing) {
+        existing.uses++
+        if (b.created_at > existing.lastUsed) existing.lastUsed = b.created_at
+      } else {
+        map.set(key, { name: b.vehicle_name, plate: b.vehicle_plate || null, uses: 1, lastUsed: b.created_at })
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.uses - a.uses)
+  }, [bookings])
+
+  // Distribuzione spesa per servizio (per donut). Solo bookings pagati.
+  const serviceBreakdown = useMemo(() => {
+    let noleggio = 0, lavaggio = 0, meccanica = 0
+    for (const b of bookings) {
+      if (b.payment_status !== 'paid' && b.payment_status !== 'succeeded' && b.payment_status !== 'completed') continue
+      const amt = (b.price_total || 0) / 100
+      if (b.service_type === 'car_wash') lavaggio += amt
+      else if (b.service_type === 'mechanical_service' || b.service_type === 'mechanical') meccanica += amt
+      else noleggio += amt
+    }
+    const total = noleggio + lavaggio + meccanica
+    const pct = (v: number) => total > 0 ? Math.round((v / total) * 100) : 0
+    return {
+      total,
+      slices: [
+        { label: 'Noleggio', value: noleggio, pct: pct(noleggio), color: '#3B82F6' },
+        { label: 'Lavaggio', value: lavaggio, pct: pct(lavaggio), color: '#06B6D4' },
+        { label: 'Meccanica', value: meccanica, pct: pct(meccanica), color: '#A855F7' },
+      ].filter(s => s.value > 0),
+    }
+  }, [bookings])
+
+  // Alert & Notifiche derivati dai dati: documenti mancanti/scaduti, debiti,
+  // periodo di inattivita', tokenizzazione assente. Niente mock.
+  const alerts = useMemo(() => {
+    const out: { level: 'info' | 'warn' | 'crit'; title: string; detail?: string }[] = []
+    const eur = (v: number) => `€${v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    if (kpis.unpaidTotal > 0) {
+      out.push({ level: 'warn', title: 'Pagamenti pendenti', detail: `Da incassare ${eur(kpis.unpaidTotal)}` })
+    }
+    const docVerified = documents.some(d => d.status === 'verified')
+    if (!docVerified) {
+      out.push({ level: 'crit', title: 'Documenti non verificati', detail: 'Nessun documento verificato in archivio' })
+    }
+    if (kpis.lastDate) {
+      const days = Math.floor((Date.now() - kpis.lastDate.getTime()) / 86400000)
+      if (days > 180) out.push({ level: 'info', title: 'Cliente inattivo', detail: `Ultima attività ${days} giorni fa` })
+    }
+    if (!customer?.metadata?.nexi_contract_id) {
+      out.push({ level: 'info', title: 'Carta non tokenizzata', detail: 'Nessun addebito automatico disponibile' })
+    }
+    if (kpis.danniCount > 0) {
+      out.push({ level: 'warn', title: `${kpis.danniCount} ${kpis.danniCount === 1 ? 'danno' : 'danni'} registrati`, detail: eur(kpis.totalDanni) })
+    }
+    return out
+  }, [kpis, documents, customer])
+
   const customerName = customer ? (customer.denominazione || `${customer.nome || ''} ${customer.cognome || ''}`.trim() || customer.email || 'N/A') : ''
 
   const statusBadge = (s?: string) => {
@@ -402,41 +476,120 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
   return (
     <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-theme-bg-primary border border-theme-border rounded-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-theme-bg-primary border border-theme-border rounded-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
-        <div className="p-6 border-b border-theme-border flex items-start justify-between shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-dr7-gold/20 flex items-center justify-center text-2xl font-bold text-dr7-gold">
-              {(customer.nome?.[0] || customer.denominazione?.[0] || '?').toUpperCase()}
+        {/* Hero Header — avatar + identita + 4 KPI cards */}
+        <div className="relative shrink-0 border-b border-theme-border">
+          <div className="absolute -top-12 -right-12 w-56 h-56 bg-dr7-gold/10 rounded-full blur-3xl pointer-events-none"/>
+          <div className="absolute -bottom-12 -left-12 w-56 h-56 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"/>
+          <div className="relative p-6 flex flex-col xl:flex-row xl:items-center gap-5 xl:gap-6">
+            {/* Identità cliente */}
+            <div className="flex items-start gap-4 flex-1 min-w-0">
+              <div className="relative shrink-0">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-dr7-gold/30 to-dr7-gold/5 border border-dr7-gold/40 flex items-center justify-center text-3xl font-bold text-dr7-gold">
+                  {(customer.nome?.[0] || customer.denominazione?.[0] || '?').toUpperCase()}
+                </div>
+                {clubTier.tier === 'signature' && (
+                  <div className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-amber-400 border-2 border-theme-bg-primary flex items-center justify-center text-theme-bg-primary text-sm" title="Signature">
+                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.176 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-2xl font-bold text-theme-text-primary truncate">{customerName}</h2>
+                  {statusBadge(customer.status_cliente)}
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wide ${clubTier.badge}`}>
+                    {clubTier.label} · {clubTier.reward}%
+                  </span>
+                  {isDR7Club && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-dr7-gold/15 text-dr7-gold border border-dr7-gold/40 uppercase tracking-wide">DR7 Club</span>}
+                </div>
+                {customer.tipo_cliente === 'azienda' && customer.denominazione && (
+                  <div className="text-sm text-theme-text-muted mt-0.5">{customer.denominazione}</div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 mt-2 text-xs text-theme-text-muted">
+                  {customer.email && (
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                      <span className="truncate">{customer.email}</span>
+                    </div>
+                  )}
+                  {customer.telefono && (
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                      <span>{customer.telefono}</span>
+                    </div>
+                  )}
+                  {customer.data_nascita && (
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                      <span>Nato il {fmtDate(customer.data_nascita)}</span>
+                    </div>
+                  )}
+                  {customer.codice_fiscale && (
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0"/></svg>
+                      <span className="truncate font-mono">{customer.codice_fiscale}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 col-span-2">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Iscritto dal {fmtDate(customer.created_at)} · {daysSince(new Date(customer.created_at))} giorni</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xl font-bold text-theme-text-primary">{customerName}</h2>
-                {statusBadge(customer.status_cliente)}
-                {isDR7Club && <span className="px-2 py-1 rounded-full text-xs font-bold bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/50">DR7 CLUB PRIVILEGE</span>}
-                <span
-                  className={`px-2 py-1 rounded-full text-xs font-bold border ${clubTier.badge}`}
-                  title={`Pagato con carta ultimi 12 mesi: ${fmtEur(clubTier.annualSpend)} (prenotazioni ${fmtEur(clubTier.cardBookingSpend)} + ricariche ${fmtEur(clubTier.rechargeSpend)} × ${clubTier.rechargeCount})${clubTier.nextThreshold ? ` · ${fmtEur(clubTier.nextThreshold - clubTier.annualSpend)} al livello successivo` : ''}`}
-                >
-                  Livello {clubTier.label} · {clubTier.reward}%
-                </span>
+
+            {/* KPI cards a destra */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 xl:w-[640px] xl:shrink-0">
+              {/* Client Score con anello */}
+              <div className="relative rounded-xl border border-theme-border bg-theme-bg-secondary p-3 overflow-hidden">
+                <div className="text-[9px] uppercase tracking-wider text-theme-text-muted font-semibold">Client Score</div>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <div className="relative w-12 h-12 shrink-0">
+                    <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="15.91549" fill="none" stroke="currentColor" strokeWidth="3" className="text-theme-bg-tertiary"/>
+                      <circle
+                        cx="18" cy="18" r="15.91549" fill="none" strokeWidth="3" strokeLinecap="round"
+                        stroke={clientScoreLabel.color}
+                        strokeDasharray={`${clientScore}, 100`}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center text-sm font-bold tabular-nums" style={{ color: clientScoreLabel.color }}>{clientScore}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold" style={{ color: clientScoreLabel.color }}>{clientScoreLabel.label}</div>
+                    <div className="text-[10px] text-theme-text-muted leading-tight">{Math.round((kpis.punctuality))}% puntualità</div>
+                  </div>
+                </div>
               </div>
-              {customer.tipo_cliente === 'azienda' && customer.denominazione && (
-                <div className="text-sm text-theme-text-muted">{customer.denominazione}</div>
-              )}
-              <div className="flex items-center gap-4 mt-1 text-sm text-theme-text-muted">
-                {customer.telefono && <span>{customer.telefono}</span>}
-                {customer.email && <span>{customer.email}</span>}
+
+              {/* Spesa Totale */}
+              <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent p-3">
+                <div className="text-[9px] uppercase tracking-wider text-emerald-300/80 font-semibold">Spesa totale</div>
+                <div className="text-lg font-bold text-emerald-400 mt-1 tabular-nums">{fmtEur(kpis.totalSpent)}</div>
+                <div className="text-[10px] text-theme-text-muted mt-0.5">storico completo</div>
               </div>
-              <div className="text-xs text-theme-text-muted mt-1">
-                Iscritto dal {fmtDate(customer.created_at)} ({daysSince(new Date(customer.created_at))} giorni)
+
+              {/* Prenotazioni */}
+              <div className="rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-transparent p-3">
+                <div className="text-[9px] uppercase tracking-wider text-blue-300/80 font-semibold">Prenotazioni</div>
+                <div className="text-lg font-bold text-blue-400 mt-1 tabular-nums">{bookings.length}</div>
+                <div className="text-[10px] text-theme-text-muted mt-0.5">N {kpis.noleggiCount} · L {kpis.lavaggiCount} · M {kpis.meccanicaCount}</div>
+              </div>
+
+              {/* Ultimo Servizio */}
+              <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-transparent p-3">
+                <div className="text-[9px] uppercase tracking-wider text-purple-300/80 font-semibold">Ultimo servizio</div>
+                <div className="text-sm font-bold text-purple-300 mt-1">{kpis.lastDate ? fmtDate(kpis.lastDate.toISOString()) : '—'}</div>
+                <div className="text-[10px] text-theme-text-muted mt-0.5">{kpis.lastDate ? `${daysSince(kpis.lastDate)} giorni fa` : 'mai'}</div>
               </div>
             </div>
+
+            <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-theme-bg-tertiary hover:bg-theme-bg-hover flex items-center justify-center text-theme-text-muted">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-theme-bg-tertiary hover:bg-theme-bg-hover flex items-center justify-center text-theme-text-muted">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
         </div>
 
         {/* DR7 Club tier progress — same panel as the customer sees on website */}
@@ -511,51 +664,27 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
           )
         })()}
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 px-6 py-4 border-b border-theme-border shrink-0">
-          <div className="bg-theme-bg-secondary rounded-xl p-3 border border-theme-border">
-            <div className="text-xs text-theme-text-muted">Wallet</div>
-            <div className="text-lg font-bold text-dr7-gold">{fmtEur(walletBalance)}</div>
+        {/* Secondary stats — wallet, debiti, penali, danni, annullate */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 px-6 py-3 border-b border-theme-border shrink-0">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-theme-text-muted">Wallet:</span>
+            <span className="font-bold text-dr7-gold tabular-nums">{fmtEur(walletBalance)}</span>
           </div>
-          <div className="bg-theme-bg-secondary rounded-xl p-3 border border-theme-border">
-            <div className="text-xs text-theme-text-muted">Noleggi</div>
-            <div className="text-lg font-bold text-theme-text-primary">{kpis.noleggiCount}</div>
-          </div>
-          <div className="bg-theme-bg-secondary rounded-xl p-3 border border-theme-border">
-            <div className="text-xs text-theme-text-muted">Lavaggi</div>
-            <div className="text-lg font-bold text-theme-text-primary">{kpis.lavaggiCount}</div>
-          </div>
-          <div className="bg-theme-bg-secondary rounded-xl p-3 border border-theme-border">
-            <div className="text-xs text-theme-text-muted">Totale Speso</div>
-            <div className="text-lg font-bold text-green-400">{fmtEur(kpis.totalSpent)}</div>
-          </div>
-          <div className="bg-theme-bg-secondary rounded-xl p-3 border border-theme-border">
-            <div className="text-xs text-theme-text-muted">Penali</div>
-            <div className="text-lg font-bold text-yellow-400">{fmtEur(kpis.totalPenali)} <span className="text-xs font-normal">({kpis.penaliCount})</span></div>
-          </div>
-          <div className="bg-theme-bg-secondary rounded-xl p-3 border border-theme-border">
-            <div className="text-xs text-theme-text-muted">Danni</div>
-            <div className="text-lg font-bold text-red-400">{fmtEur(kpis.totalDanni)} <span className="text-xs font-normal">({kpis.danniCount})</span></div>
-          </div>
-        </div>
-
-        {/* Sub-KPI row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 py-3 border-b border-theme-border shrink-0">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-xs">
             <span className="text-theme-text-muted">Debiti:</span>
-            <span className={`font-bold ${kpis.unpaidTotal > 0 ? 'text-red-400' : 'text-green-400'}`}>{fmtEur(kpis.unpaidTotal)}</span>
+            <span className={`font-bold tabular-nums ${kpis.unpaidTotal > 0 ? 'text-red-400' : 'text-emerald-400'}`}>{fmtEur(kpis.unpaidTotal)}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-theme-text-muted">Penali:</span>
+            <span className="font-bold text-yellow-400 tabular-nums">{fmtEur(kpis.totalPenali)} <span className="text-theme-text-muted font-normal">({kpis.penaliCount})</span></span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-theme-text-muted">Danni:</span>
+            <span className="font-bold text-red-400 tabular-nums">{fmtEur(kpis.totalDanni)} <span className="text-theme-text-muted font-normal">({kpis.danniCount})</span></span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
             <span className="text-theme-text-muted">Annullate:</span>
-            <span className="font-bold text-theme-text-primary">{kpis.cancelled}</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-theme-text-muted">Ultima attivita:</span>
-            <span className="font-bold text-theme-text-primary">{kpis.lastDate ? `${daysSince(kpis.lastDate)} giorni fa` : '-'}</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-theme-text-muted">Meccanica:</span>
-            <span className="font-bold text-theme-text-primary">{kpis.meccanicaCount}</span>
+            <span className="font-bold text-theme-text-primary tabular-nums">{kpis.cancelled}</span>
           </div>
         </div>
 
@@ -568,12 +697,103 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
           ))}
         </div>
 
-        {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Tab Content + Right Sidebar */}
+        <div className="flex-1 flex overflow-hidden min-h-0">
+        <div className="flex-1 overflow-y-auto p-6 min-w-0">
 
           {/* STATO CLIENTE */}
           {activeTab === 'stato' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-6">
+              {/* Distribuzione Spesa per Servizio + Veicoli Utilizzati */}
+              {(serviceBreakdown.total > 0 || uniqueVehicles.length > 0) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Donut: Distribuzione Spesa per Servizio */}
+                  {serviceBreakdown.total > 0 && (
+                    <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Distribuzione spesa per servizio</h3>
+                        <span className="text-[10px] text-theme-text-muted">solo pagati</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {(() => {
+                          const r = 15.91549
+                          let offset = 0
+                          return (
+                            <div className="relative w-32 h-32 shrink-0">
+                              <svg className="w-32 h-32 -rotate-90" viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r={r} fill="none" stroke="currentColor" strokeWidth="4" className="text-theme-bg-tertiary"/>
+                                {serviceBreakdown.slices.map((s, i) => {
+                                  const dash = `${s.pct}, 100`
+                                  const el = (
+                                    <circle
+                                      key={i}
+                                      cx="18" cy="18" r={r}
+                                      fill="none" strokeWidth="4"
+                                      stroke={s.color}
+                                      strokeDasharray={dash}
+                                      strokeDashoffset={-offset}
+                                    />
+                                  )
+                                  offset += s.pct
+                                  return el
+                                })}
+                              </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <div className="text-[10px] text-theme-text-muted">Totale</div>
+                                <div className="text-base font-bold text-theme-text-primary tabular-nums">{fmtEur(serviceBreakdown.total)}</div>
+                              </div>
+                            </div>
+                          )
+                        })()}
+                        <div className="flex-1 space-y-1.5 min-w-0">
+                          {serviceBreakdown.slices.map((s, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs">
+                              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: s.color }}/>
+                              <span className="text-theme-text-secondary flex-1 truncate">{s.label}</span>
+                              <span className="text-theme-text-primary font-bold tabular-nums">{s.pct}%</span>
+                              <span className="text-theme-text-muted tabular-nums w-16 text-right">{fmtEur(s.value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Veicoli Utilizzati */}
+                  {uniqueVehicles.length > 0 && (
+                    <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Veicoli utilizzati</h3>
+                        <span className="text-[10px] text-theme-text-muted">{uniqueVehicles.length} {uniqueVehicles.length === 1 ? 'veicolo' : 'veicoli'}</span>
+                      </div>
+                      <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                        {uniqueVehicles.slice(0, 6).map((v, i) => (
+                          <div key={i} className="flex items-center gap-3 rounded-xl border border-theme-border bg-theme-bg-primary/50 p-2">
+                            <div className="w-12 h-10 rounded-lg bg-gradient-to-br from-dr7-gold/20 to-dr7-gold/5 border border-dr7-gold/20 grid place-items-center shrink-0">
+                              <svg className="w-6 h-5 text-dr7-gold" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M3 17v-2.5C3 13.12 4.12 12 5.5 12h13c1.38 0 2.5 1.12 2.5 2.5V17h-2v2a1 1 0 01-1 1h-1a1 1 0 01-1-1v-2H8v2a1 1 0 01-1 1H6a1 1 0 01-1-1v-2H3zm2-3a.75.75 0 100 1.5.75.75 0 000-1.5zm14 0a.75.75 0 100 1.5.75.75 0 000-1.5zM6.5 5h11l1.5 5H5l1.5-5z"/>
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-theme-text-primary truncate">{v.name}</div>
+                              <div className="text-[10px] text-theme-text-muted flex items-center gap-1.5">
+                                {v.plate && <span className="font-mono uppercase">{v.plate}</span>}
+                                {v.plate && <span>·</span>}
+                                <span>{v.uses} {v.uses === 1 ? 'utilizzo' : 'utilizzi'}</span>
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-theme-text-muted whitespace-nowrap text-right">
+                              ultimo<br/>{fmtDate(v.lastUsed)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left: Activity table */}
               <div className="lg:col-span-2 space-y-4">
                 {/* DR7 Club daily interest accrual — visible at the TOP for
@@ -791,6 +1011,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 </div>
               </div>
             </div>
+            </div>
           )}
 
           {/* DATI ANAGRAFICI */}
@@ -1007,6 +1228,136 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
               </div>
             </div>
           )}
+        </div>
+
+          {/* Right Sidebar — Azioni / Alert / Insight / Documenti */}
+          <aside className="hidden xl:flex flex-col w-80 shrink-0 border-l border-theme-border overflow-y-auto bg-theme-bg-secondary/30">
+            <div className="p-4 space-y-4">
+              {/* Azioni Rapide */}
+              <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-3">
+                <h3 className="text-[10px] font-bold text-theme-text-primary uppercase tracking-wider mb-2.5">Azioni Rapide</h3>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {customer.telefono && (
+                    <a
+                      href={`https://wa.me/${customer.telefono.replace(/\D/g, '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/15 transition-colors text-center"
+                    >
+                      <svg className="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                      <span className="text-[10px] font-medium text-theme-text-primary">WhatsApp</span>
+                    </a>
+                  )}
+                  {customer.email && (
+                    <a
+                      href={`mailto:${customer.email}`}
+                      className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border border-blue-500/20 bg-blue-500/5 hover:bg-blue-500/15 transition-colors text-center"
+                    >
+                      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                      <span className="text-[10px] font-medium text-theme-text-primary">Email</span>
+                    </a>
+                  )}
+                  {customer.telefono && (
+                    <a
+                      href={`tel:${customer.telefono}`}
+                      className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/15 transition-colors text-center"
+                    >
+                      <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                      <span className="text-[10px] font-medium text-theme-text-primary">Chiama</span>
+                    </a>
+                  )}
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(customer.email || customer.telefono || '')}
+                    className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/15 transition-colors text-center"
+                  >
+                    <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                    <span className="text-[10px] font-medium text-theme-text-primary">Copia contatto</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Alert & Notifiche */}
+              <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-3">
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-[10px] font-bold text-theme-text-primary uppercase tracking-wider">Alert & Notifiche</h3>
+                  {alerts.length > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 font-bold">{alerts.length}</span>
+                  )}
+                </div>
+                {alerts.length === 0 ? (
+                  <div className="text-xs text-theme-text-muted py-2">Nessuna notifica attiva</div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {alerts.map((a, i) => {
+                      const colors = a.level === 'crit'
+                        ? 'border-red-500/30 bg-red-500/5 text-red-400'
+                        : a.level === 'warn'
+                        ? 'border-amber-500/30 bg-amber-500/5 text-amber-400'
+                        : 'border-blue-500/30 bg-blue-500/5 text-blue-400'
+                      return (
+                        <div key={i} className={`rounded-lg border p-2 ${colors}`}>
+                          <div className="text-xs font-semibold leading-tight">{a.title}</div>
+                          {a.detail && <div className="text-[10px] mt-0.5 text-theme-text-muted">{a.detail}</div>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Insight */}
+              <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-3">
+                <h3 className="text-[10px] font-bold text-theme-text-primary uppercase tracking-wider mb-2.5">Insight</h3>
+                <div className={`rounded-lg border p-2.5 ${insight.bg}`}>
+                  <div className={`text-xs font-semibold ${insight.color}`}>{insight.label}</div>
+                  <div className="text-[10px] text-theme-text-muted mt-1">
+                    Risk score {riskScore}/10 · Punctuality {kpis.punctuality}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Documenti */}
+              <div className="rounded-xl border border-theme-border bg-theme-bg-primary p-3">
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-[10px] font-bold text-theme-text-primary uppercase tracking-wider">Documenti</h3>
+                  <span className="text-[10px] text-theme-text-muted">{documents.length} archiviati</span>
+                </div>
+                <div className="space-y-1.5">
+                  {[
+                    { type: 'patente', label: 'Patente' },
+                    { type: 'carta_identita', label: 'Carta identità' },
+                    { type: 'codice_fiscale', label: 'Codice fiscale' },
+                    { type: 'passaporto', label: 'Passaporto' },
+                  ].map(d => {
+                    const status = docStatus(d.type)
+                    return (
+                      <div key={d.type} className="flex items-center justify-between text-xs">
+                        <span className="text-theme-text-secondary">{d.label}</span>
+                        <span className={`font-semibold ${status.color}`}>{status.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Carta tokenizzata */}
+              {customer.metadata?.nexi_contract_id && (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Carta su file</h3>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase">Tokenizzata</span>
+                  </div>
+                  <div className="font-mono text-sm text-theme-text-primary">
+                    {customer.metadata.nexi_card_masked_pan || '•••• •••• •••• ••••'}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 text-[10px] text-theme-text-muted">
+                    {customer.metadata.nexi_card_circuit && <span className="uppercase">{customer.metadata.nexi_card_circuit}</span>}
+                    {customer.metadata.nexi_card_type && <span className="text-theme-text-muted/70">· {customer.metadata.nexi_card_type}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
         </div>
       </div>
     </div>
