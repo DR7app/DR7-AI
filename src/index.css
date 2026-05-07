@@ -308,3 +308,35 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .light .scrollbar-thumb-white\/10::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.1);
 }
+
+/* Light-mode override per le pastel Tailwind: i toni 300/400 sono nati per
+   sfondi scuri e diventano illeggibili su bianco. Sotto .light li riportiamo
+   ai toni 600/700, mantenendo il colore semantico. Le opacity slash come
+   /80 /70 mantengono la nuova base perché Tailwind genera color: rgb(... / a). */
+.light .text-red-300, .light .text-red-400 { color: #B91C1C; }
+.light .text-red-300\/80, .light .text-red-400\/80, .light .text-red-400\/70 { color: rgba(185, 28, 28, 0.85); }
+
+.light .text-emerald-300, .light .text-emerald-400 { color: #047857; }
+.light .text-emerald-300\/80, .light .text-emerald-400\/80, .light .text-emerald-400\/70 { color: rgba(4, 120, 87, 0.85); }
+
+.light .text-amber-300, .light .text-amber-400 { color: #B45309; }
+.light .text-amber-300\/80 { color: rgba(180, 83, 9, 0.85); }
+
+.light .text-blue-300, .light .text-blue-400 { color: #1D4ED8; }
+.light .text-blue-300\/80 { color: rgba(29, 78, 216, 0.85); }
+
+.light .text-cyan-300, .light .text-cyan-400 { color: #0E7490; }
+
+.light .text-yellow-300, .light .text-yellow-400 { color: #A16207; }
+
+.light .text-purple-300, .light .text-purple-400 { color: #6D28D9; }
+.light .text-purple-300\/80 { color: rgba(109, 40, 217, 0.85); }
+
+.light .text-rose-300 { color: #BE123C; }
+.light .text-orange-300, .light .text-orange-400 { color: #C2410C; }
+.light .text-pink-300 { color: #BE185D; }
+
+/* dr7-gold token usato come testo: il valore dark (#2d8a7e) è ok su scuro
+   ma poco contrastato su bg-dr7-gold/10. Lascia invariato sui badge ma
+   scurisci leggermente quando è su sfondo chiaro. */
+.light .text-dr7-gold { color: #1B5F57; }
