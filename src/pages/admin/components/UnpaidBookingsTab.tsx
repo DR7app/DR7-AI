@@ -579,39 +579,55 @@ export default function UnpaidBookingsTab() {
         }
 
         // 2. Generate contract + send signing link (ONLY for car rentals)
+        // Skip when the booking already has a signed contract — re-sending a
+        // signing link to a customer who has already signed (status was
+        // "Confermata da saldare" precisely because the signature came back)
+        // is the bug we're guarding against.
         if (isCarRental) {
-          try {
-            const genRes = await authFetch('/.netlify/functions/generate-contract', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ bookingId, silent: true })
-            })
-            if (!genRes.ok) {
-              const genErr = await genRes.json().catch(() => ({} as any))
-              logger.warn('[Segna Pagato] generate-contract failed:', genErr)
-              toast.error(`Contratto non generato: ${genErr.error || `HTTP ${genRes.status}`}`, { duration: 8000 })
-            } else {
-              // Delegate the contract lookup to signature-init (service-role
-              // backend bypasses RLS). Skips the frontend SELECT that could
-              // silently return null when the admin JWT isn't allowed to read
-              // contracts — which was the exact reason "Segna pagato" wasn't
-              // triggering the signing link before.
-              const sigRes = await fetch('/.netlify/functions/signature-init', {
+          const { data: existingContract } = await supabase
+            .from('contracts')
+            .select('signed_pdf_url')
+            .eq('booking_id', bookingId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (existingContract?.signed_pdf_url) {
+            logger.log('[Segna Pagato] Contract already signed for booking', bookingId, '— skipping regenerate + signature-init')
+          } else {
+            try {
+              const genRes = await authFetch('/.netlify/functions/generate-contract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bookingId })
+                body: JSON.stringify({ bookingId, silent: true })
               })
-              if (sigRes.ok) {
-                toast.success('Contratto e link firma inviati al cliente')
+              if (!genRes.ok) {
+                const genErr = await genRes.json().catch(() => ({} as any))
+                logger.warn('[Segna Pagato] generate-contract failed:', genErr)
+                toast.error(`Contratto non generato: ${genErr.error || `HTTP ${genRes.status}`}`, { duration: 8000 })
               } else {
-                const sigErr = await sigRes.json().catch(() => ({} as any))
-                logger.warn('[Segna Pagato] signature-init failed:', sigErr)
-                toast.error(`Link firma non inviato: ${sigErr.error || `HTTP ${sigRes.status}`}`, { duration: 8000 })
+                // Delegate the contract lookup to signature-init (service-role
+                // backend bypasses RLS). Skips the frontend SELECT that could
+                // silently return null when the admin JWT isn't allowed to read
+                // contracts — which was the exact reason "Segna pagato" wasn't
+                // triggering the signing link before.
+                const sigRes = await fetch('/.netlify/functions/signature-init', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ bookingId })
+                })
+                if (sigRes.ok) {
+                  toast.success('Contratto e link firma inviati al cliente')
+                } else {
+                  const sigErr = await sigRes.json().catch(() => ({} as any))
+                  logger.warn('[Segna Pagato] signature-init failed:', sigErr)
+                  toast.error(`Link firma non inviato: ${sigErr.error || `HTTP ${sigRes.status}`}`, { duration: 8000 })
+                }
               }
+            } catch (sigErr) {
+              logger.warn('Contract/signing link generation failed:', sigErr)
+              toast.error(`Errore contratto: ${sigErr instanceof Error ? sigErr.message : 'sconosciuto'}`, { duration: 8000 })
             }
-          } catch (sigErr) {
-            logger.warn('Contract/signing link generation failed:', sigErr)
-            toast.error(`Errore contratto: ${sigErr instanceof Error ? sigErr.message : 'sconosciuto'}`, { duration: 8000 })
           }
 
           // 3. Send "Conferma Noleggio (cliente)" confirmation via rental_new_customer template
@@ -1602,28 +1618,42 @@ export default function UnpaidBookingsTab() {
         }).catch(() => { /* non-blocking */ })
 
         // Each newly-paid rental needs its contract regenerated and the firma
-        // link re-sent to the customer. Same pipeline used by the single-booking
-        // "Segna Pagato" path (updatePaymentStatus). Best-effort — any failure
-        // here is logged but does not abort the batch.
+        // link re-sent to the customer — UNLESS the customer has already
+        // signed. In that case the booking was "Confermata da saldare"
+        // because the signature came back; re-sending would push a new
+        // signing link for a contract the customer already signed.
+        // Best-effort — any failure here is logged but does not abort the batch.
         try {
-          await authFetch('/.netlify/functions/generate-contract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookingId, silent: true })
-          })
-          const { data: contractForSig } = await supabase
+          const { data: signedCheck } = await supabase
             .from('contracts')
-            .select('id, pdf_url')
+            .select('signed_pdf_url')
             .eq('booking_id', bookingId)
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle()
-          if (contractForSig?.id && contractForSig?.pdf_url) {
-            await fetch('/.netlify/functions/signature-init', {
+
+          if (signedCheck?.signed_pdf_url) {
+            logger.log('[markAllCustomerPaid] Contract already signed for', bookingId, '— skipping regenerate + signature-init')
+          } else {
+            await authFetch('/.netlify/functions/generate-contract', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contractId: contractForSig.id, bookingId })
+              body: JSON.stringify({ bookingId, silent: true })
             })
+            const { data: contractForSig } = await supabase
+              .from('contracts')
+              .select('id, pdf_url')
+              .eq('booking_id', bookingId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            if (contractForSig?.id && contractForSig?.pdf_url) {
+              await fetch('/.netlify/functions/signature-init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId: contractForSig.id, bookingId })
+              })
+            }
           }
         } catch (sigErr) {
           logger.warn('[markAllCustomerPaid] contract/firma pipeline failed for', bookingId, sigErr)
