@@ -1,18 +1,19 @@
 /**
  * DR7 Club tier-based cashback helper.
  *
- * Single source of truth for the cashback rule:
+ * Source of truth for tiers is Centralina Pro
+ * (`centralina_pro_config.config.dr7_club.tiers`), loaded at runtime by
+ * `loadActiveTiers()`. The hardcoded `TIER_THRESHOLDS` below is the
+ * fallback when Centralina Pro has never been saved.
+ *
+ * Rule:
  *  - User must have an active DR7 Club subscription
  *  - Cashback % depends on the user's tier (computed from annual spend
  *    over the last 12 months: card-paid bookings + wallet recharges)
- *  - Tiers (mirrors `dr7-web-bugfix/utils/dr7club.ts`):
- *      Access     €0     – €2.999    →  2%
- *      Black      €3.000 – €9.999    →  3%
- *      Signature  €10.000+           →  4%
  *
  * Usage:
  *   const pct = await getClubCashbackPct(supabase, userId)
- *   if (pct == null) // no active club → no cashback
+ *   if (pct == null) // no active club / no matching tier → no cashback
  *
  * Cashback amount lands in `user_credit_balance.balance` and is recorded
  * in `credit_transactions` with `reference_type='card_bonus'` so the
@@ -22,13 +23,27 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export const TIER_THRESHOLDS = [
-    { tier: 'access' as const,    min: 0,     max: 2999,     rewardPercent: 2, label: 'Access' },
-    { tier: 'black' as const,     min: 3000,  max: 9999,     rewardPercent: 3, label: 'Black' },
-    { tier: 'signature' as const, min: 10000, max: Infinity, rewardPercent: 4, label: 'Signature' },
+export interface TierThreshold {
+    tier: string
+    min: number
+    max: number
+    rewardPercent: number
+    label: string
+}
+
+/**
+ * Default tiers — used as fallback ONLY when Centralina Pro has never
+ * been saved (no `dr7_club` key in the config row). If the operator
+ * explicitly saves an empty list or disables every tier, that intent
+ * wins (no cashback).
+ */
+export const TIER_THRESHOLDS: TierThreshold[] = [
+    { tier: 'access',    min: 0,     max: 2999,     rewardPercent: 2, label: 'Access' },
+    { tier: 'black',     min: 3000,  max: 9999,     rewardPercent: 3, label: 'Black' },
+    { tier: 'signature', min: 10000, max: Infinity, rewardPercent: 4, label: 'Signature' },
 ]
 
-export type ClubTier = 'access' | 'black' | 'signature'
+export type ClubTier = string
 
 export interface TierInfo {
     tier: ClubTier
@@ -37,8 +52,70 @@ export interface TierInfo {
     annualSpend: number
 }
 
-export function calculateTier(annualSpend: number): TierInfo {
-    const t = TIER_THRESHOLDS.find(x => annualSpend >= x.min && annualSpend <= x.max) || TIER_THRESHOLDS[0]
+interface RawCentralinaTier {
+    id?: unknown
+    label?: unknown
+    min_annual_spend?: unknown
+    rate_pct?: unknown
+    is_active?: unknown
+}
+
+/**
+ * Load the active DR7 Club tier list from Centralina Pro. Returns:
+ *  - `TIER_THRESHOLDS` when the config row has no `dr7_club` key
+ *    (Centralina Pro never saved this section).
+ *  - The operator-edited list otherwise — even if empty (operator
+ *    disabled / removed every tier → cashback turned off by intent).
+ */
+export async function loadActiveTiers(supabase: SupabaseClient): Promise<TierThreshold[]> {
+    try {
+        const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+        const cfg = (data?.config ?? null) as Record<string, unknown> | null
+        const dr7Club = cfg?.dr7_club as Record<string, unknown> | undefined
+        const tiersRaw = dr7Club?.tiers as RawCentralinaTier[] | undefined
+        // No dr7_club key at all → fall back to defaults.
+        if (!Array.isArray(tiersRaw)) return TIER_THRESHOLDS
+        const active = tiersRaw
+            .filter((t) => t && t.is_active !== false)
+            .map((t) => {
+                const label = String(t.label ?? t.id ?? 'Tier')
+                const idStr = String(t.id ?? label).toLowerCase().replace(/\s+/g, '_') || 'tier'
+                const min = typeof t.min_annual_spend === 'number'
+                    ? t.min_annual_spend
+                    : Number(t.min_annual_spend ?? 0)
+                const reward = typeof t.rate_pct === 'number'
+                    ? t.rate_pct
+                    : Number(t.rate_pct ?? 0)
+                return { tier: idStr, label, min, rewardPercent: reward, max: 0 }
+            })
+            .filter((t) => Number.isFinite(t.min) && Number.isFinite(t.rewardPercent))
+            .sort((a, b) => a.min - b.min)
+        // Operator explicitly disabled / deleted every tier → return empty
+        // so the caller produces no cashback. This is intentional, not an error.
+        if (active.length === 0) return []
+        // Compute `max` based on the next tier's threshold; top tier is open-ended.
+        for (let i = 0; i < active.length; i++) {
+            active[i].max = i < active.length - 1 ? active[i + 1].min - 1 : Infinity
+        }
+        return active
+    } catch (err) {
+        console.error('[dr7ClubCashback] loadActiveTiers failed, using defaults:', err)
+        return TIER_THRESHOLDS
+    }
+}
+
+/**
+ * Pick the tier matching `annualSpend` from `tiers`. Returns rewardPercent=0
+ * (and a synthetic 'none' tier) when no tier matches — e.g. operator removed
+ * the lowest band or the spend is below it.
+ */
+export function calculateTier(annualSpend: number, tiers: TierThreshold[] = TIER_THRESHOLDS): TierInfo {
+    const t = tiers.find(x => annualSpend >= x.min && annualSpend <= x.max)
+    if (!t) return { tier: 'none', label: 'Nessun tier', rewardPercent: 0, annualSpend }
     return { tier: t.tier, label: t.label, rewardPercent: t.rewardPercent, annualSpend }
 }
 
@@ -105,11 +182,18 @@ export async function getAnnualSpendEur(supabase: SupabaseClient, userId: string
 }
 
 /**
- * Returns the cashback percentage for the user, or null if no cashback
- * (no active club). Wraps `hasActiveClub` + `getAnnualSpendEur` + `calculateTier`.
+ * Returns the cashback percentage for the user, or null when no cashback
+ * should be awarded — covering: no active club, no configured tier
+ * matches the spend, or the matching tier has rewardPercent <= 0.
+ * Wraps `hasActiveClub` + `getAnnualSpendEur` + `loadActiveTiers` +
+ * `calculateTier`.
  */
 export async function getClubCashbackPct(supabase: SupabaseClient, userId: string): Promise<number | null> {
     if (!await hasActiveClub(supabase, userId)) return null
-    const spend = await getAnnualSpendEur(supabase, userId)
-    return calculateTier(spend).rewardPercent
+    const [spend, tiers] = await Promise.all([
+        getAnnualSpendEur(supabase, userId),
+        loadActiveTiers(supabase),
+    ])
+    const pct = calculateTier(spend, tiers).rewardPercent
+    return pct > 0 ? pct : null
 }
