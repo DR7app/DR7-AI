@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import AddressAutocomplete from './AddressAutocomplete'
+import { kmFromDR7Office } from '../../../utils/dr7Distance'
 
 type FleetVehicle = {
   id: string
@@ -3124,7 +3126,7 @@ function ServiziSection({
                 placeholder="Titolo"
               />
               <p className="text-[12px] text-[#6e6e73] mt-0.5 px-1.5">
-                Tariffa = km × €{deliveryRate}/km (modificabile in &laquo;Consegna a Domicilio&raquo;)
+                Cerca un indirizzo: i km dall&rsquo;ufficio DR7 vengono calcolati automaticamente. Tariffa = km × €{deliveryRate}/km (modificabile in &laquo;Consegna a Domicilio&raquo;).
               </p>
             </div>
             <button
@@ -3144,8 +3146,8 @@ function ServiziSection({
               const fee = Math.round(km * deliveryRate * 100) / 100
               return (
                 <li key={loc.id} className="px-5 py-3 group">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <label className="inline-flex items-center cursor-pointer">
+                  <div className="flex items-start gap-3 flex-wrap">
+                    <label className="inline-flex items-center cursor-pointer mt-2.5">
                       <input
                         type="checkbox"
                         checked={loc.is_active}
@@ -3153,12 +3155,26 @@ function ServiziSection({
                         className="w-4 h-4 accent-[#007aff]"
                       />
                     </label>
-                    <input
-                      value={loc.label}
-                      onChange={(e) => patchLoc(loc.id, { label: e.target.value })}
-                      className="flex-1 min-w-[160px] bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-                      placeholder="Nome luogo"
-                    />
+                    <div className="flex-1 min-w-[260px]">
+                      <AddressAutocomplete
+                        value={loc.label}
+                        onChange={(val) => patchLoc(loc.id, { label: val })}
+                        onSelectParts={(parts) => {
+                          // Geocode hit → recompute road km from DR7 office
+                          // automatically. Admin can still override the km
+                          // value below if they know better than the geodesic
+                          // estimate (e.g. ferry routes, long detours).
+                          if (parts.lat != null && parts.lon != null) {
+                            const computedKm = kmFromDR7Office({ lat: parts.lat, lon: parts.lon })
+                            patchLoc(loc.id, { label: parts.full, km: computedKm })
+                          } else {
+                            patchLoc(loc.id, { label: parts.full })
+                          }
+                        }}
+                        placeholder="Aeroporto, hotel, indirizzo..."
+                        className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      />
+                    </div>
                     <div className="relative">
                       <input
                         type="number"
@@ -3170,15 +3186,16 @@ function ServiziSection({
                           patchLoc(loc.id, { km: v === '' ? '' : Number(v) })
                         }}
                         className="w-28 bg-white border border-black/10 rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                        title="Calcolato dall'indirizzo (modificabile)"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">km</span>
                     </div>
-                    <span className="text-[13px] tabular-nums text-[#6e6e73] min-w-[80px] text-right">
+                    <span className="text-[13px] tabular-nums text-[#6e6e73] min-w-[80px] text-right mt-2.5">
                       = €{fee.toFixed(2)}
                     </span>
                     <button
                       onClick={() => removeLoc(loc.id)}
-                      className="text-[13px] text-[#ff3b30] hover:text-[#d70015] transition-colors opacity-0 group-hover:opacity-100"
+                      className="text-[13px] text-[#ff3b30] hover:text-[#d70015] transition-colors opacity-0 group-hover:opacity-100 mt-2.5"
                     >
                       Rimuovi
                     </button>

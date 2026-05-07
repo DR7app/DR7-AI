@@ -3,6 +3,9 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 interface NominatimResult {
   place_id: number
   display_name: string
+  /** Nominatim returns coords as strings — convert to number when used. */
+  lat?: string
+  lon?: string
   address?: {
     road?: string
     house_number?: string
@@ -23,12 +26,14 @@ export interface AddressParts {
   zip: string
   province: string
   full: string
+  lat?: number
+  lon?: number
 }
 
 interface AddressAutocompleteProps {
   value: string
   onChange: (value: string) => void
-  /** Called with structured address parts when a suggestion is selected */
+  /** Called with structured address parts (incl. coords) when a suggestion is selected */
   onSelectParts?: (parts: AddressParts) => void
   placeholder?: string
   className?: string
@@ -103,7 +108,17 @@ export default function AddressAutocomplete({
     const city = a.city || a.town || a.village || a.municipality || ''
     const zip = a.postcode || ''
     const province = a.county || a.state || ''
-    return { street, city, zip, province, full: formatAddress(result) }
+    const lat = result.lat ? parseFloat(result.lat) : undefined
+    const lon = result.lon ? parseFloat(result.lon) : undefined
+    return {
+      street,
+      city,
+      zip,
+      province,
+      full: formatAddress(result),
+      lat: Number.isFinite(lat) ? lat : undefined,
+      lon: Number.isFinite(lon) ? lon : undefined,
+    }
   }
 
   const handleSelect = (result: NominatimResult) => {
