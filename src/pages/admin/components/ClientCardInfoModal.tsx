@@ -78,8 +78,28 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
             }
         }
 
+        // Fallback: se customers_extended.metadata non ha la tokenizzazione,
+        // controlla nexi_transactions per una transazione completata con
+        // contract_id collegata alla stessa email del cliente. Capita per i
+        // clienti pagati prima che il backfill scrivesse i campi
+        // nexi_card_* dentro customers_extended.metadata (vedi NexiTab,
+        // pulsante "Recupera carte mancanti").
+        async function fetchNexiTxByEmail(email: string) {
+            const { data: tx, error: err } = await supabase
+                .from('nexi_transactions')
+                .select('contract_id, status, metadata')
+                .eq('customer_email', email)
+                .eq('status', 'completed')
+                .not('contract_id', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+            if (err) return null
+            return tx
+        }
+
         lookup()
-            .then((row) => {
+            .then(async (row) => {
                 if (cancelled) return
                 if (!row) {
                     setError('Cliente non trovato in customers_extended')
@@ -87,16 +107,36 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
                     return
                 }
                 const m = (row.metadata || {}) as Record<string, unknown>
+                let contractId = m.nexi_contract_id as string | undefined
+                let maskedPan = m.nexi_card_masked_pan as string | undefined
+                let circuit = m.nexi_card_circuit as string | undefined
+                let brand = m.nexi_card_brand as string | undefined
+                let cardType = m.nexi_card_type as string | undefined
+                let updated = m.nexi_contract_updated as string | undefined
+
+                if (!contractId && row.email) {
+                    const tx = await fetchNexiTxByEmail(row.email)
+                    if (cancelled) return
+                    if (tx?.contract_id) {
+                        contractId = tx.contract_id
+                        const txMeta = (tx.metadata || {}) as Record<string, unknown>
+                        maskedPan = maskedPan || (txMeta.card_masked_pan as string | undefined) || (txMeta.nexi_card_masked_pan as string | undefined)
+                        circuit = circuit || (txMeta.card_circuit as string | undefined) || (txMeta.nexi_card_circuit as string | undefined)
+                        brand = brand || (txMeta.card_brand as string | undefined) || (txMeta.nexi_card_brand as string | undefined)
+                        cardType = cardType || (txMeta.card_type as string | undefined) || (txMeta.nexi_card_type as string | undefined)
+                    }
+                }
+
                 setData({
                     full_name: buildFullName(row as Record<string, unknown>),
                     email: row.email || null,
                     phone: row.telefono || null,
-                    nexi_contract_id: m.nexi_contract_id as string | undefined,
-                    nexi_card_masked_pan: m.nexi_card_masked_pan as string | undefined,
-                    nexi_card_circuit: m.nexi_card_circuit as string | undefined,
-                    nexi_card_brand: m.nexi_card_brand as string | undefined,
-                    nexi_card_type: m.nexi_card_type as string | undefined,
-                    nexi_contract_updated: m.nexi_contract_updated as string | undefined,
+                    nexi_contract_id: contractId,
+                    nexi_card_masked_pan: maskedPan,
+                    nexi_card_circuit: circuit,
+                    nexi_card_brand: brand,
+                    nexi_card_type: cardType,
+                    nexi_contract_updated: updated,
                 })
                 setLoading(false)
             })
