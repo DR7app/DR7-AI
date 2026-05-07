@@ -262,13 +262,6 @@ function PageHeader() {
                 </div>
             </div>
             <div className="flex items-center gap-3 text-[11px]">
-                <div className="flex flex-col items-end leading-tight">
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>
-                        Accesso verificato
-                    </span>
-                    <span className="text-[10px] text-theme-text-muted mt-0.5">Operatore Verificato</span>
-                </div>
                 <div className="relative">
                     <span className="w-9 h-9 grid place-items-center rounded-full bg-rose-500 text-white font-semibold text-xs">MR</span>
                     <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 border-2 border-theme-bg-primary"/>
