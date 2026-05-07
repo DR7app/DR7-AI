@@ -38,6 +38,7 @@ interface VehicleAlarmContextType {
     enableAudio: () => void
     disableAudio: () => void
     stopAlarm: (bookingId: string) => void
+    snoozeAlarm: (bookingId: string, minutes: number) => void
     markReturned: (bookingId: string) => Promise<{ ok: boolean; error?: string }>
 }
 
@@ -96,6 +97,27 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             return new Set<string>()
         }
     })())
+
+    // Restore active snoozes (survive page reload). Each entry has `until`;
+    // if still in the future, mark the id as triggered and schedule removal.
+    useEffect(() => {
+        try {
+            const stored = JSON.parse(localStorage.getItem('snoozed_alarms') || '[]')
+            if (!Array.isArray(stored)) return
+            const now = Date.now()
+            const stillValid: { id: string; until: number }[] = []
+            for (const entry of stored) {
+                if (!entry || typeof entry.id !== 'string' || typeof entry.until !== 'number') continue
+                if (entry.until <= now) continue
+                triggeredAlarmsRef.current.add(entry.id)
+                window.setTimeout(() => {
+                    triggeredAlarmsRef.current.delete(entry.id)
+                }, entry.until - now)
+                stillValid.push(entry)
+            }
+            localStorage.setItem('snoozed_alarms', JSON.stringify(stillValid))
+        } catch { /* storage may be blocked */ }
+    }, [])
 
     // Helper: add alarm to triggered set with timestamp for cleanup
     const markAlarmTriggered = (trackingId: string, bookingId?: string) => {
@@ -264,6 +286,50 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         } catch (error) {
             console.error('Failed to update alarm status:', error)
         }
+    }
+
+    // Snooze: silenzia temporaneamente per N minuti, poi l'allarme torna a
+    // suonare se la condizione è ancora valida. Diversamente da stopAlarm,
+    // NON persiste alarm_triggered_at in DB (= dismissal permanente).
+    // Aggiunge le tracking-id in triggeredAlarmsRef per fermare il polling
+    // della tab corrente, e schedula la rimozione al timestamp `until`.
+    // Persistito in localStorage 'snoozed_alarms' per sopravvivere a reload.
+    const snoozeAlarm = (bookingId: string, minutes: number) => {
+        if (audioRef.current) {
+            audioRef.current.pause()
+            audioRef.current.currentTime = 0
+        }
+        setAlarmState(prev => ({ ...prev, activeAlarm: null, isPlaying: false }))
+
+        const ids = [
+            bookingId,
+            `return_before_${bookingId}`,
+            `return_after_${bookingId}`,
+            `deposit_${bookingId}`,
+            `unpaid_${bookingId}`,
+            `car_wash_${bookingId}`,
+        ]
+        const until = Date.now() + minutes * 60_000
+
+        for (const id of ids) {
+            triggeredAlarmsRef.current.add(id)
+            // Ritardiamo la rimozione: dopo `until` la tab corrente ricomincia
+            // a valutare il booking. Se nel frattempo la prenotazione è stata
+            // chiusa o spostata, il polling semplicemente non trigger di nuovo.
+            window.setTimeout(() => {
+                triggeredAlarmsRef.current.delete(id)
+            }, minutes * 60_000)
+        }
+
+        // Persisti per sopravvivere a reload — al mount restoreremo gli
+        // ID + ri-schedula i timeout.
+        try {
+            const stored = JSON.parse(localStorage.getItem('snoozed_alarms') || '[]')
+            const cleaned = (Array.isArray(stored) ? stored : [])
+                .filter((e: { id?: string; until?: number }) => typeof e?.until === 'number' && e.until > Date.now())
+            for (const id of ids) cleaned.push({ id, until })
+            localStorage.setItem('snoozed_alarms', JSON.stringify(cleaned))
+        } catch { /* storage may be blocked */ }
     }
 
     // Mark booking as returned: status='completata' + alarm off in one action.
@@ -938,7 +1004,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     }, [])
 
     return (
-        <VehicleAlarmContext.Provider value={{ alarmState, enableAudio, disableAudio, stopAlarm, markReturned }}>
+        <VehicleAlarmContext.Provider value={{ alarmState, enableAudio, disableAudio, stopAlarm, snoozeAlarm, markReturned }}>
             {children}
         </VehicleAlarmContext.Provider>
     )

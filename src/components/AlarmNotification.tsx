@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
 export default function AlarmNotification() {
-    const { alarmState, stopAlarm, markReturned } = useVehicleAlarm()
+    const { alarmState, stopAlarm, snoozeAlarm, markReturned } = useVehicleAlarm()
     const navigate = useNavigate()
-    const [busy, setBusy] = useState<'returned' | 'snooze' | null>(null)
+    const [busy, setBusy] = useState<'returned' | 'snooze' | 'postpone' | null>(null)
 
     if (!alarmState.activeAlarm) return null
 
@@ -47,6 +47,16 @@ export default function AlarmNotification() {
         await stopAlarm(bookingId)
         setBusy(null)
         toast.success('Allarme silenziato')
+    }
+
+    // Posticipa: silenzia per 10 min, poi l'allarme torna a suonare se la
+    // condizione è ancora valida. Diversamente da "Silenzia" (che chiude
+    // permanentemente per la prenotazione corrente), questo è temporaneo.
+    const handlePostpone = () => {
+        setBusy('postpone')
+        snoozeAlarm(bookingId, 10)
+        setBusy(null)
+        toast.success('Allarme posticipato di 10 minuti')
     }
 
     return (
@@ -156,17 +166,26 @@ export default function AlarmNotification() {
                                     )}
                                 </button>
                             )}
+                            <button
+                                onClick={handleOpenBooking}
+                                className="w-full px-4 py-2.5 bg-gray-900 hover:bg-black text-white font-medium rounded-xl transition-colors text-sm"
+                            >
+                                {isFleet ? 'Apri flotta' : 'Apri prenotazione'}
+                            </button>
                             <div className="grid grid-cols-2 gap-2">
                                 <button
-                                    onClick={handleOpenBooking}
-                                    className="px-4 py-2.5 bg-gray-900 hover:bg-black text-white font-medium rounded-xl transition-colors text-sm"
+                                    onClick={handlePostpone}
+                                    disabled={busy !== null}
+                                    className="px-4 py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 font-semibold rounded-xl transition-colors text-sm border border-amber-200"
+                                    title="Silenzia per 10 min, poi l'allarme tornerà a suonare se la condizione è ancora valida"
                                 >
-                                    {isFleet ? 'Apri flotta' : 'Apri prenotazione'}
+                                    {busy === 'postpone' ? 'Posticipo...' : 'Posticipa 10 min'}
                                 </button>
                                 <button
                                     onClick={handleSnooze}
                                     disabled={busy !== null}
                                     className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-xl transition-colors text-sm"
+                                    title="Silenzia definitivamente questo allarme"
                                 >
                                     {busy === 'snooze' ? 'Silenzio...' : 'Silenzia'}
                                 </button>
