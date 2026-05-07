@@ -145,14 +145,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       }
 
       if (vehiclesData) {
-        // Sort: Exotic -> Urban -> Aziendali
-        const sorted = vehiclesData.sort((a, b) => {
-          const order: Record<string, number> = { 'exotic': 1, 'urban': 2, 'aziendali': 3 }
-          const oa = order[a.category || ''] || 99
-          const ob = order[b.category || ''] || 99
-          return oa - ob || a.display_name.localeCompare(b.display_name)
-        })
-        setVehicles(sorted)
+        // Store as-is — final ordering is computed in a useMemo against
+        // proCategories so the calendar follows whatever order the admin
+        // sets in Centralina Pro > Categorie & Fascia (first category =
+        // top of the calendar).
+        setVehicles(vehiclesData)
       }
 
       if (allBookings) {
@@ -309,7 +306,18 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       // No name-based fallback — with multiple same-model cars, plate match is the only reliable method
     })
 
-    vehicles.forEach(vehicle => {
+    // Order rows by Centralina Pro category position (first = top of
+    // calendar). Vehicles whose category isn't in the Pro list fall to
+    // the bottom; ties broken alphabetically.
+    const orderedVehicles = [...vehicles].sort((a, b) => {
+      const ia = proCategories.findIndex(c => c.id === a.category)
+      const ib = proCategories.findIndex(c => c.id === b.category)
+      const ja = ia < 0 ? Number.POSITIVE_INFINITY : ia
+      const jb = ib < 0 ? Number.POSITIVE_INFINITY : ib
+      return ja - jb || a.display_name.localeCompare(b.display_name)
+    })
+
+    orderedVehicles.forEach(vehicle => {
       const vehicleBookings = bookings.filter(b => bookingToVehicleId.get(b.id) === vehicle.id)
 
       // Normalize
@@ -365,7 +373,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
     return rows
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vehicles, bookings, currentRomeComponents, daysInMonth])
+  }, [vehicles, bookings, currentRomeComponents, daysInMonth, proCategories])
 
   // Filter Rows for Display
   const visibleRows = useMemo(() => {
