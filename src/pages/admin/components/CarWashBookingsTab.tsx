@@ -192,6 +192,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // Buffer for an edit-click blocked by the paid_wash_modify OTP gate.
   // Resumed by the useEffect below once the override is approved.
   const pendingEditBookingRef = useRef<CarWashBooking | null>(null)
+  // Set quando il gate OTP per prenotazione_lavaggio_conferma viene aperto a
+  // Salva. Quando l'OTP è approvato il useEffect ripete createBooking(force)
+  // così l'operatore non deve premere di nuovo Salva.
+  const pendingCreateBookingRef = useRef<{ force: boolean } | null>(null)
 
   // Centralized "Modifica" handler — gates paid/confirmed bookings behind OTP
   // (Valerio + Ilenia bypass server-side automatically).
@@ -220,6 +224,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     if (pending && override.overrideCodes.has('paid_wash_modify')) {
       pendingEditBookingRef.current = null
       openEditBooking(pending, { skipOtpGate: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [override.overrideCodes])
+
+  // Resume create booking once OTP `prenotazione_lavaggio_conferma` is
+  // approved — replay createBooking with the stored `force` flag so the
+  // operator doesn't have to press Salva a second time.
+  useEffect(() => {
+    const pending = pendingCreateBookingRef.current
+    if (pending && override.overrideCodes.has('prenotazione_lavaggio_conferma')) {
+      pendingCreateBookingRef.current = null
+      createBooking(pending.force)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [override.overrideCodes])
@@ -1002,6 +1018,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // chiediamo OTP. useLimitationOverride bypassa server-side se il toggle e'
     // OFF, quindi quando off questa chiamata non blocca nulla.
     if (!override.hasOverride('prenotazione_lavaggio_conferma')) {
+      pendingCreateBookingRef.current = { force: forceBooking }
       override.requestOverride('prenotazione_lavaggio_conferma', 'Conferma prenotazione lavaggio richiede autorizzazione direzionale')
       return
     }
