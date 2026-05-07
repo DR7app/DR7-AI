@@ -34,7 +34,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9'
 
 type Category = { id: string; label: string }
 type Fascia = {
@@ -55,6 +55,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p6', title: 'Prezzo Dinamico' },
   { id: 'p7', title: 'Preventivi' },
   { id: 'p8', title: 'Danni & Penali' },
+  { id: 'p9', title: 'Fiscale & Loyalty' },
 ]
 
 const INITIAL_CATEGORIES: Category[] = [
@@ -433,6 +434,42 @@ const INITIAL_PREVENTIVI: PreventiviConfig = {
       body: 'Richiesta No Cauzione da {{cliente}}\nTelefono: {{telefono}}\nVeicolo: {{veicolo}}',
       is_enabled: true,
     },
+  ],
+}
+
+// === Fiscale & Loyalty ===
+
+type FiscalConfig = {
+  vat_rate: number | ''
+}
+
+const INITIAL_FISCAL: FiscalConfig = {
+  vat_rate: 22,
+}
+
+type CashbackChannel = 'card_full' | 'card_deposit' | 'extras' | 'wash'
+
+type CashbackRule = {
+  channel: CashbackChannel
+  label: string
+  rate: number | ''
+  is_active: boolean
+}
+
+type LoyaltyConfig = {
+  is_enabled: boolean
+  min_rentals_for_loyal: number | ''
+  cashback_rules: CashbackRule[]
+}
+
+const INITIAL_LOYALTY: LoyaltyConfig = {
+  is_enabled: true,
+  min_rentals_for_loyal: 3,
+  cashback_rules: [
+    { channel: 'card_full', label: 'Cashback pagamento pieno (carta)', rate: 2, is_active: true },
+    { channel: 'card_deposit', label: 'Cashback acconto 30% (carta)', rate: 1, is_active: true },
+    { channel: 'extras', label: 'Cashback servizi extra', rate: 2, is_active: true },
+    { channel: 'wash', label: 'Cashback Prime Wash', rate: 3, is_active: true },
   ],
 }
 
@@ -850,6 +887,8 @@ type PersistedSnapshot = {
   preventivi: PreventiviConfig
   penali?: PenaliConfig
   danni?: DanniConfig
+  fiscal?: FiscalConfig
+  loyalty?: LoyaltyConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -955,6 +994,34 @@ function migrateSpecialPeriods(
   return out.sort((a, b) => a.start_date.localeCompare(b.start_date))
 }
 
+/**
+ * Merge a persisted LoyaltyConfig with the default 4-channel cashback set,
+ * so that older configs missing a channel still yield a valid object.
+ */
+function mergeLoyalty(raw: unknown): LoyaltyConfig {
+  if (!raw || typeof raw !== 'object') return INITIAL_LOYALTY
+  const r = raw as Partial<LoyaltyConfig>
+  const validChannels: CashbackChannel[] = ['card_full', 'card_deposit', 'extras', 'wash']
+  const incoming = Array.isArray(r.cashback_rules) ? r.cashback_rules : []
+  const merged: CashbackRule[] = validChannels.map((ch) => {
+    const found = incoming.find((x) => x?.channel === ch)
+    const def = INITIAL_LOYALTY.cashback_rules.find((x) => x.channel === ch)!
+    return {
+      channel: ch,
+      label: typeof found?.label === 'string' && found.label.length > 0 ? found.label : def.label,
+      rate: typeof found?.rate === 'number' || found?.rate === '' ? found.rate as number | '' : def.rate,
+      is_active: typeof found?.is_active === 'boolean' ? found.is_active : def.is_active,
+    }
+  })
+  return {
+    is_enabled: typeof r.is_enabled === 'boolean' ? r.is_enabled : INITIAL_LOYALTY.is_enabled,
+    min_rentals_for_loyal: typeof r.min_rentals_for_loyal === 'number' || r.min_rentals_for_loyal === ''
+      ? r.min_rentals_for_loyal as number | ''
+      : INITIAL_LOYALTY.min_rentals_for_loyal,
+    cashback_rules: merged,
+  }
+}
+
 function pick<T>(persisted: PersistedSnapshot | null, key: keyof PersistedSnapshot, fallback: T): T {
   if (persisted && persisted[key] !== undefined && persisted[key] !== null) {
     return persisted[key] as unknown as T
@@ -1023,6 +1090,8 @@ export default function CentralinaProTab() {
   const initialPreventivi = pick(persisted, 'preventivi', INITIAL_PREVENTIVI)
   const initialPenali = migratePenali(pick(persisted, 'penali', INITIAL_PENALI))
   const initialDanni = migrateDanni(pick(persisted, 'danni', INITIAL_DANNI))
+  const initialFiscal = pick(persisted, 'fiscal', INITIAL_FISCAL)
+  const initialLoyalty = mergeLoyalty(pick(persisted, 'loyalty', INITIAL_LOYALTY))
 
   // Current (working) state
   const [categories, setCategories] = useState<Category[]>(initialCategories)
@@ -1035,6 +1104,8 @@ export default function CentralinaProTab() {
   const [preventivi, setPreventivi] = useState<PreventiviConfig>(initialPreventivi)
   const [penali, setPenali] = useState<PenaliConfig>(initialPenali)
   const [danni, setDanni] = useState<DanniConfig>(initialDanni)
+  const [fiscal, setFiscal] = useState<FiscalConfig>(initialFiscal)
+  const [loyalty, setLoyalty] = useState<LoyaltyConfig>(initialLoyalty)
 
   // Saved (committed) snapshot — what was last persisted
   const [savedCategories, setSavedCategories] = useState<Category[]>(initialCategories)
@@ -1047,6 +1118,8 @@ export default function CentralinaProTab() {
   const [savedPreventivi, setSavedPreventivi] = useState<PreventiviConfig>(initialPreventivi)
   const [savedPenali, setSavedPenali] = useState<PenaliConfig>(initialPenali)
   const [savedDanni, setSavedDanni] = useState<DanniConfig>(initialDanni)
+  const [savedFiscal, setSavedFiscal] = useState<FiscalConfig>(initialFiscal)
+  const [savedLoyalty, setSavedLoyalty] = useState<LoyaltyConfig>(initialLoyalty)
 
   const [justSaved, setJustSaved] = useState(false)
 
@@ -1084,11 +1157,16 @@ export default function CentralinaProTab() {
           const migrated = migrateDanni(remote.danni)
           setDanni(migrated); setSavedDanni(migrated)
         }
+        if (remote.fiscal !== undefined) { setFiscal(remote.fiscal); setSavedFiscal(remote.fiscal) }
+        if (remote.loyalty !== undefined) {
+          const migrated = mergeLoyalty(remote.loyalty)
+          setLoyalty(migrated); setSavedLoyalty(migrated)
+        }
         // Refresh local cache with the authoritative copy
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
       } else {
         // Supabase is empty — seed with initial/localStorage values
-        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni }
+        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, loyalty }
         savePersisted(seed)
         console.log('[CentralinaPro] Seeded Pro config to Supabase')
       }
@@ -1179,7 +1257,7 @@ export default function CentralinaProTab() {
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni },
+        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, loyalty },
         {
           categories: savedCategories,
           fasce: savedFasce,
@@ -1191,11 +1269,13 @@ export default function CentralinaProTab() {
           preventivi: savedPreventivi,
           penali: savedPenali,
           danni: savedDanni,
+          fiscal: savedFiscal,
+          loyalty: savedLoyalty,
         }
       ),
     [
-      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni,
-      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni,
+      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, loyalty,
+      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedLoyalty,
     ]
   )
 
@@ -1211,7 +1291,9 @@ export default function CentralinaProTab() {
     setSavedPreventivi(preventivi)
     setSavedPenali(penali)
     setSavedDanni(danni)
-    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni })
+    setSavedFiscal(fiscal)
+    setSavedLoyalty(loyalty)
+    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, loyalty })
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
 
@@ -1232,6 +1314,8 @@ export default function CentralinaProTab() {
     setPreventivi(savedPreventivi)
     setPenali(savedPenali)
     setDanni(savedDanni)
+    setFiscal(savedFiscal)
+    setLoyalty(savedLoyalty)
   }
 
   void changes.length // SaveBar always visible
@@ -1321,12 +1405,13 @@ export default function CentralinaProTab() {
                 categories={categories}
               />
             )}
-            {section !== 'categorie-fascia' && section !== 'p2' && section !== 'p3' && section !== 'p4' && section !== 'p5' && section !== 'p6' && section !== 'p7' && section !== 'p8' && (
-              <div className="bg-white rounded-2xl border border-black/5 shadow-sm p-12 text-center">
-                <p className="text-[15px] text-[#6e6e73]">
-                  Sezione in arrivo — da definire
-                </p>
-              </div>
+            {section === 'p9' && (
+              <FiscaleLoyaltySection
+                fiscal={fiscal}
+                setFiscal={setFiscal}
+                loyalty={loyalty}
+                setLoyalty={setLoyalty}
+              />
             )}
           </main>
         </div>
@@ -1449,10 +1534,39 @@ type Snapshot = {
   preventivi: PreventiviConfig
   penali: PenaliConfig
   danni: DanniConfig
+  fiscal: FiscalConfig
+  loyalty: LoyaltyConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   const out: string[] = []
+
+  // Fiscale
+  if (current.fiscal.vat_rate !== saved.fiscal.vat_rate) {
+    out.push(`Aliquota IVA: ${saved.fiscal.vat_rate || 0}% → ${current.fiscal.vat_rate || 0}%`)
+  }
+
+  // Loyalty
+  if (current.loyalty.is_enabled !== saved.loyalty.is_enabled) {
+    out.push(`Sistema Loyalty: ${current.loyalty.is_enabled ? 'attivato' : 'disattivato'}`)
+  }
+  if (current.loyalty.min_rentals_for_loyal !== saved.loyalty.min_rentals_for_loyal) {
+    out.push(`Soglia Cliente Fedele: ${saved.loyalty.min_rentals_for_loyal || 0} → ${current.loyalty.min_rentals_for_loyal || 0} noleggi`)
+  }
+  current.loyalty.cashback_rules.forEach((cur) => {
+    const prev = saved.loyalty.cashback_rules.find((x) => x.channel === cur.channel)
+    if (!prev) return
+    if (prev.label !== cur.label) {
+      out.push(`Cashback "${prev.label}" rinominato in "${cur.label}"`)
+    }
+    if (prev.rate !== cur.rate) {
+      out.push(`${cur.label}: ${prev.rate || 0}% → ${cur.rate || 0}%`)
+    }
+    if (prev.is_active !== cur.is_active) {
+      out.push(`${cur.label}: ${cur.is_active ? 'attivato' : 'disattivato'}`)
+    }
+  })
+
 
   // Categories
   const catSavedIds = new Set(saved.categories.map((c) => c.id))
@@ -4617,6 +4731,161 @@ function FeeListEditor({
             Aggiungi {itemNoun}
           </button>
         </footer>
+      </section>
+    </div>
+  )
+}
+
+// ========== FISCALE & LOYALTY (Punto 9) ==========
+
+function FiscaleLoyaltySection({
+  fiscal,
+  setFiscal,
+  loyalty,
+  setLoyalty,
+}: {
+  fiscal: FiscalConfig
+  setFiscal: (next: FiscalConfig) => void
+  loyalty: LoyaltyConfig
+  setLoyalty: (next: LoyaltyConfig) => void
+}) {
+  function patchCashback(channel: CashbackChannel, p: Partial<CashbackRule>) {
+    setLoyalty({
+      ...loyalty,
+      cashback_rules: loyalty.cashback_rules.map((r) =>
+        r.channel === channel ? { ...r, ...p } : r
+      ),
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+          Fiscale & Loyalty
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] mt-1">
+          IVA, soglia cliente fedele e regole di cashback DR7 Club.
+        </p>
+      </div>
+
+      {/* Fiscale */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+        <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1">Fiscale</h3>
+        <p className="text-[13px] text-[#6e6e73] mb-4">
+          Aliquota IVA applicata alle fatture generate dal sistema.
+        </p>
+        <label className="block max-w-xs">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            Aliquota IVA
+          </span>
+          <div className="relative">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.01}
+              value={fiscal.vat_rate}
+              onChange={(e) => {
+                const v = e.target.value
+                setFiscal({ ...fiscal, vat_rate: v === '' ? '' : Number(v) })
+              }}
+              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
+          </div>
+        </label>
+      </section>
+
+      {/* Loyalty system toggle + threshold */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Sistema Fedeltà</h3>
+            <p className="text-[13px] text-[#6e6e73] mt-0.5">
+              Se disattivato, nessun cliente è considerato &laquo;fedele&raquo; e il cashback non viene applicato.
+            </p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              checked={loyalty.is_enabled}
+              onChange={(e) => setLoyalty({ ...loyalty, is_enabled: e.target.checked })}
+              className="sr-only peer"
+            />
+            <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
+              <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+            </span>
+          </label>
+        </div>
+        <label className={`block max-w-xs mt-4 ${!loyalty.is_enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            Cliente fedele dopo
+          </span>
+          <div className="relative">
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={loyalty.min_rentals_for_loyal}
+              onChange={(e) => {
+                const v = e.target.value
+                setLoyalty({ ...loyalty, min_rentals_for_loyal: v === '' ? '' : Number(v) })
+              }}
+              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-20 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">noleggi</span>
+          </div>
+        </label>
+      </section>
+
+      {/* Cashback rules */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Cashback DR7 Club</h3>
+          <p className="text-[13px] text-[#6e6e73] mt-0.5">
+            Percentuale accreditata sul wallet del cliente. Disattiva un canale per non applicarlo, senza perdere il valore configurato.
+          </p>
+        </header>
+        <ul className="divide-y divide-black/5">
+          {loyalty.cashback_rules.map((r) => (
+            <li key={r.channel} className="px-5 py-3 flex items-center gap-3 flex-wrap">
+              <label className="inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={r.is_active}
+                  onChange={(e) => patchCashback(r.channel, { is_active: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
+                  <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                </span>
+              </label>
+              <input
+                type="text"
+                value={r.label}
+                onChange={(e) => patchCashback(r.channel, { label: e.target.value })}
+                placeholder="Etichetta"
+                className={`flex-1 min-w-[200px] bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${!r.is_active ? 'opacity-50' : ''}`}
+              />
+              <div className={`relative ${!r.is_active ? 'opacity-50' : ''}`}>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={r.rate}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    patchCashback(r.channel, { rate: v === '' ? '' : Number(v) })
+                  }}
+                  className="w-24 bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
+              </div>
+            </li>
+          ))}
+        </ul>
       </section>
     </div>
   )
