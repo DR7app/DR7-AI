@@ -523,6 +523,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     limitationState,
     requestOverride,
     handleOverrideApproved,
+    markCodesApproved,
     closeLimitation,
     cancelLimitation,
     hasOverride,
@@ -540,6 +541,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // useEffect below replays processBookingSubmission with the same args,
   // so the operator doesn't have to re-click Salva.
   const pendingSubmitRef = useRef<{ skipValidation: boolean; overrideCustomerId?: string } | null>(null)
+  // Codici di limitation aggiuntivi da marcare come autorizzati con lo stesso
+  // overrideId della modal corrente. Usato per il flusso "motivazioni
+  // combinate": la modal verifica una sola OTP, poi marchiamo anche gli altri
+  // gate scattati così il resume non chiede una seconda autorizzazione.
+  const comboExtraCodesRef = useRef<string[]>([])
+  const comboMessageRef = useRef<string>('')
 
   // Snapshot of formData captured when the operator opens an existing
   // booking for edit. Diffed against live formData at Salva time so the
@@ -559,7 +566,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   useEffect(() => {
     const pending = pendingSubmitRef.current
     if (!pending) return
-    if (overrideCodes.has('paid_rental_modify') || overrideCodes.has('out_of_office_hours')) {
+    // Riprendi il save quando UNO dei codici combo è stato approvato.
+    // I codici extra vengono marchiati come approvati nel wrapper di
+    // onOverrideApproved (markCodesApproved), quindi qui basta osservare
+    // qualsiasi codice del set.
+    const comboCodes = [
+      'paid_rental_modify',
+      'out_of_office_hours',
+      'tier1_no_cauzione',
+      'no_cauzione_rca_only',
+      'driver_blocked',
+    ]
+    if (comboCodes.some(c => overrideCodes.has(c))) {
       pendingSubmitRef.current = null
       processBookingSubmission(pending.skipValidation, pending.overrideCustomerId)
     }
@@ -3469,29 +3487,96 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     if (isSubmitting) return
 
-    // OTP gate — out-of-office-hours pickup or return. Fires only at Salva
-    // (the time-picker no longer triggers the modal mid-input). Once the
-    // operator approves OTP, the resume effect re-runs this submit with the
-    // override active.
-    if (!hasOverride('out_of_office_hours')) {
-      const pickupOff = formData.pickup_date && formData.pickup_time
-        && !isInRentalHours(formData.pickup_date, formData.pickup_time, 'pickup')
-      const returnOff = formData.return_date && formData.return_time
-        && !isInRentalHours(formData.return_date, formData.return_time, 'return')
-      if (pickupOff || returnOff) {
-        const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
-        const describe = (date: string, time: string, kind: 'pickup' | 'return') => {
-          const r = rentalHoursFor(date, kind)
-          const hoursLabel = r ? r.map(([a, b]) => `${fmt(a)}-${fmt(b)}`).join(' / ') : 'Domenica chiusa'
-          const verb = kind === 'pickup' ? 'Ritiro' : 'Riconsegna'
-          return `${verb} alle ${time} fuori orario standard (orari: ${hoursLabel}).`
-        }
-        const reasons: string[] = []
-        if (pickupOff) reasons.push(describe(formData.pickup_date, formData.pickup_time, 'pickup'))
-        if (returnOff) reasons.push(describe(formData.return_date, formData.return_time, 'return'))
+    // ─── OTP gates (Salva-time) ─────────────────────────────────────────
+    // Valutiamo TUTTI i gate insieme: se più condizioni richiedono
+    // autorizzazione, la direzione riceve UNA sola email con TUTTE le
+    // motivazioni reali. All'approvazione della prima limitation marchiamo
+    // come autorizzati anche i codici aggiuntivi tripped (stesso overrideId).
+    {
+      type ComboTrip = { code: string; motivazione: string }
+      const trips: ComboTrip[] = []
 
-        // Snapshot del booking incluso nell'email a direzione: cosi' la
-        // direzione vede chi/cosa/quando/quanto prima di autorizzare.
+      // (a) Fuori orario standard (pickup e/o riconsegna)
+      if (!hasOverride('out_of_office_hours')) {
+        const pickupOff = formData.pickup_date && formData.pickup_time
+          && !isInRentalHours(formData.pickup_date, formData.pickup_time, 'pickup')
+        const returnOff = formData.return_date && formData.return_time
+          && !isInRentalHours(formData.return_date, formData.return_time, 'return')
+        if (pickupOff || returnOff) {
+          const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
+          const describe = (date: string, time: string, kind: 'pickup' | 'return') => {
+            const r = rentalHoursFor(date, kind)
+            const hoursLabel = r ? r.map(([a, b]) => `${fmt(a)}-${fmt(b)}`).join(' / ') : 'Domenica chiusa'
+            const verb = kind === 'pickup' ? 'Ritiro' : 'Riconsegna'
+            return `${verb} alle ${time} fuori orario standard (orari: ${hoursLabel})`
+          }
+          const parts: string[] = []
+          if (pickupOff) parts.push(describe(formData.pickup_date, formData.pickup_time, 'pickup'))
+          if (returnOff) parts.push(describe(formData.return_date, formData.return_time, 'return'))
+          trips.push({ code: 'out_of_office_hours', motivazione: `Fuori orario — ${parts.join(' · ')}` })
+        }
+      }
+
+      // (b) Modifica prenotazione pagata/confermata
+      let editDiffDetails: Array<{ label: string; value: string }> | null = null
+      if (editingId && !hasOverride('paid_rental_modify')) {
+        const original = bookings.find(b => b.id === editingId)
+        if (original) {
+          const PAID = ['paid', 'completed', 'succeeded']
+          const CONFIRMED = ['confirmed', 'confermata', 'active', 'in_corso']
+          const isPaid = PAID.includes((original.payment_status || '').toLowerCase())
+          const isConfirmed = CONFIRMED.includes((original.status || '').toLowerCase())
+          if (isPaid || isConfirmed) {
+            const cust = customers.find(c => c.id === formData.customer_id)
+            const customerNameForDiff = cust?.full_name
+              || original.customer_name
+              || original.booking_details?.customer?.fullName
+              || original.booking_details?.customer?.name
+              || '—'
+            const before = editFormSnapshotRef.current || formData
+            editDiffDetails = buildBookingEditDiff(before, formData, String(customerNameForDiff), original.id, vehicles)
+            trips.push({
+              code: 'paid_rental_modify',
+              motivazione: 'Modifica di una prenotazione pagata o confermata',
+            })
+          }
+        }
+      }
+
+      // (c) No Cauzione + Fascia B
+      if (
+        formData.deposit_status === 'no_cauzione'
+        && customerTier?.tier === 'TIER_1'
+        && !hasOverride('tier1_no_cauzione')
+      ) {
+        trips.push({
+          code: 'tier1_no_cauzione',
+          motivazione: 'No Cauzione richiesta per cliente Fascia B (età 21-25 o patente 3-4 anni)',
+        })
+      }
+
+      // (d) No Cauzione + RCA only (richiede Kasko attiva)
+      if (
+        formData.deposit_status === 'no_cauzione'
+        && formData.insurance_option === 'RCA'
+        && !hasOverride('no_cauzione_rca_only')
+      ) {
+        trips.push({
+          code: 'no_cauzione_rca_only',
+          motivazione: 'No Cauzione abbinata a RCA: richiesta autorizzazione perché manca la Kasko',
+        })
+      }
+
+      // (e) Driver bloccato (età <21, ≥70 o patente <3 anni)
+      if (customerTier?.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+        trips.push({
+          code: 'driver_blocked',
+          motivazione: `Cliente non idoneo al noleggio: ${customerTier.reason || 'fascia bloccata'}`,
+        })
+      }
+
+      if (trips.length > 0) {
+        // Snapshot del booking nell'email — la direzione vede chi/cosa/quando/quanto.
         const cust = customers.find(c => c.id === formData.customer_id)
         const newName = `${newCustomerData?.nome || ''} ${newCustomerData?.cognome || ''}`.trim()
         const customerName = newCustomerMode
@@ -3513,7 +3598,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             ? `€${num.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             : '—'
         }
-        const details: Array<{ label: string; value: string }> = [
+        const baseDetails: Array<{ label: string; value: string }> = [
           { label: 'Operazione', value: editingId ? 'Modifica prenotazione' : 'Nuova prenotazione' },
           { label: 'Cliente', value: customerName },
           { label: 'Telefono', value: customerPhone },
@@ -3524,52 +3609,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           { label: 'Totale', value: eur(formData.total_amount) },
           { label: 'Cauzione', value: formData.deposit_status === 'no_cauzione' ? 'No Cauzione' : eur(formData.deposit) },
           { label: 'Pagamento', value: formData.payment_method || '—' },
-          { label: 'Motivo richiesta', value: reasons.join(' · ') },
         ]
-        if (editingId) details.splice(1, 0, { label: 'Prenotazione', value: editingId.slice(0, 8) })
-        setOverrideDetails(details)
+        if (editingId) baseDetails.splice(1, 0, { label: 'Prenotazione', value: editingId.slice(0, 8) })
+
+        // Aggiungiamo le motivazioni in coda — la direzione vede l'elenco
+        // completo di cosa sta autorizzando.
+        const motivazioniRows: Array<{ label: string; value: string }> = trips.length === 1
+          ? [{ label: 'Motivo', value: trips[0].motivazione }]
+          : trips.map((t, i) => ({ label: `Motivo ${i + 1}`, value: t.motivazione }))
+
+        // Per la modifica di una prenotazione paid/confirmed combiniamo il
+        // diff (campi cambiati) con i dettagli base + motivazioni — così
+        // la direzione vede sia "cosa cambia" sia "perché l'OTP scatta".
+        const finalDetails = editDiffDetails
+          ? [...editDiffDetails, ...baseDetails.filter(r =>
+              !['Operazione', 'Prenotazione', 'Cliente', 'Veicolo', 'Ritiro', 'Riconsegna'].includes(r.label)
+            ), ...motivazioniRows]
+          : [...baseDetails, ...motivazioniRows]
+
+        setOverrideDetails(finalDetails)
+
+        const primary = trips[0]
+        const extras = trips.slice(1).map(t => t.code)
+        comboExtraCodesRef.current = extras
+        comboMessageRef.current = trips.map(t => t.motivazione).join(' · ')
+
+        const limitationMessage = trips.length === 1
+          ? primary.motivazione
+          : `Più condizioni richiedono autorizzazione: ${trips.length} motivi (vedi dettaglio).`
 
         pendingSubmitRef.current = { skipValidation, overrideCustomerId }
-        requestOverride('out_of_office_hours', reasons.join(' · '))
+        requestOverride(primary.code, limitationMessage, primary.code === 'paid_rental_modify' ? `booking_edit_${editingId}` : undefined)
         return
-      }
-    }
-
-    // OTP gate — modifying a PAID or CONFIRMED rental requires direzione approval
-    // (Valerio & Ilenia bypass server-side via DIREZIONE_EMAILS). The gate is
-    // skipped entirely if the operator has already approved this session OR if
-    // the toggle is OFF in Gestione OTP (handled inside requestOverride).
-    // The email to direzione includes the diff of what is changing so they
-    // see the actual modification before approving.
-    if (editingId && !hasOverride('paid_rental_modify')) {
-      const original = bookings.find(b => b.id === editingId)
-      if (original) {
-        const PAID = ['paid', 'completed', 'succeeded']
-        const CONFIRMED = ['confirmed', 'confermata', 'active', 'in_corso']
-        const isPaid = PAID.includes((original.payment_status || '').toLowerCase())
-        const isConfirmed = CONFIRMED.includes((original.status || '').toLowerCase())
-        if (isPaid || isConfirmed) {
-          pendingSubmitRef.current = { skipValidation, overrideCustomerId }
-          // Customer name from the customers list (most reliable) with
-          // fallback chain to the booking row itself.
-          const cust = customers.find(c => c.id === formData.customer_id)
-          const customerName = cust?.full_name
-            || original.customer_name
-            || original.booking_details?.customer?.fullName
-            || original.booking_details?.customer?.name
-            || '—'
-          // Diff snapshot vs current. If snapshot is somehow missing
-          // (defensive), fall back to diffing current against itself
-          // which yields just customer + booking ID rows.
-          const before = editFormSnapshotRef.current || formData
-          setOverrideDetails(buildBookingEditDiff(before, formData, String(customerName), original.id, vehicles))
-          requestOverride(
-            'paid_rental_modify',
-            'Modifica di una prenotazione pagata o confermata: serve OTP della direzione.',
-            `booking_edit_${editingId}`,
-          )
-          return
-        }
       }
     }
 
@@ -5876,8 +5947,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           draftSessionId={draftSessionId}
           flowType={flowType}
           details={
-            (limitationState.limitationCode === 'paid_rental_modify'
-              || limitationState.limitationCode === 'out_of_office_hours')
+            ([
+              'paid_rental_modify',
+              'out_of_office_hours',
+              'tier1_no_cauzione',
+              'no_cauzione_rca_only',
+              'driver_blocked',
+            ].includes(limitationState.limitationCode))
               ? overrideDetails
               : undefined
           }
@@ -5887,10 +5963,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // X = abort save and go back to the form. The booking values the
             // operator typed stay intact; nothing is persisted.
             pendingSubmitRef.current = null
+            comboExtraCodesRef.current = []
+            comboMessageRef.current = ''
             setOverrideDetails(undefined)
             cancelLimitation()
           }}
-          onOverrideApproved={handleOverrideApproved}
+          onOverrideApproved={(overrideId, notes) => {
+            handleOverrideApproved(overrideId, notes)
+            // Combo OTP: una sola autorizzazione copre tutti i gate scattati.
+            const extras = comboExtraCodesRef.current
+            if (extras.length > 0) {
+              markCodesApproved(extras, overrideId, comboMessageRef.current || '')
+              comboExtraCodesRef.current = []
+              comboMessageRef.current = ''
+            }
+          }}
         />
 
         {showForm && (

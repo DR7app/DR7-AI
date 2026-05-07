@@ -131,6 +131,37 @@ export function useLimitationOverride() {
     setLimitationState(prev => ({ ...prev, isOpen: false }))
   }, [limitationState])
 
+  /**
+   * Marca come approvati ulteriori codici limitation con lo stesso
+   * overrideId di un'OTP appena verificata. Serve per i flussi in cui un
+   * unico OTP autorizza più gate insieme (email "motivazioni combinate"):
+   * la modal verifica la prima limitation, poi questo metodo registra
+   * anche le altre nella stessa sessione, così i gate successivi non
+   * ri-promptano e l'audit log traccia tutte le autorizzazioni.
+   */
+  const markCodesApproved = useCallback((codes: string[], overrideId: string, message: string) => {
+    if (!codes || codes.length === 0) return
+    const approvedAt = new Date().toISOString()
+    for (const code of codes) {
+      if (overrideMap.current.has(code)) continue
+      overrideMap.current.set(code, {
+        overrideId,
+        limitationCode: code,
+        limitationMessage: message,
+        approvedAt,
+      })
+      logAdminAction('limitation_override_approved_combo', 'limitation', overrideId, {
+        limitation_code: code,
+        limitation_message: message,
+        action_context: `combo_${overrideId}`,
+        draft_session_id: draftSessionIdRef.current,
+        flow_type: flowTypeRef.current,
+        combo: true,
+      })
+    }
+    setOverrideCodes(new Set(overrideMap.current.keys()))
+  }, [])
+
   const closeLimitation = useCallback(() => {
     setLimitationState(prev => ({ ...prev, isOpen: false }))
   }, [])
@@ -202,6 +233,7 @@ export function useLimitationOverride() {
     newSession,
     requestOverride,
     handleOverrideApproved,
+    markCodesApproved,
     closeLimitation,
     cancelLimitation,
     hasOverride,
