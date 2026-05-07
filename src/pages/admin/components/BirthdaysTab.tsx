@@ -104,6 +104,95 @@ export default function BirthdaysTab() {
         return code
     }
 
+    // Genera DUE codici (Supercar €100 + Lavaggio €10) salvati nella tabella
+    // unica `discount_codes` — la stessa che il sito interroga via
+    // validate-discount-code, e che usa anche il cron send-birthday-messages.
+    // Restituisce { supercarCode, lavaggioCode } pronti per il template.
+    async function generateBirthdayCodes(customerName: string): Promise<{ supercarCode: string; lavaggioCode: string }> {
+        const ensureUnique = async (): Promise<string> => {
+            for (let i = 0; i < 5; i++) {
+                const candidate = generateDiscountCode()
+                const { data: existing } = await supabase
+                    .from('discount_codes')
+                    .select('id')
+                    .eq('code', candidate)
+                    .maybeSingle()
+                if (!existing) return candidate
+            }
+            return generateDiscountCode() + '-' + Date.now().toString(36).toUpperCase()
+        }
+
+        const supercarCode = await ensureUnique()
+        const lavaggioCode = await ensureUnique()
+
+        const now = new Date()
+        const expires = new Date(now); expires.setDate(expires.getDate() + 30); expires.setHours(23, 59, 59, 999)
+        const traceMsg = `Codice compleanno — generato per ${customerName}`
+
+        const { error } = await supabase.from('discount_codes').insert([
+            {
+                code: supercarCode,
+                code_type: 'codice_sconto',
+                value_type: 'fixed',
+                value_amount: 100,
+                scope: ['supercar'],
+                minimum_spend: 400,
+                single_use: true,
+                status: 'active',
+                customer_email: null,
+                customer_phone: null,
+                valid_from: now.toISOString(),
+                valid_until: expires.toISOString(),
+                message: traceMsg,
+                usage_conditions: 'Utilizzabile una sola volta. Valido 30 giorni.',
+                qr_url: null,
+            },
+            {
+                code: lavaggioCode,
+                code_type: 'codice_sconto',
+                value_type: 'fixed',
+                value_amount: 10,
+                scope: ['lavaggi'],
+                minimum_spend: 40,
+                single_use: true,
+                status: 'active',
+                customer_email: null,
+                customer_phone: null,
+                valid_from: now.toISOString(),
+                valid_until: expires.toISOString(),
+                message: traceMsg,
+                usage_conditions: 'Utilizzabile una sola volta. Valido 30 giorni.',
+                qr_url: null,
+            },
+        ])
+        if (error) throw error
+        return { supercarCode, lavaggioCode }
+    }
+
+    // Sostituisce TUTTE le variabili del template compleanno: nome, due
+    // codici espliciti e {codice} per retro-compatibilità (= codice supercar).
+    function applyBirthdayVariables(template: string, firstName: string, supercarCode: string, lavaggioCode: string): string {
+        const map: Record<string, string> = {
+            '{nome}': firstName,
+            '{codice}': supercarCode,
+            '{codice_supercar}': supercarCode,
+            '{codice_noleggio}': supercarCode,
+            '{codice_lavaggio}': lavaggioCode,
+            '{importo_supercar}': '100',
+            '{importo_noleggio}': '100',
+            '{importo_lavaggio}': '10',
+            '{spesa_min_supercar}': '400',
+            '{spesa_min_noleggio}': '400',
+            '{spesa_min_lavaggio}': '40',
+            '{validita_giorni}': '30',
+        }
+        let out = template
+        for (const [k, v] of Object.entries(map)) {
+            out = out.split(k).join(v)
+        }
+        return out
+    }
+
     useEffect(() => {
         loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -291,46 +380,22 @@ export default function BirthdaysTab() {
 
         for (const customer of toSend) {
             try {
-                // Generate unique discount code
-                let discountCode = generateDiscountCode()
-
-                // Check if code exists (retry if needed)
-                let attempts = 0
-                while (attempts < 5) {
-                    const { data: existingCode } = await supabase
-                        .from('birthday_discount_codes')
-                        .select('code')
-                        .eq('code', discountCode)
-                        .single()
-
-                    if (!existingCode) break
-                    discountCode = generateDiscountCode()
-                    attempts++
-                }
-
-                // Save discount code to database
-                const { error: codeError } = await supabase
-                    .from('birthday_discount_codes')
-                    .insert({
-                        code: discountCode,
-                        customer_id: customer.id,
-                        customer_name: customer.full_name,
-                        customer_phone: customer.phone,
-                        rental_credit: 100.00,
-                        car_wash_discount: 10.00,
-                        sent_via: 'whatsapp_bulk'
-                    })
-
-                if (codeError) {
+                // Genera due codici (Supercar + Lavaggio) e salvali nella
+                // tabella `discount_codes` (stessa che usa il sito).
+                let supercarCode = ''
+                let lavaggioCode = ''
+                try {
+                    const codes = await generateBirthdayCodes(customer.full_name)
+                    supercarCode = codes.supercarCode
+                    lavaggioCode = codes.lavaggioCode
+                } catch (codeError) {
                     console.error('Error saving discount code:', codeError)
                     errors++
                     continue
                 }
 
                 const firstName = customer.full_name.split(' ')[0]
-                const personalizedMessage = messageTemplate
-                    .replace('{nome}', firstName)
-                    .replace('{codice}', discountCode)
+                const personalizedMessage = applyBirthdayVariables(messageTemplate, firstName, supercarCode, lavaggioCode)
 
                 let cleanPhone = customer.phone!.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
                 if (cleanPhone.startsWith('00')) {
@@ -365,7 +430,7 @@ export default function BirthdaysTab() {
                     setCustomers(prev => prev.map(c =>
                         c.id === customer.id ? { ...c, already_sent_this_year: true } : c
                     ))
-                    generatedCodes.push(`${customer.full_name}: ${discountCode}`)
+                    generatedCodes.push(`${customer.full_name}: Supercar ${supercarCode} · Lavaggio ${lavaggioCode}`)
                     sent++
                 } else {
                     errors++
@@ -393,46 +458,12 @@ export default function BirthdaysTab() {
         setSending(customer.id)
 
         try {
-            // Generate unique discount code
-            let discountCode = generateDiscountCode()
+            // Genera due codici (Supercar + Lavaggio) nella tabella `discount_codes`.
+            const { supercarCode, lavaggioCode } = await generateBirthdayCodes(customer.full_name)
 
-            // Check if code exists (retry if needed)
-            let attempts = 0
-            while (attempts < 5) {
-                const { data: existingCode } = await supabase
-                    .from('birthday_discount_codes')
-                    .select('code')
-                    .eq('code', discountCode)
-                    .single()
-
-                if (!existingCode) break
-                discountCode = generateDiscountCode()
-                attempts++
-            }
-
-            // Save discount code to database
-            const { error: codeError } = await supabase
-                .from('birthday_discount_codes')
-                .insert({
-                    code: discountCode,
-                    customer_id: customer.id,
-                    customer_name: customer.full_name,
-                    customer_phone: customer.phone,
-                    rental_credit: 100.00,
-                    car_wash_discount: 10.00,
-                    sent_via: 'whatsapp_manual'
-                })
-
-            if (codeError) {
-                console.error('Error saving discount code:', codeError)
-                throw new Error('Errore nel generare il codice sconto')
-            }
-
-            // Prepare personalized message with code
+            // Compila il template Pro: {nome}, {codice_supercar}, {codice_lavaggio}, ecc.
             const firstName = customer.full_name.split(' ')[0]
-            const personalizedMessage = messageTemplate
-                .replace('{nome}', firstName)
-                .replace('{codice}', discountCode)
+            const personalizedMessage = applyBirthdayVariables(messageTemplate, firstName, supercarCode, lavaggioCode)
 
             // Clean phone number
             let cleanPhone = customer.phone.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
@@ -478,8 +509,8 @@ export default function BirthdaysTab() {
                 c.id === customer.id ? { ...c, already_sent_this_year: true } : c
             ))
 
-            // Show success with code
-            alert(`Messaggio inviato a ${customer.full_name}!\n\nCodice sconto generato: ${discountCode}`)
+            // Show success with both codes
+            alert(`Messaggio inviato a ${customer.full_name}!\n\nSupercar (€100): ${supercarCode}\nLavaggio (€10): ${lavaggioCode}`)
         } catch (error: unknown) {
           const _errMsg = error instanceof Error ? error.message : String(error)
             console.error('Error sending birthday message:', error)
@@ -655,9 +686,9 @@ export default function BirthdaysTab() {
                 ) : (
                     <>
                         <pre className="text-theme-text-muted text-sm whitespace-pre-wrap bg-theme-bg-secondary p-3 rounded border border-theme-border">
-                            {messageTemplate.replace('{nome}', '[Nome Cliente]').replace('{codice}', 'BDAY-XXXX-XXXX')}
+                            {applyBirthdayVariables(messageTemplate, '[Nome Cliente]', 'BDAY-XXXX-XXXX', 'BDAY-YYYY-YYYY')}
                         </pre>
-                        <p className="text-xs text-green-400 mt-2">Il codice sconto viene generato automaticamente per ogni cliente</p>
+                        <p className="text-xs text-green-400 mt-2">I codici (Supercar €100 + Lavaggio €10) vengono generati automaticamente per ogni cliente al momento dell'invio.</p>
                     </>
                 )}
             </div>
