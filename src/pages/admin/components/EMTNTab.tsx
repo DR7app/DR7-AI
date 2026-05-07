@@ -261,16 +261,6 @@ function PageHeader() {
                     </p>
                 </div>
             </div>
-            <div className="flex items-center gap-3 text-[11px]">
-                <div className="relative">
-                    <span className="w-9 h-9 grid place-items-center rounded-full bg-rose-500 text-white font-semibold text-xs">MR</span>
-                    <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 border-2 border-theme-bg-primary"/>
-                </div>
-                <div className="leading-tight hidden sm:block">
-                    <p className="text-xs font-semibold text-theme-text-primary">Remora S.r.l.</p>
-                    <p className="text-[10px] text-theme-text-muted">Operatore</p>
-                </div>
-            </div>
         </header>
     )
 }
