@@ -81,6 +81,54 @@ interface CustomerGroup {
   chargedViaMit: number   // cents already collected via addebito MIT
 }
 
+// ── Display helpers ───────────────────────────────────────────────────────────
+
+const AVATAR_PALETTE = [
+  'bg-rose-500/20 text-rose-300 border-rose-500/40',
+  'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+  'bg-purple-500/20 text-purple-300 border-purple-500/40',
+  'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+  'bg-orange-500/20 text-orange-300 border-orange-500/40',
+  'bg-pink-500/20 text-pink-300 border-pink-500/40',
+]
+
+function getInitials(name: string): string {
+  return (name || '?').split(/\s+/).map(s => s[0] || '').join('').slice(0, 2).toUpperCase() || '?'
+}
+
+function paletteFor(key: string): string {
+  let hash = 0
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length]
+}
+
+function daysSince(iso: string | null | undefined): number | null {
+  if (!iso) return null
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return null
+  return Math.floor((Date.now() - t) / 86400000)
+}
+
+function relativeIt(days: number | null): string {
+  if (days == null) return '—'
+  if (days <= 0) return 'oggi'
+  if (days === 1) return 'ieri'
+  if (days < 30) return `${days} giorni fa`
+  const months = Math.floor(days / 30)
+  if (months < 12) return `${months} ${months === 1 ? 'mese' : 'mesi'} fa`
+  const years = Math.floor(days / 365)
+  return `${years} ${years === 1 ? 'anno' : 'anni'} fa`
+}
+
+function priorityFromDays(days: number | null): { label: string; classes: string } {
+  if (days == null) return { label: 'N/D', classes: 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border' }
+  if (days >= 30) return { label: 'Alta', classes: 'bg-red-500/15 text-red-300 border-red-500/40' }
+  if (days >= 7) return { label: 'Media', classes: 'bg-amber-500/15 text-amber-300 border-amber-500/40' }
+  return { label: 'Bassa', classes: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' }
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function UnpaidBookingsTab() {
@@ -2106,6 +2154,32 @@ export default function UnpaidBookingsTab() {
     [customerGroups]
   )
 
+  const performanceStats = useMemo(() => {
+    const totalUnpaidCents = customerGroups.reduce((s, g) => s + g.totalRemaining, 0)
+    const denom = totalUnpaidCents + totalChargedViaMit
+    const recoveryRate = denom > 0 ? Math.round((totalChargedViaMit / denom) * 100) : 0
+    const clientsWithMit = customerGroups.filter(g => g.chargedViaMit > 0).length
+    const avgPerClient = customerGroups.length > 0 ? totalUnpaidCents / customerGroups.length : 0
+
+    let oldestSum = 0
+    let oldestCount = 0
+    for (const g of customerGroups) {
+      const dates = [
+        ...g.noleggioBookings.map(b => b.created_at),
+        ...g.primeWashBookings.map(b => b.created_at),
+        ...g.penaliItems.map(p => p.booking.created_at),
+        ...g.danniItems.map(p => p.booking.created_at),
+      ].filter(Boolean) as string[]
+      if (dates.length === 0) continue
+      const oldest = dates.reduce((a, b) => a < b ? a : b)
+      const d = daysSince(oldest)
+      if (d != null) { oldestSum += d; oldestCount++ }
+    }
+    const avgAgeDays = oldestCount > 0 ? Math.round(oldestSum / oldestCount) : 0
+
+    return { recoveryRate, clientsWithMit, avgPerClient, avgAgeDays }
+  }, [customerGroups, totalChargedViaMit])
+
   // ── Mobile accordion toggle ────────────────────────────────────────────────
 
   function handleSort(col: 'amount' | 'name') {
@@ -3065,21 +3139,63 @@ export default function UnpaidBookingsTab() {
               </tr>
             </thead>
             <tbody>
-              {customerGroups.map(group => (
+              {customerGroups.map(group => {
+                const allDates = [
+                  ...group.noleggioBookings.map(b => b.created_at),
+                  ...group.primeWashBookings.map(b => b.created_at),
+                  ...group.penaliItems.map(p => p.booking.created_at),
+                  ...group.danniItems.map(p => p.booking.created_at),
+                ].filter(Boolean) as string[]
+                const latestActivity = allDates.length ? allDates.reduce((a, b) => a > b ? a : b) : null
+                const oldestActivity = allDates.length ? allDates.reduce((a, b) => a < b ? a : b) : null
+                const lastActivityDays = daysSince(latestActivity)
+                const oldestDays = daysSince(oldestActivity)
+                const priority = priorityFromDays(oldestDays)
+                const recoveredEur = group.chargedViaMit / 100
+                const remainingEur = group.totalRemaining / 100
+                const totalGroupEur = recoveredEur + remainingEur
+                const recoveryPct = totalGroupEur > 0 ? Math.min(100, Math.round((recoveredEur / totalGroupEur) * 100)) : 0
+                const initials = getInitials(group.customerName)
+                const avatarColor = paletteFor(group.customerKey)
+
+                return (
                 <tr key={group.customerKey} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 align-top">
                   {/* Cliente column */}
                   <td className="px-4 py-3">
-                    <div className="text-sm font-bold text-theme-text-primary flex items-center gap-1.5 flex-wrap">
-                      <span>{group.customerName}</span>
-                      <ClientStatusBadge email={group.customerEmail} />
+                    <div className="flex items-start gap-2.5">
+                      <div className={`w-10 h-10 rounded-full grid place-items-center text-xs font-bold border flex-shrink-0 ${avatarColor}`}>{initials}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-theme-text-primary flex items-center gap-1.5 flex-wrap">
+                          <span className="truncate">{group.customerName}</span>
+                          <ClientStatusBadge email={group.customerEmail} />
+                        </div>
+                        {group.customerEmail && <div className="text-[11px] text-theme-text-muted mt-0.5 truncate max-w-[180px]">{group.customerEmail}</div>}
+                        {group.customerPhone && <div className="text-[11px] text-theme-text-muted truncate">{group.customerPhone}</div>}
+                      </div>
                     </div>
-                    {group.customerEmail && <div className="text-xs text-theme-text-muted mt-0.5 truncate max-w-[180px]">{group.customerEmail}</div>}
-                    {group.customerPhone && <div className="text-xs text-theme-text-muted">{group.customerPhone}</div>}
-                    <div className="text-red-400 font-bold text-lg mt-2">
-                      €{(group.totalRemaining / 100).toFixed(2)}
+
+                    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                      <span className={`px-1.5 py-0.5 rounded-full border text-[9px] uppercase font-bold tracking-wide ${priority.classes}`}>
+                        {priority.label}{oldestDays != null ? ` · ${oldestDays}gg` : ''}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded-full bg-theme-bg-tertiary border border-theme-border text-[10px] text-theme-text-muted whitespace-nowrap">
+                        Attività {relativeIt(lastActivityDays)}
+                      </span>
                     </div>
-                    {group.chargedViaMit > 0 && (
-                      <div className="text-xs text-orange-400 mt-0.5">Da incassare: €{(group.totalRemaining / 100).toFixed(2)}</div>
+
+                    <div className="text-red-400 font-bold text-xl mt-2 tabular-nums">
+                      €{(group.totalRemaining / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    {totalGroupEur > 0 && group.chargedViaMit > 0 && (
+                      <div className="mt-1.5">
+                        <div className="flex items-center justify-between text-[10px] mb-0.5">
+                          <span className="text-emerald-400 font-semibold">Recuperato {recoveryPct}%</span>
+                          <span className="text-emerald-400/70">€{recoveredEur.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                        </div>
+                        <div className="h-1 bg-theme-bg-tertiary rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${recoveryPct}%` }}/>
+                        </div>
+                      </div>
                     )}
                     {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 ? (
                       <button
@@ -3138,7 +3254,8 @@ export default function UnpaidBookingsTab() {
                     <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
                   </td>
                 </tr>
-              ))}
+                )
+              })}
               {customerGroups.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-theme-text-muted">
@@ -3162,19 +3279,35 @@ export default function UnpaidBookingsTab() {
             {topDebtors.length === 0 ? (
               <div className="text-xs text-theme-text-muted py-4 text-center">Nessun debitore</div>
             ) : (
-              <div className="space-y-2">
-                {topDebtors.map((g, i) => {
-                  const initials = (g.customerName || '?').split(/\s+/).map(s => s[0] || '').join('').slice(0, 2).toUpperCase()
-                  const palette = ['bg-rose-500/20 text-rose-300 border-rose-500/30', 'bg-amber-500/20 text-amber-300 border-amber-500/30', 'bg-blue-500/20 text-blue-300 border-blue-500/30', 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', 'bg-purple-500/20 text-purple-300 border-purple-500/30']
-                  const color = palette[i % palette.length]
+              <div className="space-y-3">
+                {topDebtors.map((g) => {
+                  const initials = getInitials(g.customerName)
+                  const color = paletteFor(g.customerKey)
+                  const recoveredEur = g.chargedViaMit / 100
+                  const remainingEur = g.totalRemaining / 100
+                  const totalEur = recoveredEur + remainingEur
+                  const recoveryPct = totalEur > 0 ? Math.min(100, Math.round((recoveredEur / totalEur) * 100)) : 0
                   return (
-                    <div key={g.customerKey} className="flex items-center gap-2.5 group">
-                      <div className={`w-8 h-8 rounded-full grid place-items-center text-[11px] font-bold border flex-shrink-0 ${color}`}>{initials}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs text-theme-text-primary font-semibold truncate">{g.customerName}</div>
-                        <div className="text-[10px] text-theme-text-muted truncate">{g.customerEmail || g.customerPhone || '—'}</div>
+                    <div key={g.customerKey}>
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-full grid place-items-center text-[11px] font-bold border flex-shrink-0 ${color}`}>{initials}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-theme-text-primary font-semibold truncate">{g.customerName}</div>
+                          <div className="text-[10px] text-theme-text-muted truncate">{g.customerEmail || g.customerPhone || '—'}</div>
+                        </div>
+                        <div className="text-xs font-bold text-red-400 tabular-nums whitespace-nowrap">€{remainingEur.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
                       </div>
-                      <div className="text-xs font-bold text-red-400 tabular-nums whitespace-nowrap">€{(g.totalRemaining / 100).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                      {g.chargedViaMit > 0 && (
+                        <div className="mt-1 ml-10.5 pl-0">
+                          <div className="flex items-center justify-between text-[9px] text-emerald-400/80 mb-0.5">
+                            <span>Recuperato {recoveryPct}%</span>
+                            <span className="tabular-nums">€{recoveredEur.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                          </div>
+                          <div className="h-1 bg-theme-bg-tertiary rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${recoveryPct}%` }}/>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -3218,6 +3351,44 @@ export default function UnpaidBookingsTab() {
             </div>
           </div>
         </aside>
+      </div>
+
+      {/* Performance / Recupero metrics */}
+      <div className="bg-gradient-to-br from-theme-bg-secondary to-theme-bg-tertiary rounded-2xl border border-theme-border p-4 lg:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Prestazione recupero crediti</h3>
+            <p className="text-[10px] text-theme-text-muted mt-0.5">Calcolato sui dati attuali · esclusi periodi</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+            <div className="text-[10px] text-emerald-300/80 uppercase tracking-wider font-semibold">Tasso recupero</div>
+            <div className="text-2xl font-bold text-emerald-400 mt-1.5 tabular-nums">{performanceStats.recoveryRate}%</div>
+            <div className="h-1 bg-theme-bg-tertiary rounded-full overflow-hidden mt-2">
+              <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${performanceStats.recoveryRate}%` }}/>
+            </div>
+            <div className="text-[10px] text-theme-text-muted mt-1">recuperato vs totale</div>
+          </div>
+
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+            <div className="text-[10px] text-amber-300/80 uppercase tracking-wider font-semibold">Età media debito</div>
+            <div className="text-2xl font-bold text-amber-400 mt-1.5 tabular-nums">{performanceStats.avgAgeDays}<span className="text-sm font-medium text-amber-400/70 ml-1">gg</span></div>
+            <div className="text-[10px] text-theme-text-muted mt-3">dal primo sospeso del cliente</div>
+          </div>
+
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+            <div className="text-[10px] text-blue-300/80 uppercase tracking-wider font-semibold">Importo medio</div>
+            <div className="text-2xl font-bold text-blue-400 mt-1.5 tabular-nums">€{(performanceStats.avgPerClient / 100).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+            <div className="text-[10px] text-theme-text-muted mt-3">da incassare per cliente</div>
+          </div>
+
+          <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-3">
+            <div className="text-[10px] text-purple-300/80 uppercase tracking-wider font-semibold">Clienti con MIT</div>
+            <div className="text-2xl font-bold text-purple-400 mt-1.5 tabular-nums">{performanceStats.clientsWithMit}<span className="text-sm font-medium text-purple-400/70 ml-1">/ {customerGroups.length}</span></div>
+            <div className="text-[10px] text-theme-text-muted mt-3">addebito automatico attivo</div>
+          </div>
+        </div>
       </div>
 
       {/* Payment-method picker — opens before any "Segna Pagato" / "Salda Tutto"
