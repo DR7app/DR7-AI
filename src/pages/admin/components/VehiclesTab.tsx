@@ -5,6 +5,7 @@ import Select from './Select'
 import Button from './Button'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { logger } from '../../../utils/logger'
+import { CATEGORY_PALETTES, ORPHAN_PALETTE } from '../../../utils/categoryPalettes'
 
 // Estrae un messaggio leggibile da qualunque shape di errore (Error,
 // PostgrestError di Supabase, oggetto generico). Senza questa logica
@@ -44,22 +45,9 @@ interface Vehicle {
 
 interface ProCategory { id: string; label: string }
 
-// Palette ciclata: ogni categoria di Centralina Pro riceve il suo pill
-// colorato in base all'ordine di definizione.
-const CATEGORY_PALETTES = [
-  { wrapBg: 'bg-cyan-900/30',    pillBg: 'bg-cyan-900',    pillText: 'text-cyan-200' },
-  { wrapBg: 'bg-purple-900/30',  pillBg: 'bg-purple-900',  pillText: 'text-purple-200' },
-  { wrapBg: 'bg-orange-900/30',  pillBg: 'bg-orange-900',  pillText: 'text-orange-200' },
-  { wrapBg: 'bg-emerald-900/30', pillBg: 'bg-emerald-900', pillText: 'text-emerald-200' },
-  { wrapBg: 'bg-sky-900/30',     pillBg: 'bg-sky-900',     pillText: 'text-sky-200' },
-  { wrapBg: 'bg-rose-900/30',    pillBg: 'bg-rose-900',    pillText: 'text-rose-200' },
-  { wrapBg: 'bg-fuchsia-900/30', pillBg: 'bg-fuchsia-900', pillText: 'text-fuchsia-200' },
-  { wrapBg: 'bg-amber-900/30',   pillBg: 'bg-amber-900',   pillText: 'text-amber-200' },
-  { wrapBg: 'bg-lime-900/30',    pillBg: 'bg-lime-900',    pillText: 'text-lime-200' },
-  { wrapBg: 'bg-teal-900/30',    pillBg: 'bg-teal-900',    pillText: 'text-teal-200' },
-  { wrapBg: 'bg-indigo-900/30',  pillBg: 'bg-indigo-900',  pillText: 'text-indigo-200' },
-]
-const ORPHAN_PALETTE = { wrapBg: 'bg-theme-bg-tertiary', pillBg: 'bg-theme-bg-tertiary', pillText: 'text-theme-text-secondary' }
+// Palette ciclata definita in utils/categoryPalettes.ts e condivisa con
+// CalendarTab perche\' il tag categoria deve avere gli stessi colori in
+// entrambi i tab.
 
 export default function VehiclesTab() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])

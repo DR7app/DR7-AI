@@ -9,18 +9,24 @@ import BookingDetailsPanel from './BookingDetailsPanel'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { authFetch } from '../../../utils/authFetch'
+import { getPaletteForCategory } from '../../../utils/categoryPalettes'
 
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
 const MIN_ROW_HEIGHT = 60
 const BAR_HEIGHT = 30
 
+interface ProCategory { id: string; label: string }
+
 interface Vehicle {
   id: string
   display_name: string
   plate?: string | null
   status: string
-  category: 'exotic' | 'urban' | 'aziendali' | null
+  // Whatever the operator typed in Centralina Pro > Categorie & Fascia
+  // (legacy seeds 'exotic'/'urban'/'aziendali' still appear in DB rows
+  // that haven't been re-saved since the rename to 'supercars').
+  category: string | null
   metadata?: {
     unavailable_from?: string
     unavailable_until?: string
@@ -60,6 +66,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   // Canonical monthly fatturato — same number Report Noleggio + Dashboard show
   const [canonicalFatturato, setCanonicalFatturato] = useState<number | null>(null)
+  // Centralina Pro categories — used to colour the small "AZIENDALE / SUPERCARS"
+  // pill next to each row's vehicle name. Same source the Veicoli tab uses, so
+  // the palette stays in sync between the two screens.
+  const [proCategories, setProCategories] = useState<ProCategory[]>([])
 
   // Scroll Sync Refs
   const gridRef = useRef<HTMLDivElement>(null)
@@ -72,6 +82,33 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => loadData())
       .subscribe()
     return () => { subscription.unsubscribe() }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadProCategories() {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      if (cancelled) return
+      const cfg = (data?.config as { categories?: ProCategory[] } | null) || null
+      const list = Array.isArray(cfg?.categories) ? cfg.categories : []
+      setProCategories(list)
+    }
+    loadProCategories()
+    const sub = supabase
+      .channel('calendar-categories-sync')
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' },
+        (payload) => {
+          const cfg = (payload.new as { config?: { categories?: ProCategory[] } } | undefined)?.config
+          const list = Array.isArray(cfg?.categories) ? cfg.categories : []
+          setProCategories(list)
+        })
+      .subscribe()
+    return () => { cancelled = true; sub.unsubscribe() }
   }, [])
 
   async function loadData() {
@@ -497,14 +534,16 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                   <div className="flex flex-col overflow-hidden">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm text-theme-text-primary truncate" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
-                      {row.vehicle.category && (
-                        <span className={`text-[9px] px-2 py-0.5 rounded uppercase font-bold tracking-wider ${row.vehicle.category === 'exotic' ? 'bg-purple-900/50 text-purple-200' :
-                          row.vehicle.category === 'urban' ? 'bg-blue-900/50 text-blue-200' :
-                            'bg-orange-900/50 text-orange-200'
-                          }`}>
-                          {row.vehicle.category === 'aziendali' ? 'AZIENDALE' : row.vehicle.category.toUpperCase()}
-                        </span>
-                      )}
+                      {row.vehicle.category && (() => {
+                        const palette = getPaletteForCategory(row.vehicle.category, proCategories)
+                        const proLabel = proCategories.find(c => c.id === row.vehicle.category)?.label
+                        const tagText = (proLabel || (row.vehicle.category === 'aziendali' ? 'AZIENDALE' : row.vehicle.category)).toUpperCase()
+                        return (
+                          <span className={`text-[9px] px-2 py-0.5 rounded uppercase font-bold tracking-wider ${palette.pillBg} ${palette.pillText}`}>
+                            {tagText}
+                          </span>
+                        )
+                      })()}
                     </div>
                     <span className="text-xs text-theme-text-muted font-mono">{row.vehicle.plate || '-'}</span>
                   </div>
