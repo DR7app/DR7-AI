@@ -373,7 +373,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const [slotOverrideId, setSlotOverrideId] = useState<string | null>(null)
   const [slotOverrideModalOpen, setSlotOverrideModalOpen] = useState(false)
   const [slotOverrideReason, setSlotOverrideReason] = useState<string>('')
-  const [pendingSendAfterSave, setPendingSendAfterSave] = useState(false)
+  // Holds the `send` flag from the operator's Salva click while an OTP modal
+  // is open. Cleared on cancel (X) or once the resume effect re-runs
+  // handleSave with fresh override IDs.
+  const pendingSaveRef = useRef<{ send: boolean } | null>(null)
   const [slotUnavailableWarning, setSlotUnavailableWarning] = useState<string>('')
 
   // Out-of-office-hours OTP override (admin picked a slot outside the
@@ -449,9 +452,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   )
 
   // Auto-check availability whenever vehicle/date/time changes.
-  // If the slot is unavailable and no override is cached yet, open the OTP
-  // modal IMMEDIATELY (no need to wait until save). Admin sees red warning
-  // under the time fields until the conflict is resolved or OTP verified.
+  // The OTP modal is NOT opened here anymore — only a red warning is shown.
+  // Authorization is requested only when the operator presses Salva.
   useEffect(() => {
     if (slotCheckTimerRef.current) {
       window.clearTimeout(slotCheckTimerRef.current)
@@ -466,12 +468,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       setSlotUnavailableWarning('')
       return
     }
-    // Debounce so the modal doesn't open mid-typing
     slotCheckTimerRef.current = window.setTimeout(async () => {
       // Day/hour exception checks run BEFORE the vehicle availability lookup —
       // they don't need the booking window data. Out-of-hours / Sunday /
-      // holiday on either pickup or return triggers the same OTP modal that
-      // a vehicle conflict does.
+      // holiday on either pickup or return is shown as a warning here; the
+      // OTP gate fires at Salva time.
       const pickupExc = describeException(form.pickup_date, form.pickup_time, 'pickup')
       const returnExc = describeException(form.return_date, form.return_time, 'return')
       if (pickupExc || returnExc) {
@@ -481,7 +482,6 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         ].filter(Boolean).join(' · ')
         setSlotUnavailableWarning(reason)
         setSlotOverrideReason(reason)
-        if (!slotOverrideModalOpen) setSlotOverrideModalOpen(true)
         return
       }
 
@@ -520,8 +520,6 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         const reason = result.reason || 'Slot non disponibile'
         setSlotUnavailableWarning(reason)
         setSlotOverrideReason(reason)
-        // Open OTP modal immediately — admin inserts director code to proceed
-        if (!slotOverrideModalOpen) setSlotOverrideModalOpen(true)
       } else {
         setSlotUnavailableWarning('')
       }
@@ -1116,6 +1114,20 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     setVehicles(data || [])
   }
 
+  // ─── Resume Save after OTP approval ─────────────────────────────────────
+  // When an OTP gate trips during Salva, pendingSaveRef is set and the
+  // matching modal is shown. Approving the OTP updates the corresponding
+  // override id state; this effect notices the new id and resumes the save
+  // automatically with the same `send` flag the operator originally used.
+  useEffect(() => {
+    if (!pendingSaveRef.current) return
+    if (otpModalOpen || slotOverrideModalOpen || outOfHoursModalOpen) return
+    const { send } = pendingSaveRef.current
+    pendingSaveRef.current = null
+    handleSave(send)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outOfHoursOverrideId, noCauzioneOverrideId, slotOverrideId])
+
   // ─── Save Preventivo ───────────────────────────────────────────────────────
 
   async function handleSave(sendAfterSave: boolean = false) {
@@ -1135,7 +1147,36 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       }
     }
 
-    // Availability guard: a preventivo reserves the slot just like a booking.
+    // OTP gates — fire ONLY at Salva, sequentially. Each gate, when tripped,
+    // stores { send } in pendingSaveRef so the resume effect re-invokes
+    // handleSave with fresh override IDs once the operator approves the OTP.
+    // Cancel (X) clears pendingSaveRef and leaves the form intact.
+    //
+    // 1) Out-of-office hours on pickup or return.
+    if (!outOfHoursOverrideId) {
+      const pickupExc = describeException(form.pickup_date, form.pickup_time, 'pickup')
+      const returnExc = describeException(form.return_date, form.return_time, 'return')
+      if (pickupExc || returnExc) {
+        const reason = [
+          pickupExc ? `Ritiro: ${pickupExc}` : null,
+          returnExc ? `Riconsegna: ${returnExc}` : null,
+        ].filter(Boolean).join(' · ')
+        setOutOfHoursReason(reason)
+        pendingSaveRef.current = { send: sendAfterSave }
+        setOutOfHoursModalOpen(true)
+        return
+      }
+    }
+
+    // 2) No Cauzione for Fascia B requires direzione OTP (unless the
+    //    operator is Valerio himself).
+    if (form.include_no_cauzione && isFasciaB && !isValerio && !noCauzioneOverrideId) {
+      pendingSaveRef.current = { send: sendAfterSave }
+      setOtpModalOpen(true)
+      return
+    }
+
+    // 3) Availability guard: a preventivo reserves the slot just like a booking.
     // Blocks same-car 75-min buffer AND the 15-min cross-vehicle handover gap.
     // If blocked, the admin can override via a director OTP.
     if (selectedVehicle && !slotOverrideId) {
@@ -1171,12 +1212,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       )
       if (!result.available) {
         setSlotOverrideReason(result.reason || 'Slot non disponibile')
-        setPendingSendAfterSave(sendAfterSave)
+        pendingSaveRef.current = { send: sendAfterSave }
         setSlotOverrideModalOpen(true)
         return
       }
     }
 
+    // All gates cleared — clear any pending save marker and persist.
+    pendingSaveRef.current = null
     setSaving(true)
     try {
       const pickup = `${form.pickup_date}T${form.pickup_time}:00+02:00`
@@ -1397,37 +1440,20 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     draftSessionIdRef.current = crypto.randomUUID()
   }
 
-  // ─── No-Cauzione guard: require OTP when client is Fascia B and admin is not Valerio ───
+  // ─── No-Cauzione guard ────────────────────────────────────────────────────
+  // Fascia B + non-Valerio still needs OTP, but the modal is opened only at
+  // Salva — checking the box mid-form must not interrupt the operator.
 
   const isFasciaB = form.driver_tier === 'TIER_1'
 
   function handleNoCauzioneToggle(nextChecked: boolean) {
-    // Unchecking: always allow, clear any pending override
     if (!nextChecked) {
       setForm(prev => ({ ...prev, include_no_cauzione: false }))
       setNoCauzioneOverrideId(null)
       return
     }
-
-    // Valerio himself OR not Fascia B OR already-approved for this session → allow directly
-    if (isValerio || !isFasciaB || noCauzioneOverrideId) {
-      setForm(prev => ({ ...prev, include_no_cauzione: true }))
-      return
-    }
-
-    // Fascia B + non-Valerio: open shared OTP modal (blocks until verified)
-    setOtpModalOpen(true)
+    setForm(prev => ({ ...prev, include_no_cauzione: true }))
   }
-
-  // Close loophole: if tier changes to Fascia B after "No Cauzione" was already
-  // checked (e.g. customer autofill switches TIER_2 → TIER_1), force uncheck
-  // unless admin is Valerio or there's a valid override.
-  useEffect(() => {
-    if (form.include_no_cauzione && isFasciaB && !isValerio && !noCauzioneOverrideId) {
-      setForm(prev => ({ ...prev, include_no_cauzione: false }))
-      toast.error('"No Cauzione" richiede autorizzazione per Fascia B')
-    }
-  }, [form.driver_tier, form.include_no_cauzione, isFasciaB, isValerio, noCauzioneOverrideId])
 
   // ─── WhatsApp Send ──────────────────────────────────────────────────────
 
@@ -2792,25 +2818,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           const d = new Date(); d.setHours(h, m, 0); d.setMinutes(d.getMinutes() - 90)
           const autoReturn = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
           setForm(prev => ({ ...prev, pickup_time: newPickupTime, return_time: autoReturn }))
-          if (!isWithinOfficeHoursForDate(form.pickup_date, newPickupTime, 'pickup') && !outOfHoursOverrideId) {
-            const reason = describeException(form.pickup_date, newPickupTime, 'pickup')
-            if (reason) {
-              setOutOfHoursReason(`Ritiro: ${reason}`)
-              setOutOfHoursModalOpen(true)
-            }
-          }
         }} options={buildTimeOptions(form.pickup_date, 'pickup')} />
         <Input label="Data Riconsegna *" type="date" value={form.return_date} onChange={(e) => setForm(prev => ({ ...prev, return_date: e.target.value }))} />
         <Select label="Ora Riconsegna (auto: ritiro -1h30)" value={form.return_time} onChange={(e) => {
           const v = e.target.value
           setForm(prev => ({ ...prev, return_time: v }))
-          if (!isWithinOfficeHoursForDate(form.return_date, v, 'return') && !outOfHoursOverrideId) {
-            const reason = describeException(form.return_date, v, 'return')
-            if (reason) {
-              setOutOfHoursReason(`Riconsegna: ${reason}`)
-              setOutOfHoursModalOpen(true)
-            }
-          }
         }} options={buildTimeOptions(form.return_date, 'return')} />
       </div>
 
@@ -3215,7 +3227,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         </Button>
       </div>
 
-      {/* No-Cauzione OTP — reuses the shared LimitationOverrideModal pattern */}
+      {/* No-Cauzione OTP — opened ONLY at Salva when Fascia B + non-Valerio. */}
       <LimitationOverrideModal
         isOpen={otpModalOpen}
         limitationCode="NO_CAUZIONE_FASCIA_B"
@@ -3223,17 +3235,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         draftSessionId={draftSessionIdRef.current}
         flowType="preventivo"
         onCancel={() => {
+          // X = back to the form, save NOT performed. Form values stay intact.
           setOtpModalOpen(false)
-          setForm(prev => ({ ...prev, include_no_cauzione: false }))
+          pendingSaveRef.current = null
         }}
         onOverrideApproved={(overrideId) => {
           setNoCauzioneOverrideId(overrideId)
-          setForm(prev => ({ ...prev, include_no_cauzione: true }))
           setOtpModalOpen(false)
         }}
       />
 
-      {/* Slot-unavailable OTP — same-car 75-min buffer OR 15-min cross-vehicle gap */}
+      {/* Slot-unavailable OTP — opened ONLY at Salva when the slot is taken. */}
       <LimitationOverrideModal
         isOpen={slotOverrideModalOpen}
         limitationCode="SLOT_NON_DISPONIBILE"
@@ -3241,22 +3253,19 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         draftSessionId={draftSessionIdRef.current}
         flowType="preventivo"
         onCancel={() => {
+          // X = back to the form, save NOT performed. Warning stays visible.
           setSlotOverrideModalOpen(false)
-          setPendingSendAfterSave(false)
-          // Keep warning visible so admin knows the slot is still blocked
+          pendingSaveRef.current = null
         }}
         onOverrideApproved={(overrideId) => {
           setSlotOverrideId(overrideId)
           setSlotOverrideModalOpen(false)
           setSlotUnavailableWarning('')
-          // If the modal was triggered from a Save attempt, re-run the save
-          if (pendingSendAfterSave !== null && pendingSendAfterSave !== undefined) {
-            // handleSave re-entered — it will now skip the availability check because slotOverrideId is set
-          }
         }}
       />
 
-      {/* Out-of-office-hours OTP — admin picked a slot outside the rental schedule */}
+      {/* Out-of-office-hours OTP — opened ONLY at Salva when pickup/return is
+          outside the standard schedule. */}
       <LimitationOverrideModal
         isOpen={outOfHoursModalOpen}
         limitationCode="out_of_office_hours"
@@ -3265,6 +3274,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         flowType="preventivo"
         onCancel={() => {
           setOutOfHoursModalOpen(false)
+          pendingSaveRef.current = null
         }}
         onOverrideApproved={(overrideId) => {
           setOutOfHoursOverrideId(overrideId)
