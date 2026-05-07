@@ -551,11 +551,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // email to direzione + saved on the limitation_overrides record.
   const [overrideDetails, setOverrideDetails] = useState<Array<{ label: string; value: string }> | undefined>(undefined)
 
-  // Resume submission once the override is approved (overrideCodes
-  // contains 'paid_rental_modify').
+  // Resume submission once a paused-save override is approved. Gates that
+  // remember their pending-save state via pendingSubmitRef are
+  // `paid_rental_modify` (booking edit guard) and `out_of_office_hours`
+  // (Salva-time time-window guard). Other limitation gates inside the
+  // validation flow run at Salva already and only require re-click.
   useEffect(() => {
     const pending = pendingSubmitRef.current
-    if (pending && overrideCodes.has('paid_rental_modify')) {
+    if (!pending) return
+    if (overrideCodes.has('paid_rental_modify') || overrideCodes.has('out_of_office_hours')) {
       pendingSubmitRef.current = null
       processBookingSubmission(pending.skipValidation, pending.overrideCustomerId)
     }
@@ -3454,6 +3458,32 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     if (isSubmitting) return
 
+    // OTP gate — out-of-office-hours pickup or return. Fires only at Salva
+    // (the time-picker no longer triggers the modal mid-input). Once the
+    // operator approves OTP, the resume effect re-runs this submit with the
+    // override active.
+    if (!hasOverride('out_of_office_hours')) {
+      const pickupOff = formData.pickup_date && formData.pickup_time
+        && !isInRentalHours(formData.pickup_date, formData.pickup_time, 'pickup')
+      const returnOff = formData.return_date && formData.return_time
+        && !isInRentalHours(formData.return_date, formData.return_time, 'return')
+      if (pickupOff || returnOff) {
+        const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
+        const describe = (date: string, time: string, kind: 'pickup' | 'return') => {
+          const r = rentalHoursFor(date, kind)
+          const hoursLabel = r ? r.map(([a, b]) => `${fmt(a)}-${fmt(b)}`).join(' / ') : 'Domenica chiusa'
+          const verb = kind === 'pickup' ? 'Ritiro' : 'Riconsegna'
+          return `${verb} alle ${time} fuori orario standard (orari: ${hoursLabel}).`
+        }
+        const reasons: string[] = []
+        if (pickupOff) reasons.push(describe(formData.pickup_date, formData.pickup_time, 'pickup'))
+        if (returnOff) reasons.push(describe(formData.return_date, formData.return_time, 'return'))
+        pendingSubmitRef.current = { skipValidation, overrideCustomerId }
+        requestOverride('out_of_office_hours', reasons.join(' · '))
+        return
+      }
+    }
+
     // OTP gate — modifying a PAID or CONFIRMED rental requires direzione approval
     // (Valerio & Ilenia bypass server-side via DIREZIONE_EMAILS). The gate is
     // skipped entirely if the operator has already approved this session OR if
@@ -5794,14 +5824,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           showNotes={limitationState.limitationCode === 'paid_rental_modify'}
           onClose={closeLimitation}
           onCancel={() => {
+            // X = abort save and go back to the form. The booking values the
+            // operator typed stay intact; nothing is persisted.
             pendingSubmitRef.current = null
-            editFormSnapshotRef.current = null
             setOverrideDetails(undefined)
             cancelLimitation()
-            resetForm()
-            setEditingId(null)
-            setShowForm(false)
-            setNewCustomerMode(false)
           }}
           onOverrideApproved={handleOverrideApproved}
         />
@@ -6059,6 +6086,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       }}
                       placeholder="Inizia a scrivere nome, email o telefono..."
                       required={true}
+                      showCardInfoOnSelect={true}
                     />
 
                     {/* Show selected customer details */}
@@ -6194,12 +6222,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const pickupTime = e.target.value
                       const returnTime = calculateReturnTime(pickupTime)
                       setFormData(prev => ({ ...prev, pickup_time: pickupTime, return_time: returnTime }))
-                      if (!isInRentalHours(formData.pickup_date, pickupTime, 'pickup') && !hasOverride('out_of_office_hours')) {
-                        const r = rentalHoursFor(formData.pickup_date, 'pickup')
-                        const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
-                        const hoursLabel = r ? r.map(([a,b]) => `${fmt(a)}-${fmt(b)}`).join(' / ') : 'Domenica chiusa'
-                        requestOverride('out_of_office_hours', `Ritiro alle ${pickupTime} fuori orario standard (orari: ${hoursLabel}).`)
-                      }
                     }}
                     options={buildRentalTimeOptions(formData.pickup_date, 'pickup')}
                   />
@@ -6284,12 +6306,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     onChange={(e) => {
                       const v = e.target.value
                       setFormData(prev => ({ ...prev, return_time: v }))
-                      if (!isInRentalHours(formData.return_date, v, 'return') && !hasOverride('out_of_office_hours')) {
-                        const r = rentalHoursFor(formData.return_date, 'return')
-                        const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`
-                        const hoursLabel = r ? r.map(([a,b]) => `${fmt(a)}-${fmt(b)}`).join(' / ') : 'Domenica chiusa'
-                        requestOverride('out_of_office_hours', `Riconsegna alle ${v} fuori orario standard (orari: ${hoursLabel}).`)
-                      }
                     }}
                     options={buildRentalTimeOptions(formData.return_date, 'return')}
                   />

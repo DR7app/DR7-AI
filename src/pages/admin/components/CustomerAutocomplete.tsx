@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import ClientCardInfoModal from './ClientCardInfoModal'
 
 interface Customer {
     id: string
@@ -16,6 +17,7 @@ interface CustomerAutocompleteProps {
     onSelectCustomer: (customerId: string) => void
     placeholder?: string
     required?: boolean
+    showCardInfoOnSelect?: boolean
 }
 
 export default function CustomerAutocomplete({
@@ -23,8 +25,10 @@ export default function CustomerAutocomplete({
     selectedCustomerId,
     onSelectCustomer,
     placeholder = 'Cerca cliente per nome, email o telefono...',
-    required = true
+    required = true,
+    showCardInfoOnSelect = false
 }: CustomerAutocompleteProps) {
+    const [cardInfoCustomerId, setCardInfoCustomerId] = useState<string | null>(null)
     const [searchQuery, setSearchQuery] = useState('')
     const [isOpen, setIsOpen] = useState(false)
     const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -132,6 +136,9 @@ export default function CustomerAutocomplete({
         setSearchQuery(customer.full_name)
         setIsOpen(false)
         setHighlightedIndex(0)
+        if (showCardInfoOnSelect) {
+            setCardInfoCustomerId(customer.id)
+        }
     }
 
     const handleInputChange = (value: string) => {
@@ -227,6 +234,13 @@ export default function CustomerAutocomplete({
                 value={selectedCustomerId}
                 required={required}
             />
+
+            {showCardInfoOnSelect && cardInfoCustomerId && (
+                <ClientCardInfoModal
+                    customerId={cardInfoCustomerId}
+                    onClose={() => setCardInfoCustomerId(null)}
+                />
+            )}
         </div>
     )
 }

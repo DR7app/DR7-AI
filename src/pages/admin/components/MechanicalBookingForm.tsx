@@ -377,6 +377,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                             onSelectCustomer={(customerId) => setFormData({ ...formData, customer_id: customerId })}
                             placeholder="Inizia a scrivere nome, email o telefono..."
                             required={true}
+                            showCardInfoOnSelect={true}
                         />
                     </div>
                 </div>

@@ -2270,6 +2270,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   onSelectCustomer={(customerId) => setFormData(prev => ({ ...prev, customer_id: customerId }))}
                   placeholder="Inizia a scrivere nome, email o telefono..."
                   required={true}
+                  showCardInfoOnSelect={true}
                 />
                 <button
                   type="button"
