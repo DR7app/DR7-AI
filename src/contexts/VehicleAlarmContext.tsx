@@ -239,6 +239,30 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     }
 
     // Stop alarm
+    // Tutti i tracking-ID variant generati dal polling per un booking O un
+    // veicolo (fleet). Usato sia da stopAlarm che da snoozeAlarm così nessun
+    // tipo di allarme può sfuggire al silenziamento.
+    // bookingId è il booking.id per allarmi prenotazione, oppure il vehicleId
+    // per allarmi flotta — entrambi i prefissi vengono coperti.
+    const buildAllAlarmIds = (id: string): string[] => [
+        id,
+        // Booking-based alarms
+        `return_before_${id}`,
+        `return_after_${id}`,
+        `deposit_${id}`,
+        `unpaid_${id}`,
+        `car_wash_${id}`,
+        // Fleet maintenance alarms (id = vehicleId)
+        `fleet_service_${id}`,
+        `fleet_tires_front_${id}`,
+        `fleet_tires_rear_${id}`,
+        `fleet_brakes_front_${id}`,
+        `fleet_brakes_rear_${id}`,
+        `fleet_insurance_${id}`,
+        `fleet_tax_${id}`,
+        `fleet_inspection_${id}`,
+    ]
+
     const stopAlarm = async (bookingId: string) => {
         // Stop audio
         if (audioRef.current) {
@@ -256,14 +280,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         // IMMEDIATE session-level block — every tracking-ID variant for this booking
         // gets added to the in-memory set + localStorage, so the alarm cannot
         // re-trigger in the current tab even if the DB update below fails.
-        const ids = [
-            bookingId,
-            `return_before_${bookingId}`,
-            `return_after_${bookingId}`,
-            `deposit_${bookingId}`,
-            `unpaid_${bookingId}`,
-            `car_wash_${bookingId}`,
-        ]
+        const ids = buildAllAlarmIds(bookingId)
         try {
             const stored = JSON.parse(localStorage.getItem('triggered_alarms') || '[]')
             const now = Date.now()
@@ -301,14 +318,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
         setAlarmState(prev => ({ ...prev, activeAlarm: null, isPlaying: false }))
 
-        const ids = [
-            bookingId,
-            `return_before_${bookingId}`,
-            `return_after_${bookingId}`,
-            `deposit_${bookingId}`,
-            `unpaid_${bookingId}`,
-            `car_wash_${bookingId}`,
-        ]
+        const ids = buildAllAlarmIds(bookingId)
         const until = Date.now() + minutes * 60_000
 
         for (const id of ids) {
