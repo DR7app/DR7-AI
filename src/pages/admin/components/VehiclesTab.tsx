@@ -610,6 +610,16 @@ export default function VehiclesTab() {
     return plate.includes(q) || name.includes(q)
   }
 
+  // Single source of truth for category labels: Centralina Pro. Falls back to
+  // the FALLBACK list (only used until Centralina Pro is opened for the first
+  // time) and finally to the raw id so a deleted category id doesn't leak.
+  const categoryLabel = (id: string): string => {
+    const fromPro = categories.find(c => c.id === id)
+    if (fromPro?.label) return fromPro.label
+    const legacy = FALLBACK_CATEGORIES.find(c => c.id === id)
+    return legacy?.label || id
+  }
+
   const exoticVehicles = vehicles.filter(v => v.category === 'exotic').filter(searchFilter)
   const urbanVehicles = vehicles.filter(v => v.category === 'urban').filter(searchFilter)
   const aziendaliVehicles = vehicles.filter(v => v.category === 'aziendali').filter(searchFilter)
@@ -651,7 +661,7 @@ export default function VehiclesTab() {
         <div>
           <h2 className="text-2xl font-bold text-theme-text-primary">Veicoli</h2>
           <p className="text-sm text-theme-text-muted mt-1">
-            Exotic Supercars: {exoticCount} | Urban: {urbanCount} | Aziendali: {aziendaliCount} | Totale: {vehicles.length}
+            {categoryLabel('exotic')}: {exoticCount} | {categoryLabel('urban')}: {urbanCount} | {categoryLabel('aziendali')}: {aziendaliCount} | Totale: {vehicles.length}
           </p>
         </div>
         <div className="flex gap-2">
@@ -1025,7 +1035,7 @@ export default function VehiclesTab() {
         <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
           <div className="bg-cyan-900/30 px-4 py-3 border-b border-theme-border">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-              <span className="px-3 py-1 bg-cyan-900 text-cyan-200 rounded text-sm">Urban</span>
+              <span className="px-3 py-1 bg-cyan-900 text-cyan-200 rounded text-sm">{categoryLabel('urban')}</span>
               <span className="text-sm text-theme-text-muted">({urbanCount} veicoli)</span>
             </h3>
           </div>
@@ -1184,7 +1194,7 @@ export default function VehiclesTab() {
         <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
           <div className="bg-purple-900/30 px-4 py-3 border-b border-theme-border">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-              <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">Exotic Supercars</span>
+              <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">{categoryLabel('exotic')}</span>
               <span className="text-sm text-theme-text-muted">({exoticCount} veicoli)</span>
             </h3>
           </div>
@@ -1343,7 +1353,7 @@ export default function VehiclesTab() {
         <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
           <div className="bg-orange-900/30 px-4 py-3 border-b border-theme-border">
             <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-              <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">Aziendali</span>
+              <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">{categoryLabel('aziendali')}</span>
               <span className="text-sm text-theme-text-muted">({aziendaliCount} veicoli)</span>
             </h3>
           </div>
