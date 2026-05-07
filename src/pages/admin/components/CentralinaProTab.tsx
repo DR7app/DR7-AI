@@ -34,7 +34,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10'
 
 type Category = { id: string; label: string }
 type Fascia = {
@@ -56,6 +56,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p7', title: 'Preventivi' },
   { id: 'p8', title: 'Danni & Penali' },
   { id: 'p9', title: 'Fiscale' },
+  { id: 'p10', title: 'DR7 Club' },
 ]
 
 const INITIAL_CATEGORIES: Category[] = [
@@ -445,6 +446,28 @@ type FiscalConfig = {
 
 const INITIAL_FISCAL: FiscalConfig = {
   vat_rate: 22,
+}
+
+// === DR7 Club ===
+
+type DR7ClubTier = {
+  id: string
+  label: string
+  min_annual_spend: number | ''
+  rate_pct: number | ''
+  is_active: boolean
+}
+
+type DR7ClubConfig = {
+  tiers: DR7ClubTier[]
+}
+
+const INITIAL_DR7_CLUB: DR7ClubConfig = {
+  tiers: [
+    { id: 'access',    label: 'Access',    min_annual_spend: 0,     rate_pct: 2, is_active: true },
+    { id: 'black',     label: 'Black',     min_annual_spend: 3000,  rate_pct: 3, is_active: true },
+    { id: 'signature', label: 'Signature', min_annual_spend: 10000, rate_pct: 4, is_active: true },
+  ],
 }
 
 type DepositOption = {
@@ -862,6 +885,7 @@ type PersistedSnapshot = {
   penali?: PenaliConfig
   danni?: DanniConfig
   fiscal?: FiscalConfig
+  dr7_club?: DR7ClubConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -1036,6 +1060,7 @@ export default function CentralinaProTab() {
   const initialPenali = migratePenali(pick(persisted, 'penali', INITIAL_PENALI))
   const initialDanni = migrateDanni(pick(persisted, 'danni', INITIAL_DANNI))
   const initialFiscal = pick(persisted, 'fiscal', INITIAL_FISCAL)
+  const initialDr7Club = pick(persisted, 'dr7_club', INITIAL_DR7_CLUB)
 
   // Current (working) state
   const [categories, setCategories] = useState<Category[]>(initialCategories)
@@ -1049,6 +1074,7 @@ export default function CentralinaProTab() {
   const [penali, setPenali] = useState<PenaliConfig>(initialPenali)
   const [danni, setDanni] = useState<DanniConfig>(initialDanni)
   const [fiscal, setFiscal] = useState<FiscalConfig>(initialFiscal)
+  const [dr7Club, setDr7Club] = useState<DR7ClubConfig>(initialDr7Club)
 
   // Saved (committed) snapshot — what was last persisted
   const [savedCategories, setSavedCategories] = useState<Category[]>(initialCategories)
@@ -1062,6 +1088,7 @@ export default function CentralinaProTab() {
   const [savedPenali, setSavedPenali] = useState<PenaliConfig>(initialPenali)
   const [savedDanni, setSavedDanni] = useState<DanniConfig>(initialDanni)
   const [savedFiscal, setSavedFiscal] = useState<FiscalConfig>(initialFiscal)
+  const [savedDr7Club, setSavedDr7Club] = useState<DR7ClubConfig>(initialDr7Club)
 
   const [justSaved, setJustSaved] = useState(false)
 
@@ -1100,11 +1127,12 @@ export default function CentralinaProTab() {
           setDanni(migrated); setSavedDanni(migrated)
         }
         if (remote.fiscal !== undefined) { setFiscal(remote.fiscal); setSavedFiscal(remote.fiscal) }
+        if (remote.dr7_club !== undefined) { setDr7Club(remote.dr7_club); setSavedDr7Club(remote.dr7_club) }
         // Refresh local cache with the authoritative copy
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
       } else {
         // Supabase is empty — seed with initial/localStorage values
-        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal }
+        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club }
         savePersisted(seed)
         console.log('[CentralinaPro] Seeded Pro config to Supabase')
       }
@@ -1195,7 +1223,7 @@ export default function CentralinaProTab() {
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal },
+        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club },
         {
           categories: savedCategories,
           fasce: savedFasce,
@@ -1208,11 +1236,12 @@ export default function CentralinaProTab() {
           penali: savedPenali,
           danni: savedDanni,
           fiscal: savedFiscal,
+          dr7_club: savedDr7Club,
         }
       ),
     [
-      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal,
-      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal,
+      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7Club,
+      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club,
     ]
   )
 
@@ -1229,7 +1258,8 @@ export default function CentralinaProTab() {
     setSavedPenali(penali)
     setSavedDanni(danni)
     setSavedFiscal(fiscal)
-    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal })
+    setSavedDr7Club(dr7Club)
+    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club })
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
 
@@ -1251,6 +1281,7 @@ export default function CentralinaProTab() {
     setPenali(savedPenali)
     setDanni(savedDanni)
     setFiscal(savedFiscal)
+    setDr7Club(savedDr7Club)
   }
 
   void changes.length // SaveBar always visible
@@ -1344,6 +1375,12 @@ export default function CentralinaProTab() {
               <FiscaleSection
                 fiscal={fiscal}
                 setFiscal={setFiscal}
+              />
+            )}
+            {section === 'p10' && (
+              <DR7ClubSection
+                dr7Club={dr7Club}
+                setDr7Club={setDr7Club}
               />
             )}
           </main>
@@ -1468,6 +1505,7 @@ type Snapshot = {
   penali: PenaliConfig
   danni: DanniConfig
   fiscal: FiscalConfig
+  dr7_club: DR7ClubConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -1476,6 +1514,26 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   // Fiscale
   if (current.fiscal.vat_rate !== saved.fiscal.vat_rate) {
     out.push(`Aliquota IVA: ${saved.fiscal.vat_rate || 0}% → ${current.fiscal.vat_rate || 0}%`)
+  }
+
+  // DR7 Club tiers
+  {
+    const savedIds = new Set(saved.dr7_club.tiers.map((t) => t.id))
+    const curIds = new Set(current.dr7_club.tiers.map((t) => t.id))
+    current.dr7_club.tiers.forEach((t) => {
+      if (!savedIds.has(t.id)) out.push(`DR7 Club: tier aggiunto "${t.label || '(senza nome)'}"`)
+    })
+    saved.dr7_club.tiers.forEach((t) => {
+      if (!curIds.has(t.id)) out.push(`DR7 Club: tier rimosso "${t.label}"`)
+    })
+    current.dr7_club.tiers.forEach((cur) => {
+      const prev = saved.dr7_club.tiers.find((x) => x.id === cur.id)
+      if (!prev) return
+      if (prev.label !== cur.label) out.push(`DR7 Club / "${prev.label}" → "${cur.label}"`)
+      if (prev.min_annual_spend !== cur.min_annual_spend) out.push(`DR7 Club / ${cur.label}: soglia €${prev.min_annual_spend || 0} → €${cur.min_annual_spend || 0}`)
+      if (prev.rate_pct !== cur.rate_pct) out.push(`DR7 Club / ${cur.label}: reward ${prev.rate_pct || 0}% → ${cur.rate_pct || 0}%`)
+      if (prev.is_active !== cur.is_active) out.push(`DR7 Club / ${cur.label}: ${cur.is_active ? 'attivato' : 'disattivato'}`)
+    })
   }
 
 
@@ -4688,6 +4746,159 @@ function FiscaleSection({
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
           </div>
         </label>
+      </section>
+    </div>
+  )
+}
+
+// ========== DR7 CLUB (Punto 10) ==========
+
+function DR7ClubSection({
+  dr7Club,
+  setDr7Club,
+}: {
+  dr7Club: DR7ClubConfig
+  setDr7Club: (next: DR7ClubConfig) => void
+}) {
+  function patchTier(id: string, p: Partial<DR7ClubTier>) {
+    setDr7Club({
+      ...dr7Club,
+      tiers: dr7Club.tiers.map((t) => (t.id === id ? { ...t, ...p } : t)),
+    })
+  }
+
+  function addTier() {
+    setDr7Club({
+      ...dr7Club,
+      tiers: [
+        ...dr7Club.tiers,
+        { id: uid(), label: 'Nuovo tier', min_annual_spend: 0, rate_pct: 0, is_active: true },
+      ],
+    })
+  }
+
+  function removeTier(id: string) {
+    setDr7Club({
+      ...dr7Club,
+      tiers: dr7Club.tiers.filter((t) => t.id !== id),
+    })
+  }
+
+  // Sort by min_annual_spend ascending for display (doesn't mutate state)
+  const sortedTiers = [...dr7Club.tiers].sort((a, b) => {
+    const av = typeof a.min_annual_spend === 'number' ? a.min_annual_spend : 0
+    const bv = typeof b.min_annual_spend === 'number' ? b.min_annual_spend : 0
+    return av - bv
+  })
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+          DR7 Club
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] mt-1">
+          Tier di cashback DR7 Club. Il tier piu' alto raggiunto in base alla spesa annuale (ultimi 12 mesi, solo pagamenti carta + ricariche wallet) determina la percentuale di cashback applicata.
+        </p>
+      </div>
+
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Tier di Cashback</h3>
+            <p className="text-[12px] text-[#6e6e73] mt-0.5">
+              Disattiva un tier per non applicarlo, senza perderlo dalla configurazione.
+            </p>
+          </div>
+          <button
+            onClick={addTier}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+            Aggiungi tier
+          </button>
+        </header>
+
+        <div className="px-5 pb-2">
+          <div className="grid grid-cols-[44px_1fr_140px_100px_32px] gap-2 items-center px-1 mb-2">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Attivo</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Nome</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Spesa min.</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Reward</span>
+            <span />
+          </div>
+        </div>
+
+        <ul className="divide-y divide-black/5">
+          {sortedTiers.map((t) => (
+            <li key={t.id} className="px-5 py-3 grid grid-cols-[44px_1fr_140px_100px_32px] gap-2 items-center group">
+              <label className="inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={t.is_active}
+                  onChange={(e) => patchTier(t.id, { is_active: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
+                  <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                </span>
+              </label>
+              <input
+                type="text"
+                value={t.label}
+                onChange={(e) => patchTier(t.id, { label: e.target.value })}
+                placeholder="Nome tier"
+                className={`bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${!t.is_active ? 'opacity-50' : ''}`}
+              />
+              <div className={`relative ${!t.is_active ? 'opacity-50' : ''}`}>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={t.min_annual_spend}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    patchTier(t.id, { min_annual_spend: v === '' ? '' : Number(v) })
+                  }}
+                  className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                />
+              </div>
+              <div className={`relative ${!t.is_active ? 'opacity-50' : ''}`}>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={t.rate_pct}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    patchTier(t.id, { rate_pct: v === '' ? '' : Number(v) })
+                  }}
+                  className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
+              </div>
+              <button
+                onClick={() => removeTier(t.id)}
+                className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                aria-label="Rimuovi tier"
+                title="Rimuovi tier"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+                </svg>
+              </button>
+            </li>
+          ))}
+          {sortedTiers.length === 0 && (
+            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+              Nessun tier configurato. Tutti i clienti riceveranno 0% di cashback.
+            </li>
+          )}
+        </ul>
       </section>
     </div>
   )
