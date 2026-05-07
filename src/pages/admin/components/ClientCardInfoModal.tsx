@@ -3,6 +3,8 @@ import { supabase } from '../../../supabaseClient'
 
 interface ClientCardInfoModalProps {
     customerId: string | null
+    customerEmail?: string | null
+    customerPhone?: string | null
     onClose: () => void
 }
 
@@ -32,7 +34,7 @@ function buildFullName(c: Record<string, unknown>): string {
     return combined || (c.ragione_sociale as string) || 'N/A'
 }
 
-export default function ClientCardInfoModal({ customerId, onClose }: ClientCardInfoModalProps) {
+export default function ClientCardInfoModal({ customerId, customerEmail, customerPhone, onClose }: ClientCardInfoModalProps) {
     const [loading, setLoading] = useState(false)
     const [data, setData] = useState<CustomerCardData | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -44,20 +46,43 @@ export default function ClientCardInfoModal({ customerId, onClose }: ClientCardI
         setError(null)
         setData(null)
 
-        supabase
-            .from('customers_extended')
-            .select('nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, metadata')
-            .eq('id', customerId)
-            .maybeSingle()
-            .then(({ data: row, error: err }) => {
+        const SELECT = 'nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, metadata'
+
+        // Il customerId che arriva può essere:
+        //  - customers_extended.id (record creato dall'admin)
+        //  - auth.users.user_id (cliente registrato via sito) → la riga
+        //    customers_extended esiste ma con id diverso e user_id uguale
+        //  - un id legacy della tabella customers (nessun match diretto)
+        // Strategia: id, poi user_id, poi email, poi telefono.
+        async function lookup() {
+            const tryQuery = async (column: 'id' | 'user_id' | 'email' | 'telefono', value: string) => {
+                const { data: row, error: err } = await supabase
+                    .from('customers_extended')
+                    .select(SELECT)
+                    .eq(column, value)
+                    .order('updated_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                if (err) throw err
+                return row
+            }
+
+            try {
+                let row = await tryQuery('id', customerId!)
+                if (!row) row = await tryQuery('user_id', customerId!)
+                if (!row && customerEmail) row = await tryQuery('email', customerEmail)
+                if (!row && customerPhone) row = await tryQuery('telefono', customerPhone)
+                return row
+            } catch (e: unknown) {
+                throw e instanceof Error ? e : new Error(String(e))
+            }
+        }
+
+        lookup()
+            .then((row) => {
                 if (cancelled) return
-                if (err) {
-                    setError(err.message)
-                    setLoading(false)
-                    return
-                }
                 if (!row) {
-                    setError('Cliente non trovato')
+                    setError('Cliente non trovato in customers_extended')
                     setLoading(false)
                     return
                 }
@@ -75,11 +100,16 @@ export default function ClientCardInfoModal({ customerId, onClose }: ClientCardI
                 })
                 setLoading(false)
             })
+            .catch((err: Error) => {
+                if (cancelled) return
+                setError(err.message)
+                setLoading(false)
+            })
 
         return () => {
             cancelled = true
         }
-    }, [customerId])
+    }, [customerId, customerEmail, customerPhone])
 
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
@@ -91,7 +121,12 @@ export default function ClientCardInfoModal({ customerId, onClose }: ClientCardI
 
     if (!customerId) return null
 
-    const isTokenized = !!(data?.nexi_contract_id && data?.nexi_card_masked_pan)
+    // Tokenizzata = contract id presente. Il masked PAN può mancare per le
+    // tokenizzazioni più vecchie (l'operation details fetch non è sempre
+    // riuscito a popolarlo) — è una decorazione, non il segnale principale.
+    // NexiTab, CustomersTab, CauzioniTab e ReportClienteModal usano la stessa
+    // regola: basta nexi_contract_id per considerare la carta su file.
+    const isTokenized = !!data?.nexi_contract_id
     const circuitLabel = data?.nexi_card_circuit || data?.nexi_card_brand || ''
 
     return (
@@ -155,7 +190,7 @@ export default function ClientCardInfoModal({ customerId, onClose }: ClientCardI
                                             )}
                                         </div>
                                         <div className="font-mono text-lg text-theme-text-primary">
-                                            {data.nexi_card_masked_pan}
+                                            {data.nexi_card_masked_pan || '•••• •••• •••• ••••'}
                                         </div>
                                         {data.nexi_contract_updated && (
                                             <div className="text-xs text-theme-text-muted mt-2">

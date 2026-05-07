@@ -28,7 +28,7 @@ export default function CustomerAutocomplete({
     required = true,
     showCardInfoOnSelect = false
 }: CustomerAutocompleteProps) {
-    const [cardInfoCustomerId, setCardInfoCustomerId] = useState<string | null>(null)
+    const [cardInfoCustomer, setCardInfoCustomer] = useState<{ id: string; email: string | null; phone: string | null } | null>(null)
     const [searchQuery, setSearchQuery] = useState('')
     const [isOpen, setIsOpen] = useState(false)
     const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -137,7 +137,7 @@ export default function CustomerAutocomplete({
         setIsOpen(false)
         setHighlightedIndex(0)
         if (showCardInfoOnSelect) {
-            setCardInfoCustomerId(customer.id)
+            setCardInfoCustomer({ id: customer.id, email: customer.email, phone: customer.phone })
         }
     }
 
@@ -235,10 +235,12 @@ export default function CustomerAutocomplete({
                 required={required}
             />
 
-            {showCardInfoOnSelect && cardInfoCustomerId && (
+            {showCardInfoOnSelect && cardInfoCustomer && (
                 <ClientCardInfoModal
-                    customerId={cardInfoCustomerId}
-                    onClose={() => setCardInfoCustomerId(null)}
+                    customerId={cardInfoCustomer.id}
+                    customerEmail={cardInfoCustomer.email}
+                    customerPhone={cardInfoCustomer.phone}
+                    onClose={() => setCardInfoCustomer(null)}
                 />
             )}
         </div>
