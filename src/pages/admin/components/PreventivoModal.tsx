@@ -8,6 +8,7 @@ import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
+import { logAdminAction } from '../../../utils/logAdminAction'
 import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice, getSecondDriverPrice, getNoCauzioneSurcharge, getSforoKm } from '../../../utils/configLookup'
 import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 import type { DriverTier } from '../../../types/rentalConfig'
@@ -596,11 +597,25 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
     if (rentalDays <= 0) { toast.error('La data di riconsegna deve essere dopo il ritiro'); return }
 
     async function buildPreventivoMessage(preventivoId: string): Promise<string | null> {
-      // Load template from Messaggi di Sistema — if not found/disabled, skip auto-send
+      // Load every enabled preventivo template (by key OR label prefix). Partition
+      // by whether the body contains {sconto}, then pick the variant matching
+      // p.sconto. Supports user-created keys like `preventivo_whatsapp_<ts>` and
+      // `preventivo_senza_sconto_<ts>` alongside the canonical pro_conferma_preventivo.
       const { data: p } = await supabase.from('preventivi').select('*').eq('id', preventivoId).single()
-      const { data: tpl } = await supabase.from('system_messages').select('message_body, is_enabled').eq('message_key', 'preventivo_whatsapp').maybeSingle()
-      if (!tpl?.is_enabled || !tpl.message_body) return null
       if (!p) return null
+      const { data: tplRows } = await supabase
+        .from('system_messages')
+        .select('message_key, label, message_body, is_enabled')
+        .eq('is_enabled', true)
+        .or('message_key.ilike.preventivo%,message_key.eq.pro_conferma_preventivo,label.ilike.preventivo%')
+
+      const rows = (tplRows || []).filter(r => r.message_body && r.message_body.trim().length > 0)
+      const withSconto = rows.find(r => r.message_body.includes('{sconto}'))?.message_body || ''
+      const noSconto   = rows.find(r => !r.message_body.includes('{sconto}'))?.message_body || ''
+      const chosen = p.sconto > 0
+        ? (withSconto || noSconto)
+        : (noSconto   || withSconto)
+      if (!chosen) return null
 
       const formatEur = (v: number) => `€${(v || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -611,7 +626,10 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
       if (p.unlimited_km_total > 0) pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
       if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
 
-      const specs = [p.vehicle_name, p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '', p.vehicle_cv ? `${p.vehicle_cv}cv` : ''].filter(Boolean).join(' ')
+      const specs = [p.vehicle_name, p.vehicle_model_year ? `${p.vehicle_model_year}` : '', p.vehicle_cv ? `${p.vehicle_cv}cv` : ''].filter(Boolean).join(' ')
+      const fmtDate = (iso: string) => { try { return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) } catch { return '' } }
+      const fmtTime = (iso: string) => { try { return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }) } catch { return '' } }
+      const discountLine = p.sconto > 0 ? `Condizione riservata DR7:\n${formatEur(p.total_final)} complessivi` : ''
       const vars: Record<string, string> = {
         vehicle_specs: specs,
         vehicle_name: p.vehicle_name || '',
@@ -619,14 +637,22 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
         daily_rate: formatEur(p.base_daily_rate),
         rental_total: formatEur(p.base_daily_rate * p.rental_days),
         pricing_lines: pricingLines,
+        breakdown: pricingLines,
         subtotal: formatEur(p.subtotal),
         total: formatEur(p.total_final || p.subtotal),
-        sconto: p.sconto > 0 ? `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}` : '',
+        total_final: formatEur(p.total_final || p.subtotal),
+        sconto: discountLine,
+        sconto_note: p.sconto_note || '',
         customer_name: p.customer_name || '',
         km_info: p.unlimited_km_total > 0 ? 'Illimitati' : `${p.km_limit || 0} Km`,
         insurance_line: p.insurance_total > 0 ? `Assicurazione = ${formatEur(p.insurance_total)}` : '',
+        insurance_option: p.insurance_option || '',
+        pickup_date: p.pickup_date ? fmtDate(p.pickup_date) : '',
+        pickup_time: p.pickup_date ? fmtTime(p.pickup_date) : '',
+        dropoff_date: p.dropoff_date ? fmtDate(p.dropoff_date) : '',
+        dropoff_time: p.dropoff_date ? fmtTime(p.dropoff_date) : '',
       }
-      let msg = tpl.message_body
+      let msg = chosen
       for (const [k, v] of Object.entries(vars)) msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '')
       return msg.replace(/\n{3,}/g, '\n\n').trim()
     }
@@ -698,18 +724,32 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
 
       let savedId: string | null = null
       let isNew = false
+      const logPayload = {
+        customer: selectedCust?.full_name || record.customer_name || null,
+        phone: selectedCust?.phone || record.customer_phone || null,
+        vehicle: record.vehicle_name || null,
+        plate: record.vehicle_plate || null,
+        pickup: record.pickup_date ? new Date(record.pickup_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : null,
+        dropoff: record.dropoff_date ? new Date(record.dropoff_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : null,
+        rental_days: record.rental_days,
+        total: record.total_amount,
+      }
       if (editData?.id) {
         const { error } = await supabase.from('preventivi').update(record).eq('id', editData.id)
         if (error) throw error
         savedId = editData.id
         appendPreventivoEvent(editData.id, 'preventivo_aggiornato', { value: record.total_amount })
+        logAdminAction('preventivo_updated', 'preventivo', editData.id, { ...logPayload, number: editData.id.substring(0, 8) })
       } else {
         record.created_at = new Date().toISOString()
         const { data: inserted, error } = await supabase.from('preventivi').insert(record).select('id').single()
         if (error) throw error
         savedId = inserted?.id || null
         isNew = true
-        if (inserted?.id) appendPreventivoEvent(inserted.id, 'preventivo_creato', { value: record.total_amount })
+        if (inserted?.id) {
+          appendPreventivoEvent(inserted.id, 'preventivo_creato', { value: record.total_amount })
+          logAdminAction('preventivo_created', 'preventivo', inserted.id, { ...logPayload, number: inserted.id.substring(0, 8) })
+        }
       }
 
       // Auto-send WhatsApp if new preventivo and customer has phone
@@ -717,7 +757,7 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
         try {
           const autoMsg = await buildPreventivoMessage(savedId)
           if (!autoMsg) {
-            toast.success('Preventivo salvato! (Template "preventivo_whatsapp" non configurato in Messaggi di Sistema)')
+            toast.success('Preventivo salvato! (Template "pro_conferma_preventivo" non configurato in Messaggi di Sistema Pro)')
           } else {
             const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
@@ -733,6 +773,11 @@ export default function PreventivoModal({ isOpen, onClose, onSaved, editData }: 
                 expires_at: expiresAt,
               }).eq('id', savedId)
               appendPreventivoEvent(savedId, 'preventivo_inviato', { detail: `${selectedCust.phone} - ${selectedCust.full_name || ''} (auto)` })
+              logAdminAction('preventivo_sent', 'preventivo', savedId, {
+                ...logPayload,
+                number: savedId.substring(0, 8),
+                auto: true,
+              })
               toast.success('Preventivo salvato e inviato via WhatsApp!')
             } else {
               toast.success('Preventivo salvato (invio WhatsApp fallito)')

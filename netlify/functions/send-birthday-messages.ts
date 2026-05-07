@@ -196,10 +196,10 @@ const birthdayHandler: Handler = async (event) => {
 
         console.log(`[Birthday Auto] Generated code ${discountCode} for ${fullName}`);
 
-        // Personalize message with name and code
+        // Personalize message with name and code (replace ALL occurrences, not just the first)
         const personalizedMessage = birthdayMessage
-          .replace('{nome}', firstName)
-          .replace('{codice}', discountCode);
+          .replace(/\{nome\}/g, firstName)
+          .replace(/\{codice\}/g, discountCode);
 
         // Clean phone number — strip all non-digit chars, normalize Italian prefix
         let cleanPhone = customer.telefono.replace(/[^\d]/g, '');

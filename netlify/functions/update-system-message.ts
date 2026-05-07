@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
+import { invalidateTemplateCache } from './utils/messageTemplates'
 
 const handler: Handler = async (event) => {
   const headers = {
@@ -55,6 +56,8 @@ const handler: Handler = async (event) => {
     if (!data) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Message not found' }) }
     }
+
+    invalidateTemplateCache()
 
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, data }) }
   } catch (err: any) {

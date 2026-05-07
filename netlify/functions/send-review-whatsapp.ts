@@ -6,6 +6,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
+const GOOGLE_REVIEW_LINK = process.env.GOOGLE_REVIEW_LINK || 'https://g.page/r/CQwgJt7OYpsfEBM/review';
 
 const DEFAULT_REVIEW_MESSAGE = `Ciao {nome} 👋🏻
 
@@ -39,19 +40,33 @@ const reviewHandler: Handler = async (event) => {
   });
 
   try {
-    // Load custom message template from database (fallback to default)
+    // Source-of-truth order:
+    //  1. system_messages.review_request_whatsapp (edited from Messaggi di Sistema)
+    //  2. app_settings.review_whatsapp_template   (legacy Reviews-Tab editor)
+    //  3. DEFAULT_REVIEW_MESSAGE                  (hardcoded fallback)
     let reviewMessage = DEFAULT_REVIEW_MESSAGE;
-    const { data: settingData } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'review_whatsapp_template')
-      .single();
 
-    if (settingData?.value) {
-      reviewMessage = settingData.value;
-      console.log('[Review WhatsApp] Using custom message template from database');
+    const { data: sysMsg } = await supabase
+      .from('system_messages')
+      .select('message_body, is_enabled')
+      .eq('message_key', 'review_request_whatsapp')
+      .maybeSingle();
+
+    if (sysMsg?.is_enabled && sysMsg.message_body) {
+      reviewMessage = sysMsg.message_body;
+      console.log('[Review WhatsApp] Using template from system_messages');
     } else {
-      console.log('[Review WhatsApp] Using default message template');
+      const { data: settingData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'review_whatsapp_template')
+        .single();
+      if (settingData?.value) {
+        reviewMessage = settingData.value;
+        console.log('[Review WhatsApp] Using legacy app_settings template');
+      } else {
+        console.log('[Review WhatsApp] Using hardcoded default template');
+      }
     }
 
     // Find bookings where dropoff_date is between 60 and 120 minutes ago
@@ -132,9 +147,15 @@ const reviewHandler: Handler = async (event) => {
         // Get first name (split on space, take first part)
         const firstName = (booking.customer_name || 'Cliente').split(' ')[0];
 
-        // Personalize message
-        const fallbackMsg = reviewMessage.replace(/\{nome\}/g, firstName);
-        const personalizedMessage = await renderTemplate('review_request_whatsapp', { nome: firstName }, fallbackMsg);
+        // Personalize message — substitute ALL supported placeholders
+        const fallbackMsg = reviewMessage
+          .replace(/\{nome\}/g, firstName)
+          .replace(/\{review_link\}/g, GOOGLE_REVIEW_LINK);
+        const personalizedMessage = await renderTemplate(
+          'review_request_whatsapp',
+          { nome: firstName, review_link: GOOGLE_REVIEW_LINK },
+          fallbackMsg
+        );
 
         // Clean phone number — strip all non-digit chars, normalize Italian prefix
         let cleanPhone = booking.customer_phone.replace(/[^\d]/g, '');

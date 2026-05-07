@@ -35,12 +35,15 @@ function cleanPhone(phone: string): string {
 }
 
 /**
- * Replaces template placeholders with actual values
+ * Replaces template placeholders with actual values.
+ * Supports both single-brace {key} (used by Messaggi di Sistema templates)
+ * and double-brace {{key}} (legacy review_templates rows).
  */
 function renderTemplate(template: string, vars: Record<string, string>): string {
   let result = template;
   for (const [key, value] of Object.entries(vars)) {
     result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
   }
   return result;
 }
@@ -147,6 +150,7 @@ const handler: Handler = async (event) => {
     const templateVars: Record<string, string> = {
       customer_name: candidate.customer_name || 'Cliente',
       first_name: firstName,
+      nome: firstName,
       review_link: reviewLink,
       service_type: serviceTypeLabel,
       Service_type: serviceTypeLabelCap,

@@ -19,9 +19,11 @@ interface MessageTemplate {
 const DEFAULT_HEADER = `*MESSAGGIO AUTOMATICO GENERATO DA RENTORA*\n_Questo messaggio è stato inviato tramite il sistema automatizzato sviluppato da Rentora, Tecnologia Proprietaria DR7_\n\n`
 const DEFAULT_FOOTER = `\n\n_Se questo messaggio non era destinato a lei, oppure lo ha già ricevuto in precedenza, può semplicemente ignorarlo._`
 
-// Cache templates for 60 seconds to avoid hammering DB
+// Cache templates for 5 seconds so admin edits propagate near-immediately.
+// Longer caches caused stale messages because admin updates don't broadcast
+// invalidation across warm Netlify function instances.
 let cache: { templates: MessageTemplate[]; loadedAt: number } | null = null
-const CACHE_TTL = 60_000
+const CACHE_TTL = 5_000
 
 async function loadAllTemplates(): Promise<MessageTemplate[]> {
   if (cache && Date.now() - cache.loadedAt < CACHE_TTL) return cache.templates
