@@ -5,7 +5,7 @@ import Select from './Select'
 import Button from './Button'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { logger } from '../../../utils/logger'
-import { CATEGORY_PALETTES, ORPHAN_PALETTE } from '../../../utils/categoryPalettes'
+import { ORPHAN_PALETTE, getPaletteForCategory } from '../../../utils/categoryPalettes'
 
 // Estrae un messaggio leggibile da qualunque shape di errore (Error,
 // PostgrestError di Supabase, oggetto generico). Senza questa logica
@@ -621,9 +621,13 @@ export default function VehiclesTab() {
   // categoria costruiamo una sezione con i veicoli filtrati e la palette
   // assegnata in base all'ordine in Centralina Pro.
   const knownIds = new Set(categories.map(c => c.id))
-  const sections = categories.map((c, i) => ({
+  // Use the SAME palette resolver as CalendarTab so the section banner /
+  // pill colors here stay perfectly in sync with the per-vehicle category
+  // tags shown in the rental calendar. Refactoring this to a positional
+  // index would silently drift the two views apart.
+  const sections = categories.map((c) => ({
     category: c,
-    palette: CATEGORY_PALETTES[i % CATEGORY_PALETTES.length],
+    palette: getPaletteForCategory(c.id, categories),
     vehicles: vehicles.filter(v => v.category === c.id).filter(searchFilter),
   }))
   // Veicoli con un category id non piu\' presente in Centralina Pro (es.

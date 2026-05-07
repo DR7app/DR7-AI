@@ -108,7 +108,7 @@ export default function Login() {
                     autoCorrect="off"
                     spellCheck={false}
                     inputMode="email"
-                    className="w-full pl-11 pr-4 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-white/[0.06] transition-all"
+                    className="w-full pl-11 pr-4 py-3 bg-theme-bg-secondary border border-theme-border rounded-xl text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-theme-bg-tertiary transition-all"
                     placeholder="admin@dr7empire.com"
                   />
                 </div>
@@ -140,7 +140,7 @@ export default function Login() {
                     data-lpignore="true"
                     data-1p-ignore="true"
                     data-form-type="other"
-                    className="w-full pl-11 pr-12 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-white/[0.06] transition-all"
+                    className="w-full pl-11 pr-12 py-3 bg-theme-bg-secondary border border-theme-border rounded-xl text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 focus:bg-theme-bg-tertiary transition-all"
                     placeholder="••••••••"
                   />
                   <button
@@ -194,7 +194,7 @@ export default function Login() {
             </form>
           ) : (
             <form onSubmit={handleForgotPassword} className="space-y-4">
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-theme-text-muted">
                 Inserisci la tua email per ricevere un link di recupero password.
               </p>
               <div className="relative">
@@ -237,7 +237,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => { setShowForgot(false); setForgotError(''); setForgotMessage('') }}
-                className="w-full text-xs text-gray-500 hover:text-dr7-gold transition-colors py-1"
+                className="w-full text-xs text-theme-text-muted hover:text-dr7-gold transition-colors py-1"
               >
                 ← Torna al login
               </button>
@@ -245,7 +245,7 @@ export default function Login() {
           )}
 
           {/* Footer secure note */}
-          <div className="mt-8 pt-5 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] text-gray-500">
+          <div className="mt-8 pt-5 border-t border-theme-border flex items-center justify-center gap-2 text-[11px] text-theme-text-muted">
             <svg className="w-3.5 h-3.5 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M12 21a9 9 0 100-18 9 9 0 000 18z" />
             </svg>
