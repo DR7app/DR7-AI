@@ -975,7 +975,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               // bespoke experience add-on is added on top afterwards.
               const listDailyRate = data.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, data.rentalDays)
               const listRentalTotal = listDailyRate * data.rentalDays
-              const extrasNoExp = insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + flexCost
+              // Location fees (consegna + ritiro) are EXCLUDED from the
+              // coefficient — same treatment as Experience. They cover
+              // transport/km that doesn't scale with demand.
+              const extrasNoExp = insuranceTotal + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + flexCost
               const listSubtotalNoExp = listRentalTotal + extrasNoExp
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
@@ -988,8 +991,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
               if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
               if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-              // Experience stays at LIST PRICE — no coefficient, no clamp.
-              const subtotal = Math.round((afterRevenueNoExp + experienceCost) * 100) / 100
+              // Experience + location fees stay at LIST PRICE — no coefficient, no clamp.
+              const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees) * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               const updates: Record<string, string> = { total_amount: total.toFixed(2) }
@@ -1052,7 +1055,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // auto_apply branch above.
       const listDailyRate = revenueSuggestion.selectedBaseRateEur || getDailyRateFromConfig(selectedVehicle, revenueSuggestion.rentalDays)
       const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
-      const extrasNoExp = insuranceTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + flexCost
+      // Location fees (consegna + ritiro) excluded from the coefficient —
+      // same rationale as Experience.
+      const extrasNoExp = insuranceTotal + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmSurcharge + secondDriverFee + flexCost
       const listSubtotalNoExp = listRentalTotal + extrasNoExp
       const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
       const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
@@ -1062,8 +1067,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
       if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
       if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-      // Experience stays at LIST PRICE — no coefficient, no clamp.
-      const subtotal = Math.round((afterRevenueNoExp + experienceCost) * 100) / 100
+      // Experience + location fees stay at LIST PRICE — no coefficient, no clamp.
+      const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees) * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
       // Auto-calculate KM limit from rental days

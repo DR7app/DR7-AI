@@ -812,24 +812,27 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       : 1
 
     // List totals split by whether they're subject to the min/max clamp.
-    // Experience services are INTENTIONALLY excluded from the clamp — they're
-    // bespoke add-ons paid to third parties, the Max €/g from Centralina
-    // applies only to the rental + standard extras.
-    const extrasListTotalNoExp = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + cauzioneVeicoliTotal + deliveryFee + pickupFee
+    // Experience services AND location fees (consegna + ritiro) are
+    // INTENTIONALLY excluded from the coefficient and clamp — Experience is
+    // a bespoke pass-through to third parties, location fees cover km/transport
+    // costs that don't scale with demand. The Max €/g from Centralina applies
+    // only to the rental + standard extras.
+    const locationFees = Math.round((deliveryFee + pickupFee) * 100) / 100
+    const extrasListTotalNoExp = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + cauzioneVeicoliTotal
     const listSubtotalNoExp = listRentalTotal + extrasListTotalNoExp
-    const listSubtotal = listSubtotalNoExp + experienceCost
+    const listSubtotal = listSubtotalNoExp + experienceCost + locationFees
 
     // Apply revenue coefficients ONLY to the clamp-eligible portion.
-    // Experience stays at LIST PRICE — no coefficient, no clamp — so the
-    // price stamped on the preventivo matches the cost the experience
-    // provider actually charges us.
+    // Experience + location fees stay at LIST PRICE — no coefficient, no
+    // clamp — so the price stamped on the preventivo matches the cost the
+    // experience provider / transport actually charges us.
     const rawAfterRevenueNoExp = listSubtotalNoExp * revenueCoeff
     const experienceAfterCoeff = Math.round(experienceCost * 100) / 100
 
     // Clamp the clamp-eligible portion (rental + standard extras) against the
     // per-vehicle daily max/min from Centralina Pro. 800 €/g × 3 giorni =
-    // 2400 € max for (rental + insurance + lavaggio + delivery + ecc.);
-    // experience is added ON TOP afterwards.
+    // 2400 € max for (rental + insurance + lavaggio + ecc.); experience and
+    // location fees are added ON TOP afterwards.
     const minDaily = revenueData?.enabled && typeof revenueData.minPrice === 'number' ? revenueData.minPrice : null
     const maxDaily = revenueData?.enabled && typeof revenueData.maxPrice === 'number' ? revenueData.maxPrice : null
     const maxTotal = maxDaily != null ? maxDaily * rentalDays : null
@@ -842,8 +845,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
     // line the admin sees, reflecting what the engine would ask for without
     // limits. The clamp lines below show how it's been capped.
-    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff) * 100) / 100
-    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff) * 100) / 100
+    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff + locationFees) * 100) / 100
+    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff + locationFees) * 100) / 100
     // Keep the legacy `afterRevenue` alias = the clamped subtotal used for all
     // downstream math (markup, sconto, totale finale).
     const afterRevenue = subtotalClamped
