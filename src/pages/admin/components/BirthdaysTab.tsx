@@ -485,11 +485,11 @@ export default function BirthdaysTab() {
                 throw new Error('Errore nel generare il codice sconto')
             }
 
-            // Prepare personalized message with code
+            // Prepare personalized message with code (replace ALL occurrences)
             const firstName = customer.full_name.split(' ')[0]
             const personalizedMessage = messageTemplate
-                .replace('{nome}', firstName)
-                .replace('{codice}', discountCode)
+                .replace(/\{nome\}/g, firstName)
+                .replace(/\{codice\}/g, discountCode)
 
             // Clean phone number
             let cleanPhone = customer.phone.replace(/[\s\-+()]/g, '').replace(/[^\d]/g, '')
