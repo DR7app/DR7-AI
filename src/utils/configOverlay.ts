@@ -38,6 +38,12 @@ export interface ConfigOverlay {
   defaultExpiryHours: number
   depositDefaults: { UTILITAIRE: number; FURGONE: number; SUPERCAR: number }
   experienceServices: { id: string; name: string; price: number; unit: string; tierOnly?: string | null }[]
+  /**
+   * Configurable pickup locations (airports, ports, etc.). Each entry exposes
+   * a `fee` already computed as `km × deliveryPerKm` for convenience — admin
+   * edits `km` in Centralina Pro, the rate is shared with delivery.
+   */
+  pickupLocations: { id: string; label: string; km: number; fee: number }[]
 }
 
 /** Build overlay from config. Any missing section falls back to hardcoded defaults. */
@@ -109,6 +115,15 @@ export function buildConfigOverlay(config: RentalConfig | null): ConfigOverlay {
     experienceServices: (config.experience_services || [])
       .filter(s => s.is_active)
       .map(s => ({ id: s.id, name: s.name, price: s.price, unit: s.unit, tierOnly: s.tier_only })),
+    pickupLocations: (() => {
+      const rate = config.delivery?.price_per_km ?? defaults.deliveryPerKm
+      const list = (config.pickup_locations || []).filter(p => p.is_active)
+      if (list.length > 0) {
+        return list.map(p => ({ id: p.id, label: p.label, km: p.km, fee: Math.round(p.km * rate * 100) / 100 }))
+      }
+      // Fallback: defaults already pre-multiplied by defaults.deliveryPerKm
+      return defaults.pickupLocations
+    })(),
   }
 }
 
@@ -172,6 +187,13 @@ function getHardcodedDefaults(): ConfigOverlay {
       { id: 'premium_24h', name: 'Assistenza premium 24h dedicata', price: 19.90, unit: 'per_day', tierOnly: null },
       { id: 'vehicle_replacement', name: 'Sostituzione immediata veicolo', price: 19.90, unit: 'per_day', tierOnly: 'TIER_2' },
       { id: 'chauffeur_vip', name: 'Noleggio con autista + itinerario VIP', price: 189, unit: 'per_hour', tierOnly: null },
+    ],
+    // Distance-based defaults (km from DR7 Cagliari, Viale Marconi 229).
+    // Fee = km × deliveryPerKm (3 €/km by default → 27 €/750 €/840 €).
+    pickupLocations: [
+      { id: 'cagliari_airport', label: 'Aeroporto Cagliari Elmas', km: 9, fee: 27 },
+      { id: 'alghero_airport', label: 'Aeroporto Alghero Fertilia', km: 250, fee: 750 },
+      { id: 'olbia_airport', label: 'Aeroporto Olbia Costa Smeralda', km: 280, fee: 840 },
     ],
   }
 }

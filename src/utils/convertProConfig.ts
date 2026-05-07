@@ -6,7 +6,7 @@
  * Fascia mapping:    Pro A → TIER_2, Pro B → TIER_1
  */
 
-import type { RentalConfig, InsuranceCategoryConfig, KmIncludedEntry, DepositOption, ExperienceService, DayRateTable } from '../types/rentalConfig'
+import type { RentalConfig, InsuranceCategoryConfig, KmIncludedEntry, DepositOption, ExperienceService, PickupLocation, DayRateTable } from '../types/rentalConfig'
 import { DEFAULT_RENTAL_CONFIG } from '../hooks/rentalConfigDefaults'
 
 // Pro config types (mirror CentralinaProTab.tsx)
@@ -29,8 +29,10 @@ interface ProKmConfig {
 interface ProDepositOption { id: string; label: string; amount: number | ''; surcharge_per_day: number | '' }
 interface ProDepositFasciaConfig { residente: ProDepositOption[]; non_residente: ProDepositOption[] }
 interface ProExperienceService { id: string; name: string; price: number | ''; unit: 'per_day' | 'per_hour' | 'per_item' | 'flat'; is_active: boolean; tier_only: string }
+interface ProPickupLocation { id: string; label: string; km: number | ''; is_active: boolean }
 interface ProServiziConfig {
   experience: ProExperienceService[]
+  pickup_locations?: ProPickupLocation[]
   dr7_flex: { daily_price: number | ''; refund_percent: number | ''; tier_restriction: string; description: string }
   lavaggio: { fee: number | ''; mandatory: boolean }
   delivery: { price_per_km: number | '' }
@@ -240,6 +242,16 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
         unit: e.unit,
         is_active: e.is_active,
         tier_only: e.tier_only ? (PRO_TO_TIER[e.tier_only] || e.tier_only) : null,
+      }))
+    }
+
+    // Pickup locations (airports, etc.) — fee = km × delivery.price_per_km
+    if (s.pickup_locations) {
+      config.pickup_locations = s.pickup_locations.map((p): PickupLocation => ({
+        id: p.id,
+        label: p.label,
+        km: num(p.km),
+        is_active: p.is_active,
       }))
     }
 

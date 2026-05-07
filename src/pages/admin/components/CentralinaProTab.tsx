@@ -79,6 +79,13 @@ type ExperienceService = {
   tier_only: string // '' = all fasce, otherwise fascia.id
 }
 
+type PickupLocation = {
+  id: string
+  label: string
+  km: number | ''
+  is_active: boolean
+}
+
 type ServiziConfig = {
   // Section titles (editable from admin) — fall back to defaults when missing
   experience_title?: string
@@ -87,6 +94,7 @@ type ServiziConfig = {
   lavaggio_title?: string
   delivery_title?: string
   second_driver_title?: string
+  pickup_locations_title?: string
   experience: ExperienceService[]
   dr7_flex: {
     enabled?: boolean // false = entire block hidden everywhere (admin + website)
@@ -98,6 +106,12 @@ type ServiziConfig = {
   lavaggio: { fee: number | ''; mandatory: boolean }
   delivery: { price_per_km: number | '' }
   second_driver: Record<string, number | ''> // keyed by fascia.id
+  /**
+   * Pickup locations the admin can pick from when creating a preventivo or
+   * reservation. Fee is computed as `km × delivery.price_per_km` — admin
+   * sets only the km value, the rate is shared with delivery.
+   */
+  pickup_locations: PickupLocation[]
 }
 
 const INITIAL_SERVIZI: ServiziConfig = {
@@ -121,6 +135,11 @@ const INITIAL_SERVIZI: ServiziConfig = {
   lavaggio: { fee: 9.9, mandatory: true },
   delivery: { price_per_km: 3 },
   second_driver: { A: 10, B: 20 },
+  pickup_locations: [
+    { id: 'cagliari_airport', label: 'Aeroporto Cagliari Elmas', km: 9, is_active: true },
+    { id: 'alghero_airport', label: 'Aeroporto Alghero Fertilia', km: 250, is_active: true },
+    { id: 'olbia_airport', label: 'Aeroporto Olbia Costa Smeralda', km: 280, is_active: true },
+  ],
 }
 
 // ========== PREZZO DINAMICO (Punto 6) types ==========
@@ -2735,6 +2754,24 @@ function ServiziSection({
     })
   }
 
+  const pickupLocations = servizi.pickup_locations ?? []
+  function patchLoc(id: string, p: Partial<PickupLocation>) {
+    setServizi({ ...servizi, pickup_locations: pickupLocations.map((l) => (l.id === id ? { ...l, ...p } : l)) })
+  }
+  function removeLoc(id: string) {
+    setServizi({ ...servizi, pickup_locations: pickupLocations.filter((l) => l.id !== id) })
+  }
+  function addLoc() {
+    setServizi({
+      ...servizi,
+      pickup_locations: [
+        ...pickupLocations,
+        { id: uid(), label: 'Nuovo luogo', km: 0, is_active: true },
+      ],
+    })
+  }
+  const deliveryRate = typeof servizi.delivery.price_per_km === 'number' ? servizi.delivery.price_per_km : 0
+
   return (
     <div className="space-y-6">
       {/* Servizi Experience */}
@@ -3074,6 +3111,87 @@ function ServiziSection({
               </p>
             )}
           </div>
+        </section>
+
+        {/* Luoghi di Ritiro */}
+        <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden md:col-span-2">
+          <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <input
+                value={servizi.pickup_locations_title ?? 'Luoghi di Ritiro'}
+                onChange={(e) => setServizi({ ...servizi, pickup_locations_title: e.target.value })}
+                className="w-full bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+                placeholder="Titolo"
+              />
+              <p className="text-[12px] text-[#6e6e73] mt-0.5 px-1.5">
+                Tariffa = km × €{deliveryRate}/km (modificabile in &laquo;Consegna a Domicilio&raquo;)
+              </p>
+            </div>
+            <button
+              onClick={addLoc}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Aggiungi luogo
+            </button>
+          </header>
+
+          <ul className="divide-y divide-black/5">
+            {pickupLocations.map((loc) => {
+              const km = typeof loc.km === 'number' ? loc.km : 0
+              const fee = Math.round(km * deliveryRate * 100) / 100
+              return (
+                <li key={loc.id} className="px-5 py-3 group">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <label className="inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={loc.is_active}
+                        onChange={(e) => patchLoc(loc.id, { is_active: e.target.checked })}
+                        className="w-4 h-4 accent-[#007aff]"
+                      />
+                    </label>
+                    <input
+                      value={loc.label}
+                      onChange={(e) => patchLoc(loc.id, { label: e.target.value })}
+                      className="flex-1 min-w-[160px] bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      placeholder="Nome luogo"
+                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={loc.km}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          patchLoc(loc.id, { km: v === '' ? '' : Number(v) })
+                        }}
+                        className="w-28 bg-white border border-black/10 rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">km</span>
+                    </div>
+                    <span className="text-[13px] tabular-nums text-[#6e6e73] min-w-[80px] text-right">
+                      = €{fee.toFixed(2)}
+                    </span>
+                    <button
+                      onClick={() => removeLoc(loc.id)}
+                      className="text-[13px] text-[#ff3b30] hover:text-[#d70015] transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      Rimuovi
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+            {pickupLocations.length === 0 && (
+              <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+                Nessun luogo configurato. L&rsquo;ufficio DR7 e il domicilio restano sempre disponibili.
+              </li>
+            )}
+          </ul>
         </section>
       </div>
     </div>

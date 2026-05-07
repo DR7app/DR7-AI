@@ -1578,12 +1578,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return result
   }, [baseVehiclesForDropdown, formData.pickup_date, vehicles, vehicleEarliestTimes, showAllVehicles])
 
-  const LOCATIONS = [
+  // Pickup/dropoff locations: built-ins (office, domicilio) + configurable
+  // entries from Centralina Pro (Servizi → Luoghi di Ritiro). Fee is
+  // computed as km × delivery.price_per_km in configOverlay.
+  const LOCATIONS = useMemo(() => [
     { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA', fee: 0 },
-    { value: 'cagliari_airport', label: 'Aeroporto di Cagliari Elmas (+€50)', fee: 50 },
-    { value: 'alghero_airport', label: 'Aeroporto di Alghero (+€50)', fee: 50 },
+    ...configOverlay.pickupLocations.map(p => ({
+      value: p.id,
+      label: `${p.label} (+€${p.fee.toFixed(2)})`,
+      fee: p.fee,
+    })),
     { value: 'domicilio', label: 'Consegna a domicilio (inserisci indirizzo)', fee: 0 },
-  ]
+  ], [configOverlay.pickupLocations])
 
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
@@ -6253,15 +6259,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   value={formData.pickup_location}
                   onChange={(e) => {
                     const loc = e.target.value
+                    const locConfig = LOCATIONS.find(l => l.value === loc)
+                    const isDomicilio = loc === 'domicilio'
+                    const isOffice = loc === 'dr7_office'
                     setFormData(prev => ({
                       ...prev,
                       pickup_location: loc,
-                      delivery_enabled: loc === 'domicilio' || loc === 'cagliari_airport',
-                      delivery_fee: loc === 'cagliari_airport' ? '50' : loc === 'domicilio' ? prev.delivery_fee : '0',
+                      delivery_enabled: !isOffice,
+                      delivery_fee: isDomicilio ? prev.delivery_fee : String(locConfig?.fee ?? 0),
                       ...(loc === 'cagliari_airport' ? {
                         delivery_street: 'Aeroporto di Cagliari Elmas',
                         delivery_city: 'Elmas', delivery_zip: '09030', delivery_province: 'CA',
-                      } : loc === 'dr7_office' ? {
+                      } : isOffice ? {
                         delivery_enabled: false, delivery_fee: '0',
                         delivery_street: '', delivery_city: '', delivery_zip: '', delivery_province: '',
                       } : {}),
@@ -6338,15 +6347,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   value={formData.dropoff_location}
                   onChange={(e) => {
                     const loc = e.target.value
+                    const locConfig = LOCATIONS.find(l => l.value === loc)
+                    const isDomicilio = loc === 'domicilio'
+                    const isOffice = loc === 'dr7_office'
                     setFormData(prev => ({
                       ...prev,
                       dropoff_location: loc,
-                      pickup_enabled: loc === 'domicilio' || loc === 'cagliari_airport',
-                      pickup_fee: loc === 'cagliari_airport' ? '50' : loc === 'domicilio' ? prev.pickup_fee : '0',
+                      pickup_enabled: !isOffice,
+                      pickup_fee: isDomicilio ? prev.pickup_fee : String(locConfig?.fee ?? 0),
                       ...(loc === 'cagliari_airport' ? {
                         pickup_street: 'Aeroporto di Cagliari Elmas',
                         pickup_city: 'Elmas', pickup_zip: '09030', pickup_province: 'CA',
-                      } : loc === 'dr7_office' ? {
+                      } : isOffice ? {
                         pickup_enabled: false, pickup_fee: '0',
                         pickup_street: '', pickup_city: '', pickup_zip: '', pickup_province: '',
                       } : {}),

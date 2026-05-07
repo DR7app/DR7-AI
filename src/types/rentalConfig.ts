@@ -56,6 +56,13 @@ export interface ExperienceService {
   description?: string
 }
 
+export interface PickupLocation {
+  id: string
+  label: string
+  km: number
+  is_active: boolean
+}
+
 export interface DayRateTable {
   resident?: Record<string, number>
   non_resident?: Record<string, number>
@@ -139,6 +146,14 @@ export interface RentalConfig {
   delivery: {
     price_per_km: number
   }
+
+  /**
+   * Configurable pickup locations (e.g. airports). Fee is computed
+   * dynamically as `km × delivery.price_per_km`. Built-in `dr7_office`
+   * and `domicilio` stay outside this list — they're added in code
+   * (office is fee 0, domicilio uses the per-booking delivery_fee).
+   */
+  pickup_locations: PickupLocation[]
 
   no_cauzione_surcharge: {
     per_day: number

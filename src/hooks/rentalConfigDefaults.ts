@@ -65,6 +65,8 @@ export const DEFAULT_RENTAL_CONFIG: RentalConfig = {
 
   delivery: { price_per_km: 0 },
 
+  pickup_locations: [],
+
   no_cauzione_surcharge: { per_day: 0, tier_restriction: 'TIER_2', requires_kasko: true },
 
   experience_services: [],

@@ -301,12 +301,11 @@ function renderWhatsAppHtml(text: string): string {
     .replace(/`([^`\n]+?)`/g, '<code>$1</code>')
 }
 
-const LOCATIONS = [
-  { value: 'dr7_office', label: 'DR7 — Viale Marconi 229, Cagliari', fee: 0 },
-  { value: 'cagliari_airport', label: 'Aeroporto Cagliari Elmas', fee: 50 },
-  { value: 'alghero_airport', label: 'Aeroporto Alghero', fee: 50 },
-  { value: 'domicilio', label: 'Domicilio (indirizzo custom)', fee: 0 },
-]
+// LOCATIONS is now built dynamically inside the component from
+// configOverlay.pickupLocations. The two built-ins (DR7 office, domicilio)
+// stay hardcoded because their fee semantics differ — office is always
+// free, domicilio is admin-typed per booking.
+type LocationOption = { value: string; label: string; fee: number }
 
 const STATUS_LABELS: Record<string, string> = {
   bozza: 'Bozza',
@@ -390,6 +389,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
   const configOverlay = useMemo(() => buildConfigOverlay(rentalConfig), [rentalConfig])
+
+  const LOCATIONS: LocationOption[] = useMemo(() => [
+    { value: 'dr7_office', label: 'DR7 — Viale Marconi 229, Cagliari', fee: 0 },
+    ...configOverlay.pickupLocations.map(p => ({ value: p.id, label: p.label, fee: p.fee })),
+    { value: 'domicilio', label: 'Domicilio (indirizzo custom)', fee: 0 },
+  ], [configOverlay.pickupLocations])
 
   // ─── Form State ─────────────────────────────────────────────────────────
 
