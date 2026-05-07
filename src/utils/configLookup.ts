@@ -6,16 +6,33 @@
 
 import type { RentalConfig, InsuranceOption, ExperienceService, DepositOption, DriverTier } from '../types/rentalConfig'
 
+/** Resolve a category lookup against its alias set (handles "supercars"/"exotic" rename). */
+function lookupByCategoryAlias<T>(
+  bag: Record<string, T> | undefined,
+  category: string,
+): T | undefined {
+  if (!bag) return undefined
+  const candidates = (
+    category === 'supercars' ? ['supercars', 'exotic'] :
+    category === 'exotic' ? ['exotic', 'supercars'] :
+    [category]
+  )
+  for (const cat of candidates) {
+    if (bag[cat] != null) return bag[cat]
+  }
+  return undefined
+}
+
 /** Get sforo KM for a vehicle. Priority: vehicle > category > global */
 export function getSforoKm(config: RentalConfig, vehicleId: string, category: string): number {
   return config.sforo_km.vehicle_overrides?.[vehicleId]
-    ?? config.sforo_km.category?.[category]
+    ?? lookupByCategoryAlias(config.sforo_km.category, category)
     ?? config.sforo_km._global
 }
 
 /** Get insurance options for a category + tier */
 export function getInsuranceOptions(config: RentalConfig, category: string, tier: DriverTier): InsuranceOption[] {
-  const catConfig = config.insurance?.[category]
+  const catConfig = lookupByCategoryAlias(config.insurance, category)
   if (!catConfig) return []
   if (tier === 'BLOCKED') return []
   return (catConfig as Record<string, InsuranceOption[]>)[tier]
@@ -41,7 +58,13 @@ export function getInsuranceNameById(config: RentalConfig | null | undefined, id
 
 /** Get KM included for a number of rental days + vehicle category */
 export function getKmIncluded(config: RentalConfig, days: number, category: string): number | 'unlimited' {
-  const catConfig = config.km_included?.[category]
+  if (!Number.isFinite(days) || days < 1) return 0
+
+  // Centralina Pro renamed "exotic" to "supercars" (April 2026); convertProConfig
+  // still writes the bucket under the legacy "exotic" key via PRO_TO_DB_CATEGORY.
+  // Without alias resolution a vehicle saved with category="supercars" would
+  // miss the bucket and fall through to an empty `_global`, producing NaN.
+  const catConfig = lookupByCategoryAlias(config.km_included, category)
 
   // Category has unlimited KM (e.g., urban)
   if (catConfig && 'unlimited' in catConfig && catConfig.unlimited) {
@@ -53,7 +76,12 @@ export function getKmIncluded(config: RentalConfig, days: number, category: stri
   if (!entry || !('table' in entry)) return 0
 
   const table = entry.table
-  const maxTableDay = Math.max(...Object.keys(table).map(Number))
+  const tableKeys = Object.keys(table)
+  // Empty/missing table: would otherwise produce Math.max() = -Infinity and
+  // Infinity × extra_per_day = NaN downstream.
+  if (tableKeys.length === 0) return 0
+
+  const maxTableDay = Math.max(...tableKeys.map(Number))
 
   if (days <= maxTableDay) {
     // Direct lookup from table
@@ -68,7 +96,7 @@ export function getKmIncluded(config: RentalConfig, days: number, category: stri
 
 /** Get unlimited KM price per day for a category + tier */
 export function getUnlimitedKmPrice(config: RentalConfig, category: string, tier: DriverTier): number {
-  const catConfig = config.unlimited_km?.[category]
+  const catConfig = lookupByCategoryAlias(config.unlimited_km, category)
   if (!catConfig) return 0
 
   // Check tier-specific price first
