@@ -3489,6 +3489,46 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const reasons: string[] = []
         if (pickupOff) reasons.push(describe(formData.pickup_date, formData.pickup_time, 'pickup'))
         if (returnOff) reasons.push(describe(formData.return_date, formData.return_time, 'return'))
+
+        // Snapshot del booking incluso nell'email a direzione: cosi' la
+        // direzione vede chi/cosa/quando/quanto prima di autorizzare.
+        const cust = customers.find(c => c.id === formData.customer_id)
+        const newName = `${newCustomerData?.nome || ''} ${newCustomerData?.cognome || ''}`.trim()
+        const customerName = newCustomerMode
+          ? (newName || newCustomerData?.denominazione || '—')
+          : (cust?.full_name || '—')
+        const customerPhone = newCustomerMode
+          ? (newCustomerData?.telefono || '—')
+          : (cust?.phone || '—')
+        const veh = vehicles.find(v => v.id === formData.vehicle_id)
+        const vehLabel = veh ? `${veh.display_name}${veh.plate ? ` (${veh.plate})` : ''}` : '—'
+        const fmtDate = (d: string, t: string) => {
+          if (!d) return '—'
+          const [y, mo, da] = d.split('-')
+          return y && mo && da ? `${da}/${mo}/${y} ${t || ''}`.trim() : `${d} ${t || ''}`.trim()
+        }
+        const eur = (n: unknown) => {
+          const num = typeof n === 'number' ? n : parseFloat(String(n ?? 0))
+          return Number.isFinite(num)
+            ? `€${num.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : '—'
+        }
+        const details: Array<{ label: string; value: string }> = [
+          { label: 'Operazione', value: editingId ? 'Modifica prenotazione' : 'Nuova prenotazione' },
+          { label: 'Cliente', value: customerName },
+          { label: 'Telefono', value: customerPhone },
+          { label: 'Veicolo', value: vehLabel },
+          { label: 'Ritiro', value: fmtDate(formData.pickup_date, formData.pickup_time) },
+          { label: 'Riconsegna', value: fmtDate(formData.return_date, formData.return_time) },
+          { label: 'Luogo ritiro', value: formData.pickup_location || '—' },
+          { label: 'Totale', value: eur(formData.total_amount) },
+          { label: 'Cauzione', value: formData.deposit_status === 'no_cauzione' ? 'No Cauzione' : eur(formData.deposit) },
+          { label: 'Pagamento', value: formData.payment_method || '—' },
+          { label: 'Motivo richiesta', value: reasons.join(' · ') },
+        ]
+        if (editingId) details.splice(1, 0, { label: 'Prenotazione', value: editingId.slice(0, 8) })
+        setOverrideDetails(details)
+
         pendingSubmitRef.current = { skipValidation, overrideCustomerId }
         requestOverride('out_of_office_hours', reasons.join(' · '))
         return
@@ -5835,7 +5875,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           actionContext={limitationState.actionContext}
           draftSessionId={draftSessionId}
           flowType={flowType}
-          details={limitationState.limitationCode === 'paid_rental_modify' ? overrideDetails : undefined}
+          details={
+            (limitationState.limitationCode === 'paid_rental_modify'
+              || limitationState.limitationCode === 'out_of_office_hours')
+              ? overrideDetails
+              : undefined
+          }
           showNotes={limitationState.limitationCode === 'paid_rental_modify'}
           onClose={closeLimitation}
           onCancel={() => {

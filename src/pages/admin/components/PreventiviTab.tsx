@@ -1122,6 +1122,34 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     setVehicles(data || [])
   }
 
+  // Snapshot del preventivo allegato all'email OTP a direzione: cosi' la
+  // direzione vede chi/cosa/quando/quanto prima di autorizzare. Usato per
+  // tutte le modal OTP del preventivo (No Cauzione, slot, fuori orario).
+  const otpDetails = useMemo<Array<{ label: string; value: string }>>(() => {
+    const cust = customers.find((c: any) => c.id === selectedCustomerId)
+    const fmtDate = (d: string, t: string) => {
+      if (!d) return '—'
+      const [y, mo, da] = d.split('-')
+      return y && mo && da ? `${da}/${mo}/${y} ${t || ''}`.trim() : `${d} ${t || ''}`.trim()
+    }
+    const tierLabel = form.driver_tier === 'TIER_1' ? 'Fascia B' : form.driver_tier === 'TIER_2' ? 'Fascia A' : (form.driver_tier || '—')
+    const rows: Array<{ label: string; value: string }> = [
+      { label: 'Operazione', value: editingId ? 'Modifica preventivo' : 'Nuovo preventivo' },
+      { label: 'Cliente', value: cust?.full_name || '—' },
+      { label: 'Telefono', value: cust?.phone || '—' },
+      { label: 'Veicolo', value: selectedVehicle ? `${selectedVehicle.display_name}${selectedVehicle.plate ? ` (${selectedVehicle.plate})` : ''}` : '—' },
+      { label: 'Ritiro', value: fmtDate(form.pickup_date, form.pickup_time) },
+      { label: 'Riconsegna', value: fmtDate(form.return_date, form.return_time) },
+      { label: 'Giorni', value: String(rentalDays || 0) },
+      { label: 'Fascia', value: tierLabel },
+      { label: 'Residente Sardegna', value: form.residente_sardegna ? 'Sì' : 'No' },
+      { label: 'No Cauzione', value: form.include_no_cauzione ? 'Sì' : 'No' },
+      { label: 'Totale', value: formatEur(pricing.totalFinal) },
+    ]
+    if (editingId) rows.splice(1, 0, { label: 'Preventivo', value: String(editingId).slice(0, 8) })
+    return rows
+  }, [customers, selectedCustomerId, selectedVehicle, form, editingId, rentalDays, pricing.totalFinal])
+
   // ─── Resume Save after OTP approval ─────────────────────────────────────
   // When an OTP gate trips during Salva, pendingSaveRef is set and the
   // matching modal is shown. Approving the OTP updates the corresponding
@@ -3240,6 +3268,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         isOpen={otpModalOpen}
         limitationCode="NO_CAUZIONE_FASCIA_B"
         limitationMessage={`Richiesta "No Cauzione" per cliente Fascia B (residente: ${form.residente_sardegna ? 'sì' : 'no'}).`}
+        details={otpDetails}
         draftSessionId={draftSessionIdRef.current}
         flowType="preventivo"
         onCancel={() => {
@@ -3258,6 +3287,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         isOpen={slotOverrideModalOpen}
         limitationCode="SLOT_NON_DISPONIBILE"
         limitationMessage={slotOverrideReason || 'Slot non disponibile'}
+        details={otpDetails}
         draftSessionId={draftSessionIdRef.current}
         flowType="preventivo"
         onCancel={() => {
@@ -3278,6 +3308,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         isOpen={outOfHoursModalOpen}
         limitationCode="out_of_office_hours"
         limitationMessage={outOfHoursReason || 'Orario fuori dagli orari di apertura'}
+        details={otpDetails}
         draftSessionId={draftSessionIdRef.current}
         flowType="preventivo"
         onCancel={() => {
