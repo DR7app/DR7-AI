@@ -3125,9 +3125,6 @@ function ServiziSection({
                 className="w-full bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
                 placeholder="Titolo"
               />
-              <p className="text-[12px] text-[#6e6e73] mt-0.5 px-1.5">
-                Cerca un indirizzo: i km dall&rsquo;ufficio DR7 vengono calcolati automaticamente. Tariffa = km × €{deliveryRate}/km (modificabile in &laquo;Consegna a Domicilio&raquo;).
-              </p>
             </div>
             <button
               onClick={addLoc}
