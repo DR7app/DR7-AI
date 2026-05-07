@@ -5122,16 +5122,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           //   pay-by-link callback marks the row paid, etc.). Sending the
           //   confirmation before payment is misleading: customer thinks the
           //   booking is locked when it isn't yet.
+          // - Conferma Prenotazione ON → rental_new_customer (works for BOTH
+          //   paid AND da-saldare; the {payment_status} placeholder shows
+          //   "Da saldare" when payment is still pending)
           // - Edit fully paid → rental_new_customer
-          // - Conferma Prenotazione ON + paid → rental_new_customer
-          // - New + paid → rental_new_customer
+          // - New + paid (no conferma checkbox) → rental_new_customer
+          // - Pending (da-saldare) without conferma → null (silent until
+          //   admin records the payment or explicitly ticks Conferma)
           let templateKey: string | null
-          if (isPending) {
-            logger.log('[Save] Booking pending (da saldare) — skipping conferma-noleggio until payment is recorded')
+          if (confirmBooking) {
+            templateKey = 'rental_new_customer'
+          } else if (isPending) {
+            logger.log('[Save] Booking pending (da saldare) — skipping conferma-noleggio (Conferma Prenotazione checkbox not ticked)')
             templateKey = null
           } else if (editingId) {
-            templateKey = 'rental_new_customer'
-          } else if (confirmBooking) {
             templateKey = 'rental_new_customer'
           } else {
             templateKey = 'rental_new_customer'
