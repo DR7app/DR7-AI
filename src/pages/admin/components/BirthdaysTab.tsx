@@ -68,32 +68,46 @@ export default function BirthdaysTab() {
     async function saveMessageTemplate() {
         setSavingMessage(true)
         try {
-            // Primary: system_messages.birthday_message (what the cron actually reads)
-            const { data: existing } = await supabase
-                .from('system_messages')
-                .select('id')
-                .eq('message_key', 'birthday_message')
-                .maybeSingle()
-
-            if (existing?.id) {
-                const { error } = await supabase
+            // Primary: system_messages.pro_marketing_compleanno (Messaggi di Sistema Pro,
+            // the source the cron now reads first).
+            async function upsertSystemMessage(messageKey: string, label: string, description: string) {
+                const { data: existing } = await supabase
                     .from('system_messages')
-                    .update({ message_body: draftMessage, is_enabled: true, updated_at: new Date().toISOString() })
-                    .eq('id', existing.id)
-                if (error) throw error
-            } else {
-                const { error } = await supabase
-                    .from('system_messages')
-                    .insert({
-                        message_key: 'birthday_message',
-                        label: 'Messaggio Compleanno',
-                        description: 'Auguri compleanno + codice sconto (10 giorni prima)',
-                        message_body: draftMessage,
-                        is_automatic: true,
-                        is_enabled: true,
-                    })
-                if (error) throw error
+                    .select('id')
+                    .eq('message_key', messageKey)
+                    .maybeSingle()
+                if (existing?.id) {
+                    const { error } = await supabase
+                        .from('system_messages')
+                        .update({ message_body: draftMessage, is_enabled: true, updated_at: new Date().toISOString() })
+                        .eq('id', existing.id)
+                    if (error) throw error
+                } else {
+                    const { error } = await supabase
+                        .from('system_messages')
+                        .insert({
+                            message_key: messageKey,
+                            label,
+                            description,
+                            message_body: draftMessage,
+                            is_automatic: true,
+                            is_enabled: true,
+                        })
+                    if (error) throw error
+                }
             }
+
+            await upsertSystemMessage(
+                'pro_marketing_compleanno',
+                'Messaggio Compleanno',
+                'Auguri compleanno + codice sconto (10 giorni prima)'
+            )
+            // Keep legacy key in sync for any older code path still reading it.
+            await upsertSystemMessage(
+                'birthday_message',
+                'Messaggio Compleanno (legacy)',
+                'Mirror legacy del messaggio di compleanno'
+            )
 
             // Mirror to legacy app_settings for backward compatibility
             await supabase
@@ -139,22 +153,31 @@ export default function BirthdaysTab() {
         setLoading(true)
         try {
             // Load saved birthday message — same priority as the cron:
-            // system_messages first, app_settings legacy fallback.
-            const { data: sysMsg } = await supabase
+            // pro_marketing_compleanno -> birthday_message -> app_settings legacy.
+            const { data: proMsg } = await supabase
                 .from('system_messages')
                 .select('message_body')
-                .eq('message_key', 'birthday_message')
+                .eq('message_key', 'pro_marketing_compleanno')
                 .maybeSingle()
 
-            if (sysMsg?.message_body) {
-                setMessageTemplate(sysMsg.message_body)
+            if (proMsg?.message_body) {
+                setMessageTemplate(proMsg.message_body)
             } else {
-                const { data: settingData } = await supabase
-                    .from('app_settings')
-                    .select('value')
-                    .eq('key', 'birthday_message_template')
-                    .single()
-                if (settingData?.value) setMessageTemplate(settingData.value)
+                const { data: sysMsg } = await supabase
+                    .from('system_messages')
+                    .select('message_body')
+                    .eq('message_key', 'birthday_message')
+                    .maybeSingle()
+                if (sysMsg?.message_body) {
+                    setMessageTemplate(sysMsg.message_body)
+                } else {
+                    const { data: settingData } = await supabase
+                        .from('app_settings')
+                        .select('value')
+                        .eq('key', 'birthday_message_template')
+                        .single()
+                    if (settingData?.value) setMessageTemplate(settingData.value)
+                }
             }
 
             // Load customers with birthdays
