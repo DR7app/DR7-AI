@@ -44,17 +44,26 @@ interface Vehicle {
 
 interface ProCategory { id: string; label: string }
 
-// Default categories shown until the live Centralina Pro list loads (and as a
-// safety net if the operator never opened Centralina Pro yet).
-const FALLBACK_CATEGORIES: ProCategory[] = [
-  { id: 'exotic', label: 'Exotic Supercars' },
-  { id: 'urban', label: 'Urban' },
-  { id: 'aziendali', label: 'Aziendali' },
+// Palette ciclata: ogni categoria di Centralina Pro riceve il suo pill
+// colorato in base all'ordine di definizione.
+const CATEGORY_PALETTES = [
+  { wrapBg: 'bg-cyan-900/30',    pillBg: 'bg-cyan-900',    pillText: 'text-cyan-200' },
+  { wrapBg: 'bg-purple-900/30',  pillBg: 'bg-purple-900',  pillText: 'text-purple-200' },
+  { wrapBg: 'bg-orange-900/30',  pillBg: 'bg-orange-900',  pillText: 'text-orange-200' },
+  { wrapBg: 'bg-emerald-900/30', pillBg: 'bg-emerald-900', pillText: 'text-emerald-200' },
+  { wrapBg: 'bg-sky-900/30',     pillBg: 'bg-sky-900',     pillText: 'text-sky-200' },
+  { wrapBg: 'bg-rose-900/30',    pillBg: 'bg-rose-900',    pillText: 'text-rose-200' },
+  { wrapBg: 'bg-fuchsia-900/30', pillBg: 'bg-fuchsia-900', pillText: 'text-fuchsia-200' },
+  { wrapBg: 'bg-amber-900/30',   pillBg: 'bg-amber-900',   pillText: 'text-amber-200' },
+  { wrapBg: 'bg-lime-900/30',    pillBg: 'bg-lime-900',    pillText: 'text-lime-200' },
+  { wrapBg: 'bg-teal-900/30',    pillBg: 'bg-teal-900',    pillText: 'text-teal-200' },
+  { wrapBg: 'bg-indigo-900/30',  pillBg: 'bg-indigo-900',  pillText: 'text-indigo-200' },
 ]
+const ORPHAN_PALETTE = { wrapBg: 'bg-theme-bg-tertiary', pillBg: 'bg-theme-bg-tertiary', pillText: 'text-theme-text-secondary' }
 
 export default function VehiclesTab() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [categories, setCategories] = useState<ProCategory[]>(FALLBACK_CATEGORIES)
+  const [categories, setCategories] = useState<ProCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -75,7 +84,7 @@ export default function VehiclesTab() {
     plate: '',
     status: 'available',
     daily_rate: '0',
-    category: 'exotic',
+    category: '',
     unavailable_from: '',
     unavailable_until: '',
     unavailable_from_time: '',
@@ -94,6 +103,16 @@ export default function VehiclesTab() {
     loadVehicles()
   }, [])
 
+  // Quando le categorie da Centralina Pro arrivano o cambiano, riallinea
+  // il valore del Select del form alla prima categoria valida.
+  useEffect(() => {
+    if (categories.length === 0) return
+    setFormData(prev => {
+      if (prev.category && categories.some(c => c.id === prev.category)) return prev
+      return { ...prev, category: categories[0].id }
+    })
+  }, [categories])
+
   // Categories live in centralina_pro_config.config.categories (Centralina Pro
   // > Categorie & Fascia is the single source of truth). We subscribe so any
   // add/rename/delete done there propagates here within a couple of seconds.
@@ -107,7 +126,7 @@ export default function VehiclesTab() {
         .maybeSingle()
       if (cancelled) return
       const cfg = (data?.config as { categories?: ProCategory[] } | null) || null
-      const list = Array.isArray(cfg?.categories) && cfg.categories.length > 0 ? cfg.categories : FALLBACK_CATEGORIES
+      const list = Array.isArray(cfg?.categories) ? cfg.categories : []
       setCategories(list)
     }
     loadCategories()
@@ -115,7 +134,7 @@ export default function VehiclesTab() {
       .channel('vehicles-categories-sync')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
         const cfg = (payload.new as { config?: { categories?: ProCategory[] } } | undefined)?.config
-        const list = Array.isArray(cfg?.categories) && cfg.categories.length > 0 ? cfg.categories : FALLBACK_CATEGORIES
+        const list = Array.isArray(cfg?.categories) ? cfg.categories : []
         setCategories(list)
       })
       .subscribe()
@@ -512,7 +531,7 @@ export default function VehiclesTab() {
       plate: '',
       status: 'available',
       daily_rate: '0',
-      category: 'exotic',
+      category: categories[0]?.id || '',
       unavailable_from: '',
       unavailable_until: '',
       unavailable_from_time: '',
@@ -531,7 +550,7 @@ export default function VehiclesTab() {
       plate: vehicle.plate || '',
       status: vehicle.status,
       daily_rate: vehicle.daily_rate.toString(),
-      category: vehicle.category || 'exotic',
+      category: vehicle.category || categories[0]?.id || '',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       unavailable_from: (vehicle.metadata as any)?.unavailable_from || '',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -610,46 +629,25 @@ export default function VehiclesTab() {
     return plate.includes(q) || name.includes(q)
   }
 
-  // Single source of truth for category labels: Centralina Pro. Falls back to
-  // the FALLBACK list (only used until Centralina Pro is opened for the first
-  // time) and finally to the raw id so a deleted category id doesn't leak.
-  const categoryLabel = (id: string): string => {
-    const fromPro = categories.find(c => c.id === id)
-    if (fromPro?.label) return fromPro.label
-    const legacy = FALLBACK_CATEGORIES.find(c => c.id === id)
-    return legacy?.label || id
-  }
-
-  const exoticVehicles = vehicles.filter(v => v.category === 'exotic').filter(searchFilter)
-  const urbanVehicles = vehicles.filter(v => v.category === 'urban').filter(searchFilter)
-  const aziendaliVehicles = vehicles.filter(v => v.category === 'aziendali').filter(searchFilter)
-
-  const exoticCount = exoticVehicles.length
-  const urbanCount = urbanVehicles.length
-  const aziendaliCount = aziendaliVehicles.length
-
-  // Any category added in Centralina Pro beyond the three legacy ones gets its
-  // own section below the main three so newly-added categories aren't invisible.
-  const LEGACY_IDS = new Set(['exotic', 'urban', 'aziendali'])
-  // Color palette ciclato per le categorie custom in modo che ogni
-  // categoria abbia il suo pill colorato come Urban/Exotic/Aziendali.
-  const EXTRA_PALETTES = [
-    { wrapBg: 'bg-emerald-900/30', pillBg: 'bg-emerald-900', pillText: 'text-emerald-200' },
-    { wrapBg: 'bg-sky-900/30',     pillBg: 'bg-sky-900',     pillText: 'text-sky-200' },
-    { wrapBg: 'bg-rose-900/30',    pillBg: 'bg-rose-900',    pillText: 'text-rose-200' },
-    { wrapBg: 'bg-fuchsia-900/30', pillBg: 'bg-fuchsia-900', pillText: 'text-fuchsia-200' },
-    { wrapBg: 'bg-amber-900/30',   pillBg: 'bg-amber-900',   pillText: 'text-amber-200' },
-    { wrapBg: 'bg-lime-900/30',    pillBg: 'bg-lime-900',    pillText: 'text-lime-200' },
-    { wrapBg: 'bg-teal-900/30',    pillBg: 'bg-teal-900',    pillText: 'text-teal-200' },
-    { wrapBg: 'bg-indigo-900/30',  pillBg: 'bg-indigo-900',  pillText: 'text-indigo-200' },
-  ]
-  const extraSections = categories
-    .filter(c => !LEGACY_IDS.has(c.id))
-    .map((c, i) => ({
-      category: c,
-      palette: EXTRA_PALETTES[i % EXTRA_PALETTES.length],
-      vehicles: vehicles.filter(v => v.category === c.id).filter(searchFilter),
-    }))
+  // Centralina Pro e\' la sola fonte di verita\' per le categorie. Per ogni
+  // categoria costruiamo una sezione con i veicoli filtrati e la palette
+  // assegnata in base all'ordine in Centralina Pro.
+  const knownIds = new Set(categories.map(c => c.id))
+  const sections = categories.map((c, i) => ({
+    category: c,
+    palette: CATEGORY_PALETTES[i % CATEGORY_PALETTES.length],
+    vehicles: vehicles.filter(v => v.category === c.id).filter(searchFilter),
+  }))
+  // Veicoli con un category id non piu\' presente in Centralina Pro (es.
+  // dopo un rename) finirebbero invisibili: li raccogliamo in "Altre"
+  // per garantire che restino editabili.
+  const orphanVehicles = vehicles
+    .filter(v => !v.category || !knownIds.has(v.category))
+    .filter(searchFilter)
+  const orphanSection = orphanVehicles.length > 0
+    ? { category: { id: '__orphan__', label: 'Altre / Senza categoria' }, palette: ORPHAN_PALETTE, vehicles: orphanVehicles }
+    : null
+  const allSections = orphanSection ? [...sections, orphanSection] : sections
 
   if (loading) {
     return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
@@ -661,7 +659,9 @@ export default function VehiclesTab() {
         <div>
           <h2 className="text-2xl font-bold text-theme-text-primary">Veicoli</h2>
           <p className="text-sm text-theme-text-muted mt-1">
-            {categoryLabel('exotic')}: {exoticCount} | {categoryLabel('urban')}: {urbanCount} | {categoryLabel('aziendali')}: {aziendaliCount} | Totale: {vehicles.length}
+            {sections.map(s => `${s.category.label}: ${s.vehicles.length}`).join(' | ')}
+            {sections.length > 0 ? ' | ' : ''}Totale: {vehicles.length}
+            {orphanSection ? ` | Senza categoria: ${orphanSection.vehicles.length}` : ''}
           </p>
         </div>
         <div className="flex gap-2">
@@ -1029,494 +1029,24 @@ export default function VehiclesTab() {
         </form>
       )}
 
-      {/* Three Column Layout: Urban, Exotic, and Aziendali */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Urban Vehicles Column */}
-        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
-          <div className="bg-cyan-900/30 px-4 py-3 border-b border-theme-border">
-            <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-              <span className="px-3 py-1 bg-cyan-900 text-cyan-200 rounded text-sm">{categoryLabel('urban')}</span>
-              <span className="text-sm text-theme-text-muted">({urbanCount} veicoli)</span>
-            </h3>
-          </div>
-          {/* Mobile Card View */}
-          <div className="lg:hidden divide-y divide-theme-border">
-            {urbanVehicles.map((vehicle) => (
-              <div key={vehicle.id} className={`p-3 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20' : ''}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {multiSelectMode && (
-                      <input
-                        type="checkbox"
-                        checked={selectedVehicles.has(vehicle.id)}
-                        onChange={() => toggleVehicleSelection(vehicle.id)}
-                        className="w-5 h-5 flex-shrink-0"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
-                      <div className="text-xs text-theme-text-muted">
-                        {vehicle.plate || '-'}
-                        {(vehicle.metadata as any)?.cv && <span className="ml-2">{(vehicle.metadata as any).cv} CV</span>}
-                        {(vehicle.metadata as any)?.model_year && <span className="ml-2">{(vehicle.metadata as any).model_year}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-sm font-medium text-theme-text-primary">€{vehicle.daily_rate}</div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block mt-1 ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
-                      vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                        vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                          vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                            'bg-theme-bg-tertiary text-theme-text-secondary'
-                    }`}>
-                      {vehicle.status === 'available' ? 'Disponibile' :
-                        vehicle.status === 'unavailable' ? 'Non Disp.' :
-                          vehicle.status === 'rented' ? 'Noleggiato' :
-                            vehicle.status === 'maintenance' ? 'Manut.' : 'Ritirato'}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-2 px-3 flex-1">
-                    Modifica
-                  </Button>
-                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800">
-                    Sync
-                  </Button>
-                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">
-                    ×
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {urbanVehicles.length === 0 && (
-              <div className="p-8 text-center text-theme-text-muted">
-                Nessun veicolo Urban trovato
-              </div>
-            )}
-          </div>
-          <div className="block overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead className="">
-                <tr>
-                  {multiSelectMode && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
-                      <input
-                        type="checkbox"
-                        checked={urbanVehicles.length > 0 && urbanVehicles.every(v => selectedVehicles.has(v.id))}
-                        onChange={() => toggleSelectCategory(urbanVehicles)}
-                        className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
-                      />
-                    </th>
-                  )}
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">CV</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Anno</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
-                </tr>
-              </thead>
-              <tbody>
-                {urbanVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
-                    {multiSelectMode && (
-                      <td className="px-4 py-3 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedVehicles.has(vehicle.id)}
-                          onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
-                        />
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
-                        vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                          vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                            vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-theme-bg-tertiary text-theme-text-secondary'
-                        }`}>
-                        {vehicle.status === 'available' ? 'Disponibile' :
-                          vehicle.status === 'unavailable' ? 'Non Disponibile' :
-                            vehicle.status === 'rented' ? 'Noleggiato' :
-                              vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.cv || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.model_year || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={() => handleEdit(vehicle)}
-                          variant="secondary"
-                          className="text-xs py-1 px-3"
-                        >
-                          Modifica
-                        </Button>
-                        <Button
-                          onClick={() => syncToGoogleCalendar(vehicle)}
-                          variant="secondary"
-                          className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800"
-                          title="Sincronizza con Google Calendar"
-                        >
-                          📅 Sync
-                        </Button>
-                        <Button
-                          onClick={() => handleDelete(vehicle.id)}
-                          variant="secondary"
-                          className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800"
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {urbanVehicles.length === 0 && (
-                  <tr>
-                    <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
-                      Nessun veicolo Urban trovato
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Exotic Vehicles Column */}
-        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
-          <div className="bg-purple-900/30 px-4 py-3 border-b border-theme-border">
-            <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-              <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded text-sm">{categoryLabel('exotic')}</span>
-              <span className="text-sm text-theme-text-muted">({exoticCount} veicoli)</span>
-            </h3>
-          </div>
-          {/* Mobile Card View */}
-          <div className="lg:hidden divide-y divide-theme-border">
-            {exoticVehicles.map((vehicle) => (
-              <div key={vehicle.id} className={`p-3 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20' : ''}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {multiSelectMode && (
-                      <input
-                        type="checkbox"
-                        checked={selectedVehicles.has(vehicle.id)}
-                        onChange={() => toggleVehicleSelection(vehicle.id)}
-                        className="w-5 h-5 flex-shrink-0"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
-                      <div className="text-xs text-theme-text-muted">
-                        {vehicle.plate || '-'}
-                        {(vehicle.metadata as any)?.cv && <span className="ml-2">{(vehicle.metadata as any).cv} CV</span>}
-                        {(vehicle.metadata as any)?.model_year && <span className="ml-2">{(vehicle.metadata as any).model_year}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-sm font-medium text-theme-text-primary">€{vehicle.daily_rate}</div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block mt-1 ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
-                      vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                        vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                          vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                            'bg-theme-bg-tertiary text-theme-text-secondary'
-                    }`}>
-                      {vehicle.status === 'available' ? 'Disponibile' :
-                        vehicle.status === 'unavailable' ? 'Non Disp.' :
-                          vehicle.status === 'rented' ? 'Noleggiato' :
-                            vehicle.status === 'maintenance' ? 'Manut.' : 'Ritirato'}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-2 px-3 flex-1">
-                    Modifica
-                  </Button>
-                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800">
-                    Sync
-                  </Button>
-                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">
-                    ×
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {exoticVehicles.length === 0 && (
-              <div className="p-8 text-center text-theme-text-muted">
-                Nessun veicolo Exotic trovato
-              </div>
-            )}
-          </div>
-          <div className="block overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead className="">
-                <tr>
-                  {multiSelectMode && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
-                      <input
-                        type="checkbox"
-                        checked={exoticVehicles.length > 0 && exoticVehicles.every(v => selectedVehicles.has(v.id))}
-                        onChange={() => toggleSelectCategory(exoticVehicles)}
-                        className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
-                      />
-                    </th>
-                  )}
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">CV</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Anno</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
-                </tr>
-              </thead>
-              <tbody>
-                {exoticVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
-                    {multiSelectMode && (
-                      <td className="px-4 py-3 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedVehicles.has(vehicle.id)}
-                          onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
-                        />
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
-                        vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                          vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                            vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-theme-bg-tertiary text-theme-text-secondary'
-                        }`}>
-                        {vehicle.status === 'available' ? 'Disponibile' :
-                          vehicle.status === 'unavailable' ? 'Non Disponibile' :
-                            vehicle.status === 'rented' ? 'Noleggiato' :
-                              vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.cv || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.model_year || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={() => handleEdit(vehicle)}
-                          variant="secondary"
-                          className="text-xs py-1 px-3"
-                        >
-                          Modifica
-                        </Button>
-                        <Button
-                          onClick={() => syncToGoogleCalendar(vehicle)}
-                          variant="secondary"
-                          className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800"
-                          title="Sincronizza con Google Calendar"
-                        >
-                          📅 Sync
-                        </Button>
-                        <Button
-                          onClick={() => handleDelete(vehicle.id)}
-                          variant="secondary"
-                          className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800"
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {exoticVehicles.length === 0 && (
-                  <tr>
-                    <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
-                      Nessun veicolo Exotic trovato
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Aziendali Vehicles Column */}
-        <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
-          <div className="bg-orange-900/30 px-4 py-3 border-b border-theme-border">
-            <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-              <span className="px-3 py-1 bg-orange-900 text-orange-200 rounded text-sm">{categoryLabel('aziendali')}</span>
-              <span className="text-sm text-theme-text-muted">({aziendaliCount} veicoli)</span>
-            </h3>
-          </div>
-          {/* Mobile Card View */}
-          <div className="lg:hidden divide-y divide-theme-border">
-            {aziendaliVehicles.map((vehicle) => (
-              <div key={vehicle.id} className={`p-3 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20' : ''}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {multiSelectMode && (
-                      <input
-                        type="checkbox"
-                        checked={selectedVehicles.has(vehicle.id)}
-                        onChange={() => toggleVehicleSelection(vehicle.id)}
-                        className="w-5 h-5 flex-shrink-0"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
-                      <div className="text-xs text-theme-text-muted">
-                        {vehicle.plate || '-'}
-                        {(vehicle.metadata as any)?.cv && <span className="ml-2">{(vehicle.metadata as any).cv} CV</span>}
-                        {(vehicle.metadata as any)?.model_year && <span className="ml-2">{(vehicle.metadata as any).model_year}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-sm font-medium text-theme-text-primary">€{vehicle.daily_rate}</div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block mt-1 ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
-                      vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                        vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                          vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                            'bg-theme-bg-tertiary text-theme-text-secondary'
-                    }`}>
-                      {vehicle.status === 'available' ? 'Disponibile' :
-                        vehicle.status === 'unavailable' ? 'Non Disp.' :
-                          vehicle.status === 'rented' ? 'Noleggiato' :
-                            vehicle.status === 'maintenance' ? 'Manut.' : 'Ritirato'}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-2 px-3 flex-1">
-                    Modifica
-                  </Button>
-                  <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800">
-                    Sync
-                  </Button>
-                  <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">
-                    ×
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {aziendaliVehicles.length === 0 && (
-              <div className="p-8 text-center text-theme-text-muted">
-                Nessun veicolo Aziendali trovato
-              </div>
-            )}
-          </div>
-          <div className="block overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead className="">
-                <tr>
-                  {multiSelectMode && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
-                      <input
-                        type="checkbox"
-                        checked={aziendaliVehicles.length > 0 && aziendaliVehicles.every(v => selectedVehicles.has(v.id))}
-                        onChange={() => toggleSelectCategory(aziendaliVehicles)}
-                        className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
-                      />
-                    </th>
-                  )}
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">CV</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Anno</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
-                </tr>
-              </thead>
-              <tbody>
-                {aziendaliVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
-                    {multiSelectMode && (
-                      <td className="px-4 py-3 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedVehicles.has(vehicle.id)}
-                          onChange={() => toggleVehicleSelection(vehicle.id)}
-                          className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
-                        />
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
-                        vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                          vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                            vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-theme-bg-tertiary text-theme-text-secondary'
-                        }`}>
-                        {vehicle.status === 'available' ? 'Disponibile' :
-                          vehicle.status === 'unavailable' ? 'Non Disponibile' :
-                            vehicle.status === 'rented' ? 'Noleggiato' :
-                              vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.cv || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as any)?.model_year || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={() => handleEdit(vehicle)}
-                          variant="secondary"
-                          className="text-xs py-1 px-3"
-                        >
-                          Modifica
-                        </Button>
-                        <Button
-                          onClick={() => syncToGoogleCalendar(vehicle)}
-                          variant="secondary"
-                          className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800"
-                          title="Sincronizza con Google Calendar"
-                        >
-                          📅 Sync
-                        </Button>
-                        <Button
-                          onClick={() => handleDelete(vehicle.id)}
-                          variant="secondary"
-                          className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800"
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {aziendaliVehicles.length === 0 && (
-                  <tr>
-                    <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
-                      Nessun veicolo Aziendali trovato
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* Categorie custom — qualsiasi categoria aggiunta in Centralina Pro
-          oltre alle tre legacy (exotic / urban / aziendali) viene renderizzata
-          con la stessa card+tabella delle legacy: pill colorato in header,
+      {/* Categorie veicoli — Centralina Pro e\' la sola fonte di verita\'.
+          Ogni categoria e\' una card con pill colorato (palette ciclata),
           7 colonne (Nome, Targa, Stato, CV, Anno, Tariffa, Azioni), vista
-          mobile a card, bulk select, pulsanti Modifica / Sync / Elimina. */}
-      {extraSections.length > 0 && (
-        <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {extraSections.map(section => (
+          mobile a card, bulk select, pulsanti Modifica / Sync / Elimina.
+          I veicoli orfani (category id non piu\' in Centralina Pro) finiscono
+          nella sezione "Altre / Senza categoria" per restare modificabili. */}
+      {categories.length === 0 && (
+        <div className="rounded-lg border border-dashed border-theme-border bg-theme-bg-secondary p-8 text-center">
+          <p className="text-sm font-semibold text-theme-text-primary">Nessuna categoria configurata</p>
+          <p className="text-xs text-theme-text-muted mt-1">
+            Vai in <span className="font-medium">Centralina Pro &rsaquo; Categorie &amp; Fascia</span> per crearle.
+            Senza categorie i veicoli non possono essere catalogati.
+          </p>
+        </div>
+      )}
+      {allSections.length > 0 && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {allSections.map(section => (
             <div key={section.category.id} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
               <div className={`${section.palette.wrapBg} px-4 py-3 border-b border-theme-border`}>
                 <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
