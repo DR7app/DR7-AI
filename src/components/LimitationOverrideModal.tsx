@@ -234,6 +234,40 @@ export default function LimitationOverrideModal({
             <p className="text-[11px] text-theme-text-muted mt-1.5 font-mono">{limitationCode}</p>
           </div>
 
+          {/* Dettaglio richiesta — sempre visibile in modal quando details
+              è presente. Cosi' l'operatore vede ESATTAMENTE cosa sta
+              autorizzando (cliente, veicolo, motivazioni multiple, ecc.)
+              prima di chiedere l'OTP, senza dover aprire l'email. */}
+          {step === 'blocked' && (() => {
+            const rows: Array<{ label: string; value: string }> = []
+            if (Array.isArray(details)) {
+              for (const d of details) {
+                if (d && typeof d === 'object' && d.label) {
+                  rows.push({ label: String(d.label), value: String(d.value ?? '') })
+                }
+              }
+            } else if (details && typeof details === 'object') {
+              for (const [k, v] of Object.entries(details as Record<string, unknown>)) {
+                if (v == null || v === '') continue
+                rows.push({ label: k, value: String(v) })
+              }
+            }
+            if (rows.length === 0) return null
+            return (
+              <div className="bg-theme-bg-tertiary border border-theme-border rounded-xl px-4 py-3 mb-5 max-h-64 overflow-y-auto">
+                <p className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-2">Dettaglio richiesta</p>
+                <div className="space-y-1.5 text-xs">
+                  {rows.map((r, i) => (
+                    <div key={i} className="flex gap-2">
+                      <span className="text-theme-text-muted font-medium min-w-[100px]">{r.label}:</span>
+                      <span className="text-theme-text-primary break-words flex-1 whitespace-pre-wrap">{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* Notes textarea — opzionale. Quando compilato, il testo viene
               mostrato nell'email alla direzione e salvato nel log attività
               operatori. Lasciato vuoto, la richiesta procede comunque. */}

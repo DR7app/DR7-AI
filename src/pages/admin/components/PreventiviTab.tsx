@@ -3317,9 +3317,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             ? 'Autorizzazione richiesta'
             : combinedOtpMotivazioni.length === 1
               ? combinedOtpMotivazioni[0]
-              : `Più condizioni richiedono autorizzazione: ${combinedOtpMotivazioni.length} motivi (vedi dettaglio).`
+              : `${combinedOtpMotivazioni.length} condizioni richiedono autorizzazione`
         }
         details={otpDetails}
+        showNotes
         draftSessionId={draftSessionIdRef.current}
         flowType="preventivo"
         onCancel={() => {

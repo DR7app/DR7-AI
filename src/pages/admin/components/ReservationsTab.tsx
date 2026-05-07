@@ -3636,7 +3636,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         const limitationMessage = trips.length === 1
           ? primary.motivazione
-          : `Più condizioni richiedono autorizzazione: ${trips.length} motivi (vedi dettaglio).`
+          : `${trips.length} condizioni richiedono autorizzazione`
 
         pendingSubmitRef.current = { skipValidation, overrideCustomerId }
         requestOverride(primary.code, limitationMessage, primary.code === 'paid_rental_modify' ? `booking_edit_${editingId}` : undefined)
@@ -5935,10 +5935,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         )}
 
         {/* Limitation Override Modal (OTP director approval).
-            showNotes: per le modifiche di prenotazioni noleggio
-            (paid_rental_modify) mostra un campo note opzionale. Se
-            compilato, il testo arriva nell'email a Valerio e nel log
-            attività operatori. */}
+            showNotes: campo note operatore opzionale, mostrato per tutti i
+            gate Salva-time. Se compilato il testo arriva nell'email a
+            direzione e nel log attività. */}
         <LimitationOverrideModal
           isOpen={limitationState.isOpen}
           limitationCode={limitationState.limitationCode}
@@ -5957,7 +5956,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               ? overrideDetails
               : undefined
           }
-          showNotes={limitationState.limitationCode === 'paid_rental_modify'}
+          showNotes={[
+            'paid_rental_modify',
+            'out_of_office_hours',
+            'tier1_no_cauzione',
+            'no_cauzione_rca_only',
+            'driver_blocked',
+          ].includes(limitationState.limitationCode)}
           onClose={closeLimitation}
           onCancel={() => {
             // X = abort save and go back to the form. The booking values the
