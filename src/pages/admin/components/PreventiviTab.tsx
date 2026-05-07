@@ -366,12 +366,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // No-Cauzione OTP override (when client is Fascia B and admin is not Valerio)
   const draftSessionIdRef = useRef<string>(crypto.randomUUID())
   const [noCauzioneOverrideId, setNoCauzioneOverrideId] = useState<string | null>(null)
-  const [otpModalOpen, setOtpModalOpen] = useState(false)
 
   // Slot-unavailable OTP override (same-car buffer OR 15-min cross-vehicle gap)
   const [slotOverrideId, setSlotOverrideId] = useState<string | null>(null)
-  const [slotOverrideModalOpen, setSlotOverrideModalOpen] = useState(false)
-  const [slotOverrideReason, setSlotOverrideReason] = useState<string>('')
   // Holds the `send` flag from the operator's Salva click while an OTP modal
   // is open. Cleared on cancel (X) or once the resume effect re-runs
   // handleSave with fresh override IDs.
@@ -382,9 +379,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // rental schedule). One approval per draft session — flipping back
   // and forth between flagged/in-window slots doesn't re-prompt.
   const [outOfHoursOverrideId, setOutOfHoursOverrideId] = useState<string | null>(null)
-  const [outOfHoursModalOpen, setOutOfHoursModalOpen] = useState(false)
-  const [outOfHoursReason, setOutOfHoursReason] = useState<string>('')
   const slotCheckTimerRef = useRef<number | null>(null)
+
+  // Combined OTP modal: when più gate scattano insieme (es. No Cauzione +
+  // Fuori orario), apriamo UNA sola modal con TUTTE le motivazioni. La
+  // direzione riceve UNA sola email che elenca tutti i motivi reali della
+  // richiesta. All'approvazione marchiamo come autorizzati tutti i gate
+  // tripped (con lo stesso overrideId) così il resume non ri-prompta.
+  type TrippedCode = 'out_of_hours' | 'no_cauzione' | 'slot'
+  const [combinedOtpOpen, setCombinedOtpOpen] = useState(false)
+  const [combinedOtpMotivazioni, setCombinedOtpMotivazioni] = useState<string[]>([])
+  const [combinedOtpTripped, setCombinedOtpTripped] = useState<TrippedCode[]>([])
 
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
@@ -486,7 +491,6 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           returnExc ? `Riconsegna: ${returnExc}` : null,
         ].filter(Boolean).join(' · ')
         setSlotUnavailableWarning(reason)
-        setSlotOverrideReason(reason)
         return
       }
 
@@ -524,7 +528,6 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       if (!result.available) {
         const reason = result.reason || 'Slot non disponibile'
         setSlotUnavailableWarning(reason)
-        setSlotOverrideReason(reason)
       } else {
         setSlotUnavailableWarning('')
       }
@@ -1154,8 +1157,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       { label: 'Totale', value: formatEur(pricing.totalFinal) },
     ]
     if (editingId) rows.splice(1, 0, { label: 'Preventivo', value: String(editingId).slice(0, 8) })
+    // Quando ci sono motivazioni multiple le elenchiamo come righe
+    // numerate nella tabella dell'email — la direzione vede subito ogni
+    // motivo reale per cui l'OTP è stato richiesto.
+    if (combinedOtpMotivazioni.length > 1) {
+      combinedOtpMotivazioni.forEach((m, i) => {
+        rows.push({ label: `Motivo ${i + 1}`, value: m })
+      })
+    } else if (combinedOtpMotivazioni.length === 1) {
+      rows.push({ label: 'Motivo', value: combinedOtpMotivazioni[0] })
+    }
     return rows
-  }, [customers, selectedCustomerId, selectedVehicle, form, editingId, rentalDays, pricing.totalFinal])
+  }, [customers, selectedCustomerId, selectedVehicle, form, editingId, rentalDays, pricing.totalFinal, combinedOtpMotivazioni])
 
   // ─── Resume Save after OTP approval ─────────────────────────────────────
   // When an OTP gate trips during Salva, pendingSaveRef is set and the
@@ -1164,7 +1177,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // automatically with the same `send` flag the operator originally used.
   useEffect(() => {
     if (!pendingSaveRef.current) return
-    if (otpModalOpen || slotOverrideModalOpen || outOfHoursModalOpen) return
+    if (combinedOtpOpen) return
     const { send } = pendingSaveRef.current
     pendingSaveRef.current = null
     handleSave(send)
@@ -1190,38 +1203,37 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       }
     }
 
-    // OTP gates — fire ONLY at Salva, sequentially. Each gate, when tripped,
-    // stores { send } in pendingSaveRef so the resume effect re-invokes
-    // handleSave with fresh override IDs once the operator approves the OTP.
-    // Cancel (X) clears pendingSaveRef and leaves the form intact.
-    //
+    // OTP gates — fire ONLY at Salva. Tutte e tre le condizioni vengono
+    // valutate insieme; se più di una scatta apriamo UNA sola modal
+    // combinata con TUTTE le motivazioni, così la direzione riceve UNA
+    // email che elenca tutti i motivi reali della richiesta.
+    const motivazioni: string[] = []
+    const trippedCodes: TrippedCode[] = []
+
     // 1) Out-of-office hours on pickup or return.
     if (!outOfHoursOverrideId) {
       const pickupExc = describeException(form.pickup_date, form.pickup_time, 'pickup')
       const returnExc = describeException(form.return_date, form.return_time, 'return')
       if (pickupExc || returnExc) {
-        const reason = [
-          pickupExc ? `Ritiro: ${pickupExc}` : null,
-          returnExc ? `Riconsegna: ${returnExc}` : null,
-        ].filter(Boolean).join(' · ')
-        setOutOfHoursReason(reason)
-        pendingSaveRef.current = { send: sendAfterSave }
-        setOutOfHoursModalOpen(true)
-        return
+        const parts: string[] = []
+        if (pickupExc) parts.push(`Ritiro: ${pickupExc}`)
+        if (returnExc) parts.push(`Riconsegna: ${returnExc}`)
+        motivazioni.push(`Fuori orario standard — ${parts.join(' · ')}`)
+        trippedCodes.push('out_of_hours')
       }
     }
 
     // 2) No Cauzione for Fascia B requires direzione OTP (unless the
     //    operator is Valerio himself).
     if (form.include_no_cauzione && isFasciaB && !isValerio && !noCauzioneOverrideId) {
-      pendingSaveRef.current = { send: sendAfterSave }
-      setOtpModalOpen(true)
-      return
+      motivazioni.push(`No Cauzione richiesta per cliente Fascia B (residente: ${form.residente_sardegna ? 'sì' : 'no'})`)
+      trippedCodes.push('no_cauzione')
     }
 
     // 3) Availability guard: a preventivo reserves the slot just like a booking.
     // Blocks same-car 75-min buffer AND the 15-min cross-vehicle handover gap.
     // If blocked, the admin can override via a director OTP.
+    let slotConflictReason: string | null = null
     if (selectedVehicle && !slotOverrideId) {
       const windowStart = new Date(`${form.pickup_date}T00:00:00+02:00`)
       const windowEnd = new Date(`${form.return_date}T23:59:59+02:00`)
@@ -1254,11 +1266,20 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         (windowBookings || []) as AvailabilityBooking[],
       )
       if (!result.available) {
-        setSlotOverrideReason(result.reason || 'Slot non disponibile')
-        pendingSaveRef.current = { send: sendAfterSave }
-        setSlotOverrideModalOpen(true)
-        return
+        slotConflictReason = result.reason || 'Slot non disponibile'
+        motivazioni.push(`Slot non disponibile — ${slotConflictReason}`)
+        trippedCodes.push('slot')
       }
+    }
+
+    // Se almeno UN gate è scattato apriamo la modal combinata con TUTTE le
+    // motivazioni. La direzione riceve UNA sola email con l'elenco completo.
+    if (motivazioni.length > 0) {
+      setCombinedOtpMotivazioni(motivazioni)
+      setCombinedOtpTripped(trippedCodes)
+      pendingSaveRef.current = { send: sendAfterSave }
+      setCombinedOtpOpen(true)
+      return
     }
 
     // All gates cleared — clear any pending save marker and persist.
@@ -1477,9 +1498,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     setNoCauzioneOverrideId(null)
     // Reset slot-availability override
     setSlotOverrideId(null)
-    setSlotOverrideReason('')
     setSlotUnavailableWarning('')
-    setSlotOverrideModalOpen(false)
+    // Reset out-of-hours override
+    setOutOfHoursOverrideId(null)
+    // Close any combined OTP modal still open from a previous session
+    setCombinedOtpOpen(false)
+    setCombinedOtpMotivazioni([])
+    setCombinedOtpTripped([])
+    pendingSaveRef.current = null
     draftSessionIdRef.current = crypto.randomUUID()
   }
 
@@ -2876,13 +2902,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             <p className="text-sm text-red-300 font-medium">Slot non disponibile</p>
             <p className="text-xs text-red-300/80 mt-1">{slotUnavailableWarning}</p>
             {!slotOverrideId && (
-              <button
-                type="button"
-                onClick={() => setSlotOverrideModalOpen(true)}
-                className="mt-2 text-xs text-red-300 underline hover:text-red-200"
-              >
-                Richiedi autorizzazione
-              </button>
+              <p className="mt-2 text-xs text-red-300/80 italic">L'autorizzazione direzionale verrà richiesta al Salva.</p>
             )}
           </div>
         </div>
@@ -3276,61 +3296,52 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         </Button>
       </div>
 
-      {/* No-Cauzione OTP — opened ONLY at Salva when Fascia B + non-Valerio. */}
+      {/* OTP combinata — opened ONLY at Salva. Se più gate scattano insieme
+          (Fuori orario + No Cauzione + Slot) la modal mostra TUTTE le
+          motivazioni e la direzione riceve UNA sola email con l'elenco
+          completo. La limitationCode dell'email rispecchia il primo gate
+          scattato (per coerenza con il log) ma il messaggio combina tutti
+          i motivi. All'approvazione marchiamo come autorizzati TUTTI i
+          gate tripped con lo stesso overrideId, così il resume non chiede
+          una seconda OTP. */}
       <LimitationOverrideModal
-        isOpen={otpModalOpen}
-        limitationCode="NO_CAUZIONE_FASCIA_B"
-        limitationMessage={`Richiesta "No Cauzione" per cliente Fascia B (residente: ${form.residente_sardegna ? 'sì' : 'no'}).`}
+        isOpen={combinedOtpOpen}
+        limitationCode={(() => {
+          if (combinedOtpTripped.includes('out_of_hours')) return 'out_of_office_hours'
+          if (combinedOtpTripped.includes('no_cauzione')) return 'NO_CAUZIONE_FASCIA_B'
+          if (combinedOtpTripped.includes('slot')) return 'SLOT_NON_DISPONIBILE'
+          return 'preventivo_save'
+        })()}
+        limitationMessage={
+          combinedOtpMotivazioni.length === 0
+            ? 'Autorizzazione richiesta'
+            : combinedOtpMotivazioni.length === 1
+              ? combinedOtpMotivazioni[0]
+              : `Più condizioni richiedono autorizzazione: ${combinedOtpMotivazioni.length} motivi (vedi dettaglio).`
+        }
         details={otpDetails}
         draftSessionId={draftSessionIdRef.current}
         flowType="preventivo"
         onCancel={() => {
           // X = back to the form, save NOT performed. Form values stay intact.
-          setOtpModalOpen(false)
+          setCombinedOtpOpen(false)
+          setCombinedOtpMotivazioni([])
+          setCombinedOtpTripped([])
           pendingSaveRef.current = null
         }}
         onOverrideApproved={(overrideId) => {
-          setNoCauzioneOverrideId(overrideId)
-          setOtpModalOpen(false)
-        }}
-      />
-
-      {/* Slot-unavailable OTP — opened ONLY at Salva when the slot is taken. */}
-      <LimitationOverrideModal
-        isOpen={slotOverrideModalOpen}
-        limitationCode="SLOT_NON_DISPONIBILE"
-        limitationMessage={slotOverrideReason || 'Slot non disponibile'}
-        details={otpDetails}
-        draftSessionId={draftSessionIdRef.current}
-        flowType="preventivo"
-        onCancel={() => {
-          // X = back to the form, save NOT performed. Warning stays visible.
-          setSlotOverrideModalOpen(false)
-          pendingSaveRef.current = null
-        }}
-        onOverrideApproved={(overrideId) => {
-          setSlotOverrideId(overrideId)
-          setSlotOverrideModalOpen(false)
-          setSlotUnavailableWarning('')
-        }}
-      />
-
-      {/* Out-of-office-hours OTP — opened ONLY at Salva when pickup/return is
-          outside the standard schedule. */}
-      <LimitationOverrideModal
-        isOpen={outOfHoursModalOpen}
-        limitationCode="out_of_office_hours"
-        limitationMessage={outOfHoursReason || 'Orario fuori dagli orari di apertura'}
-        details={otpDetails}
-        draftSessionId={draftSessionIdRef.current}
-        flowType="preventivo"
-        onCancel={() => {
-          setOutOfHoursModalOpen(false)
-          pendingSaveRef.current = null
-        }}
-        onOverrideApproved={(overrideId) => {
-          setOutOfHoursOverrideId(overrideId)
-          setOutOfHoursModalOpen(false)
+          // Marchiamo come approvati tutti i gate scattati con lo stesso
+          // overrideId. Il resume effect riprende handleSave e tutti e tre
+          // i gate vedono il proprio override id valorizzato.
+          if (combinedOtpTripped.includes('out_of_hours')) setOutOfHoursOverrideId(overrideId)
+          if (combinedOtpTripped.includes('no_cauzione')) setNoCauzioneOverrideId(overrideId)
+          if (combinedOtpTripped.includes('slot')) {
+            setSlotOverrideId(overrideId)
+            setSlotUnavailableWarning('')
+          }
+          setCombinedOtpOpen(false)
+          setCombinedOtpMotivazioni([])
+          setCombinedOtpTripped([])
         }}
       />
 
