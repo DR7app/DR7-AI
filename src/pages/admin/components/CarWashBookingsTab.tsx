@@ -3401,7 +3401,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         draftSessionId={override.draftSessionId}
         flowType={override.flowType}
         onClose={override.closeLimitation}
-        onCancel={override.cancelLimitation}
+        onCancel={() => {
+          // X = chiudi popup senza salvare. Pulisci tutti i pending ref
+          // così l'operatore può ri-cliccare Salva (o Modifica) e il gate
+          // si ri-arma da zero, senza riprodurre azioni dalla sessione
+          // cancellata.
+          pendingCreateBookingRef.current = null
+          pendingEditBookingRef.current = null
+          setPendingForeignCategory(null)
+          override.cancelLimitation()
+        }}
         onOverrideApproved={override.handleOverrideApproved}
       />
     </div >
