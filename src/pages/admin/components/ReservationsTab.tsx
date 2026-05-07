@@ -7280,16 +7280,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays : 0
                           const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
                           const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
-                          // List price (no coefficients). Experience excluded from
-                          // the clamp-eligible subtotal.
+                          // List price (no coefficients). Experience AND location
+                          // fees (consegna + ritiro) excluded from the
+                          // clamp-eligible subtotal — devono restare a listino,
+                          // stesso trattamento dell'auto-fill (riga 981) e di
+                          // Preventivi. Mostrare il coefficiente come applicato
+                          // anche su consegna/ritiro confonde l'admin: lo sconto
+                          // visualizzato non corrisponderebbe al totale salvato.
                           const listDailyRate = revenueSuggestion.selectedBaseRateEur || getDailyRateFromConfig(sv, revenueSuggestion.rentalDays)
                           const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
-                          const listSubtotalNoExp = listRentalTotal + insTotal + deliveryFees + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost + secondDriverCost + flexCost
-                          const listSubtotal = listSubtotalNoExp + experienceCost
+                          const listSubtotalNoExp = listRentalTotal + insTotal + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost + secondDriverCost + flexCost
+                          const listSubtotal = listSubtotalNoExp + experienceCost + deliveryFees
                           const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
                           const rawAfterCoeffNoExp = listSubtotalNoExp * combinedCoeff
-                          // Experience stays at LIST PRICE — no coefficient, no clamp.
-                          // Min/Max clamp on the no-experience subtotal.
+                          // Experience + location fees stay at LIST PRICE — no
+                          // coefficient, no clamp. Min/Max clamp on the no-exp,
+                          // no-fees subtotal only.
                           const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
                           const maxDaily = typeof revenueSuggestion.maxPrice === 'number' ? revenueSuggestion.maxPrice : null
                           const maxTotal = maxDaily != null ? maxDaily * revenueSuggestion.rentalDays : null
@@ -7298,8 +7304,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           let clampHit: 'min' | 'max' | null = null
                           if (maxTotal != null && clampedNoExp > maxTotal) { clampedNoExp = maxTotal; clampHit = 'max' }
                           if (minTotal != null && clampedNoExp < minTotal) { clampedNoExp = minTotal; clampHit = 'min' }
-                          const uncappedSubtotal = Math.round((rawAfterCoeffNoExp + experienceCost) * 100) / 100
-                          const dynamicSubtotal = Math.round((clampedNoExp + experienceCost) * 100) / 100
+                          const uncappedSubtotal = Math.round((rawAfterCoeffNoExp + experienceCost + deliveryFees) * 100) / 100
+                          const dynamicSubtotal = Math.round((clampedNoExp + experienceCost + deliveryFees) * 100) / 100
                           const grandTotal = formData.payment_method === 'Contanti' ? dynamicSubtotal * 1.20 : dynamicSubtotal
                           const uncappedGrand = formData.payment_method === 'Contanti' ? uncappedSubtotal * 1.20 : uncappedSubtotal
                           const hasDiscount = Math.abs(combinedCoeff - 1) > 0.001

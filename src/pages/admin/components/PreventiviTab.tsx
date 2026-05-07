@@ -894,6 +894,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       experienceCost,
       experienceAfterCoeff,
       listSubtotal,
+      // Subtotale a cui il coefficiente si applica davvero: esclude
+      // experience e location fees (consegna + ritiro) — quelli passano
+      // a listino. Il riepilogo usa questo valore per mostrare lo
+      // sconto effettivo del coefficiente, evitando che la riga
+      // "Coefficiente combinato" simuli uno sconto sull'intero subtotale
+      // (che in realtà non viene applicato sulle fee).
+      listSubtotalNoExp,
       revenueCoeff,
       revenueBreakdown: revenueData?.breakdown || [],
       // Uncapped subtotal — what the admin sees as "Subtotale" in the riepilogo.
@@ -3142,7 +3149,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           </div>
         )}
 
-        {/* Revenue coefficients applied to total */}
+        {/* Revenue coefficients applied to total. Lo sconto mostrato qui
+            è calcolato sul subtotale "no experience / no location fees"
+            perché il coefficiente NON viene applicato a consegna/ritiro
+            né ai Servizi Experience — passano a listino. Mostrare la
+            differenza sull'intero listino sarebbe fuorviante: l'admin
+            vedrebbe uno sconto più grande di quello effettivamente
+            applicato al Subtotale qui sotto. */}
         {pricing.revenueBreakdown.length > 0 && pricing.revenueCoeff !== 1 && (
           <>
             <div className="border-t border-theme-border pt-2 flex justify-between text-sm text-theme-text-muted">
@@ -3155,8 +3168,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               </div>
             ))}
             <div className="flex justify-between text-xs text-dr7-gold pl-2">
-              <span>Coefficiente combinato: x{pricing.revenueCoeff.toFixed(4)}</span>
-              <span>{pricing.revenueCoeff < 1 ? `-${formatEur(pricing.listSubtotal - pricing.listSubtotal * pricing.revenueCoeff)}` : `+${formatEur(pricing.listSubtotal * pricing.revenueCoeff - pricing.listSubtotal)}`}</span>
+              <span>Coefficiente combinato: x{pricing.revenueCoeff.toFixed(4)} (escl. consegna/ritiro/experience)</span>
+              <span>{pricing.revenueCoeff < 1 ? `-${formatEur(pricing.listSubtotalNoExp - pricing.listSubtotalNoExp * pricing.revenueCoeff)}` : `+${formatEur(pricing.listSubtotalNoExp * pricing.revenueCoeff - pricing.listSubtotalNoExp)}`}</span>
             </div>
           </>
         )}
