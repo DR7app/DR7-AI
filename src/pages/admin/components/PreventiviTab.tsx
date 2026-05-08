@@ -14,6 +14,7 @@ import PreventivoAcceptModal, { openPreventivoAcceptModal } from './PreventivoAc
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { isOtpRequired } from '../../../utils/otpConfigCache'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
@@ -1272,13 +1273,53 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       }
     }
 
-    // Se almeno UN gate è scattato apriamo la modal combinata con TUTTE le
-    // motivazioni. La direzione riceve UNA sola email con l'elenco completo.
-    if (motivazioni.length > 0) {
-      setCombinedOtpMotivazioni(motivazioni)
-      setCombinedOtpTripped(trippedCodes)
+    // Filtro per Gestione OTP: se un codice è disattivato in
+    // system_otp_overrides (is_required=false) lo bypassiamo SILENZIOSAMENTE
+    // qui — niente modal, niente email a direzione, override id sintetico
+    // assegnato così il save procede subito. Disattivare un OTP nel tab
+    // Gestione OTP deve realmente disattivarlo per i preventivi.
+    const TRIP_CODE_TO_DB: Record<TrippedCode, string> = {
+      out_of_hours: 'out_of_office_hours',
+      no_cauzione: 'tier1_no_cauzione',
+      slot: 'slot_unavailable',
+    }
+    const filteredMotivazioni: string[] = []
+    const filteredTripped: TrippedCode[] = []
+    trippedCodes.forEach((code, i) => {
+      const dbCode = TRIP_CODE_TO_DB[code]
+      if (!isOtpRequired(dbCode)) {
+        // Auto-bypass: marca l'override id locale e non includere nel modal
+        const bypassId = `bypass_${dbCode}_${Date.now()}_${i}`
+        if (code === 'out_of_hours') setOutOfHoursOverrideId(bypassId)
+        if (code === 'no_cauzione') setNoCauzioneOverrideId(bypassId)
+        if (code === 'slot') {
+          setSlotOverrideId(bypassId)
+          setSlotUnavailableWarning('')
+        }
+        return
+      }
+      filteredMotivazioni.push(motivazioni[i])
+      filteredTripped.push(code)
+    })
+
+    // Se almeno UN gate richiede ancora OTP apriamo la modal combinata con
+    // tutte le motivazioni rimaste. La direzione riceve UNA sola email con
+    // l'elenco completo. I gate disattivati (filtrati sopra) vengono
+    // bypassati senza coinvolgere la direzione.
+    if (filteredMotivazioni.length > 0) {
+      setCombinedOtpMotivazioni(filteredMotivazioni)
+      setCombinedOtpTripped(filteredTripped)
       pendingSaveRef.current = { send: sendAfterSave }
       setCombinedOtpOpen(true)
+      return
+    }
+
+    // Tutti i gate sono OK (verificati o bypassati): se abbiamo settato un
+    // override id sintetico tramite bypass dobbiamo lasciare React fare il
+    // commit dello stato, poi il resume effect ri-esegue handleSave. Questo
+    // path scatta solo quando NON abbiamo aperto la modal.
+    if (trippedCodes.length > 0) {
+      pendingSaveRef.current = { send: sendAfterSave }
       return
     }
 
@@ -3307,9 +3348,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       <LimitationOverrideModal
         isOpen={combinedOtpOpen}
         limitationCode={(() => {
+          // Codici canonici allineati a system_otp_overrides — così
+          // disattivando una riga in Gestione OTP la modal/log mostrano
+          // lo stesso identificativo.
           if (combinedOtpTripped.includes('out_of_hours')) return 'out_of_office_hours'
-          if (combinedOtpTripped.includes('no_cauzione')) return 'NO_CAUZIONE_FASCIA_B'
-          if (combinedOtpTripped.includes('slot')) return 'SLOT_NON_DISPONIBILE'
+          if (combinedOtpTripped.includes('no_cauzione')) return 'tier1_no_cauzione'
+          if (combinedOtpTripped.includes('slot')) return 'slot_unavailable'
           return 'preventivo_save'
         })()}
         limitationMessage={

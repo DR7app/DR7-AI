@@ -67,6 +67,7 @@ import GestisciMenu, { type GestisciSection } from './GestisciMenu'
 import DanniPenaliModal from './DanniPenaliModal'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
+import { isOtpRequired } from '../../../utils/otpConfigCache'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import { decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
@@ -3574,6 +3575,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           motivazione: `Cliente non idoneo al noleggio: ${customerTier.reason || 'fascia bloccata'}`,
         })
       }
+
+      // Filtro Gestione OTP: rimuoviamo dalla lista trips i codici che la
+      // direzione ha disattivato in system_otp_overrides (is_required=false).
+      // Per quei codici chiamiamo requestOverride: il hook auto-bypassa
+      // (synthetic bypass id) senza aprire la modal e senza inviare email.
+      // Risultato: disattivare un OTP nel tab Gestione OTP lo disattiva
+      // davvero anche per i bookings.
+      const filteredTrips: ComboTrip[] = []
+      for (const t of trips) {
+        if (!isOtpRequired(t.code)) {
+          // Bypass silenzioso — il hook setta l'override in mappa.
+          requestOverride(t.code, t.motivazione)
+          continue
+        }
+        filteredTrips.push(t)
+      }
+      // Sostituiamo la lista così la modal mostra solo motivazioni
+      // realmente attive.
+      trips.length = 0
+      trips.push(...filteredTrips)
 
       if (trips.length > 0) {
         // Snapshot del booking nell'email — la direzione vede chi/cosa/quando/quanto.
