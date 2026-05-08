@@ -178,8 +178,30 @@ export default function NexiTab() {
     useEffect(() => {
         fetchTransactions()
         fetchAllAddebiti()
-        fetchTokenizedCards()
+        // Initial fetch + silent auto-enrichment so PANs show without
+        // forcing the admin to click "Recupera carte mancanti". Runs the
+        // apply path of the backfill in background; if it saves anything
+        // we refetch and the new PANs replace the empty rows in place.
+        fetchTokenizedCards().then(() => { autoSyncMissingPans() })
     }, [])
+
+    async function autoSyncMissingPans() {
+        try {
+            const res = await authFetch('/.netlify/functions/nexi-tokenize-backfill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dryRun: false, limit: 100 }),
+            })
+            if (!res.ok) return
+            const data = await res.json().catch(() => ({}))
+            if ((data?.saved || 0) > 0) {
+                await fetchTokenizedCards()
+            }
+        } catch (err) {
+            // Silent — manual "Recupera" button stays available as a fallback.
+            console.warn('[NexiTab] Auto-sync missing PANs failed:', err)
+        }
+    }
 
     async function fetchTokenizedCards() {
         setCardsLoading(true)
