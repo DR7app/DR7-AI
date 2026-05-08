@@ -4798,16 +4798,65 @@ function DR7ClubSection({
           DR7 Club
         </h2>
         <p className="text-[14px] text-[#6e6e73] mt-1">
-          Tier di cashback DR7 Club. Il tier piu' alto raggiunto in base alla spesa annuale (ultimi 12 mesi, solo pagamenti carta + ricariche wallet) determina la percentuale di cashback applicata.
+          Tier di cashback DR7 Club. Il tier piu' alto raggiunto in base alla spesa annuale del cliente determina la percentuale di cashback applicata.
         </p>
       </div>
+
+      {/* Legend — explain what the rules mean for the operator */}
+      <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
+        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">
+          <svg className="w-4 h-4 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Come funziona il calcolo
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-[13px] text-[#1d1d1f]">
+          <div>
+            <p className="font-semibold mb-2 text-[#34c759]">Cosa conta come "spesa annuale"</p>
+            <ul className="space-y-1.5 text-[#3a3a3c]">
+              <li className="flex gap-2">
+                <span className="text-[#34c759] mt-0.5">+</span>
+                <span>Prenotazioni pagate con <b>carta</b> (Nexi / circuito Visa-Mastercard / Stripe), negli ultimi 12 mesi</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-[#34c759] mt-0.5">+</span>
+                <span>Ricariche wallet pagate con carta — solo l'importo ricaricato, <b>non</b> il bonus pacchetto</span>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="font-semibold mb-2 text-[#ff3b30]">Cosa <u>non</u> conta</p>
+            <ul className="space-y-1.5 text-[#3a3a3c]">
+              <li className="flex gap-2">
+                <span className="text-[#ff3b30] mt-0.5">−</span>
+                <span>Prenotazioni pagate dal <b>wallet</b> (credito accumulato)</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-[#ff3b30] mt-0.5">−</span>
+                <span>Prenotazioni <b>annullate</b></span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-[#ff3b30] mt-0.5">−</span>
+                <span>Pagamenti in <b>contanti</b>, bonifico, codice sconto</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-[#ff3b30] mt-0.5">−</span>
+                <span>Bonus pacchetto sulle ricariche wallet</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div className="mt-4 pt-3 border-t border-[#007aff]/10 text-[12px] text-[#6e6e73]">
+          <span className="font-semibold text-[#1d1d1f]">Requisito:</span> il cliente deve avere un'iscrizione DR7 Club <b>attiva</b> al momento del pagamento. Senza iscrizione, nessun cashback viene applicato anche se la spesa supera la soglia.
+        </div>
+      </section>
 
       <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
           <div>
             <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Tier di Cashback</h3>
             <p className="text-[12px] text-[#6e6e73] mt-0.5">
-              Disattiva un tier per non applicarlo, senza perderlo dalla configurazione.
+              Disattiva un tier per non applicarlo, senza perderlo dalla configurazione. Elimina un tier per rimuoverlo definitivamente.
             </p>
           </div>
           <button
