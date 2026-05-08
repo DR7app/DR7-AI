@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
 import OperatoriReportDashboard from './OperatoriReportDashboard'
+import InviteOperatoreModal from './InviteOperatoreModal'
 
 interface Admin {
   id: string
@@ -366,6 +367,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
   // Only direzione (Valerio + Ilenia by email) can edit operator HR fields
   // — same allowlist as the OTP self-approval.
   const [currentEmail, setCurrentEmail] = useState<string | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentEmail(data.user?.email || null))
   }, [])
@@ -493,7 +495,22 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
             </button>
           )
         })}
+        {canEditOperators && (
+          <button
+            onClick={() => setInviteOpen(true)}
+            className="flex items-center gap-2 px-3 py-1 rounded-full border border-dashed border-dr7-gold/60 text-dr7-gold hover:bg-dr7-gold/10 transition-colors"
+            title="Invita un nuovo operatore via email"
+          >
+            <span className="text-base leading-none">+</span>
+            <span className="text-sm font-medium">Aggiungi Operatore</span>
+          </button>
+        )}
       </div>
+      <InviteOperatoreModal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        onCreated={() => loadAdmins()}
+      />
 
       {selected && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

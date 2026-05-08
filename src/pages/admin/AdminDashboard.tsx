@@ -134,23 +134,14 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
-  const { role: adminRole, canViewFinancials, loading: roleLoading } = useAdminRole()
+  const { role: adminRole, hasPermission } = useAdminRole()
   const { theme, toggleTheme } = useTheme()
 
-  // RBAC: tabs restricted to superadmin
-  const financialTabs: TabType[] = ['fattura', 'nexi', 'unpaid', 'cauzioni']
-  const adminOnlyTabs: TabType[] = ['reports', 'report-noleggio', 'report-lavaggio', 'report-clienti', 'report-traffic']
-  const isTabRestricted = (tab: TabType) => {
-    // Don't lock the user out while the role is still loading — defaults
-    // are role='admin', canViewFinancials=false, which would briefly flash
-    // "Accesso non autorizzato" on every page load before useAdminRole's
-    // useEffect resolves the actual permissions from the DB.
-    if (roleLoading) return false
-    if (adminRole === 'superadmin') return false
-    if (financialTabs.includes(tab) && !canViewFinancials) return true
-    if (adminOnlyTabs.includes(tab)) return true
-    return false
-  }
+  // Permission gate: a tab is restricted iff the operator's permissions[]
+  // doesn't include it (and isn't '*' / direzione / superadmin).
+  // useAdminRole.hasPermission encapsulates that logic and stays optimistic
+  // while loading so we don't flash "Accesso non autorizzato" on mount.
+  const isTabRestricted = (tab: TabType) => !hasPermission(tab)
 
   async function handleSignOut() {
     clearAdminCache()
@@ -397,7 +388,7 @@ export default function AdminDashboard() {
             grosso vuoto sotto l'ultima voce. */}
         <nav className="flex-1 flex flex-col justify-evenly py-2 px-3 overflow-y-auto scrollbar-thin">
           {SECTIONS.map(section => {
-            const visibleTabs = section.tabs.filter(t => !t.superadminOnly || adminRole === 'superadmin')
+            const visibleTabs = section.tabs.filter(t => hasPermission(t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
             if (visibleTabs.length === 0) return null
             const firstTab = visibleTabs[0].tab
             const sectionActive = isSectionActive(section.name)
@@ -588,11 +579,11 @@ export default function AdminDashboard() {
         {/* In-page horizontal sub-tab bar — lists all sub-tabs of the
             active section. Renders only if the section has more than one
             sub-tab so single-tab sections don't get a one-button bar. */}
-        {sectionForActiveTab && sectionForActiveTab.tabs.filter(t => !t.superadminOnly || adminRole === 'superadmin').length > 1 && (
+        {sectionForActiveTab && sectionForActiveTab.tabs.filter(t => hasPermission(t.tab) && (!t.superadminOnly || adminRole === 'superadmin')).length > 1 && (
           <div className="bg-black border-b border-white/10 overflow-x-auto scrollbar-thin">
             <div className="flex items-center gap-1 px-3 sm:px-6 lg:px-8">
               {sectionForActiveTab.tabs
-                .filter(t => !t.superadminOnly || adminRole === 'superadmin')
+                .filter(t => hasPermission(t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
                 .map((t, idx) => {
                   const tabMatch = activeTab === t.tab
                   const subMatch = t.subView ? rentalSubView === t.subView : (t.tab !== 'reservations' || true)

@@ -13,9 +13,10 @@ export default function ResetPassword() {
   const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
-    // Check URL hash for recovery token (handles race condition where event fires before listener)
+    // Check URL hash for recovery token (handles race condition where event fires before listener).
+    // type=invite covers Supabase's inviteUserByEmail flow used by Aggiungi Operatore.
     const hash = window.location.hash
-    if (hash && (hash.includes('type=recovery') || hash.includes('type=magiclink'))) {
+    if (hash && (hash.includes('type=recovery') || hash.includes('type=magiclink') || hash.includes('type=invite'))) {
       setReady(true)
     }
 
