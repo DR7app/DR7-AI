@@ -156,12 +156,16 @@ export default function NexiTab() {
     async function fetchTokenizedCards() {
         setCardsLoading(true)
         try {
-            const { data } = await supabase
+            // Source 1 — customers_extended whose metadata holds a Nexi contract id.
+            // This is the "fully matched" path: the callback found the customer
+            // and wrote masked_pan/circuit/etc. into metadata.
+            const { data: customers } = await supabase
                 .from('customers_extended')
                 .select('id, nome, cognome, email, telefono, metadata, updated_at')
                 .not('metadata->nexi_contract_id', 'is', null)
                 .order('updated_at', { ascending: false })
-            const cards: TokenizedCard[] = (data || []).map((c: any) => ({
+
+            const cards: TokenizedCard[] = (customers || []).map((c: any) => ({
                 id: c.id,
                 full_name: [c.nome, c.cognome].filter(Boolean).join(' ') || '',
                 email: c.email || '',
@@ -173,6 +177,41 @@ export default function NexiTab() {
                 card_brand: c.metadata?.nexi_card_brand || '',
                 updated_at: c.metadata?.nexi_contract_updated || c.updated_at || '',
             }))
+
+            // Source 2 — nexi_transactions with a contract_id but no matching
+            // customers_extended row. This recovers the case where the
+            // callback's customer-matching missed (e.g. customer record
+            // doesn't exist in customers_extended yet, email casing differs)
+            // OR the related booking was later cancelled — the card was
+            // tokenized server-side at Nexi, the contract id is valid, the
+            // admin still needs to see it.
+            const knownContractIds = new Set(cards.map(c => c.contract_id).filter(Boolean))
+            const { data: txs } = await supabase
+                .from('nexi_transactions')
+                .select('id, contract_id, customer_email, booking_id, metadata, updated_at, booking:bookings(customer_name, customer_phone)')
+                .not('contract_id', 'is', null)
+                .in('status', ['completed', 'paid', 'authorized', 'captured', 'succeeded'])
+                .order('updated_at', { ascending: false })
+
+            for (const tx of (txs || []) as any[]) {
+                const cid = tx.contract_id as string
+                if (!cid || knownContractIds.has(cid)) continue
+                knownContractIds.add(cid)
+                const meta = tx.metadata || {}
+                cards.push({
+                    id: `tx:${tx.id}`,
+                    full_name: tx.booking?.customer_name || tx.customer_email?.split('@')[0] || 'Cliente',
+                    email: tx.customer_email || '',
+                    phone: tx.booking?.customer_phone || '',
+                    contract_id: cid,
+                    masked_pan: meta.masked_pan || meta.nexi_card_masked_pan || '',
+                    circuit: meta.circuit || meta.nexi_card_circuit || '',
+                    card_type: meta.card_type || meta.nexi_card_type || '',
+                    card_brand: meta.card_brand || meta.nexi_card_brand || '',
+                    updated_at: tx.updated_at || '',
+                })
+            }
+
             setTokenizedCards(cards)
         } catch (err) {
             console.error('Error fetching tokenized cards:', err)
