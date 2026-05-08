@@ -860,6 +860,19 @@ const handler: Handler = async (event) => {
                         ...cardInfo,
                     }
 
+                    // Also stamp the card info on the nexi_transactions row
+                    // itself so the admin's tokenized-cards UI can recover the
+                    // masked PAN / circuit even when customer matching below
+                    // misses (e.g. customer not yet in customers_extended,
+                    // booking later cancelled). Best-effort — already-set
+                    // fields are merged on top.
+                    if (Object.keys(cardInfo).length > 0) {
+                        await supabase.from('nexi_transactions').update({
+                            metadata: { ...(transaction.metadata || {}), ...cardInfo },
+                            updated_at: new Date().toISOString(),
+                        }).eq('id', transaction.id)
+                    }
+
                     let savedOnCustomer = false;
 
                     if (custId) {

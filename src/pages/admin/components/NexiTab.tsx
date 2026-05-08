@@ -200,12 +200,15 @@ export default function NexiTab() {
                 const meta = tx.metadata || {}
                 cards.push({
                     id: `tx:${tx.id}`,
-                    full_name: tx.booking?.customer_name || tx.customer_email?.split('@')[0] || 'Cliente',
+                    full_name: meta.customer_name || tx.booking?.customer_name || tx.customer_email?.split('@')[0] || 'Cliente',
                     email: tx.customer_email || '',
                     phone: tx.booking?.customer_phone || '',
                     contract_id: cid,
-                    masked_pan: meta.masked_pan || meta.nexi_card_masked_pan || '',
-                    circuit: meta.circuit || meta.nexi_card_circuit || '',
+                    // payment_instrument is the masked pan returned by the
+                    // pay-by-link callback when one is present. payment_circuit
+                    // is set from the link callback ("MC", "VISA", ...).
+                    masked_pan: meta.masked_pan || meta.nexi_card_masked_pan || meta.payment_instrument || '',
+                    circuit: meta.circuit || meta.nexi_card_circuit || meta.payment_circuit || '',
                     card_type: meta.card_type || meta.nexi_card_type || '',
                     card_brand: meta.card_brand || meta.nexi_card_brand || '',
                     updated_at: tx.updated_at || '',
