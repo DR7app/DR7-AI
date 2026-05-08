@@ -68,18 +68,19 @@ export const handler: Handler = async (event) => {
       // historical 'superadmin' rows in the admins table, must enter the
       // OTP that the direzione sends them.
       const SELF_APPROVE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
-      // Allowlist scoped: ophe@dr7.app può gestire la tabella OTP
-      // (codici gestione_otp_*) senza ricevere l'OTP dalla direzione,
-      // così può aggiungere/attivare/disattivare regole. Per qualunque
-      // altro flusso (booking, preventivi, lavaggio…) ophe entra nel
-      // gate normale e deve digitare l'OTP inviato a Valerio.
-      const OTP_TABLE_MANAGERS = ['ophe@dr7.app']
+      // Sviluppatori/manutentori del tab Gestione OTP: bypassano l'OTP
+      // SOLO per i codici `gestione_otp_*` (add/toggle/edit/delete delle
+      // regole). Il ruolo è tecnico, NON di direzione — per qualunque
+      // altro flusso di business (booking, preventivi, lavaggio…) il
+      // developer entra nel gate normale e deve digitare l'OTP inviato
+      // alla direzione.
+      const OTP_TAB_DEVELOPERS = ['ophe@dr7.app']
       const requestorEmail = (authUser?.email || '').toLowerCase()
-      const isOtpTableAction = typeof limitationCode === 'string'
+      const isOtpTabAction = typeof limitationCode === 'string'
         && limitationCode.startsWith('gestione_otp_')
       const isSelfApproval = !!authUser?.email && (
         SELF_APPROVE_EMAILS.includes(requestorEmail)
-        || (isOtpTableAction && OTP_TABLE_MANAGERS.includes(requestorEmail))
+        || (isOtpTabAction && OTP_TAB_DEVELOPERS.includes(requestorEmail))
       )
 
       // Store OTP server-side

@@ -24,35 +24,46 @@ interface OtpRow {
     sort_order: number
 }
 
-// Allowlist per la SOLA Gestione OTP. Direzione (Valerio, Ilenia)
-// e ophe@dr7.app possono gestire il tab senza dover digitare un OTP
-// (per ophe il bypass server-side è scoped: vale solo per i codici
-// gestione_otp_* — gli altri flussi richiedono comunque l'OTP della
-// direzione, vedi netlify/functions/limitation-override-otp.ts).
-const DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app', 'ophe@dr7.app']
+// Direzione = chi autorizza decisioni di business (Valerio, Ilenia).
+const DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
+
+// Sviluppatori/manutentori che possono gestire la tabella OTP senza
+// passare dalla direzione: bypassano i gate `gestione_otp_*` perché
+// devono poter aggiungere/attivare/disattivare regole come parte del
+// loro ruolo tecnico. Il bypass server-side è scoped: vale SOLO per
+// i codici `gestione_otp_*` — per qualunque altro flusso (booking,
+// preventivi, lavaggio…) il developer entra nel gate normale e deve
+// digitare l'OTP inviato a Valerio.
+const OTP_TAB_DEVELOPERS = ['ophe@dr7.app']
+
+// Chi può aprire/modificare il tab senza ricevere un OTP dalla direzione.
+const TAB_BYPASS_EMAILS = [...DIREZIONE_EMAILS, ...OTP_TAB_DEVELOPERS]
 
 export default function GestioneOtpTab() {
     const { adminEmail, loading: roleLoading } = useAdminRole()
-    const isSuperadmin = !!adminEmail &&
-        DIREZIONE_EMAILS.includes(adminEmail.toLowerCase())
+    const lowerEmail = (adminEmail || '').toLowerCase()
+    const isDirezione = !!lowerEmail && DIREZIONE_EMAILS.includes(lowerEmail)
+    const isDeveloper = !!lowerEmail && OTP_TAB_DEVELOPERS.includes(lowerEmail)
+    const canBypass = !!lowerEmail && TAB_BYPASS_EMAILS.includes(lowerEmail)
     const override = useLimitationOverride()
 
-    // Gate the entire section behind an OTP for non-superadmins.
-    // Superadmins (Valerio, Ilenia) bypass this server-side automatically.
+    // Gate the entire section behind an OTP for chi non è in TAB_BYPASS_EMAILS.
+    // Direzione + sviluppatori (ophe) saltano direttamente; gli altri devono
+    // ricevere un OTP dalla direzione per aprire il tab.
     const [tabUnlocked, setTabUnlocked] = useState(false)
 
     useEffect(() => {
         if (roleLoading) return
-        if (isSuperadmin) {
+        if (canBypass) {
             setTabUnlocked(true)
             return
         }
-        // Non-superadmin: request OTP override before exposing any data
+        // Operatore senza bypass: richiedi OTP prima di esporre i dati
         if (!override.hasOverride('gestione_otp_access')) {
             override.requestOverride('gestione_otp_access', 'Accesso alla Gestione OTP richiede autorizzazione direzionale')
         }
         // tabUnlocked stays false until override is approved (effect below)
-    }, [roleLoading, isSuperadmin]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [roleLoading, canBypass]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // When the access override is approved, unlock the tab
     useEffect(() => {
@@ -65,22 +76,21 @@ export default function GestioneOtpTab() {
     // park the action here and run it once the modal approves.
     const pendingAction = useRef<null | { code: string; run: () => Promise<void> | void }>(null)
 
-    /** Gate a write action through OTP. Direzione + ophe@dr7.app
-     *  (DIREZIONE_EMAILS) eseguono l'azione SENZA modal: skip totale,
-     *  audit log emesso direttamente. Operatori normali passano dal flusso
-     *  OTP (la prima volta apre la modal, le successive nella stessa
-     *  sessione riusano l'override già approvato). */
+    /** Gate a write action through OTP.
+     *  - Direzione (Valerio, Ilenia) → bypass: decisione di business.
+     *  - Sviluppatori (ophe) → bypass: ruolo tecnico di manutenzione del tab.
+     *  - Operatori normali → flusso OTP standard (modal + email a direzione).
+     *  Il record di audit distingue il ruolo di chi ha bypassato. */
     function gated(code: string, message: string, run: () => Promise<void> | void) {
-        if (isSuperadmin) {
-            // Skip modal: esegui l'azione e logga il bypass. Niente flash
-            // di modal, niente click su "Invia richiesta" — Gestione OTP
-            // deve essere fluida per chi ha l'autorizzazione direzionale.
+        if (canBypass) {
+            const role = isDirezione ? 'direzione' : isDeveloper ? 'developer' : 'unknown_bypass'
             logAdminAction('limitation_override_approved', 'limitation', code, {
                 limitation_code: code,
                 limitation_message: message,
                 action_context: `${code}_${Date.now()}`,
                 self_approved: true,
-                bypass_reason: 'direzione/ophe — gestione OTP self-management',
+                bypass_role: role,
+                bypass_reason: `${role} — gestione OTP tab self-management`,
             })
             ;(async () => { try { await run() } catch (err) { console.error('[gated] run failed', err) } })()
             return
