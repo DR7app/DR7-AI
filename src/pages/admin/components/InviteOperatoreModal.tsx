@@ -86,7 +86,7 @@ const ALL_TAB_KEYS = PERMISSION_SECTIONS.flatMap(s => s.tabs.map(t => t.key))
 
 const PRESETS: { name: string; permissions: string[] }[] = [
   { name: 'Tutto', permissions: ['*'] },
-  { name: 'Solo Ore (babysitter)', permissions: ['rilevazione-orari'] },
+  { name: 'Solo Ore', permissions: ['rilevazione-orari'] },
   { name: 'Operatore standard', permissions: ALL_TAB_KEYS.filter(k => !['fattura', 'nexi', 'unpaid', 'cauzioni'].includes(k)) },
 ]
 
