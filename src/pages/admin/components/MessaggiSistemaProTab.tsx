@@ -57,6 +57,162 @@ const CATEGORY_LABELS: Record<string, string> = {
     'furgone': 'Furgoni',
 }
 
+// ── Legenda variabili template ────────────────────────────────────────────────
+// Mirror esatto delle variabili sostituite da
+// netlify/functions/send-whatsapp-notification.ts. Aggiornare insieme.
+// Le descrizioni sono volutamente discorsive: l'admin che scrive il
+// messaggio non e' uno sviluppatore.
+type TemplateVar = { key: string; description: string; example?: string; aliases?: string[] }
+const TEMPLATE_VAR_GROUPS: { label: string; items: TemplateVar[] }[] = [
+    {
+        label: 'Cliente',
+        items: [
+            { key: 'nome', description: 'Solo il nome del cliente', example: 'Marco' },
+            { key: 'customer_name', description: 'Nome e cognome completo', example: 'Marco Bianchi', aliases: ['cliente'] },
+            { key: 'customer_email', description: 'Email del cliente', example: 'marco@esempio.it' },
+            { key: 'customer_phone', description: 'Numero di telefono del cliente', example: '+39 349 1234567' },
+        ],
+    },
+    {
+        label: 'Prenotazione',
+        items: [
+            { key: 'booking_id', description: 'Codice breve della prenotazione', example: 'A1B2C3D4' },
+            { key: 'vehicle_name', description: "Modello dell'auto", example: 'Audi RS3' },
+            { key: 'plate', description: "Targa dell'auto", example: 'AB123CD', aliases: ['targa'] },
+            { key: 'service_name', description: 'Tipo di servizio (lavaggio, tagliando, ecc.)', example: 'Lavaggio Premium', aliases: ['servizio'] },
+        ],
+    },
+    {
+        label: 'Luoghi',
+        items: [
+            { key: 'pickup_location', description: 'Indirizzo di ritiro', example: 'DR7 Cagliari, Via Sonnino 1' },
+            { key: 'dropoff_location', description: 'Indirizzo di riconsegna (se vuoto usa il ritiro)', example: 'DR7 Cagliari' },
+        ],
+    },
+    {
+        label: 'Date e orari (noleggio)',
+        items: [
+            { key: 'pickup_date', description: 'Data di ritiro', example: '12/05/2026' },
+            { key: 'pickup_time', description: 'Orario di ritiro', example: '11:00' },
+            { key: 'dropoff_date', description: 'Data di riconsegna', example: '15/05/2026' },
+            { key: 'dropoff_time', description: 'Orario di riconsegna', example: '10:00' },
+        ],
+    },
+    {
+        label: 'Date e orari (lavaggio / meccanica)',
+        items: [
+            { key: 'date', description: "Data dell'appuntamento", example: 'lunedì 12 maggio 2026' },
+            { key: 'time', description: "Orario dell'appuntamento", example: '15:30' },
+        ],
+    },
+    {
+        label: 'Pagamento',
+        items: [
+            { key: 'total', description: 'Importo totale in euro', example: '450,00', aliases: ['totale', 'importo', 'amount'] },
+            { key: 'payment_status', description: 'Stato del pagamento', example: 'Pagato / Da saldare', aliases: ['pagamento', 'payment_info'] },
+            { key: 'deposit', description: 'Cauzione (importo) o "Senza cauzione"', example: '€500 - In attesa' },
+        ],
+    },
+    {
+        label: 'Assicurazione e Km',
+        items: [
+            { key: 'insurance', description: 'Nome assicurazione scelta dal cliente', example: 'Kasko Black' },
+            { key: 'km_info', description: 'Km inclusi nel noleggio', example: '300 Km / Illimitati' },
+            { key: 'km_package', description: 'Pacchetto km con eventuale costo', example: '300 Km (€20,00)' },
+        ],
+    },
+    {
+        label: 'Note',
+        items: [
+            { key: 'notes', description: 'Note inserite in prenotazione', example: 'Cliente arriva in serata', aliases: ['note', 'nota'] },
+        ],
+    },
+    {
+        label: 'Email Addebito (solo per i template email)',
+        items: [
+            { key: 'contract_ref', description: 'Riferimento del contratto / prenotazione', example: 'DR7-A1B2C3D4' },
+            { key: 'causale', description: "Motivo dell'addebito", example: 'Danni carrozzeria' },
+        ],
+    },
+]
+
+function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
+    const [expanded, setExpanded] = useState(defaultOpen)
+    const copy = (k: string) => {
+        navigator.clipboard?.writeText(`{${k}}`)
+        toast.success(`{${k}} copiato — incollalo nel messaggio`)
+    }
+    const totalVars = TEMPLATE_VAR_GROUPS.reduce((s, g) => s + g.items.length, 0)
+    return (
+        <div className="mt-2 rounded-lg border border-dr7-gold/30 bg-dr7-gold/5 overflow-hidden">
+            <button
+                type="button"
+                onClick={() => setExpanded(e => !e)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold text-theme-text-primary hover:bg-dr7-gold/10 transition-colors"
+            >
+                <span className="flex items-center gap-2 text-left">
+                    <svg className="w-4 h-4 text-dr7-gold shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>Quali campi posso inserire nel messaggio?</span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-dr7-gold/20 text-dr7-gold text-[10px] font-bold">
+                        {totalVars} disponibili
+                    </span>
+                </span>
+                <svg
+                    className={`w-3.5 h-3.5 text-theme-text-muted transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`}
+                    fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+                >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            {expanded && (
+                <div className="px-3 pb-3 space-y-3 border-t border-dr7-gold/20">
+                    <div className="text-[12px] text-theme-text-secondary mt-3 leading-relaxed">
+                        Scrivi il messaggio in italiano normale e quando vuoi inserire un dato del cliente o della prenotazione,
+                        usa una di queste etichette tra parentesi graffe (es. <code className="bg-theme-bg-tertiary px-1 rounded text-dr7-gold">{'{nome}'}</code>).
+                        Quando il messaggio viene inviato, ogni etichetta viene sostituita automaticamente con il dato reale.
+                        <br/>
+                        <span className="text-theme-text-muted">Tocca un'etichetta per copiarla negli appunti.</span>
+                    </div>
+                    {TEMPLATE_VAR_GROUPS.map(group => (
+                        <div key={group.label}>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-1.5">
+                                {group.label}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {group.items.map(v => (
+                                    <button
+                                        key={v.key}
+                                        type="button"
+                                        onClick={() => copy(v.key)}
+                                        title={[
+                                            v.description,
+                                            v.example ? `Esempio: ${v.example}` : null,
+                                            v.aliases?.length ? `Alias: ${v.aliases.map(a => `{${a}}`).join(', ')}` : null,
+                                        ].filter(Boolean).join('\n')}
+                                        className="group inline-flex flex-col items-start px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border hover:border-dr7-gold/60 hover:bg-dr7-gold/5 transition-colors text-left"
+                                    >
+                                        <code className="font-mono text-[11px] text-dr7-gold leading-tight">{`{${v.key}}`}</code>
+                                        <span className="text-[10px] text-theme-text-secondary leading-tight">
+                                            {v.description}
+                                        </span>
+                                        {v.example && (
+                                            <span className="text-[9px] text-theme-text-muted leading-tight">
+                                                es. {v.example}
+                                            </span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
 // Organized by KIND of message (purpose), not by service.
 // All pro_* keys start with empty body — admin fills them in from scratch.
 type ProTemplateDef = { key: string; label: string; description: string }
@@ -786,7 +942,8 @@ export default function MessaggiSistemaProTab() {
                                 placeholder="Buongiorno {nome},&#10;&#10;..."
                                 className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
                             />
-                            <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
+                            <TemplateVarLegend />
+                            <p className="text-[11px] text-theme-text-muted mt-1.5">Esempio rapido: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded text-dr7-gold">{"{nome}"}</code> verrà sostituito col nome del cliente.</p>
                         </div>
 
                         <div className="border border-theme-border rounded-lg p-4">
@@ -1030,7 +1187,8 @@ export default function MessaggiSistemaProTab() {
                                                                 placeholder="Buongiorno {nome},&#10;&#10;..."
                                                                 className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
                                                             />
-                                                            <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
+                                                            <TemplateVarLegend />
+                            <p className="text-[11px] text-theme-text-muted mt-1.5">Esempio rapido: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded text-dr7-gold">{"{nome}"}</code> verrà sostituito col nome del cliente.</p>
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -1129,7 +1287,8 @@ export default function MessaggiSistemaProTab() {
                                 placeholder="Buongiorno {nome},&#10;&#10;..."
                                 className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 font-mono text-sm"
                             />
-                            <p className="text-xs text-theme-text-muted mt-1">Placeholder: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">{"{"+"nome}"}</code> = nome del cliente</p>
+                            <TemplateVarLegend />
+                            <p className="text-[11px] text-theme-text-muted mt-1.5">Esempio rapido: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded text-dr7-gold">{"{nome}"}</code> verrà sostituito col nome del cliente.</p>
                         </div>
                     )}
 
