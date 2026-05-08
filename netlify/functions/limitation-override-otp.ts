@@ -68,8 +68,19 @@ export const handler: Handler = async (event) => {
       // historical 'superadmin' rows in the admins table, must enter the
       // OTP that the direzione sends them.
       const SELF_APPROVE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
-      const isSelfApproval = !!authUser?.email &&
-        SELF_APPROVE_EMAILS.includes(authUser.email.toLowerCase())
+      // Allowlist scoped: ophe@dr7.app può gestire la tabella OTP
+      // (codici gestione_otp_*) senza ricevere l'OTP dalla direzione,
+      // così può aggiungere/attivare/disattivare regole. Per qualunque
+      // altro flusso (booking, preventivi, lavaggio…) ophe entra nel
+      // gate normale e deve digitare l'OTP inviato a Valerio.
+      const OTP_TABLE_MANAGERS = ['ophe@dr7.app']
+      const requestorEmail = (authUser?.email || '').toLowerCase()
+      const isOtpTableAction = typeof limitationCode === 'string'
+        && limitationCode.startsWith('gestione_otp_')
+      const isSelfApproval = !!authUser?.email && (
+        SELF_APPROVE_EMAILS.includes(requestorEmail)
+        || (isOtpTableAction && OTP_TABLE_MANAGERS.includes(requestorEmail))
+      )
 
       // Store OTP server-side
       const { data: override, error: insertErr } = await supabase

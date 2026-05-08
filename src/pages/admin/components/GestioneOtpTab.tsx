@@ -23,10 +23,12 @@ interface OtpRow {
     sort_order: number
 }
 
-// Direzione allowlist — only these two are exempt from typing an OTP.
-// Other superadmins must still pass the gate (the role label is just
-// for permissions; only the direzione self-approves).
-const DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
+// Allowlist per la SOLA Gestione OTP. Direzione (Valerio, Ilenia)
+// e ophe@dr7.app possono gestire il tab senza dover digitare un OTP
+// (per ophe il bypass server-side è scoped: vale solo per i codici
+// gestione_otp_* — gli altri flussi richiedono comunque l'OTP della
+// direzione, vedi netlify/functions/limitation-override-otp.ts).
+const DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app', 'ophe@dr7.app']
 
 export default function GestioneOtpTab() {
     const { adminEmail, loading: roleLoading } = useAdminRole()
