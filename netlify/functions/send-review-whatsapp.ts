@@ -1,6 +1,7 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
+import { getGoogleReviewLink } from './utils/loadMarketing';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -117,7 +118,9 @@ const reviewHandler: Handler = async (event) => {
         // Body from Messaggi di Sistema Pro — no hardcoded fallback.
         // Pro template uses {customer_name} + {review_link}; pass legacy {nome} too
         // for older templates that still reference it.
-        const reviewLink = process.env.GOOGLE_REVIEW_LINK || 'https://g.page/r/CQwgJt7OYpsfEBM/review';
+        // Letto da centralina_pro_config.config.marketing.google_review_link
+        // (modificabile direttamente in DB; fallback hardcoded per safety).
+        const reviewLink = await getGoogleReviewLink();
         const personalizedMessage = await renderTemplate('review_request_whatsapp', {
           nome: firstName,
           customer_name: booking.customer_name || 'Cliente',

@@ -3,6 +3,7 @@ import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { getMessageTemplate } from './utils/messageTemplates';
+import { getGoogleReviewLink } from './utils/loadMarketing';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -10,7 +11,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
-const GOOGLE_REVIEW_URL = process.env.GOOGLE_REVIEW_URL || 'https://g.page/r/CQwgJt7OYpsfEBM/review';
+// GOOGLE_REVIEW_URL ora letto da centralina_pro_config.config.marketing
+// via getGoogleReviewLink() — vedi inizio handler.
 
 type SendChannel = 'EMAIL_ONLY' | 'WHATSAPP_ONLY' | 'EMAIL_AND_WHATSAPP';
 type SendMode = 'AUTOMATIC' | 'MANUAL';
@@ -138,7 +140,7 @@ const handler: Handler = async (event) => {
     }
 
     // 4. Generate review link
-    const reviewLink = GOOGLE_REVIEW_URL;
+    const reviewLink = await getGoogleReviewLink(supabase);
 
     // 5. Load templates based on service_type + channel
     const serviceTypeLabel = candidate.service_type === 'WASH' ? 'lavaggio' : 'noleggio';

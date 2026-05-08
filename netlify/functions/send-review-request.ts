@@ -1,7 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { Resend } from 'resend';
-
-const GOOGLE_REVIEW_LINK = "https://g.page/r/CQwgJt7OYpsfEBM/review";
+import { getGoogleReviewLink } from './utils/loadMarketing';
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -30,7 +29,8 @@ export const handler: Handler = async (event) => {
     let sentCount = 0;
     const errors: string[] = [];
 
-    const reviewLink = process.env.GOOGLE_REVIEW_LINK || GOOGLE_REVIEW_LINK;
+    // Letto da centralina_pro_config.config.marketing.google_review_link.
+    const reviewLink = await getGoogleReviewLink();
 
     for (const booking of bookings) {
       if (!booking.email) {
