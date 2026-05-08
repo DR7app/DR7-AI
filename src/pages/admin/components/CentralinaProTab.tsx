@@ -34,7 +34,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11'
 
 type Category = { id: string; label: string }
 type Fascia = {
@@ -57,6 +57,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p8', title: 'Danni & Penali' },
   { id: 'p9', title: 'Fiscale' },
   { id: 'p10', title: 'DR7 Club' },
+  { id: 'p11', title: 'Automazioni' },
 ]
 
 const INITIAL_CATEGORIES: Category[] = [
@@ -446,6 +447,19 @@ type FiscalConfig = {
 
 const INITIAL_FISCAL: FiscalConfig = {
   vat_rate: 22,
+}
+
+// === Automazioni ===
+// Parametri operativi configurabili: buffer post-noleggio, ecc.
+// Le logiche di disponibilita' (sito + admin) leggono da qui invece
+// di usare valori hardcoded.
+
+type AutomationsConfig = {
+  rental_buffer_minutes: number | ''
+}
+
+const INITIAL_AUTOMATIONS: AutomationsConfig = {
+  rental_buffer_minutes: 75,
 }
 
 // === DR7 Club ===
@@ -886,6 +900,7 @@ type PersistedSnapshot = {
   danni?: DanniConfig
   fiscal?: FiscalConfig
   dr7_club?: DR7ClubConfig
+  automations?: AutomationsConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -1061,6 +1076,7 @@ export default function CentralinaProTab() {
   const initialDanni = migrateDanni(pick(persisted, 'danni', INITIAL_DANNI))
   const initialFiscal = pick(persisted, 'fiscal', INITIAL_FISCAL)
   const initialDr7Club = pick(persisted, 'dr7_club', INITIAL_DR7_CLUB)
+  const initialAutomations = pick(persisted, 'automations', INITIAL_AUTOMATIONS)
 
   // Current (working) state
   const [categories, setCategories] = useState<Category[]>(initialCategories)
@@ -1075,6 +1091,7 @@ export default function CentralinaProTab() {
   const [danni, setDanni] = useState<DanniConfig>(initialDanni)
   const [fiscal, setFiscal] = useState<FiscalConfig>(initialFiscal)
   const [dr7Club, setDr7Club] = useState<DR7ClubConfig>(initialDr7Club)
+  const [automations, setAutomations] = useState<AutomationsConfig>(initialAutomations)
 
   // Saved (committed) snapshot — what was last persisted
   const [savedCategories, setSavedCategories] = useState<Category[]>(initialCategories)
@@ -1089,6 +1106,7 @@ export default function CentralinaProTab() {
   const [savedDanni, setSavedDanni] = useState<DanniConfig>(initialDanni)
   const [savedFiscal, setSavedFiscal] = useState<FiscalConfig>(initialFiscal)
   const [savedDr7Club, setSavedDr7Club] = useState<DR7ClubConfig>(initialDr7Club)
+  const [savedAutomations, setSavedAutomations] = useState<AutomationsConfig>(initialAutomations)
 
   const [justSaved, setJustSaved] = useState(false)
 
@@ -1128,11 +1146,12 @@ export default function CentralinaProTab() {
         }
         if (remote.fiscal !== undefined) { setFiscal(remote.fiscal); setSavedFiscal(remote.fiscal) }
         if (remote.dr7_club !== undefined) { setDr7Club(remote.dr7_club); setSavedDr7Club(remote.dr7_club) }
+        if (remote.automations !== undefined) { setAutomations(remote.automations); setSavedAutomations(remote.automations) }
         // Refresh local cache with the authoritative copy
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
       } else {
         // Supabase is empty — seed with initial/localStorage values
-        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club }
+        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations }
         savePersisted(seed)
         console.log('[CentralinaPro] Seeded Pro config to Supabase')
       }
@@ -1223,7 +1242,7 @@ export default function CentralinaProTab() {
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club },
+        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations },
         {
           categories: savedCategories,
           fasce: savedFasce,
@@ -1237,11 +1256,12 @@ export default function CentralinaProTab() {
           danni: savedDanni,
           fiscal: savedFiscal,
           dr7_club: savedDr7Club,
+          automations: savedAutomations,
         }
       ),
     [
-      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7Club,
-      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club,
+      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7Club, automations,
+      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club, savedAutomations,
     ]
   )
 
@@ -1259,7 +1279,8 @@ export default function CentralinaProTab() {
     setSavedDanni(danni)
     setSavedFiscal(fiscal)
     setSavedDr7Club(dr7Club)
-    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club })
+    setSavedAutomations(automations)
+    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations })
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
 
@@ -1282,6 +1303,7 @@ export default function CentralinaProTab() {
     setDanni(savedDanni)
     setFiscal(savedFiscal)
     setDr7Club(savedDr7Club)
+    setAutomations(savedAutomations)
   }
 
   void changes.length // SaveBar always visible
@@ -1381,6 +1403,12 @@ export default function CentralinaProTab() {
               <DR7ClubSection
                 dr7Club={dr7Club}
                 setDr7Club={setDr7Club}
+              />
+            )}
+            {section === 'p11' && (
+              <AutomazioniSection
+                automations={automations}
+                setAutomations={setAutomations}
               />
             )}
           </main>
@@ -1506,6 +1534,7 @@ type Snapshot = {
   danni: DanniConfig
   fiscal: FiscalConfig
   dr7_club: DR7ClubConfig
+  automations: AutomationsConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -1514,6 +1543,11 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   // Fiscale
   if (current.fiscal.vat_rate !== saved.fiscal.vat_rate) {
     out.push(`Aliquota IVA: ${saved.fiscal.vat_rate || 0}% → ${current.fiscal.vat_rate || 0}%`)
+  }
+
+  // Automazioni
+  if (current.automations.rental_buffer_minutes !== saved.automations.rental_buffer_minutes) {
+    out.push(`Buffer post-noleggio: ${saved.automations.rental_buffer_minutes || 0} → ${current.automations.rental_buffer_minutes || 0} minuti`)
   }
 
   // DR7 Club tiers
@@ -4948,6 +4982,67 @@ function DR7ClubSection({
             </li>
           )}
         </ul>
+      </section>
+    </div>
+  )
+}
+
+// ========== AUTOMAZIONI (Punto 11) ==========
+
+function AutomazioniSection({
+  automations,
+  setAutomations,
+}: {
+  automations: AutomationsConfig
+  setAutomations: (next: AutomationsConfig) => void
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+          Automazioni
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] mt-1">
+          Parametri operativi che controllano le verifiche di disponibilita' del calendario.
+        </p>
+      </div>
+
+      <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
+        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-2 flex items-center gap-2">
+          <svg className="w-4 h-4 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Cos'e' il "buffer post-noleggio"
+        </h3>
+        <p className="text-[13px] text-[#3a3a3c] leading-relaxed">
+          E' la pausa minima richiesta tra la fine di un noleggio (riconsegna) e l'inizio del successivo sullo <b>stesso veicolo</b>: serve a coprire pulizia interna, controllo, eventuale lavaggio. Sito e admin usano lo stesso valore quando verificano la disponibilita' di un'auto. Tutti gli altri buffer (handover tra veicoli diversi 15 min, pre-pickup) restano invariati.
+        </p>
+      </section>
+
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+        <label className="block max-w-xs">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            Buffer post-noleggio
+          </span>
+          <div className="relative">
+            <input
+              type="number"
+              min={0}
+              max={720}
+              step={5}
+              value={automations.rental_buffer_minutes}
+              onChange={(e) => {
+                const v = e.target.value
+                setAutomations({ ...automations, rental_buffer_minutes: v === '' ? '' : Number(v) })
+              }}
+              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+          </div>
+          <p className="text-[11px] text-theme-text-muted mt-1.5">
+            Default: 75 minuti (30 min stacco + 45 min lavaggio).
+          </p>
+        </label>
       </section>
     </div>
   )
