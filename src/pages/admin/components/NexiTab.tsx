@@ -68,18 +68,46 @@ export default function NexiTab() {
     // a colpo d'occhio chi ha gia' una carta on file (= candidato per
     // rentale senza cauzione).
     const [search, setSearch] = useState('')
+    // Card type filter — credit / debit / prepaid / wallets / unknown
+    const [cardTypeFilter, setCardTypeFilter] = useState<'' | 'credit' | 'debit' | 'prepaid' | 'unknown'>('')
+    // Date range filter — applied to the tokenized card's updated_at
+    // (= when the card was last tokenized/refreshed).
+    const [dateFilter, setDateFilter] = useState<'' | '7d' | '30d' | '90d' | 'year'>('')
     const filterMatches = (haystacks: (string | null | undefined)[], needle: string) => {
         const q = needle.trim().toLowerCase()
         if (!q) return true
         return haystacks.some(h => (h || '').toLowerCase().includes(q))
     }
-    const filteredCards = tokenizedCards.filter(c => filterMatches(
-        [c.full_name, c.email, c.phone, c.masked_pan, c.contract_id], search
-    ))
-    const filteredTransactions = transactions.filter(tx => filterMatches(
-        [tx.customer_email, tx.order_id, tx.description, tx.booking?.customer_name, tx.booking?.vehicle_name, tx.contract_id, tx.booking_id],
-        search
-    ))
+    const dateCutoff = (() => {
+        if (!dateFilter) return null
+        const now = Date.now()
+        const days = dateFilter === '7d' ? 7 : dateFilter === '30d' ? 30 : dateFilter === '90d' ? 90 : 365
+        return new Date(now - days * 24 * 60 * 60 * 1000)
+    })()
+    const matchesCardType = (rawType: string | null | undefined): boolean => {
+        if (!cardTypeFilter) return true
+        const t = (rawType || '').toLowerCase()
+        if (cardTypeFilter === 'unknown') return !t || (t !== 'credit' && t !== 'debit' && t !== 'prepaid')
+        return t === cardTypeFilter
+    }
+    const matchesDate = (iso: string | null | undefined): boolean => {
+        if (!dateCutoff) return true
+        if (!iso) return false
+        const d = new Date(iso)
+        return Number.isFinite(d.getTime()) && d >= dateCutoff
+    }
+    const filteredCards = tokenizedCards.filter(c =>
+        filterMatches([c.full_name, c.email, c.phone, c.masked_pan, c.contract_id], search)
+        && matchesCardType(c.card_type)
+        && matchesDate(c.updated_at)
+    )
+    const filteredTransactions = transactions.filter(tx =>
+        filterMatches(
+            [tx.customer_email, tx.order_id, tx.description, tx.booking?.customer_name, tx.booking?.vehicle_name, tx.contract_id, tx.booking_id],
+            search,
+        )
+        && matchesDate(tx.created_at)
+    )
 
     async function runBackfill() {
         // Two-step: dry run first to count, then ask for confirm before applying.
@@ -156,66 +184,20 @@ export default function NexiTab() {
     async function fetchTokenizedCards() {
         setCardsLoading(true)
         try {
-            // Source 1 — customers_extended whose metadata holds a Nexi contract id.
-            // This is the "fully matched" path: the callback found the customer
-            // and wrote masked_pan/circuit/etc. into metadata.
-            const { data: customers } = await supabase
-                .from('customers_extended')
-                .select('id, nome, cognome, email, telefono, metadata, updated_at')
-                .not('metadata->nexi_contract_id', 'is', null)
-                .order('updated_at', { ascending: false })
-
-            const cards: TokenizedCard[] = (customers || []).map((c: any) => ({
-                id: c.id,
-                full_name: [c.nome, c.cognome].filter(Boolean).join(' ') || '',
-                email: c.email || '',
-                phone: c.telefono || '',
-                contract_id: c.metadata?.nexi_contract_id || '',
-                masked_pan: c.metadata?.nexi_card_masked_pan || '',
-                circuit: c.metadata?.nexi_card_circuit || '',
-                card_type: c.metadata?.nexi_card_type || '',
-                card_brand: c.metadata?.nexi_card_brand || '',
-                updated_at: c.metadata?.nexi_contract_updated || c.updated_at || '',
-            }))
-
-            // Source 2 — nexi_transactions with a contract_id but no matching
-            // customers_extended row. This recovers the case where the
-            // callback's customer-matching missed (e.g. customer record
-            // doesn't exist in customers_extended yet, email casing differs)
-            // OR the related booking was later cancelled — the card was
-            // tokenized server-side at Nexi, the contract id is valid, the
-            // admin still needs to see it.
-            const knownContractIds = new Set(cards.map(c => c.contract_id).filter(Boolean))
-            const { data: txs } = await supabase
-                .from('nexi_transactions')
-                .select('id, contract_id, customer_email, booking_id, metadata, updated_at, booking:bookings(customer_name, customer_phone)')
-                .not('contract_id', 'is', null)
-                .in('status', ['completed', 'paid', 'authorized', 'captured', 'succeeded'])
-                .order('updated_at', { ascending: false })
-
-            for (const tx of (txs || []) as any[]) {
-                const cid = tx.contract_id as string
-                if (!cid || knownContractIds.has(cid)) continue
-                knownContractIds.add(cid)
-                const meta = tx.metadata || {}
-                cards.push({
-                    id: `tx:${tx.id}`,
-                    full_name: meta.customer_name || tx.booking?.customer_name || tx.customer_email?.split('@')[0] || 'Cliente',
-                    email: tx.customer_email || '',
-                    phone: tx.booking?.customer_phone || '',
-                    contract_id: cid,
-                    // payment_instrument is the masked pan returned by the
-                    // pay-by-link callback when one is present. payment_circuit
-                    // is set from the link callback ("MC", "VISA", ...).
-                    masked_pan: meta.masked_pan || meta.nexi_card_masked_pan || meta.payment_instrument || '',
-                    circuit: meta.circuit || meta.nexi_card_circuit || meta.payment_circuit || '',
-                    card_type: meta.card_type || meta.nexi_card_type || '',
-                    card_brand: meta.card_brand || meta.nexi_card_brand || '',
-                    updated_at: tx.updated_at || '',
-                })
+            // Goes through the netlify function (service role) so every
+            // authenticated admin sees the same count regardless of RLS
+            // policies on customers_extended / nexi_transactions. Direct
+            // supabase queries from the client previously hid rows from
+            // admins without read policies (e.g. one operator saw 64 cards,
+            // another saw 27).
+            const res = await authFetch('/.netlify/functions/nexi-list-tokenized-cards')
+            if (!res.ok) {
+                const errText = await res.text().catch(() => '')
+                console.error('[fetchTokenizedCards] HTTP', res.status, errText)
+                return
             }
-
-            setTokenizedCards(cards)
+            const data = await res.json()
+            setTokenizedCards(Array.isArray(data?.cards) ? data.cards : [])
         } catch (err) {
             console.error('Error fetching tokenized cards:', err)
         } finally {
@@ -417,6 +399,30 @@ export default function NexiTab() {
                             className="text-xs px-2 py-2 rounded text-theme-text-muted hover:text-theme-text-primary"
                             title="Cancella ricerca">×</button>
                     )}
+                    <select
+                        value={cardTypeFilter}
+                        onChange={e => setCardTypeFilter(e.target.value as typeof cardTypeFilter)}
+                        title="Filtra per tipo carta (carte tokenizzate)"
+                        className="px-3 py-2 text-sm bg-theme-text-primary/5 border border-theme-border/50 rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                    >
+                        <option value="">Tutti i tipi</option>
+                        <option value="credit">Credit</option>
+                        <option value="debit">Debit</option>
+                        <option value="prepaid">Prepaid</option>
+                        <option value="unknown">Sconosciuto</option>
+                    </select>
+                    <select
+                        value={dateFilter}
+                        onChange={e => setDateFilter(e.target.value as typeof dateFilter)}
+                        title="Filtra per data"
+                        className="px-3 py-2 text-sm bg-theme-text-primary/5 border border-theme-border/50 rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                    >
+                        <option value="">Tutte le date</option>
+                        <option value="7d">Ultimi 7 giorni</option>
+                        <option value="30d">Ultimi 30 giorni</option>
+                        <option value="90d">Ultimi 90 giorni</option>
+                        <option value="year">Ultimo anno</option>
+                    </select>
                     <button
                         onClick={fetchTransactions}
                         className="p-2 hover:bg-theme-text-primary/5 rounded-full transition-colors"
@@ -435,7 +441,7 @@ export default function NexiTab() {
                     <h3 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider">Carte Tokenizzate</h3>
                     <div className="flex items-center gap-3">
                         <span className="text-xs text-theme-text-muted">
-                            {search ? `${filteredCards.length}/${tokenizedCards.length}` : tokenizedCards.length} carte
+                            {(search || cardTypeFilter || dateFilter) ? `${filteredCards.length}/${tokenizedCards.length}` : tokenizedCards.length} carte
                         </span>
                         <button
                             onClick={runBackfill}
