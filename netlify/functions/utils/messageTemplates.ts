@@ -101,6 +101,14 @@ const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['codice', 'sconto'],
     ['discount', 'review'],
   ],
+  // Richiesta Recensione — il body inviato al cliente per chiedere il
+  // feedback. Match il primo gruppo "richiesta recensione", poi gruppi
+  // più larghi per template rinominati ("recensione", "review request").
+  pro_marketing_recensione: [
+    ['richiesta', 'recensione'],
+    ['review', 'request'],
+    ['recensione'],
+  ],
   // Maxi Promo Gap 1GG — message #21 in Messaggi di Sistema Pro, body fully
   // editable by admin. Match by a few plausible label spellings so the
   // template resolves even when the admin-created row has a custom key.
@@ -181,12 +189,16 @@ const OLD_TO_PRO: Record<string, string> = {
   admin_new_website_quote: 'pro_richiesta_otp',
   admin_no_cauzione_request: 'pro_richiesta_otp',
 
-  // Marketing & Wallet — review body lives in pro_promemoria_firma,
-  // wallet cashback body lives in the dedicated pro_wallet_bonus_cliente
-  // template (admin fills it in from Messaggi di Sistema Pro → "Bonus
-  // Wallet Cliente"). Variables: {custName}, {cardLabel}, {percentLabel},
-  // {bonusEur}, {newBalance}.
-  review_request_whatsapp: 'pro_promemoria_firma',
+  // Marketing & Wallet — review body lives in `pro_marketing_recensione`
+  // (slot dedicato "Richiesta Recensione" in Messaggi di Sistema Pro). Era
+  // mappato per errore su pro_promemoria_firma (la mappa era stata fatta
+  // pensando che il body vivesse lì), ma il body firma e quello recensione
+  // sono messaggi diversi: dirottare il review request sul template della
+  // firma significava (a) inviare il testo della firma invece del review,
+  // o (b) sovraccaricare il template firma con il body del review. La
+  // mappa qui sotto ora punta allo slot corretto. Wallet cashback resta
+  // su pro_wallet_bonus_cliente.
+  review_request_whatsapp: 'pro_marketing_recensione',
   birthday_message: 'pro_marketing_compleanno',
   wallet_bonus_credit: 'pro_wallet_bonus_cliente',
 
