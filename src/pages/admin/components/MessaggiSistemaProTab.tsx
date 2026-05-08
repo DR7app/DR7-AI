@@ -44,9 +44,24 @@ const TRIGGER_LABELS: Record<string, string> = {
     'after_pickup': 'Dopo il ritiro',
     'before_dropoff': 'Prima della riconsegna',
     'after_dropoff': 'Dopo la riconsegna',
-    'on_booking': 'Alla creazione prenotazione',
-    'on_payment': 'Al pagamento',
-    'on_preventivo': 'Invio preventivo',
+    'on_booking': 'Alla creazione della prenotazione',
+    'on_payment': 'Al pagamento ricevuto',
+    'on_signature': 'Dopo la firma del contratto',
+    'on_extension': 'Dopo una proroga',
+    'on_preventivo': 'Invio preventivo (gestito separatamente)',
+}
+
+// Descrizioni in linguaggio naturale per ogni evento — mostrate sotto la select.
+const TRIGGER_DESCRIPTIONS: Record<string, string> = {
+    'before_pickup': 'Il messaggio parte prima del ritiro veicolo. Es. 24 ore prima per ricordare al cliente.',
+    'after_pickup': 'Il messaggio parte dopo il ritiro veicolo. Es. 1 ora dopo per chiedere come e\' andato.',
+    'before_dropoff': 'Il messaggio parte prima della riconsegna. Es. 24 ore prima per ricordare orario.',
+    'after_dropoff': 'Il messaggio parte dopo la riconsegna. Es. 1 ora dopo per richiesta IBAN cauzione.',
+    'on_booking': 'Il messaggio parte quando la prenotazione viene creata. Es. 0 ore = subito.',
+    'on_payment': 'Il messaggio parte quando il pagamento viene ricevuto.',
+    'on_signature': 'Il messaggio parte dopo che il cliente firma il contratto.',
+    'on_extension': 'Il messaggio parte dopo una proroga del noleggio.',
+    'on_preventivo': 'I preventivi usano un canale separato (vedi Preventivi). Non gestito dal cron.',
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -961,8 +976,12 @@ export default function MessaggiSistemaProTab() {
                             </label>
 
                             {newIsAutomatic && (
-                                <div className="mt-4 grid grid-cols-2 gap-4">
-                                    <div>
+                                <>
+                                <div className="mt-3 mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-300/90 leading-relaxed">
+                                    Il messaggio verrà inviato automaticamente da un cron che gira ogni 15 minuti. Per ogni cliente verrà inviato una sola volta (no doppioni).
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="col-span-2">
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Evento</label>
                                         <select value={newTriggerEvent} onChange={e => setNewTriggerEvent(e.target.value)}
                                             className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
@@ -970,12 +989,15 @@ export default function MessaggiSistemaProTab() {
                                                 <option key={k} value={k}>{v}</option>
                                             ))}
                                         </select>
+                                        <p className="text-[11px] text-theme-text-muted mt-1.5">
+                                            {TRIGGER_DESCRIPTIONS[newTriggerEvent] || ''}
+                                        </p>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Quanto prima/dopo (ore)</label>
                                         <input type="number" value={newTriggerOffset} onChange={e => setNewTriggerOffset(parseInt(e.target.value) || 0)}
                                             className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
-                                        <p className="text-xs text-theme-text-muted mt-1">24 = 1 giorno, 48 = 2 giorni</p>
+                                        <p className="text-xs text-theme-text-muted mt-1">1 = 1 ora · 24 = 1 giorno · 48 = 2 giorni · 0 = subito</p>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Ora di invio (Roma)</label>
@@ -997,6 +1019,7 @@ export default function MessaggiSistemaProTab() {
                                         </select>
                                     </div>
                                 </div>
+                                </>
                             )}
                         </div>
 
