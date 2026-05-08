@@ -458,12 +458,14 @@ type AutomationsConfig = {
   rental_buffer_minutes: number | ''
   cross_vehicle_gap_minutes: number | ''
   pre_pickup_carwash_buffer_minutes: number | ''
+  late_return_grace_minutes: number | ''
 }
 
 const INITIAL_AUTOMATIONS: AutomationsConfig = {
   rental_buffer_minutes: 90,
   cross_vehicle_gap_minutes: 15,
   pre_pickup_carwash_buffer_minutes: 90,
+  late_return_grace_minutes: 90,
 }
 
 // === DR7 Club ===
@@ -642,12 +644,20 @@ function migrateDeposits(raw: unknown): DepositsConfig {
       aziendali: INITIAL_DEPOSITS.aziendali,
     }
   }
-  // Already new shape — fill any missing category from the initials.
-  return {
-    supercars: canonicalizeDepositIds((obj.supercars as DepositsByFascia) || INITIAL_DEPOSITS.supercars),
-    urban: canonicalizeDepositIds((obj.urban as DepositsByFascia) || INITIAL_DEPOSITS.urban),
-    aziendali: canonicalizeDepositIds((obj.aziendali as DepositsByFascia) || INITIAL_DEPOSITS.aziendali),
+  // New shape — preserve EVERY category that exists in raw (operator-added
+  // categories included), then fill in any default-category that's still
+  // missing from the initials. Previously this function hardcoded the 3
+  // default ids and silently dropped deposits for any custom category on
+  // every page load.
+  const out: DepositsConfig = {}
+  for (const [catId, catData] of Object.entries(obj)) {
+    if (!catData || typeof catData !== 'object') continue
+    out[catId] = canonicalizeDepositIds(catData as DepositsByFascia)
   }
+  for (const [catId, defaults] of Object.entries(INITIAL_DEPOSITS)) {
+    if (!out[catId]) out[catId] = defaults
+  }
+  return out
 }
 
 type KmConfig = {
@@ -1558,6 +1568,9 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   }
   if (current.automations.pre_pickup_carwash_buffer_minutes !== saved.automations.pre_pickup_carwash_buffer_minutes) {
     out.push(`Buffer pre-pickup (lavaggio in corso): ${saved.automations.pre_pickup_carwash_buffer_minutes || 0} → ${current.automations.pre_pickup_carwash_buffer_minutes || 0} minuti`)
+  }
+  if (current.automations.late_return_grace_minutes !== saved.automations.late_return_grace_minutes) {
+    out.push(`Grace ritardo riconsegna: ${saved.automations.late_return_grace_minutes || 0} → ${current.automations.late_return_grace_minutes || 0} minuti`)
   }
 
   // DR7 Club tiers
