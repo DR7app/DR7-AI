@@ -18,12 +18,19 @@ import { supabase } from '../supabaseClient'
 
 // Configuration constants
 //
-// RENTAL_BUFFER_MINUTES: post-rental buffer (return → next pickup on the
-// SAME vehicle). Hydrated once at module load from Centralina Pro
-// (`centralina_pro_config.config.automations.rental_buffer_minutes`).
-// Default 75 (30 min stacco + 45 min lavaggio). Operators change it in
+// All 3 buffers below are hydrated once at module load from Centralina Pro
+// (`centralina_pro_config.config.automations`). Operators change them in
 // admin → Centralina Pro → Automazioni; takes effect after page refresh.
-let RENTAL_BUFFER_MINUTES = 75
+//
+// 1) RENTAL_BUFFER_MINUTES: post-rental buffer (return → next pickup on
+//    the SAME vehicle). Default 90 (include lavaggio automatico).
+// 2) CROSS_VEHICLE_GAP_MINUTES: min gap between ANY two rental events
+//    (pickup or return) on DIFFERENT vehicles — staff handover capacity.
+//    Default 15.
+// 3) PRE_PICKUP_CARWASH_BUFFER_MINUTES is read separately by ReservationsTab.
+let RENTAL_BUFFER_MINUTES = 90
+let CROSS_VEHICLE_GAP_MINUTES = 15
+let PRE_PICKUP_CARWASH_BUFFER_MINUTES = 90
 
 ;(async () => {
     try {
@@ -34,22 +41,24 @@ let RENTAL_BUFFER_MINUTES = 75
             .maybeSingle()
         const cfg = (data?.config ?? null) as Record<string, unknown> | null
         const automations = cfg?.automations as Record<string, unknown> | undefined
-        const v = automations?.rental_buffer_minutes
-        if (typeof v === 'number' && v >= 0 && v <= 720) {
-            RENTAL_BUFFER_MINUTES = v
+        if (automations) {
+            const a = automations.rental_buffer_minutes
+            if (typeof a === 'number' && a >= 0 && a <= 720) RENTAL_BUFFER_MINUTES = a
+            const b = automations.cross_vehicle_gap_minutes
+            if (typeof b === 'number' && b >= 0 && b <= 120) CROSS_VEHICLE_GAP_MINUTES = b
+            const c = automations.pre_pickup_carwash_buffer_minutes
+            if (typeof c === 'number' && c >= 0 && c <= 720) PRE_PICKUP_CARWASH_BUFFER_MINUTES = c
         }
     } catch (err) {
-        // Keep default. Logged but non-blocking.
-        logger.log('[vehicleAvailability] failed to load buffer from Centralina Pro, using default 75:', err)
+        // Keep defaults. Logged but non-blocking.
+        logger.log('[vehicleAvailability] failed to load automations from Centralina Pro, using defaults:', err)
     }
 })()
 
-/** Read-only access for other modules that need the same buffer (e.g. ReservationsTab). */
-export function getRentalBufferMinutes(): number {
-    return RENTAL_BUFFER_MINUTES
-}
-
-const CROSS_VEHICLE_GAP_MINUTES = 15 // Min gap between ANY two rental events (pickup or return) on different vehicles — staff can only handle one handover at a time
+/** Read-only access for other modules. Reflect the latest hydrated values. */
+export function getRentalBufferMinutes(): number { return RENTAL_BUFFER_MINUTES }
+export function getCrossVehicleGapMinutes(): number { return CROSS_VEHICLE_GAP_MINUTES }
+export function getPrePickupCarwashBufferMinutes(): number { return PRE_PICKUP_CARWASH_BUFFER_MINUTES }
 const BUSINESS_START_HOUR = 0  // Admin can book any time
 const BUSINESS_END_HOUR = 24   // Admin can book any time
 const TIME_SLOT_INTERVAL_MINUTES = 15
@@ -467,7 +476,7 @@ export function isVehicleAvailable(
             if (diffMs > 0 && diffMs < crossGapMs) {
                 const otherTimeFmt = new Date(otherTime).toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
                 const plateInfo = booking.vehicle_plate || booking.vehicle_name || 'altro veicolo'
-                logger.log(`[CROSS-GAP] CONFLICT: ${myLabel} within 15 min of ${otherLabel} (${diffMin.toFixed(1)} min), booking ${booking.id?.substring(0,8)}`)
+                logger.log(`[CROSS-GAP] CONFLICT: ${myLabel} within ${CROSS_VEHICLE_GAP_MINUTES} min of ${otherLabel} (${diffMin.toFixed(1)} min), booking ${booking.id?.substring(0,8)}`)
                 return {
                     available: false,
                     reason: `${myLabel} a meno di ${CROSS_VEHICLE_GAP_MINUTES} minuti dalla ${otherLabel} di ${plateInfo} (${otherTimeFmt}). Serve almeno ${CROSS_VEHICLE_GAP_MINUTES} minuti tra due operazioni su auto diverse.`

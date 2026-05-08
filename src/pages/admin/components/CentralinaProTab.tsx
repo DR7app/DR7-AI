@@ -456,10 +456,14 @@ const INITIAL_FISCAL: FiscalConfig = {
 
 type AutomationsConfig = {
   rental_buffer_minutes: number | ''
+  cross_vehicle_gap_minutes: number | ''
+  pre_pickup_carwash_buffer_minutes: number | ''
 }
 
 const INITIAL_AUTOMATIONS: AutomationsConfig = {
-  rental_buffer_minutes: 75,
+  rental_buffer_minutes: 90,
+  cross_vehicle_gap_minutes: 15,
+  pre_pickup_carwash_buffer_minutes: 90,
 }
 
 // === DR7 Club ===
@@ -1548,6 +1552,12 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   // Automazioni
   if (current.automations.rental_buffer_minutes !== saved.automations.rental_buffer_minutes) {
     out.push(`Buffer post-noleggio: ${saved.automations.rental_buffer_minutes || 0} → ${current.automations.rental_buffer_minutes || 0} minuti`)
+  }
+  if (current.automations.cross_vehicle_gap_minutes !== saved.automations.cross_vehicle_gap_minutes) {
+    out.push(`Buffer handover tra veicoli diversi: ${saved.automations.cross_vehicle_gap_minutes || 0} → ${current.automations.cross_vehicle_gap_minutes || 0} minuti`)
+  }
+  if (current.automations.pre_pickup_carwash_buffer_minutes !== saved.automations.pre_pickup_carwash_buffer_minutes) {
+    out.push(`Buffer pre-pickup (lavaggio in corso): ${saved.automations.pre_pickup_carwash_buffer_minutes || 0} → ${current.automations.pre_pickup_carwash_buffer_minutes || 0} minuti`)
   }
 
   // DR7 Club tiers
@@ -4996,6 +5006,9 @@ function AutomazioniSection({
   automations: AutomationsConfig
   setAutomations: (next: AutomationsConfig) => void
 }) {
+  const update = (patch: Partial<AutomationsConfig>) =>
+    setAutomations({ ...automations, ...patch })
+
   return (
     <div className="space-y-6">
       <div>
@@ -5003,46 +5016,140 @@ function AutomazioniSection({
           Automazioni
         </h2>
         <p className="text-[14px] text-[#6e6e73] mt-1">
-          Parametri operativi che controllano le verifiche di disponibilita' del calendario.
+          Buffer e gap operativi che controllano le verifiche di disponibilita' del calendario, sito e admin.
         </p>
       </div>
 
+      {/* Legend — 3 buffers, what they do, when they fire */}
       <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
-        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-2 flex items-center gap-2">
+        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">
           <svg className="w-4 h-4 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Cos'e' il "buffer post-noleggio"
+          Come funzionano i 3 buffer
         </h3>
-        <p className="text-[13px] text-[#3a3a3c] leading-relaxed">
-          E' la pausa minima richiesta tra la fine di un noleggio (riconsegna) e l'inizio del successivo sullo <b>stesso veicolo</b>: serve a coprire pulizia interna, controllo, eventuale lavaggio. Sito e admin usano lo stesso valore quando verificano la disponibilita' di un'auto. Tutti gli altri buffer (handover tra veicoli diversi 15 min, pre-pickup) restano invariati.
-        </p>
+        <ul className="space-y-2.5 text-[13px] text-[#3a3a3c]">
+          <li className="flex gap-3">
+            <span className="inline-flex shrink-0 w-6 h-6 rounded-full bg-[#007aff] text-white items-center justify-center text-[11px] font-bold mt-0.5">1</span>
+            <div>
+              <b>Post-noleggio (stesso veicolo).</b> Quanto tempo deve passare dopo la riconsegna prima che la <b>stessa</b> auto sia di nuovo prenotabile. Include il lavaggio automatico. Default 90. Sito e admin.
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="inline-flex shrink-0 w-6 h-6 rounded-full bg-[#ff9500] text-white items-center justify-center text-[11px] font-bold mt-0.5">2</span>
+            <div>
+              <b>Handover tra veicoli diversi.</b> Pausa minima tra qualsiasi ritiro o riconsegna su <b>auto diverse</b>. Lo staff non puo' gestire due handover contemporaneamente: cliente A ritira alle 10:30 → cliente B non prima delle 10:45. Default 15. Solo admin.
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="inline-flex shrink-0 w-6 h-6 rounded-full bg-[#34c759] text-white items-center justify-center text-[11px] font-bold mt-0.5">3</span>
+            <div>
+              <b>Pre-pickup (lavaggio in corso).</b> Se il veicolo e' impegnato in un lavaggio entro <b>questo intervallo</b> prima del ritiro, blocca la prenotazione. Evita di promettere un'auto che non sara' asciutta in tempo. Default 90. Solo admin.
+            </div>
+          </li>
+        </ul>
+        <div className="mt-4 pt-3 border-t border-[#007aff]/10 text-[12px] text-[#6e6e73]">
+          <span className="font-semibold text-[#1d1d1f]">Importante:</span> dopo aver salvato un nuovo valore, l'admin va aggiornato (refresh pagina). Il sito propaga entro ~60 secondi grazie alla cache server-side.
+        </div>
       </section>
 
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-        <label className="block max-w-xs">
-          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
-            Buffer post-noleggio
-          </span>
-          <div className="relative">
-            <input
-              type="number"
-              min={0}
-              max={720}
-              step={5}
-              value={automations.rental_buffer_minutes}
-              onChange={(e) => {
-                const v = e.target.value
-                setAutomations({ ...automations, rental_buffer_minutes: v === '' ? '' : Number(v) })
-              }}
-              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
-          </div>
-          <p className="text-[11px] text-theme-text-muted mt-1.5">
-            Default: 75 minuti (30 min stacco + 45 min lavaggio).
+      {/* 1) Buffer post-noleggio */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#f5f9ff] border-b border-[#007aff]/10">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+            <span className="inline-flex w-6 h-6 rounded-full bg-[#007aff] text-white items-center justify-center text-[12px] font-bold">1</span>
+            Buffer post-noleggio (stesso veicolo)
+          </h3>
+          <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
+            Pausa minima tra la riconsegna di un noleggio e l'inizio del successivo sullo <b>stesso veicolo</b>. Serve per pulizia, controllo, eventuale lavaggio. Sito e admin usano lo stesso valore.
           </p>
-        </label>
+        </header>
+        <div className="p-5">
+          <label className="block max-w-xs">
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                max={720}
+                step={5}
+                value={automations.rental_buffer_minutes}
+                onChange={(e) => {
+                  const v = e.target.value
+                  update({ rental_buffer_minutes: v === '' ? '' : Number(v) })
+                }}
+                className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+            </div>
+            <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 90 (include il lavaggio automatico).</p>
+          </label>
+        </div>
+      </section>
+
+      {/* 2) Cross-vehicle handover gap */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#fff7e6] border-b border-[#ff9500]/15">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+            <span className="inline-flex w-6 h-6 rounded-full bg-[#ff9500] text-white items-center justify-center text-[12px] font-bold">2</span>
+            Buffer handover tra veicoli diversi
+          </h3>
+          <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
+            Pausa minima tra <b>qualsiasi</b> ritiro o riconsegna su un veicolo diverso. Serve perche' lo staff non puo' gestire due handover contemporaneamente: due clienti non possono ritirare auto diverse alla stessa ora.
+          </p>
+        </header>
+        <div className="p-5">
+          <label className="block max-w-xs">
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                max={120}
+                step={5}
+                value={automations.cross_vehicle_gap_minutes}
+                onChange={(e) => {
+                  const v = e.target.value
+                  update({ cross_vehicle_gap_minutes: v === '' ? '' : Number(v) })
+                }}
+                className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff9500]/40"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+            </div>
+            <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 15. Esempio: cliente A ritira alle 10:30 → cliente B non puo' ritirare prima delle 10:45.</p>
+          </label>
+        </div>
+      </section>
+
+      {/* 3) Pre-pickup carwash conflict */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#f0f9ff] border-b border-[#34c759]/15">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+            <span className="inline-flex w-6 h-6 rounded-full bg-[#34c759] text-white items-center justify-center text-[12px] font-bold">3</span>
+            Buffer pre-pickup (veicolo in lavaggio)
+          </h3>
+          <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
+            Se il veicolo e' impegnato in un lavaggio entro questo intervallo prima del ritiro, l'admin blocca la prenotazione. Evita di prenotare un'auto che non sara' pronta in tempo.
+          </p>
+        </header>
+        <div className="p-5">
+          <label className="block max-w-xs">
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                max={720}
+                step={15}
+                value={automations.pre_pickup_carwash_buffer_minutes}
+                onChange={(e) => {
+                  const v = e.target.value
+                  update({ pre_pickup_carwash_buffer_minutes: v === '' ? '' : Number(v) })
+                }}
+                className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#34c759]/40"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+            </div>
+            <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 90 (1h30). Solo lato admin.</p>
+          </label>
+        </div>
       </section>
     </div>
   )

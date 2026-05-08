@@ -52,7 +52,8 @@ import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import {
   getAvailableVehicles,
   isVehicleAvailable,
-  getRentalBufferMinutes
+  getRentalBufferMinutes,
+  getPrePickupCarwashBufferMinutes
 } from '../../../utils/vehicleAvailability'
 import Input from './Input'
 import Select from './Select'
@@ -4196,8 +4197,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const pickupDateTime = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
         const returnDateTime = new Date(`${formData.return_date}T${formData.return_time}:00`)
 
-        // Calculate buffer time (1h30 = 90 minutes)
-        const BUFFER_MINUTES = 90
+        // Buffer pre-pickup carwash (Centralina Pro > Automazioni, default 90).
+        const BUFFER_MINUTES = getPrePickupCarwashBufferMinutes()
         const pickupWithBuffer = new Date(pickupDateTime.getTime() - BUFFER_MINUTES * 60 * 1000)
 
         // First, check if the vehicle is currently in the car wash
