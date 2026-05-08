@@ -77,14 +77,19 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 // ── Legenda variabili template ────────────────────────────────────────────────
-// Mirror esatto delle variabili sostituite da
-// netlify/functions/send-whatsapp-notification.ts. Aggiornare insieme.
-// Le descrizioni sono volutamente discorsive: l'admin che scrive il
-// messaggio non e' uno sviluppatore.
+// Mirror esatto delle variabili sostituite dai code-path:
+//   send-whatsapp-notification (comuni), nexi-nuovo-addebito (email),
+//   nexi-payment-callback (link pagamento), signature-* (OTP/firma),
+//   send-birthday-messages, cancel-unpaid-nexi-bookings, review-send,
+//   generate-penalty-invoice, maxi-promo-gap-cron, promo-incassi-cron.
+// Aggiornare in coppia col code-path.
 type TemplateVar = { key: string; description: string; example?: string; aliases?: string[] }
-const TEMPLATE_VAR_GROUPS: { label: string; items: TemplateVar[] }[] = [
+type VarGroup = { label: string; scope: 'common' | 'specific'; scopeNote?: string; items: TemplateVar[] }
+const TEMPLATE_VAR_GROUPS: VarGroup[] = [
+    // ═══ SEMPRE DISPONIBILI ═══════════════════════════════════════════════════
     {
         label: 'Cliente',
+        scope: 'common',
         items: [
             { key: 'nome', description: 'Solo il nome del cliente', example: 'Marco' },
             { key: 'customer_name', description: 'Nome e cognome completo', example: 'Marco Bianchi', aliases: ['cliente'] },
@@ -94,8 +99,9 @@ const TEMPLATE_VAR_GROUPS: { label: string; items: TemplateVar[] }[] = [
     },
     {
         label: 'Prenotazione',
+        scope: 'common',
         items: [
-            { key: 'booking_id', description: 'Codice breve della prenotazione', example: 'A1B2C3D4' },
+            { key: 'booking_id', description: 'Codice breve della prenotazione', example: 'A1B2C3D4', aliases: ['booking_ref', 'bookingRef'] },
             { key: 'vehicle_name', description: "Modello dell'auto", example: 'Audi RS3' },
             { key: 'plate', description: "Targa dell'auto", example: 'AB123CD', aliases: ['targa'] },
             { key: 'service_name', description: 'Tipo di servizio (lavaggio, tagliando, ecc.)', example: 'Lavaggio Premium', aliases: ['servizio'] },
@@ -103,6 +109,7 @@ const TEMPLATE_VAR_GROUPS: { label: string; items: TemplateVar[] }[] = [
     },
     {
         label: 'Luoghi',
+        scope: 'common',
         items: [
             { key: 'pickup_location', description: 'Indirizzo di ritiro', example: 'DR7 Cagliari, Via Sonnino 1' },
             { key: 'dropoff_location', description: 'Indirizzo di riconsegna (se vuoto usa il ritiro)', example: 'DR7 Cagliari' },
@@ -110,6 +117,7 @@ const TEMPLATE_VAR_GROUPS: { label: string; items: TemplateVar[] }[] = [
     },
     {
         label: 'Date e orari (noleggio)',
+        scope: 'common',
         items: [
             { key: 'pickup_date', description: 'Data di ritiro', example: '12/05/2026' },
             { key: 'pickup_time', description: 'Orario di ritiro', example: '11:00' },
@@ -119,6 +127,7 @@ const TEMPLATE_VAR_GROUPS: { label: string; items: TemplateVar[] }[] = [
     },
     {
         label: 'Date e orari (lavaggio / meccanica)',
+        scope: 'common',
         items: [
             { key: 'date', description: "Data dell'appuntamento", example: 'lunedì 12 maggio 2026' },
             { key: 'time', description: "Orario dell'appuntamento", example: '15:30' },
@@ -126,6 +135,7 @@ const TEMPLATE_VAR_GROUPS: { label: string; items: TemplateVar[] }[] = [
     },
     {
         label: 'Pagamento',
+        scope: 'common',
         items: [
             { key: 'total', description: 'Importo totale in euro', example: '450,00', aliases: ['totale', 'importo', 'amount'] },
             { key: 'payment_status', description: 'Stato del pagamento', example: 'Pagato / Da saldare', aliases: ['pagamento', 'payment_info'] },
@@ -134,6 +144,7 @@ const TEMPLATE_VAR_GROUPS: { label: string; items: TemplateVar[] }[] = [
     },
     {
         label: 'Assicurazione e Km',
+        scope: 'common',
         items: [
             { key: 'insurance', description: 'Nome assicurazione scelta dal cliente', example: 'Kasko Black' },
             { key: 'km_info', description: 'Km inclusi nel noleggio', example: '300 Km / Illimitati' },
@@ -142,15 +153,114 @@ const TEMPLATE_VAR_GROUPS: { label: string; items: TemplateVar[] }[] = [
     },
     {
         label: 'Note',
+        scope: 'common',
         items: [
             { key: 'notes', description: 'Note inserite in prenotazione', example: 'Cliente arriva in serata', aliases: ['note', 'nota'] },
         ],
     },
+
+    // ═══ DISPONIBILI SOLO IN FLUSSI SPECIFICI ═════════════════════════════════
     {
-        label: 'Email Addebito (solo per i template email)',
+        label: 'Email Addebito',
+        scope: 'specific',
+        scopeNote: 'Solo nei template "Email Addebito — Corpo" / "— Oggetto" (flusso Addebito MIT).',
         items: [
             { key: 'contract_ref', description: 'Riferimento del contratto / prenotazione', example: 'DR7-A1B2C3D4' },
             { key: 'causale', description: "Motivo dell'addebito", example: 'Danni carrozzeria' },
+        ],
+    },
+    {
+        label: 'Link di Pagamento (Pay by Link)',
+        scope: 'specific',
+        scopeNote: 'Solo nei template "Richiesta Pagamento" / "Link Pagamento" inviati con Nexi paybylink.',
+        items: [
+            { key: 'link', description: 'URL completo del link di pagamento Nexi', aliases: ['payment_link'] },
+        ],
+    },
+    {
+        label: 'OTP Firma Contratto',
+        scope: 'specific',
+        scopeNote: 'Solo nel template OTP firma (signature_otp_whatsapp / pro_richiesta_otp).',
+        items: [
+            { key: 'otp', description: 'Codice OTP a 6 cifre', example: '482917' },
+            { key: 'expiryMinutes', description: 'Minuti di validita\' del codice', example: '10' },
+        ],
+    },
+    {
+        label: 'Link Firma Documento',
+        scope: 'specific',
+        scopeNote: 'Solo nei template che inviano un link di firma (document_signature_link / signature_request_link / pro_richiesta_firma).',
+        items: [
+            { key: 'signerName', description: 'Nome di chi deve firmare', example: 'Marco Bianchi' },
+            { key: 'docName', description: 'Nome del documento da firmare', example: 'Contratto DR7-A1B2C3D4', aliases: ['contractNumber'] },
+            { key: 'signingUrl', description: 'Link diretto alla pagina di firma' },
+        ],
+    },
+    {
+        label: 'Compleanno Cliente',
+        scope: 'specific',
+        scopeNote: 'Solo nel template Compleanno (birthday_message), riempite dal cron giornaliero.',
+        items: [
+            { key: 'codice', description: 'Codice sconto generico', example: 'DR7-BIRTH-9F2A' },
+            { key: 'codice_supercar', description: 'Codice sconto Supercar' },
+            { key: 'codice_noleggio', description: 'Codice sconto noleggio (alias di codice_supercar)' },
+            { key: 'codice_lavaggio', description: 'Codice sconto lavaggio premium' },
+        ],
+    },
+    {
+        label: 'Cancellazione Prenotazione',
+        scope: 'specific',
+        scopeNote: 'Solo quando il cron cancel-unpaid-nexi-bookings annulla una prenotazione non pagata.',
+        items: [
+            { key: 'custName', description: 'Nome cliente' },
+            { key: 'bookingRef', description: 'Riferimento prenotazione cancellata' },
+            { key: 'link_status', description: 'Stato del link Nexi (disattivato / non trovato)', example: 'disattivato' },
+        ],
+    },
+    {
+        label: 'Cashback / Bonus Wallet',
+        scope: 'specific',
+        scopeNote: 'Solo quando un pagamento card genera cashback DR7 Club (wallet_bonus_credit).',
+        items: [
+            { key: 'custName', description: 'Nome cliente' },
+            { key: 'bonusEur', description: 'Importo cashback in euro', example: '12,00' },
+            { key: 'cardLabel', description: 'Tipo carta usata', example: 'Credito / Bancomat' },
+            { key: 'percentLabel', description: 'Percentuale cashback applicata', example: '3% / 6%' },
+            { key: 'newBalance', description: 'Nuovo saldo wallet dopo il bonus', example: '120,00' },
+        ],
+    },
+    {
+        label: 'Voucher Fidelity / Codice Sconto',
+        scope: 'specific',
+        scopeNote: 'Solo nei template voucher fidelity (250 punti) o codice sconto post-recensione.',
+        items: [
+            { key: 'codice', description: 'Codice sconto univoco', example: 'DR7-FID-9F2A', aliases: ['code'] },
+        ],
+    },
+    {
+        label: 'Recensione Google',
+        scope: 'specific',
+        scopeNote: 'Solo nel template "Richiesta Recensione" (review_request_whatsapp).',
+        items: [
+            { key: 'review_link', description: 'Link alla pagina di recensione Google' },
+        ],
+    },
+    {
+        label: 'Fattura PDF',
+        scope: 'specific',
+        scopeNote: 'Solo quando viene allegata una fattura via WhatsApp (penalty_invoice_pdf_whatsapp / invoice_pdf_whatsapp).',
+        items: [
+            { key: 'numero_fattura', description: 'Numero progressivo della fattura', example: '2026/00123' },
+        ],
+    },
+    {
+        label: 'Maxi Promo Gap / Promo Incassi',
+        scope: 'specific',
+        scopeNote: 'Solo nei template promozionali generati dai cron (maxi-promo-gap / promo-incassi).',
+        items: [
+            { key: 'gap_days', description: "Numero di giorni di gap di disponibilita'" },
+            { key: 'percentage', description: 'Sconto percentuale offerto', example: '15%' },
+            { key: 'hint_link', description: 'Link diretto alla prenotazione del veicolo' },
         ],
     },
 ]
@@ -186,7 +296,7 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
                 </svg>
             </button>
             {expanded && (
-                <div className="px-3 pb-3 space-y-3 border-t border-dr7-gold/20">
+                <div className="px-3 pb-3 space-y-4 border-t border-dr7-gold/20">
                     <div className="text-[12px] text-theme-text-secondary mt-3 leading-relaxed">
                         Scrivi il messaggio in italiano normale e quando vuoi inserire un dato del cliente o della prenotazione,
                         usa una di queste etichette tra parentesi graffe (es. <code className="bg-theme-bg-tertiary px-1 rounded text-dr7-gold">{'{nome}'}</code>).
@@ -194,38 +304,93 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
                         <br/>
                         <span className="text-theme-text-muted">Tocca un'etichetta per copiarla negli appunti.</span>
                     </div>
-                    {TEMPLATE_VAR_GROUPS.map(group => (
-                        <div key={group.label}>
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-1.5">
-                                {group.label}
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                                {group.items.map(v => (
-                                    <button
-                                        key={v.key}
-                                        type="button"
-                                        onClick={() => copy(v.key)}
-                                        title={[
-                                            v.description,
-                                            v.example ? `Esempio: ${v.example}` : null,
-                                            v.aliases?.length ? `Alias: ${v.aliases.map(a => `{${a}}`).join(', ')}` : null,
-                                        ].filter(Boolean).join('\n')}
-                                        className="group inline-flex flex-col items-start px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border hover:border-dr7-gold/60 hover:bg-dr7-gold/5 transition-colors text-left"
-                                    >
-                                        <code className="font-mono text-[11px] text-dr7-gold leading-tight">{`{${v.key}}`}</code>
-                                        <span className="text-[10px] text-theme-text-secondary leading-tight">
-                                            {v.description}
-                                        </span>
-                                        {v.example && (
-                                            <span className="text-[9px] text-theme-text-muted leading-tight">
-                                                es. {v.example}
-                                            </span>
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
+
+                    {/* SEMPRE DISPONIBILI */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-emerald-500/20">
+                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 text-[9px] font-bold uppercase tracking-wide">Sempre disponibili</span>
+                            <span className="text-[10px] text-theme-text-muted">Funzionano in ogni template Pro inviato in flussi prenotazione</span>
                         </div>
-                    ))}
+                        <div className="space-y-3">
+                            {TEMPLATE_VAR_GROUPS.filter(g => g.scope === 'common').map(group => (
+                                <div key={group.label}>
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-1.5">
+                                        {group.label}
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {group.items.map(v => (
+                                            <button
+                                                key={v.key}
+                                                type="button"
+                                                onClick={() => copy(v.key)}
+                                                title={[
+                                                    v.description,
+                                                    v.example ? `Esempio: ${v.example}` : null,
+                                                    v.aliases?.length ? `Alias: ${v.aliases.map(a => `{${a}}`).join(', ')}` : null,
+                                                ].filter(Boolean).join('\n')}
+                                                className="group inline-flex flex-col items-start px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border hover:border-dr7-gold/60 hover:bg-dr7-gold/5 transition-colors text-left"
+                                            >
+                                                <code className="font-mono text-[11px] text-dr7-gold leading-tight">{`{${v.key}}`}</code>
+                                                <span className="text-[10px] text-theme-text-secondary leading-tight">
+                                                    {v.description}
+                                                </span>
+                                                {v.example && (
+                                                    <span className="text-[9px] text-theme-text-muted leading-tight">
+                                                        es. {v.example}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* SOLO IN FLUSSI SPECIFICI */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-amber-500/20">
+                            <span className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/40 text-[9px] font-bold uppercase tracking-wide">Solo in flussi specifici</span>
+                            <span className="text-[10px] text-theme-text-muted">Funzionano solo se il template viene usato nel flusso indicato</span>
+                        </div>
+                        <div className="space-y-3">
+                            {TEMPLATE_VAR_GROUPS.filter(g => g.scope === 'specific').map(group => (
+                                <div key={group.label}>
+                                    <div className="flex items-baseline gap-2 mb-1.5">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">{group.label}</div>
+                                    </div>
+                                    {group.scopeNote && (
+                                        <div className="text-[10px] text-theme-text-muted/80 italic mb-1.5 leading-tight">{group.scopeNote}</div>
+                                    )}
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {group.items.map(v => (
+                                            <button
+                                                key={v.key}
+                                                type="button"
+                                                onClick={() => copy(v.key)}
+                                                title={[
+                                                    v.description,
+                                                    v.example ? `Esempio: ${v.example}` : null,
+                                                    v.aliases?.length ? `Alias: ${v.aliases.map(a => `{${a}}`).join(', ')}` : null,
+                                                ].filter(Boolean).join('\n')}
+                                                className="group inline-flex flex-col items-start px-2 py-1.5 rounded-md bg-theme-bg-primary border border-amber-500/20 hover:border-amber-500/60 hover:bg-amber-500/5 transition-colors text-left"
+                                            >
+                                                <code className="font-mono text-[11px] text-amber-300 leading-tight">{`{${v.key}}`}</code>
+                                                <span className="text-[10px] text-theme-text-secondary leading-tight">
+                                                    {v.description}
+                                                </span>
+                                                {v.example && (
+                                                    <span className="text-[9px] text-theme-text-muted leading-tight">
+                                                        es. {v.example}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
