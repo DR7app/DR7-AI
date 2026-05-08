@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 import { reloadOtpConfig } from '../../../utils/otpConfigCache'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
+import { logAdminAction } from '../../../utils/logAdminAction'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 
 interface OtpRow {
@@ -64,16 +65,24 @@ export default function GestioneOtpTab() {
     // park the action here and run it once the modal approves.
     const pendingAction = useRef<null | { code: string; run: () => Promise<void> | void }>(null)
 
-    /** Gate a write action through OTP. Superadmins skip the gate
-     *  (server-side bypass returns autoApproved → modal auto-closes).
-     *  Every call requires a fresh OTP unless a previously-approved
-     *  override for the same code is still in this session. */
+    /** Gate a write action through OTP. Direzione + ophe@dr7.app
+     *  (DIREZIONE_EMAILS) eseguono l'azione SENZA modal: skip totale,
+     *  audit log emesso direttamente. Operatori normali passano dal flusso
+     *  OTP (la prima volta apre la modal, le successive nella stessa
+     *  sessione riusano l'override già approvato). */
     function gated(code: string, message: string, run: () => Promise<void> | void) {
         if (isSuperadmin) {
-            // Even for superadmins, route through the modal so the audit
-            // log records the intent. Modal auto-closes thanks to bypass.
-            pendingAction.current = { code, run }
-            override.requestOverride(code, message)
+            // Skip modal: esegui l'azione e logga il bypass. Niente flash
+            // di modal, niente click su "Invia richiesta" — Gestione OTP
+            // deve essere fluida per chi ha l'autorizzazione direzionale.
+            logAdminAction('limitation_override_approved', 'limitation', code, {
+                limitation_code: code,
+                limitation_message: message,
+                action_context: `${code}_${Date.now()}`,
+                self_approved: true,
+                bypass_reason: 'direzione/ophe — gestione OTP self-management',
+            })
+            ;(async () => { try { await run() } catch (err) { console.error('[gated] run failed', err) } })()
             return
         }
         pendingAction.current = { code, run }
