@@ -59,6 +59,10 @@ const handler: Handler = async (event) => {
   const { booking, type, customPhone, skipHeader, templateKey, templateVars } = body;
   // Accept both 'message' and 'customMessage' for flexibility
   const customMessage = body.customMessage || body.message;
+  // Optional override: caller can force a specific Pro template key (used by
+  // process-scheduled-system-messages-cron and triggerSystemMessageEvent for
+  // custom pro_custom_* templates that wouldn't be picked by service_type).
+  const explicitMessageKey: string | undefined = body.messageKey;
 
   // Check if Green API is configured
   if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
@@ -209,7 +213,11 @@ const handler: Handler = async (event) => {
   // When customPhone is set, this is a CUSTOMER message — use _customer variant if available
   const isCustomerMessage = !!customPhone;
   let messageKey = '';
-  if (booking) {
+  if (explicitMessageKey) {
+    // Caller has selected a specific Pro template (es. cron / trigger inline
+    // dei Messaggi di Sistema Pro). Bypass derivazione da service_type.
+    messageKey = explicitMessageKey;
+  } else if (booking) {
     const serviceType = booking.service_type;
     const isEdit = booking.isEdit;
     if (serviceType === 'car_wash') {
@@ -379,6 +387,13 @@ const handler: Handler = async (event) => {
         vars.importo = vars.total;
         vars.amount = vars.total;
         vars.cliente = vars.customer_name;
+        vars.booking_ref = vars.booking_id;
+        vars.bookingRef = vars.booking_id;
+
+        // Static review link from env — riempie {review_link} anche quando il
+        // template e' inviato dallo scheduler/inline trigger (non solo dal
+        // dedicato review-send). Stesso URL Google per ogni cliente.
+        vars.review_link = process.env.GOOGLE_REVIEW_LINK || 'https://g.page/r/CQwgJt7OYpsfEBM/review';
 
         // Format dates if available
         if (booking.pickup_date) {
