@@ -416,10 +416,37 @@ export default function CustomerWalletTab() {
     setActionLoading(false)
   }
 
-  const formatEur = (cents: number) => `€ ${(cents / 100).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
   const formatEurDec = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
   const totalBalance = allWalletCustomers.reduce((s, c) => s + (c.balance_cents || 0), 0)
+
+  // ── KPIs e widget sidebar (dati gia' caricati, niente nuove query) ────────
+  const activeCustomers = allWalletCustomers.filter(c => (c.balance_cents || 0) > 0)
+  const activeCount = activeCustomers.length
+  const totalCount = allWalletCustomers.length
+  const inactiveCount = totalCount - activeCount
+  const avgBalanceCents = activeCount > 0 ? Math.round(totalBalance / activeCount) : 0
+
+  // Top 3 saldo alto per la sidebar
+  const topBalances = [...activeCustomers]
+    .sort((a, b) => (b.balance_cents || 0) - (a.balance_cents || 0))
+    .slice(0, 3)
+
+  // Ricariche automatiche attive — recurringSettings e' Map<customerId,
+  // { day, amount, active }> con amount in EURO, day del mese 1-31.
+  const recurringEntries: Array<{ id: string; name: string; amountEur: number; day: number }> = []
+  for (const c of allWalletCustomers) {
+    const r = recurringSettings.get(c.id)
+    if (!r || !r.active) continue
+    const amountEur = Number(r.amount || 0)
+    const day = Number(r.day || 0)
+    if (amountEur > 0) {
+      recurringEntries.push({ id: c.id, name: c.full_name || c.email || c.phone || 'N/A', amountEur, day })
+    }
+  }
+  const recurringActiveCount = recurringEntries.length
+  const recurringMonthlyTotalEur = recurringEntries.reduce((s, e) => s + e.amountEur, 0)
+  const recurringTop = [...recurringEntries].sort((a, b) => b.amountEur - a.amountEur).slice(0, 3)
 
   // Filter and sort
   const filtered = allWalletCustomers.filter(c => {
@@ -441,21 +468,113 @@ export default function CustomerWalletTab() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-theme-text-primary">Wallet Clienti</h2>
-          <p className="text-sm text-theme-text-muted mt-0.5">Visualizza e gestisci il wallet dei tuoi clienti</p>
+    <div className="space-y-4 lg:space-y-6">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-theme-bg-secondary via-theme-bg-secondary to-theme-bg-tertiary rounded-2xl border border-theme-border p-5 lg:p-6">
+        <div className="absolute -top-12 -right-12 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"/>
+        <div className="absolute -bottom-12 -left-12 w-56 h-56 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"/>
+        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/30 grid place-items-center flex-shrink-0">
+              <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 10h18M7 15h2m4 0h6m-9 5h12a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-xl lg:text-2xl font-bold text-theme-text-primary leading-tight">Credit Wallet Clienti</h2>
+              <p className="text-xs lg:text-sm text-theme-text-muted mt-0.5">Gestisci i wallet e il credito dei tuoi clienti</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-theme-text-muted">
+            <span className="px-2.5 py-1 rounded-full bg-theme-bg-tertiary border border-theme-border">
+              {totalCount} {totalCount === 1 ? 'cliente' : 'clienti'} · {activeCount} attivi
+            </span>
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-3xl font-bold text-theme-text-primary">{formatEur(totalBalance)}</p>
-          <button
-            onClick={() => setSortBy(sortBy === 'balance' ? 'name' : 'balance')}
-            className="text-xs text-theme-text-muted hover:text-theme-text-primary mt-1 transition-colors"
-          >
-            Saldo per {sortBy === 'balance' ? 'Piu Alto' : 'Nome'} ↕
-          </button>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+        {/* Totale Wallet Sistema */}
+        <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent p-4">
+          <div className="absolute -top-6 -right-6 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"/>
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-blue-300/80 uppercase tracking-wider font-semibold">Totale wallet sistema</div>
+              <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 grid place-items-center">
+                <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h2m4 0h6M5 6h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z"/>
+                </svg>
+              </div>
+            </div>
+            <div className="text-2xl lg:text-3xl font-bold text-blue-400 mt-2.5 tabular-nums">
+              €{(totalBalance / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[11px] text-theme-text-muted mt-1">saldo cumulato in piattaforma</div>
+          </div>
+        </div>
+
+        {/* Clienti Attivi */}
+        <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-4">
+          <div className="absolute -top-6 -right-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"/>
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-emerald-300/80 uppercase tracking-wider font-semibold">Clienti attivi</div>
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 grid place-items-center">
+                <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
+                </svg>
+              </div>
+            </div>
+            <div className="text-2xl lg:text-3xl font-bold text-emerald-400 mt-2.5 tabular-nums">
+              {activeCount}
+              <span className="text-sm font-medium text-emerald-400/60 ml-1">/ {totalCount}</span>
+            </div>
+            <div className="text-[11px] text-theme-text-muted mt-1">
+              {totalCount > 0 ? Math.round((activeCount / totalCount) * 100) : 0}% con saldo &gt; €0
+              {inactiveCount > 0 && ` · ${inactiveCount} inattivi`}
+            </div>
+          </div>
+        </div>
+
+        {/* Saldo Medio */}
+        <div className="relative overflow-hidden rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent p-4">
+          <div className="absolute -top-6 -right-6 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl pointer-events-none"/>
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-purple-300/80 uppercase tracking-wider font-semibold">Saldo medio</div>
+              <div className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 grid place-items-center">
+                <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+              </div>
+            </div>
+            <div className="text-2xl lg:text-3xl font-bold text-purple-400 mt-2.5 tabular-nums">
+              €{(avgBalanceCents / 100).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </div>
+            <div className="text-[11px] text-theme-text-muted mt-1">per cliente attivo</div>
+          </div>
+        </div>
+
+        {/* Ricariche Automatiche */}
+        <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent p-4">
+          <div className="absolute -top-6 -right-6 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"/>
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-amber-300/80 uppercase tracking-wider font-semibold">Ricariche automatiche</div>
+              <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 grid place-items-center">
+                <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+              </div>
+            </div>
+            <div className="text-2xl lg:text-3xl font-bold text-amber-400 mt-2.5 tabular-nums">{recurringActiveCount}</div>
+            <div className="text-[11px] text-theme-text-muted mt-1">
+              {recurringMonthlyTotalEur > 0
+                ? `€${recurringMonthlyTotalEur.toLocaleString('it-IT')} / mese ricorrenti`
+                : 'nessun piano attivo'}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -468,12 +587,20 @@ export default function CustomerWalletTab() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Cerca cliente..."
-          className="w-full pl-10 pr-4 py-3 bg-theme-bg-secondary border border-theme-border rounded-xl text-theme-text-primary outline-none focus:border-[#3a6a6a] transition-colors"
+          placeholder="Cerca cliente per nome, email o telefono..."
+          className="w-full pl-10 pr-4 py-3 bg-theme-bg-secondary border border-theme-border rounded-xl text-theme-text-primary outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
         />
+        <button
+          onClick={() => setSortBy(sortBy === 'balance' ? 'name' : 'balance')}
+          className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 rounded-full bg-theme-bg-tertiary border border-theme-border text-[11px] text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
+        >
+          Ordina: {sortBy === 'balance' ? 'Saldo' : 'Nome'} ↕
+        </button>
       </div>
 
-      {/* Table */}
+      {/* Table + Sidebar (desktop) */}
+      <div className="lg:flex lg:gap-4 lg:items-start">
+      <div className="lg:flex-1 lg:min-w-0">
       {loadingAll ? (
         <div className="text-center py-16 text-theme-text-muted">Caricamento wallet...</div>
       ) : sorted.length === 0 ? (
@@ -498,32 +625,70 @@ export default function CustomerWalletTab() {
                 className="grid grid-cols-1 lg:grid-cols-[2fr_1.5fr_2fr_1fr_1.5fr_auto] gap-2 lg:gap-4 px-5 py-3.5 items-center hover:bg-white/[0.02] transition-colors"
               >
                 {/* Cliente */}
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-                    style={{ backgroundColor: TEAL }}
-                  >
-                    {initials(customer.full_name)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-theme-text-primary truncate">{customer.full_name}</p>
-                  </div>
-                </div>
+                {(() => {
+                  const balance = customer.balance_cents || 0
+                  const isActive = balance > 0
+                  const palettes = [
+                    'bg-rose-500/20 text-rose-300 border-rose-500/40',
+                    'bg-amber-500/20 text-amber-300 border-amber-500/40',
+                    'bg-blue-500/20 text-blue-300 border-blue-500/40',
+                    'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+                    'bg-purple-500/20 text-purple-300 border-purple-500/40',
+                    'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+                    'bg-orange-500/20 text-orange-300 border-orange-500/40',
+                    'bg-pink-500/20 text-pink-300 border-pink-500/40',
+                  ]
+                  let hash = 0
+                  for (let i = 0; i < customer.id.length; i++) hash = (hash * 31 + customer.id.charCodeAt(i)) | 0
+                  const avatarColor = palettes[Math.abs(hash) % palettes.length]
+                  const hasRecurring = recurringSettings.has(customer.id)
+                  return (
+                    <>
+                      {/* Cliente */}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-10 h-10 rounded-full grid place-items-center text-sm font-bold border flex-shrink-0 ${avatarColor}`}>
+                          {initials(customer.full_name)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-theme-text-primary truncate">{customer.full_name}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border ${
+                              isActive
+                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                                : 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                            }`}>
+                              {isActive ? 'Attivo' : 'Inattivo'}
+                            </span>
+                            {hasRecurring && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-amber-500/15 text-amber-300 border border-amber-500/40">
+                                Auto
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
 
-                {/* Telefono */}
-                <div className="text-sm text-theme-text-secondary truncate">
-                  {customer.phone || '—'}
-                </div>
+                      {/* Telefono */}
+                      <div className="text-sm text-theme-text-secondary truncate">
+                        {customer.phone || '—'}
+                      </div>
 
-                {/* Email */}
-                <div className="text-sm text-theme-text-secondary truncate">
-                  {customer.email || '—'}
-                </div>
+                      {/* Email */}
+                      <div className="text-sm text-theme-text-secondary truncate">
+                        {customer.email || '—'}
+                      </div>
 
-                {/* Wallet */}
-                <div className="text-sm font-bold text-theme-text-primary">
-                  {formatEur(customer.balance_cents || 0)}
-                </div>
+                      {/* Wallet */}
+                      <div className={`text-sm font-bold tabular-nums ${
+                        balance >= 50000 ? 'text-emerald-400'
+                        : balance > 0 ? 'text-theme-text-primary'
+                        : 'text-theme-text-muted'
+                      }`}>
+                        €{(balance / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </>
+                  )
+                })()}
 
                 {/* Dettagli transazioni */}
                 <div>
@@ -618,6 +783,108 @@ export default function CustomerWalletTab() {
           </div>
         </div>
       )}
+      </div>
+
+      {/* Right Sidebar */}
+      <aside className="hidden lg:block w-80 flex-shrink-0 space-y-4 lg:sticky lg:top-4">
+        {/* Top 3 Saldo Alto */}
+        <div className="rounded-2xl border border-theme-border bg-gradient-to-br from-theme-bg-secondary to-theme-bg-tertiary p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Saldi più alti</h3>
+            <span className="text-[10px] text-theme-text-muted">top 3</span>
+          </div>
+          {topBalances.length === 0 ? (
+            <div className="text-xs text-theme-text-muted py-3 text-center">Nessun cliente con saldo</div>
+          ) : (
+            <div className="space-y-2">
+              {topBalances.map((c, i) => {
+                const init = initials(c.full_name || c.email || '?')
+                const palettes = ['bg-amber-500/20 text-amber-300 border-amber-500/40', 'bg-blue-500/20 text-blue-300 border-blue-500/40', 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40']
+                const color = palettes[i] || palettes[0]
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => openModal(c, 'credit')}
+                    className="w-full flex items-center gap-2.5 hover:bg-theme-bg-primary/40 rounded-lg p-1.5 -mx-1.5 transition-colors text-left"
+                  >
+                    <div className={`w-8 h-8 rounded-full grid place-items-center text-[11px] font-bold border flex-shrink-0 ${color}`}>{init}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-theme-text-primary font-semibold truncate">{c.full_name || c.email}</div>
+                      <div className="text-[10px] text-theme-text-muted truncate">{c.email || c.phone}</div>
+                    </div>
+                    <div className="text-xs font-bold text-emerald-400 tabular-nums whitespace-nowrap">€{((c.balance_cents || 0) / 100).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Ricariche Automatiche */}
+        <div className="rounded-2xl border border-theme-border bg-gradient-to-br from-theme-bg-secondary to-theme-bg-tertiary p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Ricariche automatiche</h3>
+            {recurringActiveCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/40 text-[10px] font-bold">{recurringActiveCount}</span>
+            )}
+          </div>
+          {recurringTop.length === 0 ? (
+            <div className="text-xs text-theme-text-muted py-3 text-center">Nessuna ricarica automatica attiva</div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {recurringTop.map(r => (
+                  <div key={r.id} className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-amber-500/15 border border-amber-500/30 grid place-items-center flex-shrink-0">
+                      <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-theme-text-primary font-semibold truncate">{r.name}</div>
+                      <div className="text-[10px] text-theme-text-muted">il {r.day} di ogni mese</div>
+                    </div>
+                    <div className="text-xs font-bold text-amber-400 tabular-nums whitespace-nowrap">€{r.amountEur.toLocaleString('it-IT')}</div>
+                  </div>
+                ))}
+              </div>
+              {recurringActiveCount > recurringTop.length && (
+                <div className="text-[10px] text-theme-text-muted mt-2 text-center">
+                  + altre {recurringActiveCount - recurringTop.length} attive
+                </div>
+              )}
+              <div className="mt-3 pt-3 border-t border-theme-border flex items-center justify-between text-[11px]">
+                <span className="text-theme-text-muted">Totale mensile</span>
+                <span className="text-theme-text-primary font-bold tabular-nums">€{recurringMonthlyTotalEur.toLocaleString('it-IT')}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Riepilogo */}
+        <div className="rounded-2xl border border-theme-border bg-gradient-to-br from-theme-bg-secondary to-theme-bg-tertiary p-4">
+          <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider mb-3">Riepilogo</h3>
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-theme-text-secondary">Saldo totale</span>
+              <span className="text-emerald-400 font-bold tabular-nums">€{(totalBalance / 100).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-theme-text-secondary">Clienti attivi</span>
+              <span className="text-theme-text-primary font-bold tabular-nums">{activeCount}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-theme-text-secondary">Clienti inattivi</span>
+              <span className="text-theme-text-muted font-bold tabular-nums">{inactiveCount}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-theme-text-secondary">Saldo medio</span>
+              <span className="text-purple-400 font-bold tabular-nums">€{(avgBalanceCents / 100).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+      </div>
 
       {/* ===== MODAL ===== */}
       {modalCustomer && (
