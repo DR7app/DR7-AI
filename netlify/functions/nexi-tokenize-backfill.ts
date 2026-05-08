@@ -88,8 +88,37 @@ export const handler: Handler = async (event) => {
         const orderId = tx.order_id
         const email = (tx.customer_email || '').trim()
 
-        // Find customer (id from booking, then email, then phone)
+        // Find customer — priority: id → phone → email. Phone is the
+        // primary key in this dataset; the previous order put email first
+        // and missed customers whose email wasn't on the booking row.
         let cust: { id: string; metadata: any } | null = null
+
+        const matchByPhone = async (rawPhone: string | null | undefined): Promise<typeof cust> => {
+            const digits = String(rawPhone || '').replace(/[^0-9]/g, '')
+            if (digits.length < 10) return null
+            const last10 = digits.slice(-10)
+            const ilikeRes = await supabase
+                .from('customers_extended')
+                .select('id, metadata, telefono')
+                .ilike('telefono', `%${last10}%`)
+                .limit(1)
+                .maybeSingle()
+            if (ilikeRes.data) return { id: ilikeRes.data.id, metadata: ilikeRes.data.metadata }
+            // Fallback: JS-compare digit-normalized telefono — handles phones
+            // stored with spaces / dots / international format that ilike
+            // can't substring-match.
+            const { data: candidates } = await supabase
+                .from('customers_extended')
+                .select('id, metadata, telefono')
+                .not('telefono', 'is', null)
+                .order('updated_at', { ascending: false })
+                .limit(5000)
+            const hit = (candidates || []).find(row => {
+                const stored = String(row.telefono || '').replace(/[^0-9]/g, '')
+                return stored.endsWith(last10) || last10.endsWith(stored.slice(-10))
+            })
+            return hit ? { id: hit.id, metadata: hit.metadata } : null
+        }
 
         if (tx.booking_id) {
             const { data: b } = await supabase
@@ -103,16 +132,12 @@ export const handler: Handler = async (event) => {
                 const { data: c } = await supabase.from('customers_extended').select('id, metadata').eq('id', cId).maybeSingle()
                 if (c) cust = c
             }
+            if (!cust && b?.customer_phone) {
+                cust = await matchByPhone(b.customer_phone)
+            }
             if (!cust && b?.customer_email) {
                 const { data: c } = await supabase.from('customers_extended').select('id, metadata').ilike('email', b.customer_email).maybeSingle()
                 if (c) cust = c
-            }
-            if (!cust && b?.customer_phone) {
-                const last10 = String(b.customer_phone).replace(/[^0-9]/g, '').slice(-10)
-                if (last10.length === 10) {
-                    const { data: c } = await supabase.from('customers_extended').select('id, metadata').ilike('telefono', `%${last10}%`).limit(1).maybeSingle()
-                    if (c) cust = c
-                }
             }
         }
         if (!cust && email) {

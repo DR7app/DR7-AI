@@ -881,6 +881,11 @@ const handler: Handler = async (event) => {
                         }).eq('id', transaction.id)
                     }
 
+                    // Customer matching priority: customerId → phone → email.
+                    // Phone is the primary identifier in this dataset (many
+                    // bookings save the phone reliably even when the email is
+                    // missing or has casing/whitespace mismatches between the
+                    // booking row and customers_extended).
                     let savedOnCustomer = false;
 
                     if (custId) {
@@ -895,7 +900,53 @@ const handler: Handler = async (event) => {
                         }
                     }
 
-                    // Fallback: lookup by email (case-insensitive)
+                    // Fallback 1: lookup by phone — primary key in this dataset.
+                    // Two-pass: ilike against the raw last-10 digits first (cheap,
+                    // catches phones stored as "3923227870", "+393923227870",
+                    // "393923227870"). If that misses (formatted phones like
+                    // "+39 392 322 7870" or "392.322.7870"), fall back to
+                    // fetching a slice of customers_extended and JS-comparing
+                    // digit-normalized telefono fields.
+                    const custPhoneRaw = booking.customer_phone || booking.booking_details?.customer?.phone || '';
+                    const custPhoneDigits = String(custPhoneRaw).replace(/[^0-9]/g, '');
+                    if (!savedOnCustomer && custPhoneDigits.length >= 10) {
+                        const last10 = custPhoneDigits.slice(-10);
+                        let custByPhone: { id: string; metadata: Record<string, unknown> | null } | null = null;
+
+                        const ilikeRes = await supabase
+                            .from('customers_extended')
+                            .select('id, metadata, telefono')
+                            .ilike('telefono', `%${last10}%`)
+                            .limit(1)
+                            .maybeSingle();
+                        if (ilikeRes.data) {
+                            custByPhone = ilikeRes.data;
+                        } else {
+                            // JS fallback for formatted phones the ilike can't match.
+                            const { data: candidates } = await supabase
+                                .from('customers_extended')
+                                .select('id, metadata, telefono')
+                                .not('telefono', 'is', null)
+                                .order('updated_at', { ascending: false })
+                                .limit(5000);
+                            const hit = (candidates || []).find(row => {
+                                const stored = String(row.telefono || '').replace(/[^0-9]/g, '');
+                                return stored.endsWith(last10) || last10.endsWith(stored.slice(-10));
+                            });
+                            if (hit) custByPhone = { id: hit.id, metadata: hit.metadata };
+                        }
+
+                        if (custByPhone) {
+                            await supabase.from('customers_extended').update({
+                                metadata: { ...(custByPhone.metadata || {}), ...metadataUpdate },
+                                updated_at: new Date().toISOString()
+                            }).eq('id', custByPhone.id);
+                            savedOnCustomer = true;
+                            console.log(`[nexi-payment-callback] Saved card info + contractId on customer ${custByPhone.id} (by phone: ${last10})`);
+                        }
+                    }
+
+                    // Fallback 2: lookup by email (case-insensitive)
                     if (!savedOnCustomer && custEmail) {
                         const { data: custByEmail } = await supabase
                             .from('customers_extended')
@@ -909,27 +960,6 @@ const handler: Handler = async (event) => {
                             }).eq('id', custByEmail.id);
                             savedOnCustomer = true;
                             console.log(`[nexi-payment-callback] Saved card info + contractId on customer ${custByEmail.id} (by email: ${custEmail})`);
-                        }
-                    }
-
-                    // Final fallback: lookup by phone (digits only)
-                    const custPhoneRaw = booking.customer_phone || booking.booking_details?.customer?.phone || '';
-                    const custPhoneDigits = String(custPhoneRaw).replace(/[^0-9]/g, '');
-                    if (!savedOnCustomer && custPhoneDigits.length >= 10) {
-                        const last10 = custPhoneDigits.slice(-10);
-                        const { data: custByPhone } = await supabase
-                            .from('customers_extended')
-                            .select('id, metadata, telefono')
-                            .ilike('telefono', `%${last10}%`)
-                            .limit(1)
-                            .maybeSingle();
-                        if (custByPhone) {
-                            await supabase.from('customers_extended').update({
-                                metadata: { ...(custByPhone.metadata || {}), ...metadataUpdate },
-                                updated_at: new Date().toISOString()
-                            }).eq('id', custByPhone.id);
-                            savedOnCustomer = true;
-                            console.log(`[nexi-payment-callback] Saved card info + contractId on customer ${custByPhone.id} (by phone: ${last10})`);
                         }
                     }
 
