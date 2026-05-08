@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { detectCardType, logCardAttempt, voidNexiTransaction, cancelBooking, notifyPrepaidBlocked } from './prepaid-card-guard';
 import { renderTemplate } from './utils/messageTemplates';
 import { getClubCashbackPct } from './utils/dr7ClubCashback';
+import { fetchNexiCardInfo } from './utils/nexiCardInfo';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -112,7 +113,7 @@ const handler: Handler = async (event) => {
         // Find the nexi_transaction by order_id
         const { data: transaction } = await supabase
             .from('nexi_transactions')
-            .select('id, booking_id, amount_cents, customer_email, contract_id, metadata, description, status')
+            .select('id, order_id, booking_id, amount_cents, customer_email, contract_id, metadata, description, status, created_at')
             .eq('order_id', orderId)
             .single();
 
@@ -825,33 +826,40 @@ const handler: Handler = async (event) => {
                     const custId = booking.booking_details?.customer?.customerId || booking.booking_details?.customer?.id || booking.booking_details?.customer_id;
                     const custEmail = (booking.customer_email || booking.booking_details?.customer?.email || transaction.customer_email || '').toLowerCase().trim();
 
-                    // Fetch card details from Nexi operation
+                    // Fetch card details from Nexi. The shared fetcher retries
+                    // /operations/{id} with backoff and falls back to
+                    // /orders/{orderId}/operations — without that we lose the
+                    // masked PAN whenever Nexi's operation endpoint hasn't yet
+                    // populated paymentMethod (eventual consistency observed
+                    // on multiple pay-by-link transactions, e.g. Alessio
+                    // Manzali's MC where the row ended up with contract_id
+                    // but no PAN).
                     let cardInfo: Record<string, any> = {}
-                    if (operationId) {
-                        const opDetails = await fetchNexiOperationDetails(operationId);
-                        if (opDetails) {
-                            const maskedPan = opDetails.paymentMethod?.maskedPan || opDetails.maskedPan || op.additionalData?.maskedPan || '';
-                            const circuit = opDetails.paymentMethod?.circuit || opDetails.paymentCircuit || paymentCircuit || '';
-                            const cardType = opDetails.paymentMethod?.cardType || '';
-                            // BIN lookup for credit/debit/prepaid detection
-                            let binType = '';
-                            let binBrand = '';
-                            if (maskedPan && maskedPan.length >= 6) {
-                                const binResult = await lookupBin(maskedPan.substring(0, 6));
-                                if (binResult) {
-                                    binType = binResult.type; // credit, debit, prepaid
-                                    binBrand = binResult.brand;
-                                }
+                    const card = await fetchNexiCardInfo(NEXI_API_KEY, {
+                        operationId,
+                        orderId: transaction.order_id,
+                    });
+                    if (card) {
+                        // BIN lookup for credit/debit/prepaid detection
+                        let binType = '';
+                        let binBrand = '';
+                        if (card.maskedPan && card.maskedPan.length >= 6) {
+                            const binResult = await lookupBin(card.maskedPan.substring(0, 6));
+                            if (binResult) {
+                                binType = binResult.type; // credit, debit, prepaid
+                                binBrand = binResult.brand;
                             }
-                            cardInfo = {
-                                nexi_card_masked_pan: maskedPan,
-                                nexi_card_circuit: circuit,
-                                nexi_card_type: cardType || binType, // credit/debit/prepaid
-                                nexi_card_brand: binBrand || circuit,
-                                nexi_card_updated: new Date().toISOString(),
-                            }
-                            console.log(`[nexi-payment-callback] Card info: ${circuit} ${maskedPan} (${cardType || binType})`);
                         }
+                        cardInfo = {
+                            nexi_card_masked_pan: card.maskedPan,
+                            nexi_card_circuit: card.circuit || paymentCircuit || '',
+                            nexi_card_type: card.cardType || binType, // credit/debit/prepaid
+                            nexi_card_brand: binBrand || card.circuit || paymentCircuit || '',
+                            nexi_card_updated: new Date().toISOString(),
+                        }
+                        console.log(`[nexi-payment-callback] Card info: ${cardInfo.nexi_card_circuit} ${card.maskedPan} (${cardInfo.nexi_card_type})`);
+                    } else {
+                        console.warn(`[nexi-payment-callback] No card info recoverable for op=${operationId} order=${transaction.order_id} — wallet payment or Nexi never exposed PAN`);
                     }
 
                     const metadataUpdate = {

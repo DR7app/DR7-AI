@@ -18,6 +18,7 @@ import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
+import { fetchNexiCardInfo } from './utils/nexiCardInfo'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -37,15 +38,8 @@ async function fetchOperationByOrderId(orderId: string): Promise<any> {
     } catch { return null }
 }
 
-async function fetchOperationDetails(operationId: string): Promise<any> {
-    try {
-        const r = await fetch(`${NEXI_BASE_URL}/operations/${operationId}`, {
-            headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': randomUUID() },
-        })
-        if (!r.ok) return null
-        return await r.json()
-    } catch { return null }
-}
+// fetchOperationDetails removed — replaced by the shared fetchNexiCardInfo
+// helper which retries and falls back to /orders/{orderId}/operations.
 
 async function lookupBin(bin: string): Promise<{ type: string; brand: string } | null> {
     try {
@@ -126,36 +120,40 @@ export const handler: Handler = async (event) => {
             if (c) cust = c
         }
 
-        if (!cust) {
-            customerNotFound++
-            results.push({ orderId, email, status: 'no_customer_match' })
-            continue
-        }
+        // No customer match isn't fatal — we still want the PAN to land on
+        // the transaction row so the tokenized-cards UI surfaces it.
+        // Below we fall through; the customers_extended write is gated on
+        // `cust` later.
 
-        // Skip if already has the same contract
-        const existingContract = cust.metadata?.nexi_contract_id
-        if (existingContract === orderId || (existingContract && cust.metadata?.nexi_card_masked_pan)) {
+        // Skip only when the row already has BOTH a contract id AND a
+        // masked pan. The previous condition also skipped when the
+        // contract_id matched the order id even with no PAN saved — that
+        // left transactions like Alessio Manzali's stuck without a card
+        // number, since their contract_id IS the order id.
+        const existingContract = cust?.metadata?.nexi_contract_id
+        const txMeta = (tx.metadata || {}) as Record<string, unknown>
+        const txAlreadyHasPan = typeof txMeta.nexi_card_masked_pan === 'string' && (txMeta.nexi_card_masked_pan as string).length > 0
+        if (cust && existingContract && cust.metadata?.nexi_card_masked_pan && txAlreadyHasPan) {
             skipped++
             continue
         }
 
-        // Fetch card data from Nexi
+        // Fetch card data from Nexi via the robust helper (retries the
+        // operation endpoint, then falls back to /orders/{orderId}/operations).
         const op = await fetchOperationByOrderId(orderId)
-        if (!op?.operationId) {
-            nexiNotFound++
-            results.push({ orderId, email, status: 'no_nexi_op' })
-            continue
-        }
-        const details = await fetchOperationDetails(op.operationId)
-        if (!details) {
+        const card = await fetchNexiCardInfo(NEXI_API_KEY, {
+            operationId: op?.operationId,
+            orderId,
+        })
+        if (!card) {
             nexiNotFound++
             results.push({ orderId, email, status: 'no_nexi_details' })
             continue
         }
 
-        const maskedPan = details?.paymentMethod?.maskedPan || details?.maskedPan || ''
-        const circuit = details?.paymentMethod?.circuit || details?.paymentCircuit || ''
-        const cardType = details?.paymentMethod?.cardType || ''
+        const maskedPan = card.maskedPan
+        const circuit = card.circuit
+        const cardType = card.cardType
         let binType = ''
         let binBrand = ''
         if (maskedPan && maskedPan.length >= 6) {
@@ -179,14 +177,29 @@ export const handler: Handler = async (event) => {
         }
 
         if (dryRun) {
-            results.push({ orderId, email, status: 'would_save', detail: `${maskedPan} (${circuit})` })
+            results.push({ orderId, email, status: cust ? 'would_save' : 'would_save_tx_only', detail: `${maskedPan} (${circuit})` })
         } else {
+            if (cust) {
+                await supabase
+                    .from('customers_extended')
+                    .update({ metadata: { ...(cust.metadata || {}), ...metadataUpdate }, updated_at: new Date().toISOString() })
+                    .eq('id', cust.id)
+            } else {
+                // No matching customer: log it but still write to the
+                // transaction so the admin can see the card in the UI.
+                customerNotFound++
+            }
+            // Always stamp on nexi_transactions so the tokenized-cards UI
+            // can surface the PAN even when customer matching fails.
             await supabase
-                .from('customers_extended')
-                .update({ metadata: { ...(cust.metadata || {}), ...metadataUpdate }, updated_at: new Date().toISOString() })
-                .eq('id', cust.id)
+                .from('nexi_transactions')
+                .update({
+                    metadata: { ...(tx.metadata || {}), ...metadataUpdate },
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', tx.id)
             saved++
-            results.push({ orderId, email, status: 'saved', detail: `${maskedPan} (${circuit})` })
+            results.push({ orderId, email, status: cust ? 'saved' : 'saved_tx_only', detail: `${maskedPan} (${circuit})` })
         }
     }
 
