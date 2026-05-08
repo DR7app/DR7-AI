@@ -51,7 +51,8 @@ import { buildBookingContext } from '../../../utils/adminLogHelpers'
 
 import {
   getAvailableVehicles,
-  isVehicleAvailable
+  isVehicleAvailable,
+  getRentalBufferMinutes
 } from '../../../utils/vehicleAvailability'
 import Input from './Input'
 import Select from './Select'
@@ -1542,9 +1543,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // If there's a conflict, calculate earliest available time
       if (latestConflictEnd) {
-        // For rental bookings, add 30min gap + 45min wash = 75 minutes total
-        // This is the true earliest available time after return + automatic wash
-        const earliestAvailable = new Date(latestConflictEnd.getTime() + 75 * 60 * 1000)
+        // Buffer post-noleggio (default 75 = 30min stacco + 45min lavaggio).
+        // Letto da Centralina Pro > Automazioni via getRentalBufferMinutes().
+        const earliestAvailable = new Date(latestConflictEnd.getTime() + getRentalBufferMinutes() * 60 * 1000)
         times.set(vehicle.id, earliestAvailable)
 
         logger.log(`[Earliest Time] ${vehicle.display_name}: Conflict ends at ${latestConflictEnd.toLocaleTimeString('it-IT')}, available at ${earliestAvailable.toLocaleTimeString('it-IT')} (after wash)`)

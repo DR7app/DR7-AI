@@ -14,9 +14,41 @@
 
 import { createRomeDate, getRomeDateComponents } from './timezoneUtils'
 import { logger } from '../utils/logger'
+import { supabase } from '../supabaseClient'
 
 // Configuration constants
-const BUFFER_MINUTES = 75 // 30min gap + 45min wash
+//
+// RENTAL_BUFFER_MINUTES: post-rental buffer (return → next pickup on the
+// SAME vehicle). Hydrated once at module load from Centralina Pro
+// (`centralina_pro_config.config.automations.rental_buffer_minutes`).
+// Default 75 (30 min stacco + 45 min lavaggio). Operators change it in
+// admin → Centralina Pro → Automazioni; takes effect after page refresh.
+let RENTAL_BUFFER_MINUTES = 75
+
+;(async () => {
+    try {
+        const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+        const cfg = (data?.config ?? null) as Record<string, unknown> | null
+        const automations = cfg?.automations as Record<string, unknown> | undefined
+        const v = automations?.rental_buffer_minutes
+        if (typeof v === 'number' && v >= 0 && v <= 720) {
+            RENTAL_BUFFER_MINUTES = v
+        }
+    } catch (err) {
+        // Keep default. Logged but non-blocking.
+        logger.log('[vehicleAvailability] failed to load buffer from Centralina Pro, using default 75:', err)
+    }
+})()
+
+/** Read-only access for other modules that need the same buffer (e.g. ReservationsTab). */
+export function getRentalBufferMinutes(): number {
+    return RENTAL_BUFFER_MINUTES
+}
+
 const CROSS_VEHICLE_GAP_MINUTES = 15 // Min gap between ANY two rental events (pickup or return) on different vehicles — staff can only handle one handover at a time
 const BUSINESS_START_HOUR = 0  // Admin can book any time
 const BUSINESS_END_HOUR = 24   // Admin can book any time
@@ -238,14 +270,14 @@ export function getEarliestValidPickupTime(
 
         if (bookingEndDate.getTime() === pickupDateOnly.getTime()) {
             // Booking ends on the same day - add buffer
-            const timeWithBuffer = new Date(bookingEnd.getTime() + BUFFER_MINUTES * 60 * 1000)
+            const timeWithBuffer = new Date(bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000)
 
             if (timeWithBuffer > earliestTime) {
                 earliestTime = timeWithBuffer
             }
         } else if (bookingEnd > earliestTime) {
             // Booking extends into or past the pickup date
-            const timeWithBuffer = new Date(bookingEnd.getTime() + BUFFER_MINUTES * 60 * 1000)
+            const timeWithBuffer = new Date(bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000)
 
             if (timeWithBuffer > earliestTime) {
                 earliestTime = timeWithBuffer
@@ -377,7 +409,7 @@ export function isVehicleAvailable(
         const bookingEnd = new Date(booking.dropoff_date)
 
         // Add buffer to booking end time
-        const bookingEndWithBuffer = new Date(bookingEnd.getTime() + BUFFER_MINUTES * 60 * 1000)
+        const bookingEndWithBuffer = new Date(bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000)
 
         // Check for overlap: (requestStart < bookingEndWithBuffer) && (requestEnd > bookingStart)
         if (requestStart < bookingEndWithBuffer && requestEnd > bookingStart) {
