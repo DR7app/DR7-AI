@@ -10,6 +10,29 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+/**
+ * Load the IVA rate (%) from Centralina Pro
+ * (centralina_pro_config.config.fiscal.vat_rate). Falls back to 22 if the
+ * config row is missing, the fiscal section was never saved, or the value
+ * is out of the [0, 100] range.
+ */
+async function loadVatRate(): Promise<number> {
+    try {
+        const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+        const cfg = (data?.config ?? null) as Record<string, unknown> | null
+        const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
+        const rate = fiscal?.vat_rate
+        if (typeof rate === 'number' && rate >= 0 && rate <= 100) return rate
+        return 22
+    } catch {
+        return 22
+    }
+}
+
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
@@ -77,6 +100,9 @@ export const handler: Handler = async (event) => {
                 body: JSON.stringify({ error: 'Booking ID is required' })
             }
         }
+
+        // Aliquota IVA dinamica da Centralina Pro (Fiscale > Aliquota IVA)
+        const dynamicVatRate = await loadVatRate()
 
         // Fetch booking details
         const { data: booking, error: bookingError } = await supabase
@@ -421,8 +447,8 @@ export const handler: Handler = async (event) => {
         } else if (extensionAmount && extensionAmount > 0) {
             // Extension invoice: single line for the additional amount
             const extGross = extensionAmount // Amount in EUR, includes IVA
-            const vatRate = includeIVA ? 22 : 0
-            const vatDivisor = 1.22
+            const vatRate = includeIVA ? dynamicVatRate : 0
+            const vatDivisor = 1 + dynamicVatRate / 100
             items.push({
                 description: `Estensione noleggio ${booking.vehicle_name || ''} - ${booking.id.substring(0, 8).toUpperCase()}`,
                 unit_price: extGross / vatDivisor,
@@ -436,9 +462,9 @@ export const handler: Handler = async (event) => {
             const serviceName = booking.service_name || (booking.service_type === 'car_wash' ? 'Lavaggio Auto' : 'Intervento Meccanico')
             const totalServicePrice = (booking.price_total || 0) / 100
 
-            // Always extract Net Price implies dividing Gross by 1.22
-            const netPrice = totalServicePrice / 1.22
-            const vatRate = includeIVA ? 22 : 0
+            // Always extract Net Price (the rate comes from Centralina Pro)
+            const netPrice = totalServicePrice / (1 + dynamicVatRate / 100)
+            const vatRate = includeIVA ? dynamicVatRate : 0
 
             items.push({
                 description: `${serviceName} - Data: ${new Date(booking.appointment_date || booking.pickup_date).toLocaleDateString('it-IT')}`,
@@ -468,9 +494,10 @@ export const handler: Handler = async (event) => {
             // NOT an actual charged penalty. Do not include it as a fattura line item.
 
             // Calculate Net Prices for components based on IVA inclusion
-            const vatRate = includeIVA ? 22 : 0
-            // Always divide by 1.22 because prices are Gross (IVA Included)
-            const vatDivisor = 1.22
+            const vatRate = includeIVA ? dynamicVatRate : 0
+            // Always divide by (1 + IVA%) because prices are Gross (IVA Included).
+            // Aliquota IVA letta da Centralina Pro > Fiscale.
+            const vatDivisor = 1 + dynamicVatRate / 100
 
             const insurancePriceGross = insuranceTotal
 
@@ -502,8 +529,8 @@ export const handler: Handler = async (event) => {
 
         // Include pending penalties and danni as line items (for "Segna Pagato Tutto")
         if (includePenalties) {
-            const vatRate = includeIVA ? 22 : 0
-            const vatDivisor = 1.22
+            const vatRate = includeIVA ? dynamicVatRate : 0
+            const vatDivisor = 1 + dynamicVatRate / 100
 
             // Only include PENDING items (not already-paid ones that have their own fattura)
             const penalties = bookingDetails.penalties || []
@@ -557,8 +584,8 @@ export const handler: Handler = async (event) => {
         // Include extensions as line items in the same fattura (all extensions, already marked paid)
         if (includeExtensions) {
             const extensions = bookingDetails.extension_history || []
-            const vatRate = includeIVA ? 22 : 0
-            const vatDivisor = 1.22
+            const vatRate = includeIVA ? dynamicVatRate : 0
+            const vatDivisor = 1 + dynamicVatRate / 100
             extensions.forEach((ext: any) => {
                 const extTotal = ext.additional_amount || 0
                 if (extTotal > 0) {
@@ -773,6 +800,8 @@ async function handleWalletPurchaseFattura(
     includeIVA: boolean,
 ): Promise<{ statusCode: number; body: string }> {
     try {
+        // Aliquota IVA dinamica da Centralina Pro (Fiscale > Aliquota IVA)
+        const dynamicVatRate = await loadVatRate()
         // 1. Validate purchase + succeeded status
         const { data: purchase, error: purchErr } = await supabase
             .from('credit_wallet_purchases')
@@ -862,8 +891,8 @@ async function handleWalletPurchaseFattura(
         }
 
         // Admin-typed amounts in this project are GROSS (IVA included) per memory
-        const vatRate = includeIVA ? 22 : 0
-        const vatDivisor = includeIVA ? 1.22 : 1
+        const vatRate = includeIVA ? dynamicVatRate : 0
+        const vatDivisor = includeIVA ? 1 + dynamicVatRate / 100 : 1
         const netUnit = Number((paidAmount / vatDivisor).toFixed(2))
         const packageName = purchase.package_name || purchaseData?.packageName || 'Ricarica'
         const bonusPct = Number(purchase.bonus_percentage ?? purchaseData?.bonusPercentage ?? 0)
