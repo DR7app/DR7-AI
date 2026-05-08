@@ -21,8 +21,13 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const DAILY_RATE = 0.001 // 0.1% per day
 
 // reference_types that count as BONUS credit (NOT card-paid).
+// 'cashback_3_percent' is the legacy reference_type used by the website
+// before the migration to dynamic tier-based cashback (now writes
+// 'card_bonus' in line with admin). Kept here so historical website
+// cashback rows stop accumulating interest.
 const BONUS_REFERENCE_TYPES = new Set([
     'card_bonus',
+    'cashback_3_percent',
     'admin_manual',
     'admin_credit',
     'referral',
