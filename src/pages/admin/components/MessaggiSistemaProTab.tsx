@@ -158,6 +158,16 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
             { key: 'notes', description: 'Note inserite in prenotazione', example: 'Cliente arriva in serata', aliases: ['note', 'nota'] },
         ],
     },
+    {
+        label: 'Marketing & Link',
+        scope: 'common',
+        items: [
+            { key: 'website', description: 'URL del sito DR7 (configurabile in Centralina → Marketing)', example: 'https://dr7empire.com', aliases: ['sito'] },
+            { key: 'review_link', description: 'Link recensione Google (configurabile in Centralina → Marketing)', example: 'https://g.page/r/.../review' },
+            { key: 'instagram', description: 'URL profilo Instagram (configurabile in Centralina)', example: 'https://instagram.com/dr7empire' },
+            { key: 'facebook', description: 'URL pagina Facebook (configurabile in Centralina)', example: 'https://facebook.com/dr7empire' },
+        ],
+    },
 
     // ═══ DISPONIBILI SOLO IN FLUSSI SPECIFICI ═════════════════════════════════
     {
@@ -235,14 +245,6 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
         scopeNote: 'Solo nei template voucher fidelity (250 punti) o codice sconto post-recensione.',
         items: [
             { key: 'codice', description: 'Codice sconto univoco', example: 'DR7-FID-9F2A', aliases: ['code'] },
-        ],
-    },
-    {
-        label: 'Recensione Google',
-        scope: 'specific',
-        scopeNote: 'Solo nel template "Richiesta Recensione" (review_request_whatsapp).',
-        items: [
-            { key: 'review_link', description: 'Link alla pagina di recensione Google' },
         ],
     },
     {

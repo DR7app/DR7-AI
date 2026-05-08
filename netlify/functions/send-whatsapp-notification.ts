@@ -390,10 +390,26 @@ const handler: Handler = async (event) => {
         vars.booking_ref = vars.booking_id;
         vars.bookingRef = vars.booking_id;
 
-        // Static review link from env — riempie {review_link} anche quando il
-        // template e' inviato dallo scheduler/inline trigger (non solo dal
-        // dedicato review-send). Stesso URL Google per ogni cliente.
-        vars.review_link = process.env.GOOGLE_REVIEW_LINK || 'https://g.page/r/CQwgJt7OYpsfEBM/review';
+        // Link configurabili dalla Centralina (rental_config.config.marketing).
+        // Niente hardcoded fallback: se admin non li ha settati, le variabili
+        // restano vuote nel messaggio (segnale chiaro di config mancante).
+        try {
+          const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+          const { data: cfgRow } = await sb.from('rental_config').select('config').eq('id', 'main').maybeSingle();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mk = ((cfgRow?.config || {}) as any).marketing || {};
+          vars.review_link = mk.google_review_link || process.env.GOOGLE_REVIEW_URL || process.env.GOOGLE_REVIEW_LINK || '';
+          vars.website = mk.website_url || process.env.WEBSITE_URL || '';
+          vars.sito = vars.website;
+          vars.instagram = mk.instagram_url || '';
+          vars.facebook = mk.facebook_url || '';
+        } catch {
+          vars.review_link = process.env.GOOGLE_REVIEW_URL || process.env.GOOGLE_REVIEW_LINK || '';
+          vars.website = process.env.WEBSITE_URL || '';
+          vars.sito = vars.website;
+          vars.instagram = '';
+          vars.facebook = '';
+        }
 
         // Format dates if available
         if (booking.pickup_date) {
