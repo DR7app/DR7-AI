@@ -952,6 +952,19 @@ const handler: Handler = async (event) => {
                     console.log('[nexi-payment-callback] Customer confirmation dispatched (template-based)');
                 }
 
+                // Messaggi di Sistema Pro — fire instant template per on_payment.
+                // Tutti i template "Al pagamento ricevuto" con offset basso (<= 1h)
+                // partono qui in real-time. Quelli con offset alto restano al cron.
+                try {
+                    const { triggerSystemMessageEvent } = await import('./utils/triggerSystemMessageEvent');
+                    const r = await triggerSystemMessageEvent({ bookingId: booking.id, event: 'on_payment' });
+                    if (r.sent || r.errors) {
+                        console.log(`[nexi-payment-callback] system messages on_payment: sent=${r.sent} skipped=${r.skipped} errors=${r.errors}`);
+                    }
+                } catch (e: any) {
+                    console.error('[nexi-payment-callback] system messages on_payment trigger failed:', e.message);
+                }
+
                 // Admin notification — uses nexi_payment_received_admin template
                 await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
                     method: 'POST',
