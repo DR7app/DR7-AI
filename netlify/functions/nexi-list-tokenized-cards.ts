@@ -41,7 +41,7 @@ const handler: Handler = async (event) => {
     if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' }
     if (event.httpMethod !== 'GET') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
 
-    const { error: authErr } = await requireAuth(event as never)
+    const { error: authErr } = await requireAuth(event)
     if (authErr) return authErr
 
     if (!supabaseUrl || !supabaseServiceKey) {
@@ -103,6 +103,16 @@ const handler: Handler = async (event) => {
                 updated_at: String(tx.updated_at || ''),
             })
         }
+
+        // Sort the merged list so the most recently tokenized card is at the
+        // top, regardless of which source it came from. Without this Source 1
+        // (customers_extended) cards always appeared above Source 2
+        // (nexi_transactions) cards, even when the latter were more recent.
+        cards.sort((a, b) => {
+            const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0
+            const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0
+            return tb - ta
+        })
 
         return { statusCode: 200, headers, body: JSON.stringify({ cards }) }
     } catch (err: unknown) {
