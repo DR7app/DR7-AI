@@ -17,6 +17,10 @@ interface SystemMessage {
     send_hour: number | null
     target_category: string
     target_status: string
+    /** Se true, dopo il WhatsApp invia anche email (stesso body). */
+    send_email?: boolean
+    /** Oggetto email; se vuoto, fallback al label del template. */
+    email_subject?: string | null
     created_at: string
     updated_at: string
 }
@@ -1126,6 +1130,30 @@ export default function MessaggiSistemaProTab() {
                                                             {template.include_header ? 'H/F ✓' : 'H/F ✗'}
                                                         </button>
                                                         <button
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                e.stopPropagation()
+                                                                const newVal = !template.send_email
+                                                                authFetch('/.netlify/functions/update-system-message', {
+                                                                    method: 'POST',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ id: template.id, send_email: newVal })
+                                                                }).then(res => {
+                                                                    if (!res.ok) { toast.error('Errore aggiornamento'); return }
+                                                                    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, send_email: newVal } : t))
+                                                                    toast.success(newVal ? 'Invio email attivato' : 'Invio email disattivato')
+                                                                }).catch(() => toast.error('Errore di rete'))
+                                                            }}
+                                                            title="Invia anche via email lo stesso testo del WhatsApp"
+                                                            className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                                                                template.send_email
+                                                                    ? 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
+                                                                    : 'bg-gray-600/20 text-gray-500 hover:bg-gray-600/30'
+                                                            }`}
+                                                        >
+                                                            {template.send_email ? 'Email ✓' : 'Email ✗'}
+                                                        </button>
+                                                        <button
                                                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteTemplate(template) }}
                                                             title="Elimina definitivamente"
                                                             aria-label="Elimina"
@@ -1145,6 +1173,35 @@ export default function MessaggiSistemaProTab() {
                                             </summary>
 
                                             <div className="p-4 border-t border-theme-border space-y-3">
+                                                {template.send_email && (
+                                                    <div className="px-3 py-2.5 rounded-lg bg-emerald-600/5 border border-emerald-600/20">
+                                                        <label className="block text-[11px] font-medium uppercase tracking-wide text-emerald-400 mb-1">
+                                                            Oggetto email
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            defaultValue={template.email_subject || ''}
+                                                            placeholder={`(default: ${template.label})`}
+                                                            onBlur={(e) => {
+                                                                const newVal = e.target.value.trim() || null
+                                                                if (newVal === (template.email_subject || null)) return
+                                                                authFetch('/.netlify/functions/update-system-message', {
+                                                                    method: 'POST',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ id: template.id, email_subject: newVal })
+                                                                }).then(res => {
+                                                                    if (!res.ok) { toast.error('Errore aggiornamento oggetto'); return }
+                                                                    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, email_subject: newVal } : t))
+                                                                    toast.success('Oggetto email aggiornato')
+                                                                }).catch(() => toast.error('Errore di rete'))
+                                                            }}
+                                                            className="w-full px-3 py-2 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                                                        />
+                                                        <p className="text-[11px] text-theme-text-muted mt-1.5">
+                                                            Il corpo email è lo stesso del WhatsApp. Se lasci vuoto, l'oggetto sarà il titolo del template.
+                                                        </p>
+                                                    </div>
+                                                )}
                                                 {template.is_automatic && (
                                                     <div className="flex flex-wrap items-center gap-3 px-3 py-2.5 rounded-lg bg-theme-bg-primary border border-theme-border/50">
                                                         <div className="flex items-center gap-2">

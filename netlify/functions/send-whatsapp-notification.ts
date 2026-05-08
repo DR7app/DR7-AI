@@ -8,6 +8,41 @@ const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || "393457905205";
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
+// ── Optional email channel (Messaggi Pro toggle "Invia anche via email") ──
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function wrapAsEmailHtml(plainText: string): string {
+  const withBreaks = escapeHtml(plainText).replace(/\n/g, '<br>');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1d1f;">
+<div style="max-width:600px;margin:24px auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+<div style="font-size:14px;line-height:1.6;">${withBreaks}</div>
+<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e5ea;font-size:12px;color:#6e6e73;">DR7 Empire &mdash; Cagliari</div>
+</div>
+</body></html>`;
+}
+
+async function sendEmailViaResend(to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { ok: false, error: 'RESEND_API_KEY missing' };
+  const fromAddress = process.env.RESEND_FROM || 'DR7 Empire <noreply@dr7.app>';
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: fromAddress, to: [to], subject, html }),
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      return { ok: false, error: `Resend ${resp.status}: ${errText}` };
+    }
+    return { ok: true };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'unknown error' };
+  }
+}
+
 /**
  * Sends WhatsApp notification using Green API
  * Used for admin panel notifications
@@ -36,6 +71,8 @@ const handler: Handler = async (event) => {
 
   let message = '';
   let targetPhone = customPhone || NOTIFICATION_PHONE;
+  // Track the resolved Pro key so we can look up the email toggle after WhatsApp send.
+  let usedTemplateKey: string | null = null;
 
   // Template key support: load template from system_messages and apply variables
   if (templateKey && !customMessage) {
@@ -62,6 +99,8 @@ const handler: Handler = async (event) => {
         .select('message_body, include_header, is_enabled')
         .eq('message_key', resolvedKey)
         .maybeSingle();
+
+      usedTemplateKey = resolvedKey;
 
       if (tpl && tpl.is_enabled === false) {
         console.log(`[send-whatsapp] Template "${resolvedKey}" is disabled — skipping send`);
@@ -225,6 +264,7 @@ const handler: Handler = async (event) => {
         };
       }
       messageKey = resolved;
+      usedTemplateKey = messageKey;
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
       let { data: tpl } = await supabase
@@ -478,6 +518,43 @@ const handler: Handler = async (event) => {
         .insert({ customer_name: customerName, customer_phone: targetPhone, message_text: fullMessage, template_label: templateLabel, status: 'sent' })
         .then(() => {})
         .catch((e: unknown) => console.error('Log failed:', e));
+    }
+
+    // ── Optional email channel ──
+    // If the template has send_email=true in Messaggi di Sistema Pro and
+    // we have a recipient email, dispatch the same body via Resend.
+    // Non-blocking: failures don't affect the WhatsApp success response.
+    if (usedTemplateKey && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      try {
+        const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+        const { data: emailMeta } = await sb
+          .from('system_messages')
+          .select('send_email, email_subject, label')
+          .eq('message_key', usedTemplateKey)
+          .maybeSingle();
+        if (emailMeta?.send_email) {
+          const recipientEmail =
+            body.customerEmail ||
+            body.customer_email ||
+            booking?.customer_email ||
+            booking?.booking_details?.customer?.email ||
+            null;
+          if (recipientEmail && typeof recipientEmail === 'string' && recipientEmail.includes('@')) {
+            const subject = (emailMeta.email_subject?.trim?.()) || emailMeta.label || 'DR7 Empire';
+            const html = wrapAsEmailHtml(wrappedMessage);
+            const sent = await sendEmailViaResend(recipientEmail, subject, html);
+            if (sent.ok) {
+              console.log(`[send-whatsapp] Email also sent to ${recipientEmail} (subject: "${subject}")`);
+            } else {
+              console.error(`[send-whatsapp] Email send failed (non-blocking): ${sent.error}`);
+            }
+          } else {
+            console.log(`[send-whatsapp] Template "${usedTemplateKey}" has send_email=true but no recipient email available`);
+          }
+        }
+      } catch (emailErr) {
+        console.error('[send-whatsapp] Email channel failed (non-blocking):', emailErr);
+      }
     }
 
     return {
