@@ -82,12 +82,8 @@ const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[
   ]},
 ]
 
-const ALL_TAB_KEYS = PERMISSION_SECTIONS.flatMap(s => s.tabs.map(t => t.key))
-
 const PRESETS: { name: string; permissions: string[] }[] = [
-  { name: 'Tutto', permissions: ['*'] },
   { name: 'Solo Ore', permissions: ['rilevazione-orari'] },
-  { name: 'Operatore standard', permissions: ALL_TAB_KEYS.filter(k => !['fattura', 'nexi', 'unpaid', 'cauzioni'].includes(k)) },
 ]
 
 interface Props {
@@ -101,8 +97,6 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
   const [nome, setNome] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
-
-  const isWildcard = selected.has('*')
 
   const reset = () => {
     setEmail('')
@@ -120,8 +114,6 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
   const togglePermission = (key: string) => {
     setSelected(prev => {
       const next = new Set(prev)
-      // Toggling any specific permission while wildcard is on first clears wildcard.
-      if (next.has('*') && key !== '*') next.delete('*')
       if (next.has(key)) next.delete(key)
       else next.add(key)
       return next
@@ -132,16 +124,11 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
     setSelected(new Set(perms))
   }
 
-  const isSelected = (key: string) => selected.has('*') || selected.has(key)
+  const isSelected = (key: string) => selected.has(key)
 
   const sectionToggle = (sectionTabs: { key: string }[]) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has('*')) {
-        // Replace wildcard with the specific section being deselected from "all"
-        next.delete('*')
-        for (const k of ALL_TAB_KEYS) next.add(k)
-      }
       const allOn = sectionTabs.every(t => next.has(t.key))
       if (allOn) {
         for (const t of sectionTabs) next.delete(t.key)
@@ -200,12 +187,11 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
   }
 
   const summary = useMemo(() => {
-    if (isWildcard) return 'Accesso completo'
     const n = selected.size
     if (n === 0) return 'Nessun permesso'
     if (n === 1) return '1 permesso'
     return `${n} permessi`
-  }, [isWildcard, selected])
+  }, [selected])
 
   if (!open) return null
 
@@ -258,39 +244,45 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
             <span className="ml-auto text-xs font-medium text-theme-text-secondary">{summary}</span>
           </div>
 
-          {/* Permission grid */}
+          {/* Permission toggles — one ON/OFF switch per tab. */}
           <div className="space-y-3">
             {PERMISSION_SECTIONS.map(section => {
               const allOn = section.tabs.every(t => isSelected(t.key))
               const someOn = !allOn && section.tabs.some(t => isSelected(t.key))
               return (
                 <div key={section.name} className="border border-theme-border rounded-lg p-3 bg-theme-bg-secondary">
-                  <div className="flex items-center justify-between mb-2">
-                    <button
-                      type="button"
-                      onClick={() => sectionToggle(section.tabs)}
-                      disabled={submitting || isWildcard}
-                      className="text-sm font-semibold text-theme-text-primary hover:text-dr7-gold disabled:opacity-50"
-                    >
-                      {section.name}
-                      <span className={`ml-2 text-[10px] uppercase tracking-wider ${allOn ? 'text-emerald-500' : someOn ? 'text-amber-500' : 'text-theme-text-muted'}`}>
-                        {allOn ? 'tutti' : someOn ? 'parziale' : 'nessuno'}
-                      </span>
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                    {section.tabs.map(t => (
-                      <label key={t.key} className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm cursor-pointer ${isSelected(t.key) ? 'bg-dr7-gold/10 text-theme-text-primary' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected(t.key)}
-                          onChange={() => togglePermission(t.key)}
-                          disabled={submitting || isWildcard}
-                          className="w-4 h-4 accent-dr7-gold"
-                        />
-                        <span>{t.label}</span>
-                      </label>
-                    ))}
+                  <button
+                    type="button"
+                    onClick={() => sectionToggle(section.tabs)}
+                    disabled={submitting}
+                    className="w-full flex items-center justify-between mb-2 text-left disabled:opacity-50"
+                  >
+                    <span className="text-sm font-semibold text-theme-text-primary">{section.name}</span>
+                    <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${allOn ? 'bg-emerald-500/20 text-emerald-500' : someOn ? 'bg-amber-500/20 text-amber-500' : 'bg-theme-bg-hover text-theme-text-muted'}`}>
+                      {allOn ? 'tutti ON' : someOn ? 'parziale' : 'tutti OFF'}
+                    </span>
+                  </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                    {section.tabs.map(t => {
+                      const on = isSelected(t.key)
+                      return (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => togglePermission(t.key)}
+                          disabled={submitting}
+                          className="flex items-center justify-between gap-2 px-2 py-2 rounded hover:bg-theme-bg-hover disabled:opacity-50 text-left"
+                        >
+                          <span className={`text-sm ${on ? 'text-theme-text-primary font-medium' : 'text-theme-text-secondary'}`}>{t.label}</span>
+                          <span
+                            className={`relative inline-flex flex-shrink-0 items-center w-10 h-5 rounded-full transition-colors ${on ? 'bg-emerald-500' : 'bg-theme-bg-hover border border-theme-border'}`}
+                            aria-hidden="true"
+                          >
+                            <span className={`inline-block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )
