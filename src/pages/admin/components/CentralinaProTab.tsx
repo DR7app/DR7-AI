@@ -34,7 +34,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12'
 
 type Category = { id: string; label: string }
 type Fascia = {
@@ -58,6 +58,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p9', title: 'Fiscale' },
   { id: 'p10', title: 'DR7 Club' },
   { id: 'p11', title: 'Automazioni' },
+  { id: 'p12', title: 'Marketing' },
 ]
 
 const INITIAL_CATEGORIES: Category[] = [
@@ -466,6 +467,24 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   cross_vehicle_gap_minutes: 15,
   pre_pickup_carwash_buffer_minutes: 90,
   late_return_grace_minutes: 90,
+}
+
+// === Marketing ===
+// Link a sito, Google review, social. Letti dai template recensioni e
+// dai messaggi WhatsApp/email come variabili sostituibili.
+
+type MarketingConfig = {
+  website_url: string
+  google_review_link: string
+  instagram_url: string
+  facebook_url: string
+}
+
+const INITIAL_MARKETING: MarketingConfig = {
+  website_url: 'https://dr7empire.com',
+  google_review_link: 'https://g.page/r/CQwgJt7OYpsfEBM/review',
+  instagram_url: 'https://instagram.com/dr7empire',
+  facebook_url: 'https://facebook.com/dr7empire',
 }
 
 // === DR7 Club ===
@@ -915,6 +934,7 @@ type PersistedSnapshot = {
   fiscal?: FiscalConfig
   dr7_club?: DR7ClubConfig
   automations?: AutomationsConfig
+  marketing?: MarketingConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -1091,6 +1111,7 @@ export default function CentralinaProTab() {
   const initialFiscal = pick(persisted, 'fiscal', INITIAL_FISCAL)
   const initialDr7Club = pick(persisted, 'dr7_club', INITIAL_DR7_CLUB)
   const initialAutomations = pick(persisted, 'automations', INITIAL_AUTOMATIONS)
+  const initialMarketing = pick(persisted, 'marketing', INITIAL_MARKETING)
 
   // Current (working) state
   const [categories, setCategories] = useState<Category[]>(initialCategories)
@@ -1106,6 +1127,7 @@ export default function CentralinaProTab() {
   const [fiscal, setFiscal] = useState<FiscalConfig>(initialFiscal)
   const [dr7Club, setDr7Club] = useState<DR7ClubConfig>(initialDr7Club)
   const [automations, setAutomations] = useState<AutomationsConfig>(initialAutomations)
+  const [marketing, setMarketing] = useState<MarketingConfig>(initialMarketing)
 
   // Saved (committed) snapshot — what was last persisted
   const [savedCategories, setSavedCategories] = useState<Category[]>(initialCategories)
@@ -1121,6 +1143,7 @@ export default function CentralinaProTab() {
   const [savedFiscal, setSavedFiscal] = useState<FiscalConfig>(initialFiscal)
   const [savedDr7Club, setSavedDr7Club] = useState<DR7ClubConfig>(initialDr7Club)
   const [savedAutomations, setSavedAutomations] = useState<AutomationsConfig>(initialAutomations)
+  const [savedMarketing, setSavedMarketing] = useState<MarketingConfig>(initialMarketing)
 
   const [justSaved, setJustSaved] = useState(false)
 
@@ -1161,11 +1184,12 @@ export default function CentralinaProTab() {
         if (remote.fiscal !== undefined) { setFiscal(remote.fiscal); setSavedFiscal(remote.fiscal) }
         if (remote.dr7_club !== undefined) { setDr7Club(remote.dr7_club); setSavedDr7Club(remote.dr7_club) }
         if (remote.automations !== undefined) { setAutomations(remote.automations); setSavedAutomations(remote.automations) }
+        if (remote.marketing !== undefined) { setMarketing(remote.marketing); setSavedMarketing(remote.marketing) }
         // Refresh local cache with the authoritative copy
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
       } else {
         // Supabase is empty — seed with initial/localStorage values
-        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations }
+        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing }
         savePersisted(seed)
         console.log('[CentralinaPro] Seeded Pro config to Supabase')
       }
@@ -1256,7 +1280,7 @@ export default function CentralinaProTab() {
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations },
+        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing },
         {
           categories: savedCategories,
           fasce: savedFasce,
@@ -1271,11 +1295,12 @@ export default function CentralinaProTab() {
           fiscal: savedFiscal,
           dr7_club: savedDr7Club,
           automations: savedAutomations,
+          marketing: savedMarketing,
         }
       ),
     [
-      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7Club, automations,
-      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club, savedAutomations,
+      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7Club, automations, marketing,
+      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club, savedAutomations, savedMarketing,
     ]
   )
 
@@ -1294,7 +1319,8 @@ export default function CentralinaProTab() {
     setSavedFiscal(fiscal)
     setSavedDr7Club(dr7Club)
     setSavedAutomations(automations)
-    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations })
+    setSavedMarketing(marketing)
+    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing })
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
 
@@ -1318,6 +1344,7 @@ export default function CentralinaProTab() {
     setFiscal(savedFiscal)
     setDr7Club(savedDr7Club)
     setAutomations(savedAutomations)
+    setMarketing(savedMarketing)
   }
 
   void changes.length // SaveBar always visible
@@ -1423,6 +1450,12 @@ export default function CentralinaProTab() {
               <AutomazioniSection
                 automations={automations}
                 setAutomations={setAutomations}
+              />
+            )}
+            {section === 'p12' && (
+              <MarketingSection
+                marketing={marketing}
+                setMarketing={setMarketing}
               />
             )}
           </main>
@@ -1549,6 +1582,7 @@ type Snapshot = {
   fiscal: FiscalConfig
   dr7_club: DR7ClubConfig
   automations: AutomationsConfig
+  marketing: MarketingConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -1571,6 +1605,20 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   }
   if (current.automations.late_return_grace_minutes !== saved.automations.late_return_grace_minutes) {
     out.push(`Grace ritardo riconsegna: ${saved.automations.late_return_grace_minutes || 0} → ${current.automations.late_return_grace_minutes || 0} minuti`)
+  }
+
+  // Marketing
+  if (current.marketing.website_url !== saved.marketing.website_url) {
+    out.push(`Marketing / Sito: aggiornato`)
+  }
+  if (current.marketing.google_review_link !== saved.marketing.google_review_link) {
+    out.push(`Marketing / Google Review: aggiornato`)
+  }
+  if (current.marketing.instagram_url !== saved.marketing.instagram_url) {
+    out.push(`Marketing / Instagram: aggiornato`)
+  }
+  if (current.marketing.facebook_url !== saved.marketing.facebook_url) {
+    out.push(`Marketing / Facebook: aggiornato`)
   }
 
   // DR7 Club tiers
@@ -5163,6 +5211,104 @@ function AutomazioniSection({
             <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 90 (1h30). Solo lato admin.</p>
           </label>
         </div>
+      </section>
+    </div>
+  )
+}
+
+// ========== MARKETING (Punto 12) ==========
+
+function MarketingSection({
+  marketing,
+  setMarketing,
+}: {
+  marketing: MarketingConfig
+  setMarketing: (next: MarketingConfig) => void
+}) {
+  const update = (patch: Partial<MarketingConfig>) =>
+    setMarketing({ ...marketing, ...patch })
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+          Marketing
+        </h2>
+        <p className="text-[14px] text-[#6e6e73] mt-1">
+          Link a sito, Google review e social. Vengono inseriti automaticamente nei messaggi recensione (WhatsApp + email) e disponibili come variabili nei template di sistema.
+        </p>
+      </div>
+
+      {/* Legend */}
+      <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
+        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-2 flex items-center gap-2">
+          <svg className="w-4 h-4 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Dove vengono usati questi link
+        </h3>
+        <ul className="space-y-1.5 text-[13px] text-[#3a3a3c]">
+          <li>• <b>Google Review</b>: nei messaggi automatici di richiesta recensione (WhatsApp + email).</li>
+          <li>• <b>Sito / Instagram / Facebook</b>: disponibili come variabili in qualsiasi template di Messaggi di Sistema Pro (es. <code>{'{website_url}'}</code>, <code>{'{instagram_url}'}</code>).</li>
+        </ul>
+        <div className="mt-3 pt-3 border-t border-[#007aff]/10 text-[12px] text-[#6e6e73]">
+          Le modifiche si propagano sito + funzioni server entro 60 secondi (cache TTL).
+        </div>
+      </section>
+
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5 space-y-4">
+        <label className="block">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            Sito web
+          </span>
+          <input
+            type="url"
+            value={marketing.website_url}
+            onChange={(e) => update({ website_url: e.target.value })}
+            placeholder="https://dr7empire.com"
+            className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+          />
+        </label>
+
+        <label className="block">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            Link Google Review
+          </span>
+          <input
+            type="url"
+            value={marketing.google_review_link}
+            onChange={(e) => update({ google_review_link: e.target.value })}
+            placeholder="https://g.page/r/.../review"
+            className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+          />
+          <p className="text-[11px] text-[#6e6e73] mt-1.5">Inserito automaticamente nei messaggi automatici di recensione.</p>
+        </label>
+
+        <label className="block">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            Instagram
+          </span>
+          <input
+            type="url"
+            value={marketing.instagram_url}
+            onChange={(e) => update({ instagram_url: e.target.value })}
+            placeholder="https://instagram.com/dr7empire"
+            className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+          />
+        </label>
+
+        <label className="block">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            Facebook
+          </span>
+          <input
+            type="url"
+            value={marketing.facebook_url}
+            onChange={(e) => update({ facebook_url: e.target.value })}
+            placeholder="https://facebook.com/dr7empire"
+            className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+          />
+        </label>
       </section>
     </div>
   )
