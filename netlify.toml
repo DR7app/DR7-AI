@@ -94,12 +94,12 @@
 [functions."process-scheduled-campaigns-cron"]
   schedule = "*/5 * * * *"
 
-# Messaggi di Sistema Pro — ogni 15 min processa i template con
+# Messaggi di Sistema Pro — ogni 2 min processa i template con
 # is_automatic=true e invia a ogni booking il cui evento (pickup/dropoff/
 # booking/payment/signature/extension) cade nella finestra utile. Dedup
 # tramite system_message_send_log (UNIQUE template_id+booking_id).
 [functions."process-scheduled-system-messages-cron"]
-  schedule = "*/15 * * * *"
+  schedule = "*/2 * * * *"
 
 # DR7 Privilege — DISABILITATO dopo invio massivo non voluto.
 # Lo schedule è commentato così Netlify NON registra il cron.

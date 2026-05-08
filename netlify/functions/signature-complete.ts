@@ -603,6 +603,20 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Messaggi di Sistema Pro — fire instant template per on_signature.
+        // I template con offset alto restano gestiti dal cron.
+        if (contract?.booking_id) {
+            try {
+                const { triggerSystemMessageEvent } = await import('./utils/triggerSystemMessageEvent')
+                const r = await triggerSystemMessageEvent({ bookingId: contract.booking_id, event: 'on_signature' })
+                if (r.sent || r.errors) {
+                    console.log(`[signature-complete] system messages on_signature: sent=${r.sent} skipped=${r.skipped} errors=${r.errors}`)
+                }
+            } catch (e: any) {
+                console.error('[signature-complete] system messages trigger failed:', e.message)
+            }
+        }
+
         return {
             statusCode: 200,
             body: JSON.stringify({

@@ -121,6 +121,24 @@ export const handler: Handler = async (event) => {
       }
     }
 
+    // 4. Messaggi di Sistema Pro — fire instant template per on_booking.
+    //    Templates con offset alto (es. 24h prima del pickup) restano al cron.
+    try {
+      const { triggerSystemMessageEvent } = await import('./utils/triggerSystemMessageEvent')
+      const r = await triggerSystemMessageEvent({ bookingId, event: 'on_booking' })
+      if (r.sent || r.errors) {
+        console.log(`[post-booking-webhook] system messages on_booking: sent=${r.sent} skipped=${r.skipped} errors=${r.errors}`)
+      }
+      if (isPaid) {
+        const r2 = await triggerSystemMessageEvent({ bookingId, event: 'on_payment' })
+        if (r2.sent || r2.errors) {
+          console.log(`[post-booking-webhook] system messages on_payment: sent=${r2.sent} skipped=${r2.skipped} errors=${r2.errors}`)
+        }
+      }
+    } catch (e: any) {
+      console.error('[post-booking-webhook] system messages trigger failed:', e.message)
+    }
+
     return {
       statusCode: 200, headers,
       body: JSON.stringify({ success: true, contractGenerated, fatturaGenerated }),
