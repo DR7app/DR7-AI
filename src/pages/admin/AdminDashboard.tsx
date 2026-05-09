@@ -53,6 +53,7 @@ const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
 // RevenuePricingTab removed — replaced by CentralinaProTab
 const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreventiviTab'))
 const CentralinaProTab = lazyWithRetry(() => import('./components/CentralinaProTab'))
+const SitoTab = lazyWithRetry(() => import('./components/SitoTab'))
 const MaxiPromoGapTab = lazyWithRetry(() => import('./components/MaxiPromoGapTab'))
 const PromoIncassiTab = lazyWithRetry(() => import('./components/PromoIncassiTab'))
 const GestioneOtpTab = lazyWithRetry(() => import('./components/GestioneOtpTab'))
@@ -287,6 +288,9 @@ export default function AdminDashboard() {
     { name: 'Centralina Pro', tabs: [
       { tab: 'centralina-pro', label: 'Centralina Pro' },
     ] },
+    { name: 'Sito', tabs: [
+      { tab: 'sito', label: 'Sito' },
+    ] },
     { name: 'Trustera', tabs: [
       { tab: 'trustera', label: 'Trustera' },
     ] },
@@ -348,6 +352,7 @@ export default function AdminDashboard() {
     'operatori': 'Operatori',
     'rilevazione-orari': 'Rilevazione Orari',
     'dashboard-kpi': 'Dashboard',
+    'sito': 'Sito',
   }
 
   return (
@@ -695,6 +700,7 @@ export default function AdminDashboard() {
           {activeTab === 'rilevazione-orari' && <RilevazioneOrariTab />}
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
           {activeTab === 'centralina-pro' && <CentralinaProTab />}
+          {activeTab === 'sito' && <SitoTab />}
           {activeTab === 'maxi-promo-gap' && <MaxiPromoGapTab />}
           {activeTab === 'promo-incassi' && <PromoIncassiTab />}
           {activeTab === 'gestione-otp' && <GestioneOtpTab />}
