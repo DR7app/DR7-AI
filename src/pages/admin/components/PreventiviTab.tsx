@@ -268,6 +268,63 @@ function getUnlimitedKmPriceForVehicle(vehicle: Vehicle | undefined, tier: Drive
   return tier === 'TIER_2' ? overlay.unlimitedKmTier2 : overlay.unlimitedKmTier1
 }
 
+// Resolve KM inclusi for a (vehicle category, days) pair.
+// Prefers Centralina Pro (source of truth post-April 2026), falls back to
+// legacy rental_config. Guarantees a finite number or 'unlimited' — never NaN.
+function resolveKmIncluded(
+  vehCategory: string | undefined,
+  rentalDays: number,
+  proKm: Array<Record<string, unknown>> | null,
+  rentalConfig: RentalConfig | null,
+): number | 'unlimited' {
+  if (!Number.isFinite(rentalDays) || rentalDays < 1) return 0
+
+  // Map DB vehicle category → Centralina Pro key (mirrors proCategoryKey)
+  const cat = String(vehCategory || '').toLowerCase().trim()
+  let proKey = 'urban'
+  if (cat === 'supercar' || cat === 'supercars' || cat === 'exotic') proKey = 'supercars'
+  else if (cat === 'furgone' || cat === 'furgoni' || cat === 'aziendali' || cat === 'ncc') proKey = 'aziendali'
+
+  const proEntry = (proKm || []).find(k => (k as { id?: string })?.id === proKey) as
+    | { table?: Record<string, number | string>; extraPerDay?: number | string }
+    | undefined
+
+  if (proEntry) {
+    const rawTable = proEntry.table || {}
+    const table: Record<number, number> = {}
+    for (const [k, v] of Object.entries(rawTable)) {
+      const nk = Number(k)
+      const nv = typeof v === 'number' ? v : Number(v)
+      if (Number.isFinite(nk) && Number.isFinite(nv)) table[nk] = nv
+    }
+    const extraPerDay = (() => {
+      const v = typeof proEntry.extraPerDay === 'number' ? proEntry.extraPerDay : Number(proEntry.extraPerDay)
+      return Number.isFinite(v) ? v : 0
+    })()
+    const tableDays = Object.keys(table).map(Number).filter(n => Number.isFinite(n))
+    const hasLimits = tableDays.length > 0 && Object.values(table).some(v => v > 0)
+
+    if (!hasLimits && extraPerDay === 0) {
+      return 'unlimited'
+    }
+    if (hasLimits) {
+      const maxDay = Math.max(...tableDays)
+      const result = rentalDays <= maxDay
+        ? (table[rentalDays] ?? table[maxDay] ?? 0)
+        : ((table[maxDay] ?? 0) + (rentalDays - maxDay) * extraPerDay)
+      return Number.isFinite(result) ? result : 0
+    }
+  }
+
+  // Legacy fallback (Centralina Unica) — also guard against NaN leaks
+  if (rentalConfig) {
+    const r = getKmIncluded(rentalConfig, rentalDays, vehCategory || 'exotic')
+    if (r === 'unlimited') return 'unlimited'
+    return Number.isFinite(r as number) ? (r as number) : 0
+  }
+  return 0
+}
+
 function calculateExperienceCost(services: Record<string, number>, rentalDays: number, allServices: { id: string; name: string; price: number; unit: string }[]): number {
   let total = 0
   for (const [id, qty] of Object.entries(services)) {
@@ -918,10 +975,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       subtotal,
       sconto,
       totalFinal,
-      kmIncluded: rentalConfig ? getKmIncluded(rentalConfig, rentalDays, selectedVehicle?.category || 'exotic') : 0,
+      kmIncluded: resolveKmIncluded(selectedVehicle?.category, rentalDays, proKm, rentalConfig),
       sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 0,
     }
-  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig, noCauzioneResolvedDaily, proLavaggioFee, proSecondDriverDaily, proDr7FlexDaily, proUnlimitedKmDaily])
+  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig, noCauzioneResolvedDaily, proLavaggioFee, proSecondDriverDaily, proDr7FlexDaily, proUnlimitedKmDaily, proKm])
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
 
@@ -1649,27 +1706,44 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           pInsOpts.find(i => i.id === p.insurance_option)?.label
           || (p.insurance_option ? String(p.insurance_option) : 'Kasko')
 
-        // Build pricing lines
-        let pricingLines = `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur((p.base_daily_rate) * p.rental_days)}`
-        if (p.insurance_option && p.insurance_total >= 0) {
-          pricingLines += `\n${resolveInsLabel()} = ${formatEur(p.insurance_total)}`
-        }
-        if (p.lavaggio_fee > 0) pricingLines += `\nLavaggio = ${formatEur(p.lavaggio_fee)}`
-        if (p.no_cauzione_total > 0) pricingLines += `\nNo cauzione = ${formatEur(p.no_cauzione_total)}`
-        if (pickedUnlimitedKm) {
-          pricingLines += p.unlimited_km_total > 0
-            ? `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
-            : `\nKm illimitati = Incluso`
-        } else if (rentalConfig) {
-          const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
-          pricingLines += `\nKm inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}`
-        }
-        if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
-        if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) pricingLines += `\nDR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}`
-        if (extras?.cauzione_veicoli_total && Number(extras.cauzione_veicoli_total) > 0) pricingLines += `\nCauzione veicolo = ${formatEur(Number(extras.cauzione_veicoli_total))}`
-        if (extras?.delivery_fee && Number(extras.delivery_fee) > 0) pricingLines += `\nConsegna = ${formatEur(Number(extras.delivery_fee))}`
-        if (extras?.pickup_fee && Number(extras.pickup_fee) > 0) pricingLines += `\nRitiro = ${formatEur(Number(extras.pickup_fee))}`
-        if (extras?.experience_cost && Number(extras.experience_cost) > 0) pricingLines += `\nServizi experience = ${formatEur(Number(extras.experience_cost))}`
+        // Build each pricing line independently so the template can reference
+        // them one at a time (e.g. {rental_line}, {km_line}, ...) and skip
+        // anything it doesn't want. Each is empty when not applicable, so an
+        // unused line collapses cleanly. The legacy {pricing_lines} placeholder
+        // joins all non-empty lines with \n for templates that still use it.
+        const giornoLabel = p.rental_days === 1 ? 'giorno' : 'giorni'
+        const lineRental = `${p.rental_days} ${giornoLabel} — ${formatEur(p.base_daily_rate)}/giorno = ${formatEur((p.base_daily_rate) * p.rental_days)}`
+        const lineInsurance = (p.insurance_option && p.insurance_total >= 0)
+          ? `${resolveInsLabel()} = ${formatEur(p.insurance_total)}` : ''
+        const lineLavaggio = p.lavaggio_fee > 0 ? `Lavaggio Finale = ${formatEur(p.lavaggio_fee)}` : ''
+        const lineNoCauzione = p.no_cauzione_total > 0 ? `No cauzione = ${formatEur(p.no_cauzione_total)}` : ''
+        const lineKm = (() => {
+          if (pickedUnlimitedKm) {
+            return p.unlimited_km_total > 0
+              ? `Km illimitati = ${formatEur(p.unlimited_km_total)}`
+              : `Km illimitati = Incluso`
+          }
+          const kmInc = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
+          return `Km inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}`
+        })()
+        const lineSecondDriver = p.second_driver_total > 0
+          ? `Secondo guidatore = ${formatEur(p.second_driver_total)}` : ''
+        const lineDr7Flex = (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0)
+          ? `DR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}` : ''
+        const lineCauzioneVeicoli = (extras?.cauzione_veicoli_total && Number(extras.cauzione_veicoli_total) > 0)
+          ? `Cauzione veicolo = ${formatEur(Number(extras.cauzione_veicoli_total))}` : ''
+        const lineDelivery = (extras?.delivery_fee && Number(extras.delivery_fee) > 0)
+          ? `Consegna = ${formatEur(Number(extras.delivery_fee))}` : ''
+        const linePickup = (extras?.pickup_fee && Number(extras.pickup_fee) > 0)
+          ? `Ritiro = ${formatEur(Number(extras.pickup_fee))}` : ''
+        const lineExperience = (extras?.experience_cost && Number(extras.experience_cost) > 0)
+          ? `Servizi experience = ${formatEur(Number(extras.experience_cost))}` : ''
+
+        const pricingLines = [
+          lineRental, lineInsurance, lineLavaggio, lineNoCauzione, lineKm,
+          lineSecondDriver, lineDr7Flex, lineCauzioneVeicoli,
+          lineDelivery, linePickup, lineExperience,
+        ].filter(Boolean).join('\n')
 
         let discountLine = ''
         if (p.sconto > 0) discountLine = `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}`
@@ -1704,10 +1778,30 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         const vars: Record<string, string> = {
           vehicle_specs: specs,
           vehicle_name: p.vehicle_name || '',
+          // Anno modello in formato compatto "MY2024" (vuoto se mancante).
+          vehicle_year: p.vehicle_model_year ? `MY${p.vehicle_model_year}` : '',
+          // Specs senza nome veicolo: "440 CV • 0-100 km/h in 3,9s".
+          vehicle_specs_short: [
+            p.vehicle_cv ? `${p.vehicle_cv} CV` : '',
+            p.vehicle_0_100 ? `0-100 km/h in ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
+          ].filter(Boolean).join(' • '),
           rental_days: String(p.rental_days),
           daily_rate: formatEur(p.base_daily_rate),
           rental_total: formatEur((p.base_daily_rate) * p.rental_days),
-          insurance_line: p.insurance_option ? `${resolveInsLabel()} = ${formatEur(p.insurance_total)}` : '',
+          // Per-line placeholders — usali al posto di {pricing_lines} per
+          // controllare quali voci appaiono nel messaggio. Vuoto se la voce
+          // non si applica (es. lavaggio non incluso).
+          rental_line: lineRental,
+          insurance_line: lineInsurance,
+          lavaggio_line: lineLavaggio,
+          no_cauzione_line: lineNoCauzione,
+          km_line: lineKm,
+          second_driver_line: lineSecondDriver,
+          dr7_flex_line: lineDr7Flex,
+          cauzione_veicoli_line: lineCauzioneVeicoli,
+          delivery_line: lineDelivery,
+          pickup_line: linePickup,
+          experience_line: lineExperience,
           pricing_lines: pricingLines,
           // Subtotale listino: somma di tutte le voci a prezzo di listino,
           // PRIMA dell'applicazione dei coefficienti della Centralina Pro.
@@ -1751,8 +1845,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             ? new Date(p.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
             : '',
           km_info: pickedUnlimitedKm ? 'Illimitati' : (() => {
-            if (!rentalConfig) return ''
-            const km = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+            const km = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
             return km === 'unlimited' ? 'Illimitati' : `${km} Km`
           })(),
           // Luogo di ritiro/riconsegna — se "domicilio" usa l'indirizzo custom,

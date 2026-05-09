@@ -265,6 +265,51 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
             { key: 'hint_link', description: 'Link diretto alla prenotazione del veicolo' },
         ],
     },
+    {
+        label: 'Preventivo — Veicolo & Date',
+        scope: 'specific',
+        scopeNote: 'Solo nei template "Preventivo WhatsApp" / "Preventivo senza sconto".',
+        items: [
+            { key: 'vehicle_year', description: 'Anno modello in formato compatto', example: 'MY2024' },
+            { key: 'vehicle_specs', description: 'Specs complete (nome + anno + cv + 0-100)', example: 'Porsche Macan GTS my 2024 440cv 0-100 3,9s' },
+            { key: 'vehicle_specs_short', description: 'Solo specs tecniche, senza nome veicolo', example: '440 CV • 0-100 km/h in 3,9s' },
+            { key: 'rental_days', description: 'Numero di giorni di noleggio', example: '6' },
+            { key: 'daily_rate', description: 'Tariffa giornaliera a listino', example: '€149,00' },
+            { key: 'rental_total', description: 'Totale noleggio (giorni × tariffa)', example: '€894,00' },
+        ],
+    },
+    {
+        label: 'Preventivo — Voci di costo (per riga)',
+        scope: 'specific',
+        scopeNote: 'Usali al posto di {pricing_lines} per scegliere quali voci appaiono nel messaggio. Vuoto se la voce non si applica.',
+        items: [
+            { key: 'rental_line', description: 'Riga noleggio completa', example: '6 giorni — €149,00/giorno = €894,00' },
+            { key: 'insurance_line', description: 'Riga assicurazione', example: 'Kasko Base = €534,00' },
+            { key: 'lavaggio_line', description: 'Riga lavaggio finale (se incluso)', example: 'Lavaggio Finale = €9,90' },
+            { key: 'no_cauzione_line', description: 'Riga No Cauzione (se richiesta)', example: 'No cauzione = €147,00' },
+            { key: 'km_line', description: 'Riga km inclusi o illimitati', example: 'Km inclusi: 360 Km' },
+            { key: 'second_driver_line', description: 'Riga secondo guidatore', example: 'Secondo guidatore = €60,00' },
+            { key: 'dr7_flex_line', description: 'Riga DR7 Flex', example: 'DR7 Flex = €54,00' },
+            { key: 'cauzione_veicoli_line', description: 'Riga cauzione veicoli', example: 'Cauzione veicolo = €1.500,00' },
+            { key: 'delivery_line', description: 'Riga consegna a domicilio', example: 'Consegna = €40,00' },
+            { key: 'pickup_line', description: 'Riga ritiro a domicilio', example: 'Ritiro = €40,00' },
+            { key: 'experience_line', description: 'Riga servizi experience', example: 'Servizi experience = €120,00' },
+            { key: 'pricing_lines', description: 'Tutte le voci sopra concatenate (legacy)', example: '6 giorni — €149,00/giorno = €894,00\\nKasko Base = €534,00\\n...' },
+        ],
+    },
+    {
+        label: 'Preventivo — Totali & Coefficienti',
+        scope: 'specific',
+        scopeNote: 'Solo nei template Preventivo. Coefficienti opt-in via checkbox al momento dell\'invio.',
+        items: [
+            { key: 'subtotal_listino', description: 'Subtotale a listino (prima dei coefficienti Pro)', example: '€1.575,00' },
+            { key: 'subtotal', description: 'Subtotale dopo coefficienti', example: '€1.434,22' },
+            { key: 'total', description: 'Totale finale (sconto applicato se presente)', example: '€1.290,00' },
+            { key: 'sconto', description: 'Riga sconto (vuoto se nessuno sconto)', example: 'sconto valido 24h €1.290,00' },
+            { key: 'coefficienti', description: 'Blocco multilinea con tutti i coefficienti applicati', example: 'Coefficienti applicati:\\n- Stagione: x1,15\\n...' },
+            { key: 'coefficiente_combinato', description: 'Solo il moltiplicatore combinato', example: 'x1,2143' },
+        ],
+    },
 ]
 
 function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
