@@ -54,7 +54,10 @@ const handler: Handler = async (event) => {
 
         if (insErr) throw insErr
 
-        const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
+        // Public-facing registration URL: clients should land on the website
+        // (dr7empire.com), NOT the admin domain. PUBLIC_REGISTRATION_URL lets
+        // ops override per-environment without redeploying code.
+        const baseUrl = process.env.PUBLIC_REGISTRATION_URL || 'https://dr7empire.com'
         const url = `${baseUrl}/registrazione-cliente/${token}`
 
         return {

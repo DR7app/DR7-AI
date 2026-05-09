@@ -51,13 +51,19 @@ const handler: Handler = async (event) => {
             return { statusCode: 410, headers, body: JSON.stringify({ error: 'Link revocato' }) }
         }
 
-        // Whitelist + trim fields to avoid arbitrary writes
+        // Whitelist + trim fields to avoid arbitrary writes. Estesa per
+        // matchare i campi del NewClientModal usato nell'admin (sesso,
+        // numero_civico, ente_ufficio, citta_nascita) cosi' i clienti che
+        // si auto-registrano popolano gli stessi campi che direzione vede
+        // dall'admin senza dover completare a mano dopo.
         const ALLOWED_TEXT = [
             'tipo_cliente', 'nome', 'cognome', 'email', 'telefono', 'pec',
-            'codice_fiscale', 'numero_patente', 'indirizzo', 'citta', 'cap',
-            'provincia', 'nazione', 'ragione_sociale', 'partita_iva',
-            'codice_destinatario', 'denominazione', 'codice_ipa',
-            'codice_univoco', 'luogo_nascita', 'provincia_nascita', 'note',
+            'codice_fiscale', 'numero_patente', 'indirizzo', 'numero_civico',
+            'citta', 'cap', 'codice_postale', 'provincia', 'nazione',
+            'ragione_sociale', 'partita_iva', 'codice_destinatario',
+            'denominazione', 'codice_ipa', 'codice_univoco', 'sesso',
+            'luogo_nascita', 'citta_nascita', 'provincia_nascita',
+            'ente_ufficio', 'note',
         ] as const
 
         const insert: Record<string, unknown> = { source: 'self_registration' }
