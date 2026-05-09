@@ -1694,12 +1694,25 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         const extras = p.extras_detail as Record<string, unknown> | null
         const pickedUnlimitedKm = !!extras?.include_unlimited_km || p.unlimited_km_total > 0
 
+        // Vehicle specs fallback: preventivi creati senza compilare i campi
+        // (cv / 0-100 / anno) hanno NULL su quelle colonne. Cadiamo allora
+        // su vehicle.metadata.* della tabella vehicles, dove VehiclesTab
+        // memorizza i dati tecnici. Tutti i nuovi preventivi vengono salvati
+        // con i campi compilati, ma la fallback copre le righe storiche.
+        const meta = (pVehicle?.metadata || {}) as { cv?: unknown; model_year?: unknown; acceleration_0_100?: unknown }
+        const metaCv = meta.cv != null ? Number(meta.cv) : null
+        const metaYear = meta.model_year != null ? Number(meta.model_year) : null
+        const metaZeroToHundred = meta.acceleration_0_100 != null ? Number(meta.acceleration_0_100) : null
+        const cv = p.vehicle_cv ?? (Number.isFinite(metaCv) ? metaCv : null)
+        const modelYear = p.vehicle_model_year ?? (Number.isFinite(metaYear) ? metaYear : null)
+        const zeroToHundred = p.vehicle_0_100 ?? (Number.isFinite(metaZeroToHundred) ? metaZeroToHundred : null)
+
         // Build variables for substitution
         const specs = [
           p.vehicle_name,
-          p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
-          p.vehicle_cv ? `${p.vehicle_cv}cv` : '',
-          p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
+          modelYear ? `my ${modelYear}` : '',
+          cv ? `${cv}cv` : '',
+          zeroToHundred ? `0-100 ${String(zeroToHundred).replace('.', ',')}s` : '',
         ].filter(Boolean).join(' ')
 
         const resolveInsLabel = () =>
@@ -1779,11 +1792,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           vehicle_specs: specs,
           vehicle_name: p.vehicle_name || '',
           // Anno modello in formato compatto "MY2024" (vuoto se mancante).
-          vehicle_year: p.vehicle_model_year ? `MY${p.vehicle_model_year}` : '',
+          vehicle_year: modelYear ? `MY${modelYear}` : '',
           // Specs senza nome veicolo: "440 CV • 0-100 km/h in 3,9s".
           vehicle_specs_short: [
-            p.vehicle_cv ? `${p.vehicle_cv} CV` : '',
-            p.vehicle_0_100 ? `0-100 km/h in ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
+            cv ? `${cv} CV` : '',
+            zeroToHundred ? `0-100 km/h in ${String(zeroToHundred).replace('.', ',')}s` : '',
           ].filter(Boolean).join(' • '),
           rental_days: String(p.rental_days),
           daily_rate: formatEur(p.base_daily_rate),
@@ -2909,7 +2922,24 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         <Select
           label="Veicolo *"
           value={form.vehicle_id}
-          onChange={(e) => setForm(prev => ({ ...prev, vehicle_id: e.target.value, insurance_option: '' }))}
+          onChange={(e) => {
+            const newId = e.target.value
+            const v = vehicles.find(x => x.id === newId)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const m = (v?.metadata || {}) as any
+            // Auto-popola le specs dalla scheda veicolo (Veicoli > metadata)
+            // cosi' i placeholder {vehicle_year}/{vehicle_specs_short}/{vehicle_specs}
+            // sono sempre pieni nel preventivo. Se l'admin vuole ridefinirli,
+            // puo' editare i campi a mano sotto.
+            setForm(prev => ({
+              ...prev,
+              vehicle_id: newId,
+              insurance_option: '',
+              model_year: m.model_year != null ? String(m.model_year) : prev.model_year,
+              cv: m.cv != null ? String(m.cv) : prev.cv,
+              acceleration_0_100: m.acceleration_0_100 != null ? String(m.acceleration_0_100) : prev.acceleration_0_100,
+            }))
+          }}
           options={[
             { value: '', label: 'Seleziona veicolo...' },
             ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}${v.status === 'maintenance' ? ' [Manutenzione]' : ''}` }))
