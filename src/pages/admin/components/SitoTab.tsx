@@ -46,6 +46,8 @@ type SectionId =
     | 'investitori'
     | 'franchising'
     | 'aviation'
+    | 'check-email'
+    | 'jet-search'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -63,6 +65,8 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'investitori', title: 'Investitori', ready: true },
     { id: 'franchising', title: 'Franchising', ready: true },
     { id: 'aviation', title: 'Aviation Quote', ready: true },
+    { id: 'check-email', title: 'Check Email', ready: true },
+    { id: 'jet-search', title: 'Jet Search Results', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -297,6 +301,37 @@ function emptyLegalPage(id: LegalPageId): LegalPageCopy {
 
 const INITIAL_LEGAL: LegalCopy = {
     pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
+}
+
+// ─── Check Email + Jet Search Results (small bilingual pages) ─────────────
+interface CheckEmailCopy {
+    title_it: string; title_en: string
+    body_it: string; body_en: string
+    back_link_it: string; back_link_en: string
+}
+const INITIAL_CHECK_EMAIL: CheckEmailCopy = {
+    title_it: '', title_en: '',
+    body_it: '', body_en: '',
+    back_link_it: '', back_link_en: '',
+}
+
+interface JetSearchResultsCopy {
+    title_it: string; title_en: string
+    subtitle_connector_it: string; subtitle_connector_en: string
+    passengers_suffix_it: string; passengers_suffix_en: string
+    modify_search_cta_it: string; modify_search_cta_en: string
+    airport_fallback: string
+    empty_title_it: string; empty_title_en: string
+    empty_body_it: string; empty_body_en: string
+}
+const INITIAL_JET_SEARCH: JetSearchResultsCopy = {
+    title_it: '', title_en: '',
+    subtitle_connector_it: '', subtitle_connector_en: '',
+    passengers_suffix_it: '', passengers_suffix_en: '',
+    modify_search_cta_it: '', modify_search_cta_en: '',
+    airport_fallback: 'N/A',
+    empty_title_it: '', empty_title_en: '',
+    empty_body_it: '', empty_body_en: '',
 }
 
 // ─── Aviation Quote Request (bilingual) ───────────────────────────────────
@@ -741,6 +776,8 @@ interface SiteCopySnapshot {
     investitori?: InvestitoriCopy
     franchising?: FranchisingCopy
     aviationQuote?: AviationQuoteCopy
+    checkEmail?: CheckEmailCopy
+    jetSearchResults?: JetSearchResultsCopy
 }
 
 interface CurrentState {
@@ -759,6 +796,8 @@ interface CurrentState {
     investitori: InvestitoriCopy
     franchising: FranchisingCopy
     aviationQuote: AviationQuoteCopy
+    checkEmail: CheckEmailCopy
+    jetSearchResults: JetSearchResultsCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -847,6 +886,10 @@ export default function SitoTab() {
     const [savedFranchising, setSavedFranchising] = useState<FranchisingCopy>(INITIAL_FRANCHISING)
     const [aviationQuote, setAviationQuote] = useState<AviationQuoteCopy>(INITIAL_AVIATION_QUOTE)
     const [savedAviationQuote, setSavedAviationQuote] = useState<AviationQuoteCopy>(INITIAL_AVIATION_QUOTE)
+    const [checkEmail, setCheckEmail] = useState<CheckEmailCopy>(INITIAL_CHECK_EMAIL)
+    const [savedCheckEmail, setSavedCheckEmail] = useState<CheckEmailCopy>(INITIAL_CHECK_EMAIL)
+    const [jetSearchResults, setJetSearchResults] = useState<JetSearchResultsCopy>(INITIAL_JET_SEARCH)
+    const [savedJetSearchResults, setSavedJetSearchResults] = useState<JetSearchResultsCopy>(INITIAL_JET_SEARCH)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -934,6 +977,14 @@ export default function SitoTab() {
                     setAviationQuote(remote.aviationQuote)
                     setSavedAviationQuote(remote.aviationQuote)
                 }
+                if (remote?.checkEmail && remote.checkEmail.title_it) {
+                    setCheckEmail(remote.checkEmail)
+                    setSavedCheckEmail(remote.checkEmail)
+                }
+                if (remote?.jetSearchResults && remote.jetSearchResults.title_it) {
+                    setJetSearchResults(remote.jetSearchResults)
+                    setSavedJetSearchResults(remote.jetSearchResults)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -946,10 +997,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults]
     )
     const dirty = changes.length > 0
 
@@ -960,7 +1011,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -976,6 +1027,8 @@ export default function SitoTab() {
             setSavedInvestitori(investitori)
             setSavedFranchising(franchising)
             setSavedAviationQuote(aviationQuote)
+            setSavedCheckEmail(checkEmail)
+            setSavedJetSearchResults(jetSearchResults)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1025,6 +1078,8 @@ export default function SitoTab() {
         setInvestitori(savedInvestitori)
         setFranchising(savedFranchising)
         setAviationQuote(savedAviationQuote)
+        setCheckEmail(savedCheckEmail)
+        setJetSearchResults(savedJetSearchResults)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1175,6 +1230,12 @@ export default function SitoTab() {
                         {hydrated && section === 'aviation' && (
                             <AviationQuoteEditor copy={aviationQuote} setCopy={setAviationQuote} />
                         )}
+                        {hydrated && section === 'check-email' && (
+                            <CheckEmailEditor copy={checkEmail} setCopy={setCheckEmail} />
+                        )}
+                        {hydrated && section === 'jet-search' && (
+                            <JetSearchResultsEditor copy={jetSearchResults} setCopy={setJetSearchResults} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1287,6 +1348,12 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.aviationQuote) !== JSON.stringify(saved.aviationQuote)) {
         out.push('Aviation Quote: contenuti modificati')
+    }
+    if (JSON.stringify(current.checkEmail) !== JSON.stringify(saved.checkEmail)) {
+        out.push('Check Email: contenuti modificati')
+    }
+    if (JSON.stringify(current.jetSearchResults) !== JSON.stringify(saved.jetSearchResults)) {
+        out.push('Jet Search Results: contenuti modificati')
     }
     return out
 }
@@ -3877,6 +3944,69 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
                     <FieldTextArea label="Template RETURN (EN)" value={copy.whatsapp_template_return_en} onChange={v => update('whatsapp_template_return_en', v)} />
                     <FieldTextArea label="Template NOTES + closing (IT) — incluso se note compilate" value={copy.whatsapp_template_notes_it} onChange={v => update('whatsapp_template_notes_it', v)} />
                     <FieldTextArea label="Template NOTES + closing (EN)" value={copy.whatsapp_template_notes_en} onChange={v => update('whatsapp_template_notes_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Check Email editor ────────────────────────────────────────────────────
+function CheckEmailEditor({ copy, setCopy }: { copy: CheckEmailCopy; setCopy: (next: CheckEmailCopy) => void }) {
+    const update = <K extends keyof CheckEmailCopy>(key: K, value: CheckEmailCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Check Email</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/check-email</code> mostrata dopo signup. Solo 3 stringhe IT/EN.
+                </p>
+            </div>
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.title_it} onChange={v => update('title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.title_en} onChange={v => update('title_en', v)} />
+                    <FieldTextArea label="Corpo (IT)" value={copy.body_it} onChange={v => update('body_it', v)} />
+                    <FieldTextArea label="Body (EN)" value={copy.body_en} onChange={v => update('body_en', v)} />
+                    <FieldText label='Link "Torna al Login" (IT)' value={copy.back_link_it} onChange={v => update('back_link_it', v)} />
+                    <FieldText label='Link "Back to Sign In" (EN)' value={copy.back_link_en} onChange={v => update('back_link_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Jet Search Results editor (chrome only) ───────────────────────────────
+function JetSearchResultsEditor({ copy, setCopy }: { copy: JetSearchResultsCopy; setCopy: (next: JetSearchResultsCopy) => void }) {
+    const update = <K extends keyof JetSearchResultsCopy>(key: K, value: JetSearchResultsCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Jet Search Results</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/jet-search-results</code> — chrome editabile (titolo, connettori, empty state). Il catalogo jet vive in RENTAL_CATEGORIES (constants).
+                </p>
+            </div>
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header risultati</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.title_it} onChange={v => update('title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.title_en} onChange={v => update('title_en', v)} />
+                    <FieldText label='Connettore "a" / "to" (IT)' value={copy.subtitle_connector_it} onChange={v => update('subtitle_connector_it', v)} />
+                    <FieldText label='Connector "to" (EN)' value={copy.subtitle_connector_en} onChange={v => update('subtitle_connector_en', v)} />
+                    <FieldText label='Suffisso "Passeggeri" (IT)' value={copy.passengers_suffix_it} onChange={v => update('passengers_suffix_it', v)} />
+                    <FieldText label='Suffix "Passengers" (EN)' value={copy.passengers_suffix_en} onChange={v => update('passengers_suffix_en', v)} />
+                    <FieldText label='Bottone "Modifica Ricerca" (IT)' value={copy.modify_search_cta_it} onChange={v => update('modify_search_cta_it', v)} />
+                    <FieldText label='Button "Modify Search" (EN)' value={copy.modify_search_cta_en} onChange={v => update('modify_search_cta_en', v)} />
+                </div>
+                <FieldText label='Fallback aeroporto sconosciuto (es. "N/A")' value={copy.airport_fallback} onChange={v => update('airport_fallback', v)} />
+            </section>
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato vuoto (nessun jet trovato)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.empty_title_it} onChange={v => update('empty_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.empty_title_en} onChange={v => update('empty_title_en', v)} />
+                    <FieldTextArea label="Corpo (IT)" value={copy.empty_body_it} onChange={v => update('empty_body_it', v)} />
+                    <FieldTextArea label="Body (EN)" value={copy.empty_body_en} onChange={v => update('empty_body_en', v)} />
                 </div>
             </section>
         </div>
