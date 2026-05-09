@@ -3,13 +3,14 @@ import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
 import Button from './Button'
 import toast from 'react-hot-toast'
+import FleetVehiclePanoramica from './FleetVehiclePanoramica'
 
 interface FleetVehicleDetailProps {
     vehicleId: string
     onBack: () => void
 }
 
-type SubTab = 'dashboard' | 'maintenance' | 'details' | 'history'
+type SubTab = 'panoramica' | 'dashboard' | 'maintenance' | 'details' | 'history'
 
 interface MaintenanceAlert {
     type: 'service' | 'tires' | 'brakes' | 'insurance' | 'tax' | 'inspection'
@@ -24,7 +25,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
     const [vehicle, setVehicle] = useState<Vehicle | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
-    const [activeTab, setActiveTab] = useState<SubTab>('dashboard')
+    const [activeTab, setActiveTab] = useState<SubTab>('panoramica')
     const [editedVehicle, setEditedVehicle] = useState<Partial<Vehicle>>({})
 
     useEffect(() => {
@@ -270,6 +271,12 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
             {/* Internal Navigation */}
             <div className="flex gap-2 mb-6 border-b border-theme-border pb-2 overflow-x-auto">
                 <button
+                    onClick={() => setActiveTab('panoramica')}
+                    className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'panoramica' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
+                >
+                    Panoramica
+                </button>
+                <button
                     onClick={() => setActiveTab('dashboard')}
                     className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'dashboard' ? 'bg-dr7-gold text-white font-bold' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary'}`}
                 >
@@ -299,7 +306,10 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
             </div>
 
             {/* Content Area */}
-            <div className="bg-theme-bg-secondary rounded-lg p-6 border border-theme-border min-h-[400px]">
+            <div className={activeTab === 'panoramica' ? 'min-h-[400px]' : 'bg-theme-bg-secondary rounded-lg p-6 border border-theme-border min-h-[400px]'}>
+                {activeTab === 'panoramica' && vehicle && (
+                    <FleetVehiclePanoramica vehicle={{ ...vehicle, ...editedVehicle } as Vehicle} alerts={alerts} />
+                )}
                 {activeTab === 'dashboard' && (
                     <div>
                         <h3 className="text-xl text-theme-text-primary mb-4">Cruscotto</h3>
