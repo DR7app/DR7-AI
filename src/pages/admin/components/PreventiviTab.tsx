@@ -272,7 +272,7 @@ function getUnlimitedKmPriceForVehicle(vehicle: Vehicle | undefined, tier: Drive
 // Prefers Centralina Pro (source of truth post-April 2026), falls back to
 // legacy rental_config. Guarantees a finite number or 'unlimited' — never NaN.
 function resolveKmIncluded(
-  vehCategory: string | undefined,
+  vehCategory: string | null | undefined,
   rentalDays: number,
   proKm: Array<Record<string, unknown>> | null,
   rentalConfig: RentalConfig | null,
