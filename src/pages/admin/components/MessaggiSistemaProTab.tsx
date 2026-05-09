@@ -405,6 +405,41 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
                         <span className="text-theme-text-muted">Tocca un'etichetta per copiarla negli appunti.</span>
                     </div>
 
+                    {/* FORMATTAZIONE WhatsApp */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-sky-500/20">
+                            <span className="px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/40 text-[9px] font-bold uppercase tracking-wide">Formattazione</span>
+                            <span className="text-[10px] text-theme-text-muted">Caratteri speciali e sintassi WhatsApp — passano nel messaggio cosi' come li scrivi</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {([
+                                { code: '•', label: 'Bullet point', preview: '• Voce 1\n• Voce 2', tip: 'Mac: ⌥+8 — Win: Alt+0149' },
+                                { code: '·', label: 'Bullet piccolo', preview: '· Voce' },
+                                { code: '*testo*', label: 'Grassetto', preview: '*Totale*: €1.290' },
+                                { code: '_testo_', label: 'Corsivo', preview: '_valido 24h_' },
+                                { code: '~testo~', label: 'Barrato', preview: '~€1.500~ €1.290' },
+                                { code: '```testo```', label: 'Monospaziato', preview: '```DR7-A1B2C3```' },
+                            ] as const).map(f => (
+                                <button
+                                    key={f.code}
+                                    type="button"
+                                    onClick={() => {
+                                        navigator.clipboard?.writeText(f.code)
+                                        toast.success(`${f.code} copiato`)
+                                    }}
+                                    className="flex items-start gap-2 px-2 py-2 rounded border border-theme-border bg-theme-bg-secondary hover:border-sky-500/50 hover:bg-sky-500/5 text-left transition-colors"
+                                    title={'tip' in f ? f.tip : 'Tocca per copiare'}
+                                >
+                                    <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded text-dr7-gold text-[11px] shrink-0">{f.code}</code>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-[11px] font-semibold text-theme-text-primary">{f.label}</div>
+                                        <div className="text-[10px] text-theme-text-muted whitespace-pre-line truncate">{f.preview}</div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* SEMPRE DISPONIBILI */}
                     <div>
                         <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-emerald-500/20">
