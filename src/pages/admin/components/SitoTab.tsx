@@ -45,7 +45,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'membership', title: 'Membership / DR7 Club', ready: true },
     { id: 'hero', title: 'Home / Hero', ready: true },
     { id: 'chi-siamo', title: 'Chi Siamo', ready: true },
-    { id: 'footer', title: 'Footer', ready: false },
+    { id: 'footer', title: 'Footer', ready: true },
     { id: 'legali', title: 'Privacy & Termini', ready: false },
 ]
 
@@ -181,6 +181,65 @@ const INITIAL_ABOUT: AboutCopy = {
     story_signature: '',
 }
 
+// ─── Footer schema (mirror of website utils/siteCopy.ts) ───────────────────
+type FooterSocialIcon = 'instagram' | 'tiktok' | 'facebook' | 'linkedin' | 'youtube' | 'x'
+
+interface FooterSocialLink {
+    id: string
+    label: string
+    href: string
+    icon: FooterSocialIcon
+}
+
+interface FooterLink {
+    id: string
+    label_it: string
+    label_en: string
+    to: string
+    external?: boolean
+}
+
+interface FooterCopy {
+    network_title: string
+    network_text_it: string; network_text_en: string
+    social_links: FooterSocialLink[]
+    reviews_title: string
+    reviews_text_it: string; reviews_text_en: string
+    contact_title: string
+    contact_whatsapp_number: string
+    contact_whatsapp_url: string
+    contact_company_name: string
+    contact_legal_address_it: string; contact_legal_address_en: string
+    contact_capitale_sociale_it: string; contact_capitale_sociale_en: string
+    contact_piva: string
+    contact_disclaimer_it: string; contact_disclaimer_en: string
+    division_links: FooterLink[]
+    corporate_links: FooterLink[]
+    legal_links: FooterLink[]
+    bottom_brand_line: string
+    bottom_copyright: string
+}
+
+const INITIAL_FOOTER: FooterCopy = {
+    network_title: '',
+    network_text_it: '', network_text_en: '',
+    social_links: [],
+    reviews_title: '',
+    reviews_text_it: '', reviews_text_en: '',
+    contact_title: '',
+    contact_whatsapp_number: '', contact_whatsapp_url: '',
+    contact_company_name: '',
+    contact_legal_address_it: '', contact_legal_address_en: '',
+    contact_capitale_sociale_it: '', contact_capitale_sociale_en: '',
+    contact_piva: '',
+    contact_disclaimer_it: '', contact_disclaimer_en: '',
+    division_links: [],
+    corporate_links: [],
+    legal_links: [],
+    bottom_brand_line: '',
+    bottom_copyright: '',
+}
+
 const INITIAL_MEMBERSHIP: MembershipCopy = {
     hero_eyebrow_it: '', hero_eyebrow_en: '',
     hero_title: 'DR7 CLUB',
@@ -252,7 +311,8 @@ interface SiteCopySnapshot {
     membership?: MembershipCopy
     home?: HomeCopy
     about?: AboutCopy
-    // Future: footer, legali
+    footer?: FooterCopy
+    // Future: legali
 }
 
 interface CurrentState {
@@ -261,6 +321,7 @@ interface CurrentState {
     membership: MembershipCopy
     home: HomeCopy
     about: AboutCopy
+    footer: FooterCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -329,6 +390,8 @@ export default function SitoTab() {
     const [savedHome, setSavedHome] = useState<HomeCopy>(INITIAL_HOME)
     const [about, setAbout] = useState<AboutCopy>(INITIAL_ABOUT)
     const [savedAbout, setSavedAbout] = useState<AboutCopy>(INITIAL_ABOUT)
+    const [footer, setFooter] = useState<FooterCopy>(INITIAL_FOOTER)
+    const [savedFooter, setSavedFooter] = useState<FooterCopy>(INITIAL_FOOTER)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -358,6 +421,10 @@ export default function SitoTab() {
                     setAbout(remote.about)
                     setSavedAbout(remote.about)
                 }
+                if (remote?.footer && Array.isArray(remote.footer.social_links)) {
+                    setFooter(remote.footer)
+                    setSavedFooter(remote.footer)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -370,10 +437,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout }
+            { faq, cancellazione, membership, home, about, footer },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter]
     )
     const dirty = changes.length > 0
 
@@ -384,12 +451,13 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
             setSavedHome(home)
             setSavedAbout(about)
+            setSavedFooter(footer)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -429,6 +497,7 @@ export default function SitoTab() {
         setMembership(savedMembership)
         setHome(savedHome)
         setAbout(savedAbout)
+        setFooter(savedFooter)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -549,7 +618,10 @@ export default function SitoTab() {
                         {hydrated && section === 'chi-siamo' && (
                             <AboutEditor copy={about} setCopy={setAbout} />
                         )}
-                        {hydrated && section !== 'faq' && section !== 'cancellazione' && section !== 'membership' && section !== 'hero' && section !== 'chi-siamo' && (
+                        {hydrated && section === 'footer' && (
+                            <FooterEditor copy={footer} setCopy={setFooter} />
+                        )}
+                        {hydrated && section !== 'faq' && section !== 'cancellazione' && section !== 'membership' && section !== 'hero' && section !== 'chi-siamo' && section !== 'footer' && (
                             <PlaceholderSection
                                 title={SECTIONS.find(s => s.id === section)?.title || section}
                             />
@@ -623,6 +695,10 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     // About (same approach)
     if (JSON.stringify(current.about) !== JSON.stringify(saved.about)) {
         out.push('Chi Siamo: contenuti modificati')
+    }
+    // Footer (same approach)
+    if (JSON.stringify(current.footer) !== JSON.stringify(saved.footer)) {
+        out.push('Footer: contenuti modificati')
     }
     return out
 }
@@ -1755,6 +1831,237 @@ function ParagraphCard({
                 <textarea value={paragraph.text_en} onChange={e => onChange({ text_en: e.target.value })} placeholder="Text EN" rows={4} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
             </div>
         </div>
+    )
+}
+
+// ─── Footer editor ──────────────────────────────────────────────────────────
+const SOCIAL_ICON_OPTIONS: FooterSocialIcon[] = ['instagram', 'tiktok', 'facebook', 'linkedin', 'youtube', 'x']
+
+function FooterEditor({
+    copy,
+    setCopy,
+}: {
+    copy: FooterCopy
+    setCopy: (next: FooterCopy) => void
+}) {
+    const updateField = <K extends keyof FooterCopy>(key: K, value: FooterCopy[K]) => {
+        setCopy({ ...copy, [key]: value })
+    }
+    // Social links
+    const updateSocial = (idx: number, patch: Partial<FooterSocialLink>) => {
+        const next = [...copy.social_links]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, social_links: next })
+    }
+    const moveSocial = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.social_links.length) return
+        const next = [...copy.social_links]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, social_links: next })
+    }
+    const removeSocial = (idx: number) => {
+        if (!confirm('Rimuovere questo social link?')) return
+        setCopy({ ...copy, social_links: copy.social_links.filter((_, i) => i !== idx) })
+    }
+    const addSocial = () => {
+        setCopy({
+            ...copy,
+            social_links: [...copy.social_links, { id: `s-${Date.now().toString(36)}`, label: 'Social', href: 'https://', icon: 'instagram' }],
+        })
+    }
+    // Generic link list helpers
+    type LinkField = 'division_links' | 'corporate_links' | 'legal_links'
+    const updateLink = (field: LinkField, idx: number, patch: Partial<FooterLink>) => {
+        const list = copy[field]
+        const next = [...list]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, [field]: next })
+    }
+    const moveLink = (field: LinkField, idx: number, dir: -1 | 1) => {
+        const list = copy[field]
+        const j = idx + dir
+        if (j < 0 || j >= list.length) return
+        const next = [...list]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, [field]: next })
+    }
+    const removeLink = (field: LinkField, idx: number) => {
+        if (!confirm('Rimuovere questo link?')) return
+        setCopy({ ...copy, [field]: copy[field].filter((_, i) => i !== idx) })
+    }
+    const addLink = (field: LinkField) => {
+        const list = copy[field]
+        setCopy({
+            ...copy,
+            [field]: [...list, { id: `l-${Date.now().toString(36)}`, label_it: '', label_en: '', to: '/' }],
+        })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Footer</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Footer del sito (visibile su ogni pagina). I social link qui sono indipendenti dalla tab <b>Marketing &gt; Social Links</b> (quella alimenta i template messaggi).
+                </p>
+            </div>
+
+            {/* Network band */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Network (banda social)</h3>
+                <FieldText label="Titolo" value={copy.network_title} onChange={v => updateField('network_title', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Testo (IT)" value={copy.network_text_it} onChange={v => updateField('network_text_it', v)} />
+                    <FieldTextArea label="Testo (EN)" value={copy.network_text_en} onChange={v => updateField('network_text_en', v)} />
+                </div>
+                <div className="space-y-2">
+                    <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#a1a1a6]">Social ({copy.social_links.length})</h4>
+                    {copy.social_links.map((s, i) => (
+                        <div key={s.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[120px_1fr_minmax(0,1fr)_auto] gap-2 items-center">
+                            <select
+                                value={s.icon}
+                                onChange={(e) => updateSocial(i, { icon: e.target.value as FooterSocialIcon })}
+                                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]"
+                            >
+                                {SOCIAL_ICON_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                            <input type="text" value={s.label} onChange={e => updateSocial(i, { label: e.target.value })} placeholder="aria-label (es. Instagram)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={s.href} onChange={e => updateSocial(i, { href: e.target.value })} placeholder="https://www.instagram.com/..." className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                            <div className="flex items-center gap-1">
+                                <button onClick={() => moveSocial(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                                <button onClick={() => moveSocial(i, 1)} disabled={i === copy.social_links.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                                <button onClick={() => removeSocial(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                            </div>
+                        </div>
+                    ))}
+                    <button onClick={addSocial} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Aggiungi social
+                    </button>
+                </div>
+            </section>
+
+            {/* Reviews band */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Recensioni (banda)</h3>
+                <FieldText label="Titolo" value={copy.reviews_title} onChange={v => updateField('reviews_title', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Testo (IT)" value={copy.reviews_text_it} onChange={v => updateField('reviews_text_it', v)} />
+                    <FieldTextArea label="Testo (EN)" value={copy.reviews_text_en} onChange={v => updateField('reviews_text_en', v)} />
+                </div>
+                <p className="text-[11px] text-[#6e6e73]">La lista recensioni sotto e' renderizzata da ReviewsSection (dinamico, non editabile da qui).</p>
+            </section>
+
+            {/* Contact band */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Contatti & Legale</h3>
+                <FieldText label="Titolo (es. Contact)" value={copy.contact_title} onChange={v => updateField('contact_title', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Numero WhatsApp visualizzato" value={copy.contact_whatsapp_number} onChange={v => updateField('contact_whatsapp_number', v)} />
+                    <FieldText label="URL WhatsApp (wa.me)" value={copy.contact_whatsapp_url} onChange={v => updateField('contact_whatsapp_url', v)} />
+                </div>
+                <FieldText label="Ragione sociale" value={copy.contact_company_name} onChange={v => updateField('contact_company_name', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Sede legale (IT)" value={copy.contact_legal_address_it} onChange={v => updateField('contact_legal_address_it', v)} />
+                    <FieldText label="Registered office (EN)" value={copy.contact_legal_address_en} onChange={v => updateField('contact_legal_address_en', v)} />
+                    <FieldText label="Capitale sociale (IT)" value={copy.contact_capitale_sociale_it} onChange={v => updateField('contact_capitale_sociale_it', v)} />
+                    <FieldText label="Share capital (EN)" value={copy.contact_capitale_sociale_en} onChange={v => updateField('contact_capitale_sociale_en', v)} />
+                </div>
+                <FieldText label="P.IVA / C.F." value={copy.contact_piva} onChange={v => updateField('contact_piva', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label='Disclaimer (IT) — usa newline per a-capo' value={copy.contact_disclaimer_it} onChange={v => updateField('contact_disclaimer_it', v)} />
+                    <FieldTextArea label="Disclaimer (EN)" value={copy.contact_disclaimer_en} onChange={v => updateField('contact_disclaimer_en', v)} />
+                </div>
+            </section>
+
+            {/* Link rows */}
+            <FooterLinkSection
+                title="Division links (riga 1, bold)"
+                hint="Es. Supercar & Luxury Division, Prime Wash, Contattaci"
+                links={copy.division_links}
+                onChange={(idx, patch) => updateLink('division_links', idx, patch)}
+                onMoveUp={(idx) => moveLink('division_links', idx, -1)}
+                onMoveDown={(idx) => moveLink('division_links', idx, 1)}
+                onRemove={(idx) => removeLink('division_links', idx)}
+                onAdd={() => addLink('division_links')}
+            />
+            <FooterLinkSection
+                title="Corporate links (riga 2)"
+                hint="Es. Corporate Overview, Press & Media, Careers"
+                links={copy.corporate_links}
+                onChange={(idx, patch) => updateLink('corporate_links', idx, patch)}
+                onMoveUp={(idx) => moveLink('corporate_links', idx, -1)}
+                onMoveDown={(idx) => moveLink('corporate_links', idx, 1)}
+                onRemove={(idx) => removeLink('corporate_links', idx)}
+                onAdd={() => addLink('corporate_links')}
+            />
+            <FooterLinkSection
+                title="Legal links (riga 3)"
+                hint="Es. Terms of Service, Cookie, Privacy, Cancellation"
+                links={copy.legal_links}
+                onChange={(idx, patch) => updateLink('legal_links', idx, patch)}
+                onMoveUp={(idx) => moveLink('legal_links', idx, -1)}
+                onMoveDown={(idx) => moveLink('legal_links', idx, 1)}
+                onRemove={(idx) => removeLink('legal_links', idx)}
+                onAdd={() => addLink('legal_links')}
+            />
+
+            {/* Bottom band */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Banda inferiore</h3>
+                <FieldText label="Riga brand (es. DR7 Cagliari – Global Mobility...)" value={copy.bottom_brand_line} onChange={v => updateField('bottom_brand_line', v)} />
+                <FieldText label="Copyright (es. © 2024 - 2026 DR7...)" value={copy.bottom_copyright} onChange={v => updateField('bottom_copyright', v)} />
+            </section>
+        </div>
+    )
+}
+
+function FooterLinkSection({
+    title, hint, links, onChange, onMoveUp, onMoveDown, onRemove, onAdd,
+}: {
+    title: string
+    hint: string
+    links: FooterLink[]
+    onChange: (idx: number, patch: Partial<FooterLink>) => void
+    onMoveUp: (idx: number) => void
+    onMoveDown: (idx: number) => void
+    onRemove: (idx: number) => void
+    onAdd: () => void
+}) {
+    return (
+        <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+            <div>
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">{title} ({links.length})</h3>
+                <p className="text-[12px] text-[#6e6e73] mt-1">{hint}</p>
+            </div>
+            {links.map((l, i) => (
+                <div key={l.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{l.label_it || '(senza titolo)'}</span>
+                        {l.external && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700">esterno</span>}
+                        <button onClick={() => onMoveUp(i)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                        <button onClick={() => onMoveDown(i)} disabled={i === links.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                        <button onClick={() => onRemove(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <input type="text" value={l.label_it} onChange={e => onChange(i, { label_it: e.target.value })} placeholder="Etichetta IT" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={l.label_en} onChange={e => onChange(i, { label_en: e.target.value })} placeholder="Label EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-center">
+                        <input type="text" value={l.to} onChange={e => onChange(i, { to: e.target.value })} placeholder="/about oppure https://..." className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                        <label className="flex items-center gap-2 text-[12px] text-[#6e6e73] whitespace-nowrap">
+                            <input type="checkbox" checked={!!l.external} onChange={e => onChange(i, { external: e.target.checked || undefined })} />
+                            forza link esterno
+                        </label>
+                    </div>
+                </div>
+            ))}
+            <button onClick={onAdd} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Aggiungi link
+            </button>
+        </section>
     )
 }
 
