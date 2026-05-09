@@ -187,8 +187,11 @@ export default function LimitationOverrideModal({
           </button>
         )}
 
-        {/* Content */}
-        <div className="px-6 sm:px-8 pt-8 pb-6">
+        {/* Content — scroll qui dentro, non sull'intero modale, cosi\' il
+            footer azioni resta sempre visibile in fondo. min-h-0 e\'
+            necessario su parent flex per permettere all'overflow di
+            funzionare in Safari iOS / Chrome Android. */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 sm:px-8 pt-8 pb-6">
           {/* Icon + Title (centered) */}
           <div className="flex flex-col items-center mb-5">
             <div className="w-14 h-14 rounded-full bg-dr7-gold/10 border border-dr7-gold/30 flex items-center justify-center mb-4">
@@ -254,7 +257,7 @@ export default function LimitationOverrideModal({
             }
             if (rows.length === 0) return null
             return (
-              <div className="bg-theme-bg-tertiary border border-theme-border rounded-xl px-4 py-3 mb-5 max-h-64 overflow-y-auto">
+              <div className="bg-theme-bg-tertiary border border-theme-border rounded-xl px-4 py-3 mb-5">
                 <p className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-2">Dettaglio richiesta</p>
                 <div className="space-y-1.5 text-xs">
                   {rows.map((r, i) => (
@@ -312,9 +315,11 @@ export default function LimitationOverrideModal({
           )}
         </div>
 
-        {/* Actions */}
+        {/* Actions — pinned al fondo, separato dal corpo scroll da un
+            border. pb tiene conto della safe-area iOS (home indicator)
+            cosi\' il bottone non finisce sotto la barra del telefono. */}
         {step !== 'verified' && (
-          <div className="px-6 sm:px-8 pb-6 flex flex-col-reverse sm:flex-row gap-3 sm:justify-stretch flex-shrink-0">
+          <div className="px-6 sm:px-8 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col-reverse sm:flex-row gap-3 sm:justify-stretch flex-shrink-0 border-t border-theme-border bg-theme-bg-secondary rounded-b-2xl">
             {step === 'blocked' && (
               <>
                 {onCancel && (
