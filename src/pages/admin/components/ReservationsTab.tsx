@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
+import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
 import { supabase } from '../../../supabaseClient'
 
 /**
@@ -119,36 +120,22 @@ export const TIME_OPTIONS = Array.from({ length: 96 }).map((_, i) => {
   return { value: time, label: time }
 })
 
-// Rental schedule (per-kind) used to flag out-of-hours slots in the booking
-// form. Admin can still pick any slot — flagged ones just get a loud label
-// + red styling so the choice is deliberate.
-//   PICKUP  Mon-Fri: 10:30-12:30 / 16:30-18:30
-//   PICKUP  Sat:     10:30-16:30
-//   RETURN  Mon-Fri: 09:00-11:00 / 15:00-17:00
-//   RETURN  Sat:     09:00-15:00
-const PICKUP_HOURS_WEEKDAY: [number, number][] = [[10*60+30, 12*60+30], [16*60+30, 18*60+30]]
-const PICKUP_HOURS_SATURDAY: [number, number][] = [[10*60+30, 16*60+30]]
-const RETURN_HOURS_WEEKDAY: [number, number][] = [[9*60, 11*60], [15*60, 17*60]]
-const RETURN_HOURS_SATURDAY: [number, number][] = [[9*60, 15*60]]
-
-function rentalHoursFor(dateStr: string | undefined, kind: 'pickup' | 'return'): [number, number][] | null {
-  const weekday = kind === 'return' ? RETURN_HOURS_WEEKDAY : PICKUP_HOURS_WEEKDAY
-  const saturday = kind === 'return' ? RETURN_HOURS_SATURDAY : PICKUP_HOURS_SATURDAY
-  if (!dateStr) return weekday
-  const [y, mo, d] = dateStr.split('-').map(Number)
-  if (!y || !mo || !d) return weekday
-  const dow = new Date(y, mo - 1, d).getDay()
-  if (dow === 0) return null               // Sunday — closed
-  if (dow === 6) return saturday
-  return weekday
+// Rental schedule comes from Centralina Pro > Orari Noleggio
+// (utils/noleggioHours). Admin can still pick any slot — flagged ones
+// just get a loud label + red styling so the choice is deliberate.
+function isInRentalHours(dateStr: string | undefined, time: string, kind: 'pickup' | 'return'): boolean {
+  if (!dateStr) return true // unknown date → don't flag
+  return isWithinOfficeHoursForDate(dateStr, time, kind)
 }
 
-function isInRentalHours(dateStr: string | undefined, time: string, kind: 'pickup' | 'return'): boolean {
-  const ranges = rentalHoursFor(dateStr, kind)
-  if (!ranges) return false
-  const [h, m] = time.split(':').map(Number)
-  const total = (h || 0) * 60 + (m || 0)
-  return ranges.some(([a, b]) => total >= a && total <= b)
+// Rental hour ranges for a date as [[startMin, endMin], ...].
+// Returns null when the day is CLOSED (Sunday / configured closure) so
+// callers can display "Domenica chiusa" without distinguishing
+// undefined-vs-empty-array. Wraps getOfficeMinuteRangesForDate.
+function rentalHoursFor(dateStr: string | undefined, kind: 'pickup' | 'return'): [number, number][] | null {
+  if (!dateStr) return null
+  const ranges = getOfficeMinuteRangesForDate(dateStr, kind)
+  return ranges.length === 0 ? null : ranges
 }
 
 const FLAGGED_TIME_STYLE: React.CSSProperties = { color: 'white', backgroundColor: '#dc2626', fontWeight: 600 }
