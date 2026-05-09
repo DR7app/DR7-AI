@@ -1916,15 +1916,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       />
 
       {showForm && (
-        <div className="bg-transparent rounded-lg p-6 border border-theme-border mb-6">
-          {/* Step Indicator */}
-          <div className="flex items-center justify-center mb-6">
+        <div className="bg-theme-bg-secondary rounded-2xl p-6 sm:p-8 border border-theme-border shadow-2xl mb-6">
+          {/* Hero header — only visible on step 0 (matches the new design) */}
+          {currentStep === 0 && (
+            <div className="mb-6 pb-5 border-b border-theme-border">
+              <h3 className="text-xl sm:text-2xl font-bold text-theme-text-primary">Nuova Prenotazione Lavaggio</h3>
+              <p className="text-sm text-theme-text-muted mt-1">Crea una nuova prenotazione in pochi semplici passaggi.</p>
+            </div>
+          )}
+
+          {/* Step Indicator — labels under sphere, green = current/done, ring on active */}
+          <div className="flex items-center justify-center mb-8">
             {[
-              { step: 0 as const, label: 'Veicolo' },
-              { step: 1 as const, label: 'Servizio' },
-              { step: 2 as const, label: 'Extra' },
-              { step: 3 as const, label: 'Conferma' }
-            ].map(({ step, label }, idx) => (
+              { step: 0 as const, label: 'Veicolo', sub: 'Dati del veicolo' },
+              { step: 1 as const, label: 'Servizio', sub: 'Scegli il lavaggio' },
+              { step: 2 as const, label: 'Extra', sub: 'Servizi aggiuntivi' },
+              { step: 3 as const, label: 'Conferma', sub: 'Riepilogo e prenota' }
+            ].map(({ step, label, sub }, idx) => (
               <div key={step} className="flex items-center">
                 <button
                   type="button"
@@ -1932,21 +1940,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   disabled={step > currentStep}
                   className={`flex flex-col items-center ${step <= currentStep ? 'cursor-pointer' : 'cursor-default'}`}
                 >
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                  <div className={`relative w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                     step === currentStep
-                      ? 'bg-dr7-gold text-white'
+                      ? 'bg-emerald-500 text-white ring-4 ring-emerald-500/25 shadow-lg shadow-emerald-500/30'
                       : step < currentStep
-                        ? 'bg-dr7-gold/60 text-white'
-                        : 'bg-theme-bg-tertiary text-theme-text-muted'
+                        ? 'bg-emerald-500/80 text-white'
+                        : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border'
                   }`}>
-                    {step < currentStep ? '✓' : step}
+                    {step < currentStep ? '✓' : step + 1}
                   </div>
-                  <span className={`text-xs mt-1 ${step <= currentStep ? 'text-dr7-gold' : 'text-theme-text-muted'}`}>
+                  <span className={`text-[11px] font-semibold mt-2 uppercase tracking-wide ${step <= currentStep ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
                     {label}
+                  </span>
+                  <span className={`text-[10px] mt-0.5 hidden sm:block ${step <= currentStep ? 'text-theme-text-muted' : 'text-theme-text-muted/60'}`}>
+                    {sub}
                   </span>
                 </button>
                 {idx < 3 && (
-                  <div className={`w-12 h-0.5 mx-1.5 mb-4 ${step < currentStep ? 'bg-dr7-gold/60' : 'bg-theme-bg-tertiary'}`} />
+                  <div className={`w-12 sm:w-20 h-0.5 mx-2 mb-7 ${step < currentStep ? 'bg-emerald-500/60' : 'bg-theme-border'}`} />
                 )}
               </div>
             ))}
@@ -1954,65 +1965,120 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
           {/* ===== STEP 0: Vehicle Identification ===== */}
           {currentStep === 0 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-theme-text-primary">Identificazione Veicolo</h3>
-
-              {/* Targa + Cerca */}
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Targa</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVehicleCategory(vehicleCategory === 'moto' ? null : 'moto')
-                      setTargaVehicleInfo(vehicleCategory === 'moto' ? null : { brand: 'Moto', model: '' })
-                    }}
-                    className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
-                      vehicleCategory === 'moto'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
-                    }`}
-                  >
-                    Moto
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowForeignPlateModal(true)}
-                    className={`px-4 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
-                      (vehicleCategory === 'urban' || vehicleCategory === 'maxi') && targaVehicleInfo?.brand === 'Targa Estera'
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
-                    }`}
-                  >
-                    Targa Estera
-                  </button>
-                  <input
-                    type="text"
-                    value={vehiclePlate}
-                    onChange={(e) => setVehiclePlate(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                    placeholder="ES. AB123CD"
-                    className="flex-1 px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary font-mono tracking-widest uppercase focus:border-dr7-gold focus:outline-none"
-                    maxLength={10}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && vehiclePlate.length >= 5 && !lookingUpTarga) {
-                        e.preventDefault()
-                        handleTargaLookup()
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    disabled={vehiclePlate.length < 5 || lookingUpTarga}
-                    onClick={handleTargaLookup}
-                    className={`px-5 py-3 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${
-                      vehiclePlate.length < 5 || lookingUpTarga
-                        ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                        : 'bg-dr7-gold hover:bg-[#0A8FA3] text-white'
-                    }`}
-                  >
-                    {lookingUpTarga ? 'Ricerca...' : 'Cerca'}
-                  </button>
+            <div className="space-y-5">
+              {/* Card identificazione veicolo */}
+              <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded-2xl p-5 sm:p-6 space-y-5">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <h3 className="text-lg font-bold text-theme-text-primary">Identificazione Veicolo</h3>
+                    <p className="text-xs text-theme-text-muted mt-0.5">Inserisci la targa per identificare il veicolo.</p>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                    Riconoscimento automatico attivo
+                  </span>
                 </div>
+
+                {/* Tipo Targa tabs — Italiana | Estera | Moto */}
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider font-semibold text-theme-text-muted mb-2">Tipo Targa</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { key: 'italiana', label: 'Italiana' },
+                      { key: 'estera', label: 'Estera' },
+                      { key: 'moto', label: 'Moto' },
+                    ] as const).map(t => {
+                      const active =
+                        (t.key === 'moto' && vehicleCategory === 'moto') ||
+                        (t.key === 'estera' && targaVehicleInfo?.brand === 'Targa Estera') ||
+                        (t.key === 'italiana' && vehicleCategory !== 'moto' && targaVehicleInfo?.brand !== 'Targa Estera')
+                      return (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => {
+                            if (t.key === 'moto') {
+                              setVehicleCategory(vehicleCategory === 'moto' ? null : 'moto')
+                              setTargaVehicleInfo(vehicleCategory === 'moto' ? null : { brand: 'Moto', model: '' })
+                            } else if (t.key === 'estera') {
+                              setShowForeignPlateModal(true)
+                            } else {
+                              setVehicleCategory(null)
+                              setTargaVehicleInfo(null)
+                            }
+                          }}
+                          className={`px-4 py-3 rounded-xl font-semibold text-sm border transition-all ${
+                            active
+                              ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/25'
+                              : 'bg-theme-bg-primary text-theme-text-secondary border-theme-border hover:border-emerald-400/60 hover:text-theme-text-primary'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Targa input + Riconosci Veicolo */}
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider font-semibold text-theme-text-muted mb-2">Targa</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex-1 relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted pointer-events-none">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z" /><circle cx="7" cy="15" r="1" fill="currentColor" /><circle cx="17" cy="15" r="1" fill="currentColor" /></svg>
+                      </span>
+                      <input
+                        type="text"
+                        value={vehiclePlate}
+                        onChange={(e) => setVehiclePlate(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                        placeholder="Es. AB123CD"
+                        className="w-full pl-11 pr-4 py-3.5 bg-theme-bg-primary border border-theme-border rounded-xl text-theme-text-primary font-mono text-base tracking-widest uppercase placeholder:text-theme-text-muted/60 placeholder:tracking-normal focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 transition-colors"
+                        maxLength={10}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && vehiclePlate.length >= 5 && !lookingUpTarga) {
+                            e.preventDefault()
+                            handleTargaLookup()
+                          }
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={vehiclePlate.length < 5 || lookingUpTarga}
+                      onClick={handleTargaLookup}
+                      className={`px-6 py-3.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
+                        vehiclePlate.length < 5 || lookingUpTarga
+                          ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
+                          : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 active:scale-[0.98]'
+                      }`}
+                    >
+                      {lookingUpTarga ? 'Ricerca...' : '⊛ Riconosci Veicolo'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* "oppure" divider */}
+                <div className="flex items-center gap-3 text-xs text-theme-text-muted">
+                  <div className="flex-1 h-px bg-theme-border" />
+                  <span className="uppercase tracking-wider">oppure</span>
+                  <div className="flex-1 h-px bg-theme-border" />
+                </div>
+
+                {/* Seleziona dalla lista — focuses the search input above the form */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.querySelector<HTMLInputElement>('input[placeholder*="Cerca per codice"]')
+                    if (el) {
+                      el.focus()
+                      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    }
+                  }}
+                  className="w-full px-4 py-3 rounded-xl border border-theme-border bg-theme-bg-primary text-theme-text-secondary font-medium text-sm hover:border-theme-text-secondary hover:text-theme-text-primary transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+                  Seleziona veicolo dalla lista
+                </button>
               </div>
 
               {/* Targa lookup result card */}
@@ -2092,36 +2158,58 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               )}
 
               {/* Navigation */}
-              <div className="flex justify-between items-center pt-4 border-t border-theme-border">
+              <div className="flex justify-between items-center pt-5 border-t border-theme-border">
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors text-sm"
                 >
                   Annulla
                 </button>
-                <div className="flex gap-2 items-center">
-                  <button
-                    type="button"
-                    disabled={!targaVehicleInfo}
-                    onClick={() => {
-                      // Clear service selection when changing step from 0 to 1 (category may have changed)
-                      setSelectedService(null)
-                      setSelectedPriceOption(null)
-                      setSelectedExtras([])
-                      setExtraPriceOptions({})
-    setExtraQuantities({})
-                      setCustomPrice('')
-                      setCurrentStep(1)
-                    }}
-                    className={`px-6 py-2 rounded-full font-semibold transition-colors ${
-                      targaVehicleInfo
-                        ? 'bg-dr7-gold hover:bg-[#0A8FA3] text-white'
-                        : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                    }`}
-                  >
-                    Avanti
-                  </button>
+                <button
+                  type="button"
+                  disabled={!targaVehicleInfo}
+                  onClick={() => {
+                    setSelectedService(null)
+                    setSelectedPriceOption(null)
+                    setSelectedExtras([])
+                    setExtraPriceOptions({})
+                    setExtraQuantities({})
+                    setCustomPrice('')
+                    setCurrentStep(1)
+                  }}
+                  className={`px-7 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
+                    targaVehicleInfo
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 active:scale-[0.98]'
+                      : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
+                  }`}
+                >
+                  Avanti →
+                </button>
+              </div>
+
+              {/* Feature trust cards (visibili sullo step 0) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
+                <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 p-4">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  </div>
+                  <h4 className="text-sm font-bold text-theme-text-primary">Riconoscimento Automatico</h4>
+                  <p className="text-xs text-theme-text-muted mt-1">Inserisci la targa e recupereremo tutti i dati del veicolo in automatico.</p>
+                </div>
+                <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 p-4">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                  </div>
+                  <h4 className="text-sm font-bold text-theme-text-primary">Sicuro e Veloce</h4>
+                  <p className="text-xs text-theme-text-muted mt-1">I tuoi dati e quelli del cliente sono protetti. La prenotazione richiede pochi secondi.</p>
+                </div>
+                <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 p-4">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <h4 className="text-sm font-bold text-theme-text-primary">Storico Prenotazioni</h4>
+                  <p className="text-xs text-theme-text-muted mt-1">Tutte le tue prenotazioni saranno salvate nello storico per consultazioni future.</p>
                 </div>
               </div>
             </div>
