@@ -22,6 +22,10 @@ import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking a
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { getHolidayForDate, isSunday as isSundayDate } from '../../../data/italianHolidays'
+import {
+  getOfficeMinuteRangesForDate,
+  isWithinOfficeHoursForDate,
+} from '../../../utils/noleggioHours'
 
 // ─── Time slots ─────────────────────────────────────────────────────────────
 //
@@ -40,26 +44,13 @@ import { getHolidayForDate, isSunday as isSundayDate } from '../../../data/itali
 //             customer-supplied window arrives
 //   Sunday: closed (handled by classifyDay)
 
-// Rental schedule (NOT generic office hours). Differs per kind:
-//   PICKUP  Mon-Fri: 10:30-12:30 / 16:30-18:30
-//   PICKUP  Sat:     10:30-16:30  (single window)
-//   RETURN  Mon-Fri: 09:00-11:00 / 15:00-17:00
-//   RETURN  Sat:     09:00-15:00  (single window)
-const PICKUP_HOURS_WEEKDAY: [number, number][] = [[10*60+30, 12*60+30], [16*60+30, 18*60+30]]
-const PICKUP_HOURS_SATURDAY: [number, number][] = [[10*60+30, 16*60+30]]
-const RETURN_HOURS_WEEKDAY: [number, number][] = [[9*60, 11*60], [15*60, 17*60]]
-const RETURN_HOURS_SATURDAY: [number, number][] = [[9*60, 15*60]]
-
+// Rental schedule comes from Centralina Pro > Orari Noleggio
+// (utils/noleggioHours). Defaults match the legacy hardcoded values:
+//   PICKUP  Mon-Fri: 10:30-12:30 / 16:30-18:30, Sat 10:30-16:30
+//   RETURN  Mon-Fri: 09:00-11:00 / 15:00-17:00, Sat 09:00-15:00
 function getOfficeHoursForDate(dateStr: string, kind: 'pickup' | 'return' = 'pickup'): [number, number][] | null {
-  const weekday = kind === 'return' ? RETURN_HOURS_WEEKDAY : PICKUP_HOURS_WEEKDAY
-  const saturday = kind === 'return' ? RETURN_HOURS_SATURDAY : PICKUP_HOURS_SATURDAY
-  if (!dateStr) return weekday
-  const [y, mo, d] = dateStr.split('-').map(Number)
-  if (!y || !mo || !d) return weekday
-  const dow = new Date(y, mo - 1, d).getDay() // 0 Sun, 6 Sat
-  if (dow === 0) return null               // Sunday — closed
-  if (dow === 6) return saturday
-  return weekday
+  const ranges = getOfficeMinuteRangesForDate(dateStr, kind)
+  return ranges.length === 0 ? null : ranges
 }
 
 function genAllDaySlots(): { value: string; label: string }[] {
@@ -71,22 +62,6 @@ function genAllDaySlots(): { value: string; label: string }[] {
   return s
 }
 const ALL_DAY_SLOTS = genAllDaySlots()
-
-function timeToMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number)
-  return (h || 0) * 60 + (m || 0)
-}
-
-function isInRanges(t: string, ranges: [number, number][]): boolean {
-  const m = timeToMinutes(t)
-  return ranges.some(([a, b]) => m >= a && m <= b)
-}
-
-function isWithinOfficeHoursForDate(dateStr: string, t: string, kind: 'pickup' | 'return' = 'pickup'): boolean {
-  const ranges = getOfficeHoursForDate(dateStr, kind)
-  if (!ranges) return false // Sunday: closed entirely
-  return isInRanges(t, ranges)
-}
 
 // Style applied to flagged (exceptional) <option> entries. Native <option>
 // styling is limited but color/backgroundColor are honored on Chrome/Edge/
@@ -1846,13 +1821,23 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           total: formatEur(p.total_final || p.subtotal),
           // Sconto — variabili granulari (admin compone la riga nel template).
           // {sconto} resta la riga pronta come prima per retrocompatibilita'.
+          // {sconto_post} e' SEMPRE valorizzato (anche senza sconto) cosi'
+          // lo stesso template puo' funzionare in entrambi gli scenari:
+          // con sconto = "prezzo dopo sconto", senza sconto = "prezzo
+          // finale". Le altre {sconto_*} restano vuote senza sconto, cosi'
+          // una riga tipo "Sconto X% (Y) Z: W" collassa naturalmente.
           sconto: discountLine,
           sconto_line: discountLine,
           sconto_amount: scontoAmount > 0 ? formatEur(scontoAmount) : '',
           sconto_perc: scontoPerc > 0 ? `${scontoPerc}%` : '',
           sconto_note: scontoNote,
           sconto_pre: scontoAmount > 0 ? formatEur(scontoPre) : '',
-          sconto_post: scontoAmount > 0 ? formatEur(scontoPost) : '',
+          sconto_post: formatEur(scontoPost),
+          // Alias non-"sconto" — usali nei template "Preventivo senza sconto"
+          // per evitare la parola "sconto" nel nome variabile.
+          prezzo_finale: formatEur(scontoPost),
+          prezzo: formatEur(scontoPost),
+          prezzo_listino: formatEur(scontoPre || scontoPost),
           // Centralina Pro: blocco multilinea con tutti i coefficienti
           // applicati al preventivo + il moltiplicatore combinato.
           coefficienti: coefficientiBlock,

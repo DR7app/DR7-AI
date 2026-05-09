@@ -314,23 +314,28 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
     {
         label: 'Preventivo — Sconto (per riga)',
         scope: 'specific',
-        scopeNote: 'Tutte le variabili sono vuote se il preventivo non ha sconto, cosi\' la riga collassa naturalmente. Tocca uno snippet qui sotto per copiare la riga pronta.',
+        scopeNote: '{sconto_post} e\' SEMPRE il prezzo finale (con o senza sconto). Le altre {sconto_*} sono vuote senza sconto, cosi\' la stessa riga funziona in entrambi i template (con e senza sconto). Tocca uno snippet per copiarlo.',
         items: [
-            { key: 'sconto_line', description: 'Riga sconto pronta all\'uso', example: 'sconto valido 24h €1.290,00', aliases: ['sconto'] },
-            { key: 'sconto_amount', description: 'Importo dello sconto in euro', example: '€285,00' },
-            { key: 'sconto_perc', description: 'Percentuale di sconto applicata', example: '15%' },
-            { key: 'sconto_note', description: 'Solo la nota dello sconto (senza prezzo)', example: 'valido solo 24h' },
-            { key: 'sconto_pre', description: 'Prezzo prima dello sconto (subtotale)', example: '€1.575,00' },
-            { key: 'sconto_post', description: 'Prezzo finale dopo lo sconto', example: '€1.290,00' },
+            { key: 'sconto_line', description: 'Riga sconto pronta all\'uso (vuota senza sconto)', example: 'sconto valido 24h €1.290,00', aliases: ['sconto'] },
+            { key: 'sconto_amount', description: 'Importo dello sconto in euro (vuoto senza sconto)', example: '€285,00' },
+            { key: 'sconto_perc', description: 'Percentuale di sconto (vuoto senza sconto)', example: '15%' },
+            { key: 'sconto_note', description: 'Nota dello sconto (vuoto senza sconto)', example: 'valido solo 24h' },
+            { key: 'sconto_pre', description: 'Prezzo prima dello sconto (vuoto senza sconto)', example: '€1.575,00' },
+            { key: 'sconto_post', description: 'Prezzo finale (sempre valorizzato — con o senza sconto)', example: '€1.290,00' },
         ],
         recipes: [
+            {
+                label: 'Senza sconto — solo prezzo finale (usa {total})',
+                snippet: 'Prezzo: {total}',
+                preview: 'Prezzo: €1.575,00',
+            },
             {
                 label: 'Sconto completo (perc + importo + nota + finale)',
                 snippet: 'Sconto {sconto_perc} ({sconto_amount}) {sconto_note}: {sconto_post}',
                 preview: 'Sconto 15% (€285,00) valido solo 24h: €1.290,00',
             },
             {
-                label: 'Solo prezzo finale con nota',
+                label: 'Solo prezzo finale con nota sconto',
                 snippet: 'Prezzo finale {sconto_note}: {sconto_post}',
                 preview: 'Prezzo finale valido solo 24h: €1.290,00',
             },
