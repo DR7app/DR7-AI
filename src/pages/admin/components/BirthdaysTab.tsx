@@ -539,45 +539,56 @@ export default function BirthdaysTab() {
         )
     }
 
+    // Real metrics derived from already-loaded customer + sent data.
+    const compleanniOggi = customers.filter(c => c.days_until === 0).length
+    const daAuguriProssimi10 = customers.filter(c => c.days_until >= 0 && c.days_until <= 10).length
+    const messaggiInviati = customers.filter(c => c.already_sent_this_year).length
+
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex justify-between items-center bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
-                <div>
-                    <h2 className="text-xl font-bold text-theme-text-primary flex items-center gap-2">
-                        Compleanni
-                        {upcomingCount > 0 && (
-                            <span className="bg-dr7-gold text-white text-sm font-bold px-2 py-0.5 rounded-full">
-                                {upcomingCount}
-                            </span>
-                        )}
-                    </h2>
-                    <p className="text-theme-text-muted text-sm">Invia auguri di compleanno ai clienti</p>
-                </div>
-                <div className="flex items-center gap-4">
-                    <div className="text-center">
-                        <span className="block text-2xl font-bold text-dr7-gold">{filteredCustomers.length}</span>
-                        <span className="text-xs text-theme-text-muted">Da contattare</span>
-                    </div>
-                    {selectedIds.size > 0 && (
-                        <div className="text-center">
-                            <span className="block text-2xl font-bold text-green-400">{selectedIds.size}</span>
-                            <span className="text-xs text-theme-text-muted">Selezionati</span>
+            {/* Hero header */}
+            <div className="rounded-2xl border border-theme-border bg-gradient-to-br from-theme-bg-secondary to-theme-bg-primary p-6 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 min-w-0">
+                        <div className="w-12 h-12 rounded-2xl bg-dr7-gold/15 text-dr7-gold flex items-center justify-center shrink-0">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 21v-8H4v8M21 13H3"/>
+                                <path d="M12 13V8M8 8c0-2 4-2 4 0M16 8c0-2-4-2-4 0M4 21h16"/>
+                            </svg>
                         </div>
-                    )}
-                    <Button variant="secondary" onClick={loadData} disabled={bulkSending}>
-                        Aggiorna
-                    </Button>
-                    {selectedIds.size > 0 && (
-                        <Button
-                            variant="primary"
-                            onClick={sendBulkMessages}
-                            disabled={bulkSending}
-                        >
-                            {bulkSending ? 'Invio in corso...' : `Invia a ${selectedIds.size} clienti`}
+                        <div className="min-w-0">
+                            <h2 className="text-xl sm:text-2xl font-semibold text-theme-text-primary">Compleanni Marketing</h2>
+                            <p className="text-sm text-theme-text-muted mt-1 max-w-2xl">
+                                Automazione di auguri di compleanno e tracking degli invii in tempo reale per ottimizzare il fatturato.
+                                {compleanniOggi > 0 && (
+                                    <span className="ml-2 text-amber-400 font-medium">
+                                        {compleanniOggi} compleanni oggi.
+                                    </span>
+                                )}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Button variant="secondary" onClick={loadData} disabled={bulkSending}>
+                            Aggiorna
                         </Button>
-                    )}
+                        {selectedIds.size > 0 && (
+                            <Button variant="primary" onClick={sendBulkMessages} disabled={bulkSending}>
+                                {bulkSending ? 'Invio…' : `Invia a ${selectedIds.size}`}
+                            </Button>
+                        )}
+                    </div>
                 </div>
+            </div>
+
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                <KpiCardBD label="Compleanni Oggi" value={String(compleanniOggi)} accent="rose" icon="cake" />
+                <KpiCardBD label="Da Auguri (prossimi 10gg)" value={String(daAuguriProssimi10)} accent="amber" icon="clock" />
+                <KpiCardBD label="Messaggi Inviati" value={String(messaggiInviati)} accent="green" icon="check" />
+                <KpiCardBD label="Tasso di Apertura" value="—" accent="blue" icon="eye" decorative />
+                <KpiCardBD label="Codici Convertiti" value="—" accent="purple" icon="ticket" decorative />
+                <KpiCardBD label="Fatturato Generato" value="—" accent="gold" icon="euro" decorative />
             </div>
 
             {/* Filters */}
@@ -820,7 +831,244 @@ export default function BirthdaysTab() {
                     </div>
                 </div>
             </div>
+
+            {/* Side panels — Performance / Conversioni / Top */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <h3 className="text-sm font-semibold text-theme-text-primary mb-4">Performance Compleanni</h3>
+                    <div className="flex items-center gap-4">
+                        <DonutPct percent={customers.length > 0 ? (messaggiInviati / customers.length) * 100 : 0} total={customers.length} />
+                        <ul className="flex-1 space-y-2 text-xs">
+                            <PerfRow color="bg-green-500" label="Inviati" value={`${customers.length > 0 ? Math.round((messaggiInviati / customers.length) * 100) : 0}%`} />
+                            <PerfRow color="bg-amber-500" label="Da inviare" value={`${customers.length > 0 ? Math.round(((customers.length - messaggiInviati) / customers.length) * 100) : 0}%`} />
+                            <PerfRow color="bg-blue-500" label="Con consenso" value={`${customers.length > 0 ? Math.round((customers.filter(c => c.has_marketing_consent).length / customers.length) * 100) : 0}%`} />
+                            <PerfRow color="bg-purple-500" label="Con telefono" value={`${customers.length > 0 ? Math.round((customers.filter(c => c.phone).length / customers.length) * 100) : 0}%`} />
+                        </ul>
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-theme-text-primary">Conversioni & Fatturato</h3>
+                        <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">decorativo</span>
+                    </div>
+                    <ul className="space-y-3 text-sm">
+                        <li className="flex items-center justify-between">
+                            <span className="text-theme-text-muted">Messaggi inviati</span>
+                            <span className="text-theme-text-primary font-semibold">{messaggiInviati}</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                            <span className="text-theme-text-muted">Codici generati</span>
+                            <span className="text-theme-text-primary font-semibold">—</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                            <span className="text-theme-text-muted">Tasso di conversione</span>
+                            <span className="text-theme-text-primary font-semibold">—</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                            <span className="text-theme-text-muted">Fatturato generato</span>
+                            <span className="text-green-400 font-semibold">—</span>
+                        </li>
+                    </ul>
+                    <p className="mt-3 text-[10px] text-theme-text-muted italic">
+                        Saranno disponibili quando i codici BDAY-* saranno tracciati.
+                    </p>
+                </div>
+
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <h3 className="text-sm font-semibold text-theme-text-primary mb-4">Prossimi Compleanni</h3>
+                    {customers.length === 0 ? (
+                        <p className="text-xs text-theme-text-muted">Nessun compleanno previsto.</p>
+                    ) : (
+                        <ul className="space-y-2 text-xs">
+                            {customers.slice(0, 5).map(c => (
+                                <li key={c.id} className="flex items-center justify-between gap-2">
+                                    <span className="text-theme-text-primary truncate font-medium">{c.full_name}</span>
+                                    <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                        c.days_until === 0
+                                            ? 'bg-rose-500/15 text-rose-400'
+                                            : c.days_until <= 3
+                                                ? 'bg-amber-500/15 text-amber-400'
+                                                : 'bg-theme-bg-tertiary text-theme-text-muted'
+                                    }`}>
+                                        {c.days_until === 0 ? 'OGGI' : `+${c.days_until}g`}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            </div>
+
+            {/* Bottom strip — Impostazioni / Messaggio / Cronologia / Azioni */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-theme-text-primary">Impostazioni Automazione</h3>
+                        <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">decorativo</span>
+                    </div>
+                    <ul className="space-y-2 text-xs">
+                        <li className="flex justify-between"><span className="text-theme-text-muted">Stato</span><span className="text-green-400 font-semibold">Attiva</span></li>
+                        <li className="flex justify-between"><span className="text-theme-text-muted">Anticipo</span><span className="text-theme-text-primary font-semibold">10 giorni prima</span></li>
+                        <li className="flex justify-between"><span className="text-theme-text-muted">Orario invio</span><span className="text-theme-text-primary font-semibold">08:00</span></li>
+                        <li className="flex justify-between"><span className="text-theme-text-muted">Canale</span><span className="text-theme-text-primary font-semibold">WhatsApp</span></li>
+                        <li className="flex justify-between"><span className="text-theme-text-muted">Codice sconto</span><span className="text-theme-text-primary font-semibold">Auto</span></li>
+                    </ul>
+                </div>
+
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-theme-text-primary">Messaggio Auguri Attivo</h3>
+                        <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">live</span>
+                    </div>
+                    {proTemplateMissing ? (
+                        <p className="text-xs text-amber-400">Template <code className="bg-theme-bg-tertiary px-1 rounded">pro_marketing_compleanno</code> mancante o disattivato.</p>
+                    ) : messageTemplate ? (
+                        <p className="text-xs text-theme-text-secondary line-clamp-6 leading-relaxed whitespace-pre-line">
+                            {messageTemplate.slice(0, 240)}{messageTemplate.length > 240 ? '…' : ''}
+                        </p>
+                    ) : (
+                        <p className="text-xs text-theme-text-muted">Caricamento template…</p>
+                    )}
+                    <p className="mt-3 text-[10px] text-theme-text-muted">
+                        Modifica in <span className="text-dr7-gold">Messaggi di Sistema Pro → Messaggio Compleanno</span>.
+                    </p>
+                </div>
+
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Cronologia Invii Recenti</h3>
+                    {(() => {
+                        const recentSent = customers.filter(c => c.already_sent_this_year).slice(0, 4)
+                        if (recentSent.length === 0) {
+                            return <p className="text-xs text-theme-text-muted">Nessun invio ancora registrato.</p>
+                        }
+                        return (
+                            <ul className="space-y-2 text-xs">
+                                {recentSent.map(c => (
+                                    <li key={c.id} className="flex items-center justify-between gap-2">
+                                        <span className="text-theme-text-primary truncate font-medium">{c.full_name}</span>
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 shrink-0">Inviato</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )
+                    })()}
+                </div>
+
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Azioni Rapide</h3>
+                    <div className="space-y-2">
+                        <button
+                            onClick={loadData}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-primary text-xs font-medium text-theme-text-secondary hover:border-dr7-gold/40 hover:text-theme-text-primary transition-colors"
+                        >
+                            <span className="text-dr7-gold">↻</span>
+                            Aggiorna Lista
+                        </button>
+                        {selectedIds.size > 0 && (
+                            <button
+                                onClick={sendBulkMessages}
+                                disabled={bulkSending}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-dr7-gold text-white text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                            >
+                                <span>📨</span>
+                                Invia a {selectedIds.size}
+                            </button>
+                        )}
+                        <button
+                            disabled
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-primary text-xs font-medium text-theme-text-muted opacity-60 cursor-not-allowed"
+                        >
+                            <span>👁</span>
+                            Anteprima Messaggio
+                        </button>
+                        <button
+                            disabled
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-primary text-xs font-medium text-theme-text-muted opacity-60 cursor-not-allowed"
+                        >
+                            <span>📊</span>
+                            Esporta Report
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
+    )
+}
+
+/* ── Sub-components for Compleanni Marketing layout ────────────── */
+
+function KpiCardBD(props: {
+    label: string
+    value: string
+    accent: 'rose' | 'amber' | 'green' | 'blue' | 'purple' | 'gold'
+    icon: 'cake' | 'clock' | 'check' | 'eye' | 'ticket' | 'euro'
+    decorative?: boolean
+}) {
+    const accentMap: Record<typeof props.accent, { bg: string; text: string }> = {
+        rose: { bg: 'bg-rose-500/10', text: 'text-rose-400' },
+        amber: { bg: 'bg-amber-500/10', text: 'text-amber-400' },
+        green: { bg: 'bg-green-500/10', text: 'text-green-400' },
+        blue: { bg: 'bg-blue-500/10', text: 'text-blue-400' },
+        purple: { bg: 'bg-purple-500/10', text: 'text-purple-400' },
+        gold: { bg: 'bg-dr7-gold/10', text: 'text-dr7-gold' },
+    }
+    const a = accentMap[props.accent]
+    const iconMap: Record<typeof props.icon, React.ReactElement> = {
+        cake: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-8H4v8M21 13H3"/><path d="M12 13V8M8 8c0-2 4-2 4 0M16 8c0-2-4-2-4 0M4 21h16"/></svg>,
+        clock: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
+        check: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>,
+        eye: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+        ticket: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 5h18a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2z"/><line x1="13" y1="5" x2="13" y2="19"/></svg>,
+        euro: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10h12M4 14h9M19 6.7A6.6 6.6 0 0 0 14.3 5C10.8 5 8 7.8 8 11.3v1.4C8 16.2 10.8 19 14.3 19c1.8 0 3.4-.6 4.7-1.7"/></svg>,
+    }
+    return (
+        <div className={`rounded-2xl border bg-theme-bg-secondary p-4 shadow-sm hover:shadow-md transition-shadow ${props.decorative ? 'border-theme-border/60 opacity-90' : 'border-theme-border'}`}>
+            <div className="flex items-start justify-between gap-2 mb-2">
+                <span className="text-[11px] text-theme-text-muted uppercase tracking-wider">{props.label}</span>
+                <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${a.bg} ${a.text}`}>
+                    {iconMap[props.icon]}
+                </span>
+            </div>
+            <p className="text-xl font-bold text-theme-text-primary truncate">{props.value}</p>
+            {props.decorative && <p className="text-[10px] text-theme-text-muted mt-0.5">decorativo</p>}
+        </div>
+    )
+}
+
+function DonutPct({ percent, total }: { percent: number; total: number }) {
+    const r = 28
+    const c = 2 * Math.PI * r
+    const dash = (Math.min(100, Math.max(0, percent)) / 100) * c
+    return (
+        <div className="relative w-24 h-24 shrink-0">
+            <svg viewBox="0 0 64 64" className="w-full h-full -rotate-90">
+                <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" strokeWidth="8" className="text-theme-bg-tertiary" />
+                <circle
+                    cx="32" cy="32" r={r}
+                    fill="none" stroke="currentColor" strokeWidth="8"
+                    strokeDasharray={`${dash} ${c - dash}`}
+                    strokeLinecap="round"
+                    className="text-green-400"
+                />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-xl font-bold text-theme-text-primary leading-none">{total}</span>
+                <span className="text-[9px] uppercase tracking-wider text-theme-text-muted mt-0.5">Total</span>
+            </div>
+        </div>
+    )
+}
+
+function PerfRow({ color, label, value }: { color: string; label: string; value: string }) {
+    return (
+        <li className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 min-w-0">
+                <span className={`w-2.5 h-2.5 rounded-sm shrink-0 ${color}`} />
+                <span className="text-theme-text-secondary truncate">{label}</span>
+            </span>
+            <span className="text-theme-text-primary font-semibold tabular-nums">{value}</span>
+        </li>
     )
 }
 
