@@ -153,6 +153,205 @@ function computeTargetMs(template: SystemMessage, booking: Booking): number | nu
     return applySendHourRome(target, template.send_hour);
 }
 
+// ── Processori per eventi non-booking ────────────────────────────────────────
+//
+// Pattern comune per ognuno:
+// 1. Carica le entità dalla loro tabella di riferimento (cauzioni / customers /
+//    scadenze) con un filtro temporale che approssima la finestra utile.
+// 2. Per ogni entità, calcola target_time = event_time ± offset_hours.
+// 3. Se target_time ∈ [now - LOOKBACK, now + LOOKFORWARD] e non gia' inviato
+//    (system_message_send_log UNIQUE), costruisce un "synthetic booking" con
+//    i dati del cliente + i metadati dell'entità, lo passa a
+//    send-whatsapp-notification con messageKey = tpl.message_key, e logga.
+//
+// system_message_send_log.booking_id viene usato come "entity_id": per le
+// cauzioni e' cauzione.id, per i customers e' customer.id, per le scadenze
+// e' scadenza.id. Il dedup vincola (template_id, entity_id) unique.
+//
+// eslint-disable @typescript-eslint/no-explicit-any
+
+async function fireToCustomer(
+    tpl: SystemMessage,
+    entityId: string,
+    custName: string,
+    custEmail: string | null,
+    custPhone: string | null,
+    extraVars: Record<string, unknown> = {}
+): Promise<{ sent: boolean; skipped: boolean; error: boolean }> {
+    if (!custPhone) return { sent: false, skipped: true, error: false };
+
+    // Dedup
+    const { data: existing } = await supabase
+        .from('system_message_send_log')
+        .select('id')
+        .eq('system_message_id', tpl.id)
+        .eq('booking_id', entityId)
+        .maybeSingle();
+    if (existing?.id) return { sent: false, skipped: true, error: false };
+
+    // Synthetic booking — i campi standard usati da send-whatsapp-notification
+    // per la sostituzione delle variabili.
+    const syntheticBooking = {
+        id: entityId,
+        customer_name: custName,
+        customer_email: custEmail || '',
+        customer_phone: custPhone,
+        ...extraVars,
+    };
+
+    const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
+    try {
+        const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ booking: syntheticBooking, messageKey: tpl.message_key, customPhone: custPhone }),
+        });
+        const ok = res.ok;
+        let resp: any = null;
+        try { resp = await res.json(); } catch { /* ignore */ }
+        await supabase.from('system_message_send_log').insert({
+            system_message_id: tpl.id,
+            booking_id: entityId,
+            customer_phone: custPhone,
+            status: ok ? (resp?.skipped ? 'skipped' : 'sent') : 'error',
+            error: ok ? null : `HTTP ${res.status}`,
+        });
+        if (!ok) return { sent: false, skipped: false, error: true };
+        return { sent: !resp?.skipped, skipped: !!resp?.skipped, error: false };
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        try {
+            await supabase.from('system_message_send_log').insert({
+                system_message_id: tpl.id,
+                booking_id: entityId,
+                customer_phone: custPhone,
+                status: 'error',
+                error: msg.slice(0, 500),
+            });
+        } catch { /* ok */ }
+        return { sent: false, skipped: false, error: true };
+    }
+}
+
+async function processCauzioneScadenze(tpl: SystemMessage, now: number) {
+    const offsetH = tpl.trigger_offset_hours || 0;
+    let sent = 0, skipped = 0, errors = 0;
+
+    // Per on_cauzione_due: target_time = scadenza_cauzione - offset (offset prima)
+    // Per on_cauzione_overdue: target_time = scadenza_cauzione + offset (offset dopo)
+    const sign = tpl.trigger_event === 'on_cauzione_due' ? -1 : +1;
+    const lo = new Date(now - sign * offsetH * 3600 * 1000 - LOOKBACK_MS).toISOString();
+    const hi = new Date(now - sign * offsetH * 3600 * 1000 + LOOKFORWARD_MS).toISOString();
+
+    const { data: cauzioni } = await supabase
+        .from('cauzioni')
+        .select('id, cliente_id, importo, scadenza_cauzione, stato, data_incasso, data_restituzione')
+        .gte('scadenza_cauzione', lo)
+        .lte('scadenza_cauzione', hi)
+        .limit(500);
+
+    if (!cauzioni?.length) return { sent: 0, skipped: 0, errors: 0 };
+
+    for (const c of cauzioni as any[]) {
+        // Skip cauzioni gia' chiuse (incassate / restituite / sbloccate / bloccate)
+        if (c.stato === 'Restituita' || c.stato === 'Sbloccata' || c.stato === 'Bloccata' || c.data_incasso || c.data_restituzione) continue;
+
+        // Carica i dati cliente
+        const { data: cust } = await supabase
+            .from('customers_extended')
+            .select('nome, cognome, email, telefono, ragione_sociale')
+            .eq('id', c.cliente_id)
+            .maybeSingle();
+        if (!cust) continue;
+        const custName = cust.ragione_sociale || `${cust.nome || ''} ${cust.cognome || ''}`.trim() || cust.email || 'Cliente';
+
+        const r = await fireToCustomer(tpl, c.id, custName, cust.email, cust.telefono, {
+            deposit_amount: c.importo,
+            scadenza_cauzione: c.scadenza_cauzione,
+        });
+        if (r.sent) sent++; else if (r.skipped) skipped++; else if (r.error) errors++;
+    }
+
+    return { sent, skipped, errors };
+}
+
+async function processInactiveCustomers(tpl: SystemMessage, now: number) {
+    const days = tpl.trigger_event === 'on_inactive_30d' ? 30 : 90;
+    let sent = 0, skipped = 0, errors = 0;
+
+    // Soglia: clienti la cui ultima prenotazione e' avvenuta esattamente
+    // 'days' giorni fa (con finestra LOOKBACK/LOOKFORWARD). Cosi' il
+    // messaggio parte una volta sola per quel cliente quando supera la
+    // soglia, non ogni giorno per tutti gli inattivi.
+    const targetMs = now - days * 86400000;
+    const loDate = new Date(targetMs - LOOKBACK_MS).toISOString().slice(0, 10);
+    const hiDate = new Date(targetMs + LOOKFORWARD_MS).toISOString().slice(0, 10);
+
+    // Trova bookings il cui MASSIMO created_at per cliente e' nel range
+    // [loDate, hiDate]. Senza una vista materializzata, facciamo un best-effort:
+    // carica i clienti con email + ultimo booking via aggregate JS.
+    const { data: bookings } = await supabase
+        .from('bookings')
+        .select('customer_email, customer_phone, customer_name, created_at')
+        .not('customer_email', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(5000);
+    if (!bookings?.length) return { sent: 0, skipped: 0, errors: 0 };
+
+    // Mappa email → ultimo booking (senza considerare cancellate / non pagate)
+    const lastByEmail = new Map<string, { phone: string | null; name: string; last: string }>();
+    for (const b of bookings as any[]) {
+        const e = String(b.customer_email || '').toLowerCase().trim();
+        if (!e) continue;
+        if (!lastByEmail.has(e)) {
+            lastByEmail.set(e, { phone: b.customer_phone || null, name: b.customer_name || '', last: b.created_at });
+        }
+    }
+
+    for (const [email, info] of lastByEmail.entries()) {
+        const dateStr = info.last.slice(0, 10);
+        if (dateStr < loDate || dateStr > hiDate) continue;
+        const r = await fireToCustomer(tpl, `inactive-${email}-${days}d`, info.name, email, info.phone);
+        if (r.sent) sent++; else if (r.skipped) skipped++; else if (r.error) errors++;
+    }
+
+    return { sent, skipped, errors };
+}
+
+async function processScadenzeAdmin(tpl: SystemMessage, now: number) {
+    const days = tpl.trigger_event === 'on_scadenza_3d' ? 3 : 7;
+    let sent = 0, skipped = 0, errors = 0;
+
+    const targetMs = now + days * 86400000;
+    const lo = new Date(targetMs - LOOKBACK_MS).toISOString();
+    const hi = new Date(targetMs + LOOKFORWARD_MS).toISOString();
+
+    const { data: scadenze } = await supabase
+        .from('scadenze')
+        .select('id, item_type, description, due_date, amount, reference_name, status')
+        .gte('due_date', lo)
+        .lte('due_date', hi)
+        .not('status', 'in', '(completed,paid,refunded)')
+        .limit(500);
+
+    if (!scadenze?.length) return { sent: 0, skipped: 0, errors: 0 };
+
+    // Per le scadenze admin non c'e' un cliente — invia all'admin notification phone.
+    const adminPhone = process.env.NOTIFICATION_PHONE || '393457905205';
+
+    for (const s of scadenze as any[]) {
+        const r = await fireToCustomer(tpl, `scadenza-${s.id}-${days}d`, 'DR7 Admin', null, adminPhone, {
+            scadenza_item: s.item_type,
+            scadenza_description: s.description,
+            scadenza_amount: s.amount,
+            scadenza_reference: s.reference_name,
+        });
+        if (r.sent) sent++; else if (r.skipped) skipped++; else if (r.error) errors++;
+    }
+
+    return { sent, skipped, errors };
+}
+
 const cronHandler = async () => {
     const now = Date.now();
     console.log(`[scheduled-msgs] cron fired at ${new Date(now).toISOString()}`);
@@ -181,6 +380,23 @@ const cronHandler = async () => {
     for (const tpl of templates as SystemMessage[]) {
         // Skip eventi non gestiti (preventivo gestito altrove)
         if (tpl.trigger_event === 'on_preventivo') continue;
+
+        // ── Eventi non-booking gestiti dal cron ───────────────────────────
+        if (tpl.trigger_event === 'on_cauzione_due' || tpl.trigger_event === 'on_cauzione_overdue') {
+            const r = await processCauzioneScadenze(tpl, now);
+            totalSent += r.sent; totalSkipped += r.skipped; totalErrors += r.errors;
+            continue;
+        }
+        if (tpl.trigger_event === 'on_inactive_30d' || tpl.trigger_event === 'on_inactive_90d') {
+            const r = await processInactiveCustomers(tpl, now);
+            totalSent += r.sent; totalSkipped += r.skipped; totalErrors += r.errors;
+            continue;
+        }
+        if (tpl.trigger_event === 'on_scadenza_3d' || tpl.trigger_event === 'on_scadenza_7d') {
+            const r = await processScadenzeAdmin(tpl, now);
+            totalSent += r.sent; totalSkipped += r.skipped; totalErrors += r.errors;
+            continue;
+        }
 
         // Filtri
         const statuses = (tpl.target_status || 'confirmed,active')

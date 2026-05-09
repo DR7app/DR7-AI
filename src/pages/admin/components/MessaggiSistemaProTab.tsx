@@ -51,6 +51,7 @@ interface SentMessageLog {
 }
 
 const TRIGGER_LABELS: Record<string, string> = {
+    // Booking lifecycle
     'before_pickup': 'Prima del ritiro',
     'after_pickup': 'Dopo il ritiro',
     'before_dropoff': 'Prima della riconsegna',
@@ -60,6 +61,25 @@ const TRIGGER_LABELS: Record<string, string> = {
     'on_signature': 'Dopo la firma del contratto',
     'on_extension': 'Dopo una proroga',
     'on_preventivo': 'Invio preventivo (gestito separatamente)',
+    // Cauzione lifecycle
+    'on_cauzione_created': 'Nuova cauzione creata',
+    'on_cauzione_due': 'Cauzione in scadenza',
+    'on_cauzione_overdue': 'Cauzione scaduta',
+    'on_cauzione_collected': 'Cauzione incassata',
+    'on_cauzione_refunded': 'Cauzione restituita',
+    // Customer lifecycle
+    'on_first_booking': 'Prima prenotazione del cliente',
+    'on_inactive_30d': 'Cliente inattivo da 30 giorni',
+    'on_inactive_90d': 'Cliente inattivo da 90 giorni',
+    // Documenti
+    'on_doc_uploaded': 'Documento caricato',
+    'on_doc_verified': 'Documento verificato',
+    // Pagamento
+    'on_payment_failed': 'Pagamento fallito',
+    'on_payment_link_expired': 'Link pagamento scaduto',
+    // Scadenze
+    'on_scadenza_3d': 'Scadenza tra 3 giorni',
+    'on_scadenza_7d': 'Scadenza tra 7 giorni',
 }
 
 // Descrizioni in linguaggio naturale per ogni evento — mostrate sotto la select.
@@ -73,6 +93,20 @@ const TRIGGER_DESCRIPTIONS: Record<string, string> = {
     'on_signature': 'Il messaggio parte dopo che il cliente firma il contratto.',
     'on_extension': 'Il messaggio parte dopo una proroga del noleggio.',
     'on_preventivo': 'I preventivi usano un canale separato (vedi Preventivi). Non gestito dal cron.',
+    'on_cauzione_created': 'Quando viene aperta una nuova cauzione (in CauzioniTab). Offset 0 = subito.',
+    'on_cauzione_due': 'Quando manca poco alla scadenza_cauzione (offset = giorni prima della scadenza).',
+    'on_cauzione_overdue': 'Quando la cauzione e\' scaduta (data passata) e non ancora chiusa.',
+    'on_cauzione_collected': 'Quando admin segna la cauzione come incassata.',
+    'on_cauzione_refunded': 'Quando admin segna la cauzione come restituita al cliente.',
+    'on_first_booking': 'Solo alla PRIMA prenotazione di un cliente nuovo. Perfetto per messaggio di benvenuto.',
+    'on_inactive_30d': 'Cliente che non prenota da 30 giorni. Cron giornaliero.',
+    'on_inactive_90d': 'Cliente che non prenota da 90 giorni. Cron giornaliero.',
+    'on_doc_uploaded': 'Quando il cliente carica un documento (patente, CI). Offset 0 = subito.',
+    'on_doc_verified': 'Quando admin verifica il documento. Offset 0 = subito.',
+    'on_payment_failed': 'Quando un pagamento Nexi fallisce. Offset 0 = subito.',
+    'on_payment_link_expired': 'Quando un link di pagamento scade senza pagamento.',
+    'on_scadenza_3d': 'Per qualunque scadenza in Scadenze (assicurazione, bollo, ecc.). 3 giorni prima.',
+    'on_scadenza_7d': 'Stesso ma 7 giorni prima.',
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
