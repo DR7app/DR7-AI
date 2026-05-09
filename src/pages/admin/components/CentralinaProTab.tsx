@@ -479,9 +479,18 @@ type AutomationsConfig = {
   cancellation_rules: CancellationRule[]
 }
 
+type CancellationAppliesTo = 'all' | 'rental' | 'carwash'
+type CancellationRequiresService = 'none' | 'dr7_flex' | 'prime_flex' | 'elite'
+
 type CancellationRule = {
   id: string
   label: string
+  /** Tipo di prenotazione su cui applica la regola: tutto / solo noleggio / solo lavaggio. */
+  applies_to: CancellationAppliesTo
+  /** Condizione opzionale: la regola si applica solo se il cliente ha quel
+   *  servizio o status (DR7 Flex purchased, Prime Flex purchased, Elite member).
+   *  'none' = nessuna condizione richiesta (regola standard). */
+  requires_service: CancellationRequiresService
   /** Min giorni di preavviso al pickup per applicare questa regola. */
   min_days_notice: number | ''
   /** % rimborsata (penale = 100 − questo). */
@@ -501,7 +510,10 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   pre_pickup_carwash_buffer_minutes: 90,
   late_return_grace_minutes: 90,
   cancellation_rules: [
-    { id: 'standard', label: 'Cancellazione standard', min_days_notice: 5, refund_pct: 90, refund_method: 'wallet', is_active: true },
+    { id: 'standard',   label: 'Cancellazione standard',  applies_to: 'all',     requires_service: 'none',       min_days_notice: 5, refund_pct: 90, refund_method: 'wallet', is_active: true },
+    { id: 'dr7_flex',   label: 'DR7 Flex (noleggio)',     applies_to: 'rental',  requires_service: 'dr7_flex',   min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
+    { id: 'prime_flex', label: 'Prime Flex (lavaggio)',   applies_to: 'carwash', requires_service: 'prime_flex', min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
+    { id: 'elite',      label: 'Elite Member',            applies_to: 'all',     requires_service: 'elite',      min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
   ],
 }
 
@@ -1691,6 +1703,14 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
       if ((p.refund_method || 'wallet') !== (c.refund_method || 'wallet')) {
         const lbl = (m: string) => m === 'card' ? 'carta (manuale)' : 'wallet'
         out.push(`Cancellazione / ${c.label}: rimborso su ${lbl(p.refund_method || 'wallet')} → ${lbl(c.refund_method || 'wallet')}`)
+      }
+      if ((p.applies_to || 'all') !== (c.applies_to || 'all')) {
+        const lbl = (m: string) => m === 'rental' ? 'solo noleggio' : m === 'carwash' ? 'solo lavaggio' : 'tutto'
+        out.push(`Cancellazione / ${c.label}: si applica a ${lbl(p.applies_to || 'all')} → ${lbl(c.applies_to || 'all')}`)
+      }
+      if ((p.requires_service || 'none') !== (c.requires_service || 'none')) {
+        const lbl = (m: string) => m === 'dr7_flex' ? 'DR7 Flex' : m === 'prime_flex' ? 'Prime Flex' : m === 'elite' ? 'Elite' : 'nessuna'
+        out.push(`Cancellazione / ${c.label}: condizione ${lbl(p.requires_service || 'none')} → ${lbl(c.requires_service || 'none')}`)
       }
       if (p.is_active !== c.is_active) out.push(`Cancellazione / ${c.label}: ${c.is_active ? 'attivata' : 'disattivata'}`)
     })
@@ -5316,7 +5336,7 @@ function AutomazioniSection({
           </div>
           <button
             onClick={() => {
-              const newRule: CancellationRule = { id: uid(), label: 'Nuova regola', min_days_notice: 0, refund_pct: 50, refund_method: 'wallet', is_active: true }
+              const newRule: CancellationRule = { id: uid(), label: 'Nuova regola', applies_to: 'all', requires_service: 'none', min_days_notice: 0, refund_pct: 50, refund_method: 'wallet', is_active: true }
               update({ cancellation_rules: [...(automations.cancellation_rules || []), newRule] })
             }}
             className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#ff3b30] hover:text-[#d70015] transition-colors shrink-0"
@@ -5327,17 +5347,6 @@ function AutomazioniSection({
             Aggiungi regola
           </button>
         </header>
-
-        <div className="px-5 pb-2">
-          <div className="grid grid-cols-[44px_1fr_100px_90px_120px_32px] gap-2 items-center px-1 mb-2">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Attiva</span>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Etichetta</span>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Preavviso</span>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Rimborso</span>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Destinazione</span>
-            <span />
-          </div>
-        </div>
 
         <ul className="divide-y divide-black/5">
           {(automations.cancellation_rules || [])
@@ -5351,77 +5360,120 @@ function AutomazioniSection({
               const penalty = typeof r.refund_pct === 'number' ? Math.max(0, 100 - r.refund_pct) : 0
               const patch = (p: Partial<CancellationRule>) =>
                 update({ cancellation_rules: (automations.cancellation_rules || []).map(x => x.id === r.id ? { ...x, ...p } : x) })
+              const appliesLbl = (r.applies_to || 'all') === 'rental' ? 'Solo noleggio' : (r.applies_to || 'all') === 'carwash' ? 'Solo lavaggio' : 'Tutto'
+              const requiresLbl = (r.requires_service || 'none') === 'dr7_flex' ? 'DR7 Flex' : (r.requires_service || 'none') === 'prime_flex' ? 'Prime Flex' : (r.requires_service || 'none') === 'elite' ? 'Elite' : '—'
               return (
-                <li key={r.id} className="px-5 py-3 grid grid-cols-[44px_1fr_100px_90px_120px_32px] gap-2 items-center group">
-                  <label className="inline-flex items-center cursor-pointer">
+                <li key={r.id} className="px-5 py-4 group">
+                  {/* Header: toggle + label + delete */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <label className="inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={r.is_active}
+                        onChange={(e) => patch({ is_active: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
+                        <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                      </span>
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={r.is_active}
-                      onChange={(e) => patch({ is_active: e.target.checked })}
-                      className="sr-only peer"
+                      type="text"
+                      value={r.label}
+                      onChange={(e) => patch({ label: e.target.value })}
+                      placeholder="Nome regola"
+                      className={`flex-1 min-w-0 bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] font-medium text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40 ${!r.is_active ? 'opacity-50' : ''}`}
                     />
-                    <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
-                      <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    value={r.label}
-                    onChange={(e) => patch({ label: e.target.value })}
-                    placeholder="Nome regola"
-                    className={`bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40 ${!r.is_active ? 'opacity-50' : ''}`}
-                  />
-                  <div className={`relative ${!r.is_active ? 'opacity-50' : ''}`}>
-                    <input
-                      type="number"
-                      min={0}
-                      max={365}
-                      step={1}
-                      value={r.min_days_notice}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        patch({ min_days_notice: v === '' ? '' : Number(v) })
-                      }}
-                      className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">gg</span>
+                    <button
+                      onClick={() => update({ cancellation_rules: (automations.cancellation_rules || []).filter(x => x.id !== r.id) })}
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all shrink-0"
+                      aria-label="Rimuovi regola"
+                      title="Rimuovi regola"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+                      </svg>
+                    </button>
                   </div>
-                  <div className={`relative ${!r.is_active ? 'opacity-50' : ''}`}>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={r.refund_pct}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        patch({ refund_pct: v === '' ? '' : Number(v) })
-                      }}
-                      className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
+                  {/* Body: 5 fields in a responsive grid */}
+                  <div className={`pl-[52px] grid grid-cols-2 sm:grid-cols-5 gap-3 ${!r.is_active ? 'opacity-50' : ''}`}>
+                    <label className="block">
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Si applica a</span>
+                      <select
+                        value={r.applies_to || 'all'}
+                        onChange={(e) => patch({ applies_to: e.target.value as CancellationAppliesTo })}
+                        className="w-full bg-white border border-black/10 rounded-lg px-2 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                      >
+                        <option value="all">Tutto</option>
+                        <option value="rental">Solo noleggio</option>
+                        <option value="carwash">Solo lavaggio</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Condizione</span>
+                      <select
+                        value={r.requires_service || 'none'}
+                        onChange={(e) => patch({ requires_service: e.target.value as CancellationRequiresService })}
+                        className="w-full bg-white border border-black/10 rounded-lg px-2 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                      >
+                        <option value="none">Nessuna</option>
+                        <option value="dr7_flex">DR7 Flex acquistato</option>
+                        <option value="prime_flex">Prime Flex acquistato</option>
+                        <option value="elite">Cliente Elite</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Preavviso</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0}
+                          max={365}
+                          step={1}
+                          value={r.min_days_notice}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            patch({ min_days_notice: v === '' ? '' : Number(v) })
+                          }}
+                          className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-10 py-2 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">gg</span>
+                      </div>
+                    </label>
+                    <label className="block">
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Rimborso</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={r.refund_pct}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            patch({ refund_pct: v === '' ? '' : Number(v) })
+                          }}
+                          className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
+                      </div>
+                    </label>
+                    <label className="block">
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Destinazione</span>
+                      <select
+                        value={r.refund_method || 'wallet'}
+                        onChange={(e) => patch({ refund_method: e.target.value as 'wallet' | 'card' })}
+                        className="w-full bg-white border border-black/10 rounded-lg px-2 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                      >
+                        <option value="wallet">DR7 Wallet</option>
+                        <option value="card">Carta (manuale)</option>
+                      </select>
+                    </label>
                   </div>
-                  <select
-                    value={r.refund_method || 'wallet'}
-                    onChange={(e) => patch({ refund_method: e.target.value as 'wallet' | 'card' })}
-                    className={`w-full bg-white border border-black/10 rounded-lg px-2 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40 ${!r.is_active ? 'opacity-50' : ''}`}
-                  >
-                    <option value="wallet">DR7 Wallet</option>
-                    <option value="card">Carta (manuale)</option>
-                  </select>
-                  <button
-                    onClick={() => update({ cancellation_rules: (automations.cancellation_rules || []).filter(x => x.id !== r.id) })}
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
-                    aria-label="Rimuovi regola"
-                    title="Rimuovi regola"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
-                    </svg>
-                  </button>
-                  <span className="col-span-6 text-[11px] text-[#6e6e73] pl-[52px]">
-                    ≥ {typeof r.min_days_notice === 'number' ? r.min_days_notice : 0} gg → rimborso {typeof r.refund_pct === 'number' ? r.refund_pct : 0}% su {(r.refund_method || 'wallet') === 'card' ? 'carta (manuale)' : 'DR7 Wallet'} (penale {penalty}%)
-                  </span>
+                  {/* Summary */}
+                  <p className="text-[11px] text-[#6e6e73] mt-2 pl-[52px]">
+                    {appliesLbl}{(r.requires_service || 'none') !== 'none' ? ` · richiede ${requiresLbl}` : ''} · ≥ {typeof r.min_days_notice === 'number' ? r.min_days_notice : 0} gg → rimborso {typeof r.refund_pct === 'number' ? r.refund_pct : 0}% su {(r.refund_method || 'wallet') === 'card' ? 'carta (manuale)' : 'DR7 Wallet'} (penale {penalty}%)
+                  </p>
                 </li>
               )
             })}
