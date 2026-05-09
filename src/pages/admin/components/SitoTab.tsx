@@ -46,7 +46,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'hero', title: 'Home / Hero', ready: true },
     { id: 'chi-siamo', title: 'Chi Siamo', ready: true },
     { id: 'footer', title: 'Footer', ready: true },
-    { id: 'legali', title: 'Privacy & Termini', ready: false },
+    { id: 'legali', title: 'Privacy & Termini', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -54,6 +54,16 @@ interface FaqEntry {
     id: string
     question: string
     answer: string
+}
+
+interface FaqCopy {
+    eyebrow_it: string
+    eyebrow_en: string
+    page_title_it: string
+    page_title_en: string
+    subtitle_it: string
+    subtitle_en: string
+    entries: FaqEntry[]
 }
 
 // ─── Cancellazione schema (mirror of website utils/siteCopy.ts) ─────────────
@@ -220,6 +230,59 @@ interface FooterCopy {
     bottom_copyright: string
 }
 
+// ─── Legal pages schema (mirror of website utils/siteCopy.ts) ──────────────
+type LegalPageId = 'privacy' | 'cookie' | 'rental_agreement' | 'terms'
+
+interface LegalSection {
+    id: string
+    heading_it: string
+    heading_en: string
+    blocks: CancellazioneBlock[]
+}
+
+interface LegalPageCopy {
+    id: LegalPageId
+    enabled: boolean
+    title_it: string
+    title_en: string
+    last_updated_dynamic: boolean
+    last_updated_label_it: string
+    last_updated_label_en: string
+    intro_blocks: CancellazioneBlock[]
+    sections: LegalSection[]
+    outro_blocks: CancellazioneBlock[]
+}
+
+interface LegalCopy {
+    pages: LegalPageCopy[]
+}
+
+const LEGAL_PAGE_DEFAULTS: Record<LegalPageId, { title_it: string; title_en: string }> = {
+    privacy:          { title_it: 'Informativa sulla Privacy',     title_en: 'Privacy Policy' },
+    cookie:           { title_it: 'Cookie Policy',                 title_en: 'Cookie Policy' },
+    rental_agreement: { title_it: 'Contratto di Noleggio (Riassunto)', title_en: 'Rental Agreement (Overview)' },
+    terms:            { title_it: 'Termini di Servizio',           title_en: 'Terms of Service' },
+}
+
+function emptyLegalPage(id: LegalPageId): LegalPageCopy {
+    return {
+        id,
+        enabled: false,
+        title_it: LEGAL_PAGE_DEFAULTS[id].title_it,
+        title_en: LEGAL_PAGE_DEFAULTS[id].title_en,
+        last_updated_dynamic: id === 'privacy' || id === 'cookie',
+        last_updated_label_it: id === 'privacy' ? 'Ultimo aggiornamento' : id === 'cookie' ? 'Ultimo Aggiornamento' : '',
+        last_updated_label_en: id === 'privacy' || id === 'cookie' ? 'Last updated' : '',
+        intro_blocks: [],
+        sections: [],
+        outro_blocks: [],
+    }
+}
+
+const INITIAL_LEGAL: LegalCopy = {
+    pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
+}
+
 const INITIAL_FOOTER: FooterCopy = {
     network_title: '',
     network_text_it: '', network_text_en: '',
@@ -281,7 +344,7 @@ const INITIAL_CANCELLAZIONE: CancellazioneCopy = {
 }
 
 // Italian translations of the legacy English FAQ on /faq.
-const INITIAL_FAQ: FaqEntry[] = [
+const INITIAL_FAQ_ENTRIES: FaqEntry[] = [
     {
         id: 'requisiti-noleggio',
         question: 'Quali sono i requisiti per noleggiare un\'auto?',
@@ -304,24 +367,35 @@ const INITIAL_FAQ: FaqEntry[] = [
     },
 ]
 
+const INITIAL_FAQ: FaqCopy = {
+    eyebrow_it: 'DR7 · Supporto',
+    eyebrow_en: 'DR7 · Support',
+    page_title_it: 'Domande Frequenti',
+    page_title_en: 'Frequently Asked Questions',
+    subtitle_it: 'Le risposte alle domande piu’ frequenti su noleggio, membership e pagamenti.',
+    subtitle_en: 'Answers to the most common questions on rentals, membership, and payments.',
+    entries: INITIAL_FAQ_ENTRIES,
+}
+
 // ─── Persistence helpers ─────────────────────────────────────────────────────
 interface SiteCopySnapshot {
-    faq?: FaqEntry[]
+    faq?: FaqCopy | FaqEntry[]   // accept legacy raw-array shape too
     cancellazione?: CancellazioneCopy
     membership?: MembershipCopy
     home?: HomeCopy
     about?: AboutCopy
     footer?: FooterCopy
-    // Future: legali
+    legal?: LegalCopy
 }
 
 interface CurrentState {
-    faq: FaqEntry[]
+    faq: FaqCopy
     cancellazione: CancellazioneCopy
     membership: MembershipCopy
     home: HomeCopy
     about: AboutCopy
     footer: FooterCopy
+    legal: LegalCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -380,8 +454,8 @@ export default function SitoTab() {
     const [section, setSection] = useState<SectionId>('faq')
 
     // ─── State (current + saved snapshots per section) ───────────────────────
-    const [faq, setFaq] = useState<FaqEntry[]>(INITIAL_FAQ)
-    const [savedFaq, setSavedFaq] = useState<FaqEntry[]>(INITIAL_FAQ)
+    const [faq, setFaq] = useState<FaqCopy>(INITIAL_FAQ)
+    const [savedFaq, setSavedFaq] = useState<FaqCopy>(INITIAL_FAQ)
     const [cancellazione, setCancellazione] = useState<CancellazioneCopy>(INITIAL_CANCELLAZIONE)
     const [savedCancellazione, setSavedCancellazione] = useState<CancellazioneCopy>(INITIAL_CANCELLAZIONE)
     const [membership, setMembership] = useState<MembershipCopy>(INITIAL_MEMBERSHIP)
@@ -392,6 +466,8 @@ export default function SitoTab() {
     const [savedAbout, setSavedAbout] = useState<AboutCopy>(INITIAL_ABOUT)
     const [footer, setFooter] = useState<FooterCopy>(INITIAL_FOOTER)
     const [savedFooter, setSavedFooter] = useState<FooterCopy>(INITIAL_FOOTER)
+    const [legal, setLegal] = useState<LegalCopy>(INITIAL_LEGAL)
+    const [savedLegal, setSavedLegal] = useState<LegalCopy>(INITIAL_LEGAL)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -401,9 +477,21 @@ export default function SitoTab() {
             try {
                 const remote = await loadPersisted()
                 if (cancelled) return
-                if (remote?.faq && Array.isArray(remote.faq)) {
-                    setFaq(remote.faq)
-                    setSavedFaq(remote.faq)
+                if (remote?.faq) {
+                    // Accept legacy raw-array shape as well as the new FaqCopy object.
+                    const next: FaqCopy = Array.isArray(remote.faq)
+                        ? { ...INITIAL_FAQ, entries: remote.faq }
+                        : {
+                            eyebrow_it: remote.faq.eyebrow_it || INITIAL_FAQ.eyebrow_it,
+                            eyebrow_en: remote.faq.eyebrow_en || INITIAL_FAQ.eyebrow_en,
+                            page_title_it: remote.faq.page_title_it || INITIAL_FAQ.page_title_it,
+                            page_title_en: remote.faq.page_title_en || INITIAL_FAQ.page_title_en,
+                            subtitle_it: remote.faq.subtitle_it || INITIAL_FAQ.subtitle_it,
+                            subtitle_en: remote.faq.subtitle_en || INITIAL_FAQ.subtitle_en,
+                            entries: Array.isArray(remote.faq.entries) ? remote.faq.entries : INITIAL_FAQ.entries,
+                        }
+                    setFaq(next)
+                    setSavedFaq(next)
                 }
                 if (remote?.cancellazione && Array.isArray(remote.cancellazione.sections)) {
                     setCancellazione(remote.cancellazione)
@@ -425,6 +513,16 @@ export default function SitoTab() {
                     setFooter(remote.footer)
                     setSavedFooter(remote.footer)
                 }
+                if (remote?.legal && Array.isArray(remote.legal.pages)) {
+                    // Ensure all 4 page slots exist (in case the seed missed one).
+                    const byId = new Map(remote.legal.pages.map(p => [p.id, p]))
+                    const merged: LegalCopy = {
+                        pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[])
+                            .map(id => byId.get(id) || emptyLegalPage(id)),
+                    }
+                    setLegal(merged)
+                    setSavedLegal(merged)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -437,10 +535,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter }
+            { faq, cancellazione, membership, home, about, footer, legal },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal]
     )
     const dirty = changes.length > 0
 
@@ -451,13 +549,14 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
             setSavedHome(home)
             setSavedAbout(about)
             setSavedFooter(footer)
+            setSavedLegal(legal)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -498,6 +597,7 @@ export default function SitoTab() {
         setHome(savedHome)
         setAbout(savedAbout)
         setFooter(savedFooter)
+        setLegal(savedLegal)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -604,7 +704,7 @@ export default function SitoTab() {
                             <p className="text-sm text-[#6e6e73]">Caricamento dati…</p>
                         )}
                         {hydrated && section === 'faq' && (
-                            <FaqEditor entries={faq} setEntries={setFaq} />
+                            <FaqEditor copy={faq} setCopy={setFaq} />
                         )}
                         {hydrated && section === 'cancellazione' && (
                             <CancellazioneEditor copy={cancellazione} setCopy={setCancellazione} />
@@ -621,7 +721,10 @@ export default function SitoTab() {
                         {hydrated && section === 'footer' && (
                             <FooterEditor copy={footer} setCopy={setFooter} />
                         )}
-                        {hydrated && section !== 'faq' && section !== 'cancellazione' && section !== 'membership' && section !== 'hero' && section !== 'chi-siamo' && section !== 'footer' && (
+                        {hydrated && section === 'legali' && (
+                            <LegalEditor copy={legal} setCopy={setLegal} />
+                        )}
+                        {hydrated && section !== 'faq' && section !== 'cancellazione' && section !== 'membership' && section !== 'hero' && section !== 'chi-siamo' && section !== 'footer' && section !== 'legali' && (
                             <PlaceholderSection
                                 title={SECTIONS.find(s => s.id === section)?.title || section}
                             />
@@ -660,24 +763,31 @@ export default function SitoTab() {
 // ─── Changes detection ───────────────────────────────────────────────────────
 function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     const out: string[] = []
-    // FAQ
+    // FAQ — chrome (title/eyebrow/subtitle) + entries
     {
-        const curIds = new Set(current.faq.map(e => e.id))
-        const savIds = new Set(saved.faq.map(e => e.id))
-        const added = current.faq.filter(e => !savIds.has(e.id))
-        const removed = saved.faq.filter(e => !curIds.has(e.id))
+        const ce = current.faq.entries
+        const se = saved.faq.entries
+        const curIds = new Set(ce.map(e => e.id))
+        const savIds = new Set(se.map(e => e.id))
+        const added = ce.filter(e => !savIds.has(e.id))
+        const removed = se.filter(e => !curIds.has(e.id))
         added.forEach(e => out.push(`FAQ: nuova "${e.question.slice(0, 40) || '(senza titolo)'}"`))
         removed.forEach(e => out.push(`FAQ: rimossa "${e.question.slice(0, 40) || e.id}"`))
-        current.faq.forEach(c => {
-            const s = saved.faq.find(x => x.id === c.id)
+        ce.forEach(c => {
+            const s = se.find(x => x.id === c.id)
             if (!s) return
             if (c.question !== s.question || c.answer !== s.answer) {
                 out.push(`FAQ: modificata "${(s.question || c.question).slice(0, 40)}"`)
             }
         })
-        if (current.faq.length === saved.faq.length && added.length === 0 && removed.length === 0) {
-            const reordered = current.faq.some((e, i) => saved.faq[i]?.id !== e.id)
+        if (ce.length === se.length && added.length === 0 && removed.length === 0) {
+            const reordered = ce.some((e, i) => se[i]?.id !== e.id)
             if (reordered) out.push('FAQ: ordine modificato')
+        }
+        // Chrome diff (title/eyebrow/subtitle)
+        const chromeKeys: (keyof FaqCopy)[] = ['eyebrow_it', 'eyebrow_en', 'page_title_it', 'page_title_en', 'subtitle_it', 'subtitle_en']
+        if (chromeKeys.some(k => current.faq[k] !== saved.faq[k])) {
+            out.push('FAQ: titolo/eyebrow/sottotitolo modificati')
         }
     }
     // Cancellazione (compare as JSON — covers titles, blocks, sections, footer)
@@ -700,17 +810,30 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     if (JSON.stringify(current.footer) !== JSON.stringify(saved.footer)) {
         out.push('Footer: contenuti modificati')
     }
+    // Legal pages (per-page diff)
+    const curById = new Map(current.legal.pages.map(p => [p.id, p]))
+    const savById = new Map(saved.legal.pages.map(p => [p.id, p]))
+    for (const id of ['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]) {
+        if (JSON.stringify(curById.get(id)) !== JSON.stringify(savById.get(id))) {
+            out.push(`Legali / ${id}: contenuti modificati`)
+        }
+    }
     return out
 }
 
 // ─── FAQ editor ──────────────────────────────────────────────────────────────
 function FaqEditor({
-    entries,
-    setEntries,
+    copy,
+    setCopy,
 }: {
-    entries: FaqEntry[]
-    setEntries: (next: FaqEntry[]) => void
+    copy: FaqCopy
+    setCopy: (next: FaqCopy) => void
 }) {
+    const entries = copy.entries
+    const updateField = <K extends keyof FaqCopy>(key: K, value: FaqCopy[K]) => {
+        setCopy({ ...copy, [key]: value })
+    }
+    const setEntries = (next: FaqEntry[]) => setCopy({ ...copy, entries: next })
     const update = (id: string, patch: Partial<FaqEntry>) => {
         setEntries(entries.map(e => e.id === id ? { ...e, ...patch } : e))
     }
@@ -736,9 +859,22 @@ function FaqEditor({
             <div>
                 <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">FAQ</h2>
                 <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Domande e risposte mostrate sulla pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/faq</code>. Modifica, riordina, aggiungi o rimuovi liberamente.
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/faq</code>. Modifica titolo pagina, eyebrow, sottotitolo e voci.
                 </p>
             </div>
+
+            {/* Page chrome (title + eyebrow + subtitle) */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero pagina</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Eyebrow (IT) — es. "DR7 · Supporto"' value={copy.eyebrow_it} onChange={v => updateField('eyebrow_it', v)} />
+                    <FieldText label="Eyebrow (EN)" value={copy.eyebrow_en} onChange={v => updateField('eyebrow_en', v)} />
+                    <FieldText label='Titolo pagina (IT) — es. "Domande Frequenti"' value={copy.page_title_it} onChange={v => updateField('page_title_it', v)} />
+                    <FieldText label="Titolo pagina (EN)" value={copy.page_title_en} onChange={v => updateField('page_title_en', v)} />
+                    <FieldTextArea label="Sottotitolo (IT)" value={copy.subtitle_it} onChange={v => updateField('subtitle_it', v)} />
+                    <FieldTextArea label="Sottotitolo (EN)" value={copy.subtitle_en} onChange={v => updateField('subtitle_en', v)} />
+                </div>
+            </section>
 
             <ul className="space-y-3">
                 {entries.map((e, i) => (
@@ -2062,6 +2198,305 @@ function FooterLinkSection({
                 Aggiungi link
             </button>
         </section>
+    )
+}
+
+// ─── Privacy & Termini (Legal) editor ───────────────────────────────────────
+const LEGAL_PAGE_LABELS: Record<LegalPageId, string> = {
+    privacy: 'Privacy Policy',
+    cookie: 'Cookie Policy',
+    rental_agreement: 'Rental Agreement',
+    terms: 'Terms of Service',
+}
+
+function LegalEditor({
+    copy,
+    setCopy,
+}: {
+    copy: LegalCopy
+    setCopy: (next: LegalCopy) => void
+}) {
+    const [activeId, setActiveId] = useState<LegalPageId>('privacy')
+    const active = copy.pages.find(p => p.id === activeId) || emptyLegalPage(activeId)
+
+    const updatePage = (patch: Partial<LegalPageCopy>) => {
+        setCopy({
+            ...copy,
+            pages: copy.pages.map(p => p.id === activeId ? { ...p, ...patch } : p),
+        })
+    }
+    // Sections
+    const updateSection = (idx: number, patch: Partial<LegalSection>) => {
+        const next = [...active.sections]
+        next[idx] = { ...next[idx], ...patch }
+        updatePage({ sections: next })
+    }
+    const moveSection = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= active.sections.length) return
+        const next = [...active.sections]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        updatePage({ sections: next })
+    }
+    const removeSection = (idx: number) => {
+        if (!confirm('Rimuovere questa sezione?')) return
+        updatePage({ sections: active.sections.filter((_, i) => i !== idx) })
+    }
+    const addSection = () => {
+        const id = `sec-${Date.now().toString(36)}`
+        updatePage({
+            sections: [...active.sections, {
+                id,
+                heading_it: 'Nuova sezione', heading_en: 'New section',
+                blocks: [{ type: 'p', text_it: '', text_en: '' }],
+            }],
+        })
+    }
+
+    // Intro/Outro blocks (raw block lists)
+    const updateBandBlock = (band: 'intro_blocks' | 'outro_blocks', idx: number, next: CancellazioneBlock) => {
+        const list = [...active[band]]
+        list[idx] = next
+        updatePage({ [band]: list } as Partial<LegalPageCopy>)
+    }
+    const moveBandBlock = (band: 'intro_blocks' | 'outro_blocks', idx: number, dir: -1 | 1) => {
+        const list = [...active[band]]
+        const j = idx + dir
+        if (j < 0 || j >= list.length) return
+        ;[list[idx], list[j]] = [list[j], list[idx]]
+        updatePage({ [band]: list } as Partial<LegalPageCopy>)
+    }
+    const removeBandBlock = (band: 'intro_blocks' | 'outro_blocks', idx: number) => {
+        if (!confirm('Rimuovere questo blocco?')) return
+        updatePage({ [band]: active[band].filter((_, i) => i !== idx) } as Partial<LegalPageCopy>)
+    }
+    const addBandBlock = (band: 'intro_blocks' | 'outro_blocks', type: CancellazioneBlock['type']) => {
+        const block: CancellazioneBlock = type === 'ul'
+            ? { type: 'ul', items_it: [''], items_en: [''], tone: 'default' }
+            : { type, text_it: '', text_en: '' }
+        updatePage({ [band]: [...active[band], block] } as Partial<LegalPageCopy>)
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Privacy & Termini</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Modifica le pagine legali. Inline supportato: <code>**grassetto**</code> e <code>[testo](https://link)</code> (anche <code>mailto:</code>). Newline nei testi diventano a-capo a video.
+                </p>
+            </div>
+
+            {/* Page picker */}
+            <div className="flex flex-wrap gap-2">
+                {(['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(id => {
+                    const page = copy.pages.find(p => p.id === id)
+                    const isActive = activeId === id
+                    return (
+                        <button
+                            key={id}
+                            onClick={() => setActiveId(id)}
+                            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border ${
+                                isActive
+                                    ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
+                                    : 'bg-white border-black/10 text-[#1d1d1f] hover:bg-black/5'
+                            }`}
+                        >
+                            {LEGAL_PAGE_LABELS[id]}
+                            {!page?.enabled && (
+                                <span className={`ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${isActive ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-700'}`}>off</span>
+                            )}
+                        </button>
+                    )
+                })}
+            </div>
+
+            {/* Page meta */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                    <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Impostazioni pagina</h3>
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <span className="text-[12px] text-[#6e6e73]">Pagina attiva</span>
+                        <input
+                            type="checkbox"
+                            checked={active.enabled}
+                            onChange={(e) => updatePage({ enabled: e.target.checked })}
+                            className="sr-only peer"
+                        />
+                        <span className="relative inline-block w-9 h-5 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
+                            <span className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
+                        </span>
+                    </label>
+                </div>
+                <p className="text-[11px] text-[#6e6e73] -mt-2">Disattivata = il sito mostra il testo legacy hardcoded della pagina.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo pagina (IT)" value={active.title_it} onChange={v => updatePage({ title_it: v })} />
+                    <FieldText label="Titolo pagina (EN)" value={active.title_en} onChange={v => updatePage({ title_en: v })} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_1fr] gap-4 items-end">
+                    <label className="inline-flex items-center gap-2 cursor-pointer pb-2">
+                        <input
+                            type="checkbox"
+                            checked={active.last_updated_dynamic}
+                            onChange={(e) => updatePage({ last_updated_dynamic: e.target.checked })}
+                        />
+                        <span className="text-[12px] text-[#1d1d1f]">Mostra "ultimo aggiornamento" con data odierna</span>
+                    </label>
+                    <FieldText label='Etichetta (IT)' value={active.last_updated_label_it} onChange={v => updatePage({ last_updated_label_it: v })} />
+                    <FieldText label='Etichetta (EN)' value={active.last_updated_label_en} onChange={v => updatePage({ last_updated_label_en: v })} />
+                </div>
+            </section>
+
+            {/* Intro band */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Intro (sopra le sezioni) — {active.intro_blocks.length} blocchi</h3>
+                {active.intro_blocks.map((block, i) => (
+                    <BlockCard
+                        key={`intro-${i}`}
+                        block={block}
+                        first={i === 0}
+                        last={i === active.intro_blocks.length - 1}
+                        onChange={(b) => updateBandBlock('intro_blocks', i, b)}
+                        onMoveUp={() => moveBandBlock('intro_blocks', i, -1)}
+                        onMoveDown={() => moveBandBlock('intro_blocks', i, 1)}
+                        onRemove={() => removeBandBlock('intro_blocks', i)}
+                    />
+                ))}
+                <div className="flex flex-wrap gap-2">
+                    <AddBlockButton label="+ Paragrafo" onClick={() => addBandBlock('intro_blocks', 'p')} />
+                    <AddBlockButton label="+ Grassetto" onClick={() => addBandBlock('intro_blocks', 'p-bold')} />
+                    <AddBlockButton label="+ Corsivo" onClick={() => addBandBlock('intro_blocks', 'p-italic')} />
+                    <AddBlockButton label="+ Lista puntata" onClick={() => addBandBlock('intro_blocks', 'ul')} />
+                </div>
+            </section>
+
+            {/* Sections */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sezioni numerate ({active.sections.length})</h3>
+                {active.sections.map((sec, i) => (
+                    <LegalSectionCard
+                        key={sec.id}
+                        section={sec}
+                        first={i === 0}
+                        last={i === active.sections.length - 1}
+                        onChange={(patch) => updateSection(i, patch)}
+                        onMoveUp={() => moveSection(i, -1)}
+                        onMoveDown={() => moveSection(i, 1)}
+                        onRemove={() => removeSection(i)}
+                    />
+                ))}
+                <button
+                    onClick={addSection}
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi sezione
+                </button>
+            </section>
+
+            {/* Outro band */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Outro (sotto le sezioni) — {active.outro_blocks.length} blocchi</h3>
+                {active.outro_blocks.map((block, i) => (
+                    <BlockCard
+                        key={`outro-${i}`}
+                        block={block}
+                        first={i === 0}
+                        last={i === active.outro_blocks.length - 1}
+                        onChange={(b) => updateBandBlock('outro_blocks', i, b)}
+                        onMoveUp={() => moveBandBlock('outro_blocks', i, -1)}
+                        onMoveDown={() => moveBandBlock('outro_blocks', i, 1)}
+                        onRemove={() => removeBandBlock('outro_blocks', i)}
+                    />
+                ))}
+                <div className="flex flex-wrap gap-2">
+                    <AddBlockButton label="+ Paragrafo" onClick={() => addBandBlock('outro_blocks', 'p')} />
+                    <AddBlockButton label="+ Grassetto" onClick={() => addBandBlock('outro_blocks', 'p-bold')} />
+                    <AddBlockButton label="+ Corsivo" onClick={() => addBandBlock('outro_blocks', 'p-italic')} />
+                    <AddBlockButton label="+ Lista puntata" onClick={() => addBandBlock('outro_blocks', 'ul')} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+function LegalSectionCard({
+    section, first, last, onChange, onMoveUp, onMoveDown, onRemove,
+}: {
+    section: LegalSection
+    first: boolean
+    last: boolean
+    onChange: (patch: Partial<LegalSection>) => void
+    onMoveUp: () => void
+    onMoveDown: () => void
+    onRemove: () => void
+}) {
+    const [open, setOpen] = useState(false)
+    const updateBlock = (idx: number, next: CancellazioneBlock) => {
+        const blocks = [...section.blocks]
+        blocks[idx] = next
+        onChange({ blocks })
+    }
+    const moveBlock = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= section.blocks.length) return
+        const blocks = [...section.blocks]
+        ;[blocks[idx], blocks[j]] = [blocks[j], blocks[idx]]
+        onChange({ blocks })
+    }
+    const removeBlock = (idx: number) => {
+        if (!confirm('Rimuovere questo blocco?')) return
+        onChange({ blocks: section.blocks.filter((_, i) => i !== idx) })
+    }
+    const addBlock = (type: CancellazioneBlock['type']) => {
+        const block: CancellazioneBlock = type === 'ul'
+            ? { type: 'ul', items_it: [''], items_en: [''], tone: 'default' }
+            : { type, text_it: '', text_en: '' }
+        onChange({ blocks: [...section.blocks, block] })
+    }
+
+    return (
+        <div className="border border-black/10 rounded-2xl bg-white shadow-sm">
+            <header className="px-4 py-3 flex items-center gap-3">
+                <button onClick={() => setOpen(o => !o)} className="flex-1 text-left flex items-center gap-3">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-[#6e6e73] transition-transform ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
+                    <span className="text-[13px] font-semibold text-[#1d1d1f] flex-1 truncate">{section.heading_it || '(senza titolo)'}</span>
+                </button>
+                <div className="flex items-center gap-1">
+                    <button onClick={onMoveUp} disabled={first} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                    <button onClick={onMoveDown} disabled={last} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                    <button onClick={onRemove} className="w-7 h-7 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg></button>
+                </div>
+            </header>
+            {open && (
+                <div className="px-4 pb-4 space-y-4 border-t border-black/5 pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <FieldText label="Heading (IT)" value={section.heading_it} onChange={v => onChange({ heading_it: v })} />
+                        <FieldText label="Heading (EN)" value={section.heading_en} onChange={v => onChange({ heading_en: v })} />
+                    </div>
+                    <div className="space-y-2">
+                        <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#a1a1a6]">Blocchi ({section.blocks.length})</h4>
+                        {section.blocks.map((block, i) => (
+                            <BlockCard
+                                key={i}
+                                block={block}
+                                first={i === 0}
+                                last={i === section.blocks.length - 1}
+                                onChange={(b) => updateBlock(i, b)}
+                                onMoveUp={() => moveBlock(i, -1)}
+                                onMoveDown={() => moveBlock(i, 1)}
+                                onRemove={() => removeBlock(i)}
+                            />
+                        ))}
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            <AddBlockButton label="+ Paragrafo" onClick={() => addBlock('p')} />
+                            <AddBlockButton label="+ Grassetto" onClick={() => addBlock('p-bold')} />
+                            <AddBlockButton label="+ Corsivo" onClick={() => addBlock('p-italic')} />
+                            <AddBlockButton label="+ Lista puntata" onClick={() => addBlock('ul')} />
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     )
 }
 

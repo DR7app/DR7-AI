@@ -334,8 +334,9 @@ export default function BirthdaysTab() {
         })
     }, [customers, daysRange, showOnlyWithConsent, showOnlyWithPhone, showOnlyNotSent])
 
-    // Count of customers with birthdays in next 10 days (for badge)
-    const upcomingCount = customers.filter(c => c.days_until <= 10 && !c.already_sent_this_year).length
+    // Count of customers with birthdays in next 10 days (for badge — currently unused)
+    const _upcomingCount = customers.filter(c => c.days_until <= 10 && !c.already_sent_this_year).length
+    void _upcomingCount
 
     // Selectable customers (with phone, not yet sent)
     const selectableCustomers = filteredCustomers.filter(c => c.phone && !c.already_sent_this_year)
