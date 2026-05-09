@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type ReactElement } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -67,7 +67,7 @@ const KPI_TONE: Record<KpiTone, { ring: string; iconBg: string; iconText: string
   muted:   { ring: 'border-theme-border',  iconBg: 'bg-theme-bg-tertiary', iconText: 'text-theme-text-muted' },
 }
 
-const KPI_ICONS: Record<string, JSX.Element> = {
+const KPI_ICONS: Record<string, ReactElement> = {
   up:        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 17l6-6 4 4 8-8m0 0v6m0-6h-6" />,
   check:     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />,
   hourglass: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 2h12M6 22h12M6 2v4a6 6 0 006 6 6 6 0 006-6V2M6 22v-4a6 6 0 016-6 6 6 0 016 6v4" />,
