@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
+import { authFetch } from '../../../utils/authFetch'
 
 interface CustomerResult {
   id: string
@@ -324,7 +325,10 @@ export default function CustomerWalletTab() {
       const code = String(Math.floor(100000 + Math.random() * 900000))
       setSentOtp(code)
 
-      const res = await fetch('/.netlify/functions/send-wallet-otp', {
+      // authFetch injects the Supabase session bearer token. The server
+      // function requires it (requireAuth) and returns 401 without it,
+      // which is what produced the "Errore invio codice" toast.
+      const res = await authFetch('/.netlify/functions/send-wallet-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -337,8 +341,8 @@ export default function CustomerWalletTab() {
       })
 
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Errore invio email')
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `HTTP ${res.status}`)
       }
 
       const data = await res.json().catch(() => ({}))
@@ -356,8 +360,10 @@ export default function CustomerWalletTab() {
         toast.success('Codice di verifica inviato via email')
         setTimeout(() => otpRefs.current[0]?.focus(), 100)
       }
-    } catch {
-      toast.error('Errore invio codice')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[wallet-otp] send failed:', err)
+      toast.error('Errore invio codice OTP: ' + msg)
     } finally {
       setOtpSending(false)
     }
