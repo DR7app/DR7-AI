@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -78,6 +78,13 @@ export default function RilevazioneOrariTab() {
 
     const [dailyRows, setDailyRows] = useState<DayRow[]>([])
     const [periodRows, setPeriodRows] = useState<{ operatore: Operatore; daysData: Map<string, number> }[]>([])
+
+    // Expanded operator row in the daily table — shows full timeline of
+    // the day with EVERY pause window (start, end, duration), plus
+    // per-operator info (role, target hours, email) and a stack of
+    // performance metrics. Direzione/admin can expand any row to see
+    // EVERYTHING; everyone else can still expand their own row.
+    const [expandedId, setExpandedId] = useState<string | null>(null)
 
     useEffect(() => {
         const t = setInterval(() => setNow(new Date()), 30000)
@@ -408,12 +415,31 @@ export default function RilevazioneOrariTab() {
                                 const isMine = r.operatore.id === me?.id
                                 const target = Math.round((r.operatore.ore_target_giornaliere || 8) * 60)
                                 const straord = Math.max(0, r.minuti_lavorati - target)
+                                const deficit = Math.max(0, target - r.minuti_lavorati)
+                                const isExpanded = expandedId === r.operatore.id
+                                // Build the full set of pause windows (start, end, duration).
+                                // We pair pausa_inizi[i] with pausa_fini[i]; an unmatched
+                                // start (operator currently on break) gets end=null.
+                                const pauseWindows = r.pausa_inizi.map((start, i) => {
+                                    const end = r.pausa_fini[i] || null
+                                    let durMin = 0
+                                    if (end) durMin = Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 60000))
+                                    else if (r.stato === 'pausa') durMin = Math.max(0, Math.floor((Date.now() - new Date(start).getTime()) / 60000))
+                                    return { start, end, durMin, idx: i + 1 }
+                                })
                                 return (
-                                    <tr key={r.operatore.id} className={isMine ? 'bg-amber-50/40 dark:bg-amber-950/20' : ''}>
+                                    <React.Fragment key={r.operatore.id}>
+                                    <tr className={`${isMine ? 'bg-amber-50/40 dark:bg-amber-950/20' : ''} ${isExpanded ? 'bg-theme-bg-tertiary/40' : ''} cursor-pointer hover:bg-theme-bg-tertiary/30`}
+                                        onClick={() => setExpandedId(isExpanded ? null : r.operatore.id)}>
                                         <td className="px-3 py-2 text-theme-text-primary font-semibold">
-                                            {r.operatore.nome} {r.operatore.cognome || ''}
-                                            {isMine && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
-                                            <div className="text-xs text-theme-text-muted">{r.operatore.ruolo || '—'}</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`inline-block transition-transform ${isExpanded ? 'rotate-90' : ''} text-theme-text-muted text-xs`}>▶</span>
+                                                <div>
+                                                    {r.operatore.nome} {r.operatore.cognome || ''}
+                                                    {isMine && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
+                                                    <div className="text-xs text-theme-text-muted">{r.operatore.ruolo || '—'}</div>
+                                                </div>
+                                            </div>
                                         </td>
                                         <td className="px-3 py-2"><StatoLabel s={r.stato} /></td>
                                         <td className="px-3 py-2 font-mono text-xs">{fmtTime(r.entrata)}</td>
@@ -434,6 +460,20 @@ export default function RilevazioneOrariTab() {
                                             {straord > 0 && <div className="text-[10px] text-theme-text-muted">{straord} min</div>}
                                         </td>
                                     </tr>
+                                    {isExpanded && (
+                                        <tr className="bg-theme-bg-tertiary/20 border-b-2 border-dr7-gold/30">
+                                            <td colSpan={10} className="px-4 py-4">
+                                                <DailyOperatorDetail
+                                                    row={r}
+                                                    pauseWindows={pauseWindows}
+                                                    target={target}
+                                                    straord={straord}
+                                                    deficit={deficit}
+                                                />
+                                            </td>
+                                        </tr>
+                                    )}
+                                    </React.Fragment>
                                 )
                             })}
                         </tbody>
@@ -553,6 +593,188 @@ export default function RilevazioneOrariTab() {
                     onSaved={() => { setEditMyDay(false); load(); toast.success('Orari aggiornati') }}
                 />
             )}
+        </div>
+    )
+}
+
+/**
+ * DailyOperatorDetail — full breakdown of an operator's day.
+ *
+ * Renders inside the expanded row. Shows:
+ *   - Operator profile: nome, ruolo, email, target ore/giorno
+ *   - Visual timeline: a horizontal bar from 00:00 to 23:59 with the
+ *     work segments (entrata→pausa1, pausa1→pausa2, …, ultima→uscita)
+ *     and the pause segments overlaid in orange. Hover = exact times.
+ *   - All pause windows listed: #N · 13:00 → 13:30 · 30 min
+ *   - Performance KPIs: Lavorate, Pausa Tot, Straordinari, Deficit,
+ *     Target, % Compimento.
+ *
+ * For "see EVERYTHING" admin view: nothing is hidden — entrata,
+ * uscita, every pause start/end, durations to the minute.
+ */
+function DailyOperatorDetail({
+    row,
+    pauseWindows,
+    target,
+    straord,
+    deficit,
+}: {
+    row: DayRow
+    pauseWindows: { start: string; end: string | null; durMin: number; idx: number }[]
+    target: number
+    straord: number
+    deficit: number
+}) {
+    const op = row.operatore
+    const fmtFull = (iso: string | null) => {
+        if (!iso) return '—'
+        return new Date(iso).toLocaleTimeString('it-IT', {
+            timeZone: ROME_TZ,
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+        })
+    }
+
+    // Day-bar positions in % (0-100) from 00:00 → 24:00.
+    const minOfDay = (iso: string | null): number | null => {
+        if (!iso) return null
+        const d = new Date(iso)
+        if (isNaN(d.getTime())) return null
+        // Convert to Rome local time.
+        const rome = new Date(d.toLocaleString('en-US', { timeZone: ROME_TZ }))
+        return rome.getHours() * 60 + rome.getMinutes()
+    }
+    const TOTAL_MIN = 24 * 60
+    const entrataMin = minOfDay(row.entrata)
+    const uscitaMin = minOfDay(row.uscita) ?? (row.stato === 'fuori' ? null : TOTAL_MIN)
+    const pct = (m: number | null) => m === null ? 0 : (m / TOTAL_MIN) * 100
+
+    const completionPct = target > 0 ? Math.min(100, Math.round((row.minuti_lavorati / target) * 100)) : 0
+
+    return (
+        <div className="space-y-4">
+            {/* Profile */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Operatore</div>
+                    <div className="text-sm font-semibold text-theme-text-primary">{op.nome} {op.cognome || ''}</div>
+                </div>
+                <div>
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Ruolo</div>
+                    <div className="text-sm text-theme-text-primary">{op.ruolo || '—'}</div>
+                </div>
+                <div className="min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Email</div>
+                    <div className="text-sm text-theme-text-primary truncate" title={op.email}>{op.email || '—'}</div>
+                </div>
+                <div>
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Target ore</div>
+                    <div className="text-sm text-theme-text-primary">{op.ore_target_giornaliere}h / giorno</div>
+                </div>
+            </div>
+
+            {/* Timeline 00–24 */}
+            {entrataMin !== null && uscitaMin !== null && (
+                <div>
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">Timeline (00:00 → 24:00, ora di Roma)</div>
+                    <div className="relative h-8 bg-theme-bg-tertiary rounded overflow-hidden border border-theme-border">
+                        {/* Work segment (entrata → uscita) */}
+                        <div
+                            className="absolute h-full bg-emerald-500/40 border-l border-r border-emerald-500"
+                            style={{ left: `${pct(entrataMin)}%`, width: `${Math.max(0, pct(uscitaMin) - pct(entrataMin))}%` }}
+                            title={`Lavoro: ${fmtTime(row.entrata)} → ${fmtTime(row.uscita)}`}
+                        />
+                        {/* Pause segments overlaid in orange */}
+                        {pauseWindows.map((p) => {
+                            const ps = minOfDay(p.start)
+                            const pe = p.end ? minOfDay(p.end) : ps
+                            if (ps === null || pe === null) return null
+                            return (
+                                <div
+                                    key={p.idx}
+                                    className="absolute h-full bg-amber-500/70 border-l border-r border-amber-600"
+                                    style={{ left: `${pct(ps)}%`, width: `${Math.max(0.5, pct(pe) - pct(ps))}%` }}
+                                    title={`Pausa #${p.idx}: ${fmtTime(p.start)} → ${p.end ? fmtTime(p.end) : 'in corso'} (${p.durMin} min)`}
+                                />
+                            )
+                        })}
+                        {/* Hour ticks */}
+                        {Array.from({ length: 13 }).map((_, i) => (
+                            <div key={i} className="absolute top-0 bottom-0 border-l border-theme-border/40" style={{ left: `${(i * 2 / 24) * 100}%` }}>
+                                <span className="absolute top-full mt-0.5 -translate-x-1/2 text-[9px] text-theme-text-muted">{i * 2}h</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-theme-text-muted mt-4">
+                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500/70" />Lavoro</span>
+                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-amber-500/70" />Pausa</span>
+                    </div>
+                </div>
+            )}
+
+            {/* All pause windows */}
+            <div>
+                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">
+                    Pause della giornata ({pauseWindows.length})
+                </div>
+                {pauseWindows.length === 0 ? (
+                    <p className="text-xs text-theme-text-muted italic">Nessuna pausa registrata oggi.</p>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {pauseWindows.map((p) => (
+                            <div key={p.idx} className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] uppercase tracking-wider text-amber-400">Pausa #{p.idx}</span>
+                                    <span className="text-xs font-semibold text-theme-text-primary tabular-nums">{p.durMin} min</span>
+                                </div>
+                                <div className="font-mono text-xs text-theme-text-secondary">
+                                    {fmtFull(p.start)} → {p.end ? fmtFull(p.end) : <span className="text-amber-400">in corso</span>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* KPI grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Entrata</div>
+                    <div className="font-mono text-sm text-theme-text-primary">{fmtFull(row.entrata)}</div>
+                </div>
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Uscita</div>
+                    <div className="font-mono text-sm text-theme-text-primary">{fmtFull(row.uscita)}</div>
+                </div>
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Lavorate</div>
+                    <div className="font-semibold text-emerald-400">{fmtMin(row.minuti_lavorati)}</div>
+                    <div className="text-[10px] text-theme-text-muted">{row.minuti_lavorati} min</div>
+                </div>
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Pausa Tot</div>
+                    <div className="font-semibold text-amber-400">{fmtMin(row.minuti_pausa)}</div>
+                    <div className="text-[10px] text-theme-text-muted">{row.minuti_pausa} min</div>
+                </div>
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Straordinari</div>
+                    <div className={`font-semibold ${straord > 0 ? 'text-sky-400' : 'text-theme-text-muted'}`}>{fmtMin(straord)}</div>
+                </div>
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Deficit</div>
+                    <div className={`font-semibold ${deficit > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{deficit > 0 ? fmtMin(deficit) : '—'}</div>
+                </div>
+            </div>
+
+            {/* Completion bar */}
+            <div>
+                <div className="flex items-baseline justify-between text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">
+                    <span>Completamento target</span>
+                    <span className="tabular-nums text-theme-text-primary">{completionPct}% di {fmtMin(target)}</span>
+                </div>
+                <div className="h-2 bg-theme-bg-tertiary rounded-full overflow-hidden">
+                    <div className={`h-full transition-all ${completionPct >= 100 ? 'bg-emerald-500' : completionPct >= 75 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${completionPct}%` }} />
+                </div>
+            </div>
         </div>
     )
 }
