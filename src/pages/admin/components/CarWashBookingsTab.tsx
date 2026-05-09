@@ -493,6 +493,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const supercarExperienceOption = supercarExperienceExtra
     ? extraPriceOptions[supercarExperienceExtra.id] || null
     : null
+  // Two experience tiers, each with its own fleet:
+  //   - SUPERCAR EXPERIENCE  → vehicles.category = exotic / supercar / supercars
+  //   - ICON EXPERIENCE      → hypercars (top-tier; vehicles.category contains
+  //                            "hyper" or equals icon/icons)
+  // We detect by the extra's name so the picker can load the right pool.
+  const experienceTier: 'supercar' | 'hypercar' | null = supercarExperienceExtra
+    ? (/icon\s*experience/i.test(supercarExperienceExtra.name) ? 'hypercar' : 'supercar')
+    : null
+  const experienceTierLabel = experienceTier === 'hypercar' ? 'hypercar' : 'supercar'
   // Parse duration from option label "1h" / "2h" / "30min" → minutes.
   const supercarExperienceDurationMin = (() => {
     if (!supercarExperienceOption) return 0
@@ -523,34 +532,43 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   })()
 
-  // Load supercar fleet the first time the experience is toggled on.
-  // Categories accepted: exotic / supercar / supercars (case-insensitive)
-  // — in DR7 vehicles table category='exotic' is the canonical value
-  // (Veicoli tab maps exotic → "Supercar" label) but Centralina Pro
-  // pricing aliases supercars↔exotic, and admin can rename the category
-  // to "Supercars" / "supercar" / etc., so we match all variants via
-  // an ILIKE on the substring "supercar" or exact "exotic".
+  // Load fleet for the active experience tier (supercar OR hypercar).
+  // Re-runs whenever the tier changes so toggling between Supercar and
+  // Icon Experience swaps the underlying fleet correctly. Empty array on
+  // tier change so the previous tier's cars don't leak into the picker.
+  //
+  // Category matching:
+  //   - supercar tier  → category ILIKE %supercar% OR equals exotic (any case)
+  //   - hypercar tier  → category ILIKE %hyper% OR equals icon/icons (any case)
+  //   Both queries are case-insensitive so renamed categories
+  //   ("Supercars", "Hypercar", "ICON") still match.
   useEffect(() => {
-    if (!supercarExperienceExtra) return
-    if (supercarFleet.length > 0) return
+    if (!experienceTier) {
+      if (supercarFleet.length > 0) setSupercarFleet([])
+      return
+    }
     let cancelled = false
     ;(async () => {
+      const filter = experienceTier === 'hypercar'
+        ? 'category.ilike.%hyper%,category.eq.icon,category.eq.Icon,category.eq.ICON,category.eq.icons,category.eq.Icons'
+        : 'category.ilike.%supercar%,category.eq.exotic,category.eq.Exotic,category.eq.EXOTIC'
       const { data, error } = await supabase
         .from('vehicles')
         .select('id, display_name, plate, daily_rate, category, status, metadata')
-        .or('category.ilike.%supercar%,category.eq.exotic,category.eq.Exotic,category.eq.EXOTIC')
+        .or(filter)
         .neq('status', 'retired')
         .order('display_name', { ascending: true })
       if (cancelled) return
       if (error) {
-        console.error('[CarWashBookingsTab] failed to load supercar fleet:', error)
+        console.error(`[CarWashBookingsTab] failed to load ${experienceTier} fleet:`, error)
         return
       }
-      console.log(`[Supercar Experience] loaded ${data?.length || 0} supercars from fleet`)
+      console.log(`[${experienceTier === 'hypercar' ? 'Icon' : 'Supercar'} Experience] loaded ${data?.length || 0} ${experienceTier}s from fleet`)
       setSupercarFleet((data || []) as SupercarFleetVehicle[])
     })()
     return () => { cancelled = true }
-  }, [supercarExperienceExtra, supercarFleet.length])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [experienceTier])
 
   // Load existing bookings overlapping the experience window so we can
   // mark each supercar card as "Disponibile" / "Occupato".
@@ -2392,7 +2410,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 <div className="rounded-xl border border-dr7-gold/40 bg-dr7-gold/5 p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div>
-                      <h4 className="text-sm font-semibold text-dr7-gold">Scegli la {supercarExperienceExtra.name}</h4>
+                      <h4 className="text-sm font-semibold text-dr7-gold">
+                        Scegli la {experienceTier === 'hypercar' ? 'hypercar' : 'supercar'} per {supercarExperienceExtra.name}
+                      </h4>
                       <p className="text-xs text-theme-text-muted mt-0.5">
                         Durata {supercarExperienceOption.label}
                         {supercarExperienceWindow
@@ -2413,9 +2433,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                   {supercarFleet.length === 0 ? (
                     <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-3">
-                      Nessun veicolo della flotta supercar trovato. Apri <strong>Veicoli</strong>: ogni auto da mostrare qui deve avere
+                      Nessun veicolo della flotta {experienceTierLabel} trovato. Apri <strong>Veicoli</strong>: ogni auto da mostrare qui deve avere
                       <code className="bg-theme-bg-tertiary px-1 mx-1 rounded">category</code>
-                      = <code className="bg-theme-bg-tertiary px-1 rounded">exotic</code> (o un nome che contiene "supercar")
+                      = <code className="bg-theme-bg-tertiary px-1 rounded">{experienceTier === 'hypercar' ? 'hypercar' : 'exotic'}</code>
+                      {' '}(o un nome che contiene "{experienceTier === 'hypercar' ? 'hyper' : 'supercar'}")
                       e stato diverso da <code className="bg-theme-bg-tertiary px-1 mx-1 rounded">retired</code>.
                     </div>
                   ) : (
@@ -2723,7 +2744,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <div>
                       <h4 className="text-sm font-semibold text-dr7-gold flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M5 12l4-7h6l4 7v6a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1H8v1a1 1 0 01-1 1H6a1 1 0 01-1-1v-6z"/><circle cx="9" cy="14" r="1.5"/><circle cx="15" cy="14" r="1.5"/></svg>
-                        {supercarExperienceExtra.name}
+                        {supercarExperienceExtra.name} <span className="text-xs text-theme-text-muted font-normal">— flotta {experienceTier === 'hypercar' ? 'hypercar' : 'supercar'}</span>
                       </h4>
                       <p className="text-xs text-theme-text-muted mt-0.5">
                         Durata {supercarExperienceOption.label} · finestra {supercarExperienceWindow.pickupTime}–{supercarExperienceWindow.returnTime}
