@@ -175,6 +175,65 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
         if (max != null && amountEur > max) return false
     }
 
+    // Vehicle fuel (booking-side, sync)
+    const fuel = String(tpl.target_vehicle_fuel || 'all').toLowerCase().trim()
+    if (fuel && fuel !== 'all') {
+        const v = booking.booking_details?.vehicle ?? {}
+        const vehFuel = String(
+            booking.vehicle_fuel
+            ?? booking.fuel
+            ?? v.fuel
+            ?? v.carburante
+            ?? booking.booking_details?.vehicle_fuel
+            ?? ''
+        ).toLowerCase().trim()
+        if (!vehFuel) return false
+        // Aliases per essere robusto
+        const aliases: Record<string, string[]> = {
+            petrol: ['petrol', 'benzina', 'gasoline', 'gas'],
+            diesel: ['diesel', 'gasolio'],
+            electric: ['electric', 'elettrico', 'ev', 'bev'],
+            hybrid: ['hybrid', 'ibrido', 'hev', 'phev', 'plugin'],
+        }
+        const wanted = aliases[fuel] ?? [fuel]
+        if (!wanted.some((w: string) => vehFuel.includes(w))) return false
+    }
+
+    // Vehicle transmission (booking-side, sync)
+    const trans = String(tpl.target_vehicle_transmission || 'all').toLowerCase().trim()
+    if (trans && trans !== 'all') {
+        const v = booking.booking_details?.vehicle ?? {}
+        const vehTrans = String(
+            booking.vehicle_transmission
+            ?? booking.transmission
+            ?? v.transmission
+            ?? v.cambio
+            ?? ''
+        ).toLowerCase().trim()
+        if (!vehTrans) return false
+        const isManual = vehTrans.includes('manual') || vehTrans.includes('manuale') || vehTrans.includes('mt')
+        const isAuto = vehTrans.includes('auto') || vehTrans.includes('cvt') || vehTrans.includes('dsg') || vehTrans.includes('at') || vehTrans.includes('dct')
+        if (trans === 'manual' && !isManual) return false
+        if (trans === 'automatic' && !isAuto) return false
+    }
+
+    // Fascia oraria pickup (Europe/Rome). Si basa su pickup_date.
+    // Per car wash / mechanical: si basa su appointment_date.
+    const phMin = tpl.target_pickup_hour_min == null ? null : Number(tpl.target_pickup_hour_min)
+    const phMax = tpl.target_pickup_hour_max == null ? null : Number(tpl.target_pickup_hour_max)
+    if (phMin != null || phMax != null) {
+        const isRental = !booking.service_type || booking.service_type === 'rental' || booking.service_type === 'car_rental'
+        const tStr = isRental ? booking.pickup_date : booking.appointment_date
+        if (tStr) {
+            const fmt = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false })
+            const h = parseInt(fmt.format(new Date(tStr)), 10) % 24
+            if (!isNaN(h)) {
+                if (phMin != null && h < phMin) return false
+                if (phMax != null && h > phMax) return false
+            }
+        }
+    }
+
     // Rental duration in giorni (sync — calcolata da pickup/dropoff).
     // Vale solo per noleggi; per car wash / mechanical i campi pickup/dropoff
     // possono essere vuoti, in tal caso il filtro NON viene applicato.
@@ -213,13 +272,35 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
     const tier = tpl.target_membership_tier ? String(tpl.target_membership_tier).toLowerCase().trim() : null
     const lang = tpl.target_language ? String(tpl.target_language).toLowerCase().trim() : null
     const minPrev = tpl.target_min_prev_bookings == null ? null : Number(tpl.target_min_prev_bookings)
+    const maxPrev = tpl.target_max_prev_bookings == null ? null : Number(tpl.target_max_prev_bookings)
     const tagsCsv = tpl.target_customer_tags ? String(tpl.target_customer_tags) : null
+    const residency = tpl.target_residency ? String(tpl.target_residency).toLowerCase().trim() : null
+    const ageMin = tpl.target_age_min == null ? null : Number(tpl.target_age_min)
+    const ageMax = tpl.target_age_max == null ? null : Number(tpl.target_age_max)
+    const sourceCh = tpl.target_source_channel ? String(tpl.target_source_channel).toLowerCase().trim() : null
+    const provinceCsv = tpl.target_province ? String(tpl.target_province) : null
+    const minLtv = tpl.target_min_lifetime_value == null ? null : Number(tpl.target_min_lifetime_value)
+    const hasUnpaid: boolean | null = tpl.target_has_unpaid_invoices == null ? null : !!tpl.target_has_unpaid_invoices
+    const usedPromo: boolean | null = tpl.target_used_promo_before == null ? null : !!tpl.target_used_promo_before
+    const extMin = tpl.target_extension_count_min == null ? null : Number(tpl.target_extension_count_min)
+    const extMax = tpl.target_extension_count_max == null ? null : Number(tpl.target_extension_count_max)
 
-    // Se nessuno dei 4 filtri customer-dependent e' attivo, esci subito.
+    // Se NESSUN filtro customer-dependent e' attivo, esci subito.
     const allDisabled = (!tier || tier === 'all')
         && (!lang || lang === 'all')
         && (minPrev == null || isNaN(minPrev))
+        && (maxPrev == null || isNaN(maxPrev))
         && (!tagsCsv || !tagsCsv.trim())
+        && (!residency || residency === 'all')
+        && (ageMin == null || isNaN(ageMin))
+        && (ageMax == null || isNaN(ageMax))
+        && (!sourceCh || sourceCh === 'all')
+        && (!provinceCsv || !provinceCsv.trim())
+        && (minLtv == null || isNaN(minLtv))
+        && hasUnpaid == null
+        && usedPromo == null
+        && (extMin == null || isNaN(extMin))
+        && (extMax == null || isNaN(extMax))
     if (allDisabled) return true
 
     // Carica il cliente. Match per id, email, phone (in quest'ordine).
@@ -271,9 +352,42 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
         }
     }
 
-    // Min previous bookings — count escluse cancelled e quella corrente
-    if (minPrev != null && !isNaN(minPrev) && minPrev > 0) {
-        // Match per email come piu' affidabile
+    // Residenza: resident = nazione it/italia/italy. non_resident = altro.
+    if (residency && residency !== 'all') {
+        const naz = String(customer?.nazione ?? customer?.country ?? '').toLowerCase().trim()
+        const isResident = naz === '' || naz === 'it' || naz === 'ita' || naz === 'italia' || naz === 'italy' || naz === 'italian'
+        if (residency === 'resident' && !isResident) return false
+        if (residency === 'non_resident' && isResident) return false
+    }
+
+    // Eta' cliente — calcolata da data_nascita (Date di nascita)
+    if ((ageMin != null && !isNaN(ageMin)) || (ageMax != null && !isNaN(ageMax))) {
+        const dob = customer?.data_nascita ?? customer?.birth_date ?? customer?.dob
+        if (!dob) return false
+        const dobMs = new Date(dob).getTime()
+        if (isNaN(dobMs)) return false
+        const ageYears = Math.floor((Date.now() - dobMs) / (365.25 * 24 * 3600 * 1000))
+        if (ageMin != null && !isNaN(ageMin) && ageYears < ageMin) return false
+        if (ageMax != null && !isNaN(ageMax) && ageYears > ageMax) return false
+    }
+
+    // Source channel
+    if (sourceCh && sourceCh !== 'all') {
+        const cSrc = String(customer?.source ?? customer?.source_channel ?? customer?.channel ?? '').toLowerCase().trim()
+        if (!cSrc || cSrc !== sourceCh) return false
+    }
+
+    // Provincia (CSV — match se almeno UNA provincia in lista)
+    if (provinceCsv && provinceCsv.trim()) {
+        const wanted = provinceCsv.split(',').map((s: string) => s.trim().toUpperCase()).filter(Boolean)
+        if (wanted.length > 0) {
+            const cProv = String(customer?.provincia_residenza ?? customer?.provincia ?? customer?.province ?? '').toUpperCase().trim()
+            if (!cProv || !wanted.includes(cProv)) return false
+        }
+    }
+
+    // Min/Max previous bookings — count escluse cancelled e quella corrente
+    if ((minPrev != null && !isNaN(minPrev) && minPrev > 0) || (maxPrev != null && !isNaN(maxPrev))) {
         const email = booking.customer_email || customer?.email
         if (!email) return false
         const { count } = await supabase
@@ -282,7 +396,73 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
             .eq('customer_email', email)
             .neq('id', booking.id)
             .not('status', 'in', '(cancelled,annullata)')
-        if ((count ?? 0) < minPrev) return false
+        const c = count ?? 0
+        if (minPrev != null && !isNaN(minPrev) && c < minPrev) return false
+        if (maxPrev != null && !isNaN(maxPrev) && c > maxPrev) return false
+    }
+
+    // LTV: somma del totale storicamente speso dal cliente (escluse cancelled).
+    if (minLtv != null && !isNaN(minLtv) && minLtv > 0) {
+        const email = booking.customer_email || customer?.email
+        if (!email) return false
+        const { data: paid } = await supabase
+            .from('bookings')
+            .select('total_amount, price_total')
+            .eq('customer_email', email)
+            .not('status', 'in', '(cancelled,annullata)')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ltv = (paid || []).reduce((sum: number, b: any) => {
+            const a = typeof b.total_amount === 'number' ? b.total_amount : (typeof b.price_total === 'number' ? b.price_total / 100 : 0)
+            return sum + a
+        }, 0)
+        if (ltv < minLtv) return false
+    }
+
+    // Fatture insolute (booking con payment_status pending/unpaid e dropoff passato)
+    if (hasUnpaid != null) {
+        const email = booking.customer_email || customer?.email
+        if (!email) return false
+        const { count } = await supabase
+            .from('bookings')
+            .select('id', { count: 'exact', head: true })
+            .eq('customer_email', email)
+            .in('payment_status', ['pending', 'unpaid', 'failed'])
+            .lt('dropoff_date', new Date().toISOString())
+        const has = (count ?? 0) > 0
+        if (hasUnpaid === true && !has) return false
+        if (hasUnpaid === false && has) return false
+    }
+
+    // Ha gia' usato un codice promo
+    if (usedPromo != null) {
+        const email = booking.customer_email || customer?.email
+        if (!email) return false
+        const { count } = await supabase
+            .from('bookings')
+            .select('id', { count: 'exact', head: true })
+            .eq('customer_email', email)
+            .neq('id', booking.id)
+            .not('promo_code', 'is', null)
+        const used = (count ?? 0) > 0
+        if (usedPromo === true && !used) return false
+        if (usedPromo === false && used) return false
+    }
+
+    // Numero di estensioni storiche del cliente (somma di extension_history.length)
+    if ((extMin != null && !isNaN(extMin)) || (extMax != null && !isNaN(extMax))) {
+        const email = booking.customer_email || customer?.email
+        if (!email) return false
+        const { data: bks } = await supabase
+            .from('bookings')
+            .select('booking_details')
+            .eq('customer_email', email)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const totExt = (bks || []).reduce((sum: number, b: any) => {
+            const arr = b.booking_details?.extension_history
+            return sum + (Array.isArray(arr) ? arr.length : 0)
+        }, 0)
+        if (extMin != null && !isNaN(extMin) && totExt < extMin) return false
+        if (extMax != null && !isNaN(extMax) && totExt > extMax) return false
     }
 
     return true
@@ -313,7 +493,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     //    saranno gestiti dal cron, non qui.
     const { data: templates } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_language, target_min_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags')
+        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_language, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_vehicle_fuel, target_vehicle_transmission, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
         .eq('is_automatic', true)
         .eq('is_enabled', true)
         .eq('trigger_event', event)

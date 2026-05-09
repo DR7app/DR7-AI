@@ -31,9 +31,24 @@ interface SystemMessage {
     target_membership_tier?: string | null
     target_language?: string | null
     target_min_prev_bookings?: number | null
+    target_max_prev_bookings?: number | null
     target_rental_duration_min?: number | null
     target_rental_duration_max?: number | null
     target_customer_tags?: string | null
+    target_residency?: string | null
+    target_age_min?: number | null
+    target_age_max?: number | null
+    target_vehicle_fuel?: string | null
+    target_vehicle_transmission?: string | null
+    target_pickup_hour_min?: number | null
+    target_pickup_hour_max?: number | null
+    target_source_channel?: string | null
+    target_province?: string | null
+    target_min_lifetime_value?: number | null
+    target_has_unpaid_invoices?: boolean | null
+    target_used_promo_before?: boolean | null
+    target_extension_count_min?: number | null
+    target_extension_count_max?: number | null
     /** CSV di JS day-of-week (0=Dom..6=Sab) Europe/Rome — default tutti i giorni */
     target_days_of_week?: string
     /** Ora inizio fascia silenziosa Europe/Rome (0-23). NULL = nessuna fascia. */
@@ -822,6 +837,22 @@ export default function MessaggiSistemaProTab() {
     const [newTargetRentalDurationMin, setNewTargetRentalDurationMin] = useState('')
     const [newTargetRentalDurationMax, setNewTargetRentalDurationMax] = useState('')
     const [newTargetCustomerTags, setNewTargetCustomerTags] = useState('')
+    // Sprint autonomia 2: 12 ulteriori filtri
+    const [newTargetResidency, setNewTargetResidency] = useState('all')
+    const [newTargetMaxPrevBookings, setNewTargetMaxPrevBookings] = useState('')
+    const [newTargetAgeMin, setNewTargetAgeMin] = useState('')
+    const [newTargetAgeMax, setNewTargetAgeMax] = useState('')
+    const [newTargetVehicleFuel, setNewTargetVehicleFuel] = useState('all')
+    const [newTargetVehicleTransmission, setNewTargetVehicleTransmission] = useState('all')
+    const [newTargetPickupHourMin, setNewTargetPickupHourMin] = useState('')
+    const [newTargetPickupHourMax, setNewTargetPickupHourMax] = useState('')
+    const [newTargetSourceChannel, setNewTargetSourceChannel] = useState('all')
+    const [newTargetProvince, setNewTargetProvince] = useState('')
+    const [newTargetMinLifetimeValue, setNewTargetMinLifetimeValue] = useState('')
+    const [newTargetHasUnpaidInvoices, setNewTargetHasUnpaidInvoices] = useState<'any' | 'yes' | 'no'>('any')
+    const [newTargetUsedPromoBefore, setNewTargetUsedPromoBefore] = useState<'any' | 'yes' | 'no'>('any')
+    const [newTargetExtensionCountMin, setNewTargetExtensionCountMin] = useState('')
+    const [newTargetExtensionCountMax, setNewTargetExtensionCountMax] = useState('')
     // Categorie reali caricate da Centralina Pro (config.categories) — niente
     // hardcoded fallback. Aggiornamento real-time via postgres_changes.
     const [proCategories, setProCategories] = useState<Array<{ id: string; label: string }>>([])
@@ -1080,6 +1111,21 @@ export default function MessaggiSistemaProTab() {
                     target_rental_duration_min: newTargetRentalDurationMin ? parseInt(newTargetRentalDurationMin, 10) : null,
                     target_rental_duration_max: newTargetRentalDurationMax ? parseInt(newTargetRentalDurationMax, 10) : null,
                     target_customer_tags: newTargetCustomerTags.trim() || null,
+                    target_residency: newTargetResidency === 'all' ? null : newTargetResidency,
+                    target_max_prev_bookings: newTargetMaxPrevBookings ? parseInt(newTargetMaxPrevBookings, 10) : null,
+                    target_age_min: newTargetAgeMin ? parseInt(newTargetAgeMin, 10) : null,
+                    target_age_max: newTargetAgeMax ? parseInt(newTargetAgeMax, 10) : null,
+                    target_vehicle_fuel: newTargetVehicleFuel === 'all' ? null : newTargetVehicleFuel,
+                    target_vehicle_transmission: newTargetVehicleTransmission === 'all' ? null : newTargetVehicleTransmission,
+                    target_pickup_hour_min: newTargetPickupHourMin ? parseInt(newTargetPickupHourMin, 10) : null,
+                    target_pickup_hour_max: newTargetPickupHourMax ? parseInt(newTargetPickupHourMax, 10) : null,
+                    target_source_channel: newTargetSourceChannel === 'all' ? null : newTargetSourceChannel,
+                    target_province: newTargetProvince.trim() || null,
+                    target_min_lifetime_value: newTargetMinLifetimeValue ? parseFloat(newTargetMinLifetimeValue) : null,
+                    target_has_unpaid_invoices: newTargetHasUnpaidInvoices === 'any' ? null : newTargetHasUnpaidInvoices === 'yes',
+                    target_used_promo_before: newTargetUsedPromoBefore === 'any' ? null : newTargetUsedPromoBefore === 'yes',
+                    target_extension_count_min: newTargetExtensionCountMin ? parseInt(newTargetExtensionCountMin, 10) : null,
+                    target_extension_count_max: newTargetExtensionCountMax ? parseInt(newTargetExtensionCountMax, 10) : null,
                 })
                 .select()
                 .single()
@@ -1735,6 +1781,141 @@ export default function MessaggiSistemaProTab() {
                                                     className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
                                                 />
                                                 <p className="text-[11px] text-theme-text-muted mt-1">Match se il cliente ha almeno UNO di questi tag (separati da virgola). Vuoto = nessuna restrizione.</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Sub-section: filtri demografici / geografici */}
+                                        <div className="mt-3 pt-3 border-t border-theme-border/30">
+                                            <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Demografia & geografia</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Residenza</label>
+                                                    <select value={newTargetResidency} onChange={e => setNewTargetResidency(e.target.value)}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                        <option value="all">Tutti</option>
+                                                        <option value="resident">Residenti Italia</option>
+                                                        <option value="non_resident">Non residenti / turisti</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Provincia (CSV)</label>
+                                                    <input type="text" value={newTargetProvince} onChange={e => setNewTargetProvince(e.target.value)}
+                                                        placeholder="es. CA,SS,NU,OR"
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Eta' (anni)</label>
+                                                    <div className="flex gap-2">
+                                                        <input type="number" min="0" value={newTargetAgeMin} onChange={e => setNewTargetAgeMin(e.target.value)}
+                                                            placeholder="min" className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                        <input type="number" min="0" value={newTargetAgeMax} onChange={e => setNewTargetAgeMax(e.target.value)}
+                                                            placeholder="max" className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Source channel</label>
+                                                    <select value={newTargetSourceChannel} onChange={e => setNewTargetSourceChannel(e.target.value)}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                        <option value="all">Tutti</option>
+                                                        <option value="google">Google</option>
+                                                        <option value="instagram">Instagram</option>
+                                                        <option value="facebook">Facebook</option>
+                                                        <option value="walk-in">Walk-in</option>
+                                                        <option value="referral">Referral</option>
+                                                        <option value="direct">Diretto</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Sub-section: comportamento / storico */}
+                                        <div className="mt-3 pt-3 border-t border-theme-border/30">
+                                            <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Comportamento & storico</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Max prenotazioni precedenti</label>
+                                                    <input type="number" min="0" value={newTargetMaxPrevBookings} onChange={e => setNewTargetMaxPrevBookings(e.target.value)}
+                                                        placeholder="vuoto = nessun max"
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                    <p className="text-[11px] text-theme-text-muted mt-1">Es. 0 = primo cliente, 2 = primi 3 noleggi.</p>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Spesa storica minima (€)</label>
+                                                    <input type="number" min="0" step="50" value={newTargetMinLifetimeValue} onChange={e => setNewTargetMinLifetimeValue(e.target.value)}
+                                                        placeholder="vuoto = nessun min"
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                    <p className="text-[11px] text-theme-text-muted mt-1">LTV — somma totale spesa storicamente.</p>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Fatture insolute</label>
+                                                    <select value={newTargetHasUnpaidInvoices} onChange={e => setNewTargetHasUnpaidInvoices(e.target.value as 'any' | 'yes' | 'no')}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                        <option value="any">Indifferente</option>
+                                                        <option value="yes">Solo con insoluti</option>
+                                                        <option value="no">Solo senza insoluti</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Ha gia' usato un codice promo</label>
+                                                    <select value={newTargetUsedPromoBefore} onChange={e => setNewTargetUsedPromoBefore(e.target.value as 'any' | 'yes' | 'no')}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                        <option value="any">Indifferente</option>
+                                                        <option value="yes">Solo chi ha gia' usato</option>
+                                                        <option value="no">Solo chi non ha mai usato</option>
+                                                    </select>
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Numero proroghe storiche</label>
+                                                    <div className="flex gap-2">
+                                                        <input type="number" min="0" value={newTargetExtensionCountMin} onChange={e => setNewTargetExtensionCountMin(e.target.value)}
+                                                            placeholder="min" className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                        <input type="number" min="0" value={newTargetExtensionCountMax} onChange={e => setNewTargetExtensionCountMax(e.target.value)}
+                                                            placeholder="max" className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Sub-section: veicolo & timing */}
+                                        <div className="mt-3 pt-3 border-t border-theme-border/30">
+                                            <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Veicolo & orario pickup</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Carburante veicolo</label>
+                                                    <select value={newTargetVehicleFuel} onChange={e => setNewTargetVehicleFuel(e.target.value)}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                        <option value="all">Tutti</option>
+                                                        <option value="petrol">Benzina</option>
+                                                        <option value="diesel">Diesel</option>
+                                                        <option value="electric">Elettrico</option>
+                                                        <option value="hybrid">Ibrido</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Cambio</label>
+                                                    <select value={newTargetVehicleTransmission} onChange={e => setNewTargetVehicleTransmission(e.target.value)}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                        <option value="all">Tutti</option>
+                                                        <option value="manual">Manuale</option>
+                                                        <option value="automatic">Automatico</option>
+                                                    </select>
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Fascia oraria pickup (Roma)</label>
+                                                    <div className="flex gap-2">
+                                                        <select value={newTargetPickupHourMin} onChange={e => setNewTargetPickupHourMin(e.target.value)}
+                                                            className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                            <option value="">Min: qualunque</option>
+                                                            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
+                                                        </select>
+                                                        <select value={newTargetPickupHourMax} onChange={e => setNewTargetPickupHourMax(e.target.value)}
+                                                            className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                            <option value="">Max: qualunque</option>
+                                                            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <p className="text-[11px] text-theme-text-muted mt-1">Es. 06-09 = solo pickup mattina presto.</p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
