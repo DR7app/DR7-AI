@@ -53,6 +53,7 @@ interface SystemMessage {
     target_payment_method?: string;
     target_amount_min?: number | null;
     target_amount_max?: number | null;
+    target_days_of_week?: string;
 }
 
 const LOOKBACK_MS = 30 * 60 * 1000;  // 30 min: forgive previous-cron failures
@@ -359,7 +360,7 @@ const cronHandler = async () => {
     // 1. Carica tutti i template automatici attivi
     const { data: templates, error: tplErr } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, is_automatic, is_enabled, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max')
+        .select('id, message_key, label, is_automatic, is_enabled, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week')
         .eq('is_automatic', true)
         .eq('is_enabled', true);
 

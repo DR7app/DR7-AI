@@ -28,6 +28,8 @@ interface SystemMessage {
     target_payment_method?: string // 'card'|'wallet'|'cash'|'bonifico'|'all'
     target_amount_min?: number | null  // euro
     target_amount_max?: number | null  // euro
+    /** CSV di JS day-of-week (0=Dom..6=Sab) Europe/Rome — default tutti i giorni */
+    target_days_of_week?: string
     created_at: string
     updated_at: string
 }
@@ -783,6 +785,8 @@ export default function MessaggiSistemaProTab() {
     const [newTargetPaymentMethod, setNewTargetPaymentMethod] = useState('all')
     const [newTargetAmountMin, setNewTargetAmountMin] = useState('')
     const [newTargetAmountMax, setNewTargetAmountMax] = useState('')
+    // Giorni settimana attivi (0=Dom, 1=Lun,...6=Sab). Default tutti.
+    const [newTargetDays, setNewTargetDays] = useState<Set<number>>(new Set([0, 1, 2, 3, 4, 5, 6]))
     // Categorie reali caricate da Centralina Pro (config.categories) — niente
     // hardcoded fallback. Aggiornamento real-time via postgres_changes.
     const [proCategories, setProCategories] = useState<Array<{ id: string; label: string }>>([])
@@ -1032,6 +1036,7 @@ export default function MessaggiSistemaProTab() {
                     target_payment_method: newTargetPaymentMethod,
                     target_amount_min: newTargetAmountMin ? parseFloat(newTargetAmountMin) : null,
                     target_amount_max: newTargetAmountMax ? parseFloat(newTargetAmountMax) : null,
+                    target_days_of_week: Array.from(newTargetDays).sort((a, b) => a - b).join(','),
                 })
                 .select()
                 .single()
@@ -1522,6 +1527,48 @@ export default function MessaggiSistemaProTab() {
                                                 className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
                                             />
                                         </div>
+                                    </div>
+
+                                    {/* Giorni settimana — togli il check per non inviare in quel giorno */}
+                                    <div className="mt-3">
+                                        <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Giorni di invio (Roma)</label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {[
+                                                { d: 1, lbl: 'Lun' },
+                                                { d: 2, lbl: 'Mar' },
+                                                { d: 3, lbl: 'Mer' },
+                                                { d: 4, lbl: 'Gio' },
+                                                { d: 5, lbl: 'Ven' },
+                                                { d: 6, lbl: 'Sab' },
+                                                { d: 0, lbl: 'Dom' },
+                                            ].map(({ d, lbl }) => {
+                                                const active = newTargetDays.has(d)
+                                                return (
+                                                    <button
+                                                        key={d}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setNewTargetDays(prev => {
+                                                                const next = new Set(prev)
+                                                                if (next.has(d)) next.delete(d)
+                                                                else next.add(d)
+                                                                return next
+                                                            })
+                                                        }}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                                            active
+                                                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                                                                : 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                                                        }`}
+                                                    >
+                                                        {lbl}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                        <p className="text-[11px] text-theme-text-muted mt-1">
+                                            Togli un giorno per NON inviare in quel giorno. Default: tutti i 7 giorni attivi.
+                                        </p>
                                     </div>
                                 </div>
                                 </>

@@ -47,8 +47,26 @@ interface TriggerArgs {
  *  - target_payment_method: card | wallet | cash | bonifico | all
  *  - target_amount_min/max: range importo booking in euro
  */
+/**
+ * Restituisce il giorno della settimana corrente in fuso Europe/Rome
+ * (0=Dom, 1=Lun, ..., 6=Sab — convenzione JS).
+ */
+function romeDayOfWeek(): number {
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Rome', weekday: 'short' })
+    const wd = fmt.format(new Date())
+    return ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 } as Record<string, number>)[wd] ?? new Date().getDay()
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
+    // Day-of-week: se l'admin ha disabilitato il giorno corrente (Roma),
+    // skippa l'invio. Default '0,1,2,3,4,5,6' = sempre attivo.
+    const dowCsv = String(tpl.target_days_of_week ?? '0,1,2,3,4,5,6')
+    if (dowCsv) {
+        const allowed = new Set(dowCsv.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n)))
+        if (allowed.size > 0 && !allowed.has(romeDayOfWeek())) return false
+    }
+
     // Service type — solo 2 categorie reali nel sistema:
     //   rental     = car rental (service_type vuoto / 'rental' / 'car_rental')
     //   prime_wash = lavaggio + meccanica (service_type 'car_wash' /
@@ -152,7 +170,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     //    saranno gestiti dal cron, non qui.
     const { data: templates } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max')
+        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week')
         .eq('is_automatic', true)
         .eq('is_enabled', true)
         .eq('trigger_event', event)
