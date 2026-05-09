@@ -15,6 +15,7 @@ import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 // Orari lavaggio dinamici da Centralina Pro > Orari Lavaggio
 import { generateLavaggioSlotsForDate, getAllowedTimeRangesForDate } from '../../../utils/lavaggioHours'
+import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 
 interface Customer {
   id: string
@@ -124,6 +125,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // Foreign plate flow (Targa Estera) — requires OTP per category
   const [showForeignPlateModal, setShowForeignPlateModal] = useState(false)
   const [pendingForeignCategory, setPendingForeignCategory] = useState<'urban' | 'maxi' | null>(null)
+
+  // ─── Supercar Experience: vehicle picker ───────────────────────────
+  // When the operator picks the "Supercar Experience" or "Icon Experience"
+  // extra (with a price option that encodes a duration like 1h/2h), we
+  // show a picker of supercar fleet vehicles filtered by availability for
+  // appointment_date + appointment_time + duration. The chosen vehicle is
+  // persisted on the carwash booking AND a shadow rental row is inserted
+  // in `bookings` so the calendar / availability checks block the supercar.
+  interface SupercarFleetVehicle {
+    id: string
+    display_name: string
+    plate: string | null
+    daily_rate: number
+    category: string | null
+    status: string | null
+    metadata: Record<string, unknown> | null
+  }
+  const [supercarFleet, setSupercarFleet] = useState<SupercarFleetVehicle[]>([])
+  const [supercarFleetBookings, setSupercarFleetBookings] = useState<AvailabilityBooking[]>([])
+  const [experienceVehicle, setExperienceVehicle] = useState<SupercarFleetVehicle | null>(null)
 
   // Buffer for an edit-click blocked by the paid_wash_modify OTP gate.
   // Resumed by the useEffect below once the override is approved.
@@ -328,6 +349,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setVehiclePlate('')
     setVehicleMakeModel('')
     setVehicleCategory(null)
+    setExperienceVehicle(null)
     setClassificationSource(null)
     setLookingUpTarga(false)
     setTargaVehicleInfo(null)
@@ -461,6 +483,109 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     acc[s.category].push(s)
     return acc
   }, {})
+
+  // ─── Supercar Experience helpers ───────────────────────────────────
+  // True when the selected EXTRA includes a "Supercar Experience" or
+  // "Icon Experience" entry. Both experiences book a real supercar from
+  // the fleet for the chosen duration (price_options: 1h/2h/.../7h).
+  const SUPERCAR_EXPERIENCE_RE = /supercar\s*experience|icon\s*experience/i
+  const supercarExperienceExtra = selectedExtras.find(e => SUPERCAR_EXPERIENCE_RE.test(e.name))
+  const supercarExperienceOption = supercarExperienceExtra
+    ? extraPriceOptions[supercarExperienceExtra.id] || null
+    : null
+  // Parse duration from option label "1h" / "2h" / "30min" → minutes.
+  const supercarExperienceDurationMin = (() => {
+    if (!supercarExperienceOption) return 0
+    const lbl = supercarExperienceOption.label.toLowerCase().trim()
+    const hMatch = lbl.match(/(\d+(?:[.,]\d+)?)\s*h/)
+    if (hMatch) return Math.round(parseFloat(hMatch[1].replace(',', '.')) * 60)
+    const mMatch = lbl.match(/(\d+)\s*min/)
+    if (mMatch) return parseInt(mMatch[1])
+    return 60 // safe default 1h
+  })()
+  // Window the supercar will be blocked for: appointment time + duration.
+  const supercarExperienceWindow = (() => {
+    if (!supercarExperienceExtra || !supercarExperienceOption) return null
+    if (!formData.appointment_date || !formData.appointment_time) return null
+    const [y, mo, d] = formData.appointment_date.split('-').map(Number)
+    const [h, m] = formData.appointment_time.split(':').map(Number)
+    const start = new Date(y, mo - 1, d, h, m, 0)
+    if (isNaN(start.getTime())) return null
+    const end = new Date(start.getTime() + supercarExperienceDurationMin * 60_000)
+    const fmtTime = (dt: Date) => `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`
+    const fmtDate = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+    return {
+      pickupDate: fmtDate(start),
+      pickupTime: fmtTime(start),
+      returnDate: fmtDate(end),
+      returnTime: fmtTime(end),
+      durationMin: supercarExperienceDurationMin,
+    }
+  })()
+
+  // Load supercar fleet (vehicles category=exotic|supercar) the first time
+  // the experience is toggled on. Keep cached for the rest of the session.
+  useEffect(() => {
+    if (!supercarExperienceExtra) return
+    if (supercarFleet.length > 0) return
+    let cancelled = false
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('id, display_name, plate, daily_rate, category, status, metadata')
+        .in('category', ['exotic', 'supercar'])
+        .neq('status', 'retired')
+        .order('display_name', { ascending: true })
+      if (cancelled) return
+      if (error) {
+        console.error('[CarWashBookingsTab] failed to load supercar fleet:', error)
+        return
+      }
+      setSupercarFleet((data || []) as SupercarFleetVehicle[])
+    })()
+    return () => { cancelled = true }
+  }, [supercarExperienceExtra, supercarFleet.length])
+
+  // Load existing bookings overlapping the experience window so we can
+  // mark each supercar card as "Disponibile" / "Occupato".
+  useEffect(() => {
+    if (!supercarExperienceWindow || supercarFleet.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      // Pull a generous window around the experience day so any same-car
+      // adjacent booking is included.
+      const start = new Date(`${supercarExperienceWindow.pickupDate}T00:00:00+02:00`)
+      const end = new Date(`${supercarExperienceWindow.returnDate}T23:59:59+02:00`)
+      start.setDate(start.getDate() - 1)
+      end.setDate(end.getDate() + 1)
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id,vehicle_id,vehicle_plate,vehicle_name,customer_name,pickup_date,dropoff_date,status,service_type,payment_method,payment_status')
+        .lt('pickup_date', end.toISOString())
+        .gt('dropoff_date', start.toISOString())
+      if (cancelled) return
+      if (error) {
+        console.error('[CarWashBookingsTab] failed to load bookings for supercar window:', error)
+        return
+      }
+      setSupercarFleetBookings((data || []) as AvailabilityBooking[])
+    })()
+    return () => { cancelled = true }
+  }, [
+    supercarExperienceWindow?.pickupDate,
+    supercarExperienceWindow?.pickupTime,
+    supercarExperienceWindow?.returnDate,
+    supercarExperienceWindow?.returnTime,
+    supercarFleet.length,
+  ])
+
+  // Reset chosen vehicle when the experience extra is removed or the
+  // duration option changes (the previously-picked car may now be busy).
+  useEffect(() => {
+    if (!supercarExperienceExtra || !supercarExperienceOption) {
+      if (experienceVehicle) setExperienceVehicle(null)
+    }
+  }, [supercarExperienceExtra, supercarExperienceOption, experienceVehicle])
 
 
 
@@ -950,6 +1075,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const customer = customers.find(c => c.id === formData.customer_id)
     if (!customer) throw new Error('Cliente non trovato')
 
+    // Supercar Experience guard: block save until the operator picks the
+    // car. The shadow rental row inserted at the end of this function
+    // needs a vehicle_id, so this check has to happen before any side
+    // effect (booking insert, fattura, payment link).
+    if (supercarExperienceExtra && supercarExperienceOption && !experienceVehicle) {
+      toast.error('Seleziona la supercar per il Supercar Experience prima di salvare.')
+      return
+    }
+
     // ===== OTP GATE: Conferma Prenotazione Lavaggio (toggle Gestione OTP) =====
     // La prenotazione carwash entra di default in stato 'confirmed'. Se l'OTP
     // per quest'azione e' attivo (system_otp_overrides.is_required=true)
@@ -1057,6 +1191,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       ...(vehicleCategory && { vehicleCategory }),
       ...(vehicleMakeModel && { vehicleMakeModel }),
       ...(classificationSource && { classificationSource }),
+      // Supercar Experience: chosen vehicle + window stored on the
+      // carwash booking; the shadow rental row created below references
+      // the carwash booking id back via parent_carwash_booking_id.
+      ...(experienceVehicle && supercarExperienceWindow && supercarExperienceExtra && supercarExperienceOption ? {
+        supercar_experience: {
+          vehicle_id: experienceVehicle.id,
+          vehicle_name: experienceVehicle.display_name,
+          vehicle_plate: experienceVehicle.plate || null,
+          duration_label: supercarExperienceOption.label,
+          duration_minutes: supercarExperienceWindow.durationMin,
+          window_start: `${supercarExperienceWindow.pickupDate}T${supercarExperienceWindow.pickupTime}:00`,
+          window_end: `${supercarExperienceWindow.returnDate}T${supercarExperienceWindow.returnTime}:00`,
+          service_id: supercarExperienceExtra.id,
+          service_name: supercarExperienceExtra.name,
+        },
+      } : {}),
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1108,6 +1258,82 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       payment_status: formData.payment_status,
       amount: totalPrice,
     })
+
+    // ─── Supercar Experience: shadow rental row ─────────────────────
+    // Insert a row in `bookings` for the chosen supercar with
+    // service_type='rental' so existing isVehicleAvailable checks (admin
+    // calendar + website availability) treat the car as taken during the
+    // experience window. The row links back to the parent carwash
+    // booking via booking_details.parent_carwash_booking_id so cascade
+    // edits / deletes can find it.
+    if (experienceVehicle && supercarExperienceWindow && supercarExperienceExtra && supercarExperienceOption) {
+      try {
+        const startIso = `${supercarExperienceWindow.pickupDate}T${supercarExperienceWindow.pickupTime}:00+02:00`
+        const endIso = `${supercarExperienceWindow.returnDate}T${supercarExperienceWindow.returnTime}:00+02:00`
+        const shadowPayload = {
+          service_type: 'rental',
+          service_name: `${supercarExperienceExtra.name} (${supercarExperienceOption.label})`,
+          vehicle_id: experienceVehicle.id,
+          vehicle_name: experienceVehicle.display_name,
+          vehicle_plate: experienceVehicle.plate || null,
+          customer_name: customerName,
+          customer_email: customerEmail || null,
+          customer_phone: customerPhone || null,
+          guest_name: customerName,
+          guest_email: customerEmail || null,
+          guest_phone: customerPhone || null,
+          pickup_date: startIso,
+          dropoff_date: endIso,
+          pickup_location: 'DR7 Empire - Supercar Experience',
+          dropoff_location: 'DR7 Empire - Supercar Experience',
+          // Price 0: cost lives on the parent carwash booking; the shadow
+          // row is purely for blocking. Status 'confirmed' so isVehicleAvailable
+          // counts it (filter excludes cancelled/completed).
+          price_total: 0,
+          currency: 'EUR',
+          status: 'confirmed',
+          payment_status: 'paid',
+          payment_method: 'Supercar Experience (Prime Wash)',
+          booking_details: {
+            is_supercar_experience_block: true,
+            parent_carwash_booking_id: data.id,
+            experience_label: supercarExperienceOption.label,
+            experience_service_id: supercarExperienceExtra.id,
+            experience_service_name: supercarExperienceExtra.name,
+            duration_minutes: supercarExperienceWindow.durationMin,
+            customer: { customerId: formData.customer_id },
+            createdBy: 'admin_panel_supercar_experience',
+          },
+        }
+        const { data: shadowRow, error: shadowErr } = await supabase
+          .from('bookings')
+          .insert([shadowPayload])
+          .select('id')
+          .single()
+        if (shadowErr) {
+          console.error('[CarWashBookingsTab] failed to insert supercar shadow rental:', shadowErr)
+          toast.error(`Lavaggio creato ma blocco supercar fallito: ${shadowErr.message}`)
+        } else {
+          // Persist the shadow id on the parent so cascade edits can find it.
+          await supabase.from('bookings').update({
+            booking_details: {
+              ...(data.booking_details || {}),
+              ...((data.booking_details as Record<string, unknown> | null)?.supercar_experience as Record<string, unknown> | undefined ? {
+                supercar_experience: {
+                  ...((data.booking_details as { supercar_experience?: Record<string, unknown> }).supercar_experience as Record<string, unknown>),
+                  shadow_booking_id: shadowRow.id,
+                },
+              } : {}),
+            },
+          }).eq('id', data.id)
+          toast.success(`Supercar ${experienceVehicle.display_name} bloccata per ${supercarExperienceOption.label}`)
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[CarWashBookingsTab] supercar shadow insert exception:', err)
+        toast.error(`Errore blocco supercar: ${msg}`)
+      }
+    }
 
     // Generate fattura ONLY if paid — never for unpaid bookings, Wallet, or Gift Card
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
@@ -2309,6 +2535,105 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </select>
                 </div>
               </div>
+
+              {/* ─── Supercar Experience: vehicle picker ───────────────────
+                  Visible only when a Supercar/Icon Experience extra is
+                  selected with a duration option AND date+time are set.
+                  Marks each fleet car as Disponibile / Occupato based on
+                  conflicting bookings in the experience window. */}
+              {supercarExperienceExtra && supercarExperienceOption && supercarExperienceWindow && (
+                <div className="rounded-xl border border-dr7-gold/40 bg-dr7-gold/5 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <h4 className="text-sm font-semibold text-dr7-gold flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M5 12l4-7h6l4 7v6a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1H8v1a1 1 0 01-1 1H6a1 1 0 01-1-1v-6z"/><circle cx="9" cy="14" r="1.5"/><circle cx="15" cy="14" r="1.5"/></svg>
+                        {supercarExperienceExtra.name}
+                      </h4>
+                      <p className="text-xs text-theme-text-muted mt-0.5">
+                        Durata {supercarExperienceOption.label} · finestra {supercarExperienceWindow.pickupTime}–{supercarExperienceWindow.returnTime}
+                        {supercarExperienceWindow.pickupDate !== supercarExperienceWindow.returnDate && ` (${supercarExperienceWindow.returnDate})`}
+                      </p>
+                    </div>
+                    {experienceVehicle && (
+                      <button
+                        type="button"
+                        onClick={() => setExperienceVehicle(null)}
+                        className="text-xs text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded-full px-3 py-1"
+                      >
+                        Cambia veicolo
+                      </button>
+                    )}
+                  </div>
+
+                  {supercarFleet.length === 0 ? (
+                    <p className="text-xs text-theme-text-muted italic">Nessun veicolo nella flotta supercar.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {supercarFleet.map(vehicle => {
+                        const availabilityVehicle: AvailabilityVehicle = {
+                          id: vehicle.id,
+                          display_name: vehicle.display_name,
+                          plate: vehicle.plate,
+                          status: (vehicle.status === 'available' || vehicle.status === 'rented' || vehicle.status === 'maintenance' || vehicle.status === 'retired') ? vehicle.status : 'available',
+                          daily_rate: vehicle.daily_rate,
+                          category: (vehicle.category as AvailabilityVehicle['category']) || undefined,
+                          metadata: vehicle.metadata as AvailabilityVehicle['metadata'],
+                          created_at: '',
+                          updated_at: '',
+                        }
+                        const result = isVehicleAvailable(
+                          availabilityVehicle,
+                          supercarExperienceWindow.pickupDate,
+                          supercarExperienceWindow.returnDate,
+                          supercarExperienceWindow.pickupTime,
+                          supercarExperienceWindow.returnTime,
+                          supercarFleetBookings,
+                        )
+                        const isAvailable = result.available
+                        const isSelected = experienceVehicle?.id === vehicle.id
+                        return (
+                          <button
+                            key={vehicle.id}
+                            type="button"
+                            disabled={!isAvailable && !isSelected}
+                            onClick={() => setExperienceVehicle(vehicle)}
+                            className={`text-left rounded-lg border p-3 transition-colors ${
+                              isSelected
+                                ? 'border-dr7-gold bg-dr7-gold/15'
+                                : isAvailable
+                                ? 'border-theme-border bg-theme-bg-tertiary hover:border-dr7-gold hover:bg-dr7-gold/5'
+                                : 'border-rose-500/30 bg-rose-500/5 opacity-60 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</p>
+                                {vehicle.plate && <p className="text-[11px] font-mono text-theme-text-muted">{vehicle.plate}</p>}
+                              </div>
+                              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isSelected
+                                  ? 'bg-dr7-gold text-black border-dr7-gold'
+                                  : isAvailable
+                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                              }`}>
+                                {isSelected ? 'Selezionata' : isAvailable ? 'Disponibile' : 'Occupata'}
+                              </span>
+                            </div>
+                            {!isAvailable && !isSelected && result.reason && (
+                              <p className="text-[10px] text-rose-400 mt-1 line-clamp-2">{result.reason}</p>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {!experienceVehicle && (
+                    <p className="text-xs text-amber-400">Seleziona un veicolo per completare la prenotazione del Supercar Experience.</p>
+                  )}
+                </div>
+              )}
 
               {/* Payment + Notes */}
               <div className="grid grid-cols-2 gap-4">
