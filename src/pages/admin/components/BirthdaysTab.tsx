@@ -660,32 +660,10 @@ export default function BirthdaysTab() {
                 </div>
             </div>
 
-            {/* Preview del template Pro — sola lettura.
-                Il body viene da Messaggi di Sistema Pro → "Messaggio
-                Compleanno" (key `pro_marketing_compleanno`). Per
-                modificarlo apri direttamente quel tab; ogni invio (manuale
-                qui o automatico dal cron) usa la stessa fonte. */}
-            <div className="bg-theme-bg-tertiary p-4 rounded-lg border border-theme-border">
-                <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-theme-text-primary font-semibold">
-                        Anteprima Messaggio Auguri
-                        <span className="ml-2 text-xs text-theme-text-muted font-normal">— gestito in Messaggi di Sistema Pro</span>
-                    </h3>
-                </div>
-                {proTemplateMissing ? (
-                    <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-3">
-                        Template <code className="bg-theme-bg-secondary px-1 rounded">pro_marketing_compleanno</code> mancante o disattivato.
-                        Apri <strong>Messaggi di Sistema Pro</strong> → <em>Messaggio Compleanno</em> per scriverlo o riattivarlo.
-                    </div>
-                ) : (
-                    <>
-                        <pre className="text-theme-text-muted text-sm whitespace-pre-wrap bg-theme-bg-secondary p-3 rounded border border-theme-border">
-                            {applyBirthdayVariables(messageTemplate, '[Nome Cliente]', 'BDAY-XXXX-XXXX', 'BDAY-YYYY-YYYY')}
-                        </pre>
-                        <p className="text-xs text-green-400 mt-2">I codici (Supercar €100 + Lavaggio €10) vengono generati automaticamente per ogni cliente al momento dell'invio.</p>
-                    </>
-                )}
-            </div>
+            {/* Big inline anteprima removed — the compact "Messaggio Auguri
+                Attivo" card in the bottom strip already shows the live
+                template snippet, matching the marketing-dashboard design.
+                The proTemplateMissing warning still surfaces in that card. */}
 
             {/* Customers Table */}
             <div className="bg-theme-bg-tertiary rounded-lg overflow-hidden border border-theme-border">
