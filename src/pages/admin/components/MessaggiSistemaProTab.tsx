@@ -783,7 +783,6 @@ export default function MessaggiSistemaProTab() {
     // Filtri avanzati (migration 20260509)
     const [newTargetServiceType, setNewTargetServiceType] = useState('all')
     const [newTargetWithDeposit, setNewTargetWithDeposit] = useState('all')
-    const [newTargetPlate, setNewTargetPlate] = useState('')
     const [newTargetPaymentMethod, setNewTargetPaymentMethod] = useState('all')
     const [newTargetAmountMin, setNewTargetAmountMin] = useState('')
     const [newTargetAmountMax, setNewTargetAmountMax] = useState('')
@@ -1004,7 +1003,6 @@ export default function MessaggiSistemaProTab() {
                     target_status: 'confirmed,active',
                     target_service_type: newTargetServiceType,
                     target_with_deposit: newTargetWithDeposit,
-                    target_plate: newTargetPlate.trim() || null,
                     target_payment_method: newTargetPaymentMethod,
                     target_amount_min: newTargetAmountMin ? parseFloat(newTargetAmountMin) : null,
                     target_amount_max: newTargetAmountMax ? parseFloat(newTargetAmountMax) : null,
@@ -1444,7 +1442,7 @@ export default function MessaggiSistemaProTab() {
                                 <div className="mt-4 pt-4 border-t border-theme-border/40">
                                     <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Filtri avanzati</div>
                                     <p className="text-[11px] text-theme-text-muted mb-3 italic">
-                                        Restringi quando il messaggio parte. Esempio: solo prenotazioni noleggio con cauzione, oppure solo veicolo "AB123CD".
+                                        Restringi quando il messaggio parte. Esempio: solo prenotazioni noleggio con cauzione, solo metodo carta, importo minimo €500.
                                     </p>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
@@ -1464,16 +1462,6 @@ export default function MessaggiSistemaProTab() {
                                                 <option value="yes">Solo con cauzione</option>
                                                 <option value="no">Solo senza cauzione</option>
                                             </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">Targa specifica</label>
-                                            <input
-                                                type="text"
-                                                value={newTargetPlate}
-                                                onChange={e => setNewTargetPlate(e.target.value.toUpperCase())}
-                                                placeholder="es. AB123CD (vuoto = tutti)"
-                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm font-mono uppercase"
-                                            />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-theme-text-muted mb-1">Metodo pagamento</label>

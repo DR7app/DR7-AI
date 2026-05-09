@@ -14,11 +14,25 @@
  */
 import { createClient } from '@supabase/supabase-js'
 
+type TriggerEvent =
+    | 'on_booking' | 'on_payment' | 'on_signature' | 'on_extension'
+    | 'on_cauzione_created' | 'on_cauzione_collected' | 'on_cauzione_refunded'
+    | 'on_first_booking'
+    | 'on_doc_uploaded' | 'on_doc_verified'
+    | 'on_payment_failed' | 'on_payment_link_expired'
+
 interface TriggerArgs {
+    /** ID dell'entità da collegare nel send_log. Se l'evento e' booking-based,
+     *  e' il booking_id reale. Per cauzione e' cauzione_id, ecc. */
     bookingId: string
-    event: 'on_booking' | 'on_payment' | 'on_signature' | 'on_extension'
+    event: TriggerEvent
     /** Massimo offset_hours da considerare "immediato" (default: 1) */
     maxOffsetHours?: number
+    /** Synthetic entity passato direttamente al sender quando l'evento NON
+     *  e' booking-based. Se omesso, il sender carica la riga 'bookings'.
+     *  Usalo per gli eventi cauzione/documenti/customer-lifecycle. */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    syntheticBooking?: Record<string, any>
 }
 
 /**
@@ -108,16 +122,24 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
     return true
 }
 
-export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHours = 1 }: TriggerArgs): Promise<{ sent: number; skipped: number; errors: number }> {
+export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHours = 1, syntheticBooking }: TriggerArgs): Promise<{ sent: number; skipped: number; errors: number }> {
     const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
 
-    // 1. Carica la booking
-    const { data: booking } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('id', bookingId)
-        .maybeSingle()
+    // 1. Carica la booking — oppure usa il syntheticBooking passato dal caller
+    //    (per eventi cauzione/documenti/customer dove non c'e' una vera booking).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let booking: any = null
+    if (syntheticBooking) {
+        booking = syntheticBooking
+    } else {
+        const { data } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('id', bookingId)
+            .maybeSingle()
+        booking = data
+    }
     if (!booking) return { sent: 0, skipped: 0, errors: 0 }
 
     // 2. Carica i template attivi per questo evento, con offset basso (<= 1h
