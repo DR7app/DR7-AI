@@ -109,13 +109,10 @@ const TRIGGER_DESCRIPTIONS: Record<string, string> = {
     'on_scadenza_7d': 'Stesso ma 7 giorni prima.',
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-    'all': 'Tutti i veicoli',
-    'exotic': 'Supercar / Exotic',
-    'urban': 'Utilitarie',
-    'aziendali': 'Aziendali',
-    'furgone': 'Furgoni',
-}
+// Le categorie veicolo sono caricate dinamicamente da
+// centralina_pro_config.config.categories (proCategories nel main component).
+// Niente lista hardcoded — l'admin definisce le sue categorie in Centralina
+// Pro e quelle si propagano qui in tempo reale.
 
 // ── Legenda variabili template ────────────────────────────────────────────────
 // Mirror esatto delle variabili sostituite dai code-path:
@@ -786,6 +783,35 @@ export default function MessaggiSistemaProTab() {
     const [newTargetPaymentMethod, setNewTargetPaymentMethod] = useState('all')
     const [newTargetAmountMin, setNewTargetAmountMin] = useState('')
     const [newTargetAmountMax, setNewTargetAmountMax] = useState('')
+    // Categorie reali caricate da Centralina Pro (config.categories) — niente
+    // hardcoded fallback. Aggiornamento real-time via postgres_changes.
+    const [proCategories, setProCategories] = useState<Array<{ id: string; label: string }>>([])
+    useEffect(() => {
+        let cancelled = false
+        const load = async () => {
+            const { data } = await supabase
+                .from('centralina_pro_config')
+                .select('config')
+                .eq('id', 'main')
+                .maybeSingle()
+            if (cancelled) return
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cats = ((data?.config || {}) as any).categories
+            if (Array.isArray(cats)) {
+                setProCategories(
+                    cats.filter((c: { id?: unknown; label?: unknown }) => typeof c?.id === 'string' && typeof c?.label === 'string')
+                )
+            }
+        }
+        load()
+        const sub = supabase
+            .channel('msgpro-categories-sync')
+            .on('postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' },
+                () => load())
+            .subscribe()
+        return () => { cancelled = true; sub.unsubscribe() }
+    }, [])
     const [creatingNew, setCreatingNew] = useState(false)
 
     // Send section state
@@ -1431,8 +1457,9 @@ export default function MessaggiSistemaProTab() {
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Categoria veicolo</label>
                                         <select value={newTargetCategory} onChange={e => setNewTargetCategory(e.target.value)}
                                             className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
-                                            {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                                                <option key={k} value={k}>{v}</option>
+                                            <option value="all">Tutti i veicoli</option>
+                                            {proCategories.map(c => (
+                                                <option key={c.id} value={c.id}>{c.label}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -1459,8 +1486,9 @@ export default function MessaggiSistemaProTab() {
                                             <select value={newTargetWithDeposit} onChange={e => setNewTargetWithDeposit(e.target.value)}
                                                 className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                                 <option value="all">Tutte le prenotazioni</option>
-                                                <option value="yes">Solo con cauzione</option>
-                                                <option value="no">Solo senza cauzione</option>
+                                                <option value="yes">Con cauzione</option>
+                                                <option value="no">Senza cauzione</option>
+                                                <option value="vehicle">Veicoli come cauzione</option>
                                             </select>
                                         </div>
                                         <div>
@@ -1711,8 +1739,9 @@ export default function MessaggiSistemaProTab() {
                                                             <select value={template.target_category || 'all'}
                                                                 onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
                                                                 className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                                                {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                                                                    <option key={k} value={k}>{v}</option>
+                                                                <option value="all">Tutti i veicoli</option>
+                                                                {proCategories.map(c => (
+                                                                    <option key={c.id} value={c.id}>{c.label}</option>
                                                                 ))}
                                                             </select>
                                                         </div>

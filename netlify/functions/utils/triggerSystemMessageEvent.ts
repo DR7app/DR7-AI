@@ -65,11 +65,12 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
         if (tplSvc === 'mechanical' && bSvc !== 'mechanical' && bSvc !== 'mechanical_service') return false
     }
 
-    // With deposit? — controlla TUTTI i tipi di cauzione possibili:
-    //   1. cauzione standard di noleggio (booking_details.deposit)
-    //   2. deposit_amount top-level
-    //   3. cauzione_veicoli extra (extras.cauzione_veicoli_total)
-    //   4. cauzione_veicoli_total in booking_details.extras
+    // Cauzione — 4 opzioni:
+    //   all     → tutte le prenotazioni (no filtro)
+    //   yes     → con qualsiasi tipo di cauzione (standard o veicolo)
+    //   no      → solo senza cauzione di nessun tipo
+    //   vehicle → solo con la cauzione veicolo extra
+    //             (extras.cauzione_veicoli_total > 0)
     const tplDep = String(tpl.target_with_deposit || 'all').toLowerCase()
     if (tplDep !== 'all') {
         const depAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0)
@@ -81,9 +82,13 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
             ?? booking.extras?.cauzione_veicoli_total
             ?? 0
         )
-        const hasDeposit = standardDeposit || cauzioneVeicoli > 0
-        if (tplDep === 'yes' && !hasDeposit) return false
-        if (tplDep === 'no' && hasDeposit) return false
+        const hasAnyDeposit = standardDeposit || cauzioneVeicoli > 0
+        const hasVehicleDeposit = cauzioneVeicoli > 0
+        if (tplDep === 'yes' && !hasAnyDeposit) return false
+        if (tplDep === 'no' && hasAnyDeposit) return false
+        if (tplDep === 'vehicle' && !hasVehicleDeposit) return false
+        // Retrocompatibilita': vecchi valori 'standard' o altri non gestiti
+        if (tplDep === 'standard' && !standardDeposit) return false
     }
 
     // Plate
