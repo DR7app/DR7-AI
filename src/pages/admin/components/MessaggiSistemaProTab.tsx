@@ -161,11 +161,12 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
     {
         label: 'Marketing & Link',
         scope: 'common',
+        scopeNote: "Configurabili in Marketing → Social Links. Lì puoi anche aggiungere link personalizzati extra (es. {tiktok}, {youtube}); ognuno diventa una variabile dal titolo che gli dai.",
         items: [
-            { key: 'website', description: 'URL del sito DR7 (configurabile in Centralina → Marketing)', example: 'https://dr7empire.com', aliases: ['sito'] },
-            { key: 'review_link', description: 'Link recensione Google (configurabile in Centralina → Marketing)', example: 'https://g.page/r/.../review' },
-            { key: 'instagram', description: 'URL profilo Instagram (configurabile in Centralina)', example: 'https://instagram.com/dr7empire' },
-            { key: 'facebook', description: 'URL pagina Facebook (configurabile in Centralina)', example: 'https://facebook.com/dr7empire' },
+            { key: 'website', description: 'URL del sito DR7', example: 'https://dr7empire.com', aliases: ['sito'] },
+            { key: 'review_link', description: 'Link recensione Google', example: 'https://g.page/r/.../review' },
+            { key: 'instagram', description: 'URL profilo Instagram', example: 'https://instagram.com/dr7empire' },
+            { key: 'facebook', description: 'URL pagina Facebook', example: 'https://facebook.com/dr7empire' },
         ],
     },
 
@@ -364,6 +365,9 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
                                     <div className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-1.5">
                                         {group.label}
                                     </div>
+                                    {group.scopeNote && (
+                                        <div className="text-[10px] text-theme-text-muted/80 italic mb-1.5 leading-tight">{group.scopeNote}</div>
+                                    )}
                                     <div className="flex flex-wrap gap-1.5">
                                         {group.items.map(v => (
                                             <button
