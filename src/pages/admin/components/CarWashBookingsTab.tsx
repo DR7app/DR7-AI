@@ -523,8 +523,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   })()
 
-  // Load supercar fleet (vehicles category=exotic|supercar) the first time
-  // the experience is toggled on. Keep cached for the rest of the session.
+  // Load supercar fleet the first time the experience is toggled on.
+  // Categories accepted: exotic / supercar / supercars (case-insensitive)
+  // — in DR7 vehicles table category='exotic' is the canonical value
+  // (Veicoli tab maps exotic → "Supercar" label) but Centralina Pro
+  // pricing aliases supercars↔exotic, and admin can rename the category
+  // to "Supercars" / "supercar" / etc., so we match all variants via
+  // an ILIKE on the substring "supercar" or exact "exotic".
   useEffect(() => {
     if (!supercarExperienceExtra) return
     if (supercarFleet.length > 0) return
@@ -533,7 +538,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const { data, error } = await supabase
         .from('vehicles')
         .select('id, display_name, plate, daily_rate, category, status, metadata')
-        .in('category', ['exotic', 'supercar'])
+        .or('category.ilike.%supercar%,category.eq.exotic,category.eq.Exotic,category.eq.EXOTIC')
         .neq('status', 'retired')
         .order('display_name', { ascending: true })
       if (cancelled) return
@@ -541,6 +546,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         console.error('[CarWashBookingsTab] failed to load supercar fleet:', error)
         return
       }
+      console.log(`[Supercar Experience] loaded ${data?.length || 0} supercars from fleet`)
       setSupercarFleet((data || []) as SupercarFleetVehicle[])
     })()
     return () => { cancelled = true }
@@ -2406,7 +2412,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </div>
 
                   {supercarFleet.length === 0 ? (
-                    <p className="text-xs text-theme-text-muted italic">Nessun veicolo nella flotta supercar (caricamento in corso o flotta vuota).</p>
+                    <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-3">
+                      Nessun veicolo della flotta supercar trovato. Apri <strong>Veicoli</strong>: ogni auto da mostrare qui deve avere
+                      <code className="bg-theme-bg-tertiary px-1 mx-1 rounded">category</code>
+                      = <code className="bg-theme-bg-tertiary px-1 rounded">exotic</code> (o un nome che contiene "supercar")
+                      e stato diverso da <code className="bg-theme-bg-tertiary px-1 mx-1 rounded">retired</code>.
+                    </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       {supercarFleet.map(vehicle => {
