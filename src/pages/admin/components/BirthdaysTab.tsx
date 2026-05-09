@@ -20,29 +20,10 @@ interface BirthdaySentRecord {
     sent_at: string
 }
 
-const DEFAULT_BIRTHDAY_MESSAGE = `Ciao {nome} 👋🏻
-
-mancano esattamente 10 giorni a una data speciale: il tuo compleanno 🥳
-
-Non vogliamo anticipare gli auguri, ma fare qualcosa di più autentico: riconoscere il tuo valore, prima ancora di celebrarlo.
-
-In qualità di nostro cliente, abbiamo il piacere di riservarti un pensiero dedicato, in linea con il tuo stile 🎁
-
-Per questo ti abbiamo riservato:
-
-Credito personale di €100 utilizzabile per un noleggio DR7
-
-Buono sconto di €10 per un lavaggio auto DR7
-
-CODICE SCONTO: {codice}
-
-Non è solo un regalo, ma un invito a concederti un'esperienza che ti rappresenti: potente, elegante, inconfondibile.
-
-Ti basterà rispondere a questo messaggio per attivare il tuo credito. Saremo lieti di accompagnarti nella scelta 👇🏻
-
-Con stima,
-Dubai Rent 7.0 S.p.A.
-Ogni compleanno merita uno stile all'altezza.`
+// Il body del messaggio compleanno vive in Messaggi di Sistema Pro →
+// "Messaggio Compleanno" (key `pro_marketing_compleanno`). Niente più
+// fallback locale: se il template è mancante/disattivato il tab mostra
+// un avviso e l'invio viene bloccato.
 
 export default function BirthdaysTab() {
     const [customers, setCustomers] = useState<CustomerBirthday[]>([])
@@ -58,37 +39,20 @@ export default function BirthdaysTab() {
     const [showOnlyWithPhone, setShowOnlyWithPhone] = useState(true)
     const [showOnlyNotSent, setShowOnlyNotSent] = useState(false)
 
-    // Editable birthday message template
+    // Birthday message template — single source of truth: Messaggi di
+    // Sistema Pro → "Messaggio Compleanno" (key `pro_marketing_compleanno`).
+    // Il body viene letto da `system_messages` ad ogni load così l'invio
+    // (sia manuale qui che automatico dal cron) usa SEMPRE lo stesso testo
+    // editato in Messaggi di Sistema Pro. Niente più copia locale in
+    // app_settings → niente più desincronizzazione.
     const currentYear = new Date().getFullYear()
-    const [messageTemplate, setMessageTemplate] = useState(DEFAULT_BIRTHDAY_MESSAGE)
-    const [editingMessage, setEditingMessage] = useState(false)
-    const [draftMessage, setDraftMessage] = useState('')
-    const [savingMessage, setSavingMessage] = useState(false)
-
-    async function saveMessageTemplate() {
-        setSavingMessage(true)
-        try {
-            const { error } = await supabase
-                .from('app_settings')
-                .upsert({
-                    key: 'birthday_message_template',
-                    value: draftMessage,
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'key' })
-
-            if (error) throw error
-
-            setMessageTemplate(draftMessage)
-            setEditingMessage(false)
-            alert('Messaggio salvato!')
-        } catch (error: unknown) {
-          const _errMsg = error instanceof Error ? error.message : String(error)
-            console.error('Error saving message template:', error)
-            alert(`Errore nel salvataggio: ${_errMsg}`)
-        } finally {
-            setSavingMessage(false)
-        }
-    }
+    const [messageTemplate, setMessageTemplate] = useState('')
+    const [proTemplateMissing, setProTemplateMissing] = useState(false)
+    // URL del sito letto da centralina_pro_config.config.marketing.website_url.
+    // Sostituito nei placeholder {website} / {link} / {sito} del template
+    // così il messaggio inviato porta sempre l'URL corrente, non un valore
+    // hardcoded nel codice.
+    const [websiteUrl, setWebsiteUrl] = useState('https://dr7empire.com')
 
     // Generate unique discount code
     function generateDiscountCode(): string {
@@ -170,7 +134,8 @@ export default function BirthdaysTab() {
     }
 
     // Sostituisce TUTTE le variabili del template compleanno: nome, due
-    // codici espliciti e {codice} per retro-compatibilità (= codice supercar).
+    // codici espliciti, {codice} per retro-compatibilità (= codice supercar)
+    // e {website} con l'URL configurato in Centralina Pro → Marketing.
     function applyBirthdayVariables(template: string, firstName: string, supercarCode: string, lavaggioCode: string): string {
         const map: Record<string, string> = {
             '{nome}': firstName,
@@ -185,6 +150,9 @@ export default function BirthdaysTab() {
             '{spesa_min_noleggio}': '400',
             '{spesa_min_lavaggio}': '40',
             '{validita_giorni}': '30',
+            '{website}': websiteUrl,
+            '{link}': websiteUrl,
+            '{sito}': websiteUrl,
         }
         let out = template
         for (const [k, v] of Object.entries(map)) {
@@ -201,15 +169,41 @@ export default function BirthdaysTab() {
     async function loadData() {
         setLoading(true)
         try {
-            // Load saved birthday message template
-            const { data: settingData } = await supabase
-                .from('app_settings')
-                .select('value')
-                .eq('key', 'birthday_message_template')
-                .single()
+            // Carica l'URL del sito da Centralina Pro → marketing.website_url.
+            // Cade su https://dr7empire.com solo se il setting non c'è.
+            try {
+                const { data: cfgRow } = await supabase
+                    .from('centralina_pro_config')
+                    .select('config')
+                    .eq('id', 'main')
+                    .maybeSingle()
+                const cfg = (cfgRow?.config ?? null) as Record<string, unknown> | null
+                const marketing = cfg?.marketing as Record<string, unknown> | undefined
+                const url = marketing?.website_url
+                if (typeof url === 'string' && url.trim()) setWebsiteUrl(url.trim())
+            } catch {
+                /* fallback hardcoded già in state */
+            }
 
-            if (settingData?.value) {
-                setMessageTemplate(settingData.value)
+            // Carica il template Pro "Messaggio Compleanno". Match per key
+            // canonico, con fallback su label per coprire template rinominati
+            // o creati con key custom (pro_custom_*).
+            const { data: rows } = await supabase
+                .from('system_messages')
+                .select('message_key, message_body, is_enabled, label')
+            const candidates = (rows || []) as Array<{ message_key: string; message_body: string | null; is_enabled: boolean | null; label: string | null }>
+            const direct = candidates.find(r => r.message_key === 'pro_marketing_compleanno')
+            const labelMatch = !direct ? candidates.find(r => {
+                const lbl = (r.label || '').toLowerCase()
+                return lbl.includes('compleanno') && (r.is_enabled !== false) && r.message_body
+            }) : null
+            const tpl = direct || labelMatch
+            if (tpl?.message_body && tpl.is_enabled !== false) {
+                setMessageTemplate(tpl.message_body)
+                setProTemplateMissing(false)
+            } else {
+                setMessageTemplate('')
+                setProTemplateMissing(true)
             }
 
             // Load customers with birthdays
@@ -373,6 +367,11 @@ export default function BirthdaysTab() {
             return
         }
 
+        if (proTemplateMissing || !messageTemplate.trim()) {
+            alert('Template "Messaggio Compleanno" non configurato in Messaggi di Sistema Pro. Aprilo, scrivi il body e attivalo prima di inviare.')
+            return
+        }
+
         setBulkSending(true)
         let sent = 0
         let errors = 0
@@ -452,6 +451,11 @@ export default function BirthdaysTab() {
     async function sendBirthdayMessage(customer: CustomerBirthday) {
         if (!customer.phone) {
             alert('Questo cliente non ha un numero di telefono')
+            return
+        }
+
+        if (proTemplateMissing || !messageTemplate.trim()) {
+            alert('Template "Messaggio Compleanno" non configurato in Messaggi di Sistema Pro. Aprilo, scrivi il body e attivalo prima di inviare.')
             return
         }
 
@@ -640,49 +644,23 @@ export default function BirthdaysTab() {
                 </div>
             </div>
 
-            {/* Editable Message Template */}
+            {/* Preview del template Pro — sola lettura.
+                Il body viene da Messaggi di Sistema Pro → "Messaggio
+                Compleanno" (key `pro_marketing_compleanno`). Per
+                modificarlo apri direttamente quel tab; ogni invio (manuale
+                qui o automatico dal cron) usa la stessa fonte. */}
             <div className="bg-theme-bg-tertiary p-4 rounded-lg border border-theme-border">
                 <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-theme-text-primary font-semibold">Messaggio Auguri</h3>
-                    {!editingMessage ? (
-                        <Button
-                            variant="secondary"
-                            onClick={() => { setDraftMessage(messageTemplate); setEditingMessage(true) }}
-                            className="!py-1.5 !px-3 !text-xs"
-                        >
-                            Modifica
-                        </Button>
-                    ) : (
-                        <div className="flex gap-2">
-                            <Button
-                                variant="secondary"
-                                onClick={() => setEditingMessage(false)}
-                                disabled={savingMessage}
-                                className="!py-1.5 !px-3 !text-xs"
-                            >
-                                Annulla
-                            </Button>
-                            <Button
-                                variant="primary"
-                                onClick={saveMessageTemplate}
-                                disabled={savingMessage}
-                                className="!py-1.5 !px-3 !text-xs"
-                            >
-                                {savingMessage ? 'Salvataggio...' : 'Salva'}
-                            </Button>
-                        </div>
-                    )}
+                    <h3 className="text-theme-text-primary font-semibold">
+                        Anteprima Messaggio Auguri
+                        <span className="ml-2 text-xs text-theme-text-muted font-normal">— gestito in Messaggi di Sistema Pro</span>
+                    </h3>
                 </div>
-                {editingMessage ? (
-                    <>
-                        <textarea
-                            value={draftMessage}
-                            onChange={(e) => setDraftMessage(e.target.value)}
-                            rows={18}
-                            className="w-full text-theme-text-primary text-sm whitespace-pre-wrap bg-theme-bg-secondary p-3 rounded border border-theme-border focus:outline-none focus:border-dr7-gold resize-y"
-                        />
-                        <p className="text-xs text-yellow-400 mt-2">Usa <code className="bg-theme-bg-secondary px-1 rounded">{'{nome}'}</code> per il nome del cliente e <code className="bg-theme-bg-secondary px-1 rounded">{'{codice}'}</code> per il codice sconto generato automaticamente.</p>
-                    </>
+                {proTemplateMissing ? (
+                    <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-3">
+                        Template <code className="bg-theme-bg-secondary px-1 rounded">pro_marketing_compleanno</code> mancante o disattivato.
+                        Apri <strong>Messaggi di Sistema Pro</strong> → <em>Messaggio Compleanno</em> per scriverlo o riattivarlo.
+                    </div>
                 ) : (
                     <>
                         <pre className="text-theme-text-muted text-sm whitespace-pre-wrap bg-theme-bg-secondary p-3 rounded border border-theme-border">

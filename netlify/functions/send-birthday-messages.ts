@@ -1,6 +1,7 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
+import { getMarketingConfig } from './utils/loadMarketing';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -195,6 +196,11 @@ const birthdayHandler: Handler = async (event) => {
         const discountCode = supercarCode
         console.log(`[Birthday Auto] Generated codes Supercar=${supercarCode}, Lavaggio=${lavaggioCode} for ${fullName}`);
 
+        // URL del sito da Centralina Pro → marketing.website_url, sostituito
+        // nei placeholder {website} / {link} / {sito} del template.
+        const marketing = await getMarketingConfig(supabase);
+        const websiteUrl = marketing.website_url;
+
         // Render the Pro template for this customer (no hardcoded fallback)
         const personalizedMessage = await renderTemplate('birthday_message', {
           nome: firstName,
@@ -209,6 +215,9 @@ const birthdayHandler: Handler = async (event) => {
           spesa_min_supercar: '400',
           spesa_min_lavaggio: '40',
           validita_giorni: '30',
+          website: websiteUrl,
+          link: websiteUrl,
+          sito: websiteUrl,
         });
         if (!personalizedMessage) {
           console.warn(`[Birthday Auto] Pro template disappeared mid-run for ${fullName} — skipping`);
