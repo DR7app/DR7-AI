@@ -40,6 +40,14 @@ interface NexiTransaction {
     }
 }
 
+interface CardPayment {
+    order_id: string
+    amount_cents: number
+    status: string
+    description: string
+    paid_at: string
+}
+
 interface TokenizedCard {
     id: string
     full_name: string
@@ -51,6 +59,9 @@ interface TokenizedCard {
     card_type: string
     card_brand: string
     updated_at: string
+    paid_total_cents?: number
+    paid_count?: number
+    payments?: CardPayment[]
 }
 
 export default function NexiTab() {
@@ -62,6 +73,9 @@ export default function NexiTab() {
     const [tokenizedCards, setTokenizedCards] = useState<TokenizedCard[]>([])
     const [cardsLoading, setCardsLoading] = useState(true)
     const [backfillRunning, setBackfillRunning] = useState(false)
+    // Which card row has its payment history expanded. Only one at a time
+    // to keep the panel compact; clicking the same card again collapses.
+    const [expandedCardId, setExpandedCardId] = useState<string | null>(null)
 
     // Search bar — filtra carte tokenizzate e transazioni per nome cliente,
     // email, order_id (booking id) o numero contratto. Permette di capire
@@ -553,51 +567,93 @@ export default function NexiTab() {
                     </div>
                 ) : (
                     <div className="divide-y divide-white/5">
-                        {filteredCards.map((card) => (
-                            <div key={card.id} className="px-6 py-3 flex items-center justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-theme-text-primary font-semibold text-sm">{card.full_name || 'N/A'}</span>
-                                        {card.masked_pan && (
-                                            <span className="font-mono text-sm text-theme-text-secondary">
-                                                {card.masked_pan}
-                                            </span>
-                                        )}
-                                        {card.circuit && (
-                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30 uppercase">
-                                                {card.circuit}
-                                            </span>
-                                        )}
-                                        {card.card_type && (
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
-                                                card.card_type === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
-                                                card.card_type === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
-                                                card.card_type === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
-                                                'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
-                                            }`}>
-                                                {card.card_type}
-                                            </span>
-                                        )}
+                        {filteredCards.map((card) => {
+                            const paidCents = card.paid_total_cents ?? 0
+                            const paidCount = card.paid_count ?? 0
+                            const payments = card.payments ?? []
+                            const isExpanded = expandedCardId === card.id
+                            const hasHistory = paidCount > 0
+                            return (
+                                <div key={card.id} className="px-6 py-3">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-theme-text-primary font-semibold text-sm">{card.full_name || 'N/A'}</span>
+                                                {card.masked_pan && (
+                                                    <span className="font-mono text-sm text-theme-text-secondary">
+                                                        {card.masked_pan}
+                                                    </span>
+                                                )}
+                                                {card.circuit && (
+                                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30 uppercase">
+                                                        {card.circuit}
+                                                    </span>
+                                                )}
+                                                {card.card_type && (
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                                        card.card_type === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
+                                                        card.card_type === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
+                                                        card.card_type === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
+                                                        'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                                                    }`}>
+                                                        {card.card_type}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-theme-text-muted mt-0.5">
+                                                {card.email}{card.phone ? ` · ${card.phone}` : ''}
+                                                <span className="ml-2 font-mono">ID: ...{card.contract_id.slice(-8)}</span>
+                                                {card.updated_at && (
+                                                    <span className="ml-2">{formatRomeDate(new Date(card.updated_at), { dateStyle: 'short' })}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            {hasHistory && (
+                                                <button
+                                                    onClick={() => setExpandedCardId(isExpanded ? null : card.id)}
+                                                    className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/20"
+                                                    title={isExpanded ? 'Nascondi storico' : 'Mostra storico pagamenti'}
+                                                >
+                                                    <span className="font-semibold">€{(paidCents / 100).toFixed(2).replace('.', ',')}</span>
+                                                    <span className="text-emerald-400/70">· {paidCount} pagament{paidCount === 1 ? 'o' : 'i'}</span>
+                                                    <svg className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                            {!card.masked_pan && card.contract_id && (
+                                                <button
+                                                    onClick={() => diagnoseCard(card)}
+                                                    className="text-[11px] px-2 py-1 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
+                                                    title="Mostra cosa restituisce Nexi per questa carta"
+                                                >
+                                                    Diagnostica
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="text-xs text-theme-text-muted mt-0.5">
-                                        {card.email}{card.phone ? ` · ${card.phone}` : ''}
-                                        <span className="ml-2 font-mono">ID: ...{card.contract_id.slice(-8)}</span>
-                                        {card.updated_at && (
-                                            <span className="ml-2">{formatRomeDate(new Date(card.updated_at), { dateStyle: 'short' })}</span>
-                                        )}
-                                    </div>
+                                    {isExpanded && hasHistory && (
+                                        <div className="mt-3 pl-2 border-l-2 border-emerald-500/30 space-y-1.5">
+                                            {payments.map((p, i) => (
+                                                <div key={`${p.order_id}_${i}`} className="flex items-center justify-between gap-3 text-xs">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-theme-text-primary truncate">{p.description || 'Pagamento Nexi'}</div>
+                                                        <div className="text-theme-text-muted font-mono text-[10px]">
+                                                            {p.paid_at ? formatRomeDate(new Date(p.paid_at), { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                                                            {p.order_id ? ` · ${p.order_id}` : ''}
+                                                        </div>
+                                                    </div>
+                                                    <span className="font-mono text-emerald-400 font-semibold shrink-0">
+                                                        €{(p.amount_cents / 100).toFixed(2).replace('.', ',')}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                                {!card.masked_pan && card.contract_id && (
-                                    <button
-                                        onClick={() => diagnoseCard(card)}
-                                        className="text-[11px] px-2 py-1 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 shrink-0"
-                                        title="Mostra cosa restituisce Nexi per questa carta"
-                                    >
-                                        Diagnostica
-                                    </button>
-                                )}
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 )}
             </div>

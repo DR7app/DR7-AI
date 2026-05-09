@@ -17,6 +17,14 @@ import { getCorsOrigin } from './cors-headers'
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
+interface CardPayment {
+    order_id: string
+    amount_cents: number
+    status: string
+    description: string
+    paid_at: string
+}
+
 interface TokenizedCard {
     id: string
     full_name: string
@@ -28,6 +36,9 @@ interface TokenizedCard {
     card_type: string
     card_brand: string
     updated_at: string
+    paid_total_cents: number
+    paid_count: number
+    payments: CardPayment[]
 }
 
 const handler: Handler = async (event) => {
@@ -70,38 +81,76 @@ const handler: Handler = async (event) => {
                 card_type: String(meta.nexi_card_type || ''),
                 card_brand: String(meta.nexi_card_brand || ''),
                 updated_at: String(meta.nexi_contract_updated || c.updated_at || ''),
+                paid_total_cents: 0,
+                paid_count: 0,
+                payments: [],
             }
         })
 
         // Source 2 — nexi_transactions with a non-null contract_id and a
-        // success status, deduped by contract_id (keeps the customers_extended
-        // row when both sources have the same contract).
+        // success status. We use this both to surface contracts that don't
+        // have a customers_extended row AND to attach the payment history
+        // to every card (Source 1 too). amount_cents/description/status come
+        // from here.
         const knownContractIds = new Set(cards.map(c => c.contract_id).filter(Boolean))
         const { data: txs } = await supabase
             .from('nexi_transactions')
-            .select('id, contract_id, customer_email, booking_id, metadata, updated_at, booking:bookings(customer_name, customer_phone)')
+            .select('id, order_id, contract_id, customer_email, booking_id, amount_cents, status, description, metadata, created_at, updated_at, booking:bookings(customer_name, customer_phone)')
             .not('contract_id', 'is', null)
             .in('status', ['completed', 'paid', 'authorized', 'captured', 'succeeded'])
-            .order('updated_at', { ascending: false })
+            .order('created_at', { ascending: false })
 
         for (const tx of (txs || []) as Record<string, unknown>[]) {
             const cid = String(tx.contract_id || '')
-            if (!cid || knownContractIds.has(cid)) continue
-            knownContractIds.add(cid)
+            if (!cid) continue
             const meta = (tx.metadata || {}) as Record<string, unknown>
             const booking = (tx.booking || {}) as Record<string, unknown>
-            cards.push({
-                id: `tx:${tx.id}`,
-                full_name: String(meta.customer_name || booking.customer_name || String(tx.customer_email || '').split('@')[0] || 'Cliente'),
-                email: String(tx.customer_email || ''),
-                phone: String(booking.customer_phone || ''),
-                contract_id: cid,
-                masked_pan: String(meta.masked_pan || meta.nexi_card_masked_pan || meta.payment_instrument || ''),
-                circuit: String(meta.circuit || meta.nexi_card_circuit || meta.payment_circuit || ''),
-                card_type: String(meta.card_type || meta.nexi_card_type || ''),
-                card_brand: String(meta.card_brand || meta.nexi_card_brand || ''),
-                updated_at: String(tx.updated_at || ''),
+
+            // Either attach this transaction to an existing card (Source 1)
+            // or, if no Source 1 card exists for this contract_id, create a
+            // new card row from the transaction itself.
+            if (!knownContractIds.has(cid)) {
+                knownContractIds.add(cid)
+                cards.push({
+                    id: `tx:${tx.id}`,
+                    full_name: String(meta.customer_name || booking.customer_name || String(tx.customer_email || '').split('@')[0] || 'Cliente'),
+                    email: String(tx.customer_email || ''),
+                    phone: String(booking.customer_phone || ''),
+                    contract_id: cid,
+                    masked_pan: String(meta.masked_pan || meta.nexi_card_masked_pan || meta.payment_instrument || ''),
+                    circuit: String(meta.circuit || meta.nexi_card_circuit || meta.payment_circuit || ''),
+                    card_type: String(meta.card_type || meta.nexi_card_type || ''),
+                    card_brand: String(meta.card_brand || meta.nexi_card_brand || ''),
+                    updated_at: String(tx.updated_at || ''),
+                    paid_total_cents: 0,
+                    paid_count: 0,
+                    payments: [],
+                })
+            }
+        }
+
+        // Build a contract_id -> [transactions] map and attach to every card.
+        // Sums amount_cents (Nexi stores cents), exposes the per-payment
+        // breakdown so the UI can render an in-card history.
+        const txByContract = new Map<string, CardPayment[]>()
+        for (const tx of (txs || []) as Record<string, unknown>[]) {
+            const cid = String(tx.contract_id || '')
+            if (!cid) continue
+            const list = txByContract.get(cid) || []
+            list.push({
+                order_id: String((tx as { order_id?: string }).order_id || ''),
+                amount_cents: Number(tx.amount_cents || 0),
+                status: String(tx.status || ''),
+                description: String(tx.description || ''),
+                paid_at: String(tx.created_at || tx.updated_at || ''),
             })
+            txByContract.set(cid, list)
+        }
+        for (const card of cards) {
+            const list = txByContract.get(card.contract_id) || []
+            card.payments = list
+            card.paid_count = list.length
+            card.paid_total_cents = list.reduce((sum, p) => sum + (Number.isFinite(p.amount_cents) ? p.amount_cents : 0), 0)
         }
 
         // Sort the merged list so the most recently tokenized card is at the
