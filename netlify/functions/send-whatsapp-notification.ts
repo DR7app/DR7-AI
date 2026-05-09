@@ -403,6 +403,21 @@ const handler: Handler = async (event) => {
           vars.sito = vars.website;
           vars.instagram = mk.instagram_url || '';
           vars.facebook = mk.facebook_url || '';
+          // Link personalizzati creati dall'admin in Centralina → Marketing.
+          // Ogni link diventa una variabile {<slug>} dove slug = lowercase
+          // del titolo con underscore (stesso slug mostrato nella UI).
+          if (Array.isArray(mk.custom_links)) {
+            for (const l of mk.custom_links as Array<{ title?: string; url?: string }>) {
+              if (typeof l?.title !== 'string' || typeof l?.url !== 'string') continue;
+              const slug = l.title.toLowerCase().trim()
+                .replace(/[^a-z0-9\s\-_]/g, '')
+                .replace(/[\s\-]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/g, '')
+                .substring(0, 30);
+              if (slug) vars[slug] = l.url;
+            }
+          }
         } catch {
           vars.review_link = process.env.GOOGLE_REVIEW_URL || process.env.GOOGLE_REVIEW_LINK || '';
           vars.website = process.env.WEBSITE_URL || '';
