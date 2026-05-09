@@ -52,6 +52,76 @@ interface InvoiceItem {
 // Solo questi due account possono cambiare lo stato di pagamento delle fatture
 const PAYMENT_MANAGERS = ['valerio@dr7.app', 'ilenia@dr7.app']
 
+function formatEur(n: number): string {
+  if (!Number.isFinite(n)) return '€0,00'
+  return `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+type KpiTone = 'primary' | 'success' | 'warning' | 'info' | 'alert' | 'muted'
+const KPI_TONE: Record<KpiTone, { ring: string; iconBg: string; iconText: string }> = {
+  primary: { ring: 'border-dr7-gold/30', iconBg: 'bg-dr7-gold/15', iconText: 'text-dr7-gold' },
+  success: { ring: 'border-emerald-500/30', iconBg: 'bg-emerald-500/15', iconText: 'text-emerald-400' },
+  warning: { ring: 'border-amber-500/30', iconBg: 'bg-amber-500/15', iconText: 'text-amber-400' },
+  info:    { ring: 'border-blue-500/30',   iconBg: 'bg-blue-500/15',   iconText: 'text-blue-400' },
+  alert:   { ring: 'border-rose-500/30',   iconBg: 'bg-rose-500/15',   iconText: 'text-rose-400' },
+  muted:   { ring: 'border-theme-border',  iconBg: 'bg-theme-bg-tertiary', iconText: 'text-theme-text-muted' },
+}
+
+const KPI_ICONS: Record<string, JSX.Element> = {
+  up:        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 17l6-6 4 4 8-8m0 0v6m0-6h-6" />,
+  check:     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />,
+  hourglass: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 2h12M6 22h12M6 2v4a6 6 0 006 6 6 6 0 006-6V2M6 22v-4a6 6 0 016-6 6 6 0 016 6v4" />,
+  percent:   <><circle cx="6.5" cy="6.5" r="2.5" strokeWidth={2}/><circle cx="17.5" cy="17.5" r="2.5" strokeWidth={2}/><path strokeLinecap="round" strokeWidth={2} d="M5 19L19 5"/></>,
+  clock:     <><circle cx="12" cy="12" r="9" strokeWidth={2}/><path strokeLinecap="round" strokeWidth={2} d="M12 7v5l3 2"/></>,
+  calendar:  <><rect x="3" y="5" width="18" height="16" rx="2" strokeWidth={2}/><path strokeWidth={2} d="M3 10h18M8 3v4M16 3v4"/></>,
+}
+
+interface KpiCardProps {
+  icon: keyof typeof KPI_ICONS
+  label: string
+  value: string
+  delta?: number       // percent variation vs comparator
+  deltaIsPp?: boolean  // if true, delta is in percentage points (not %)
+  deltaSuffix?: string // e.g. "vs mese scorso"
+  tone: KpiTone
+}
+
+function KpiCard({ icon, label, value, delta, deltaIsPp, deltaSuffix, tone }: KpiCardProps) {
+  const t = KPI_TONE[tone]
+  const showDelta = typeof delta === 'number' && Number.isFinite(delta)
+  const positive = (delta ?? 0) >= 0
+  const deltaTxt = showDelta
+    ? `${positive ? '+' : ''}${(delta as number).toFixed(1)}${deltaIsPp ? 'pp' : '%'}`
+    : null
+  return (
+    <div className={`bg-theme-bg-secondary border ${t.ring} rounded-xl p-4 flex flex-col gap-2`}>
+      <div className="flex items-center justify-between">
+        <div className={`w-9 h-9 rounded-lg ${t.iconBg} ${t.iconText} flex items-center justify-center`}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {KPI_ICONS[icon]}
+          </svg>
+        </div>
+        {deltaTxt && (
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+            positive
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+              : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+          }`}>
+            {deltaTxt}
+          </span>
+        )}
+      </div>
+      <div>
+        <p className="text-[11px] uppercase tracking-wider text-theme-text-muted font-medium">{label}</p>
+        <p className="text-2xl font-bold text-theme-text-primary mt-0.5 tabular-nums">{value}</p>
+        {deltaSuffix && (
+          <p className="text-[11px] text-theme-text-muted mt-1">{deltaSuffix}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Default scadenza fattura quando non e' specificata: 30 giorni dall'emissione
 const DEFAULT_PAYMENT_TERM_DAYS = 30
 
@@ -110,6 +180,74 @@ export default function FatturaTab() {
       if (name) set.add(name)
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }))
+  }, [invoices])
+
+  // ─── KPI metrics ─────────────────────────────────────────────────────
+  // Calcoli derivati dalle fatture caricate. Confronto vs mese precedente
+  // per i delta. Tutti i valori escludono note di credito (tipo_fattura =
+  // 'nota_credito') quando si tratta di "fatturato emesso".
+  const kpis = useMemo(() => {
+    const now = new Date()
+    const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const startPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const startNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+    const eur = (n: number) => n
+    const isFattura = (i: Invoice) => i.tipo_fattura !== 'nota_credito'
+
+    let emesso = 0, emessoPrev = 0
+    let incassato = 0, incassatoPrev = 0
+    let daIncassare = 0
+    let inScadenza = 0
+    let pagamentiProgrammati = 0
+
+    const in7Days = new Date(now.getTime() + 7 * 86400000)
+
+    for (const inv of invoices) {
+      if (!isFattura(inv)) continue
+      const issued = inv.data_emissione ? new Date(inv.data_emissione) : null
+      const total = Number(inv.importo_totale) || 0
+
+      // Fatturato emesso (mese corrente / mese precedente)
+      if (issued && issued >= startThisMonth) emesso += total
+      else if (issued && issued >= startPrevMonth && issued < startThisMonth) emessoPrev += total
+
+      // Incassato vs da incassare (stato='paid' = incassato)
+      if (inv.stato === 'paid') {
+        if (issued && issued >= startThisMonth) incassato += total
+        else if (issued && issued >= startPrevMonth && issued < startThisMonth) incassatoPrev += total
+      } else if (inv.stato !== 'cancelled') {
+        daIncassare += total
+        const due = getInvoiceDueDate(inv)
+        if (due) {
+          // Scadenza nei prossimi 7 giorni (incluso oggi, escluso passato)
+          if (due >= now && due <= in7Days) inScadenza += 1
+          // Pagamenti programmati = fatture non pagate con scadenza nel mese corrente
+          if (due >= startThisMonth && due < startNextMonth) pagamentiProgrammati += 1
+        }
+      }
+    }
+
+    const totaleAtteso = emesso // fatturato del mese corrente
+    const incassoPct = totaleAtteso > 0 ? (incassato / totaleAtteso) * 100 : 0
+    const incassoPctPrev = emessoPrev > 0 ? (incassatoPrev / emessoPrev) * 100 : 0
+
+    const deltaPct = (curr: number, prev: number) => {
+      if (prev === 0) return curr > 0 ? 100 : 0
+      return ((curr - prev) / prev) * 100
+    }
+
+    return {
+      emesso: eur(emesso),
+      emessoDeltaPct: deltaPct(emesso, emessoPrev),
+      incassato: eur(incassato),
+      incassatoDeltaPct: deltaPct(incassato, incassatoPrev),
+      daIncassare: eur(daIncassare),
+      incassoPct,
+      incassoPctDeltaPct: incassoPct - incassoPctPrev,
+      inScadenza,
+      pagamentiProgrammati,
+    }
   }, [invoices])
   const [creatingNdc, setCreatingNdc] = useState<string | null>(null)
   const [currentEmail, setCurrentEmail] = useState<string | null>(null)
@@ -479,25 +617,28 @@ export default function FatturaTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-bold text-theme-text-primary">Fatture</h2>
-          <div className="flex bg-theme-bg-secondary border border-theme-border rounded-full overflow-hidden text-sm">
-            <button
-              type="button"
-              onClick={() => setView('emesse')}
-              className={`px-4 py-1.5 transition-colors ${view === 'emesse' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
-            >
-              Emesse
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('ricevute')}
-              className={`px-4 py-1.5 transition-colors ${view === 'ricevute' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
-            >
-              Ricevute (Aruba)
-            </button>
+      <div className="flex justify-between items-start flex-wrap gap-3">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold text-theme-text-primary">Fattura Amministrazione</h2>
+            <div className="flex bg-theme-bg-secondary border border-theme-border rounded-full overflow-hidden text-sm">
+              <button
+                type="button"
+                onClick={() => setView('emesse')}
+                className={`px-4 py-1.5 transition-colors ${view === 'emesse' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+              >
+                Emesse
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('ricevute')}
+                className={`px-4 py-1.5 transition-colors ${view === 'ricevute' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+              >
+                Ricevute (Aruba)
+              </button>
+            </div>
           </div>
+          <p className="text-sm text-theme-text-muted">Gestisci tutte le fatture, i pagamenti e lo stato SDI</p>
         </div>
         {view === 'emesse' && (
           <div className="flex gap-2 items-center">
@@ -545,7 +686,56 @@ export default function FatturaTab() {
       {view === 'ricevute' && <IncomingInvoicesView />}
       {view === 'emesse' && (
       <>
-      {/* Empty header replaced above; the rest of Emesse UI follows */}
+      {/* ─── KPI strip ──────────────────────────────────────────────── */}
+      {/* 6 cards dei dati chiave del mese (Fatturato Emesso, Incassato,
+          Da Incassare, % Incasso, In Scadenza, Pagamenti Programmati). */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <KpiCard
+          icon="up"
+          label="Fatturato Emesso"
+          value={formatEur(kpis.emesso)}
+          delta={kpis.emessoDeltaPct}
+          deltaSuffix="vs mese scorso"
+          tone="primary"
+        />
+        <KpiCard
+          icon="check"
+          label="Fatturato Incassato"
+          value={formatEur(kpis.incassato)}
+          delta={kpis.incassatoDeltaPct}
+          deltaSuffix="vs mese scorso"
+          tone="success"
+        />
+        <KpiCard
+          icon="hourglass"
+          label="Da Incassare"
+          value={formatEur(kpis.daIncassare)}
+          tone="warning"
+        />
+        <KpiCard
+          icon="percent"
+          label="% Incasso"
+          value={`${kpis.incassoPct.toFixed(1)}%`}
+          delta={kpis.incassoPctDeltaPct}
+          deltaIsPp
+          deltaSuffix="vs mese scorso"
+          tone="info"
+        />
+        <KpiCard
+          icon="clock"
+          label="Fatture in Scadenza"
+          value={String(kpis.inScadenza)}
+          deltaSuffix="prossimi 7 giorni"
+          tone="alert"
+        />
+        <KpiCard
+          icon="calendar"
+          label="Pagamenti Programmati"
+          value={String(kpis.pagamentiProgrammati)}
+          deltaSuffix="entro fine mese"
+          tone="muted"
+        />
+      </div>
 
       {/* Search Bar */}
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border space-y-3">
