@@ -54,13 +54,6 @@ function fmtEur(v: number): string {
     return `€ ${v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function fmtDate(iso: string | null): string {
-    if (!iso) return '—'
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return '—'
-    return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
 function fmtDateShort(iso: string | null): string {
     if (!iso) return '—'
     const d = new Date(iso)
