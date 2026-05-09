@@ -48,10 +48,10 @@ export default function BirthdaysTab() {
     const currentYear = new Date().getFullYear()
     const [messageTemplate, setMessageTemplate] = useState('')
     const [proTemplateMissing, setProTemplateMissing] = useState(false)
-    // URL del sito letto da centralina_pro_config.config.marketing.website_url.
-    // Sostituito nei placeholder {website} / {link} / {sito} del template
-    // così il messaggio inviato porta sempre l'URL corrente, non un valore
-    // hardcoded nel codice.
+    // URL del sito impostato in admin → Marketing → Social Links (UI).
+    // Storage: centralina_pro_config.config.marketing.website_url.
+    // Sostituito nel template via il placeholder canonico {website_url} con
+    // alias retro-compat {website} / {link} / {sito}.
     const [websiteUrl, setWebsiteUrl] = useState('https://dr7empire.com')
 
     // Generate unique discount code
@@ -135,7 +135,9 @@ export default function BirthdaysTab() {
 
     // Sostituisce TUTTE le variabili del template compleanno: nome, due
     // codici espliciti, {codice} per retro-compatibilità (= codice supercar)
-    // e {website} con l'URL configurato in Centralina Pro → Marketing.
+    // e l'URL del sito configurato in Marketing → Social Links.
+    // Placeholder canonico: {website_url} (consigliato in Messaggi di
+    // Sistema Pro). Alias retro-compat: {website} / {link} / {sito}.
     function applyBirthdayVariables(template: string, firstName: string, supercarCode: string, lavaggioCode: string): string {
         const map: Record<string, string> = {
             '{nome}': firstName,
@@ -150,6 +152,7 @@ export default function BirthdaysTab() {
             '{spesa_min_noleggio}': '400',
             '{spesa_min_lavaggio}': '40',
             '{validita_giorni}': '30',
+            '{website_url}': websiteUrl,
             '{website}': websiteUrl,
             '{link}': websiteUrl,
             '{sito}': websiteUrl,
@@ -169,7 +172,8 @@ export default function BirthdaysTab() {
     async function loadData() {
         setLoading(true)
         try {
-            // Carica l'URL del sito da Centralina Pro → marketing.website_url.
+            // Carica l'URL del sito impostato in admin → Marketing →
+            // Social Links (UI). Storage: centralina_pro_config.config.marketing.
             // Cade su https://dr7empire.com solo se il setting non c'è.
             try {
                 const { data: cfgRow } = await supabase

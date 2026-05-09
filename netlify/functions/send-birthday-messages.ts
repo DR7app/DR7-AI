@@ -196,8 +196,10 @@ const birthdayHandler: Handler = async (event) => {
         const discountCode = supercarCode
         console.log(`[Birthday Auto] Generated codes Supercar=${supercarCode}, Lavaggio=${lavaggioCode} for ${fullName}`);
 
-        // URL del sito da Centralina Pro → marketing.website_url, sostituito
-        // nei placeholder {website} / {link} / {sito} del template.
+        // URL del sito impostato in admin → Marketing → Social Links (UI).
+        // Storage: centralina_pro_config.config.marketing.website_url.
+        // Sostituito nel template via il placeholder canonico {website_url}
+        // con alias retro-compat {website} / {link} / {sito}.
         const marketing = await getMarketingConfig(supabase);
         const websiteUrl = marketing.website_url;
 
@@ -215,6 +217,7 @@ const birthdayHandler: Handler = async (event) => {
           spesa_min_supercar: '400',
           spesa_min_lavaggio: '40',
           validita_giorni: '30',
+          website_url: websiteUrl,
           website: websiteUrl,
           link: websiteUrl,
           sito: websiteUrl,
