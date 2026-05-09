@@ -201,18 +201,26 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   useEffect(() => {
     loadData()
 
-    // Real-time subscription for car wash bookings
+    // Realtime: bookings (creazione/modifica/cancellazione lavaggio) +
+    // car_wash_services (toggle attivo/inattivo, modifica prezzo/durata)
+    // + vehicles (cambio status / categoria del veicolo collegato al
+    // booking). Qualunque modifica fatta altrove si riflette qui senza
+    // refresh manuale.
     const subscription = supabase
       .channel('carwash-calendar-realtime')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
-        (_payload) => {
-          // Reload data when any booking changes
-          loadData()
-        }
+        () => loadData()
       )
-      .subscribe((_status) => {
-      })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'car_wash_services' },
+        () => loadData()
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'vehicles' },
+        () => loadData()
+      )
+      .subscribe()
 
     return () => {
       subscription.unsubscribe()

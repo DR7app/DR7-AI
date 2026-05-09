@@ -77,9 +77,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   // --- Data Loading ---
   useEffect(() => {
     loadData()
+    // Realtime: ascolta sia bookings (creazioni/modifiche/cancellazioni)
+    // sia vehicles (cambi status, categoria, foto, prezzo). Cosi' qualunque
+    // azione fatta in admin da un altro operatore — o sul sito da un cliente
+    // — si riflette nel calendario senza bisogno di ricaricare la pagina.
     const subscription = supabase
       .channel('calendar-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadData())
       .subscribe()
     return () => { subscription.unsubscribe() }
   }, [])

@@ -75,11 +75,17 @@ export default function MechanicalCalendarTab() {
   useEffect(() => {
     loadData()
 
-    // Real-time subscription
+    // Realtime: bookings (interventi meccanica) + vehicles (status /
+    // categoria del veicolo collegato). Se un altro admin o il sito
+    // modifica qualcosa, il calendario si aggiorna senza refresh.
     const subscription = supabase
       .channel('mechanical-calendar-updates')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
+        () => loadData()
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'vehicles' },
         () => loadData()
       )
       .subscribe()
