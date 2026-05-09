@@ -43,6 +43,7 @@ type SectionId =
     | 'contatti'
     | 'meccanica'
     | 'lavaggio'
+    | 'investitori'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -57,6 +58,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'contatti', title: 'Contatti', ready: true },
     { id: 'meccanica', title: 'Servizi Meccanica', ready: true },
     { id: 'lavaggio', title: 'Servizi Lavaggio', ready: true },
+    { id: 'investitori', title: 'Investitori', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -291,6 +293,41 @@ function emptyLegalPage(id: LegalPageId): LegalPageCopy {
 
 const INITIAL_LEGAL: LegalCopy = {
     pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
+}
+
+// ─── Investitori (IT-only sales page) ──────────────────────────────────────
+interface InvestitoriStrength { id: string; title: string; description: string }
+interface InvestitoriInfoItem { label: string; value: string }
+interface InvestitoriCopy {
+    hero_title: string
+    hero_subtitle: string
+    intro_paragraphs: string[]
+    opportunity_heading: string
+    opportunity_paragraphs: string[]
+    strength_heading: string
+    strength_points: InvestitoriStrength[]
+    cta_heading: string
+    cta_paragraphs: string[]
+    cta_button_label: string
+    cta_whatsapp_url: string
+    cta_email: string
+    info_heading: string
+    info_items: InvestitoriInfoItem[]
+    info_footnote: string
+    legal_heading: string
+    legal_paragraphs: string[]
+}
+const INITIAL_INVESTITORI: InvestitoriCopy = {
+    hero_title: 'SEZIONE INVESTITORI', hero_subtitle: 'Partecipa alla crescita del gruppo DR7',
+    intro_paragraphs: [],
+    opportunity_heading: 'Opportunità di partecipazione al capitale', opportunity_paragraphs: [],
+    strength_heading: 'Punti di forza', strength_points: [],
+    cta_heading: 'Modalità di adesione', cta_paragraphs: [],
+    cta_button_label: 'RICHIEDI ACCESSO INVESTITORI',
+    cta_whatsapp_url: '', cta_email: '',
+    info_heading: 'Informazioni sintetiche', info_items: [],
+    info_footnote: '',
+    legal_heading: 'Avvertenza legale', legal_paragraphs: [],
 }
 
 // ─── Car Wash chrome (mirror website utils/siteCopy.ts) ────────────────────
@@ -580,6 +617,7 @@ interface SiteCopySnapshot {
     contact?: ContactCopy
     mechanical?: MechanicalCopy
     carwash?: CarWashCopy
+    investitori?: InvestitoriCopy
 }
 
 interface CurrentState {
@@ -595,6 +633,7 @@ interface CurrentState {
     contact: ContactCopy
     mechanical: MechanicalCopy
     carwash: CarWashCopy
+    investitori: InvestitoriCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -677,6 +716,8 @@ export default function SitoTab() {
     const [savedMechanical, setSavedMechanical] = useState<MechanicalCopy>(INITIAL_MECHANICAL)
     const [carwash, setCarwash] = useState<CarWashCopy>(INITIAL_CARWASH)
     const [savedCarwash, setSavedCarwash] = useState<CarWashCopy>(INITIAL_CARWASH)
+    const [investitori, setInvestitori] = useState<InvestitoriCopy>(INITIAL_INVESTITORI)
+    const [savedInvestitori, setSavedInvestitori] = useState<InvestitoriCopy>(INITIAL_INVESTITORI)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -752,6 +793,10 @@ export default function SitoTab() {
                     setCarwash(remote.carwash)
                     setSavedCarwash(remote.carwash)
                 }
+                if (remote?.investitori && remote.investitori.hero_title) {
+                    setInvestitori(remote.investitori)
+                    setSavedInvestitori(remote.investitori)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -764,10 +809,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori]
     )
     const dirty = changes.length > 0
 
@@ -778,7 +823,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -791,6 +836,7 @@ export default function SitoTab() {
             setSavedContact(contact)
             setSavedMechanical(mechanical)
             setSavedCarwash(carwash)
+            setSavedInvestitori(investitori)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -837,6 +883,7 @@ export default function SitoTab() {
         setContact(savedContact)
         setMechanical(savedMechanical)
         setCarwash(savedCarwash)
+        setInvestitori(savedInvestitori)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -978,6 +1025,9 @@ export default function SitoTab() {
                         {hydrated && section === 'lavaggio' && (
                             <CarWashEditor copy={carwash} setCopy={setCarwash} />
                         )}
+                        {hydrated && section === 'investitori' && (
+                            <InvestitoriEditor copy={investitori} setCopy={setInvestitori} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1081,6 +1131,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.carwash) !== JSON.stringify(saved.carwash)) {
         out.push('Lavaggio: contenuti modificati')
+    }
+    if (JSON.stringify(current.investitori) !== JSON.stringify(saved.investitori)) {
+        out.push('Investitori: contenuti modificati')
     }
     return out
 }
@@ -3261,6 +3314,139 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
                     <FieldText label='Bottone "Aggiungi" (IT)' value={copy.upsell_add_it} onChange={v => update('upsell_add_it', v)} />
                     <FieldText label='Button "Add" (EN)' value={copy.upsell_add_en} onChange={v => update('upsell_add_en', v)} />
                 </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Investitori editor (IT-only sales page) ───────────────────────────────
+function InvestitoriEditor({ copy, setCopy }: { copy: InvestitoriCopy; setCopy: (next: InvestitoriCopy) => void }) {
+    const update = <K extends keyof InvestitoriCopy>(key: K, value: InvestitoriCopy[K]) => setCopy({ ...copy, [key]: value })
+    const updateParagraphList = (key: 'intro_paragraphs' | 'opportunity_paragraphs' | 'cta_paragraphs' | 'legal_paragraphs', value: string) => {
+        setCopy({ ...copy, [key]: value.split('\n\n').filter(s => s.trim().length > 0) })
+    }
+    // strength_points
+    const updateStrength = (idx: number, patch: Partial<InvestitoriStrength>) => {
+        const next = [...copy.strength_points]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, strength_points: next })
+    }
+    const moveStrength = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.strength_points.length) return
+        const next = [...copy.strength_points]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, strength_points: next })
+    }
+    const removeStrength = (idx: number) => {
+        if (!confirm('Rimuovere questo punto di forza?')) return
+        setCopy({ ...copy, strength_points: copy.strength_points.filter((_, i) => i !== idx) })
+    }
+    const addStrength = () => {
+        setCopy({ ...copy, strength_points: [...copy.strength_points, { id: `s-${Date.now().toString(36)}`, title: '', description: '' }] })
+    }
+    // info_items
+    const updateInfo = (idx: number, patch: Partial<InvestitoriInfoItem>) => {
+        const next = [...copy.info_items]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, info_items: next })
+    }
+    const moveInfo = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.info_items.length) return
+        const next = [...copy.info_items]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, info_items: next })
+    }
+    const removeInfo = (idx: number) => {
+        if (!confirm('Rimuovere questa riga informativa?')) return
+        setCopy({ ...copy, info_items: copy.info_items.filter((_, i) => i !== idx) })
+    }
+    const addInfo = () => {
+        setCopy({ ...copy, info_items: [...copy.info_items, { label: '', value: '' }] })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Investitori</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/investitori</code> — pagina IT-only (no traduzioni EN). I paragrafi multipli si separano con <b>riga vuota</b> (doppio invio).
+                </p>
+            </div>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+                <FieldText label="Titolo" value={copy.hero_title} onChange={v => update('hero_title', v)} />
+                <FieldText label="Sottotitolo" value={copy.hero_subtitle} onChange={v => update('hero_subtitle', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Introduzione</h3>
+                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.intro_paragraphs.join('\n\n')} onChange={v => updateParagraphList('intro_paragraphs', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Opportunità di partecipazione</h3>
+                <FieldText label="Heading" value={copy.opportunity_heading} onChange={v => update('opportunity_heading', v)} />
+                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.opportunity_paragraphs.join('\n\n')} onChange={v => updateParagraphList('opportunity_paragraphs', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Punti di forza ({copy.strength_points.length})</h3>
+                <FieldText label="Heading" value={copy.strength_heading} onChange={v => update('strength_heading', v)} />
+                {copy.strength_points.map((s, i) => (
+                    <div key={s.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{s.title || '(senza titolo)'}</span>
+                            <button onClick={() => moveStrength(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveStrength(i, 1)} disabled={i === copy.strength_points.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => removeStrength(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        </div>
+                        <input type="text" value={s.title} onChange={e => updateStrength(i, { title: e.target.value })} placeholder="Titolo punto di forza" className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-semibold" />
+                        <textarea value={s.description} onChange={e => updateStrength(i, { description: e.target.value })} placeholder="Descrizione" rows={2} className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                    </div>
+                ))}
+                <button onClick={addStrength} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi punto di forza
+                </button>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">CTA — Modalità di adesione</h3>
+                <FieldText label="Heading" value={copy.cta_heading} onChange={v => update('cta_heading', v)} />
+                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.cta_paragraphs.join('\n\n')} onChange={v => updateParagraphList('cta_paragraphs', v)} />
+                <FieldText label="Etichetta bottone primario" value={copy.cta_button_label} onChange={v => update('cta_button_label', v)} />
+                <FieldText label="URL WhatsApp (con testo precompilato)" value={copy.cta_whatsapp_url} onChange={v => update('cta_whatsapp_url', v)} />
+                <FieldText label="Email investitori (bottone secondario)" value={copy.cta_email} onChange={v => update('cta_email', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Informazioni sintetiche ({copy.info_items.length})</h3>
+                <FieldText label="Heading" value={copy.info_heading} onChange={v => update('info_heading', v)} />
+                {copy.info_items.map((it, i) => (
+                    <div key={i} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[200px_1fr_auto] gap-2 items-center">
+                        <input type="text" value={it.label} onChange={e => updateInfo(i, { label: e.target.value })} placeholder="Etichetta (es. Denominazione)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={it.value} onChange={e => updateInfo(i, { value: e.target.value })} placeholder="Valore" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => moveInfo(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveInfo(i, 1)} disabled={i === copy.info_items.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => removeInfo(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        </div>
+                    </div>
+                ))}
+                <button onClick={addInfo} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi riga
+                </button>
+                <FieldTextArea label="Footnote sotto la tabella (corsivo)" value={copy.info_footnote} onChange={v => update('info_footnote', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Avvertenza legale (banda rossa)</h3>
+                <FieldText label="Heading" value={copy.legal_heading} onChange={v => update('legal_heading', v)} />
+                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.legal_paragraphs.join('\n\n')} onChange={v => updateParagraphList('legal_paragraphs', v)} />
             </section>
         </div>
     )
