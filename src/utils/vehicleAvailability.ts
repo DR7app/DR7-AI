@@ -325,12 +325,27 @@ export function isVehicleAvailable(
     excludeBookingId?: string
 ): AvailabilityResult {
     const vehiclePlate = vehicle.plate || vehicle.targa || ''
+    // Build a human-friendly vehicle label so OTP emails show what's being
+    // overridden without the operator having to look it up. Also surface the
+    // requested rental window so the recipient can verify the slot at a
+    // glance.
+    const vehicleLabel = vehicle.display_name
+        ? `${vehicle.display_name}${vehiclePlate ? ` (${vehiclePlate})` : ''}`
+        : vehiclePlate || 'Veicolo'
+    const requestWindow = `dal ${pickupDate} ${pickupTime} al ${returnDate} ${returnTime}`
+    const statusLabelIt: Record<string, string> = {
+        retired: 'ritirato dal servizio',
+        maintenance: 'in manutenzione',
+        unavailable: 'non disponibile',
+        rented: 'noleggiato',
+    }
 
     // Check vehicle status
     if (vehicle.status === 'retired' || vehicle.status === 'maintenance') {
+        const statusIt = statusLabelIt[vehicle.status] || vehicle.status
         return {
             available: false,
-            reason: `Vehicle is marked as ${vehicle.status}`
+            reason: `Veicolo ${vehicleLabel} risulta ${statusIt}. Periodo richiesto: ${requestWindow}.`
         }
     }
 
@@ -338,7 +353,7 @@ export function isVehicleAvailable(
     if (isVehicleBlocked(vehicle, pickupDate, returnDate, pickupTime, returnTime)) {
         return {
             available: false,
-            reason: 'Vehicle is blocked for maintenance during this period'
+            reason: `Veicolo ${vehicleLabel} bloccato per manutenzione nel periodo richiesto (${requestWindow}).`
         }
     }
 
@@ -430,10 +445,26 @@ export function isVehicleAvailable(
         // Check for overlap: (requestStart < bookingEndWithBuffer) && (requestEnd > bookingStart)
         if (requestStart < bookingEndWithBuffer && requestEnd > bookingStart) {
             const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
-
+            // Conflicting booking — surface the customer + start/end so the
+            // OTP recipient can verify the override without opening the calendar.
+            const conflictingCustomer = booking.customer_name
+                ? ` (cliente: ${booking.customer_name})`
+                : ''
+            const fmtDt = (d: Date) => d.toLocaleString('it-IT', {
+                timeZone: 'Europe/Rome',
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit',
+            })
+            const fmtTime = (d: Date) => d.toLocaleString('it-IT', {
+                timeZone: 'Europe/Rome',
+                hour: '2-digit', minute: '2-digit',
+            })
+            const earliest = earliestTime
+                ? fmtTime(earliestTime)
+                : 'non disponibile in giornata'
             return {
                 available: false,
-                reason: `Vehicle is booked until ${bookingEnd.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}. Earliest available: ${earliestTime ? earliestTime.toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) : 'not today'}`,
+                reason: `Veicolo ${vehicleLabel} prenotato${conflictingCustomer} dal ${fmtDt(bookingStart)} al ${fmtDt(bookingEnd)}. Periodo richiesto: ${requestWindow}. Prima disponibilità utile: ${earliest}.`,
                 earliestTime: earliestTime || undefined
             }
         }
