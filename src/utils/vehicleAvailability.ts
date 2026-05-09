@@ -28,9 +28,13 @@ import { supabase } from '../supabaseClient'
 //    (pickup or return) on DIFFERENT vehicles — staff handover capacity.
 //    Default 15.
 // 3) PRE_PICKUP_CARWASH_BUFFER_MINUTES is read separately by ReservationsTab.
+// 4) LATE_RETURN_GRACE_MINUTES is the cushion before pickup time on the
+//    return day; if return is later than (pickup_time - grace), the
+//    customer is billed for an extra day. Sito + admin.
 let RENTAL_BUFFER_MINUTES = 90
 let CROSS_VEHICLE_GAP_MINUTES = 15
 let PRE_PICKUP_CARWASH_BUFFER_MINUTES = 90
+let LATE_RETURN_GRACE_MINUTES = 90
 
 ;(async () => {
     try {
@@ -48,6 +52,8 @@ let PRE_PICKUP_CARWASH_BUFFER_MINUTES = 90
             if (typeof b === 'number' && b >= 0 && b <= 120) CROSS_VEHICLE_GAP_MINUTES = b
             const c = automations.pre_pickup_carwash_buffer_minutes
             if (typeof c === 'number' && c >= 0 && c <= 720) PRE_PICKUP_CARWASH_BUFFER_MINUTES = c
+            const d = automations.late_return_grace_minutes
+            if (typeof d === 'number' && d >= 0 && d <= 720) LATE_RETURN_GRACE_MINUTES = d
         }
     } catch (err) {
         // Keep defaults. Logged but non-blocking.
@@ -59,6 +65,7 @@ let PRE_PICKUP_CARWASH_BUFFER_MINUTES = 90
 export function getRentalBufferMinutes(): number { return RENTAL_BUFFER_MINUTES }
 export function getCrossVehicleGapMinutes(): number { return CROSS_VEHICLE_GAP_MINUTES }
 export function getPrePickupCarwashBufferMinutes(): number { return PRE_PICKUP_CARWASH_BUFFER_MINUTES }
+export function getLateReturnGraceMinutes(): number { return LATE_RETURN_GRACE_MINUTES }
 const BUSINESS_START_HOUR = 0  // Admin can book any time
 const BUSINESS_END_HOUR = 24   // Admin can book any time
 const TIME_SLOT_INTERVAL_MINUTES = 15

@@ -5103,6 +5103,12 @@ function AutomazioniSection({
               <b>Pre-pickup (lavaggio in corso).</b> Se il veicolo e' impegnato in un lavaggio entro <b>questo intervallo</b> prima del ritiro, blocca la prenotazione. Evita di promettere un'auto che non sara' asciutta in tempo. Default 90. Solo admin.
             </div>
           </li>
+          <li className="flex gap-3">
+            <span className="inline-flex shrink-0 w-6 h-6 rounded-full bg-[#af52de] text-white items-center justify-center text-[11px] font-bold mt-0.5">4</span>
+            <div>
+              <b>Grace ritardo riconsegna.</b> Sul giorno di riconsegna, l'auto deve rientrare almeno <b>questi minuti</b> prima dell'ora di ritiro. Altrimenti il cliente paga <b>1 giorno extra</b>. Esempio default 90: pickup lun 10:00 → return mar 09:00 (entro le 08:30) = 1 giorno; return mar 09:00 (oltre le 08:30) = 2 giorni. Sito e admin.
+            </div>
+          </li>
         </ul>
         <div className="mt-4 pt-3 border-t border-[#007aff]/10 text-[12px] text-[#6e6e73]">
           <span className="font-semibold text-[#1d1d1f]">Importante:</span> dopo aver salvato un nuovo valore, l'admin va aggiornato (refresh pagina). Il sito propaga entro ~60 secondi grazie alla cache server-side.
@@ -5171,6 +5177,39 @@ function AutomazioniSection({
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
             </div>
             <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 15. Esempio: cliente A ritira alle 10:30 → cliente B non puo' ritirare prima delle 10:45.</p>
+          </label>
+        </div>
+      </section>
+
+      {/* 4) Late return grace */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#fdf3ff] border-b border-[#af52de]/15">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+            <span className="inline-flex w-6 h-6 rounded-full bg-[#af52de] text-white items-center justify-center text-[12px] font-bold">4</span>
+            Grace ritardo riconsegna
+          </h3>
+          <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
+            L'auto deve rientrare almeno <b>questi minuti</b> prima dell'orario di ritiro sul giorno di riconsegna; oltre il limite, il cliente paga <b>1 giorno extra</b>. Esempio: pickup 10:00, grace 90 min → riconsegna entro le 08:30 = nessun extra; oltre le 08:30 = +1 giorno.
+          </p>
+        </header>
+        <div className="p-5">
+          <label className="block max-w-xs">
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                max={720}
+                step={5}
+                value={automations.late_return_grace_minutes}
+                onChange={(e) => {
+                  const v = e.target.value
+                  update({ late_return_grace_minutes: v === '' ? '' : Number(v) })
+                }}
+                className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#af52de]/40"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+            </div>
+            <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 90 (1h30 prima del pickup time).</p>
           </label>
         </div>
       </section>
