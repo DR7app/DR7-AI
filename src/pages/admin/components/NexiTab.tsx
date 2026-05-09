@@ -187,8 +187,6 @@ export default function NexiTab() {
 
     async function diagnoseCard(card: TokenizedCard) {
         // contract_id == orderId for our pay-by-link flow (legacy + current).
-        // We don't store the operationId on the TokenizedCard payload, so the
-        // backend extracts it from the matching nexi_transactions row.
         const params = new URLSearchParams()
         params.set('orderId', card.contract_id)
         const toastId = toast.loading('Interrogo Nexi...')
@@ -200,27 +198,52 @@ export default function NexiTab() {
                 toast.error(json?.error || `HTTP ${res.status}`)
                 return
             }
-            // Extract maskedPan from any of the responses to summarise.
+
             const operation = (json as Record<string, unknown>).operation as Record<string, unknown> | null
-            const orderOps = (json as Record<string, unknown>).order_operations as { operations?: unknown[] } | null
-            const opMaskedPan = (operation as { paymentMethod?: { maskedPan?: string } })?.paymentMethod?.maskedPan
-                || (operation as { maskedPan?: string })?.maskedPan
-                || ''
-            let orderMaskedPan = ''
-            for (const op of (orderOps?.operations || []) as Array<{ paymentMethod?: { maskedPan?: string }; maskedPan?: string }>) {
-                if (op?.paymentMethod?.maskedPan) { orderMaskedPan = op.paymentMethod.maskedPan; break }
-                if (op?.maskedPan) { orderMaskedPan = op.maskedPan; break }
+            const operationStatus = (json as Record<string, unknown>).operation_status as number | null
+            const orderOps = (json as Record<string, unknown>).order_operations as { operations?: Record<string, unknown>[] } | null
+            const orderOpsStatus = (json as Record<string, unknown>).order_operations_status as number | null
+
+            const findMaskedPan = (op: Record<string, unknown> | null | undefined): string => {
+                if (!op) return ''
+                const pm = (op.paymentMethod || {}) as Record<string, unknown>
+                const ad = (op.additionalData || {}) as Record<string, unknown>
+                return String(pm.maskedPan || op.maskedPan || ad.maskedPan || op.paymentInstrumentInfo || '')
             }
+
+            const opMaskedPan = findMaskedPan(operation)
+            const ops = orderOps?.operations || []
+            const orderMaskedPan = ops.map(findMaskedPan).find(Boolean) || ''
+
+            // Inspect what the order's operations actually contain so the
+            // admin sees why no PAN — wrong operation type, missing
+            // paymentMethod block, etc.
+            const opsSummary = ops.map(o => {
+                const type = String(o.operationType || o.type || '?')
+                const result = String(o.operationResult || o.status || '?')
+                const hasPaymentMethod = !!(o.paymentMethod && typeof o.paymentMethod === 'object')
+                const circuit = String((o.paymentMethod as Record<string, unknown> | undefined)?.circuit || o.paymentCircuit || '')
+                const pan = findMaskedPan(o)
+                return `  • ${type} (${result})${hasPaymentMethod ? ` — paymentMethod ${circuit ? `[${circuit}]` : ''}${pan ? ` PAN=${pan}` : ' senza maskedPan'}` : ' — senza paymentMethod'}`
+            })
+
+            const verdict = (opMaskedPan || orderMaskedPan)
+                ? '✓ Nexi ESPONE il PAN — bug di salvataggio nostro. JSON completa in console (F12).'
+                : ops.length === 0
+                    ? '✗ Nessuna operazione trovata su questo ordine. Pagamento probabilmente abbandonato/scaduto prima del callback finale.'
+                    : ops.every(o => !o.paymentMethod)
+                        ? '✗ Operazioni presenti ma NESSUNA contiene paymentMethod. Tipico di:\n  - Wallet payment (Apple Pay / Google Pay)\n  - Merchant config Nexi che strippa card data dopo il callback (PCI scope reduction)\n  - Direct-link product che espone il PAN solo nel callback live, non nei GET successivi'
+                        : '✗ Operazioni con paymentMethod ma SENZA maskedPan. Probabile wallet token (DPAN) — il PAN reale non esiste lato Nexi.'
+
             const summary = [
                 `Cliente: ${card.full_name || card.email}`,
                 `Order ID: ${card.contract_id}`,
                 '',
-                `/operations: maskedPan = ${opMaskedPan || '(vuoto)'}`,
-                `/orders/.../operations: maskedPan = ${orderMaskedPan || '(vuoto)'}`,
+                `GET /operations/{id}: HTTP ${operationStatus ?? '—'}, maskedPan = ${opMaskedPan || '(vuoto)'}`,
+                `GET /orders/{id}/operations: HTTP ${orderOpsStatus ?? '—'}, ${ops.length} operazion${ops.length === 1 ? 'e' : 'i'}`,
+                ...opsSummary,
                 '',
-                opMaskedPan || orderMaskedPan
-                    ? 'Nexi espone il PAN — bug di salvataggio nostro. Riapri la console (F12) per la JSON completa.'
-                    : 'Nexi NON espone il PAN per questa transazione. Tipico di pagamenti wallet (Apple Pay/Google Pay) o di pre-tokenizzazioni senza checkout completo.',
+                verdict,
             ].join('\n')
             console.log('[diagnoseCard] Full Nexi response:', json)
             alert(summary)
