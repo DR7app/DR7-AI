@@ -121,7 +121,7 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // 4. Messaggi di Sistema Pro — fire instant template per on_booking.
+    // 4. Messaggi di Sistema Pro — fire instant templates.
     //    Templates con offset alto (es. 24h prima del pickup) restano al cron.
     try {
       const { triggerSystemMessageEvent } = await import('./utils/triggerSystemMessageEvent')
@@ -129,6 +129,34 @@ export const handler: Handler = async (event) => {
       if (r.sent || r.errors) {
         console.log(`[post-booking-webhook] system messages on_booking: sent=${r.sent} skipped=${r.skipped} errors=${r.errors}`)
       }
+
+      // on_first_booking — solo se questa è la PRIMA booking del cliente.
+      // Conta le bookings dello stesso customer_email (escludendo quella appena
+      // creata): se 0, è la prima.
+      try {
+        const { data: bookingFull } = await supabase
+          .from('bookings')
+          .select('customer_email')
+          .eq('id', bookingId)
+          .maybeSingle()
+        const email = bookingFull?.customer_email
+        if (email) {
+          const { count } = await supabase
+            .from('bookings')
+            .select('id', { count: 'exact', head: true })
+            .eq('customer_email', email)
+            .neq('id', bookingId)
+          if ((count || 0) === 0) {
+            const r1 = await triggerSystemMessageEvent({ bookingId, event: 'on_first_booking' })
+            if (r1.sent || r1.errors) {
+              console.log(`[post-booking-webhook] system messages on_first_booking: sent=${r1.sent} skipped=${r1.skipped} errors=${r1.errors}`)
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn('[post-booking-webhook] on_first_booking check failed (non-blocking):', e.message)
+      }
+
       if (isPaid) {
         const r2 = await triggerSystemMessageEvent({ bookingId, event: 'on_payment' })
         if (r2.sent || r2.errors) {

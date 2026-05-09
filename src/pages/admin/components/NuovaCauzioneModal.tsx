@@ -109,12 +109,31 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                 toast.success('Cauzione aggiornata con successo')
             } else {
                 // Create new
-                const { error } = await supabase
+                const { data: inserted, error } = await supabase
                     .from('cauzioni')
                     .insert([dataToSave])
+                    .select('id')
+                    .single()
 
                 if (error) throw error
                 toast.success('Cauzione creata con successo')
+
+                // Inline trigger: Messaggi di Sistema Pro on_cauzione_created
+                if (inserted?.id) {
+                    try {
+                        await fetch('/.netlify/functions/trigger-system-event', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                event: 'on_cauzione_created',
+                                entityType: 'cauzione',
+                                entityId: inserted.id,
+                            }),
+                        })
+                    } catch (e) {
+                        console.warn('[NuovaCauzioneModal] on_cauzione_created trigger failed (non-blocking):', e)
+                    }
+                }
             }
 
             onSave()

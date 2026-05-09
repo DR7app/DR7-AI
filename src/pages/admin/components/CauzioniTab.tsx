@@ -318,6 +318,25 @@ export default function CauzioniTab() {
 
     // --- Handlers ---
 
+    /**
+     * Fire-and-forget: notifica al sistema Messaggi di Sistema Pro che e'
+     * accaduto un evento cauzione (collected, refunded, ecc.). Il backend
+     * (trigger-system-event netlify function) carica l'entita', costruisce
+     * il synthetic booking col cliente reale e dispatcha ai template Pro
+     * con quel trigger_event configurato. Non blocca il flusso UI.
+     */
+    const fireCauzioneEvent = async (cauzioneId: string, event: string) => {
+        try {
+            await fetch('/.netlify/functions/trigger-system-event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event, entityType: 'cauzione', entityId: cauzioneId }),
+            })
+        } catch (e) {
+            console.warn(`[CauzioniTab] ${event} trigger failed (non-blocking):`, e)
+        }
+    }
+
     const handleMarkRestituita = async (cauzione: Cauzione) => {
         const note = prompt('Note opzionali per la restituzione:')
         if (note === null) return
@@ -331,6 +350,7 @@ export default function CauzioniTab() {
             if (error) throw error
 
             toast.success('Cauzione marcata come Restituita')
+            fireCauzioneEvent(cauzione.id, 'on_cauzione_refunded')
             fetchCauzioni()
         } catch (error: unknown) {
           const _errMsg = error instanceof Error ? error.message : String(error)
@@ -683,6 +703,7 @@ export default function CauzioniTab() {
                 }).eq('id', cauzione.id)
                 toast.success(`Incassato €${amount.toFixed(2)} (manuale)`)
             }
+            fireCauzioneEvent(cauzione.id, 'on_cauzione_collected')
             fetchCauzioni()
         } catch (error: unknown) {
             toast.dismiss('capture')
@@ -744,6 +765,7 @@ export default function CauzioniTab() {
                 toast.success(`Incassato €${amount.toFixed(2)} (registrato manualmente)`)
             }
 
+            fireCauzioneEvent(cauzione.id, 'on_cauzione_collected')
             fetchCauzioni()
         } catch (error: unknown) {
           const _errMsg = error instanceof Error ? error.message : String(error)
@@ -764,6 +786,7 @@ export default function CauzioniTab() {
 
             if (error) throw error
             toast.success('Cauzione segnata come incassata')
+            fireCauzioneEvent(cauzione.id, 'on_cauzione_collected')
             fetchCauzioni()
         } catch (error: unknown) {
           const _errMsg = error instanceof Error ? error.message : String(error)

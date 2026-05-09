@@ -1477,8 +1477,8 @@ export default function MessaggiSistemaProTab() {
                                             <select value={newTargetServiceType} onChange={e => setNewTargetServiceType(e.target.value)}
                                                 className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                                 <option value="all">Tutti i servizi</option>
-                                                <option value="rental">Solo noleggio veicoli</option>
-                                                <option value="prime_wash">Solo Prime Wash (lavaggio + meccanica)</option>
+                                                <option value="rental">Noleggio</option>
+                                                <option value="prime_wash">Prime Wash</option>
                                             </select>
                                         </div>
                                         <div>
