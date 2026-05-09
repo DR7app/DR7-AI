@@ -471,8 +471,14 @@ type CancellationRule = {
   label: string
   /** Min giorni di preavviso al pickup per applicare questa regola. */
   min_days_notice: number | ''
-  /** % rimborsata come credito DR7 Wallet (penale = 100 − questo). */
+  /** % rimborsata (penale = 100 − questo). */
   refund_pct: number | ''
+  /** Dove va il rimborso:
+   *   - 'wallet': accreditato automaticamente sul DR7 Wallet del cliente
+   *   - 'card':   da rimborsare manualmente sulla carta originale via Nexi
+   *               terminale (admin gestisce — cancellazione lascia un task)
+   */
+  refund_method: 'wallet' | 'card'
   is_active: boolean
 }
 
@@ -482,7 +488,7 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   pre_pickup_carwash_buffer_minutes: 90,
   late_return_grace_minutes: 90,
   cancellation_rules: [
-    { id: 'standard', label: 'Cancellazione standard', min_days_notice: 5, refund_pct: 90, is_active: true },
+    { id: 'standard', label: 'Cancellazione standard', min_days_notice: 5, refund_pct: 90, refund_method: 'wallet', is_active: true },
   ],
 }
 
@@ -1631,6 +1637,10 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
       if (p.label !== c.label) out.push(`Cancellazione: "${p.label}" rinominata in "${c.label}"`)
       if (p.min_days_notice !== c.min_days_notice) out.push(`Cancellazione / ${c.label}: soglia ${p.min_days_notice || 0} → ${c.min_days_notice || 0} giorni`)
       if (p.refund_pct !== c.refund_pct) out.push(`Cancellazione / ${c.label}: rimborso ${p.refund_pct || 0}% → ${c.refund_pct || 0}%`)
+      if ((p.refund_method || 'wallet') !== (c.refund_method || 'wallet')) {
+        const lbl = (m: string) => m === 'card' ? 'carta (manuale)' : 'wallet'
+        out.push(`Cancellazione / ${c.label}: rimborso su ${lbl(p.refund_method || 'wallet')} → ${lbl(c.refund_method || 'wallet')}`)
+      }
       if (p.is_active !== c.is_active) out.push(`Cancellazione / ${c.label}: ${c.is_active ? 'attivata' : 'disattivata'}`)
     })
   }
@@ -5234,7 +5244,7 @@ function AutomazioniSection({
           </div>
           <button
             onClick={() => {
-              const newRule: CancellationRule = { id: uid(), label: 'Nuova regola', min_days_notice: 0, refund_pct: 50, is_active: true }
+              const newRule: CancellationRule = { id: uid(), label: 'Nuova regola', min_days_notice: 0, refund_pct: 50, refund_method: 'wallet', is_active: true }
               update({ cancellation_rules: [...(automations.cancellation_rules || []), newRule] })
             }}
             className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#ff3b30] hover:text-[#d70015] transition-colors shrink-0"
@@ -5247,11 +5257,12 @@ function AutomazioniSection({
         </header>
 
         <div className="px-5 pb-2">
-          <div className="grid grid-cols-[44px_1fr_120px_100px_32px] gap-2 items-center px-1 mb-2">
+          <div className="grid grid-cols-[44px_1fr_100px_90px_120px_32px] gap-2 items-center px-1 mb-2">
             <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Attiva</span>
             <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Etichetta</span>
             <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Preavviso</span>
             <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Rimborso</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Destinazione</span>
             <span />
           </div>
         </div>
@@ -5269,7 +5280,7 @@ function AutomazioniSection({
               const patch = (p: Partial<CancellationRule>) =>
                 update({ cancellation_rules: (automations.cancellation_rules || []).map(x => x.id === r.id ? { ...x, ...p } : x) })
               return (
-                <li key={r.id} className="px-5 py-3 grid grid-cols-[44px_1fr_120px_100px_32px] gap-2 items-center group">
+                <li key={r.id} className="px-5 py-3 grid grid-cols-[44px_1fr_100px_90px_120px_32px] gap-2 items-center group">
                   <label className="inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -5318,6 +5329,14 @@ function AutomazioniSection({
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
                   </div>
+                  <select
+                    value={r.refund_method || 'wallet'}
+                    onChange={(e) => patch({ refund_method: e.target.value as 'wallet' | 'card' })}
+                    className={`w-full bg-white border border-black/10 rounded-lg px-2 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40 ${!r.is_active ? 'opacity-50' : ''}`}
+                  >
+                    <option value="wallet">DR7 Wallet</option>
+                    <option value="card">Carta (manuale)</option>
+                  </select>
                   <button
                     onClick={() => update({ cancellation_rules: (automations.cancellation_rules || []).filter(x => x.id !== r.id) })}
                     className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
@@ -5328,8 +5347,8 @@ function AutomazioniSection({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
                     </svg>
                   </button>
-                  <span className="col-span-5 text-[11px] text-[#6e6e73] pl-[52px]">
-                    ≥ {typeof r.min_days_notice === 'number' ? r.min_days_notice : 0} gg → rimborso {typeof r.refund_pct === 'number' ? r.refund_pct : 0}% (penale {penalty}%)
+                  <span className="col-span-6 text-[11px] text-[#6e6e73] pl-[52px]">
+                    ≥ {typeof r.min_days_notice === 'number' ? r.min_days_notice : 0} gg → rimborso {typeof r.refund_pct === 'number' ? r.refund_pct : 0}% su {(r.refund_method || 'wallet') === 'card' ? 'carta (manuale)' : 'DR7 Wallet'} (penale {penalty}%)
                   </span>
                 </li>
               )
