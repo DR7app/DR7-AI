@@ -43,7 +43,7 @@ interface DayRow {
     stato: 'fuori' | 'lavoro' | 'pausa' | 'finito'
 }
 
-type Range = 'oggi' | '7gg' | '30gg' | 'mese'
+type Range = 'oggi' | '7gg' | '30gg' | 'mese' | 'custom'
 
 /**
  * Dashboard "Report Operatori & Collaboratori" — la vista ricca con
@@ -59,6 +59,14 @@ export default function OperatoriReportDashboard() {
     const [range, setRange] = useState<Range>('mese')
     const [today] = useState(toRomeDate(new Date()))
     const [dataDay, setDataDay] = useState<string>(toRomeDate(new Date()))
+    // Date custom — usate solo quando range === 'custom'. Default: ultimo
+    // mese cosi' se l'utente clicca "Personalizzato" parte da uno stato
+    // sensato senza dover compilare entrambe le date.
+    const [customFrom, setCustomFrom] = useState<string>(() => {
+        const d = new Date(); d.setDate(d.getDate() - 29)
+        return toRomeDate(d)
+    })
+    const [customTo, setCustomTo] = useState<string>(() => toRomeDate(new Date()))
 
     const [operatori, setOperatori] = useState<Operatore[]>([])
     const [me, setMe] = useState<Operatore | null>(null)
@@ -80,6 +88,17 @@ export default function OperatoriReportDashboard() {
             start.setDate(start.getDate() - 29)
         } else if (range === 'mese') {
             start.setDate(1)
+        } else if (range === 'custom') {
+            // Le date custom arrivano in formato 'YYYY-MM-DD' (Europe/Rome).
+            // Costruiamo Date in local time e poi normalizziamo agli estremi
+            // della giornata in zona Roma (start 00:00, end 23:59) cosi' la
+            // query include entrambi i giorni di confine.
+            const [fy, fm, fd] = customFrom.split('-').map(Number)
+            const [ty, tm, td] = customTo.split('-').map(Number)
+            if (fy && fm && fd) start.setFullYear(fy, fm - 1, fd)
+            if (ty && tm && td) end.setFullYear(ty, tm - 1, td)
+            start.setHours(0, 0, 0, 0)
+            end.setHours(23, 59, 59, 999)
         }
         const days: string[] = []
         const cur = new Date(start)
@@ -88,7 +107,7 @@ export default function OperatoriReportDashboard() {
             cur.setDate(cur.getDate() + 1)
         }
         return { start, end, days }
-    }, [range])
+    }, [range, customFrom, customTo])
 
     const load = useCallback(async () => {
         setLoading(true)
@@ -239,15 +258,40 @@ export default function OperatoriReportDashboard() {
                             : 'Vista personale: vedi solo i tuoi dati. Solo Valerio e Ilenia vedono i report di tutti.'}
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <div className="flex gap-1 bg-theme-bg-tertiary rounded p-1 text-xs">
-                        {(['oggi', '7gg', '30gg', 'mese'] as Range[]).map(r => (
+                        {(['oggi', '7gg', '30gg', 'mese', 'custom'] as Range[]).map(r => (
                             <button key={r} onClick={() => setRange(r)}
                                 className={`px-3 py-1 rounded ${range === r ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
-                                {r === 'oggi' ? 'Oggi' : r === '7gg' ? '7 giorni' : r === '30gg' ? '30 giorni' : 'Mese corrente'}
+                                {r === 'oggi' ? 'Oggi' : r === '7gg' ? '7 giorni' : r === '30gg' ? '30 giorni' : r === 'mese' ? 'Mese corrente' : 'Personalizzato'}
                             </button>
                         ))}
                     </div>
+                    {range === 'custom' && (
+                        <div className="flex items-center gap-1.5 text-xs text-theme-text-secondary">
+                            <label className="flex items-center gap-1">
+                                <span className="text-theme-text-muted">Da</span>
+                                <input
+                                    type="date"
+                                    value={customFrom}
+                                    max={customTo}
+                                    onChange={e => setCustomFrom(e.target.value)}
+                                    className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-xs"
+                                />
+                            </label>
+                            <label className="flex items-center gap-1">
+                                <span className="text-theme-text-muted">A</span>
+                                <input
+                                    type="date"
+                                    value={customTo}
+                                    min={customFrom}
+                                    max={today}
+                                    onChange={e => setCustomTo(e.target.value)}
+                                    className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-xs"
+                                />
+                            </label>
+                        </div>
+                    )}
                     <button onClick={() => exportCsv(operatori, periodMinutesByOp, periodRange.days, periodMinutesByDay)}
                         className="text-xs px-3 py-1.5 rounded border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover">
                         Scarica CSV
