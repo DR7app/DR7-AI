@@ -860,6 +860,10 @@ export default function MessaggiSistemaProTab() {
     // Categorie reali caricate da Centralina Pro (config.categories) — niente
     // hardcoded fallback. Aggiornamento real-time via postgres_changes.
     const [proCategories, setProCategories] = useState<Array<{ id: string; label: string }>>([])
+    // Tier DR7 Club caricati DINAMICAMENTE da Centralina Pro
+    // (centralina_pro_config.config.dr7_club.tiers). Niente lista hardcoded —
+    // se il boss aggiunge "Diamond" in Centralina Pro, qui appare in tempo reale.
+    const [proTiers, setProTiers] = useState<Array<{ id: string; label: string }>>([])
     useEffect(() => {
         let cancelled = false
         const load = async () => {
@@ -870,11 +874,26 @@ export default function MessaggiSistemaProTab() {
                 .maybeSingle()
             if (cancelled) return
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const cats = ((data?.config || {}) as any).categories
+            const config = (data?.config || {}) as any
+            const cats = config.categories
             if (Array.isArray(cats)) {
                 setProCategories(
                     cats.filter((c: { id?: unknown; label?: unknown }) => typeof c?.id === 'string' && typeof c?.label === 'string')
                 )
+            }
+            // Estrai i tier attivi dal DR7 Club
+            const tiersRaw = config.dr7_club?.tiers
+            if (Array.isArray(tiersRaw)) {
+                setProTiers(
+                    tiersRaw
+                        .filter((t: { id?: unknown; label?: unknown; is_active?: unknown }) =>
+                            typeof t?.id === 'string'
+                            && typeof t?.label === 'string'
+                            && t.is_active !== false)
+                        .map((t: { id: string; label: string }) => ({ id: t.id, label: t.label }))
+                )
+            } else {
+                setProTiers([])
             }
         }
         load()
@@ -1719,12 +1738,16 @@ export default function MessaggiSistemaProTab() {
                                                     className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
                                                 >
                                                     <option value="all">Tutti i tier</option>
-                                                    <option value="free">Free (no membership)</option>
-                                                    <option value="member">Member</option>
-                                                    <option value="elite">Elite</option>
-                                                    <option value="gold">Gold</option>
-                                                    <option value="platinum">Platinum</option>
+                                                    <option value="free">Senza membership</option>
+                                                    {proTiers.map(t => (
+                                                        <option key={t.id} value={t.id}>{t.label}</option>
+                                                    ))}
                                                 </select>
+                                                {proTiers.length === 0 && (
+                                                    <p className="text-[11px] text-theme-text-muted mt-1">
+                                                        Nessun tier configurato. Aggiungi tier in Centralina Pro &gt; DR7 Club.
+                                                    </p>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Min prenotazioni precedenti</label>

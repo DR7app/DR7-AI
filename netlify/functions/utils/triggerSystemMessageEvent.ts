@@ -317,16 +317,26 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
         customer = data
     }
 
-    // Tier
+    // Tier — confronta con i tier definiti in centralina_pro_config.config.dr7_club.tiers.
+    // L'admin seleziona dal dropdown il tier.id (es. "signature") oppure "free".
+    // Il cliente puo' avere il tier salvato come id o label (case-insensitive).
     if (tier && tier !== 'all') {
         const cTier = String(
             customer?.membership_tier
             ?? customer?.tier
+            ?? customer?.dr7_club_tier
+            ?? customer?.active_membership?.tier_id
             ?? customer?.active_membership?.package_name
+            ?? booking?.active_membership?.tier_id
             ?? booking?.active_membership?.package_name
             ?? ''
         ).toLowerCase().trim()
-        if (!cTier || cTier !== tier) return false
+        if (tier === 'free') {
+            // "Senza membership" = nessun tier o stringa vuota
+            if (cTier && cTier !== 'free' && cTier !== 'none') return false
+        } else {
+            if (!cTier || cTier !== tier) return false
+        }
     }
 
     // Tag — match se almeno UNO dei tag richiesti e' nei tag del cliente
