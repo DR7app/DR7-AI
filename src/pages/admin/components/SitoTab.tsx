@@ -44,7 +44,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'cancellazione', title: 'Cancellazione', ready: true },
     { id: 'membership', title: 'Membership / DR7 Club', ready: true },
     { id: 'hero', title: 'Home / Hero', ready: true },
-    { id: 'chi-siamo', title: 'Chi Siamo', ready: false },
+    { id: 'chi-siamo', title: 'Chi Siamo', ready: true },
     { id: 'footer', title: 'Footer', ready: false },
     { id: 'legali', title: 'Privacy & Termini', ready: false },
 ]
@@ -149,6 +149,38 @@ const INITIAL_HOME: HomeCopy = {
     categories: [],
 }
 
+// ─── Chi Siamo schema (mirror of website utils/siteCopy.ts) ────────────────
+interface AboutFounder {
+    id: string
+    name: string
+    role_it: string; role_en: string
+    photo_src: string
+    alt_it: string; alt_en: string
+}
+
+interface BilingualParagraph {
+    text_it: string
+    text_en: string
+}
+
+interface AboutCopy {
+    founders: AboutFounder[]
+    story_title_it: string; story_title_en: string
+    story_paragraphs: BilingualParagraph[]
+    story_outro_main_it: string; story_outro_main_en: string
+    story_outro_sub_it: string; story_outro_sub_en: string
+    story_signature: string
+}
+
+const INITIAL_ABOUT: AboutCopy = {
+    founders: [],
+    story_title_it: '', story_title_en: '',
+    story_paragraphs: [],
+    story_outro_main_it: '', story_outro_main_en: '',
+    story_outro_sub_it: '', story_outro_sub_en: '',
+    story_signature: '',
+}
+
 const INITIAL_MEMBERSHIP: MembershipCopy = {
     hero_eyebrow_it: '', hero_eyebrow_en: '',
     hero_title: 'DR7 CLUB',
@@ -219,7 +251,8 @@ interface SiteCopySnapshot {
     cancellazione?: CancellazioneCopy
     membership?: MembershipCopy
     home?: HomeCopy
-    // Future: chi_siamo, footer, legali
+    about?: AboutCopy
+    // Future: footer, legali
 }
 
 interface CurrentState {
@@ -227,6 +260,7 @@ interface CurrentState {
     cancellazione: CancellazioneCopy
     membership: MembershipCopy
     home: HomeCopy
+    about: AboutCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -293,6 +327,8 @@ export default function SitoTab() {
     const [savedMembership, setSavedMembership] = useState<MembershipCopy>(INITIAL_MEMBERSHIP)
     const [home, setHome] = useState<HomeCopy>(INITIAL_HOME)
     const [savedHome, setSavedHome] = useState<HomeCopy>(INITIAL_HOME)
+    const [about, setAbout] = useState<AboutCopy>(INITIAL_ABOUT)
+    const [savedAbout, setSavedAbout] = useState<AboutCopy>(INITIAL_ABOUT)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -318,6 +354,10 @@ export default function SitoTab() {
                     setHome(remote.home)
                     setSavedHome(remote.home)
                 }
+                if (remote?.about && Array.isArray(remote.about.founders)) {
+                    setAbout(remote.about)
+                    setSavedAbout(remote.about)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -330,10 +370,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome }
+            { faq, cancellazione, membership, home, about },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout]
     )
     const dirty = changes.length > 0
 
@@ -344,11 +384,12 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home })
+            await savePersisted({ faq, cancellazione, membership, home, about })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
             setSavedHome(home)
+            setSavedAbout(about)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -387,6 +428,7 @@ export default function SitoTab() {
         setCancellazione(savedCancellazione)
         setMembership(savedMembership)
         setHome(savedHome)
+        setAbout(savedAbout)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -504,7 +546,10 @@ export default function SitoTab() {
                         {hydrated && section === 'hero' && (
                             <HomeEditor copy={home} setCopy={setHome} />
                         )}
-                        {hydrated && section !== 'faq' && section !== 'cancellazione' && section !== 'membership' && section !== 'hero' && (
+                        {hydrated && section === 'chi-siamo' && (
+                            <AboutEditor copy={about} setCopy={setAbout} />
+                        )}
+                        {hydrated && section !== 'faq' && section !== 'cancellazione' && section !== 'membership' && section !== 'hero' && section !== 'chi-siamo' && (
                             <PlaceholderSection
                                 title={SECTIONS.find(s => s.id === section)?.title || section}
                             />
@@ -574,6 +619,10 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     // Home (same approach)
     if (JSON.stringify(current.home) !== JSON.stringify(saved.home)) {
         out.push('Home: contenuti modificati')
+    }
+    // About (same approach)
+    if (JSON.stringify(current.about) !== JSON.stringify(saved.about)) {
+        out.push('Chi Siamo: contenuti modificati')
     }
     return out
 }
@@ -1496,6 +1545,214 @@ function CategoryCard({
                 {cat.image_src && (
                     <img src={cat.image_src} alt="" className="w-12 h-8 object-cover rounded border border-black/10" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                 )}
+            </div>
+        </div>
+    )
+}
+
+// ─── Chi Siamo (About) editor ───────────────────────────────────────────────
+function AboutEditor({
+    copy,
+    setCopy,
+}: {
+    copy: AboutCopy
+    setCopy: (next: AboutCopy) => void
+}) {
+    const updateField = <K extends keyof AboutCopy>(key: K, value: AboutCopy[K]) => {
+        setCopy({ ...copy, [key]: value })
+    }
+    // Founders
+    const updateFounder = (idx: number, patch: Partial<AboutFounder>) => {
+        const next = [...copy.founders]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, founders: next })
+    }
+    const moveFounder = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.founders.length) return
+        const next = [...copy.founders]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, founders: next })
+    }
+    const removeFounder = (idx: number) => {
+        if (!confirm('Rimuovere questo fondatore?')) return
+        setCopy({ ...copy, founders: copy.founders.filter((_, i) => i !== idx) })
+    }
+    const addFounder = () => {
+        setCopy({
+            ...copy,
+            founders: [...copy.founders, {
+                id: `founder-${Date.now().toString(36)}`,
+                name: '', role_it: 'Co-fondatore', role_en: 'Co-founder',
+                photo_src: '/', alt_it: '', alt_en: '',
+            }],
+        })
+    }
+
+    // Paragraphs
+    const updateParagraph = (idx: number, patch: Partial<BilingualParagraph>) => {
+        const next = [...copy.story_paragraphs]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, story_paragraphs: next })
+    }
+    const moveParagraph = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.story_paragraphs.length) return
+        const next = [...copy.story_paragraphs]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, story_paragraphs: next })
+    }
+    const removeParagraph = (idx: number) => {
+        if (!confirm('Rimuovere questo paragrafo?')) return
+        setCopy({ ...copy, story_paragraphs: copy.story_paragraphs.filter((_, i) => i !== idx) })
+    }
+    const addParagraph = () => {
+        setCopy({ ...copy, story_paragraphs: [...copy.story_paragraphs, { text_it: '', text_en: '' }] })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Chi Siamo</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/about</code>. Modifica i fondatori, la story e l'outro firmato. Il blocco "Careers" in fondo (Join_Our_Team) usa ancora le traduzioni globali, non e' editabile da qui.
+                </p>
+            </div>
+
+            {/* Founders */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Fondatori ({copy.founders.length})</h3>
+                <p className="text-[12px] text-[#6e6e73]">
+                    Massimo 4 ritratti per riga su desktop. Foto in <code>/public</code> (es. <code>/Valerio.jpg</code>). Add/remove/reorder liberamente.
+                </p>
+                {copy.founders.map((f, i) => (
+                    <FounderCard
+                        key={f.id}
+                        founder={f}
+                        first={i === 0}
+                        last={i === copy.founders.length - 1}
+                        onChange={(patch) => updateFounder(i, patch)}
+                        onMoveUp={() => moveFounder(i, -1)}
+                        onMoveDown={() => moveFounder(i, 1)}
+                        onRemove={() => removeFounder(i)}
+                    />
+                ))}
+                <button
+                    onClick={addFounder}
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi fondatore
+                </button>
+            </section>
+
+            {/* Story */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Story</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.story_title_it} onChange={v => updateField('story_title_it', v)} />
+                    <FieldText label="Titolo (EN)" value={copy.story_title_en} onChange={v => updateField('story_title_en', v)} />
+                </div>
+
+                <div className="space-y-2">
+                    <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#a1a1a6]">Paragrafi ({copy.story_paragraphs.length})</h4>
+                    {copy.story_paragraphs.map((p, i) => (
+                        <ParagraphCard
+                            key={i}
+                            paragraph={p}
+                            index={i}
+                            first={i === 0}
+                            last={i === copy.story_paragraphs.length - 1}
+                            onChange={(patch) => updateParagraph(i, patch)}
+                            onMoveUp={() => moveParagraph(i, -1)}
+                            onMoveDown={() => moveParagraph(i, 1)}
+                            onRemove={() => removeParagraph(i)}
+                        />
+                    ))}
+                    <button
+                        onClick={addParagraph}
+                        className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Aggiungi paragrafo
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-black/5">
+                    <FieldText label='Outro principale (IT) — es. "Benvenuti in DR7 Empire"' value={copy.story_outro_main_it} onChange={v => updateField('story_outro_main_it', v)} />
+                    <FieldText label="Outro principale (EN)" value={copy.story_outro_main_en} onChange={v => updateField('story_outro_main_en', v)} />
+                    <FieldTextArea label="Outro sub (IT)" value={copy.story_outro_sub_it} onChange={v => updateField('story_outro_sub_it', v)} />
+                    <FieldTextArea label="Outro sub (EN)" value={copy.story_outro_sub_en} onChange={v => updateField('story_outro_sub_en', v)} />
+                </div>
+
+                <FieldText label='Firma (es. "— Valerio & Ilenia")' value={copy.story_signature} onChange={v => updateField('story_signature', v)} />
+            </section>
+        </div>
+    )
+}
+
+function FounderCard({
+    founder, first, last, onChange, onMoveUp, onMoveDown, onRemove,
+}: {
+    founder: AboutFounder
+    first: boolean
+    last: boolean
+    onChange: (patch: Partial<AboutFounder>) => void
+    onMoveUp: () => void
+    onMoveDown: () => void
+    onRemove: () => void
+}) {
+    return (
+        <div className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+            <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{founder.name || '(senza nome)'}</span>
+                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input type="text" value={founder.name} onChange={e => onChange({ name: e.target.value })} placeholder="Nome" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={founder.role_it} onChange={e => onChange({ role_it: e.target.value })} placeholder="Ruolo IT (es. Co-fondatore)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={founder.role_en} onChange={e => onChange({ role_en: e.target.value })} placeholder="Role EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+            </div>
+            <div className="flex items-center gap-3">
+                <input type="text" value={founder.photo_src} onChange={e => onChange({ photo_src: e.target.value })} placeholder="/Valerio.jpg" className="flex-1 bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                {founder.photo_src && (
+                    <img src={founder.photo_src} alt="" className="w-12 h-12 object-cover rounded border border-black/10" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <input type="text" value={founder.alt_it} onChange={e => onChange({ alt_it: e.target.value })} placeholder='Alt foto IT (es. "Valerio - Co-fondatore...")' className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]" />
+                <input type="text" value={founder.alt_en} onChange={e => onChange({ alt_en: e.target.value })} placeholder="Alt photo EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]" />
+            </div>
+        </div>
+    )
+}
+
+function ParagraphCard({
+    paragraph, index, first, last, onChange, onMoveUp, onMoveDown, onRemove,
+}: {
+    paragraph: BilingualParagraph
+    index: number
+    first: boolean
+    last: boolean
+    onChange: (patch: Partial<BilingualParagraph>) => void
+    onMoveUp: () => void
+    onMoveDown: () => void
+    onRemove: () => void
+}) {
+    return (
+        <div className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+            <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono text-[#6e6e73]">P{index + 1}</span>
+                <span className="text-[11px] text-[#6e6e73] flex-1 truncate">{paragraph.text_it.slice(0, 60) || '(vuoto)'}</span>
+                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <textarea value={paragraph.text_it} onChange={e => onChange({ text_it: e.target.value })} placeholder="Testo IT" rows={4} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                <textarea value={paragraph.text_en} onChange={e => onChange({ text_en: e.target.value })} placeholder="Text EN" rows={4} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
             </div>
         </div>
     )
