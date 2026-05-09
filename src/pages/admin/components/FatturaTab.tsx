@@ -330,6 +330,9 @@ export default function FatturaTab() {
   const [filterDateFrom, setFilterDateFrom] = useState<string>('')
   const [filterDateTo, setFilterDateTo] = useState<string>('')
   const [filterCliente, setFilterCliente] = useState<string>('all')
+  const [pageSize, setPageSize] = useState(10)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null)
 
   // Lista clienti unici dalle fatture caricate, alfabetica.
   const clientiOptions = useMemo(() => {
@@ -340,6 +343,54 @@ export default function FatturaTab() {
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }))
   }, [invoices])
+
+  // Filter pipeline — single source of truth for both the table rows and
+  // the pagination counter. Resetting the page when filters change avoids
+  // landing on an empty page.
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter(invoice => {
+      if (filterCliente !== 'all' && invoice.customer_name !== filterCliente) return false
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        const matchesText = (
+          invoice.customer_name.toLowerCase().includes(query) ||
+          invoice.numero_fattura.toLowerCase().includes(query) ||
+          (invoice.customer_email && invoice.customer_email.toLowerCase().includes(query))
+        )
+        if (!matchesText) return false
+      }
+      if (filterSdi !== 'all') {
+        const status = invoice.sdi_status || 'draft'
+        if (filterSdi === 'rejected') {
+          if (status !== 'rejected' && status !== 'scartata') return false
+        } else if (status !== filterSdi) {
+          return false
+        }
+      }
+      if (filterTipo !== 'all') {
+        const isNotaCredito = invoice.tipo_fattura === 'nota_credito' || invoice.tipo_fattura === 'TD04'
+        if (filterTipo === 'nota_credito' && !isNotaCredito) return false
+        if (filterTipo === 'fattura' && isNotaCredito) return false
+      }
+      if (filterDateFrom || filterDateTo) {
+        const issueDate = (invoice.data_emissione || '').slice(0, 10)
+        if (filterDateFrom && issueDate < filterDateFrom) return false
+        if (filterDateTo && issueDate > filterDateTo) return false
+      }
+      return true
+    })
+  }, [invoices, filterCliente, searchQuery, filterSdi, filterTipo, filterDateFrom, filterDateTo])
+
+  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize))
+  const safePage = Math.min(currentPage, totalPages - 1)
+  const pagedInvoices = useMemo(
+    () => filteredInvoices.slice(safePage * pageSize, (safePage + 1) * pageSize),
+    [filteredInvoices, safePage, pageSize],
+  )
+
+  // Reset to page 0 whenever a filter changes — keeps the operator from
+  // staring at an empty page after a narrow filter.
+  useEffect(() => { setCurrentPage(0) }, [filterCliente, searchQuery, filterSdi, filterTipo, filterDateFrom, filterDateTo, pageSize])
 
   // ─── KPI metrics ─────────────────────────────────────────────────────
   // Calcoli derivati dalle fatture caricate. Confronto vs mese precedente
@@ -983,200 +1034,238 @@ export default function FatturaTab() {
         </div>
       </div>
 
-      {/* Invoices List */}
+      {/* Invoices Table */}
       {invoices.length === 0 ? (
         <div className="bg-theme-bg-secondary rounded-lg p-12 text-center">
           <p className="text-theme-text-muted text-lg mb-4">Nessuna fattura trovata</p>
           <p className="text-theme-text-muted text-sm">Le fatture vengono generate automaticamente dalle prenotazioni</p>
         </div>
+      ) : filteredInvoices.length === 0 ? (
+        <div className="bg-theme-bg-secondary rounded-lg p-12 text-center border border-theme-border">
+          <p className="text-theme-text-muted text-sm">Nessuna fattura corrisponde ai filtri attuali.</p>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {invoices.filter(invoice => {
-            // Cliente dropdown — match esatto sul nome
-            if (filterCliente !== 'all' && invoice.customer_name !== filterCliente) return false
-            // Text search (cliente / numero / email)
-            if (searchQuery) {
-              const query = searchQuery.toLowerCase()
-              const matchesText = (
-                invoice.customer_name.toLowerCase().includes(query) ||
-                invoice.numero_fattura.toLowerCase().includes(query) ||
-                (invoice.customer_email && invoice.customer_email.toLowerCase().includes(query))
-              )
-              if (!matchesText) return false
-            }
-            // SDI status — 'rejected' include anche legacy 'scartata'
-            if (filterSdi !== 'all') {
-              const status = invoice.sdi_status || 'draft'
-              if (filterSdi === 'rejected') {
-                if (status !== 'rejected' && status !== 'scartata') return false
-              } else if (status !== filterSdi) {
-                return false
-              }
-            }
-            // Tipo — fattura vs nota credito (la nota di credito ha tipo_fattura set)
-            if (filterTipo !== 'all') {
-              const isNotaCredito = invoice.tipo_fattura === 'nota_credito' || invoice.tipo_fattura === 'TD04'
-              if (filterTipo === 'nota_credito' && !isNotaCredito) return false
-              if (filterTipo === 'fattura' && isNotaCredito) return false
-            }
-            // Date range — confronto su YYYY-MM-DD per evitare problemi TZ
-            if (filterDateFrom || filterDateTo) {
-              const issueDate = (invoice.data_emissione || '').slice(0, 10)
-              if (filterDateFrom && issueDate < filterDateFrom) return false
-              if (filterDateTo && issueDate > filterDateTo) return false
-            }
-            return true
-          }).map((invoice) => (
-            <div key={invoice.id} className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    {multiSelectMode && (
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(invoice.id)}
-                        onChange={() => toggleSelect(invoice.id)}
-                        className="rounded-full border-theme-border bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
-                      />
-                    )}
-                    <h3 className="text-lg font-bold text-theme-text-primary">{invoice.numero_fattura}</h3>
-                    {invoice.tipo_fattura === 'nota_di_credito' && (
-                      <span className="px-2 py-1 rounded text-xs font-bold bg-amber-600 text-white">Nota di Credito</span>
-                    )}
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${invoice.stato === 'paid' ? 'bg-green-600 text-theme-text-primary' :
-                      invoice.stato === 'pending' ? 'bg-yellow-600 text-theme-text-primary' :
-                        'bg-red-600 text-theme-text-primary'
-                      }`}>
-                      {invoice.stato === 'paid' ? 'Pagata' : invoice.stato === 'pending' ? 'In attesa' : 'Scaduta'}
-                    </span>
-                    {isInvoiceOverdue(invoice) && (
-                      <span className="px-2 py-1 rounded text-xs font-bold bg-red-700/90 text-white animate-pulse" title={`Scaduta da ${daysOverdue(invoice)} giorni — pagamento non ricevuto`}>
-                        ⚠ SCADUTA · {daysOverdue(invoice)}g
-                      </span>
-                    )}
-                    {canManagePayments && (
-                      <button
-                        type="button"
-                        onClick={() => togglePagato(invoice)}
-                        disabled={updatingStato === invoice.id}
-                        className={`px-2 py-1 rounded text-xs font-semibold border transition-colors ${
-                          invoice.stato === 'paid'
-                            ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/15'
-                            : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15'
-                        } disabled:opacity-50`}
-                        title={invoice.stato === 'paid' ? 'Riporta a NON pagata' : 'Segna come PAGATA'}
-                      >
-                        {updatingStato === invoice.id
-                          ? '...'
-                          : invoice.stato === 'paid' ? 'Segna NON pagata' : 'Segna PAGATA'}
-                      </button>
-                    )}
-                    {invoice.sdi_status && (
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${invoice.sdi_status === 'accepted' ? 'bg-green-600 text-white' :
-                        invoice.sdi_status === 'sent' ? 'bg-blue-600 text-white' :
-                          invoice.sdi_status === 'sending' ? 'bg-yellow-600 text-white' :
-                            invoice.sdi_status === 'rejected' || invoice.sdi_status === 'error' ? 'bg-red-600 text-white' :
-                              'bg-theme-bg-hover text-theme-text-primary'
-                        }`}>
-                        {invoice.sdi_status === 'accepted' ? 'Accettata SDI' :
-                          invoice.sdi_status === 'sent' ? 'Inviata SDI' :
-                            invoice.sdi_status === 'sending' ? 'Invio...' :
-                              invoice.sdi_status === 'rejected' ? 'Scartata' :
-                                invoice.sdi_status === 'scartata' ? 'Scartata' :
-                                  invoice.sdi_status === 'error' ? 'Errore SDI' :
-                                    'Bozza'}
-                      </span>
-                    )}
-                    {/* Vista — dismisses the dashboard notification badge for
-                        scartate (rejected/scartata) fatture. Auto-resets on
-                        next scarto (server-side in _check-sdi-statuses.ts). */}
-                    {invoice.sdi_status && ['rejected', 'scartata'].includes(invoice.sdi_status) && !invoice.sdi_notification_seen && (
-                      <button
-                        type="button"
-                        onClick={() => markNotificationSeen(invoice)}
-                        className="px-2 py-1 rounded text-xs font-semibold border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
-                        title="Segna la notifica come vista (toglie il badge dalla sidebar)"
-                      >
-                        Vista
-                      </button>
-                    )}
-                    {invoice.sdi_notification_seen && invoice.sdi_status && ['rejected', 'scartata'].includes(invoice.sdi_status) && (
-                      <span className="px-2 py-1 rounded text-xs text-theme-text-muted italic" title="Notifica già visualizzata">
-                        ✓ Vista
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
-                    <div>
-                      <span className="text-theme-text-muted">Cliente:</span>
-                      <p className="text-theme-text-primary font-semibold">{invoice.customer_name}</p>
-                    </div>
-                    <div>
-                      <span className="text-theme-text-muted">Data:</span>
-                      <p className="text-theme-text-primary font-semibold">
-                        {new Date(invoice.data_emissione).toLocaleDateString('it-IT')}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-theme-text-muted">Codice Fiscale:</span>
-                      <p className="text-theme-text-primary font-semibold">{invoice.customer_tax_code || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <span className="text-theme-text-muted">Totale:</span>
-                      <p className="text-dr7-gold font-bold">€{(invoice.importo_totale || 0).toFixed(2)}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 ml-4">
-                  <button
-                    onClick={() => downloadPDF(invoice)}
-                    className="bg-green-600 hover:bg-green-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors text-center flex items-center justify-center gap-1"
-                  >
-                    PDF
-                  </button>
-                  {(!invoice.sdi_status || invoice.sdi_status === 'draft' || invoice.sdi_status === 'error' || invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata') ? (
-                    <button
-                      onClick={() => handleSendToSDI(invoice)}
-                      className={`${invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'} text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1`}
-                    >
-                      {invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata' ? 'Reinvia SDI' : 'Invia SDI'}
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => handleCheckStatus(invoice.id)}
-                        disabled={checkingStatus === invoice.id}
-                        className="bg-purple-600 hover:bg-purple-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
-                      >
-                        {checkingStatus === invoice.id ? 'Controllo...' : 'Stato SDI'}
-                      </button>
-                      <button
-                        onClick={() => handleSendToSDI(invoice)}
-                        className="bg-orange-600 hover:bg-orange-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors flex items-center justify-center gap-1"
-                      >
-                        Reinvia SDI
-                      </button>
-                    </>
-                  )}
-                  {invoice.tipo_fattura !== 'nota_di_credito' && (
-                    <button
-                      onClick={() => handleNotaDiCredito(invoice)}
-                      disabled={creatingNdc === invoice.id}
-                      className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-full text-sm transition-colors disabled:opacity-50"
-                    >
-                      {creatingNdc === invoice.id ? 'Creazione...' : 'N. Credito'}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(invoice.id)}
-                    className="bg-red-600 hover:bg-red-700 text-theme-text-primary px-3 py-1 rounded-full text-sm transition-colors"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
+        <div className="bg-theme-bg-secondary rounded-xl border border-theme-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-theme-bg-tertiary/50 text-theme-text-muted text-[11px] uppercase tracking-wider">
+                <tr>
+                  {multiSelectMode && <th className="px-3 py-3 w-10"></th>}
+                  <th className="px-4 py-3 text-left font-medium">Numero Fattura</th>
+                  <th className="px-4 py-3 text-left font-medium">Cliente</th>
+                  <th className="px-4 py-3 text-left font-medium">Data</th>
+                  <th className="px-4 py-3 text-left font-medium">Tipo</th>
+                  <th className="px-4 py-3 text-right font-medium">Totale</th>
+                  <th className="px-4 py-3 text-left font-medium">Stato Pagamento</th>
+                  <th className="px-4 py-3 text-left font-medium">Stato SDI</th>
+                  <th className="px-4 py-3 text-left font-medium">Scadenza</th>
+                  <th className="px-3 py-3 w-12"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-theme-border">
+                {pagedInvoices.map(invoice => {
+                  const isNotaCredito = invoice.tipo_fattura === 'nota_credito' || invoice.tipo_fattura === 'TD04' || invoice.tipo_fattura === 'nota_di_credito'
+                  const overdue = isInvoiceOverdue(invoice)
+                  const due = getInvoiceDueDate(invoice)
+                  const dueLabel = due ? due.toLocaleDateString('it-IT') : '—'
+                  const sdiStatus = invoice.sdi_status || (isNotaCredito ? null : 'draft')
+                  const sdiLabel = !sdiStatus ? '—'
+                    : sdiStatus === 'accepted' ? 'Accettata'
+                    : sdiStatus === 'sent' ? 'Inviata'
+                    : sdiStatus === 'sending' ? 'Invio…'
+                    : sdiStatus === 'rejected' || sdiStatus === 'scartata' ? 'Scartata'
+                    : sdiStatus === 'error' ? 'Errore'
+                    : 'Bozza'
+                  const sdiClass = !sdiStatus ? 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                    : sdiStatus === 'accepted' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : sdiStatus === 'sent' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                    : sdiStatus === 'sending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : sdiStatus === 'rejected' || sdiStatus === 'scartata' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                    : sdiStatus === 'error' ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                    : 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                  const statoLabel = invoice.stato === 'paid' ? 'Pagata' : invoice.stato === 'cancelled' ? 'Annullata' : overdue ? 'Scaduta' : 'In attesa'
+                  const statoClass = invoice.stato === 'paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : invoice.stato === 'cancelled' ? 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                    : overdue ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                  const open = openActionsId === invoice.id
+                  return (
+                    <tr key={invoice.id} className="hover:bg-theme-bg-tertiary/30 transition-colors">
+                      {multiSelectMode && (
+                        <td className="px-3 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(invoice.id)}
+                            onChange={() => toggleSelect(invoice.id)}
+                            className="rounded border-theme-border bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
+                          />
+                        </td>
+                      )}
+                      <td className="px-4 py-3 font-mono text-theme-text-primary whitespace-nowrap">{invoice.numero_fattura}</td>
+                      <td className="px-4 py-3 max-w-[200px]">
+                        <div className="text-theme-text-primary font-medium truncate" title={invoice.customer_name}>{invoice.customer_name}</div>
+                        {invoice.customer_email && (
+                          <div className="text-[11px] text-theme-text-muted truncate">{invoice.customer_email}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-theme-text-secondary whitespace-nowrap">{new Date(invoice.data_emissione).toLocaleDateString('it-IT')}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${isNotaCredito ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'}`}>
+                          {isNotaCredito ? 'N. Credito' : 'Fattura'}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 text-right tabular-nums whitespace-nowrap font-semibold ${isNotaCredito ? 'text-rose-400' : 'text-dr7-gold'}`}>
+                        {isNotaCredito ? '−' : ''}{formatEur(Math.abs(Number(invoice.importo_totale) || 0))}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${statoClass}`}>
+                          {statoLabel}
+                        </span>
+                        {overdue && invoice.stato !== 'paid' && (
+                          <div className="text-[10px] text-rose-400 mt-0.5">⚠ {daysOverdue(invoice)}g di ritardo</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${sdiClass}`}>
+                          {sdiLabel}
+                        </span>
+                        {invoice.sdi_status && ['rejected', 'scartata'].includes(invoice.sdi_status) && !invoice.sdi_notification_seen && (
+                          <button
+                            type="button"
+                            onClick={() => markNotificationSeen(invoice)}
+                            className="ml-1 text-[10px] text-theme-text-muted underline hover:text-theme-text-primary"
+                            title="Segna notifica come vista"
+                          >
+                            vista
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-theme-text-secondary whitespace-nowrap">{dueLabel}</td>
+                      <td className="px-3 py-3 text-right relative">
+                        <button
+                          type="button"
+                          onClick={() => setOpenActionsId(open ? null : invoice.id)}
+                          className="w-8 h-8 rounded-full hover:bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center"
+                          aria-label="Azioni"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+                          </svg>
+                        </button>
+                        {open && (
+                          <>
+                            <div className="fixed inset-0 z-30" onClick={() => setOpenActionsId(null)} />
+                            <div className="absolute right-2 top-10 z-40 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-xl overflow-hidden text-left">
+                              <button onClick={() => { downloadPDF(invoice); setOpenActionsId(null) }} className="w-full px-3 py-2 text-xs text-theme-text-primary hover:bg-theme-bg-tertiary flex items-center gap-2">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
+                                Scarica PDF
+                              </button>
+                              {(!invoice.sdi_status || invoice.sdi_status === 'draft' || invoice.sdi_status === 'error' || invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata') ? (
+                                <button onClick={() => { handleSendToSDI(invoice); setOpenActionsId(null) }} className="w-full px-3 py-2 text-xs text-theme-text-primary hover:bg-theme-bg-tertiary flex items-center gap-2">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M3 11l18-8-8 18-2-7-8-3z" /></svg>
+                                  {invoice.sdi_status === 'rejected' || invoice.sdi_status === 'scartata' ? 'Reinvia a SDI' : 'Invia a SDI'}
+                                </button>
+                              ) : (
+                                <>
+                                  <button onClick={() => { handleCheckStatus(invoice.id); setOpenActionsId(null) }} disabled={checkingStatus === invoice.id} className="w-full px-3 py-2 text-xs text-theme-text-primary hover:bg-theme-bg-tertiary flex items-center gap-2 disabled:opacity-50">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path strokeWidth={2} strokeLinecap="round" d="M12 7v5l3 2" /></svg>
+                                    {checkingStatus === invoice.id ? 'Controllo…' : 'Verifica stato SDI'}
+                                  </button>
+                                  <button onClick={() => { handleSendToSDI(invoice); setOpenActionsId(null) }} className="w-full px-3 py-2 text-xs text-theme-text-primary hover:bg-theme-bg-tertiary flex items-center gap-2">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M3 11l18-8-8 18-2-7-8-3z" /></svg>
+                                    Reinvia a SDI
+                                  </button>
+                                </>
+                              )}
+                              {canManagePayments && (
+                                <button onClick={() => { togglePagato(invoice); setOpenActionsId(null) }} disabled={updatingStato === invoice.id} className="w-full px-3 py-2 text-xs text-theme-text-primary hover:bg-theme-bg-tertiary flex items-center gap-2 disabled:opacity-50">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M5 13l4 4L19 7" /></svg>
+                                  {invoice.stato === 'paid' ? 'Segna NON pagata' : 'Segna PAGATA'}
+                                </button>
+                              )}
+                              {!isNotaCredito && (
+                                <button onClick={() => { handleNotaDiCredito(invoice); setOpenActionsId(null) }} disabled={creatingNdc === invoice.id} className="w-full px-3 py-2 text-xs text-amber-400 hover:bg-theme-bg-tertiary flex items-center gap-2 disabled:opacity-50">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M9 14l-4-4 4-4M5 10h11a4 4 0 014 4v6" /></svg>
+                                  {creatingNdc === invoice.id ? 'Creazione…' : 'Crea Nota di Credito'}
+                                </button>
+                              )}
+                              <button onClick={() => { handleDelete(invoice.id); setOpenActionsId(null) }} className="w-full px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 border-t border-theme-border">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M19 7l-1 13a2 2 0 01-2 2H8a2 2 0 01-2-2L5 7m5 4v6m4-6v6M4 7h16M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" /></svg>
+                                Elimina
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination footer */}
+          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-theme-bg-tertiary/30 border-t border-theme-border text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-theme-text-muted">Mostra</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-theme-text-primary"
+              >
+                {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span className="text-theme-text-muted">risultati</span>
             </div>
-          ))}
+            <div className="text-theme-text-muted">
+              {filteredInvoices.length === 0
+                ? '0'
+                : `${safePage * pageSize + 1} - ${Math.min((safePage + 1) * pageSize, filteredInvoices.length)} di ${filteredInvoices.length} fatture`}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(0)}
+                disabled={safePage === 0}
+                className="px-2 py-1 rounded border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-tertiary disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Prima pagina"
+              >«</button>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="px-2 py-1 rounded border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-tertiary disabled:opacity-30 disabled:cursor-not-allowed"
+              >‹</button>
+              {(() => {
+                const pages: number[] = []
+                const start = Math.max(0, Math.min(safePage - 2, totalPages - 5))
+                const end = Math.min(totalPages, start + 5)
+                for (let i = start; i < end; i++) pages.push(i)
+                return pages.map(i => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i)}
+                    className={`min-w-[28px] px-2 py-1 rounded border text-xs ${
+                      i === safePage
+                        ? 'bg-dr7-gold text-black border-dr7-gold font-semibold'
+                        : 'border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-tertiary'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))
+              })()}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                className="px-2 py-1 rounded border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-tertiary disabled:opacity-30 disabled:cursor-not-allowed"
+              >›</button>
+              <button
+                onClick={() => setCurrentPage(totalPages - 1)}
+                disabled={safePage >= totalPages - 1}
+                className="px-2 py-1 rounded border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-tertiary disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Ultima pagina"
+              >»</button>
+            </div>
+          </div>
         </div>
       )}
 
