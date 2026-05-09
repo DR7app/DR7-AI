@@ -38,9 +38,20 @@ function colorFor(catId: string): string {
     return CATEGORY_HEX[catId] || '#6B7280'
 }
 
+interface VehicleStats {
+    fatturato: number
+    giorniNoleggio: number
+    giorniFermo: number
+    utilizzoPct: number
+    numNoleggi: number
+}
+
+const PAID_STATES = new Set(['paid', 'succeeded', 'completed'])
+
 export default function FleetList({ onOpenDetail }: FleetListProps) {
     const [vehicles, setVehicles] = useState<Vehicle[]>([])
     const [proCategories, setProCategories] = useState<ProCategory[]>([])
+    const [vehicleStats, setVehicleStats] = useState<Map<string, VehicleStats>>(new Map())
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     const [filterCategory, setFilterCategory] = useState<string>('all')
@@ -49,14 +60,95 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
     useEffect(() => {
         loadVehicles()
         loadCategories()
-        // Realtime: tieni la lista in sync con admin.Veicoli e Centralina
+        // Realtime: tieni la lista in sync con admin.Veicoli, Centralina e bookings
         const sub = supabase
             .channel('fleet-list-sync')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadVehicles())
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, () => loadCategories())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => loadBookingStats())
             .subscribe()
         return () => { sub.unsubscribe() }
     }, [])
+
+    // Quando cambiano i vehicles, ricalcola stats fatturato/utilizzo
+    useEffect(() => {
+        if (vehicles.length > 0) loadBookingStats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [vehicles.length])
+
+    async function loadBookingStats() {
+        // Ultimi 30 giorni: aggrega fatturato e giorni di noleggio per ogni
+        // veicolo. Match per vehicle_id; fallback a plate poi a display_name.
+        const today = new Date(); today.setHours(0, 0, 0, 0)
+        const thirtyAgo = new Date(today.getTime() - 30 * 86400000)
+        const { data: bookings } = await supabase
+            .from('bookings')
+            .select('id, vehicle_id, plate, vehicle_name, pickup_date, dropoff_date, total_amount, status, payment_status, service_type')
+            .gte('pickup_date', thirtyAgo.toISOString())
+            .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
+            .limit(2000)
+
+        const stats = new Map<string, VehicleStats>()
+        // Indici per match veloce
+        const byId = new Map<string, Vehicle>()
+        const byPlate = new Map<string, Vehicle>()
+        const byName = new Map<string, Vehicle>()
+        for (const v of vehicles) {
+            byId.set(v.id, v)
+            if (v.plate) byPlate.set(v.plate.toLowerCase().replace(/\s/g, ''), v)
+            if (v.display_name) byName.set(v.display_name.toLowerCase().trim(), v)
+        }
+
+        const occupiedByVehicle = new Map<string, Set<string>>()
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const b of (bookings || []) as any[]) {
+            if (b.status === 'cancelled' || b.status === 'annullata') continue
+            // Match → vehicle id
+            let vid: string | null = null
+            if (b.vehicle_id && byId.has(b.vehicle_id)) vid = b.vehicle_id
+            else if (b.plate) {
+                const v = byPlate.get(String(b.plate).toLowerCase().replace(/\s/g, ''))
+                if (v) vid = v.id
+            }
+            if (!vid && b.vehicle_name) {
+                const v = byName.get(String(b.vehicle_name).toLowerCase().trim())
+                if (v) vid = v.id
+            }
+            if (!vid) continue
+
+            const cur = stats.get(vid) || { fatturato: 0, giorniNoleggio: 0, giorniFermo: 0, utilizzoPct: 0, numNoleggi: 0 }
+            cur.numNoleggi++
+            if (PAID_STATES.has(String(b.payment_status || '').toLowerCase())) {
+                cur.fatturato += Number(b.total_amount || 0)
+            }
+            // Giorni occupati nella finestra (30gg). pickup/dropoff possono
+            // estendersi prima/dopo: clamp a [thirtyAgo, today].
+            if (b.pickup_date && b.dropoff_date) {
+                const start = new Date(b.pickup_date); start.setHours(0, 0, 0, 0)
+                const end = new Date(b.dropoff_date); end.setHours(0, 0, 0, 0)
+                const sClamped = start < thirtyAgo ? thirtyAgo : start
+                const eClamped = end > today ? today : end
+                const set = occupiedByVehicle.get(vid) || new Set<string>()
+                for (let t = sClamped.getTime(); t <= eClamped.getTime(); t += 86400000) {
+                    set.add(new Date(t).toISOString().slice(0, 10))
+                }
+                occupiedByVehicle.set(vid, set)
+            }
+            stats.set(vid, cur)
+        }
+
+        // Calcolo finale di giorni noleggio + utilizzo
+        for (const [vid, set] of occupiedByVehicle.entries()) {
+            const cur = stats.get(vid)
+            if (!cur) continue
+            cur.giorniNoleggio = set.size
+            cur.giorniFermo = Math.max(0, 30 - set.size)
+            cur.utilizzoPct = Math.min(100, Math.round((set.size / 30) * 100))
+        }
+
+        setVehicleStats(stats)
+    }
 
     async function loadVehicles() {
         try {
@@ -226,7 +318,8 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                     <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Targa</th>
                                     <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">KM</th>
                                     <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Stato</th>
-                                    <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider text-right">Tariffa/g</th>
+                                    <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Utilizzo 30g</th>
+                                    <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider text-right">Fatturato 30g</th>
                                     <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Azioni</th>
                                 </tr>
                             </thead>
@@ -275,8 +368,27 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                                     {STATO_LABEL[vehicle.status] || vehicle.status}
                                                 </span>
                                             </td>
+                                            <td className="py-2 px-3">
+                                                {(() => {
+                                                    const s = vehicleStats.get(vehicle.id)
+                                                    const pct = s?.utilizzoPct ?? 0
+                                                    const color = pct >= 70 ? '#10B981' : pct >= 40 ? '#F59E0B' : '#EF4444'
+                                                    return (
+                                                        <div className="flex items-center gap-2 min-w-[90px]">
+                                                            <div className="flex-1 h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
+                                                                <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }}/>
+                                                            </div>
+                                                            <span className="text-[10px] font-bold tabular-nums" style={{ color }}>{pct}%</span>
+                                                        </div>
+                                                    )
+                                                })()}
+                                            </td>
                                             <td className="py-2 px-3 text-right text-xs text-dr7-gold font-bold tabular-nums">
-                                                {vehicle.daily_rate > 0 ? `€${vehicle.daily_rate.toLocaleString('it-IT')}` : '—'}
+                                                {(() => {
+                                                    const s = vehicleStats.get(vehicle.id)
+                                                    const f = s?.fatturato || 0
+                                                    return f > 0 ? `€${f.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'
+                                                })()}
                                             </td>
                                             <td className="py-2 px-3">
                                                 <button
@@ -305,40 +417,48 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                         <CategoryDonut byCategory={stats.byCategory} total={stats.total} labelFor={labelFor} colorFor={colorFor}/>
                     </div>
 
-                    {/* Top per tariffa giornaliera */}
+                    {/* Top per fatturato (ultimi 30 giorni) */}
                     <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Top tariffa giornaliera</h3>
-                            <span className="text-[10px] text-theme-text-muted">top 5</span>
+                            <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Top per fatturato</h3>
+                            <span className="text-[10px] text-theme-text-muted">30 gg</span>
                         </div>
-                        {stats.topByRate.length === 0 ? (
-                            <div className="text-xs text-theme-text-muted py-3 text-center">Nessun veicolo con tariffa</div>
-                        ) : (
-                            <div className="space-y-2">
-                                {stats.topByRate.map(v => {
-                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                    const img = (v as any).metadata?.image as string | undefined
-                                    return (
-                                        <button
-                                            key={v.id}
-                                            onClick={() => onOpenDetail(v.id)}
-                                            className="w-full flex items-center gap-2.5 hover:bg-theme-bg-primary/40 rounded-lg p-1.5 -mx-1.5 transition-colors text-left"
-                                        >
-                                            {img ? (
-                                                <img src={img} alt={v.display_name} className="w-10 h-7 rounded object-cover border border-theme-border flex-shrink-0"/>
-                                            ) : (
-                                                <div className="w-10 h-7 rounded bg-theme-bg-tertiary border border-theme-border flex-shrink-0"/>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-xs text-theme-text-primary font-semibold truncate">{v.display_name}</div>
-                                                <div className="text-[10px] text-theme-text-muted truncate">{labelFor(v.category)}{v.plate ? ` · ${v.plate}` : ''}</div>
-                                            </div>
-                                            <div className="text-xs font-bold text-dr7-gold tabular-nums whitespace-nowrap">€{(v.daily_rate || 0).toLocaleString('it-IT')}</div>
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        )}
+                        {(() => {
+                            const ranked = vehicles
+                                .map(v => ({ vehicle: v, fatturato: vehicleStats.get(v.id)?.fatturato || 0 }))
+                                .filter(x => x.fatturato > 0)
+                                .sort((a, b) => b.fatturato - a.fatturato)
+                                .slice(0, 5)
+                            if (ranked.length === 0) {
+                                return <div className="text-xs text-theme-text-muted py-3 text-center">Nessun fatturato negli ultimi 30 giorni</div>
+                            }
+                            return (
+                                <div className="space-y-2">
+                                    {ranked.map(({ vehicle: v, fatturato }) => {
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        const img = (v as any).metadata?.image as string | undefined
+                                        return (
+                                            <button
+                                                key={v.id}
+                                                onClick={() => onOpenDetail(v.id)}
+                                                className="w-full flex items-center gap-2.5 hover:bg-theme-bg-primary/40 rounded-lg p-1.5 -mx-1.5 transition-colors text-left"
+                                            >
+                                                {img ? (
+                                                    <img src={img} alt={v.display_name} className="w-10 h-7 rounded object-cover border border-theme-border flex-shrink-0"/>
+                                                ) : (
+                                                    <div className="w-10 h-7 rounded bg-theme-bg-tertiary border border-theme-border flex-shrink-0"/>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-xs text-theme-text-primary font-semibold truncate">{v.display_name}</div>
+                                                    <div className="text-[10px] text-theme-text-muted truncate">{labelFor(v.category)}{v.plate ? ` · ${v.plate}` : ''}</div>
+                                                </div>
+                                                <div className="text-xs font-bold text-dr7-gold tabular-nums whitespace-nowrap">€{fatturato.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            )
+                        })()}
                     </div>
 
                     {/* Performance flotta */}
