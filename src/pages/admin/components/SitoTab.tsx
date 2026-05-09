@@ -43,7 +43,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
     { id: 'cancellazione', title: 'Cancellazione', ready: true },
     { id: 'membership', title: 'Membership / DR7 Club', ready: true },
-    { id: 'hero', title: 'Home / Hero', ready: false },
+    { id: 'hero', title: 'Home / Hero', ready: true },
     { id: 'chi-siamo', title: 'Chi Siamo', ready: false },
     { id: 'footer', title: 'Footer', ready: false },
     { id: 'legali', title: 'Privacy & Termini', ready: false },
@@ -120,6 +120,35 @@ interface MembershipCopy {
     reward_footnote_it: string; reward_footnote_en: string
 }
 
+// ─── Home / Hero schema (mirror of website utils/siteCopy.ts) ──────────────
+interface HomeSlide {
+    id: string
+    video_src: string
+}
+
+interface HomeCategoryOverride {
+    id: string
+    display_title_it: string
+    display_title_en: string
+    image_src: string
+}
+
+interface HomeCopy {
+    seo_h1_it: string
+    seo_h1_en: string
+    hero_autoplay_seconds: number
+    hero_slides: HomeSlide[]
+    categories: HomeCategoryOverride[]
+}
+
+const INITIAL_HOME: HomeCopy = {
+    seo_h1_it: '',
+    seo_h1_en: '',
+    hero_autoplay_seconds: 8,
+    hero_slides: [],
+    categories: [],
+}
+
 const INITIAL_MEMBERSHIP: MembershipCopy = {
     hero_eyebrow_it: '', hero_eyebrow_en: '',
     hero_title: 'DR7 CLUB',
@@ -189,13 +218,15 @@ interface SiteCopySnapshot {
     faq?: FaqEntry[]
     cancellazione?: CancellazioneCopy
     membership?: MembershipCopy
-    // Future: hero, chi_siamo, footer, legali
+    home?: HomeCopy
+    // Future: chi_siamo, footer, legali
 }
 
 interface CurrentState {
     faq: FaqEntry[]
     cancellazione: CancellazioneCopy
     membership: MembershipCopy
+    home: HomeCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -260,6 +291,8 @@ export default function SitoTab() {
     const [savedCancellazione, setSavedCancellazione] = useState<CancellazioneCopy>(INITIAL_CANCELLAZIONE)
     const [membership, setMembership] = useState<MembershipCopy>(INITIAL_MEMBERSHIP)
     const [savedMembership, setSavedMembership] = useState<MembershipCopy>(INITIAL_MEMBERSHIP)
+    const [home, setHome] = useState<HomeCopy>(INITIAL_HOME)
+    const [savedHome, setSavedHome] = useState<HomeCopy>(INITIAL_HOME)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -281,6 +314,10 @@ export default function SitoTab() {
                     setMembership(remote.membership)
                     setSavedMembership(remote.membership)
                 }
+                if (remote?.home && Array.isArray(remote.home.hero_slides)) {
+                    setHome(remote.home)
+                    setSavedHome(remote.home)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -293,10 +330,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership }
+            { faq, cancellazione, membership, home },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome]
     )
     const dirty = changes.length > 0
 
@@ -307,10 +344,11 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership })
+            await savePersisted({ faq, cancellazione, membership, home })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
+            setSavedHome(home)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -348,6 +386,7 @@ export default function SitoTab() {
         setFaq(savedFaq)
         setCancellazione(savedCancellazione)
         setMembership(savedMembership)
+        setHome(savedHome)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -462,7 +501,10 @@ export default function SitoTab() {
                         {hydrated && section === 'membership' && (
                             <MembershipEditor copy={membership} setCopy={setMembership} />
                         )}
-                        {hydrated && section !== 'faq' && section !== 'cancellazione' && section !== 'membership' && (
+                        {hydrated && section === 'hero' && (
+                            <HomeEditor copy={home} setCopy={setHome} />
+                        )}
+                        {hydrated && section !== 'faq' && section !== 'cancellazione' && section !== 'membership' && section !== 'hero' && (
                             <PlaceholderSection
                                 title={SECTIONS.find(s => s.id === section)?.title || section}
                             />
@@ -528,6 +570,10 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     // Membership (same approach)
     if (JSON.stringify(current.membership) !== JSON.stringify(saved.membership)) {
         out.push('Membership: testi modificati')
+    }
+    // Home (same approach)
+    if (JSON.stringify(current.home) !== JSON.stringify(saved.home)) {
+        out.push('Home: contenuti modificati')
     }
     return out
 }
@@ -1245,6 +1291,211 @@ function RewardItemCard({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input type="text" value={item.note_it ?? ''} onChange={e => onChange({ note_it: e.target.value || null })} placeholder="Nota IT (opzionale)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]" />
                 <input type="text" value={item.note_en ?? ''} onChange={e => onChange({ note_en: e.target.value || null })} placeholder="Note EN (optional)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]" />
+            </div>
+        </div>
+    )
+}
+
+// ─── Home / Hero editor ─────────────────────────────────────────────────────
+const KNOWN_CATEGORY_IDS = [
+    'cars', 'urban-cars', 'corporate-fleet', 'yachts', 'jets',
+    'car-wash-services', 'mechanical-services', 'membership', 'credit-wallet',
+]
+
+function HomeEditor({
+    copy,
+    setCopy,
+}: {
+    copy: HomeCopy
+    setCopy: (next: HomeCopy) => void
+}) {
+    const updateField = <K extends keyof HomeCopy>(key: K, value: HomeCopy[K]) => {
+        setCopy({ ...copy, [key]: value })
+    }
+    // Slides
+    const updateSlide = (idx: number, patch: Partial<HomeSlide>) => {
+        const next = [...copy.hero_slides]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, hero_slides: next })
+    }
+    const moveSlide = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.hero_slides.length) return
+        const next = [...copy.hero_slides]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, hero_slides: next })
+    }
+    const removeSlide = (idx: number) => {
+        if (!confirm('Rimuovere questo video dal carosello hero?')) return
+        setCopy({ ...copy, hero_slides: copy.hero_slides.filter((_, i) => i !== idx) })
+    }
+    const addSlide = () => {
+        setCopy({
+            ...copy,
+            hero_slides: [...copy.hero_slides, { id: `slide-${Date.now().toString(36)}`, video_src: '/' }],
+        })
+    }
+    // Categories
+    const updateCategory = (idx: number, patch: Partial<HomeCategoryOverride>) => {
+        const next = [...copy.categories]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, categories: next })
+    }
+    const moveCategory = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.categories.length) return
+        const next = [...copy.categories]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, categories: next })
+    }
+    const removeCategory = (idx: number) => {
+        if (!confirm('Rimuovere questo override? La card mostrera\' i valori di default hardcoded.')) return
+        setCopy({ ...copy, categories: copy.categories.filter((_, i) => i !== idx) })
+    }
+    const addCategory = () => {
+        setCopy({
+            ...copy,
+            categories: [...copy.categories, { id: '', display_title_it: '', display_title_en: '', image_src: '/' }],
+        })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Home / Hero</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/</code>. Modifica il titolo SEO, i video del carosello hero (path sotto <code>/public</code>) e le card categorie (titolo IT/EN + immagine). Le voci categoria sono override: se non c'e' override per un id, la card mostra il default hardcoded.
+                </p>
+            </div>
+
+            {/* SEO */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">SEO</h3>
+                <p className="text-[12px] text-[#6e6e73]">
+                    Titolo H1 nascosto nella pagina, indicizzato dai motori di ricerca. Non visibile nella UI.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="H1 SEO (IT)" value={copy.seo_h1_it} onChange={v => updateField('seo_h1_it', v)} />
+                    <FieldText label="H1 SEO (EN)" value={copy.seo_h1_en} onChange={v => updateField('seo_h1_en', v)} />
+                </div>
+            </section>
+
+            {/* Hero slides */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Carosello Hero (video)</h3>
+                        <p className="text-[12px] text-[#6e6e73] mt-1">Lista dei video che ruotano in homepage. Ogni path e' relativo alla cartella <code>/public</code> (es. <code>/main.mp4</code>).</p>
+                    </div>
+                    <label className="block shrink-0">
+                        <span className="block text-[10px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Autoplay</span>
+                        <div className="relative">
+                            <input
+                                type="number"
+                                min={2}
+                                max={120}
+                                value={copy.hero_autoplay_seconds}
+                                onChange={(e) => updateField('hero_autoplay_seconds', Number(e.target.value) || 8)}
+                                className="mt-0.5 w-24 bg-white border border-black/10 rounded-lg pl-3 pr-10 py-1.5 text-[13px] text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-[3px] text-[11px] text-[#a1a1a6] pointer-events-none">sec</span>
+                        </div>
+                    </label>
+                </div>
+
+                <ul className="space-y-2">
+                    {copy.hero_slides.map((s, i) => (
+                        <li key={s.id} className="grid grid-cols-1 md:grid-cols-[24px_1fr_auto] gap-2 items-center bg-[#fafafa] border border-black/10 rounded-xl p-3">
+                            <span className="text-[11px] font-mono text-[#6e6e73] text-center">{i + 1}</span>
+                            <input
+                                type="text"
+                                value={s.video_src}
+                                onChange={(e) => updateSlide(i, { video_src: e.target.value })}
+                                placeholder="/main.mp4"
+                                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono"
+                            />
+                            <div className="flex items-center gap-1">
+                                <button onClick={() => moveSlide(i, -1)} disabled={i === 0} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                                <button onClick={() => moveSlide(i, 1)} disabled={i === copy.hero_slides.length - 1} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                                <button onClick={() => removeSlide(i)} className="w-7 h-7 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+                <button
+                    onClick={addSlide}
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi video
+                </button>
+            </section>
+
+            {/* Categories */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card categorie ({copy.categories.length})</h3>
+                <p className="text-[12px] text-[#6e6e73]">
+                    Override per le card della sezione "Categorie" della home. ID validi: <code className="text-[11px]">{KNOWN_CATEGORY_IDS.join(', ')}</code>. Se l'override per un id manca, la card mostra titolo + immagine di default hardcoded.
+                </p>
+                {copy.categories.map((c, i) => (
+                    <CategoryCard
+                        key={`${c.id}-${i}`}
+                        cat={c}
+                        first={i === 0}
+                        last={i === copy.categories.length - 1}
+                        onChange={(patch) => updateCategory(i, patch)}
+                        onMoveUp={() => moveCategory(i, -1)}
+                        onMoveDown={() => moveCategory(i, 1)}
+                        onRemove={() => removeCategory(i)}
+                    />
+                ))}
+                <button
+                    onClick={addCategory}
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi override categoria
+                </button>
+            </section>
+        </div>
+    )
+}
+
+function CategoryCard({
+    cat, first, last, onChange, onMoveUp, onMoveDown, onRemove,
+}: {
+    cat: HomeCategoryOverride
+    first: boolean
+    last: boolean
+    onChange: (patch: Partial<HomeCategoryOverride>) => void
+    onMoveUp: () => void
+    onMoveDown: () => void
+    onRemove: () => void
+}) {
+    const knownId = KNOWN_CATEGORY_IDS.includes(cat.id)
+    return (
+        <div className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+            <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">
+                    {cat.id || '(id mancante)'}
+                </span>
+                {!knownId && cat.id && (
+                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700" title="Id non corrisponde a una categoria nota">id sconosciuto</span>
+                )}
+                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input type="text" value={cat.id} onChange={e => onChange({ id: e.target.value.trim() })} placeholder="cars" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                <input type="text" value={cat.display_title_it} onChange={e => onChange({ display_title_it: e.target.value })} placeholder="Titolo IT" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={cat.display_title_en} onChange={e => onChange({ display_title_en: e.target.value })} placeholder="Title EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+            </div>
+            <div className="flex items-center gap-3">
+                <input type="text" value={cat.image_src} onChange={e => onChange({ image_src: e.target.value })} placeholder="/car.jpeg" className="flex-1 bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                {cat.image_src && (
+                    <img src={cat.image_src} alt="" className="w-12 h-8 object-cover rounded border border-black/10" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                )}
             </div>
         </div>
     )
