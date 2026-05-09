@@ -84,7 +84,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 //   generate-penalty-invoice, maxi-promo-gap-cron, promo-incassi-cron.
 // Aggiornare in coppia col code-path.
 type TemplateVar = { key: string; description: string; example?: string; aliases?: string[] }
-type VarGroup = { label: string; scope: 'common' | 'specific'; scopeNote?: string; items: TemplateVar[] }
+type RecipeSnippet = { label: string; snippet: string; preview?: string }
+type VarGroup = { label: string; scope: 'common' | 'specific'; scopeNote?: string; items: TemplateVar[]; recipes?: RecipeSnippet[] }
 const TEMPLATE_VAR_GROUPS: VarGroup[] = [
     // ═══ SEMPRE DISPONIBILI ═══════════════════════════════════════════════════
     {
@@ -313,7 +314,7 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
     {
         label: 'Preventivo — Sconto (per riga)',
         scope: 'specific',
-        scopeNote: 'Tutte vuote se il preventivo non ha sconto. Componi la riga nel template come preferisci. Esempio: "Sconto {sconto_perc} ({sconto_amount}) {sconto_note}: {sconto_post}".',
+        scopeNote: 'Tutte le variabili sono vuote se il preventivo non ha sconto, cosi\' la riga collassa naturalmente. Tocca uno snippet qui sotto per copiare la riga pronta.',
         items: [
             { key: 'sconto_line', description: 'Riga sconto pronta all\'uso', example: 'sconto valido 24h €1.290,00', aliases: ['sconto'] },
             { key: 'sconto_amount', description: 'Importo dello sconto in euro', example: '€285,00' },
@@ -321,6 +322,28 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
             { key: 'sconto_note', description: 'Solo la nota dello sconto (senza prezzo)', example: 'valido solo 24h' },
             { key: 'sconto_pre', description: 'Prezzo prima dello sconto (subtotale)', example: '€1.575,00' },
             { key: 'sconto_post', description: 'Prezzo finale dopo lo sconto', example: '€1.290,00' },
+        ],
+        recipes: [
+            {
+                label: 'Sconto completo (perc + importo + nota + finale)',
+                snippet: 'Sconto {sconto_perc} ({sconto_amount}) {sconto_note}: {sconto_post}',
+                preview: 'Sconto 15% (€285,00) valido solo 24h: €1.290,00',
+            },
+            {
+                label: 'Solo prezzo finale con nota',
+                snippet: 'Prezzo finale {sconto_note}: {sconto_post}',
+                preview: 'Prezzo finale valido solo 24h: €1.290,00',
+            },
+            {
+                label: 'Prezzo barrato (prima → dopo)',
+                snippet: '~{sconto_pre}~ → *{sconto_post}* ({sconto_perc} di sconto)',
+                preview: '~€1.575,00~ → *€1.290,00* (15% di sconto)',
+            },
+            {
+                label: 'Risparmio evidenziato',
+                snippet: 'Risparmi {sconto_amount} ({sconto_perc}) — finale: {sconto_post}',
+                preview: 'Risparmi €285,00 (15%) — finale: €1.290,00',
+            },
         ],
     },
 ]
@@ -561,6 +584,32 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
                                             </button>
                                         ))}
                                     </div>
+                                    {group.recipes && group.recipes.length > 0 && (
+                                        <div className="mt-3 pt-2 border-t border-amber-500/15">
+                                            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300/70 mb-1.5">Snippet pronti</div>
+                                            <div className="space-y-1.5">
+                                                {group.recipes.map((r, i) => (
+                                                    <button
+                                                        key={i}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            navigator.clipboard?.writeText(r.snippet)
+                                                            toast.success(`"${r.label}" copiato`)
+                                                        }}
+                                                        className="block w-full text-left rounded-md border border-amber-500/20 bg-theme-bg-primary hover:border-amber-500/60 hover:bg-amber-500/5 transition-colors p-2"
+                                                    >
+                                                        <div className="text-[10px] text-amber-300/90 font-semibold mb-1">{r.label}</div>
+                                                        <code className="block font-mono text-[11px] text-theme-text-primary break-all whitespace-pre-wrap">{r.snippet}</code>
+                                                        {r.preview && (
+                                                            <div className="text-[10px] text-theme-text-muted mt-1 italic">
+                                                                Esempio: {r.preview}
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
