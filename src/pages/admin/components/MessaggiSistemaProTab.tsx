@@ -1793,8 +1793,8 @@ export default function MessaggiSistemaProTab() {
                                                     <select value={newTargetResidency} onChange={e => setNewTargetResidency(e.target.value)}
                                                         className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                                         <option value="all">Tutti</option>
-                                                        <option value="resident">Residenti Italia</option>
-                                                        <option value="non_resident">Non residenti / turisti</option>
+                                                        <option value="resident">Residenti Sardegna</option>
+                                                        <option value="non_resident">Non residenti (turisti)</option>
                                                     </select>
                                                 </div>
                                                 <div>

@@ -1,11 +1,13 @@
 -- Sprint autonomia 2 — TUTTI i filtri pubblico restanti per Messaggi
 -- di Sistema Pro. Default NULL = nessuna restrizione, retro-compat 100%.
 
--- Residenza: resident (Italia) vs non_resident (turisti/esteri)
+-- Residenza in SARDEGNA: resident (sardo) vs non_resident (resto del mondo).
+-- DR7 e' in Sardegna — la distinzione che conta e' "sardo locale" vs "turista".
+-- Match contro provincia_residenza in {CA, SS, NU, OR, SU + legacy VS,CI,OG,OT}.
 ALTER TABLE system_messages
     ADD COLUMN IF NOT EXISTS target_residency TEXT;
 COMMENT ON COLUMN system_messages.target_residency IS
-    'NULL/all = tutti. resident = nazione IT/Italia/Italy. non_resident = turisti / esteri.';
+    'NULL/all = tutti. resident = provincia residenza in Sardegna (CA,SS,NU,OR,SU + legacy). non_resident = qualsiasi altro luogo (Italia continentale o estero).';
 
 -- Max prenotazioni precedenti (per "prime N" promo)
 ALTER TABLE system_messages
