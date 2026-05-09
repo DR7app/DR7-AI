@@ -5,6 +5,7 @@ import { uploadInvoiceToAruba } from './aruba-utils'
 import { generateInvoicePDF } from './invoice-pdf-utils'
 import { renderTemplate } from './utils/messageTemplates'
 import { requireAuth } from './require-auth'
+import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -484,7 +485,9 @@ export const handler: Handler = async (event) => {
             // Parse booking dates
             const pickupDate = new Date(booking.pickup_date)
             const dropoffDate = new Date(booking.dropoff_date)
-            rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+            // Allinea i giorni fatturati a quelli mostrati al cliente sul
+            // sito (calendar diff + grace late-return da Centralina Pro).
+            rentalDays = await computeRentalBillingDays(pickupDate, dropoffDate, supabase)
             if (rentalDays < 1) rentalDays = 1
 
             // Parse prices (assuming stored as cents)

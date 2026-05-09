@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFArray, PDFDict, PDFString, PDFHexString } from 'pdf-lib'
 import { requireAuth } from './require-auth'
+import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -361,12 +362,12 @@ export const handler: Handler = async (event) => {
         // Format KM limit for contract display
         let kmLimitValue: string
         if (kmLimitRaw === '50/giorno') {
-            const rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+            const rentalDays = await computeRentalBillingDays(pickupDate, dropoffDate, supabase)
             const totalKm = 50 * rentalDays
             kmLimitValue = `${totalKm} Km (50 Km/Giorno x ${rentalDays} gg)`
         } else if (kmLimitRaw === '100/giorno') {
             // Legacy format — calculate total from days
-            const rentalDays = Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+            const rentalDays = await computeRentalBillingDays(pickupDate, dropoffDate, supabase)
             const table: Record<number, number> = { 1: 100, 2: 180, 3: 240, 4: 280, 5: 300 }
             const totalKm = rentalDays <= 5 ? (table[rentalDays] || 300) : 300 + ((rentalDays - 5) * 60)
             kmLimitValue = `${totalKm} Km`
@@ -865,8 +866,8 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'DataFine': formatDateRome(dropoffDate),
             'DropoffTime': formatTimeRome(dropoffDate),
             'OraFine': formatTimeRome(dropoffDate),
-            'TotalDays': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
-            'Giorni': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)).toString(),
+            'TotalDays': (await computeRentalBillingDays(pickupDate, dropoffDate, supabase)).toString(),
+            'Giorni': (await computeRentalBillingDays(pickupDate, dropoffDate, supabase)).toString(),
             'TotalHours': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
             'Ore': Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60)).toString(),
 
@@ -1209,7 +1210,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             rental_start_date: pickupDate.toISOString().split('T')[0],
             rental_end_date: dropoffDate.toISOString().split('T')[0],
             daily_rate: 0, // We rely on total amount mostly
-            total_days: Math.ceil((dropoffDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)),
+            total_days: await computeRentalBillingDays(pickupDate, dropoffDate, supabase),
             total_amount: booking.price_total / 100,
             status: 'active',
             pdf_url: publicUrl,
