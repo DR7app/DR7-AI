@@ -48,6 +48,7 @@ type SectionId =
     | 'aviation'
     | 'check-email'
     | 'jet-search'
+    | 'confirmation'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -67,6 +68,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'aviation', title: 'Aviation Quote', ready: true },
     { id: 'check-email', title: 'Check Email', ready: true },
     { id: 'jet-search', title: 'Jet Search Results', ready: true },
+    { id: 'confirmation', title: 'Conferma Prenotazione', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -301,6 +303,70 @@ function emptyLegalPage(id: LegalPageId): LegalPageCopy {
 
 const INITIAL_LEGAL: LegalCopy = {
     pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
+}
+
+// ─── Confirmation Success (booking + email fallback) ──────────────────────
+interface ConfirmationSuccessCopy {
+    booking_title_it: string; booking_title_en: string
+    booking_subtitle_it: string; booking_subtitle_en: string
+    booking_summary_heading_it: string; booking_summary_heading_en: string
+    booking_cta_account_it: string; booking_cta_account_en: string
+    carwash_row_servizio_it: string; carwash_row_servizio_en: string
+    carwash_row_data_it: string; carwash_row_data_en: string
+    carwash_row_orario_it: string; carwash_row_orario_en: string
+    carwash_row_cliente_it: string; carwash_row_cliente_en: string
+    carwash_row_pagamento_it: string; carwash_row_pagamento_en: string
+    carwash_payment_online_it: string; carwash_payment_online_en: string
+    carwash_default_customer_it: string; carwash_default_customer_en: string
+    carwash_totale_pagato_it: string; carwash_totale_pagato_en: string
+    carwash_whatsapp_note_it: string; carwash_whatsapp_note_en: string
+    rental_row_veicolo_it: string; rental_row_veicolo_en: string
+    rental_row_ritiro_it: string; rental_row_ritiro_en: string
+    rental_row_riconsegna_it: string; rental_row_riconsegna_en: string
+    rental_row_luogo_it: string; rental_row_luogo_en: string
+    rental_row_pagamento_it: string; rental_row_pagamento_en: string
+    rental_time_connector_it: string; rental_time_connector_en: string
+    rental_payment_in_sede_it: string; rental_payment_in_sede_en: string
+    rental_payment_online_it: string; rental_payment_online_en: string
+    rental_totale_pagato_it: string; rental_totale_pagato_en: string
+    rental_totale_da_pagare_it: string; rental_totale_da_pagare_en: string
+    rental_agency_footnote_it: string; rental_agency_footnote_en: string
+    email_title_it: string; email_title_en: string
+    email_body_logged_in_it: string; email_body_logged_in_en: string
+    email_body_logged_out_it: string; email_body_logged_out_en: string
+    email_cta_logged_in_it: string; email_cta_logged_in_en: string
+    email_cta_logged_out_it: string; email_cta_logged_out_en: string
+}
+const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
+    booking_title_it: '', booking_title_en: '',
+    booking_subtitle_it: '', booking_subtitle_en: '',
+    booking_summary_heading_it: 'Riepilogo Prenotazione', booking_summary_heading_en: 'Booking Summary',
+    booking_cta_account_it: '', booking_cta_account_en: '',
+    carwash_row_servizio_it: '', carwash_row_servizio_en: '',
+    carwash_row_data_it: '', carwash_row_data_en: '',
+    carwash_row_orario_it: '', carwash_row_orario_en: '',
+    carwash_row_cliente_it: '', carwash_row_cliente_en: '',
+    carwash_row_pagamento_it: '', carwash_row_pagamento_en: '',
+    carwash_payment_online_it: '', carwash_payment_online_en: '',
+    carwash_default_customer_it: '', carwash_default_customer_en: '',
+    carwash_totale_pagato_it: '', carwash_totale_pagato_en: '',
+    carwash_whatsapp_note_it: '', carwash_whatsapp_note_en: '',
+    rental_row_veicolo_it: '', rental_row_veicolo_en: '',
+    rental_row_ritiro_it: '', rental_row_ritiro_en: '',
+    rental_row_riconsegna_it: '', rental_row_riconsegna_en: '',
+    rental_row_luogo_it: '', rental_row_luogo_en: '',
+    rental_row_pagamento_it: '', rental_row_pagamento_en: '',
+    rental_time_connector_it: 'alle', rental_time_connector_en: 'at',
+    rental_payment_in_sede_it: '', rental_payment_in_sede_en: '',
+    rental_payment_online_it: '', rental_payment_online_en: '',
+    rental_totale_pagato_it: '', rental_totale_pagato_en: '',
+    rental_totale_da_pagare_it: '', rental_totale_da_pagare_en: '',
+    rental_agency_footnote_it: '', rental_agency_footnote_en: '',
+    email_title_it: '', email_title_en: '',
+    email_body_logged_in_it: '', email_body_logged_in_en: '',
+    email_body_logged_out_it: '', email_body_logged_out_en: '',
+    email_cta_logged_in_it: '', email_cta_logged_in_en: '',
+    email_cta_logged_out_it: '', email_cta_logged_out_en: '',
 }
 
 // ─── Check Email + Jet Search Results (small bilingual pages) ─────────────
@@ -778,6 +844,7 @@ interface SiteCopySnapshot {
     aviationQuote?: AviationQuoteCopy
     checkEmail?: CheckEmailCopy
     jetSearchResults?: JetSearchResultsCopy
+    confirmationSuccess?: ConfirmationSuccessCopy
 }
 
 interface CurrentState {
@@ -798,6 +865,7 @@ interface CurrentState {
     aviationQuote: AviationQuoteCopy
     checkEmail: CheckEmailCopy
     jetSearchResults: JetSearchResultsCopy
+    confirmationSuccess: ConfirmationSuccessCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -890,6 +958,8 @@ export default function SitoTab() {
     const [savedCheckEmail, setSavedCheckEmail] = useState<CheckEmailCopy>(INITIAL_CHECK_EMAIL)
     const [jetSearchResults, setJetSearchResults] = useState<JetSearchResultsCopy>(INITIAL_JET_SEARCH)
     const [savedJetSearchResults, setSavedJetSearchResults] = useState<JetSearchResultsCopy>(INITIAL_JET_SEARCH)
+    const [confirmationSuccess, setConfirmationSuccess] = useState<ConfirmationSuccessCopy>(INITIAL_CONFIRMATION_SUCCESS)
+    const [savedConfirmationSuccess, setSavedConfirmationSuccess] = useState<ConfirmationSuccessCopy>(INITIAL_CONFIRMATION_SUCCESS)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -985,6 +1055,10 @@ export default function SitoTab() {
                     setJetSearchResults(remote.jetSearchResults)
                     setSavedJetSearchResults(remote.jetSearchResults)
                 }
+                if (remote?.confirmationSuccess && remote.confirmationSuccess.booking_title_it) {
+                    setConfirmationSuccess(remote.confirmationSuccess)
+                    setSavedConfirmationSuccess(remote.confirmationSuccess)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -997,10 +1071,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess]
     )
     const dirty = changes.length > 0
 
@@ -1011,7 +1085,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1029,6 +1103,7 @@ export default function SitoTab() {
             setSavedAviationQuote(aviationQuote)
             setSavedCheckEmail(checkEmail)
             setSavedJetSearchResults(jetSearchResults)
+            setSavedConfirmationSuccess(confirmationSuccess)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1080,6 +1155,7 @@ export default function SitoTab() {
         setAviationQuote(savedAviationQuote)
         setCheckEmail(savedCheckEmail)
         setJetSearchResults(savedJetSearchResults)
+        setConfirmationSuccess(savedConfirmationSuccess)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1236,6 +1312,9 @@ export default function SitoTab() {
                         {hydrated && section === 'jet-search' && (
                             <JetSearchResultsEditor copy={jetSearchResults} setCopy={setJetSearchResults} />
                         )}
+                        {hydrated && section === 'confirmation' && (
+                            <ConfirmationSuccessEditor copy={confirmationSuccess} setCopy={setConfirmationSuccess} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1354,6 +1433,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.jetSearchResults) !== JSON.stringify(saved.jetSearchResults)) {
         out.push('Jet Search Results: contenuti modificati')
+    }
+    if (JSON.stringify(current.confirmationSuccess) !== JSON.stringify(saved.confirmationSuccess)) {
+        out.push('Conferma Prenotazione: contenuti modificati')
     }
     return out
 }
@@ -4007,6 +4089,103 @@ function JetSearchResultsEditor({ copy, setCopy }: { copy: JetSearchResultsCopy;
                     <FieldText label="Title (EN)" value={copy.empty_title_en} onChange={v => update('empty_title_en', v)} />
                     <FieldTextArea label="Corpo (IT)" value={copy.empty_body_it} onChange={v => update('empty_body_it', v)} />
                     <FieldTextArea label="Body (EN)" value={copy.empty_body_en} onChange={v => update('empty_body_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Confirmation Success editor ──────────────────────────────────────────
+function ConfirmationSuccessEditor({ copy, setCopy }: { copy: ConfirmationSuccessCopy; setCopy: (next: ConfirmationSuccessCopy) => void }) {
+    const update = <K extends keyof ConfirmationSuccessCopy>(key: K, value: ConfirmationSuccessCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Conferma Prenotazione</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/confirmation-success</code>. Mostrata dopo prenotazione completata o conferma email. Placeholder <code>{'{total}'}</code> nel footnote rental viene sostituito con il prezzo formattato.
+                </p>
+            </div>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Branch "Booking confermato"</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.booking_title_it} onChange={v => update('booking_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.booking_title_en} onChange={v => update('booking_title_en', v)} />
+                    <FieldText label="Sottotitolo (IT)" value={copy.booking_subtitle_it} onChange={v => update('booking_subtitle_it', v)} />
+                    <FieldText label="Subtitle (EN)" value={copy.booking_subtitle_en} onChange={v => update('booking_subtitle_en', v)} />
+                    <FieldText label='Heading "Riepilogo Prenotazione" (IT)' value={copy.booking_summary_heading_it} onChange={v => update('booking_summary_heading_it', v)} />
+                    <FieldText label='Heading "Booking Summary" (EN)' value={copy.booking_summary_heading_en} onChange={v => update('booking_summary_heading_en', v)} />
+                    <FieldText label='Bottone CTA account (IT)' value={copy.booking_cta_account_it} onChange={v => update('booking_cta_account_it', v)} />
+                    <FieldText label="Account CTA (EN)" value={copy.booking_cta_account_en} onChange={v => update('booking_cta_account_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Variante Lavaggio (riepilogo)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='"Servizio:" (IT)' value={copy.carwash_row_servizio_it} onChange={v => update('carwash_row_servizio_it', v)} />
+                    <FieldText label='"Service:" (EN)' value={copy.carwash_row_servizio_en} onChange={v => update('carwash_row_servizio_en', v)} />
+                    <FieldText label='"Data:" (IT)' value={copy.carwash_row_data_it} onChange={v => update('carwash_row_data_it', v)} />
+                    <FieldText label='"Date:" (EN)' value={copy.carwash_row_data_en} onChange={v => update('carwash_row_data_en', v)} />
+                    <FieldText label='"Orario:" (IT)' value={copy.carwash_row_orario_it} onChange={v => update('carwash_row_orario_it', v)} />
+                    <FieldText label='"Time:" (EN)' value={copy.carwash_row_orario_en} onChange={v => update('carwash_row_orario_en', v)} />
+                    <FieldText label='"Cliente:" (IT)' value={copy.carwash_row_cliente_it} onChange={v => update('carwash_row_cliente_it', v)} />
+                    <FieldText label='"Customer:" (EN)' value={copy.carwash_row_cliente_en} onChange={v => update('carwash_row_cliente_en', v)} />
+                    <FieldText label='"Pagamento:" (IT)' value={copy.carwash_row_pagamento_it} onChange={v => update('carwash_row_pagamento_it', v)} />
+                    <FieldText label='"Payment:" (EN)' value={copy.carwash_row_pagamento_en} onChange={v => update('carwash_row_pagamento_en', v)} />
+                    <FieldText label='Valore "Online" (IT)' value={copy.carwash_payment_online_it} onChange={v => update('carwash_payment_online_it', v)} />
+                    <FieldText label='Value "Online" (EN)' value={copy.carwash_payment_online_en} onChange={v => update('carwash_payment_online_en', v)} />
+                    <FieldText label='Default cliente (IT)' value={copy.carwash_default_customer_it} onChange={v => update('carwash_default_customer_it', v)} />
+                    <FieldText label='Default customer (EN)' value={copy.carwash_default_customer_en} onChange={v => update('carwash_default_customer_en', v)} />
+                    <FieldText label='Etichetta "TOTALE PAGATO:" (IT)' value={copy.carwash_totale_pagato_it} onChange={v => update('carwash_totale_pagato_it', v)} />
+                    <FieldText label='Label "TOTAL PAID:" (EN)' value={copy.carwash_totale_pagato_en} onChange={v => update('carwash_totale_pagato_en', v)} />
+                    <FieldTextArea label='Nota WhatsApp (IT)' value={copy.carwash_whatsapp_note_it} onChange={v => update('carwash_whatsapp_note_it', v)} />
+                    <FieldTextArea label='WhatsApp note (EN)' value={copy.carwash_whatsapp_note_en} onChange={v => update('carwash_whatsapp_note_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Variante Noleggio (riepilogo)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='"Veicolo:" (IT)' value={copy.rental_row_veicolo_it} onChange={v => update('rental_row_veicolo_it', v)} />
+                    <FieldText label='"Vehicle:" (EN)' value={copy.rental_row_veicolo_en} onChange={v => update('rental_row_veicolo_en', v)} />
+                    <FieldText label='"Ritiro:" (IT)' value={copy.rental_row_ritiro_it} onChange={v => update('rental_row_ritiro_it', v)} />
+                    <FieldText label='"Pickup:" (EN)' value={copy.rental_row_ritiro_en} onChange={v => update('rental_row_ritiro_en', v)} />
+                    <FieldText label='"Riconsegna:" (IT)' value={copy.rental_row_riconsegna_it} onChange={v => update('rental_row_riconsegna_it', v)} />
+                    <FieldText label='"Return:" (EN)' value={copy.rental_row_riconsegna_en} onChange={v => update('rental_row_riconsegna_en', v)} />
+                    <FieldText label='"Luogo:" (IT)' value={copy.rental_row_luogo_it} onChange={v => update('rental_row_luogo_it', v)} />
+                    <FieldText label='"Location:" (EN)' value={copy.rental_row_luogo_en} onChange={v => update('rental_row_luogo_en', v)} />
+                    <FieldText label='"Pagamento:" (IT)' value={copy.rental_row_pagamento_it} onChange={v => update('rental_row_pagamento_it', v)} />
+                    <FieldText label='"Payment:" (EN)' value={copy.rental_row_pagamento_en} onChange={v => update('rental_row_pagamento_en', v)} />
+                    <FieldText label='Connettore data/ora "alle" (IT)' value={copy.rental_time_connector_it} onChange={v => update('rental_time_connector_it', v)} />
+                    <FieldText label='Time connector "at" (EN)' value={copy.rental_time_connector_en} onChange={v => update('rental_time_connector_en', v)} />
+                    <FieldText label='Pagamento "In Sede" (IT)' value={copy.rental_payment_in_sede_it} onChange={v => update('rental_payment_in_sede_it', v)} />
+                    <FieldText label='Payment "In Office" (EN)' value={copy.rental_payment_in_sede_en} onChange={v => update('rental_payment_in_sede_en', v)} />
+                    <FieldText label='Pagamento "Online" (IT)' value={copy.rental_payment_online_it} onChange={v => update('rental_payment_online_it', v)} />
+                    <FieldText label='Payment "Online" (EN)' value={copy.rental_payment_online_en} onChange={v => update('rental_payment_online_en', v)} />
+                    <FieldText label='Etichetta "TOTALE PAGATO:" (IT)' value={copy.rental_totale_pagato_it} onChange={v => update('rental_totale_pagato_it', v)} />
+                    <FieldText label='Label "TOTAL PAID:" (EN)' value={copy.rental_totale_pagato_en} onChange={v => update('rental_totale_pagato_en', v)} />
+                    <FieldText label='Etichetta "TOTALE DA PAGARE:" (IT)' value={copy.rental_totale_da_pagare_it} onChange={v => update('rental_totale_da_pagare_it', v)} />
+                    <FieldText label='Label "TOTAL TO PAY:" (EN)' value={copy.rental_totale_da_pagare_en} onChange={v => update('rental_totale_da_pagare_en', v)} />
+                    <FieldTextArea label='Footnote pagamento agenzia (IT) — usa {total}' value={copy.rental_agency_footnote_it} onChange={v => update('rental_agency_footnote_it', v)} />
+                    <FieldTextArea label='Agency payment footnote (EN) — uses {total}' value={copy.rental_agency_footnote_en} onChange={v => update('rental_agency_footnote_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Branch "Email confermata" (fallback)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.email_title_it} onChange={v => update('email_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.email_title_en} onChange={v => update('email_title_en', v)} />
+                    <FieldTextArea label="Body se loggato (IT)" value={copy.email_body_logged_in_it} onChange={v => update('email_body_logged_in_it', v)} />
+                    <FieldTextArea label="Body if signed in (EN)" value={copy.email_body_logged_in_en} onChange={v => update('email_body_logged_in_en', v)} />
+                    <FieldTextArea label="Body se non loggato (IT)" value={copy.email_body_logged_out_it} onChange={v => update('email_body_logged_out_it', v)} />
+                    <FieldTextArea label="Body if signed out (EN)" value={copy.email_body_logged_out_en} onChange={v => update('email_body_logged_out_en', v)} />
+                    <FieldText label="CTA se loggato (IT)" value={copy.email_cta_logged_in_it} onChange={v => update('email_cta_logged_in_it', v)} />
+                    <FieldText label="CTA if signed in (EN)" value={copy.email_cta_logged_in_en} onChange={v => update('email_cta_logged_in_en', v)} />
+                    <FieldText label="CTA se non loggato (IT)" value={copy.email_cta_logged_out_it} onChange={v => update('email_cta_logged_out_it', v)} />
+                    <FieldText label="CTA if signed out (EN)" value={copy.email_cta_logged_out_en} onChange={v => update('email_cta_logged_out_en', v)} />
                 </div>
             </section>
         </div>
