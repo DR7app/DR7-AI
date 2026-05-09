@@ -322,9 +322,15 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
     // l'admin aggiunge un link nel sub-tab Social Links → la legenda qui
     // ne mostra il chip al prossimo render senza refresh.
     const [customLinks, setCustomLinks] = useState<Array<{ slug: string; title: string; url: string }>>([])
+    // Stato di "configurato" dei 4 link fissi: se admin svuota il valore in
+    // Social Links, il chip corrispondente sparisce dalla legenda. Cosi'
+    // l'admin sa subito quali variabili torneranno effettivamente piene.
+    const [marketingFixed, setMarketingFixed] = useState<{
+        website: boolean; review_link: boolean; instagram: boolean; facebook: boolean
+    }>({ website: true, review_link: true, instagram: true, facebook: true })
     useEffect(() => {
         let cancelled = false
-        const loadCustomLinks = async () => {
+        const loadMarketing = async () => {
             const { data } = await supabase
                 .from('centralina_pro_config')
                 .select('config')
@@ -333,10 +339,12 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
             if (cancelled) return
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const mk = ((data?.config || {}) as any).marketing || {}
+            // Custom links
             const raw = Array.isArray(mk.custom_links) ? mk.custom_links : []
             const list: Array<{ slug: string; title: string; url: string }> = []
             for (const l of raw as Array<{ title?: string; url?: string }>) {
                 if (typeof l?.title !== 'string' || typeof l?.url !== 'string') continue
+                if (!l.url.trim()) continue
                 const slug = l.title.toLowerCase().trim()
                     .replace(/[^a-z0-9\s\-_]/g, '')
                     .replace(/[\s\-]+/g, '_')
@@ -346,13 +354,20 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
                 if (slug) list.push({ slug, title: l.title, url: l.url })
             }
             setCustomLinks(list)
+            // Fixed: chip visibile solo se URL non vuoto
+            setMarketingFixed({
+                website: typeof mk.website_url === 'string' && mk.website_url.trim().length > 0,
+                review_link: typeof mk.google_review_link === 'string' && mk.google_review_link.trim().length > 0,
+                instagram: typeof mk.instagram_url === 'string' && mk.instagram_url.trim().length > 0,
+                facebook: typeof mk.facebook_url === 'string' && mk.facebook_url.trim().length > 0,
+            })
         }
-        loadCustomLinks()
+        loadMarketing()
         const sub = supabase
-            .channel('legend-custom-links-sync')
+            .channel('legend-marketing-sync')
             .on('postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' },
-                () => loadCustomLinks())
+                () => loadMarketing())
             .subscribe()
         return () => { cancelled = true; sub.unsubscribe() }
     }, [])
@@ -361,16 +376,25 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
         navigator.clipboard?.writeText(`{${k}}`)
         toast.success(`{${k}} copiato — incollalo nel messaggio`)
     }
-    // Inietta i custom_links nel gruppo "Marketing & Link" come chip extra.
+    // Inietta i custom_links nel gruppo "Marketing & Link" come chip extra,
+    // e nasconde i 4 chip fissi quando il rispettivo URL e' vuoto in
+    // Marketing → Social Links.
     const groupsWithCustomLinks: VarGroup[] = TEMPLATE_VAR_GROUPS.map(g => {
-        if (g.label !== 'Marketing & Link' || customLinks.length === 0) return g
+        if (g.label !== 'Marketing & Link') return g
+        const visibleFixed = g.items.filter(it => {
+            if (it.key === 'website') return marketingFixed.website
+            if (it.key === 'review_link') return marketingFixed.review_link
+            if (it.key === 'instagram') return marketingFixed.instagram
+            if (it.key === 'facebook') return marketingFixed.facebook
+            return true
+        })
         const extras: TemplateVar[] = customLinks.map(l => ({
             key: l.slug,
             description: `${l.title} (link personalizzato)`,
             example: l.url,
         }))
-        return { ...g, items: [...g.items, ...extras] }
-    })
+        return { ...g, items: [...visibleFixed, ...extras] }
+    }).filter(g => g.items.length > 0)
     const totalVars = groupsWithCustomLinks.reduce((s, g) => s + g.items.length, 0)
     return (
         <div className="mt-2 rounded-lg border border-dr7-gold/30 bg-dr7-gold/5 overflow-hidden">
