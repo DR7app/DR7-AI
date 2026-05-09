@@ -175,6 +175,116 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
         if (max != null && amountEur > max) return false
     }
 
+    // Rental duration in giorni (sync — calcolata da pickup/dropoff).
+    // Vale solo per noleggi; per car wash / mechanical i campi pickup/dropoff
+    // possono essere vuoti, in tal caso il filtro NON viene applicato.
+    const durMin = tpl.target_rental_duration_min == null ? null : Number(tpl.target_rental_duration_min)
+    const durMax = tpl.target_rental_duration_max == null ? null : Number(tpl.target_rental_duration_max)
+    if (durMin != null || durMax != null) {
+        const pickup = booking.pickup_date ? new Date(booking.pickup_date).getTime() : null
+        const dropoff = booking.dropoff_date ? new Date(booking.dropoff_date).getTime() : null
+        if (pickup && dropoff && dropoff > pickup) {
+            const days = Math.ceil((dropoff - pickup) / (24 * 3600 * 1000))
+            if (durMin != null && days < durMin) return false
+            if (durMax != null && days > durMax) return false
+        }
+        // se non e' un noleggio, il filtro durata non si applica (ignorato)
+    }
+
+    return true
+}
+
+/**
+ * Filtri che richiedono una query async sul cliente. Eseguito dopo il sync
+ * matchesAdvancedFilters nel cron e nel trigger inline. Ritorna true se il
+ * template DEVE partire per questo (booking, customer), false se va saltato.
+ *
+ * Filtri:
+ *  - target_membership_tier — confronta case-insensitive con
+ *    customer.membership_tier oppure active_membership.package_name.
+ *  - target_language — confronta con customer.language (alias: lingua).
+ *  - target_min_prev_bookings — conta le prenotazioni precedenti del cliente
+ *    (escludendo quella corrente) e confronta col valore minimo.
+ *  - target_customer_tags — CSV; match se ALMENO un tag e' presente nei
+ *    tag del cliente (customers_extended.tags array o CSV).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function passesCustomerFilters(tpl: any, booking: any, supabase: any): Promise<boolean> {
+    const tier = tpl.target_membership_tier ? String(tpl.target_membership_tier).toLowerCase().trim() : null
+    const lang = tpl.target_language ? String(tpl.target_language).toLowerCase().trim() : null
+    const minPrev = tpl.target_min_prev_bookings == null ? null : Number(tpl.target_min_prev_bookings)
+    const tagsCsv = tpl.target_customer_tags ? String(tpl.target_customer_tags) : null
+
+    // Se nessuno dei 4 filtri customer-dependent e' attivo, esci subito.
+    const allDisabled = (!tier || tier === 'all')
+        && (!lang || lang === 'all')
+        && (minPrev == null || isNaN(minPrev))
+        && (!tagsCsv || !tagsCsv.trim())
+    if (allDisabled) return true
+
+    // Carica il cliente. Match per id, email, phone (in quest'ordine).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let customer: any = null
+    const cid = booking.customer_id || booking.user_id
+    if (cid) {
+        const { data } = await supabase.from('customers_extended').select('*').eq('id', cid).maybeSingle()
+        customer = data
+    }
+    if (!customer && booking.customer_email) {
+        const { data } = await supabase.from('customers_extended').select('*').eq('email', booking.customer_email).maybeSingle()
+        customer = data
+    }
+    if (!customer && booking.customer_phone) {
+        const { data } = await supabase.from('customers_extended').select('*').eq('telefono', booking.customer_phone).maybeSingle()
+        customer = data
+    }
+
+    // Tier
+    if (tier && tier !== 'all') {
+        const cTier = String(
+            customer?.membership_tier
+            ?? customer?.tier
+            ?? customer?.active_membership?.package_name
+            ?? booking?.active_membership?.package_name
+            ?? ''
+        ).toLowerCase().trim()
+        if (!cTier || cTier !== tier) return false
+    }
+
+    // Lingua
+    if (lang && lang !== 'all') {
+        const cLang = String(customer?.language ?? customer?.lingua ?? booking?.language ?? '').toLowerCase().trim()
+        if (!cLang || !cLang.startsWith(lang)) return false
+    }
+
+    // Tag — match se almeno UNO dei tag richiesti e' nei tag del cliente
+    if (tagsCsv && tagsCsv.trim()) {
+        const wanted = tagsCsv.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean)
+        if (wanted.length > 0) {
+            // tags puo' essere array Postgres, CSV string, o JSONB array
+            const raw = customer?.tags ?? customer?.customer_tags ?? []
+            let actual: string[] = []
+            if (Array.isArray(raw)) actual = raw.map((t: unknown) => String(t).toLowerCase().trim())
+            else if (typeof raw === 'string') actual = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+            const intersect = wanted.some((w: string) => actual.includes(w))
+            if (!intersect) return false
+        }
+    }
+
+    // Min previous bookings — count escluse cancelled e quella corrente
+    if (minPrev != null && !isNaN(minPrev) && minPrev > 0) {
+        // Match per email come piu' affidabile
+        const email = booking.customer_email || customer?.email
+        if (!email) return false
+        const { count } = await supabase
+            .from('bookings')
+            .select('id', { count: 'exact', head: true })
+            .eq('customer_email', email)
+            .neq('id', booking.id)
+            .not('status', 'in', '(cancelled,annullata)')
+        if ((count ?? 0) < minPrev) return false
+    }
+
     return true
 }
 
@@ -203,7 +313,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     //    saranno gestiti dal cron, non qui.
     const { data: templates } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end')
+        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_language, target_min_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags')
         .eq('is_automatic', true)
         .eq('is_enabled', true)
         .eq('trigger_event', event)
@@ -214,6 +324,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
 
     for (const tpl of templates) {
         if (!matchesAdvancedFilters(tpl, booking)) continue
+        if (!await passesCustomerFilters(tpl, booking, supabase)) continue
 
         // 3. Filtri: status + categoria
         const statuses = (tpl.target_status || 'confirmed,active').split(',').map((s: string) => s.trim()).filter(Boolean)

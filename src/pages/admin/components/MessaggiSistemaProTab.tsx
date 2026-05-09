@@ -28,6 +28,12 @@ interface SystemMessage {
     target_payment_method?: string // 'card'|'wallet'|'cash'|'bonifico'|'all'
     target_amount_min?: number | null  // euro
     target_amount_max?: number | null  // euro
+    target_membership_tier?: string | null
+    target_language?: string | null
+    target_min_prev_bookings?: number | null
+    target_rental_duration_min?: number | null
+    target_rental_duration_max?: number | null
+    target_customer_tags?: string | null
     /** CSV di JS day-of-week (0=Dom..6=Sab) Europe/Rome — default tutti i giorni */
     target_days_of_week?: string
     /** Ora inizio fascia silenziosa Europe/Rome (0-23). NULL = nessuna fascia. */
@@ -809,6 +815,13 @@ export default function MessaggiSistemaProTab() {
     const [newQuietHoursEnabled, setNewQuietHoursEnabled] = useState(false)
     const [newQuietStart, setNewQuietStart] = useState<number>(22)
     const [newQuietEnd, setNewQuietEnd] = useState<number>(7)
+    // Sprint autonomia 1: 5 nuovi filtri pubblico
+    const [newTargetMembershipTier, setNewTargetMembershipTier] = useState('all')
+    const [newTargetLanguage, setNewTargetLanguage] = useState('all')
+    const [newTargetMinPrevBookings, setNewTargetMinPrevBookings] = useState('')
+    const [newTargetRentalDurationMin, setNewTargetRentalDurationMin] = useState('')
+    const [newTargetRentalDurationMax, setNewTargetRentalDurationMax] = useState('')
+    const [newTargetCustomerTags, setNewTargetCustomerTags] = useState('')
     // Categorie reali caricate da Centralina Pro (config.categories) — niente
     // hardcoded fallback. Aggiornamento real-time via postgres_changes.
     const [proCategories, setProCategories] = useState<Array<{ id: string; label: string }>>([])
@@ -1061,6 +1074,12 @@ export default function MessaggiSistemaProTab() {
                     target_days_of_week: Array.from(newTargetDays).sort((a, b) => a - b).join(','),
                     quiet_hours_start: newQuietHoursEnabled ? newQuietStart : null,
                     quiet_hours_end: newQuietHoursEnabled ? newQuietEnd : null,
+                    target_membership_tier: newTargetMembershipTier === 'all' ? null : newTargetMembershipTier,
+                    target_language: newTargetLanguage === 'all' ? null : newTargetLanguage,
+                    target_min_prev_bookings: newTargetMinPrevBookings ? parseInt(newTargetMinPrevBookings, 10) : null,
+                    target_rental_duration_min: newTargetRentalDurationMin ? parseInt(newTargetRentalDurationMin, 10) : null,
+                    target_rental_duration_max: newTargetRentalDurationMax ? parseInt(newTargetRentalDurationMax, 10) : null,
+                    target_customer_tags: newTargetCustomerTags.trim() || null,
                 })
                 .select()
                 .single()
@@ -1637,6 +1656,87 @@ export default function MessaggiSistemaProTab() {
                                         <p className="text-[11px] text-theme-text-muted mt-1">
                                             Niente messaggi in questa fascia. Esempio: 22-07 = silenzio dalle 22:00 alle 06:59 del mattino dopo.
                                         </p>
+                                    </div>
+
+                                    {/* Sprint autonomia 1: filtri pubblico avanzati */}
+                                    <div className="mt-3 pt-3 border-t border-theme-border/50">
+                                        <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Filtri pubblico (audience targeting)</div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Tier DR7 Club</label>
+                                                <select
+                                                    value={newTargetMembershipTier}
+                                                    onChange={e => setNewTargetMembershipTier(e.target.value)}
+                                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                >
+                                                    <option value="all">Tutti i tier</option>
+                                                    <option value="free">Free (no membership)</option>
+                                                    <option value="member">Member</option>
+                                                    <option value="elite">Elite</option>
+                                                    <option value="gold">Gold</option>
+                                                    <option value="platinum">Platinum</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Lingua cliente</label>
+                                                <select
+                                                    value={newTargetLanguage}
+                                                    onChange={e => setNewTargetLanguage(e.target.value)}
+                                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                >
+                                                    <option value="all">Tutte</option>
+                                                    <option value="it">Italiano</option>
+                                                    <option value="en">English</option>
+                                                    <option value="fr">Francais</option>
+                                                    <option value="de">Deutsch</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Min prenotazioni precedenti</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={newTargetMinPrevBookings}
+                                                    onChange={e => setNewTargetMinPrevBookings(e.target.value)}
+                                                    placeholder="vuoto = nessun min"
+                                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                />
+                                                <p className="text-[11px] text-theme-text-muted mt-1">Es. 5 = solo clienti con almeno 5 prenotazioni precedenti.</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Durata noleggio (giorni)</label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={newTargetRentalDurationMin}
+                                                        onChange={e => setNewTargetRentalDurationMin(e.target.value)}
+                                                        placeholder="min"
+                                                        className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={newTargetRentalDurationMax}
+                                                        onChange={e => setNewTargetRentalDurationMax(e.target.value)}
+                                                        placeholder="max"
+                                                        className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                    />
+                                                </div>
+                                                <p className="text-[11px] text-theme-text-muted mt-1">Es. 7-30 = solo noleggi settimanali/mensili.</p>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Tag cliente (CSV)</label>
+                                                <input
+                                                    type="text"
+                                                    value={newTargetCustomerTags}
+                                                    onChange={e => setNewTargetCustomerTags(e.target.value)}
+                                                    placeholder="es. vip,turista,sardo"
+                                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                />
+                                                <p className="text-[11px] text-theme-text-muted mt-1">Match se il cliente ha almeno UNO di questi tag (separati da virgola). Vuoto = nessuna restrizione.</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 </>

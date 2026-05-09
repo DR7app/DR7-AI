@@ -27,7 +27,7 @@
  */
 import { schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
-import { matchesAdvancedFilters } from './utils/triggerSystemMessageEvent';
+import { matchesAdvancedFilters, passesCustomerFilters } from './utils/triggerSystemMessageEvent';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -56,6 +56,12 @@ interface SystemMessage {
     target_days_of_week?: string;
     quiet_hours_start?: number | null;
     quiet_hours_end?: number | null;
+    target_membership_tier?: string | null;
+    target_language?: string | null;
+    target_min_prev_bookings?: number | null;
+    target_rental_duration_min?: number | null;
+    target_rental_duration_max?: number | null;
+    target_customer_tags?: string | null;
 }
 
 const LOOKBACK_MS = 30 * 60 * 1000;  // 30 min: forgive previous-cron failures
@@ -384,7 +390,7 @@ const cronHandler = async () => {
     // 1. Carica tutti i template automatici attivi
     const { data: templates, error: tplErr } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, is_automatic, is_enabled, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end')
+        .select('id, message_key, label, is_automatic, is_enabled, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_language, target_min_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags')
         .eq('is_automatic', true)
         .eq('is_enabled', true);
 
@@ -484,6 +490,7 @@ const cronHandler = async () => {
         for (const booking of candidates as Booking[]) {
             // Filtri avanzati (service_type / cauzione / targa / metodo / importo)
             if (!matchesAdvancedFilters(tpl, booking)) continue
+            if (!await passesCustomerFilters(tpl, booking, supabase)) continue
 
             // Filtro categoria veicolo (best-effort: prima top-level, poi booking_details)
             if (tpl.target_category && tpl.target_category !== 'all') {
