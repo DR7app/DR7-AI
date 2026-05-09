@@ -45,6 +45,7 @@ type SectionId =
     | 'lavaggio'
     | 'investitori'
     | 'franchising'
+    | 'aviation'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -61,6 +62,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'lavaggio', title: 'Servizi Lavaggio', ready: true },
     { id: 'investitori', title: 'Investitori', ready: true },
     { id: 'franchising', title: 'Franchising', ready: true },
+    { id: 'aviation', title: 'Aviation Quote', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -296,6 +298,84 @@ function emptyLegalPage(id: LegalPageId): LegalPageCopy {
 const INITIAL_LEGAL: LegalCopy = {
     pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
 }
+
+// ─── Aviation Quote Request (bilingual) ───────────────────────────────────
+interface AviationQuoteCopy {
+    loading_it: string; loading_en: string
+    auth_title_it: string; auth_title_en: string
+    auth_body_it: string; auth_body_en: string
+    auth_login_cta_it: string; auth_login_cta_en: string
+    auth_signup_cta_it: string; auth_signup_cta_en: string
+    service_label_jet: string
+    service_label_helicopter: string
+    header_title_template_it: string; header_title_template_en: string
+    header_subtitle_it: string; header_subtitle_en: string
+    section_customer_it: string; section_customer_en: string
+    section_flight_it: string; section_flight_en: string
+    field_name_label_it: string; field_name_label_en: string
+    field_name_placeholder_it: string; field_name_placeholder_en: string
+    field_email_label_it: string; field_email_label_en: string
+    field_email_placeholder_it: string; field_email_placeholder_en: string
+    field_phone_label_it: string; field_phone_label_en: string
+    field_phone_placeholder_it: string; field_phone_placeholder_en: string
+    field_departure_label_it: string; field_departure_label_en: string
+    field_departure_placeholder_it: string; field_departure_placeholder_en: string
+    field_arrival_label_it: string; field_arrival_label_en: string
+    field_arrival_placeholder_it: string; field_arrival_placeholder_en: string
+    field_departure_date_label_it: string; field_departure_date_label_en: string
+    field_return_date_label_it: string; field_return_date_label_en: string
+    field_passengers_label_it: string; field_passengers_label_en: string
+    field_notes_label_it: string; field_notes_label_en: string
+    field_notes_placeholder_it: string; field_notes_placeholder_en: string
+    submit_idle_it: string; submit_idle_en: string
+    submit_submitting_it: string; submit_submitting_en: string
+    disclaimer_it: string; disclaimer_en: string
+    alert_success_it: string; alert_success_en: string
+    alert_error_it: string; alert_error_en: string
+    whatsapp_phone: string
+    whatsapp_template_main_it: string; whatsapp_template_main_en: string
+    whatsapp_template_return_it: string; whatsapp_template_return_en: string
+    whatsapp_template_notes_it: string; whatsapp_template_notes_en: string
+}
+
+function emptyStrPair(): { it: string; en: string } { return { it: '', en: '' } }
+const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
+    loading_it: 'Caricamento...', loading_en: 'Loading...',
+    auth_title_it: '', auth_title_en: '',
+    auth_body_it: '', auth_body_en: '',
+    auth_login_cta_it: 'Accedi', auth_login_cta_en: 'Login',
+    auth_signup_cta_it: 'Registrati', auth_signup_cta_en: 'Sign Up',
+    service_label_jet: 'Jet Privato', service_label_helicopter: 'Elicottero',
+    header_title_template_it: 'Richiedi Preventivo {service}', header_title_template_en: 'Request Quote {service}',
+    header_subtitle_it: '', header_subtitle_en: '',
+    section_customer_it: 'Dati Cliente', section_customer_en: 'Customer Details',
+    section_flight_it: 'Dettagli Viaggio', section_flight_en: 'Trip Details',
+    field_name_label_it: '', field_name_label_en: '',
+    field_name_placeholder_it: '', field_name_placeholder_en: '',
+    field_email_label_it: '', field_email_label_en: '',
+    field_email_placeholder_it: '', field_email_placeholder_en: '',
+    field_phone_label_it: '', field_phone_label_en: '',
+    field_phone_placeholder_it: '', field_phone_placeholder_en: '',
+    field_departure_label_it: '', field_departure_label_en: '',
+    field_departure_placeholder_it: '', field_departure_placeholder_en: '',
+    field_arrival_label_it: '', field_arrival_label_en: '',
+    field_arrival_placeholder_it: '', field_arrival_placeholder_en: '',
+    field_departure_date_label_it: '', field_departure_date_label_en: '',
+    field_return_date_label_it: '', field_return_date_label_en: '',
+    field_passengers_label_it: '', field_passengers_label_en: '',
+    field_notes_label_it: '', field_notes_label_en: '',
+    field_notes_placeholder_it: '', field_notes_placeholder_en: '',
+    submit_idle_it: '', submit_idle_en: '',
+    submit_submitting_it: '', submit_submitting_en: '',
+    disclaimer_it: '', disclaimer_en: '',
+    alert_success_it: '', alert_success_en: '',
+    alert_error_it: '', alert_error_en: '',
+    whatsapp_phone: '393457905205',
+    whatsapp_template_main_it: '', whatsapp_template_main_en: '',
+    whatsapp_template_return_it: '', whatsapp_template_return_en: '',
+    whatsapp_template_notes_it: '', whatsapp_template_notes_en: '',
+}
+void emptyStrPair  // helper kept for future use
 
 // ─── Franchising (IT-only sales page) ──────────────────────────────────────
 type FranchisingExpansionIcon = 'square' | 'diamond' | 'lines'
@@ -660,6 +740,7 @@ interface SiteCopySnapshot {
     carwash?: CarWashCopy
     investitori?: InvestitoriCopy
     franchising?: FranchisingCopy
+    aviationQuote?: AviationQuoteCopy
 }
 
 interface CurrentState {
@@ -677,6 +758,7 @@ interface CurrentState {
     carwash: CarWashCopy
     investitori: InvestitoriCopy
     franchising: FranchisingCopy
+    aviationQuote: AviationQuoteCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -763,6 +845,8 @@ export default function SitoTab() {
     const [savedInvestitori, setSavedInvestitori] = useState<InvestitoriCopy>(INITIAL_INVESTITORI)
     const [franchising, setFranchising] = useState<FranchisingCopy>(INITIAL_FRANCHISING)
     const [savedFranchising, setSavedFranchising] = useState<FranchisingCopy>(INITIAL_FRANCHISING)
+    const [aviationQuote, setAviationQuote] = useState<AviationQuoteCopy>(INITIAL_AVIATION_QUOTE)
+    const [savedAviationQuote, setSavedAviationQuote] = useState<AviationQuoteCopy>(INITIAL_AVIATION_QUOTE)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -846,6 +930,10 @@ export default function SitoTab() {
                     setFranchising(remote.franchising)
                     setSavedFranchising(remote.franchising)
                 }
+                if (remote?.aviationQuote && remote.aviationQuote.header_title_template_it) {
+                    setAviationQuote(remote.aviationQuote)
+                    setSavedAviationQuote(remote.aviationQuote)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -858,10 +946,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote]
     )
     const dirty = changes.length > 0
 
@@ -872,7 +960,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -887,6 +975,7 @@ export default function SitoTab() {
             setSavedCarwash(carwash)
             setSavedInvestitori(investitori)
             setSavedFranchising(franchising)
+            setSavedAviationQuote(aviationQuote)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -935,6 +1024,7 @@ export default function SitoTab() {
         setCarwash(savedCarwash)
         setInvestitori(savedInvestitori)
         setFranchising(savedFranchising)
+        setAviationQuote(savedAviationQuote)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1082,6 +1172,9 @@ export default function SitoTab() {
                         {hydrated && section === 'franchising' && (
                             <FranchisingEditor copy={franchising} setCopy={setFranchising} />
                         )}
+                        {hydrated && section === 'aviation' && (
+                            <AviationQuoteEditor copy={aviationQuote} setCopy={setAviationQuote} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1191,6 +1284,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.franchising) !== JSON.stringify(saved.franchising)) {
         out.push('Franchising: contenuti modificati')
+    }
+    if (JSON.stringify(current.aviationQuote) !== JSON.stringify(saved.aviationQuote)) {
+        out.push('Aviation Quote: contenuti modificati')
     }
     return out
 }
@@ -3657,6 +3753,131 @@ function FranchisingEditor({ copy, setCopy }: { copy: FranchisingCopy; setCopy: 
             <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Footer statement</h3>
                 <FieldTextArea label="Statement (newline = a-capo)" value={copy.footer_statement} onChange={v => update('footer_statement', v)} />
+            </section>
+        </div>
+    )
+}
+
+// ─── Aviation Quote editor (bilingual) ─────────────────────────────────────
+function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCopy: (next: AviationQuoteCopy) => void }) {
+    const update = <K extends keyof AviationQuoteCopy>(key: K, value: AviationQuoteCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Aviation Quote</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagine <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/aviation-quote-request</code> + <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/helicopter-quote-request</code>. Token <code>{'{service}'}</code> nel titolo si risolve a "Jet Privato" o "Elicottero" in base alla pagina. Il template WhatsApp supporta i placeholder: <code>{'{service}'}</code>, <code>{'{nome}'}</code>, <code>{'{email}'}</code>, <code>{'{telefono}'}</code>, <code>{'{partenza}'}</code>, <code>{'{arrivo}'}</code>, <code>{'{data_partenza}'}</code>, <code>{'{data_ritorno}'}</code>, <code>{'{passeggeri}'}</code>, <code>{'{note}'}</code>.
+                </p>
+            </div>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Etichette servizio (per token {'{service}'})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Label Jet Privato" value={copy.service_label_jet} onChange={v => update('service_label_jet', v)} />
+                    <FieldText label="Label Elicottero" value={copy.service_label_helicopter} onChange={v => update('service_label_helicopter', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Loading + Auth gate</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Loading (IT)" value={copy.loading_it} onChange={v => update('loading_it', v)} />
+                    <FieldText label="Loading (EN)" value={copy.loading_en} onChange={v => update('loading_en', v)} />
+                    <FieldText label="Auth title (IT)" value={copy.auth_title_it} onChange={v => update('auth_title_it', v)} />
+                    <FieldText label="Auth title (EN)" value={copy.auth_title_en} onChange={v => update('auth_title_en', v)} />
+                    <FieldTextArea label="Auth body (IT)" value={copy.auth_body_it} onChange={v => update('auth_body_it', v)} />
+                    <FieldTextArea label="Auth body (EN)" value={copy.auth_body_en} onChange={v => update('auth_body_en', v)} />
+                    <FieldText label="Login button (IT)" value={copy.auth_login_cta_it} onChange={v => update('auth_login_cta_it', v)} />
+                    <FieldText label="Login button (EN)" value={copy.auth_login_cta_en} onChange={v => update('auth_login_cta_en', v)} />
+                    <FieldText label="Sign Up button (IT)" value={copy.auth_signup_cta_it} onChange={v => update('auth_signup_cta_it', v)} />
+                    <FieldText label="Sign Up button (EN)" value={copy.auth_signup_cta_en} onChange={v => update('auth_signup_cta_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header pagina</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo template (IT) — usa {service}" value={copy.header_title_template_it} onChange={v => update('header_title_template_it', v)} />
+                    <FieldText label="Title template (EN) — uses {service}" value={copy.header_title_template_en} onChange={v => update('header_title_template_en', v)} />
+                    <FieldTextArea label="Sottotitolo (IT)" value={copy.header_subtitle_it} onChange={v => update('header_subtitle_it', v)} />
+                    <FieldTextArea label="Subtitle (EN)" value={copy.header_subtitle_en} onChange={v => update('header_subtitle_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sezioni form</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Heading Customer (IT)" value={copy.section_customer_it} onChange={v => update('section_customer_it', v)} />
+                    <FieldText label="Heading Customer (EN)" value={copy.section_customer_en} onChange={v => update('section_customer_en', v)} />
+                    <FieldText label="Heading Flight (IT)" value={copy.section_flight_it} onChange={v => update('section_flight_it', v)} />
+                    <FieldText label="Heading Flight (EN)" value={copy.section_flight_en} onChange={v => update('section_flight_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi form (label + placeholder)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Nome label (IT)" value={copy.field_name_label_it} onChange={v => update('field_name_label_it', v)} />
+                    <FieldText label="Name label (EN)" value={copy.field_name_label_en} onChange={v => update('field_name_label_en', v)} />
+                    <FieldText label="Nome placeholder (IT)" value={copy.field_name_placeholder_it} onChange={v => update('field_name_placeholder_it', v)} />
+                    <FieldText label="Name placeholder (EN)" value={copy.field_name_placeholder_en} onChange={v => update('field_name_placeholder_en', v)} />
+                    <FieldText label="Email label (IT)" value={copy.field_email_label_it} onChange={v => update('field_email_label_it', v)} />
+                    <FieldText label="Email label (EN)" value={copy.field_email_label_en} onChange={v => update('field_email_label_en', v)} />
+                    <FieldText label="Email placeholder (IT)" value={copy.field_email_placeholder_it} onChange={v => update('field_email_placeholder_it', v)} />
+                    <FieldText label="Email placeholder (EN)" value={copy.field_email_placeholder_en} onChange={v => update('field_email_placeholder_en', v)} />
+                    <FieldText label="Telefono label (IT)" value={copy.field_phone_label_it} onChange={v => update('field_phone_label_it', v)} />
+                    <FieldText label="Phone label (EN)" value={copy.field_phone_label_en} onChange={v => update('field_phone_label_en', v)} />
+                    <FieldText label="Telefono placeholder (IT)" value={copy.field_phone_placeholder_it} onChange={v => update('field_phone_placeholder_it', v)} />
+                    <FieldText label="Phone placeholder (EN)" value={copy.field_phone_placeholder_en} onChange={v => update('field_phone_placeholder_en', v)} />
+                    <FieldText label="Partenza label (IT)" value={copy.field_departure_label_it} onChange={v => update('field_departure_label_it', v)} />
+                    <FieldText label="Departure label (EN)" value={copy.field_departure_label_en} onChange={v => update('field_departure_label_en', v)} />
+                    <FieldText label="Partenza placeholder (IT)" value={copy.field_departure_placeholder_it} onChange={v => update('field_departure_placeholder_it', v)} />
+                    <FieldText label="Departure placeholder (EN)" value={copy.field_departure_placeholder_en} onChange={v => update('field_departure_placeholder_en', v)} />
+                    <FieldText label="Arrivo label (IT)" value={copy.field_arrival_label_it} onChange={v => update('field_arrival_label_it', v)} />
+                    <FieldText label="Arrival label (EN)" value={copy.field_arrival_label_en} onChange={v => update('field_arrival_label_en', v)} />
+                    <FieldText label="Arrivo placeholder (IT)" value={copy.field_arrival_placeholder_it} onChange={v => update('field_arrival_placeholder_it', v)} />
+                    <FieldText label="Arrival placeholder (EN)" value={copy.field_arrival_placeholder_en} onChange={v => update('field_arrival_placeholder_en', v)} />
+                    <FieldText label="Data Partenza label (IT)" value={copy.field_departure_date_label_it} onChange={v => update('field_departure_date_label_it', v)} />
+                    <FieldText label="Departure date (EN)" value={copy.field_departure_date_label_en} onChange={v => update('field_departure_date_label_en', v)} />
+                    <FieldText label="Data Ritorno label (IT)" value={copy.field_return_date_label_it} onChange={v => update('field_return_date_label_it', v)} />
+                    <FieldText label="Return date (EN)" value={copy.field_return_date_label_en} onChange={v => update('field_return_date_label_en', v)} />
+                    <FieldText label="Passeggeri label (IT)" value={copy.field_passengers_label_it} onChange={v => update('field_passengers_label_it', v)} />
+                    <FieldText label="Passengers label (EN)" value={copy.field_passengers_label_en} onChange={v => update('field_passengers_label_en', v)} />
+                    <FieldText label="Note label (IT)" value={copy.field_notes_label_it} onChange={v => update('field_notes_label_it', v)} />
+                    <FieldText label="Notes label (EN)" value={copy.field_notes_label_en} onChange={v => update('field_notes_label_en', v)} />
+                    <FieldText label="Note placeholder (IT)" value={copy.field_notes_placeholder_it} onChange={v => update('field_notes_placeholder_it', v)} />
+                    <FieldText label="Notes placeholder (EN)" value={copy.field_notes_placeholder_en} onChange={v => update('field_notes_placeholder_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Submit + alerts</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Bottone submit (IT)" value={copy.submit_idle_it} onChange={v => update('submit_idle_it', v)} />
+                    <FieldText label="Submit button (EN)" value={copy.submit_idle_en} onChange={v => update('submit_idle_en', v)} />
+                    <FieldText label='Stato "Invio in corso..." (IT)' value={copy.submit_submitting_it} onChange={v => update('submit_submitting_it', v)} />
+                    <FieldText label='State "Submitting..." (EN)' value={copy.submit_submitting_en} onChange={v => update('submit_submitting_en', v)} />
+                    <FieldTextArea label="Disclaimer sotto bottone (IT)" value={copy.disclaimer_it} onChange={v => update('disclaimer_it', v)} />
+                    <FieldTextArea label="Disclaimer (EN)" value={copy.disclaimer_en} onChange={v => update('disclaimer_en', v)} />
+                    <FieldText label="Alert successo (IT)" value={copy.alert_success_it} onChange={v => update('alert_success_it', v)} />
+                    <FieldText label="Success alert (EN)" value={copy.alert_success_en} onChange={v => update('alert_success_en', v)} />
+                    <FieldText label="Alert errore (IT)" value={copy.alert_error_it} onChange={v => update('alert_error_it', v)} />
+                    <FieldText label="Error alert (EN)" value={copy.alert_error_en} onChange={v => update('alert_error_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Template WhatsApp</h3>
+                <p className="text-[12px] text-[#6e6e73]">Numero WhatsApp + 3 template (main / return / notes). Le sezioni "return" e "notes" vengono concatenate solo se i campi del form sono compilati. Tutti supportano i placeholder elencati sopra.</p>
+                <FieldText label="Numero WhatsApp (formato wa.me)" value={copy.whatsapp_phone} onChange={v => update('whatsapp_phone', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Template MAIN (IT) — sempre incluso" value={copy.whatsapp_template_main_it} onChange={v => update('whatsapp_template_main_it', v)} />
+                    <FieldTextArea label="Template MAIN (EN) — always included" value={copy.whatsapp_template_main_en} onChange={v => update('whatsapp_template_main_en', v)} />
+                    <FieldTextArea label="Template RETURN (IT) — solo se data ritorno compilata" value={copy.whatsapp_template_return_it} onChange={v => update('whatsapp_template_return_it', v)} />
+                    <FieldTextArea label="Template RETURN (EN)" value={copy.whatsapp_template_return_en} onChange={v => update('whatsapp_template_return_en', v)} />
+                    <FieldTextArea label="Template NOTES + closing (IT) — incluso se note compilate" value={copy.whatsapp_template_notes_it} onChange={v => update('whatsapp_template_notes_it', v)} />
+                    <FieldTextArea label="Template NOTES + closing (EN)" value={copy.whatsapp_template_notes_en} onChange={v => update('whatsapp_template_notes_en', v)} />
+                </div>
             </section>
         </div>
     )
