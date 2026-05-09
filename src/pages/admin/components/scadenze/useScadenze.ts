@@ -6,9 +6,19 @@ import { CATEGORIES, CATEGORY_KEYS } from './scadenzeConfig'
 export interface ScadenzeStats {
   totalActive: number
   overdue: number
-  dueThisWeek: number
+  dueThisWeek: number      // legacy: 0–7 days (manteniamo per retrocompat)
+  urgent3Days: number      // 0–3 giorni
+  in7Days: number          // 4–7 giorni
+  over7Days: number        // 8+ giorni
   totalAmount: number
+  overdueAmount: number
+  urgent3Amount: number
+  in7Amount: number
+  over7Amount: number
   byCategory: Record<string, { count: number; mostUrgent: Scadenza | null }>
+  amountByCategory: Record<string, number>
+  amountByPriority: { critica: number; alta: number; media: number; bassa: number }
+  countByPriority: { critica: number; alta: number; media: number; bassa: number }
 }
 
 export function useScadenze() {
@@ -547,28 +557,54 @@ export function useScadenze() {
   const stats = useMemo((): ScadenzeStats => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const weekEnd = new Date(today)
-    weekEnd.setDate(weekEnd.getDate() + 7)
+    const day = 1000 * 60 * 60 * 24
 
     const allActive = scadenze.filter(s =>
       s.status !== 'completed' && s.status !== 'paid' && s.status !== 'refunded'
     )
 
     let overdue = 0
-    let dueThisWeek = 0
+    let urgent3Days = 0
+    let in7Days = 0
+    let over7Days = 0
     let totalAmount = 0
+    let overdueAmount = 0
+    let urgent3Amount = 0
+    let in7Amount = 0
+    let over7Amount = 0
+
+    const amountByCategory: Record<string, number> = {}
+    const amountByPriority = { critica: 0, alta: 0, media: 0, bassa: 0 }
+    const countByPriority = { critica: 0, alta: 0, media: 0, bassa: 0 }
 
     allActive.forEach(s => {
-      if (s.amount) totalAmount += s.amount
+      const amt = s.amount || 0
+      totalAmount += amt
+      // Bucket by urgency: scaduto / 0–3gg / 4–7gg / 8+gg
+      let bucket: 'overdue' | '3d' | '7d' | 'over7' | null = null
       if (s.due_date) {
         const d = new Date(s.due_date)
         d.setHours(0, 0, 0, 0)
-        if (d < today) overdue++
-        else if (d <= weekEnd) dueThisWeek++
+        const diffDays = Math.floor((d.getTime() - today.getTime()) / day)
+        if (diffDays < 0) bucket = 'overdue'
+        else if (diffDays <= 3) bucket = '3d'
+        else if (diffDays <= 7) bucket = '7d'
+        else bucket = 'over7'
+      } else if (s.due_km && s.current_km) {
+        const km = s.due_km - s.current_km
+        if (km <= 0) bucket = 'overdue'
+        else if (km <= 500) bucket = '3d'
+        else if (km <= 2000) bucket = '7d'
+        else bucket = 'over7'
       }
-      if (s.due_km && s.current_km) {
-        if (s.due_km - s.current_km <= 0) overdue++
-      }
+      if (bucket === 'overdue') { overdue++; overdueAmount += amt; countByPriority.critica++; amountByPriority.critica += amt }
+      else if (bucket === '3d') { urgent3Days++; urgent3Amount += amt; countByPriority.alta++; amountByPriority.alta += amt }
+      else if (bucket === '7d') { in7Days++; in7Amount += amt; countByPriority.media++; amountByPriority.media += amt }
+      else if (bucket === 'over7') { over7Days++; over7Amount += amt; countByPriority.bassa++; amountByPriority.bassa += amt }
+
+      // Aggregato importo per categoria
+      const k = s.category || 'altro'
+      amountByCategory[k] = (amountByCategory[k] || 0) + amt
     })
 
     const byCategory: Record<string, { count: number; mostUrgent: Scadenza | null }> = {}
@@ -583,9 +619,19 @@ export function useScadenze() {
     return {
       totalActive: allActive.length,
       overdue,
-      dueThisWeek,
+      dueThisWeek: urgent3Days + in7Days,
+      urgent3Days,
+      in7Days,
+      over7Days,
       totalAmount,
-      byCategory
+      overdueAmount,
+      urgent3Amount,
+      in7Amount,
+      over7Amount,
+      byCategory,
+      amountByCategory,
+      amountByPriority,
+      countByPriority,
     }
   }, [scadenze, getScadenzeByCategory])
 
