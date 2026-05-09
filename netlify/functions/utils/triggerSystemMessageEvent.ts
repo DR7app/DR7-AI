@@ -57,6 +57,32 @@ function romeDayOfWeek(): number {
     return ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 } as Record<string, number>)[wd] ?? new Date().getDay()
 }
 
+/**
+ * Ora corrente (0..23) in fuso Europe/Rome.
+ */
+function romeHour(): number {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/Rome',
+        hour: '2-digit',
+        hour12: false,
+    })
+    const h = parseInt(fmt.format(new Date()), 10)
+    return isNaN(h) ? new Date().getHours() : h % 24
+}
+
+/**
+ * True se l'ora corrente Roma e' dentro la fascia silenziosa [start, end).
+ * Se start>end la fascia attraversa la mezzanotte (es. 22-7 = 22:00-06:59).
+ */
+function isInQuietHours(start: number | null | undefined, end: number | null | undefined): boolean {
+    if (start == null || end == null) return false
+    if (start === end) return false // fascia di 0 ore = mai silenziosa
+    const h = romeHour()
+    if (start < end) return h >= start && h < end
+    // Wrap-around mezzanotte
+    return h >= start || h < end
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
     // Day-of-week: se l'admin ha disabilitato il giorno corrente (Roma),
@@ -66,6 +92,10 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
         const allowed = new Set(dowCsv.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n)))
         if (allowed.size > 0 && !allowed.has(romeDayOfWeek())) return false
     }
+
+    // Quiet hours: se siamo in fascia silenziosa configurata dall'admin, skip.
+    // Es. start=22, end=7 → niente invii dalle 22:00 alle 06:59 Roma.
+    if (isInQuietHours(tpl.quiet_hours_start, tpl.quiet_hours_end)) return false
 
     // Service type — solo 2 categorie reali nel sistema:
     //   rental     = car rental (service_type vuoto / 'rental' / 'car_rental')
@@ -170,7 +200,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     //    saranno gestiti dal cron, non qui.
     const { data: templates } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week')
+        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end')
         .eq('is_automatic', true)
         .eq('is_enabled', true)
         .eq('trigger_event', event)

@@ -315,6 +315,19 @@ const handler: Handler = async (event) => {
                     console.error('[nexi-payment-callback] Auto-retry link send failed (non-fatal):', retryErr);
                 }
             }
+
+            // Messaggi di Sistema Pro — fire on_payment_failed (es. notifica
+            // admin / cliente di pagamento rifiutato). Best-effort, non blocca.
+            try {
+                const { triggerSystemMessageEvent } = await import('./utils/triggerSystemMessageEvent');
+                const r = await triggerSystemMessageEvent({ bookingId: transaction.booking_id, event: 'on_payment_failed' });
+                if (r.sent || r.errors) {
+                    console.log(`[nexi-payment-callback] system messages on_payment_failed: sent=${r.sent} skipped=${r.skipped} errors=${r.errors}`);
+                }
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.error('[nexi-payment-callback] system messages on_payment_failed trigger failed:', msg);
+            }
         }
 
         // ── DANNI/PENALI PAYMENT ──────────────────────────────────────────

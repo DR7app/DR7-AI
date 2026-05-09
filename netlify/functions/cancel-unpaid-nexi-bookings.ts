@@ -183,6 +183,19 @@ const cancelHandler: Handler = async () => {
                     console.log('[cancel-unpaid-nexi] cancellation_admin_alert template missing/disabled — skipping admin WhatsApp');
                 }
             }
+
+            // 5. Messaggi di Sistema Pro — fire on_payment_link_expired
+            //    (template custom in admin per pagamento link scaduto).
+            try {
+                const { triggerSystemMessageEvent } = await import('./utils/triggerSystemMessageEvent');
+                const r = await triggerSystemMessageEvent({ bookingId: booking.id, event: 'on_payment_link_expired' });
+                if (r.sent || r.errors) {
+                    console.log(`[cancel-unpaid-nexi] system messages on_payment_link_expired: sent=${r.sent} skipped=${r.skipped} errors=${r.errors}`);
+                }
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.error('[cancel-unpaid-nexi] system messages on_payment_link_expired trigger failed:', msg);
+            }
         }
 
         console.log(`[cancel-unpaid-nexi] Done. Cancelled ${cancelled} bookings.`);

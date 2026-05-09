@@ -30,6 +30,10 @@ interface SystemMessage {
     target_amount_max?: number | null  // euro
     /** CSV di JS day-of-week (0=Dom..6=Sab) Europe/Rome — default tutti i giorni */
     target_days_of_week?: string
+    /** Ora inizio fascia silenziosa Europe/Rome (0-23). NULL = nessuna fascia. */
+    quiet_hours_start?: number | null
+    /** Ora fine fascia silenziosa esclusiva (0-23). Se start>end, attraversa mezzanotte. */
+    quiet_hours_end?: number | null
     created_at: string
     updated_at: string
 }
@@ -787,6 +791,9 @@ export default function MessaggiSistemaProTab() {
     const [newTargetAmountMax, setNewTargetAmountMax] = useState('')
     // Giorni settimana attivi (0=Dom, 1=Lun,...6=Sab). Default tutti.
     const [newTargetDays, setNewTargetDays] = useState<Set<number>>(new Set([0, 1, 2, 3, 4, 5, 6]))
+    const [newQuietHoursEnabled, setNewQuietHoursEnabled] = useState(false)
+    const [newQuietStart, setNewQuietStart] = useState<number>(22)
+    const [newQuietEnd, setNewQuietEnd] = useState<number>(7)
     // Categorie reali caricate da Centralina Pro (config.categories) — niente
     // hardcoded fallback. Aggiornamento real-time via postgres_changes.
     const [proCategories, setProCategories] = useState<Array<{ id: string; label: string }>>([])
@@ -1037,6 +1044,8 @@ export default function MessaggiSistemaProTab() {
                     target_amount_min: newTargetAmountMin ? parseFloat(newTargetAmountMin) : null,
                     target_amount_max: newTargetAmountMax ? parseFloat(newTargetAmountMax) : null,
                     target_days_of_week: Array.from(newTargetDays).sort((a, b) => a - b).join(','),
+                    quiet_hours_start: newQuietHoursEnabled ? newQuietStart : null,
+                    quiet_hours_end: newQuietHoursEnabled ? newQuietEnd : null,
                 })
                 .select()
                 .single()
@@ -1568,6 +1577,50 @@ export default function MessaggiSistemaProTab() {
                                         </div>
                                         <p className="text-[11px] text-theme-text-muted mt-1">
                                             Togli un giorno per NON inviare in quel giorno. Default: tutti i 7 giorni attivi.
+                                        </p>
+                                    </div>
+
+                                    {/* Quiet hours — fascia oraria silenziosa (es. 22:00-07:00) */}
+                                    <div className="mt-3 pt-3 border-t border-theme-border/50">
+                                        <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={newQuietHoursEnabled}
+                                                onChange={e => setNewQuietHoursEnabled(e.target.checked)}
+                                                className="w-4 h-4 rounded accent-emerald-500"
+                                            />
+                                            <span className="text-xs font-medium text-theme-text-primary">Fascia silenziosa (Roma)</span>
+                                        </label>
+                                        {newQuietHoursEnabled && (
+                                            <div className="grid grid-cols-2 gap-2 max-w-sm">
+                                                <div>
+                                                    <label className="block text-[11px] text-theme-text-muted mb-1">Da</label>
+                                                    <select
+                                                        value={newQuietStart}
+                                                        onChange={e => setNewQuietStart(parseInt(e.target.value, 10))}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                    >
+                                                        {Array.from({ length: 24 }, (_, h) => (
+                                                            <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[11px] text-theme-text-muted mb-1">A (esclusa)</label>
+                                                    <select
+                                                        value={newQuietEnd}
+                                                        onChange={e => setNewQuietEnd(parseInt(e.target.value, 10))}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                    >
+                                                        {Array.from({ length: 24 }, (_, h) => (
+                                                            <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <p className="text-[11px] text-theme-text-muted mt-1">
+                                            Niente messaggi in questa fascia. Esempio: 22-07 = silenzio dalle 22:00 alle 06:59 del mattino dopo.
                                         </p>
                                     </div>
                                 </div>

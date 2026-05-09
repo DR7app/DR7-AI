@@ -251,6 +251,21 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
       toast.success('Documento caricato con successo!')
       setSelectedFiles({ ...selectedFiles, [documentType]: null })
       await loadDocuments()
+
+      // Fire on_doc_uploaded — admin Pro template (es. ringraziamento, lista
+      // mancanti, ecc.). Best-effort: fail-silent, non blocca la UI.
+      try {
+        fetch('/.netlify/functions/trigger-system-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'on_doc_uploaded',
+            entityType: 'customer',
+            entityId: customerId,
+            extra: { document_type: documentType, file_name: file.name },
+          }),
+        }).catch(() => { /* ignore */ })
+      } catch { /* ignore */ }
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error uploading document:', error)
