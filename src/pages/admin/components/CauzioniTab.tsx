@@ -49,9 +49,16 @@ export default function CauzioniTab() {
         in_cassa: 0,
         da_incassare: 0,
         scadute: 0,
+        a_rischio: 0,
+        totale_attive: 0,
         totale_incassate: 0,
         totale_da_incassare: 0,
-        totale_in_cassa: 0
+        totale_in_cassa: 0,
+        totale_attive_amount: 0,
+        totale_scadute_amount: 0,
+        totale_rischio_amount: 0,
+        byMonth: [] as Array<{ key: string; label: string; count: number; amount: number }>,
+        topClienti: [] as Array<{ id: string; nome: string; count: number; amount: number }>,
     })
 
     useEffect(() => {
@@ -210,12 +217,69 @@ export default function CauzioniTab() {
         const inCassaList = cauzioni.filter(c => c.stato === 'Bloccata')
         const in_cassa = inCassaList.length
         const da_incassare = daIncassareList.length
-        const scadute = visible.filter(c => c.is_overdue).length
+        const scaduteList = visible.filter(c => c.is_overdue)
+        const scadute = scaduteList.length
+        // "A rischio": cauzioni attive (non scadute, non incassate) entro 3 gg.
+        const rischioList = daIncassareList.filter(c => !c.is_overdue && c.days_until_deadline <= 3 && c.days_until_deadline >= 0)
+        const a_rischio = rischioList.length
+
         const totale_incassate = incassateList.reduce((sum, c) => sum + Number(c.importo), 0)
         const totale_da_incassare = daIncassareList.reduce((sum, c) => sum + Number(c.importo), 0)
         const totale_in_cassa = inCassaList.reduce((sum, c) => sum + Number(c.importo), 0)
+        const totale_attive = visible.length + in_cassa
+        const totale_attive_amount = visible.reduce((s, c) => s + Number(c.importo), 0) + totale_in_cassa
+        const totale_scadute_amount = scaduteList.reduce((s, c) => s + Number(c.importo), 0)
+        const totale_rischio_amount = rischioList.reduce((s, c) => s + Number(c.importo), 0)
 
-        setStats({ incassate, in_cassa, da_incassare, scadute, totale_incassate, totale_da_incassare, totale_in_cassa })
+        // Andamento ultimi 6 mesi: count + somma importi per mese di created_at.
+        const now = new Date()
+        const monthKeys: string[] = []
+        const byMonthMap = new Map<string, { count: number; amount: number }>()
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+            monthKeys.push(key)
+            byMonthMap.set(key, { count: 0, amount: 0 })
+        }
+        cauzioni.forEach(c => {
+            const d = new Date(c.created_at)
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+            const b = byMonthMap.get(key)
+            if (!b) return
+            b.count++
+            b.amount += Number(c.importo) || 0
+        })
+        const byMonth = monthKeys.map(key => {
+            const [y, m] = key.split('-').map(Number)
+            const dd = new Date(y, m - 1, 1)
+            return {
+                key,
+                label: dd.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' }),
+                count: byMonthMap.get(key)!.count,
+                amount: byMonthMap.get(key)!.amount,
+            }
+        })
+
+        // Top clienti per cauzioni ATTIVE (non chiuse).
+        const clienteMap = new Map<string, { id: string; nome: string; count: number; amount: number }>()
+        const activeForRanking = [...visible, ...inCassaList]
+        activeForRanking.forEach(c => {
+            const id = c.cliente_id || 'unknown'
+            const nome = c.cliente_nome || 'N/A'
+            const cur = clienteMap.get(id) || { id, nome, count: 0, amount: 0 }
+            cur.count++
+            cur.amount += Number(c.importo) || 0
+            clienteMap.set(id, cur)
+        })
+        const topClienti = Array.from(clienteMap.values()).sort((a, b) => b.amount - a.amount).slice(0, 4)
+
+        setStats({
+            incassate, in_cassa, da_incassare, scadute, a_rischio,
+            totale_attive,
+            totale_incassate, totale_da_incassare, totale_in_cassa,
+            totale_attive_amount, totale_scadute_amount, totale_rischio_amount,
+            byMonth, topClienti,
+        })
     }
 
     // --- Section Filters ---
@@ -876,60 +940,50 @@ export default function CauzioniTab() {
     }
 
     return (
-        <div className="p-6">
-            {/* Header */}
-            <div className="mb-6 flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-theme-text-primary">Cauzioni</h2>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => setShowStorico(true)}
-                        className="p-2 bg-theme-bg-tertiary border border-theme-border rounded-full hover:bg-theme-bg-hover transition-colors"
-                        title="Storico"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-theme-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.05 11a9 9 0 1 1 .5 4m-.5-4v4h4" />
-                        </svg>
-                    </button>
-                    <button
-                        onClick={() => setShowModal(true)}
-                        className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors"
-                    >
-                        Nuova Cauzione
-                    </button>
+        <div className="p-6 space-y-4 lg:space-y-6">
+            {/* Hero Header */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-theme-bg-secondary via-theme-bg-secondary to-theme-bg-tertiary rounded-2xl border border-theme-border p-5 lg:p-6">
+                <div className="absolute -top-12 -right-12 w-56 h-56 bg-dr7-gold/10 rounded-full blur-3xl pointer-events-none"/>
+                <div className="absolute -bottom-12 -left-12 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"/>
+                <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-dr7-gold/10 border border-dr7-gold/30 grid place-items-center flex-shrink-0">
+                            <svg className="w-5 h-5 text-dr7-gold" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-xl lg:text-2xl font-bold text-theme-text-primary leading-tight">Cauzioni Amministrazione</h2>
+                            <p className="text-xs lg:text-sm text-theme-text-muted mt-0.5">Gestisci tutte le cauzioni, i pagamenti e lo stato</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowStorico(true)}
+                            className="px-3 py-2 rounded-full bg-theme-bg-tertiary border border-theme-border hover:bg-theme-bg-hover text-theme-text-secondary text-xs font-medium flex items-center gap-1.5 transition-colors"
+                            title="Storico"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3"/><path strokeLinecap="round" strokeLinejoin="round" d="M3.05 11a9 9 0 1 1 .5 4m-.5-4v4h4"/></svg>
+                            Storico
+                        </button>
+                        <button
+                            onClick={() => setShowModal(true)}
+                            className="px-4 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors text-sm shadow-lg shadow-dr7-gold/20"
+                        >
+                            + Nuova Cauzione
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-4">
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-theme-text-secondary">Incassate</div>
-                    <div className="text-2xl sm:text-3xl font-bold text-green-500">{stats.incassate}</div>
-                </div>
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-theme-text-secondary">Da Incassare</div>
-                    <div className="text-2xl sm:text-3xl font-bold text-yellow-500">{stats.da_incassare}</div>
-                </div>
-                <div className="bg-theme-bg-tertiary border border-red-500/30 rounded-3xl p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-theme-text-secondary">In Cassa</div>
-                    <div className="text-2xl sm:text-3xl font-bold text-red-500">{stats.in_cassa}</div>
-                    <div className="text-xs sm:text-sm text-red-400 mt-1">€{stats.totale_in_cassa.toFixed(2)}</div>
-                </div>
-            </div>
-            {/* Totali Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-6">
-                <div className="bg-theme-bg-tertiary border border-green-500/30 rounded-3xl p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-theme-text-secondary">Totale Incassate</div>
-                    <div className="text-xl sm:text-3xl font-bold text-green-500">€{stats.totale_incassate.toFixed(2)}</div>
-                </div>
-                <div className="bg-theme-bg-tertiary border border-yellow-500/30 rounded-3xl p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-theme-text-secondary">Totale Da Incassare</div>
-                    <div className="text-xl sm:text-3xl font-bold text-yellow-500">€{stats.totale_da_incassare.toFixed(2)}</div>
-                </div>
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-3 sm:p-4">
-                    <div className="text-xs sm:text-sm text-theme-text-secondary">Scadute</div>
-                    <div className="text-2xl sm:text-3xl font-bold text-red-500">{stats.scadute}</div>
-                </div>
+            {/* 6 KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                <CauzioneKpi label="Cauzioni Incassate" count={stats.incassate} amount={stats.totale_incassate} ring="#10B981"/>
+                <CauzioneKpi label="Da Incassare" count={stats.da_incassare} amount={stats.totale_da_incassare} ring="#F59E0B"/>
+                <CauzioneKpi label="In Cassa" count={stats.in_cassa} amount={stats.totale_in_cassa} ring="#EF4444"/>
+                <CauzioneKpi label="Totale Attive" count={stats.totale_attive} amount={stats.totale_attive_amount} ring="#A855F7"/>
+                <CauzioneKpi label="Scadute" count={stats.scadute} amount={stats.totale_scadute_amount} ring="#DC2626" urgent={stats.scadute > 0}/>
+                <CauzioneKpi label="A Rischio" count={stats.a_rischio} amount={stats.totale_rischio_amount} ring="#EAB308" urgent={stats.a_rischio > 0}/>
             </div>
 
             {/* Filters */}
@@ -1141,6 +1195,56 @@ export default function CauzioniTab() {
                 </div>
             )}
 
+            {/* Bottom row: Andamento 6 mesi + Top Clienti + Analisi donut */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Andamento ultimi 6 mesi */}
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider">Andamento cauzioni</h3>
+                        <span className="text-[10px] text-theme-text-muted">ultimi 6 mesi</span>
+                    </div>
+                    <CauzioniMonthlyBars data={stats.byMonth}/>
+                </div>
+
+                {/* Top Clienti */}
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider">Top clienti</h3>
+                        <span className="text-[10px] text-theme-text-muted">cauzioni attive</span>
+                    </div>
+                    {stats.topClienti.length === 0 ? (
+                        <div className="text-xs text-theme-text-muted py-8 text-center">Nessun cliente con cauzioni attive</div>
+                    ) : (
+                        <div className="space-y-2.5">
+                            {stats.topClienti.map((c, i) => {
+                                const palette = ['bg-rose-500/20 text-rose-300 border-rose-500/40', 'bg-amber-500/20 text-amber-300 border-amber-500/40', 'bg-blue-500/20 text-blue-300 border-blue-500/40', 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40']
+                                const initials = c.nome.split(/\s+/).map(s => s[0] || '').join('').slice(0, 2).toUpperCase() || '?'
+                                return (
+                                    <div key={c.id} className="flex items-center gap-2.5">
+                                        <div className={`w-8 h-8 rounded-full grid place-items-center text-[11px] font-bold border flex-shrink-0 ${palette[i % palette.length]}`}>{initials}</div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-xs text-theme-text-primary font-semibold truncate">{c.nome}</div>
+                                            <div className="text-[10px] text-theme-text-muted">{c.count} {c.count === 1 ? 'cauzione' : 'cauzioni'}</div>
+                                        </div>
+                                        <div className="text-xs font-bold text-dr7-gold tabular-nums whitespace-nowrap">€{c.amount.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Analisi: donut percentuale incassato vs da incassare */}
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+                    <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-3">Analisi cauzioni</h3>
+                    <CauzioniAnalysisDonut
+                        incassate={stats.totale_incassate}
+                        daIncassare={stats.totale_da_incassare}
+                        inCassa={stats.totale_in_cassa}
+                    />
+                </div>
+            </div>
+
             {/* Modal */}
             {showModal && (
                 <NuovaCauzioneModal
@@ -1158,6 +1262,103 @@ export default function CauzioniTab() {
                     onSuccess={() => { setCassaCauzione(null); fetchCauzioni() }}
                 />
             )}
+        </div>
+    )
+}
+
+// ── Sub-components ──────────────────────────────────────────────────────────
+
+function CauzioneKpi({ label, count, amount, ring, urgent }: {
+    label: string
+    count: number
+    amount: number
+    ring: string
+    urgent?: boolean
+}) {
+    return (
+        <div className="relative overflow-hidden rounded-2xl border bg-theme-bg-secondary p-4" style={{ borderColor: `${ring}33` }}>
+            <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl pointer-events-none" style={{ background: `${ring}22` }}/>
+            <div className="relative">
+                <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${ring}cc` }}>{label}</div>
+                <div className={`text-2xl lg:text-3xl font-bold mt-2 tabular-nums ${urgent ? 'animate-pulse' : ''}`} style={{ color: ring }}>{count}</div>
+                <div className="text-[11px] text-theme-text-muted mt-1 tabular-nums">€{amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            </div>
+        </div>
+    )
+}
+
+function CauzioniMonthlyBars({ data }: { data: Array<{ key: string; label: string; count: number; amount: number }> }) {
+    const maxCount = Math.max(...data.map(m => m.count), 1)
+    const totalCount = data.reduce((s, m) => s + m.count, 0)
+    const totalAmount = data.reduce((s, m) => s + m.amount, 0)
+    if (totalCount === 0) {
+        return <div className="text-xs text-theme-text-muted py-12 text-center">Nessuna cauzione negli ultimi 6 mesi</div>
+    }
+    return (
+        <div>
+            <div className="flex items-end gap-2 h-32 px-1">
+                {data.map(m => {
+                    const h = m.count > 0 ? Math.max(8, Math.round((m.count / maxCount) * 100)) : 0
+                    return (
+                        <div key={m.key} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${m.label}: ${m.count} cauzioni · €${m.amount.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}>
+                            <div className="w-full flex flex-col justify-end h-full">
+                                {m.count > 0 && (
+                                    <div className="w-full rounded-t bg-gradient-to-t from-dr7-gold/40 via-dr7-gold/70 to-dr7-gold transition-all duration-300" style={{ height: `${h}%` }}/>
+                                )}
+                            </div>
+                            <div className="text-[10px] text-theme-text-muted truncate w-full text-center">{m.label}</div>
+                            <div className="text-[11px] font-bold text-theme-text-primary tabular-nums">{m.count > 0 ? m.count : ''}</div>
+                        </div>
+                    )
+                })}
+            </div>
+            <div className="mt-3 pt-3 border-t border-theme-border flex items-center justify-between text-[11px]">
+                <span className="text-theme-text-muted">Totale 6 mesi</span>
+                <span className="text-theme-text-primary font-bold tabular-nums">{totalCount} · €{totalAmount.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+            </div>
+        </div>
+    )
+}
+
+function CauzioniAnalysisDonut({ incassate, daIncassare, inCassa }: { incassate: number; daIncassare: number; inCassa: number }) {
+    const total = incassate + daIncassare + inCassa
+    if (total === 0) {
+        return <div className="text-xs text-theme-text-muted py-8 text-center">Nessuna cauzione da analizzare</div>
+    }
+    const pctIncassate = Math.round((incassate / total) * 100)
+    const slices = [
+        { label: 'Incassate', value: incassate, pct: Math.round((incassate / total) * 100), color: '#10B981' },
+        { label: 'Da incassare', value: daIncassare, pct: Math.round((daIncassare / total) * 100), color: '#F59E0B' },
+        { label: 'In cassa', value: inCassa, pct: Math.round((inCassa / total) * 100), color: '#EF4444' },
+    ].filter(s => s.value > 0)
+    const r = 15.91549
+    let offset = 0
+    return (
+        <div className="flex items-center gap-3">
+            <div className="relative w-28 h-28 shrink-0">
+                <svg className="w-28 h-28 -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r={r} fill="none" stroke="currentColor" strokeWidth="4" className="text-theme-bg-tertiary"/>
+                    {slices.map((s, i) => {
+                        const dash = `${s.pct}, 100`
+                        const el = <circle key={i} cx="18" cy="18" r={r} fill="none" strokeWidth="4" stroke={s.color} strokeDasharray={dash} strokeDashoffset={-offset}/>
+                        offset += s.pct
+                        return el
+                    })}
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className="text-2xl font-bold text-emerald-400 tabular-nums">{pctIncassate}%</div>
+                    <div className="text-[9px] text-theme-text-muted">incassate</div>
+                </div>
+            </div>
+            <div className="flex-1 space-y-1.5 min-w-0">
+                {slices.map(s => (
+                    <div key={s.label} className="flex items-center gap-2 text-[11px]">
+                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: s.color }}/>
+                        <span className="text-theme-text-secondary flex-1 truncate">{s.label}</span>
+                        <span className="text-theme-text-primary font-bold tabular-nums">€{s.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     )
 }
