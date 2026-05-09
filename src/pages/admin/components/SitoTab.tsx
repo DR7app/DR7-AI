@@ -291,15 +291,11 @@ const INITIAL_LEGAL: LegalCopy = {
     pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
 }
 
-// ─── Mechanical Services schema (mirror website utils/siteCopy.ts) ────────
-interface MechanicalServiceItem {
-    id: string
-    name_it: string; name_en: string
-    category_it: string; category_en: string
-    description_it: string; description_en: string
-    duration_it: string; duration_en: string
-    price: number
-}
+// ─── Mechanical Services chrome (mirror website utils/siteCopy.ts) ────────
+//
+// IMPORTANT: il CATALOGO meccanica vive in tab dedicato "Catalogo Prime Wash"
+// (filtro MECCANICA). Qui editiamo SOLO il chrome della pagina:
+// hero, "Come Funziona", orari, label bottoni.
 interface MechanicalHowStep {
     title_it: string; title_en: string
     text_it: string; text_en: string
@@ -308,7 +304,6 @@ interface MechanicalCopy {
     hero_title: string
     hero_subtitle_it: string; hero_subtitle_en: string
     hero_intro_it: string; hero_intro_en: string
-    services: MechanicalServiceItem[]
     book_now_label_it: string; book_now_label_en: string
     how_heading_it: string; how_heading_en: string
     how_steps: MechanicalHowStep[]
@@ -320,7 +315,6 @@ const INITIAL_MECHANICAL: MechanicalCopy = {
     hero_title: 'DR7 RAPID SERVICE',
     hero_subtitle_it: '', hero_subtitle_en: '',
     hero_intro_it: '', hero_intro_en: '',
-    services: [],
     book_now_label_it: 'PRENOTA ORA', book_now_label_en: 'BOOK NOW',
     how_heading_it: 'Come Funziona', how_heading_en: 'How It Works',
     how_steps: [],
@@ -698,7 +692,7 @@ export default function SitoTab() {
                     setContact(remote.contact)
                     setSavedContact(remote.contact)
                 }
-                if (remote?.mechanical && Array.isArray(remote.mechanical.services)) {
+                if (remote?.mechanical && remote.mechanical.hero_title) {
                     setMechanical(remote.mechanical)
                     setSavedMechanical(remote.mechanical)
                 }
@@ -3014,40 +3008,9 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
     )
 }
 
-// ─── Mechanical Services editor ─────────────────────────────────────────────
+// ─── Mechanical Services editor (chrome only — catalog lives elsewhere) ───
 function MechanicalEditor({ copy, setCopy }: { copy: MechanicalCopy; setCopy: (next: MechanicalCopy) => void }) {
     const update = <K extends keyof MechanicalCopy>(key: K, value: MechanicalCopy[K]) => setCopy({ ...copy, [key]: value })
-
-    // Services
-    const updateSvc = (idx: number, patch: Partial<MechanicalServiceItem>) => {
-        const next = [...copy.services]
-        next[idx] = { ...next[idx], ...patch }
-        setCopy({ ...copy, services: next })
-    }
-    const moveSvc = (idx: number, dir: -1 | 1) => {
-        const j = idx + dir
-        if (j < 0 || j >= copy.services.length) return
-        const next = [...copy.services]
-        ;[next[idx], next[j]] = [next[j], next[idx]]
-        setCopy({ ...copy, services: next })
-    }
-    const removeSvc = (idx: number) => {
-        if (!confirm('Rimuovere questo servizio dal catalogo?')) return
-        setCopy({ ...copy, services: copy.services.filter((_, i) => i !== idx) })
-    }
-    const addSvc = () => {
-        setCopy({
-            ...copy,
-            services: [...copy.services, {
-                id: `svc-${Date.now().toString(36)}`,
-                name_it: 'Nuovo servizio', name_en: 'New service',
-                category_it: 'Generale', category_en: 'General',
-                description_it: '', description_en: '',
-                duration_it: '30 minuti', duration_en: '30 minutes',
-                price: 0,
-            }],
-        })
-    }
 
     // How steps
     const updateStep = (idx: number, patch: Partial<MechanicalHowStep>) => {
@@ -3078,8 +3041,12 @@ function MechanicalEditor({ copy, setCopy }: { copy: MechanicalCopy; setCopy: (n
             <div>
                 <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Servizi Meccanica</h2>
                 <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/mechanical-services</code>. Catalogo + chrome pagina. I servizi qui editati sono usati anche dalla pagina di prenotazione (<code>/mechanical-booking</code>) — ID univoco serve per il deep-link da pagina servizi.
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/mechanical-services</code> — chrome editabile (hero, "Come Funziona", orari, label bottoni).
                 </p>
+                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[12px] text-blue-700">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    Il <b>catalogo servizi</b> (prezzi, nomi, categorie) si gestisce dal tab <b>Catalogo Prime Wash</b> con il filtro <b>MECCANICA</b>.
+                </div>
             </div>
 
             <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
@@ -3094,29 +3061,11 @@ function MechanicalEditor({ copy, setCopy }: { copy: MechanicalCopy; setCopy: (n
             </section>
 
             <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                    <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Catalogo servizi ({copy.services.length})</h3>
-                    <div className="flex items-center gap-2">
-                        <FieldText label='Bottone (IT) — es. "PRENOTA ORA"' value={copy.book_now_label_it} onChange={v => update('book_now_label_it', v)} />
-                        <FieldText label="Bottone (EN)" value={copy.book_now_label_en} onChange={v => update('book_now_label_en', v)} />
-                    </div>
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Etichette card servizi</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Bottone (IT) — es. "PRENOTA ORA"' value={copy.book_now_label_it} onChange={v => update('book_now_label_it', v)} />
+                    <FieldText label="Bottone (EN)" value={copy.book_now_label_en} onChange={v => update('book_now_label_en', v)} />
                 </div>
-                {copy.services.map((s, i) => (
-                    <MechanicalServiceCard
-                        key={s.id}
-                        svc={s}
-                        first={i === 0}
-                        last={i === copy.services.length - 1}
-                        onChange={(patch) => updateSvc(i, patch)}
-                        onMoveUp={() => moveSvc(i, -1)}
-                        onMoveDown={() => moveSvc(i, 1)}
-                        onRemove={() => removeSvc(i)}
-                    />
-                ))}
-                <button onClick={addSvc} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Aggiungi servizio
-                </button>
             </section>
 
             <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
@@ -3163,52 +3112,5 @@ function MechanicalEditor({ copy, setCopy }: { copy: MechanicalCopy; setCopy: (n
     )
 }
 
-function MechanicalServiceCard({
-    svc, first, last, onChange, onMoveUp, onMoveDown, onRemove,
-}: {
-    svc: MechanicalServiceItem
-    first: boolean
-    last: boolean
-    onChange: (patch: Partial<MechanicalServiceItem>) => void
-    onMoveUp: () => void
-    onMoveDown: () => void
-    onRemove: () => void
-}) {
-    const [open, setOpen] = useState(false)
-    return (
-        <div className="border border-black/10 rounded-xl bg-[#fafafa]">
-            <header className="px-3 py-2 flex items-center gap-2">
-                <button onClick={() => setOpen(o => !o)} className="flex-1 flex items-center gap-2 text-left">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-[#6e6e73] transition-transform ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
-                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-black/5 text-[#6e6e73]">{svc.category_it}</span>
-                    <span className="text-[13px] font-medium text-[#1d1d1f] flex-1 truncate">{svc.name_it || '(senza titolo)'}</span>
-                </button>
-                <span className="text-[13px] font-bold text-[#1d1d1f] tabular-nums">€{svc.price}</span>
-                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-                <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            </header>
-            {open && (
-                <div className="px-3 pb-3 pt-1 space-y-2 border-t border-black/5">
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_120px] gap-2">
-                        <input type="text" value={svc.id} onChange={e => onChange({ id: e.target.value.trim() })} placeholder='ID univoco (es. "brake-pads-front")' className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px] font-mono" />
-                        <div className="relative">
-                            <input type="number" min={0} step={1} value={svc.price} onChange={e => onChange({ price: Number(e.target.value) || 0 })} className="w-full bg-white border border-black/10 rounded-md pl-3 pr-8 py-1.5 text-[13px] text-right tabular-nums font-semibold" />
-                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">€</span>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <input type="text" value={svc.category_it} onChange={e => onChange({ category_it: e.target.value })} placeholder='Categoria IT (es. "Freni")' className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={svc.category_en} onChange={e => onChange({ category_en: e.target.value })} placeholder="Category EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={svc.name_it} onChange={e => onChange({ name_it: e.target.value })} placeholder="Nome IT" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={svc.name_en} onChange={e => onChange({ name_en: e.target.value })} placeholder="Name EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={svc.description_it} onChange={e => onChange({ description_it: e.target.value })} placeholder="Descrizione IT" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={svc.description_en} onChange={e => onChange({ description_en: e.target.value })} placeholder="Description EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={svc.duration_it} onChange={e => onChange({ duration_it: e.target.value })} placeholder='Durata IT (es. "30 minuti")' className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={svc.duration_en} onChange={e => onChange({ duration_en: e.target.value })} placeholder="Duration EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                    </div>
-                </div>
-            )}
-        </div>
-    )
-}
+// MechanicalServiceCard removed: catalogo meccanica vive in tab "Catalogo
+// Prime Wash" (filtro MECCANICA), non in Sito CMS.
