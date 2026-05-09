@@ -132,12 +132,13 @@ export default function SocialLinksTab() {
             </div>
 
             <div className="bg-theme-bg-secondary/50 p-4 rounded-lg border border-theme-border">
-                <h3 className="text-base font-semibold text-theme-text-primary mb-1">Dove vengono usati questi link</h3>
+                <h3 className="text-base font-semibold text-theme-text-primary mb-1">Come usarli nei messaggi</h3>
                 <ul className="text-[13px] text-theme-text-secondary space-y-1">
-                    <li>• <b>Google Review</b>: nei messaggi automatici di richiesta recensione (WhatsApp + email).</li>
-                    <li>• <b>Sito / Instagram / Facebook</b>: disponibili come variabili in qualsiasi template di Messaggi di Sistema Pro (es. <code className="text-dr7-gold">{'{website_url}'}</code>, <code className="text-dr7-gold">{'{instagram_url}'}</code>).</li>
+                    <li>• Ogni link ha la sua variabile mostrata accanto al campo (es. <code className="text-dr7-gold">{'{website}'}</code>, <code className="text-dr7-gold">{'{review_link}'}</code>, <code className="text-dr7-gold">{'{instagram}'}</code>, <code className="text-dr7-gold">{'{facebook}'}</code>).</li>
+                    <li>• Scrivi la variabile dentro un template di Messaggi di Sistema Pro: viene sostituita con l'URL al momento dell'invio.</li>
+                    <li>• <b>Link personalizzati</b>: sotto puoi aggiungere link extra (es. TikTok, YouTube). Ogni titolo crea automaticamente una nuova variabile <code className="text-dr7-gold">{'{<slug>}'}</code> che appare anche nella legenda di Messaggi di Sistema Pro.</li>
                 </ul>
-                <p className="text-[12px] text-theme-text-muted mt-2">Le modifiche si propagano sito + funzioni server entro ~60 secondi (cache TTL).</p>
+                <p className="text-[12px] text-theme-text-muted mt-2">Le modifiche sono effettive subito sul sito e nei messaggi (lettura live, niente cache).</p>
             </div>
 
             <div className="bg-theme-bg-tertiary p-5 rounded-lg border border-theme-border space-y-4 max-w-2xl">

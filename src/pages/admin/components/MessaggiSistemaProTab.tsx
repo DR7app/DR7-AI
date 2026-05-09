@@ -315,11 +315,63 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
 
 function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
     const [expanded, setExpanded] = useState(defaultOpen)
+    // Carica i link personalizzati creati in Marketing → Social Links
+    // (centralina_pro_config.config.marketing.custom_links). Ogni link
+    // genera un chip aggiuntivo sotto "Marketing & Link" con la propria
+    // variabile {<slug>}. Aggiornamento real-time via postgres_changes:
+    // l'admin aggiunge un link nel sub-tab Social Links → la legenda qui
+    // ne mostra il chip al prossimo render senza refresh.
+    const [customLinks, setCustomLinks] = useState<Array<{ slug: string; title: string; url: string }>>([])
+    useEffect(() => {
+        let cancelled = false
+        const loadCustomLinks = async () => {
+            const { data } = await supabase
+                .from('centralina_pro_config')
+                .select('config')
+                .eq('id', 'main')
+                .maybeSingle()
+            if (cancelled) return
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const mk = ((data?.config || {}) as any).marketing || {}
+            const raw = Array.isArray(mk.custom_links) ? mk.custom_links : []
+            const list: Array<{ slug: string; title: string; url: string }> = []
+            for (const l of raw as Array<{ title?: string; url?: string }>) {
+                if (typeof l?.title !== 'string' || typeof l?.url !== 'string') continue
+                const slug = l.title.toLowerCase().trim()
+                    .replace(/[^a-z0-9\s\-_]/g, '')
+                    .replace(/[\s\-]+/g, '_')
+                    .replace(/_+/g, '_')
+                    .replace(/^_|_$/g, '')
+                    .substring(0, 30)
+                if (slug) list.push({ slug, title: l.title, url: l.url })
+            }
+            setCustomLinks(list)
+        }
+        loadCustomLinks()
+        const sub = supabase
+            .channel('legend-custom-links-sync')
+            .on('postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' },
+                () => loadCustomLinks())
+            .subscribe()
+        return () => { cancelled = true; sub.unsubscribe() }
+    }, [])
+
     const copy = (k: string) => {
         navigator.clipboard?.writeText(`{${k}}`)
         toast.success(`{${k}} copiato — incollalo nel messaggio`)
     }
-    const totalVars = TEMPLATE_VAR_GROUPS.reduce((s, g) => s + g.items.length, 0)
+    // Inietta i custom_links nel gruppo "Marketing & Link" come chip extra.
+    const groupsWithCustomLinks: VarGroup[] = TEMPLATE_VAR_GROUPS.map(g => {
+        if (g.label !== 'Marketing & Link' || customLinks.length === 0) return g
+        const extras: TemplateVar[] = customLinks.map(l => ({
+            key: l.slug,
+            description: `${l.title} (link personalizzato)`,
+            example: l.url,
+        }))
+        return { ...g, items: [...g.items, ...extras] }
+    })
+    const totalVars = groupsWithCustomLinks.reduce((s, g) => s + g.items.length, 0)
     return (
         <div className="mt-2 rounded-lg border border-dr7-gold/30 bg-dr7-gold/5 overflow-hidden">
             <button
@@ -360,7 +412,7 @@ function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = 
                             <span className="text-[10px] text-theme-text-muted">Funzionano in ogni template Pro inviato in flussi prenotazione</span>
                         </div>
                         <div className="space-y-3">
-                            {TEMPLATE_VAR_GROUPS.filter(g => g.scope === 'common').map(group => (
+                            {groupsWithCustomLinks.filter(g => g.scope === 'common').map(group => (
                                 <div key={group.label}>
                                     <div className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-1.5">
                                         {group.label}

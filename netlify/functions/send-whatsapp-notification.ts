@@ -390,12 +390,13 @@ const handler: Handler = async (event) => {
         vars.booking_ref = vars.booking_id;
         vars.bookingRef = vars.booking_id;
 
-        // Link configurabili dalla Centralina (rental_config.config.marketing).
-        // Niente hardcoded fallback: se admin non li ha settati, le variabili
-        // restano vuote nel messaggio (segnale chiaro di config mancante).
+        // Link configurabili da Marketing → Social Links
+        // (centralina_pro_config.config.marketing). Niente hardcoded
+        // fallback: se admin non li ha settati, le variabili restano
+        // vuote nel messaggio (segnale chiaro di config mancante).
         try {
           const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-          const { data: cfgRow } = await sb.from('rental_config').select('config').eq('id', 'main').maybeSingle();
+          const { data: cfgRow } = await sb.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle();
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const mk = ((cfgRow?.config || {}) as any).marketing || {};
           vars.review_link = mk.google_review_link || process.env.GOOGLE_REVIEW_URL || process.env.GOOGLE_REVIEW_LINK || '';
