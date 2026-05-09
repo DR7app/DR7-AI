@@ -38,6 +38,9 @@ type SectionId =
     | 'chi-siamo'
     | 'footer'
     | 'legali'
+    | 'careers'
+    | 'press'
+    | 'contatti'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -47,6 +50,9 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'chi-siamo', title: 'Chi Siamo', ready: true },
     { id: 'footer', title: 'Footer', ready: true },
     { id: 'legali', title: 'Privacy & Termini', ready: true },
+    { id: 'careers', title: 'Careers', ready: true },
+    { id: 'press', title: 'Press', ready: true },
+    { id: 'contatti', title: 'Contatti', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -283,6 +289,107 @@ const INITIAL_LEGAL: LegalCopy = {
     pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
 }
 
+// ─── Careers / Press / Contact schemas (mirror website utils/siteCopy.ts) ──
+interface CareersJob {
+    id: string
+    title_it: string; title_en: string
+    location_it: string; location_en: string
+    type_it: string; type_en: string
+    description_it: string; description_en: string
+}
+interface CareersCopy {
+    page_title_it: string; page_title_en: string
+    intro_it: string; intro_en: string
+    jobs_heading_it: string; jobs_heading_en: string
+    jobs: CareersJob[]
+    apply_heading_it: string; apply_heading_en: string
+    apply_text_it: string; apply_text_en: string
+    apply_email: string
+}
+const INITIAL_CAREERS: CareersCopy = {
+    page_title_it: 'Careers', page_title_en: 'Careers',
+    intro_it: '', intro_en: '',
+    jobs_heading_it: 'Posizioni Aperte', jobs_heading_en: 'Open Positions',
+    jobs: [],
+    apply_heading_it: 'Come Candidarsi', apply_heading_en: 'How to Apply',
+    apply_text_it: '', apply_text_en: '',
+    apply_email: '',
+}
+
+interface PressArticle {
+    id: string
+    title: string
+    publication: string
+    date: string
+    summary_it: string; summary_en: string
+    link: string
+}
+interface PressCopy {
+    page_title_it: string; page_title_en: string
+    subtitle_it: string; subtitle_en: string
+    inquiries_heading_it: string; inquiries_heading_en: string
+    inquiries_text_it: string; inquiries_text_en: string
+    inquiries_email_label_it: string; inquiries_email_label_en: string
+    inquiries_email: string
+    news_heading_it: string; news_heading_en: string
+    read_more_label_it: string; read_more_label_en: string
+    articles: PressArticle[]
+    releases_heading_it: string; releases_heading_en: string
+    releases_text_it: string; releases_text_en: string
+}
+const INITIAL_PRESS: PressCopy = {
+    page_title_it: 'Press', page_title_en: 'Press',
+    subtitle_it: '', subtitle_en: '',
+    inquiries_heading_it: 'Richieste Stampa', inquiries_heading_en: 'Media Inquiries',
+    inquiries_text_it: '', inquiries_text_en: '',
+    inquiries_email_label_it: 'Email:', inquiries_email_label_en: 'Email:',
+    inquiries_email: '',
+    news_heading_it: 'Sui Media', news_heading_en: 'In the News',
+    read_more_label_it: "Leggi l'articolo", read_more_label_en: 'Read full article',
+    articles: [],
+    releases_heading_it: 'Comunicati Stampa', releases_heading_en: 'Press Releases',
+    releases_text_it: '', releases_text_en: '',
+}
+
+interface ContactCopy {
+    page_title_it: string; page_title_en: string
+    subtitle_it: string; subtitle_en: string
+    phone_label_it: string; phone_label_en: string
+    phone_display: string
+    phone_tel_url: string
+    whatsapp_label_it: string; whatsapp_label_en: string
+    whatsapp_button_it: string; whatsapp_button_en: string
+    whatsapp_url: string
+    email_label_it: string; email_label_en: string
+    email_address: string
+    hours_label_it: string; hours_label_en: string
+    hours_lines_it: string[]; hours_lines_en: string[]
+    office_heading_it: string; office_heading_en: string
+    office_company_name: string
+    office_address_it: string; office_address_en: string
+    office_piva: string
+    map_title: string
+    map_iframe_url: string
+}
+const INITIAL_CONTACT: ContactCopy = {
+    page_title_it: 'Contattaci', page_title_en: 'Contact Us',
+    subtitle_it: '', subtitle_en: '',
+    phone_label_it: 'Telefono', phone_label_en: 'Phone',
+    phone_display: '', phone_tel_url: '',
+    whatsapp_label_it: 'WhatsApp', whatsapp_label_en: 'WhatsApp',
+    whatsapp_button_it: '', whatsapp_button_en: '',
+    whatsapp_url: '',
+    email_label_it: 'Email', email_label_en: 'Email',
+    email_address: '',
+    hours_label_it: 'Orari', hours_label_en: 'Hours',
+    hours_lines_it: [], hours_lines_en: [],
+    office_heading_it: 'Sede Operativa', office_heading_en: 'Operating Office',
+    office_company_name: '',
+    office_address_it: '', office_address_en: '',
+    office_piva: '',
+    map_title: '', map_iframe_url: '',
+}
+
 const INITIAL_FOOTER: FooterCopy = {
     network_title: '',
     network_text_it: '', network_text_en: '',
@@ -386,6 +493,9 @@ interface SiteCopySnapshot {
     about?: AboutCopy
     footer?: FooterCopy
     legal?: LegalCopy
+    careers?: CareersCopy
+    press?: PressCopy
+    contact?: ContactCopy
 }
 
 interface CurrentState {
@@ -396,6 +506,9 @@ interface CurrentState {
     about: AboutCopy
     footer: FooterCopy
     legal: LegalCopy
+    careers: CareersCopy
+    press: PressCopy
+    contact: ContactCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -468,6 +581,12 @@ export default function SitoTab() {
     const [savedFooter, setSavedFooter] = useState<FooterCopy>(INITIAL_FOOTER)
     const [legal, setLegal] = useState<LegalCopy>(INITIAL_LEGAL)
     const [savedLegal, setSavedLegal] = useState<LegalCopy>(INITIAL_LEGAL)
+    const [careers, setCareers] = useState<CareersCopy>(INITIAL_CAREERS)
+    const [savedCareers, setSavedCareers] = useState<CareersCopy>(INITIAL_CAREERS)
+    const [press, setPress] = useState<PressCopy>(INITIAL_PRESS)
+    const [savedPress, setSavedPress] = useState<PressCopy>(INITIAL_PRESS)
+    const [contact, setContact] = useState<ContactCopy>(INITIAL_CONTACT)
+    const [savedContact, setSavedContact] = useState<ContactCopy>(INITIAL_CONTACT)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -523,6 +642,18 @@ export default function SitoTab() {
                     setLegal(merged)
                     setSavedLegal(merged)
                 }
+                if (remote?.careers && Array.isArray(remote.careers.jobs)) {
+                    setCareers(remote.careers)
+                    setSavedCareers(remote.careers)
+                }
+                if (remote?.press && Array.isArray(remote.press.articles)) {
+                    setPress(remote.press)
+                    setSavedPress(remote.press)
+                }
+                if (remote?.contact && remote.contact.email_address) {
+                    setContact(remote.contact)
+                    setSavedContact(remote.contact)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -535,10 +666,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact]
     )
     const dirty = changes.length > 0
 
@@ -549,7 +680,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -557,6 +688,9 @@ export default function SitoTab() {
             setSavedAbout(about)
             setSavedFooter(footer)
             setSavedLegal(legal)
+            setSavedCareers(careers)
+            setSavedPress(press)
+            setSavedContact(contact)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -598,6 +732,9 @@ export default function SitoTab() {
         setAbout(savedAbout)
         setFooter(savedFooter)
         setLegal(savedLegal)
+        setCareers(savedCareers)
+        setPress(savedPress)
+        setContact(savedContact)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -724,10 +861,14 @@ export default function SitoTab() {
                         {hydrated && section === 'legali' && (
                             <LegalEditor copy={legal} setCopy={setLegal} />
                         )}
-                        {hydrated && section !== 'faq' && section !== 'cancellazione' && section !== 'membership' && section !== 'hero' && section !== 'chi-siamo' && section !== 'footer' && section !== 'legali' && (
-                            <PlaceholderSection
-                                title={SECTIONS.find(s => s.id === section)?.title || section}
-                            />
+                        {hydrated && section === 'careers' && (
+                            <CareersEditor copy={careers} setCopy={setCareers} />
+                        )}
+                        {hydrated && section === 'press' && (
+                            <PressEditor copy={press} setCopy={setPress} />
+                        )}
+                        {hydrated && section === 'contatti' && (
+                            <ContactEditor copy={contact} setCopy={setContact} />
                         )}
                     </main>
                 </div>
@@ -817,6 +958,15 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
         if (JSON.stringify(curById.get(id)) !== JSON.stringify(savById.get(id))) {
             out.push(`Legali / ${id}: contenuti modificati`)
         }
+    }
+    if (JSON.stringify(current.careers) !== JSON.stringify(saved.careers)) {
+        out.push('Careers: contenuti modificati')
+    }
+    if (JSON.stringify(current.press) !== JSON.stringify(saved.press)) {
+        out.push('Press: contenuti modificati')
+    }
+    if (JSON.stringify(current.contact) !== JSON.stringify(saved.contact)) {
+        out.push('Contatti: contenuti modificati')
     }
     return out
 }
@@ -2058,12 +2208,12 @@ function FooterEditor({
                             <select
                                 value={s.icon}
                                 onChange={(e) => updateSocial(i, { icon: e.target.value as FooterSocialIcon })}
-                                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]"
+                                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f]"
                             >
-                                {SOCIAL_ICON_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                {SOCIAL_ICON_OPTIONS.map(o => <option key={o} value={o} className="text-[#1d1d1f]">{o}</option>)}
                             </select>
-                            <input type="text" value={s.label} onChange={e => updateSocial(i, { label: e.target.value })} placeholder="aria-label (es. Instagram)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                            <input type="text" value={s.href} onChange={e => updateSocial(i, { href: e.target.value })} placeholder="https://www.instagram.com/..." className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                            <input type="text" value={s.label} onChange={e => updateSocial(i, { label: e.target.value })} placeholder="aria-label (es. Instagram)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f]" />
+                            <input type="text" value={s.href} onChange={e => updateSocial(i, { href: e.target.value })} placeholder="https://www.instagram.com/..." className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] font-mono" />
                             <div className="flex items-center gap-1">
                                 <button onClick={() => moveSocial(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
                                 <button onClick={() => moveSocial(i, 1)} disabled={i === copy.social_links.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
@@ -2500,17 +2650,310 @@ function LegalSectionCard({
     )
 }
 
-// ─── Placeholder for upcoming sections ───────────────────────────────────────
-function PlaceholderSection({ title }: { title: string }) {
+// All current sections are migrated, so PlaceholderSection isn't rendered.
+// Keeping the spot reserved for the next sub-tab — define + remove together
+// when the next migration lands.
+
+// ─── Careers editor ─────────────────────────────────────────────────────────
+function CareersEditor({ copy, setCopy }: { copy: CareersCopy; setCopy: (next: CareersCopy) => void }) {
+    const update = <K extends keyof CareersCopy>(key: K, value: CareersCopy[K]) => setCopy({ ...copy, [key]: value })
+    const updateJob = (idx: number, patch: Partial<CareersJob>) => {
+        const next = [...copy.jobs]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, jobs: next })
+    }
+    const moveJob = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.jobs.length) return
+        const next = [...copy.jobs]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, jobs: next })
+    }
+    const removeJob = (idx: number) => {
+        if (!confirm('Rimuovere questa posizione?')) return
+        setCopy({ ...copy, jobs: copy.jobs.filter((_, i) => i !== idx) })
+    }
+    const addJob = () => {
+        setCopy({
+            ...copy,
+            jobs: [...copy.jobs, {
+                id: `job-${Date.now().toString(36)}`,
+                title_it: '', title_en: '',
+                location_it: '', location_en: '',
+                type_it: 'Tempo pieno', type_en: 'Full-time',
+                description_it: '', description_en: '',
+            }],
+        })
+    }
+
     return (
-        <div className="space-y-3 text-center py-12">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Careers</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/careers</code>. Inline supportato nel testo "Come Candidarsi": <code>**grassetto**</code> e <code>[testo](mailto:...)</code>.
+                </p>
             </div>
-            <h2 className="text-[18px] font-semibold tracking-tight text-[#1d1d1f]">{title}</h2>
-            <p className="text-[13px] text-[#6e6e73] max-w-md mx-auto">
-                Editor in arrivo. Le modifiche a questa pagina del sito saranno gestibili da qui non appena la migrazione del testo sara' completata.
-            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero pagina</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo pagina (IT)" value={copy.page_title_it} onChange={v => update('page_title_it', v)} />
+                    <FieldText label="Titolo pagina (EN)" value={copy.page_title_en} onChange={v => update('page_title_en', v)} />
+                    <FieldTextArea label="Intro (IT)" value={copy.intro_it} onChange={v => update('intro_it', v)} />
+                    <FieldTextArea label="Intro (EN)" value={copy.intro_en} onChange={v => update('intro_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Posizioni Aperte ({copy.jobs.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Heading sezione (IT)" value={copy.jobs_heading_it} onChange={v => update('jobs_heading_it', v)} />
+                    <FieldText label="Heading sezione (EN)" value={copy.jobs_heading_en} onChange={v => update('jobs_heading_en', v)} />
+                </div>
+                {copy.jobs.map((job, i) => (
+                    <div key={job.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{job.title_it || '(senza titolo)'}</span>
+                            <button onClick={() => moveJob(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveJob(i, 1)} disabled={i === copy.jobs.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => removeJob(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input type="text" value={job.title_it} onChange={e => updateJob(i, { title_it: e.target.value })} placeholder="Titolo IT" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.title_en} onChange={e => updateJob(i, { title_en: e.target.value })} placeholder="Title EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.location_it} onChange={e => updateJob(i, { location_it: e.target.value })} placeholder="Sede IT (es. Sede: Cagliari, Italia)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.location_en} onChange={e => updateJob(i, { location_en: e.target.value })} placeholder="Location EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.type_it} onChange={e => updateJob(i, { type_it: e.target.value })} placeholder="Tempo (IT) — es. Tempo pieno" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.type_en} onChange={e => updateJob(i, { type_en: e.target.value })} placeholder="Type EN — e.g. Full-time" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <textarea value={job.description_it} onChange={e => updateJob(i, { description_it: e.target.value })} placeholder="Descrizione IT" rows={3} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                            <textarea value={job.description_en} onChange={e => updateJob(i, { description_en: e.target.value })} placeholder="Description EN" rows={3} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                        </div>
+                    </div>
+                ))}
+                <button onClick={addJob} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi posizione
+                </button>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Come Candidarsi</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Heading (IT)" value={copy.apply_heading_it} onChange={v => update('apply_heading_it', v)} />
+                    <FieldText label="Heading (EN)" value={copy.apply_heading_en} onChange={v => update('apply_heading_en', v)} />
+                    <FieldTextArea label="Testo (IT) — supporta inline markdown" value={copy.apply_text_it} onChange={v => update('apply_text_it', v)} />
+                    <FieldTextArea label="Text (EN)" value={copy.apply_text_en} onChange={v => update('apply_text_en', v)} />
+                </div>
+                <FieldText label="Email candidature" value={copy.apply_email} onChange={v => update('apply_email', v)} />
+            </section>
+        </div>
+    )
+}
+
+// ─── Press editor ───────────────────────────────────────────────────────────
+function PressEditor({ copy, setCopy }: { copy: PressCopy; setCopy: (next: PressCopy) => void }) {
+    const update = <K extends keyof PressCopy>(key: K, value: PressCopy[K]) => setCopy({ ...copy, [key]: value })
+    const updateArt = (idx: number, patch: Partial<PressArticle>) => {
+        const next = [...copy.articles]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, articles: next })
+    }
+    const moveArt = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.articles.length) return
+        const next = [...copy.articles]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, articles: next })
+    }
+    const removeArt = (idx: number) => {
+        if (!confirm('Rimuovere questo articolo?')) return
+        setCopy({ ...copy, articles: copy.articles.filter((_, i) => i !== idx) })
+    }
+    const addArt = () => {
+        setCopy({
+            ...copy,
+            articles: [...copy.articles, {
+                id: `art-${Date.now().toString(36)}`,
+                title: '', publication: '', date: '',
+                summary_it: '', summary_en: '',
+                link: 'https://',
+            }],
+        })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Press</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/press</code>. Hero, sezione "Richieste Stampa", lista articoli, sezione "Comunicati Stampa".
+                </p>
+            </div>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo pagina (IT)" value={copy.page_title_it} onChange={v => update('page_title_it', v)} />
+                    <FieldText label="Titolo pagina (EN)" value={copy.page_title_en} onChange={v => update('page_title_en', v)} />
+                    <FieldTextArea label="Sottotitolo (IT)" value={copy.subtitle_it} onChange={v => update('subtitle_it', v)} />
+                    <FieldTextArea label="Sottotitolo (EN)" value={copy.subtitle_en} onChange={v => update('subtitle_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Richieste Stampa (banda)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Heading (IT)" value={copy.inquiries_heading_it} onChange={v => update('inquiries_heading_it', v)} />
+                    <FieldText label="Heading (EN)" value={copy.inquiries_heading_en} onChange={v => update('inquiries_heading_en', v)} />
+                    <FieldTextArea label="Testo (IT)" value={copy.inquiries_text_it} onChange={v => update('inquiries_text_it', v)} />
+                    <FieldTextArea label="Testo (EN)" value={copy.inquiries_text_en} onChange={v => update('inquiries_text_en', v)} />
+                    <FieldText label="Etichetta email (IT)" value={copy.inquiries_email_label_it} onChange={v => update('inquiries_email_label_it', v)} />
+                    <FieldText label="Etichetta email (EN)" value={copy.inquiries_email_label_en} onChange={v => update('inquiries_email_label_en', v)} />
+                </div>
+                <FieldText label="Email contatto" value={copy.inquiries_email} onChange={v => update('inquiries_email', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sui Media — Articoli ({copy.articles.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Heading sezione (IT) — es. "Sui Media"' value={copy.news_heading_it} onChange={v => update('news_heading_it', v)} />
+                    <FieldText label="Heading sezione (EN)" value={copy.news_heading_en} onChange={v => update('news_heading_en', v)} />
+                    <FieldText label='Etichetta "Leggi articolo" (IT)' value={copy.read_more_label_it} onChange={v => update('read_more_label_it', v)} />
+                    <FieldText label="Etichetta (EN)" value={copy.read_more_label_en} onChange={v => update('read_more_label_en', v)} />
+                </div>
+                {copy.articles.map((a, i) => (
+                    <div key={a.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{a.title || '(senza titolo)'}</span>
+                            <button onClick={() => moveArt(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveArt(i, 1)} disabled={i === copy.articles.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => removeArt(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        </div>
+                        <input type="text" value={a.title} onChange={e => updateArt(i, { title: e.target.value })} placeholder="Titolo articolo (lingua originale)" className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input type="text" value={a.publication} onChange={e => updateArt(i, { publication: e.target.value })} placeholder="Testata (es. Casteddu Online)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={a.date} onChange={e => updateArt(i, { date: e.target.value })} placeholder="Data (es. 28 Maggio 2025)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        </div>
+                        <input type="text" value={a.link} onChange={e => updateArt(i, { link: e.target.value })} placeholder="https://..." className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <textarea value={a.summary_it} onChange={e => updateArt(i, { summary_it: e.target.value })} placeholder="Sommario IT" rows={3} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                            <textarea value={a.summary_en} onChange={e => updateArt(i, { summary_en: e.target.value })} placeholder="Summary EN" rows={3} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                        </div>
+                    </div>
+                ))}
+                <button onClick={addArt} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi articolo
+                </button>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Comunicati Stampa (banda)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Heading (IT)" value={copy.releases_heading_it} onChange={v => update('releases_heading_it', v)} />
+                    <FieldText label="Heading (EN)" value={copy.releases_heading_en} onChange={v => update('releases_heading_en', v)} />
+                    <FieldTextArea label="Testo (IT)" value={copy.releases_text_it} onChange={v => update('releases_text_it', v)} />
+                    <FieldTextArea label="Testo (EN)" value={copy.releases_text_en} onChange={v => update('releases_text_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Contact editor ─────────────────────────────────────────────────────────
+function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: ContactCopy) => void }) {
+    const update = <K extends keyof ContactCopy>(key: K, value: ContactCopy[K]) => setCopy({ ...copy, [key]: value })
+    const setHoursIt = (lines: string[]) => setCopy({ ...copy, hours_lines_it: lines })
+    const setHoursEn = (lines: string[]) => setCopy({ ...copy, hours_lines_en: lines })
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Contatti</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/contact</code>. Hero, 4 card (Telefono / WhatsApp / Email / Orari), info azienda, mappa.
+                </p>
+            </div>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo pagina (IT)" value={copy.page_title_it} onChange={v => update('page_title_it', v)} />
+                    <FieldText label="Titolo pagina (EN)" value={copy.page_title_en} onChange={v => update('page_title_en', v)} />
+                    <FieldTextArea label="Sottotitolo (IT)" value={copy.subtitle_it} onChange={v => update('subtitle_it', v)} />
+                    <FieldTextArea label="Sottotitolo (EN)" value={copy.subtitle_en} onChange={v => update('subtitle_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card: Telefono</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Etichetta (IT)" value={copy.phone_label_it} onChange={v => update('phone_label_it', v)} />
+                    <FieldText label="Etichetta (EN)" value={copy.phone_label_en} onChange={v => update('phone_label_en', v)} />
+                    <FieldText label="Numero visualizzato" value={copy.phone_display} onChange={v => update('phone_display', v)} />
+                    <FieldText label='URL "tel:" (es. tel:+393457905205)' value={copy.phone_tel_url} onChange={v => update('phone_tel_url', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card: WhatsApp</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Etichetta card (IT)" value={copy.whatsapp_label_it} onChange={v => update('whatsapp_label_it', v)} />
+                    <FieldText label="Etichetta card (EN)" value={copy.whatsapp_label_en} onChange={v => update('whatsapp_label_en', v)} />
+                    <FieldText label="Bottone (IT)" value={copy.whatsapp_button_it} onChange={v => update('whatsapp_button_it', v)} />
+                    <FieldText label="Bottone (EN)" value={copy.whatsapp_button_en} onChange={v => update('whatsapp_button_en', v)} />
+                </div>
+                <FieldText label="URL WhatsApp" value={copy.whatsapp_url} onChange={v => update('whatsapp_url', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card: Email</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Etichetta (IT)" value={copy.email_label_it} onChange={v => update('email_label_it', v)} />
+                    <FieldText label="Etichetta (EN)" value={copy.email_label_en} onChange={v => update('email_label_en', v)} />
+                </div>
+                <FieldText label="Indirizzo email" value={copy.email_address} onChange={v => update('email_address', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card: Orari</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Etichetta (IT)" value={copy.hours_label_it} onChange={v => update('hours_label_it', v)} />
+                    <FieldText label="Etichetta (EN)" value={copy.hours_label_en} onChange={v => update('hours_label_en', v)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Righe IT (una per linea)" value={copy.hours_lines_it.join('\n')} onChange={v => setHoursIt(v.split('\n').filter(s => s.length > 0))} />
+                    <FieldTextArea label="Lines EN (one per line)" value={copy.hours_lines_en.join('\n')} onChange={v => setHoursEn(v.split('\n').filter(s => s.length > 0))} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sede Operativa</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Heading (IT)" value={copy.office_heading_it} onChange={v => update('office_heading_it', v)} />
+                    <FieldText label="Heading (EN)" value={copy.office_heading_en} onChange={v => update('office_heading_en', v)} />
+                </div>
+                <FieldText label="Ragione sociale" value={copy.office_company_name} onChange={v => update('office_company_name', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Indirizzo (IT)" value={copy.office_address_it} onChange={v => update('office_address_it', v)} />
+                    <FieldText label="Address (EN)" value={copy.office_address_en} onChange={v => update('office_address_en', v)} />
+                </div>
+                <FieldText label="P.IVA / C.F." value={copy.office_piva} onChange={v => update('office_piva', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Mappa</h3>
+                <FieldText label="Title (accessibilità)" value={copy.map_title} onChange={v => update('map_title', v)} />
+                <FieldText label="URL iframe (OpenStreetMap embed)" value={copy.map_iframe_url} onChange={v => update('map_iframe_url', v)} />
+                {copy.map_iframe_url && (
+                    <div className="rounded-xl overflow-hidden border border-black/10">
+                        <iframe title={copy.map_title || 'preview'} src={copy.map_iframe_url} width="100%" height="200" style={{ border: 0 }} loading="lazy" />
+                    </div>
+                )}
+            </section>
         </div>
     )
 }
