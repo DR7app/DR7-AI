@@ -290,6 +290,29 @@ const birthdayHandler: Handler = async (event) => {
 
         sent++;
 
+        // Messaggi di Sistema Pro — fire before_birthday in piu' al messaggio
+        // di base. Cosi' l'admin puo' aggiungere template Pro custom (es.
+        // "auguri da Massimo") che partono come ulteriore evento. Synthetic
+        // booking con i campi cliente.
+        try {
+          const { triggerSystemMessageEvent } = await import('./utils/triggerSystemMessageEvent');
+          await triggerSystemMessageEvent({
+            bookingId: customer.id,
+            event: 'before_birthday',
+            syntheticBooking: {
+              id: customer.id,
+              customer_name: fullName,
+              customer_email: customer.email || null,
+              customer_phone: customer.telefono,
+              service_type: 'rental',
+              status: 'confirmed',
+            },
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error('[Birthday Auto] before_birthday trigger failed:', msg);
+        }
+
         // Delay between messages to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 2000));
 

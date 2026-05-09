@@ -17,9 +17,12 @@ import { createClient } from '@supabase/supabase-js'
 type TriggerEvent =
     | 'on_booking' | 'on_payment' | 'on_signature' | 'on_extension'
     | 'on_cauzione_created' | 'on_cauzione_collected' | 'on_cauzione_refunded'
-    | 'on_first_booking'
+    | 'on_cauzione_partial_capture'
+    | 'on_first_booking' | 'before_birthday'
     | 'on_doc_uploaded' | 'on_doc_verified'
     | 'on_payment_failed' | 'on_payment_link_expired'
+    | 'before_signature' | 'after_signature_review' | 'on_late_return'
+    | 'on_review_received' | 'on_promo_gap'
 
 interface TriggerArgs {
     /** ID dell'entità da collegare nel send_log. Se l'evento e' booking-based,

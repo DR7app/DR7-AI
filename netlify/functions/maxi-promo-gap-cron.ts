@@ -381,6 +381,41 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
       }
       await new Promise(r => setTimeout(r, 800))
     }
+
+    // Messaggi di Sistema Pro — fire on_promo_gap per ogni gap rilevato.
+    // Un solo fire per candidato (non per recipient), cosi' i template Pro
+    // partono indipendentemente da chi e' nei recipients del cron base.
+    // SyntheticBooking riempie le variabili comuni per il sender.
+    try {
+      const { triggerSystemMessageEvent } = await import('./utils/triggerSystemMessageEvent')
+      await triggerSystemMessageEvent({
+        bookingId: `gap_${v.id}_${c.gapSignature}`,
+        event: 'on_promo_gap',
+        syntheticBooking: {
+          id: `gap_${v.id}_${c.gapSignature}`,
+          customer_name: 'Gap veicolo',
+          customer_phone: null,
+          service_type: 'rental',
+          status: 'confirmed',
+          vehicle_id: v.id,
+          vehicle_name: v.display_name,
+          vehicle_plate: (v as Record<string, unknown>).plate as string | undefined,
+          gap_signature: c.gapSignature,
+          booking_details: {
+            promo_gap: {
+              vehicle: v.display_name,
+              gap_date: c.gapDateDb,
+              gap_hours: c.gapHours,
+              gap_start: c.gapStartDate.toISOString(),
+              gap_end: c.gapEndDate.toISOString(),
+            },
+          },
+        },
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[maxi-promo-gap] on_promo_gap trigger failed:', msg)
+    }
   }
 
   return {

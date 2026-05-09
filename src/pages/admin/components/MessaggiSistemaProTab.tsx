@@ -65,18 +65,23 @@ const TRIGGER_LABELS: Record<string, string> = {
     'on_booking': 'Alla creazione della prenotazione',
     'on_payment': 'Al pagamento ricevuto',
     'on_signature': 'Dopo la firma del contratto',
+    'before_signature': 'Promemoria firma contratto',
+    'after_signature_review': 'Recensione dopo firma',
     'on_extension': 'Dopo una proroga',
+    'on_late_return': 'Ritardo riconsegna oltre grace',
     'on_preventivo': 'Invio preventivo (gestito separatamente)',
     // Cauzione lifecycle
     'on_cauzione_created': 'Nuova cauzione creata',
     'on_cauzione_due': 'Cauzione in scadenza',
     'on_cauzione_overdue': 'Cauzione scaduta',
     'on_cauzione_collected': 'Cauzione incassata',
+    'on_cauzione_partial_capture': 'Cauzione incassata parziale',
     'on_cauzione_refunded': 'Cauzione restituita',
     // Customer lifecycle
     'on_first_booking': 'Prima prenotazione del cliente',
     'on_inactive_30d': 'Cliente inattivo da 30 giorni',
     'on_inactive_90d': 'Cliente inattivo da 90 giorni',
+    'before_birthday': 'Compleanno cliente',
     // Documenti
     'on_doc_uploaded': 'Documento caricato',
     'on_doc_verified': 'Documento verificato',
@@ -86,6 +91,9 @@ const TRIGGER_LABELS: Record<string, string> = {
     // Scadenze
     'on_scadenza_3d': 'Scadenza tra 3 giorni',
     'on_scadenza_7d': 'Scadenza tra 7 giorni',
+    // Marketing & ops
+    'on_review_received': 'Recensione Google ricevuta',
+    'on_promo_gap': 'Gap disponibilita\' veicolo',
 }
 
 // Descrizioni in linguaggio naturale per ogni evento — mostrate sotto la select.
@@ -113,6 +121,13 @@ const TRIGGER_DESCRIPTIONS: Record<string, string> = {
     'on_payment_link_expired': 'Quando un link di pagamento scade senza pagamento.',
     'on_scadenza_3d': 'Per qualunque scadenza in Scadenze (assicurazione, bollo, ecc.). 3 giorni prima.',
     'on_scadenza_7d': 'Stesso ma 7 giorni prima.',
+    'before_signature': 'Promemoria al cliente di firmare il contratto. Offset = ore PRIMA del pickup. Parte solo se signature_signed_at e\' ancora vuoto.',
+    'after_signature_review': 'Richiesta recensione X giorni dopo la firma (es. 7 = una settimana dopo). Offset in ore.',
+    'on_late_return': 'Quando l\'auto e\' in ritardo oltre la grace di Centralina Pro (default 90 min prima dell\'orario pickup nel giorno di rientro). Cron giornaliero.',
+    'before_birthday': 'Compleanno cliente. Default 10 giorni prima dal cron esistente. Offset in ore non modifica (e\' fisso a 10 giorni).',
+    'on_review_received': 'Recensione Google ricevuta. Trigger MANUALE: si fa fire da admin via /trigger-system-event quando arriva una review (richiede integrazione esterna).',
+    'on_promo_gap': 'Gap di disponibilita\' di un veicolo (4-48h tra due booking). Cron ogni 10 minuti tramite maxi-promo-gap-cron.',
+    'on_cauzione_partial_capture': 'Quando l\'admin incassa solo una parte della cauzione (es. €100 su €500 di danno). Inline in CauzioniTab.',
 }
 
 // Le categorie veicolo sono caricate dinamicamente da

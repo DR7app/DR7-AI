@@ -100,6 +100,28 @@ function getEventTimeMs(booking: Booking, event: string): number | null {
             const t = last?.created_at;
             return t ? new Date(t).getTime() : null;
         }
+        case 'before_signature': {
+            // Promemoria firma: parte SOLO se la firma manca ancora.
+            // Ancora il timestamp al pickup_date (rental) o appointment_date.
+            const signed = booking.booking_details?.signature_signed_at || booking.booking_details?.contract?.signed_at;
+            if (signed) return null;
+            const t = isRental ? booking.pickup_date : apt;
+            return t ? new Date(t).getTime() : null;
+        }
+        case 'after_signature_review': {
+            // Recensione X giorni/ore DOPO la firma.
+            const t = booking.booking_details?.signature_signed_at || booking.booking_details?.contract?.signed_at;
+            return t ? new Date(t).getTime() : null;
+        }
+        case 'on_late_return': {
+            // Ritardo riconsegna oltre la grace. Ancora a dropoff_date.
+            // Il template viene mandato quando NOW > dropoff_date + grace_min
+            // e l'auto non e' ancora rientrata (status != completata).
+            const isReturned = booking.status === 'completed' || booking.status === 'completata';
+            if (isReturned) return null;
+            const t = isRental ? (booking.dropoff_date || booking.pickup_date) : apt;
+            return t ? new Date(t).getTime() : null;
+        }
         default:
             return null;
     }
@@ -434,8 +456,23 @@ const cronHandler = async () => {
             const lo = new Date(now - offsetH * 3600 * 1000 - LOOKBACK_MS).toISOString();
             const hi = new Date(now - offsetH * 3600 * 1000 + LOOKFORWARD_MS).toISOString();
             q = q.gte('updated_at', lo).lte('updated_at', hi);
+        } else if (tpl.trigger_event === 'before_signature') {
+            // Promemoria firma: ancorato al pickup_date come before_pickup,
+            // poi computeTargetMs/getEventTimeMs filtra via signed!=null.
+            const lo = new Date(now + offsetH * 3600 * 1000 - LOOKBACK_MS).toISOString();
+            const hi = new Date(now + offsetH * 3600 * 1000 + LOOKFORWARD_MS).toISOString();
+            q = q.gte('pickup_date', lo).lte('pickup_date', hi);
+        } else if (tpl.trigger_event === 'on_late_return') {
+            // Ritardo: dropoff_date in passato, status non completato.
+            // Niente filtro per data perche' il ritardo puo' essere di ore o
+            // giorni — getEventTimeMs gestisce. Filtra via status.
+            q = q.not('status', 'in', '(completed,completata,cancelled,annullata)');
+            const lo = new Date(now - 7 * 24 * 3600 * 1000).toISOString();
+            const hi = new Date(now).toISOString();
+            q = q.gte('dropoff_date', lo).lte('dropoff_date', hi);
         }
-        // on_signature / on_extension: niente filtro perche' i timestamp sono dentro JSONB
+        // on_signature / after_signature_review / on_extension: niente filtro
+        // perche' i timestamp sono dentro JSONB
 
         const { data: candidates, error: bkErr } = await q.limit(500);
         if (bkErr) {

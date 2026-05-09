@@ -765,6 +765,14 @@ export default function CauzioniTab() {
                 toast.success(`Incassato €${amount.toFixed(2)} (registrato manualmente)`)
             }
 
+            // Distingui partial vs full capture: se l'admin incassa MENO
+            // dell'importo totale della cauzione, fire on_cauzione_partial_capture
+            // (cosi' template diversi possono partire). Sempre fire anche
+            // on_cauzione_collected per retro-compatibilita'.
+            const isPartial = amount > 0 && amount < cauzione.importo
+            if (isPartial) {
+                fireCauzioneEvent(cauzione.id, 'on_cauzione_partial_capture')
+            }
             fireCauzioneEvent(cauzione.id, 'on_cauzione_collected')
             fetchCauzioni()
         } catch (error: unknown) {
