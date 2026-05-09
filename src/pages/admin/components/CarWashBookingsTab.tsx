@@ -826,6 +826,28 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   }
 
+  // Find the shadow rental row for a carwash booking that bundles a
+  // Supercar Experience. Looks first at booking_details.supercar_experience.
+  // shadow_booking_id, then falls back to a query by parent id (so older
+  // bookings created before the back-ref was persisted are still cleaned).
+  async function findSupercarShadowBookingId(carwashBookingId: string, parentDetails: Record<string, unknown> | null | undefined): Promise<string | null> {
+    const exp = parentDetails && typeof parentDetails === 'object'
+      ? (parentDetails as { supercar_experience?: { shadow_booking_id?: string | null } }).supercar_experience
+      : undefined
+    if (exp?.shadow_booking_id) return exp.shadow_booking_id
+    // Fallback: search bookings where booking_details.parent_carwash_booking_id === carwashBookingId
+    try {
+      const { data } = await supabase
+        .from('bookings')
+        .select('id')
+        .contains('booking_details', { parent_carwash_booking_id: carwashBookingId })
+        .limit(1)
+      return data && data.length > 0 ? data[0].id : null
+    } catch {
+      return null
+    }
+  }
+
   async function handleDeleteBooking(bookingId: string, customerName: string) {
     try {
       // Try to delete from Google Calendar
@@ -842,6 +864,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         logger.log('Google Calendar event deletion requested for booking:', bookingId)
       } catch (calError) {
         logger.warn('Failed to delete from Google Calendar:', calError)
+      }
+
+      // Cascade: drop the shadow rental row that blocks the supercar so
+      // the car frees up the moment the carwash booking is deleted.
+      try {
+        const parent = bookings.find(b => b.id === bookingId)
+        const shadowId = await findSupercarShadowBookingId(bookingId, parent?.booking_details)
+        if (shadowId) {
+          await supabase.from('bookings').delete().eq('id', shadowId)
+          logger.log('[Supercar Experience] Cascaded delete of shadow rental', shadowId)
+        }
+      } catch (cascadeErr) {
+        console.error('[Supercar Experience] cascade-delete failed:', cascadeErr)
       }
 
       // Delete dependent records first (FK constraints)
@@ -3485,6 +3520,36 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         .eq('id', editingBooking.id)
 
                       if (error) throw error
+
+                      // ─── Supercar Experience cascade on edit ──────────
+                      // If this carwash booking has an associated supercar
+                      // shadow rental, sync its window to the new
+                      // appointment date/time. Duration stays the one chosen
+                      // at create-time (stored in supercar_experience.duration_minutes).
+                      try {
+                        const exp = (editingBooking.booking_details as { supercar_experience?: { shadow_booking_id?: string | null; duration_minutes?: number; vehicle_id?: string } } | undefined)?.supercar_experience
+                        const shadowId = exp?.shadow_booking_id
+                          || await findSupercarShadowBookingId(editingBooking.id, editingBooking.booking_details)
+                        if (shadowId && _apptIso && exp?.duration_minutes) {
+                          const start = new Date(_apptIso)
+                          const end = new Date(start.getTime() + exp.duration_minutes * 60_000)
+                          await supabase.from('bookings').update({
+                            pickup_date: start.toISOString(),
+                            dropoff_date: end.toISOString(),
+                            customer_name: editingBooking.customer_name,
+                            customer_email: editingBooking.customer_email,
+                            customer_phone: editingBooking.customer_phone,
+                            // Mirror cancelled state from parent so the
+                            // supercar frees up if the carwash is annulled.
+                            status: editingBooking.status === 'cancelled' || editingBooking.status === 'annullata'
+                              ? 'cancelled'
+                              : 'confirmed',
+                          }).eq('id', shadowId)
+                          logger.log('[Supercar Experience] Cascaded edit to shadow', shadowId, start.toISOString(), '→', end.toISOString())
+                        }
+                      } catch (cascadeErr) {
+                        console.error('[Supercar Experience] cascade-edit failed:', cascadeErr)
+                      }
 
                       // Auto-generate fattura if payment changed to paid (skip Wallet & Gift Card)
                       const editPaymentMethod = editingBooking.payment_method || ''
