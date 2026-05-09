@@ -2377,6 +2377,109 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </label>
               </div>
 
+              {/* ─── Supercar Experience picker (also rendered in step 3) ───
+                  Visible the moment a Supercar/Icon Experience extra has a
+                  duration option selected. If date+time aren't picked yet,
+                  the operator can still pre-select the car; availability is
+                  re-checked in step 3 against the actual appointment time. */}
+              {supercarExperienceExtra && supercarExperienceOption && (
+                <div className="rounded-xl border border-dr7-gold/40 bg-dr7-gold/5 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <h4 className="text-sm font-semibold text-dr7-gold">Scegli la {supercarExperienceExtra.name}</h4>
+                      <p className="text-xs text-theme-text-muted mt-0.5">
+                        Durata {supercarExperienceOption.label}
+                        {supercarExperienceWindow
+                          ? ` · finestra ${supercarExperienceWindow.pickupTime}–${supercarExperienceWindow.returnTime}`
+                          : ' · imposta data e ora in step 3 per verificare la disponibilità'}
+                      </p>
+                    </div>
+                    {experienceVehicle && (
+                      <button
+                        type="button"
+                        onClick={() => setExperienceVehicle(null)}
+                        className="text-xs text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded-full px-3 py-1"
+                      >
+                        Cambia veicolo
+                      </button>
+                    )}
+                  </div>
+
+                  {supercarFleet.length === 0 ? (
+                    <p className="text-xs text-theme-text-muted italic">Nessun veicolo nella flotta supercar (caricamento in corso o flotta vuota).</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {supercarFleet.map(vehicle => {
+                        const availabilityVehicle: AvailabilityVehicle = {
+                          id: vehicle.id,
+                          display_name: vehicle.display_name,
+                          plate: vehicle.plate,
+                          status: (vehicle.status === 'available' || vehicle.status === 'rented' || vehicle.status === 'maintenance' || vehicle.status === 'retired') ? vehicle.status : 'available',
+                          daily_rate: vehicle.daily_rate,
+                          category: (vehicle.category as AvailabilityVehicle['category']) || undefined,
+                          metadata: vehicle.metadata as AvailabilityVehicle['metadata'],
+                          created_at: '',
+                          updated_at: '',
+                        }
+                        // If the appointment window isn't set yet, treat as
+                        // available (provisional). Final availability is
+                        // re-checked in step 3 once date+time are confirmed.
+                        const result = supercarExperienceWindow
+                          ? isVehicleAvailable(
+                              availabilityVehicle,
+                              supercarExperienceWindow.pickupDate,
+                              supercarExperienceWindow.returnDate,
+                              supercarExperienceWindow.pickupTime,
+                              supercarExperienceWindow.returnTime,
+                              supercarFleetBookings,
+                            )
+                          : { available: true }
+                        const isAvailable = result.available
+                        const isSelected = experienceVehicle?.id === vehicle.id
+                        return (
+                          <button
+                            key={vehicle.id}
+                            type="button"
+                            disabled={!isAvailable && !isSelected}
+                            onClick={() => setExperienceVehicle(vehicle)}
+                            className={`text-left rounded-lg border p-3 transition-colors ${
+                              isSelected
+                                ? 'border-dr7-gold bg-dr7-gold/15'
+                                : isAvailable
+                                ? 'border-theme-border bg-theme-bg-tertiary hover:border-dr7-gold hover:bg-dr7-gold/5'
+                                : 'border-rose-500/30 bg-rose-500/5 opacity-60 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</p>
+                                {vehicle.plate && <p className="text-[11px] font-mono text-theme-text-muted">{vehicle.plate}</p>}
+                              </div>
+                              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isSelected
+                                  ? 'bg-dr7-gold text-black border-dr7-gold'
+                                  : isAvailable
+                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                              }`}>
+                                {isSelected ? 'Selezionata' : isAvailable ? (supercarExperienceWindow ? 'Disponibile' : 'Provvisoria') : 'Occupata'}
+                              </span>
+                            </div>
+                            {!isAvailable && !isSelected && 'reason' in result && result.reason && (
+                              <p className="text-[10px] text-rose-400 mt-1 line-clamp-2">{result.reason}</p>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {!experienceVehicle && (
+                    <p className="text-xs text-amber-400">Seleziona la supercar per completare la prenotazione.</p>
+                  )}
+                </div>
+              )}
+
               {/* Running total */}
               <div className="p-3 bg-theme-bg-tertiary/50 rounded-lg flex justify-between items-center">
                 <span className="text-sm text-theme-text-muted">Durata: ~{getTotalDuration()} min</span>
