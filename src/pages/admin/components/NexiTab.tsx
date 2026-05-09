@@ -185,6 +185,52 @@ export default function NexiTab() {
         fetchTokenizedCards().then(() => { autoSyncMissingPans() })
     }, [])
 
+    async function diagnoseCard(card: TokenizedCard) {
+        // contract_id == orderId for our pay-by-link flow (legacy + current).
+        // We don't store the operationId on the TokenizedCard payload, so the
+        // backend extracts it from the matching nexi_transactions row.
+        const params = new URLSearchParams()
+        params.set('orderId', card.contract_id)
+        const toastId = toast.loading('Interrogo Nexi...')
+        try {
+            const res = await authFetch(`/.netlify/functions/nexi-debug-operation?${params.toString()}`)
+            const json = await res.json()
+            toast.dismiss(toastId)
+            if (!res.ok) {
+                toast.error(json?.error || `HTTP ${res.status}`)
+                return
+            }
+            // Extract maskedPan from any of the responses to summarise.
+            const operation = (json as Record<string, unknown>).operation as Record<string, unknown> | null
+            const orderOps = (json as Record<string, unknown>).order_operations as { operations?: unknown[] } | null
+            const opMaskedPan = (operation as { paymentMethod?: { maskedPan?: string } })?.paymentMethod?.maskedPan
+                || (operation as { maskedPan?: string })?.maskedPan
+                || ''
+            let orderMaskedPan = ''
+            for (const op of (orderOps?.operations || []) as Array<{ paymentMethod?: { maskedPan?: string }; maskedPan?: string }>) {
+                if (op?.paymentMethod?.maskedPan) { orderMaskedPan = op.paymentMethod.maskedPan; break }
+                if (op?.maskedPan) { orderMaskedPan = op.maskedPan; break }
+            }
+            const summary = [
+                `Cliente: ${card.full_name || card.email}`,
+                `Order ID: ${card.contract_id}`,
+                '',
+                `/operations: maskedPan = ${opMaskedPan || '(vuoto)'}`,
+                `/orders/.../operations: maskedPan = ${orderMaskedPan || '(vuoto)'}`,
+                '',
+                opMaskedPan || orderMaskedPan
+                    ? 'Nexi espone il PAN — bug di salvataggio nostro. Riapri la console (F12) per la JSON completa.'
+                    : 'Nexi NON espone il PAN per questa transazione. Tipico di pagamenti wallet (Apple Pay/Google Pay) o di pre-tokenizzazioni senza checkout completo.',
+            ].join('\n')
+            console.log('[diagnoseCard] Full Nexi response:', json)
+            alert(summary)
+        } catch (err: unknown) {
+            toast.dismiss(toastId)
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error(`Errore diagnostica: ${msg}`)
+        }
+    }
+
     async function autoSyncMissingPans() {
         try {
             const res = await authFetch('/.netlify/functions/nexi-tokenize-backfill', {
@@ -518,6 +564,15 @@ export default function NexiTab() {
                                         )}
                                     </div>
                                 </div>
+                                {!card.masked_pan && card.contract_id && (
+                                    <button
+                                        onClick={() => diagnoseCard(card)}
+                                        className="text-[11px] px-2 py-1 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 shrink-0"
+                                        title="Mostra cosa restituisce Nexi per questa carta"
+                                    >
+                                        Diagnostica
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>
