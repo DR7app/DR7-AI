@@ -434,9 +434,6 @@ interface AviationQuoteCopy {
     alert_success_it: string; alert_success_en: string
     alert_error_it: string; alert_error_en: string
     whatsapp_phone: string
-    whatsapp_template_main_it: string; whatsapp_template_main_en: string
-    whatsapp_template_return_it: string; whatsapp_template_return_en: string
-    whatsapp_template_notes_it: string; whatsapp_template_notes_en: string
 }
 
 function emptyStrPair(): { it: string; en: string } { return { it: '', en: '' } }
@@ -472,9 +469,6 @@ const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
     alert_success_it: '', alert_success_en: '',
     alert_error_it: '', alert_error_en: '',
     whatsapp_phone: '393457905205',
-    whatsapp_template_main_it: '', whatsapp_template_main_en: '',
-    whatsapp_template_return_it: '', whatsapp_template_return_en: '',
-    whatsapp_template_notes_it: '', whatsapp_template_notes_en: '',
 }
 void emptyStrPair  // helper kept for future use
 
@@ -4016,16 +4010,11 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
             </section>
 
             <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Template WhatsApp</h3>
-                <p className="text-[12px] text-[#6e6e73]">Numero WhatsApp + 3 template (main / return / notes). Le sezioni "return" e "notes" vengono concatenate solo se i campi del form sono compilati. Tutti supportano i placeholder elencati sopra.</p>
-                <FieldText label="Numero WhatsApp (formato wa.me)" value={copy.whatsapp_phone} onChange={v => update('whatsapp_phone', v)} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldTextArea label="Template MAIN (IT) — sempre incluso" value={copy.whatsapp_template_main_it} onChange={v => update('whatsapp_template_main_it', v)} />
-                    <FieldTextArea label="Template MAIN (EN) — always included" value={copy.whatsapp_template_main_en} onChange={v => update('whatsapp_template_main_en', v)} />
-                    <FieldTextArea label="Template RETURN (IT) — solo se data ritorno compilata" value={copy.whatsapp_template_return_it} onChange={v => update('whatsapp_template_return_it', v)} />
-                    <FieldTextArea label="Template RETURN (EN)" value={copy.whatsapp_template_return_en} onChange={v => update('whatsapp_template_return_en', v)} />
-                    <FieldTextArea label="Template NOTES + closing (IT) — incluso se note compilate" value={copy.whatsapp_template_notes_it} onChange={v => update('whatsapp_template_notes_it', v)} />
-                    <FieldTextArea label="Template NOTES + closing (EN)" value={copy.whatsapp_template_notes_en} onChange={v => update('whatsapp_template_notes_en', v)} />
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Numero WhatsApp destinazione</h3>
+                <FieldText label='Numero WhatsApp (formato wa.me — es. "393457905205")' value={copy.whatsapp_phone} onChange={v => update('whatsapp_phone', v)} />
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[12px] text-blue-700">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    Il <b>template del messaggio WhatsApp</b> si modifica in <b>Messaggi di Sistema Pro</b> → "Richiesta Preventivo Aviation" (key <code>pro_aviation_quote_request</code>). Placeholder disponibili: <code>{'{service}'}</code>, <code>{'{nome}'}</code>, <code>{'{email}'}</code>, <code>{'{telefono}'}</code>, <code>{'{partenza}'}</code>, <code>{'{arrivo}'}</code>, <code>{'{data_partenza}'}</code>, <code>{'{data_ritorno}'}</code>, <code>{'{passeggeri}'}</code>, <code>{'{note}'}</code>, <code>{'{return_line}'}</code> (riga ritorno se compilata), <code>{'{notes_line}'}</code> (riga note se compilate).
                 </div>
             </section>
         </div>

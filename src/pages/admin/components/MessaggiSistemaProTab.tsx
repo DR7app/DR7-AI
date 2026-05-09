@@ -784,6 +784,12 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
     ],
   },
   {
+    label: 'Richieste Preventivo (sito)',
+    templates: [
+      { key: 'pro_aviation_quote_request', label: 'Richiesta Preventivo Aviation', description: 'Template WhatsApp inviato dal sito (/aviation-quote-request + /helicopter-quote-request) — token: {service}, {nome}, {email}, {telefono}, {partenza}, {arrivo}, {data_partenza}, {data_ritorno}, {passeggeri}, {note}' },
+    ],
+  },
+  {
     label: 'Wrapper Messaggio',
     templates: [
       { key: 'pro_wrapper_header', label: 'Header Messaggio', description: 'Testo in cima a ogni messaggio (opzionale)' },
