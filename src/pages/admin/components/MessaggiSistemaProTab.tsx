@@ -1358,27 +1358,15 @@ export default function MessaggiSistemaProTab() {
                 {showNewForm && (
                     <div className="bg-theme-bg-secondary rounded-xl border border-dr7-gold/30 p-5 space-y-4 animate-fadeIn">
                         <h4 className="font-semibold text-theme-text-primary">Nuovo Template Pro</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nome del messaggio</label>
-                                <input
-                                    type="text"
-                                    value={newLabel}
-                                    onChange={e => setNewLabel(e.target.value)}
-                                    placeholder="es. Promemoria appuntamento"
-                                    className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Pianificazione</label>
-                                <input
-                                    type="text"
-                                    value={newDescription}
-                                    onChange={e => setNewDescription(e.target.value)}
-                                    placeholder="es. 60 min dopo fine noleggio, 1 giorno prima, manuale..."
-                                    className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
-                                />
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nome del messaggio</label>
+                            <input
+                                type="text"
+                                value={newLabel}
+                                onChange={e => setNewLabel(e.target.value)}
+                                placeholder="es. Promemoria appuntamento"
+                                className="w-full px-4 py-2.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
+                            />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Testo del messaggio</label>
@@ -1465,8 +1453,7 @@ export default function MessaggiSistemaProTab() {
                                                 className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                                 <option value="all">Tutti i servizi</option>
                                                 <option value="rental">Solo noleggio veicoli</option>
-                                                <option value="car_wash">Solo lavaggio</option>
-                                                <option value="mechanical">Solo meccanica</option>
+                                                <option value="prime_wash">Solo Prime Wash (lavaggio + meccanica)</option>
                                             </select>
                                         </div>
                                         <div>

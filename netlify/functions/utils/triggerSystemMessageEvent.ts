@@ -35,23 +35,39 @@ interface TriggerArgs {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
-    // Service type
+    // Service type — solo 2 categorie reali nel sistema:
+    //   rental     = car rental (service_type vuoto / 'rental' / 'car_rental')
+    //   prime_wash = lavaggio + meccanica (service_type 'car_wash' /
+    //                'mechanical' / 'mechanical_service')
     const tplSvc = String(tpl.target_service_type || 'all').toLowerCase()
     if (tplSvc !== 'all') {
         const bSvc = String(booking.service_type || 'rental').toLowerCase()
-        // Normalizza: noleggio veicoli = service_type vuoto/null o 'rental'/'car_rental'
         const bookingIsRental = !booking.service_type || bSvc === 'rental' || bSvc === 'car_rental'
+        const bookingIsPrimeWash = bSvc === 'car_wash' || bSvc === 'mechanical' || bSvc === 'mechanical_service'
         if (tplSvc === 'rental' && !bookingIsRental) return false
+        if (tplSvc === 'prime_wash' && !bookingIsPrimeWash) return false
+        // Retrocompatibilita': accetta anche le vecchie etichette se gia' configurate
         if (tplSvc === 'car_wash' && bSvc !== 'car_wash') return false
         if (tplSvc === 'mechanical' && bSvc !== 'mechanical' && bSvc !== 'mechanical_service') return false
     }
 
-    // With deposit?
+    // With deposit? — controlla TUTTI i tipi di cauzione possibili:
+    //   1. cauzione standard di noleggio (booking_details.deposit)
+    //   2. deposit_amount top-level
+    //   3. cauzione_veicoli extra (extras.cauzione_veicoli_total)
+    //   4. cauzione_veicoli_total in booking_details.extras
     const tplDep = String(tpl.target_with_deposit || 'all').toLowerCase()
     if (tplDep !== 'all') {
         const depAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0)
         const depOption = booking.booking_details?.depositOption
-        const hasDeposit = depAmount > 0 && depOption !== 'no_deposit'
+        const standardDeposit = depAmount > 0 && depOption !== 'no_deposit'
+        const cauzioneVeicoli = Number(
+            booking.booking_details?.extras?.cauzione_veicoli_total
+            ?? booking.booking_details?.cauzione_veicoli_total
+            ?? booking.extras?.cauzione_veicoli_total
+            ?? 0
+        )
+        const hasDeposit = standardDeposit || cauzioneVeicoli > 0
         if (tplDep === 'yes' && !hasDeposit) return false
         if (tplDep === 'no' && hasDeposit) return false
     }
