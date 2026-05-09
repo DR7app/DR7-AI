@@ -70,7 +70,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p9', title: 'Fiscale' },
   { id: 'p10', title: 'DR7 Club' },
   { id: 'p11', title: 'Automazioni' },
-  { id: 'p12', title: 'Orari Lavaggio' },
+  { id: 'p12', title: 'Orari' },
   // 'Marketing' rimossa: ora vive in admin > Marketing > Social Links.
   // Il campo `marketing` resta nel snapshot per preservarlo durante save.
 ]
@@ -537,6 +537,46 @@ const INITIAL_LAVAGGIO_HOURS: LavaggioHoursConfig = {
     fri: { is_open: true, windows: [{ start: '09:00', end: '13:00' }, { start: '15:00', end: '19:00' }] },
     sat: { is_open: true, windows: [{ start: '09:00', end: '17:00' }] },
     sun: { is_open: false, windows: [] },
+  },
+}
+
+// === Orari Noleggio ===
+// Calendario settimanale di pickup + return per il noleggio auto.
+// Pickup: orari in cui il cliente puo' ritirare il veicolo.
+// Return: orari in cui il cliente puo' riconsegnare il veicolo.
+// Granularita' slot condivisa (default 15 min).
+
+type NoleggioHoursConfig = {
+  hours_pickup: WeekHours
+  hours_return: WeekHours
+  slot_minutes: number | ''
+}
+
+const INITIAL_NOLEGGIO_PICKUP_WEEKDAY: DayHours = { is_open: true, windows: [{ start: '10:30', end: '12:30' }, { start: '16:30', end: '18:30' }] }
+const INITIAL_NOLEGGIO_PICKUP_SAT: DayHours = { is_open: true, windows: [{ start: '10:30', end: '16:30' }] }
+const INITIAL_NOLEGGIO_RETURN_WEEKDAY: DayHours = { is_open: true, windows: [{ start: '09:00', end: '11:00' }, { start: '15:00', end: '17:00' }] }
+const INITIAL_NOLEGGIO_RETURN_SAT: DayHours = { is_open: true, windows: [{ start: '09:00', end: '15:00' }] }
+const INITIAL_NOLEGGIO_CLOSED: DayHours = { is_open: false, windows: [] }
+
+const INITIAL_NOLEGGIO_HOURS: NoleggioHoursConfig = {
+  slot_minutes: 15,
+  hours_pickup: {
+    mon: INITIAL_NOLEGGIO_PICKUP_WEEKDAY,
+    tue: INITIAL_NOLEGGIO_PICKUP_WEEKDAY,
+    wed: INITIAL_NOLEGGIO_PICKUP_WEEKDAY,
+    thu: INITIAL_NOLEGGIO_PICKUP_WEEKDAY,
+    fri: INITIAL_NOLEGGIO_PICKUP_WEEKDAY,
+    sat: INITIAL_NOLEGGIO_PICKUP_SAT,
+    sun: INITIAL_NOLEGGIO_CLOSED,
+  },
+  hours_return: {
+    mon: INITIAL_NOLEGGIO_RETURN_WEEKDAY,
+    tue: INITIAL_NOLEGGIO_RETURN_WEEKDAY,
+    wed: INITIAL_NOLEGGIO_RETURN_WEEKDAY,
+    thu: INITIAL_NOLEGGIO_RETURN_WEEKDAY,
+    fri: INITIAL_NOLEGGIO_RETURN_WEEKDAY,
+    sat: INITIAL_NOLEGGIO_RETURN_SAT,
+    sun: INITIAL_NOLEGGIO_CLOSED,
   },
 }
 
@@ -1007,6 +1047,7 @@ type PersistedSnapshot = {
   automations?: AutomationsConfig
   marketing?: MarketingConfig
   lavaggio_hours?: LavaggioHoursConfig
+  noleggio_hours?: NoleggioHoursConfig
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -1185,6 +1226,7 @@ export default function CentralinaProTab() {
   const initialAutomations = pick(persisted, 'automations', INITIAL_AUTOMATIONS)
   const initialMarketing = pick(persisted, 'marketing', INITIAL_MARKETING)
   const initialLavaggioHours = pick(persisted, 'lavaggio_hours', INITIAL_LAVAGGIO_HOURS)
+  const initialNoleggioHours = pick(persisted, 'noleggio_hours', INITIAL_NOLEGGIO_HOURS)
 
   // Current (working) state
   const [categories, setCategories] = useState<Category[]>(initialCategories)
@@ -1202,6 +1244,7 @@ export default function CentralinaProTab() {
   const [automations, setAutomations] = useState<AutomationsConfig>(initialAutomations)
   const [marketing, setMarketing] = useState<MarketingConfig>(initialMarketing)
   const [lavaggioHours, setLavaggioHours] = useState<LavaggioHoursConfig>(initialLavaggioHours)
+  const [noleggioHours, setNoleggioHours] = useState<NoleggioHoursConfig>(initialNoleggioHours)
 
   // Saved (committed) snapshot — what was last persisted
   const [savedCategories, setSavedCategories] = useState<Category[]>(initialCategories)
@@ -1219,6 +1262,7 @@ export default function CentralinaProTab() {
   const [savedAutomations, setSavedAutomations] = useState<AutomationsConfig>(initialAutomations)
   const [savedMarketing, setSavedMarketing] = useState<MarketingConfig>(initialMarketing)
   const [savedLavaggioHours, setSavedLavaggioHours] = useState<LavaggioHoursConfig>(initialLavaggioHours)
+  const [savedNoleggioHours, setSavedNoleggioHours] = useState<NoleggioHoursConfig>(initialNoleggioHours)
 
   const [justSaved, setJustSaved] = useState(false)
 
@@ -1261,11 +1305,12 @@ export default function CentralinaProTab() {
         if (remote.automations !== undefined) { setAutomations(remote.automations); setSavedAutomations(remote.automations) }
         if (remote.marketing !== undefined) { setMarketing(remote.marketing); setSavedMarketing(remote.marketing) }
         if (remote.lavaggio_hours !== undefined) { setLavaggioHours(remote.lavaggio_hours); setSavedLavaggioHours(remote.lavaggio_hours) }
+        if (remote.noleggio_hours !== undefined) { setNoleggioHours(remote.noleggio_hours); setSavedNoleggioHours(remote.noleggio_hours) }
         // Refresh local cache with the authoritative copy
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
       } else {
         // Supabase is empty — seed with initial/localStorage values
-        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours }
+        const seed: PersistedSnapshot = persisted || { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours }
         savePersisted(seed)
         console.log('[CentralinaPro] Seeded Pro config to Supabase')
       }
@@ -1356,7 +1401,7 @@ export default function CentralinaProTab() {
   const changes = useMemo(
     () =>
       computeChanges(
-        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours },
+        { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours },
         {
           categories: savedCategories,
           fasce: savedFasce,
@@ -1373,11 +1418,12 @@ export default function CentralinaProTab() {
           automations: savedAutomations,
           marketing: savedMarketing,
           lavaggio_hours: savedLavaggioHours,
+          noleggio_hours: savedNoleggioHours,
         }
       ),
     [
-      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7Club, automations, marketing, lavaggioHours,
-      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club, savedAutomations, savedMarketing, savedLavaggioHours,
+      categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7Club, automations, marketing, lavaggioHours, noleggioHours,
+      savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club, savedAutomations, savedMarketing, savedLavaggioHours, savedNoleggioHours,
     ]
   )
 
@@ -1398,7 +1444,8 @@ export default function CentralinaProTab() {
     setSavedAutomations(automations)
     setSavedMarketing(marketing)
     setSavedLavaggioHours(lavaggioHours)
-    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours })
+    setSavedNoleggioHours(noleggioHours)
+    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours })
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
 
@@ -1424,6 +1471,7 @@ export default function CentralinaProTab() {
     setAutomations(savedAutomations)
     setMarketing(savedMarketing)
     setLavaggioHours(savedLavaggioHours)
+    setNoleggioHours(savedNoleggioHours)
   }
 
   void changes.length // SaveBar always visible
@@ -1532,9 +1580,11 @@ export default function CentralinaProTab() {
               />
             )}
             {section === 'p12' && (
-              <OrariLavaggioSection
-                config={lavaggioHours}
-                setConfig={setLavaggioHours}
+              <OrariSection
+                lavaggio={lavaggioHours}
+                setLavaggio={setLavaggioHours}
+                noleggio={noleggioHours}
+                setNoleggio={setNoleggioHours}
               />
             )}
           </main>
@@ -1663,6 +1713,7 @@ type Snapshot = {
   automations: AutomationsConfig
   marketing: MarketingConfig
   lavaggio_hours: LavaggioHoursConfig
+  noleggio_hours: NoleggioHoursConfig
 }
 
 function computeChanges(current: Snapshot, saved: Snapshot): string[] {
@@ -1749,6 +1800,31 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
         out.push(`Orari Lavaggio / ${dl}: ${fmt(sav.windows)} → ${fmt(cur.windows)}`)
       }
     })
+  }
+
+  // Orari Noleggio (pickup + return)
+  {
+    if ((current.noleggio_hours.slot_minutes || 0) !== (saved.noleggio_hours.slot_minutes || 0)) {
+      out.push(`Orari Noleggio: granularità slot ${saved.noleggio_hours.slot_minutes || 0} → ${current.noleggio_hours.slot_minutes || 0} min`)
+    }
+    const diffWeek = (label: string, curW: WeekHours | undefined, savW: WeekHours | undefined) => {
+      DAY_KEYS.forEach((d) => {
+        const cur = curW?.[d] || { is_open: false, windows: [] }
+        const sav = savW?.[d] || { is_open: false, windows: [] }
+        const dl = DAY_LABELS[d]
+        if (cur.is_open !== sav.is_open) {
+          out.push(`Orari Noleggio / ${label} / ${dl}: ${cur.is_open ? 'aperto' : 'chiuso'}`)
+        }
+        const cwStr = JSON.stringify(cur.windows || [])
+        const swStr = JSON.stringify(sav.windows || [])
+        if (cwStr !== swStr) {
+          const fmt = (ws: TimeWindow[]) => (ws || []).map(w => `${w.start}-${w.end}`).join(', ') || '—'
+          out.push(`Orari Noleggio / ${label} / ${dl}: ${fmt(sav.windows)} → ${fmt(cur.windows)}`)
+        }
+      })
+    }
+    diffWeek('Pickup', current.noleggio_hours.hours_pickup, saved.noleggio_hours.hours_pickup)
+    diffWeek('Riconsegna', current.noleggio_hours.hours_return, saved.noleggio_hours.hours_return)
   }
 
   // DR7 Club tiers
@@ -5588,15 +5664,6 @@ function OrariLavaggioSection({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
-          Orari Lavaggio
-        </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
-          Calendario settimanale di apertura del lavaggio. Sito + admin generano gli slot prenotabili da queste finestre. Per ogni giorno: aperto/chiuso e lista finestre orarie.
-        </p>
-      </div>
-
       {/* Legend */}
       <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
         <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-2 flex items-center gap-2">
@@ -5713,6 +5780,243 @@ function OrariLavaggioSection({
             )
           })}
         </ul>
+      </section>
+    </div>
+  )
+}
+
+// ========== ORARI (Punto 12) ==========
+// Wrapper with Noleggio / Lavaggio sub-tabs.
+
+type OrariSubTab = 'noleggio' | 'lavaggio'
+
+function OrariSection({
+  lavaggio,
+  setLavaggio,
+  noleggio,
+  setNoleggio,
+}: {
+  lavaggio: LavaggioHoursConfig
+  setLavaggio: (next: LavaggioHoursConfig) => void
+  noleggio: NoleggioHoursConfig
+  setNoleggio: (next: NoleggioHoursConfig) => void
+}) {
+  const [tab, setTab] = useState<OrariSubTab>('noleggio')
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">Orari</h2>
+        <p className="text-[14px] text-[#6e6e73] mt-1">
+          Calendari settimanali per Noleggio (pickup + riconsegna) e Lavaggio. Sito + admin generano gli slot prenotabili da queste finestre.
+        </p>
+      </div>
+
+      {/* Sub-tab pills */}
+      <div className="inline-flex items-center gap-1 p-1 bg-[#f5f5f7] rounded-xl">
+        <button
+          onClick={() => setTab('noleggio')}
+          className={`px-4 py-1.5 text-[13px] font-medium rounded-lg transition-colors ${
+            tab === 'noleggio' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+          }`}
+        >
+          Noleggio
+        </button>
+        <button
+          onClick={() => setTab('lavaggio')}
+          className={`px-4 py-1.5 text-[13px] font-medium rounded-lg transition-colors ${
+            tab === 'lavaggio' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+          }`}
+        >
+          Lavaggio
+        </button>
+      </div>
+
+      {tab === 'noleggio' && (
+        <OrariNoleggioSection config={noleggio} setConfig={setNoleggio} />
+      )}
+      {tab === 'lavaggio' && (
+        <OrariLavaggioSection config={lavaggio} setConfig={setLavaggio} />
+      )}
+    </div>
+  )
+}
+
+function NoleggioWeekHoursEditor({
+  hours,
+  setHours,
+  accent,
+}: {
+  hours: WeekHours
+  setHours: (next: WeekHours) => void
+  accent: string
+}) {
+  const updateDay = (day: DayKey, patch: Partial<DayHours>) => {
+    setHours({ ...hours, [day]: { ...hours[day], ...patch } })
+  }
+  const addWindow = (day: DayKey) => {
+    const cur = hours[day]
+    updateDay(day, { windows: [...cur.windows, { start: '09:00', end: '13:00' }] })
+  }
+  const removeWindow = (day: DayKey, idx: number) => {
+    const cur = hours[day]
+    updateDay(day, { windows: cur.windows.filter((_, i) => i !== idx) })
+  }
+  const patchWindow = (day: DayKey, idx: number, patch: Partial<TimeWindow>) => {
+    const cur = hours[day]
+    updateDay(day, { windows: cur.windows.map((w, i) => i === idx ? { ...w, ...patch } : w) })
+  }
+
+  return (
+    <ul className="divide-y divide-black/5">
+      {DAY_KEYS.map((d) => {
+        const day = hours[d] || { is_open: false, windows: [] }
+        return (
+          <li key={d} className="px-5 py-4">
+            <div className="flex items-center gap-3 mb-3">
+              <label className="inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={day.is_open}
+                  onChange={(e) => updateDay(d, { is_open: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
+                  <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                </span>
+              </label>
+              <span className="text-[14px] font-semibold text-[#1d1d1f] w-24">{DAY_LABELS[d]}</span>
+              {!day.is_open && <span className="text-[12px] text-[#ff3b30]">Chiuso</span>}
+              {day.is_open && (
+                <button
+                  onClick={() => addWindow(d)}
+                  className="ml-auto inline-flex items-center gap-1 text-[12px] font-medium hover:opacity-80"
+                  style={{ color: accent }}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Finestra
+                </button>
+              )}
+            </div>
+            {day.is_open && (
+              <div className="pl-[52px] space-y-2">
+                {day.windows.map((w, i) => (
+                  <div key={i} className="flex items-center gap-2 group">
+                    <input
+                      type="time"
+                      value={w.start}
+                      onChange={(e) => patchWindow(d, i, { start: e.target.value })}
+                      className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2"
+                    />
+                    <span className="text-[12px] text-[#a1a1a6]">→</span>
+                    <input
+                      type="time"
+                      value={w.end}
+                      onChange={(e) => patchWindow(d, i, { end: e.target.value })}
+                      className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2"
+                    />
+                    <button
+                      onClick={() => removeWindow(d, i)}
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 ml-1 flex items-center justify-center w-7 h-7 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                      aria-label="Rimuovi finestra"
+                      title="Rimuovi finestra"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                {day.windows.length === 0 && (
+                  <p className="text-[12px] text-[#6e6e73] italic">Nessuna finestra. Clicca "Finestra" per aggiungerne una.</p>
+                )}
+              </div>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function OrariNoleggioSection({
+  config,
+  setConfig,
+}: {
+  config: NoleggioHoursConfig
+  setConfig: (next: NoleggioHoursConfig) => void
+}) {
+  const update = (patch: Partial<NoleggioHoursConfig>) => setConfig({ ...config, ...patch })
+
+  return (
+    <div className="space-y-6">
+      {/* Legend */}
+      <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
+        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-2 flex items-center gap-2">
+          <svg className="w-4 h-4 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Come funziona
+        </h3>
+        <ul className="space-y-1.5 text-[13px] text-[#3a3a3c]">
+          <li>• <b>Pickup</b>: orari mostrati al cliente per ritirare il veicolo (default Lun-Ven 10:30-12:30 / 16:30-18:30, Sab 10:30-16:30, Dom chiuso).</li>
+          <li>• <b>Riconsegna</b>: orari mostrati al cliente per riconsegnare (default Lun-Ven 09:00-11:00 / 15:00-17:00, Sab 09:00-15:00, Dom chiuso).</li>
+          <li>• Per ogni direzione e per ogni giorno: toggle aperto/chiuso + lista finestre editabili (aggiungi/modifica/elimina).</li>
+          <li>• <b>Granularità slot</b> condivisa (default 15 min) — frequenza degli orari prenotabili dentro ogni finestra.</li>
+        </ul>
+      </section>
+
+      {/* Slot interval */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+        <label className="block max-w-xs">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            Granularità slot
+          </span>
+          <div className="relative">
+            <input
+              type="number"
+              min={1}
+              max={60}
+              step={1}
+              value={config.slot_minutes}
+              onChange={(e) => {
+                const v = e.target.value
+                update({ slot_minutes: v === '' ? '' : Number(v) })
+              }}
+              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+          </div>
+          <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 15. Esempio con 15: gli slot disponibili sono 09:00, 09:15, 09:30, …</p>
+        </label>
+      </section>
+
+      {/* Pickup */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#f5f9ff] border-b border-[#007aff]/10">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Pickup (ritiro)</h3>
+          <p className="text-[12px] text-[#3a3a3c] mt-0.5">Orari in cui il cliente puo' ritirare il veicolo.</p>
+        </header>
+        <NoleggioWeekHoursEditor
+          hours={config.hours_pickup}
+          setHours={(next) => update({ hours_pickup: next })}
+          accent="#007aff"
+        />
+      </section>
+
+      {/* Return */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#fff7e6] border-b border-[#ff9500]/15">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Riconsegna (return)</h3>
+          <p className="text-[12px] text-[#3a3a3c] mt-0.5">Orari in cui il cliente puo' riconsegnare il veicolo.</p>
+        </header>
+        <NoleggioWeekHoursEditor
+          hours={config.hours_return}
+          setHours={(next) => update({ hours_return: next })}
+          accent="#ff9500"
+        />
       </section>
     </div>
   )
