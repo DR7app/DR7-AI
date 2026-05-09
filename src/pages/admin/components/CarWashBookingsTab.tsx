@@ -1813,24 +1813,51 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Prime Wash</h2>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-theme-text-muted">
-            {bookings.length} prenotazion{bookings.length !== 1 ? 'i' : 'e'}
+    <div className="space-y-4 lg:space-y-6">
+      {/* Hero header */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-theme-bg-secondary via-theme-bg-secondary to-theme-bg-tertiary rounded-2xl border border-theme-border p-5 lg:p-6">
+        <div className="absolute -top-12 -right-12 w-56 h-56 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"/>
+        <div className="absolute -bottom-12 -left-12 w-56 h-56 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"/>
+        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/30 grid place-items-center flex-shrink-0">
+              <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16l4-4m0 0l4 4m-4-4v9m11-9V8.5M6.5 8.5h11M3 8.5L4.07 6.36a2 2 0 011.79-1.11h12.28a2 2 0 011.79 1.11L21 8.5"/>
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-xl lg:text-2xl font-bold text-theme-text-primary leading-tight">Prenotazioni Prime Wash</h2>
+              <p className="text-xs lg:text-sm text-theme-text-muted mt-0.5">Lavaggio · Meccanica · Detailing · Storico e calendario</p>
+            </div>
           </div>
-          <button
-            onClick={() => {
-              if (!showForm) resetWizard()
-              setShowForm(!showForm)
-            }}
-            className="px-4 py-2 bg-dr7-gold hover:bg-[#0A8FA3] text-white font-semibold rounded-full transition-colors"
-          >
-            {showForm ? 'Chiudi' : '+ Nuova Prenotazione'}
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-muted whitespace-nowrap">
+              {bookings.length} prenotazion{bookings.length !== 1 ? 'i' : 'e'}
+            </span>
+            <button
+              onClick={() => {
+                if (!showForm) resetWizard()
+                setShowForm(!showForm)
+              }}
+              className="px-4 py-2 bg-dr7-gold hover:bg-[#0A8FA3] text-white font-semibold rounded-full transition-colors text-sm shadow-lg shadow-dr7-gold/20"
+            >
+              {showForm ? 'Chiudi' : '+ Nuova Prenotazione'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Sezione "Nuova Prenotazione Lavaggio" — visibile quando il wizard è attivo */}
+      {showForm && (
+        <div className="bg-theme-bg-secondary/50 rounded-2xl border border-theme-border p-4 lg:p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base lg:text-lg font-bold text-theme-text-primary">Nuova Prenotazione Lavaggio</h3>
+              <p className="text-xs lg:text-sm text-theme-text-muted mt-0.5">Crea una nuova prenotazione in pochi semplici passaggi</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search Bar */}
       <div className="mb-4">
