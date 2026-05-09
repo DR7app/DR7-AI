@@ -57,7 +57,6 @@ interface SystemMessage {
     quiet_hours_start?: number | null;
     quiet_hours_end?: number | null;
     target_membership_tier?: string | null;
-    target_language?: string | null;
     target_min_prev_bookings?: number | null;
     target_rental_duration_min?: number | null;
     target_rental_duration_max?: number | null;
@@ -390,7 +389,7 @@ const cronHandler = async () => {
     // 1. Carica tutti i template automatici attivi
     const { data: templates, error: tplErr } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, is_automatic, is_enabled, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_language, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_vehicle_fuel, target_vehicle_transmission, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
+        .select('id, message_key, label, is_automatic, is_enabled, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_vehicle_fuel, target_vehicle_transmission, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
         .eq('is_automatic', true)
         .eq('is_enabled', true);
 

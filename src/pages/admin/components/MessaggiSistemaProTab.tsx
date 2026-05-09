@@ -29,7 +29,6 @@ interface SystemMessage {
     target_amount_min?: number | null  // euro
     target_amount_max?: number | null  // euro
     target_membership_tier?: string | null
-    target_language?: string | null
     target_min_prev_bookings?: number | null
     target_max_prev_bookings?: number | null
     target_rental_duration_min?: number | null
@@ -832,7 +831,6 @@ export default function MessaggiSistemaProTab() {
     const [newQuietEnd, setNewQuietEnd] = useState<number>(7)
     // Sprint autonomia 1: 5 nuovi filtri pubblico
     const [newTargetMembershipTier, setNewTargetMembershipTier] = useState('all')
-    const [newTargetLanguage, setNewTargetLanguage] = useState('all')
     const [newTargetMinPrevBookings, setNewTargetMinPrevBookings] = useState('')
     const [newTargetRentalDurationMin, setNewTargetRentalDurationMin] = useState('')
     const [newTargetRentalDurationMax, setNewTargetRentalDurationMax] = useState('')
@@ -1106,7 +1104,6 @@ export default function MessaggiSistemaProTab() {
                     quiet_hours_start: newQuietHoursEnabled ? newQuietStart : null,
                     quiet_hours_end: newQuietHoursEnabled ? newQuietEnd : null,
                     target_membership_tier: newTargetMembershipTier === 'all' ? null : newTargetMembershipTier,
-                    target_language: newTargetLanguage === 'all' ? null : newTargetLanguage,
                     target_min_prev_bookings: newTargetMinPrevBookings ? parseInt(newTargetMinPrevBookings, 10) : null,
                     target_rental_duration_min: newTargetRentalDurationMin ? parseInt(newTargetRentalDurationMin, 10) : null,
                     target_rental_duration_max: newTargetRentalDurationMax ? parseInt(newTargetRentalDurationMax, 10) : null,
@@ -1721,20 +1718,6 @@ export default function MessaggiSistemaProTab() {
                                                     <option value="elite">Elite</option>
                                                     <option value="gold">Gold</option>
                                                     <option value="platinum">Platinum</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Lingua cliente</label>
-                                                <select
-                                                    value={newTargetLanguage}
-                                                    onChange={e => setNewTargetLanguage(e.target.value)}
-                                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
-                                                >
-                                                    <option value="all">Tutte</option>
-                                                    <option value="it">Italiano</option>
-                                                    <option value="en">English</option>
-                                                    <option value="fr">Francais</option>
-                                                    <option value="de">Deutsch</option>
                                                 </select>
                                             </div>
                                             <div>

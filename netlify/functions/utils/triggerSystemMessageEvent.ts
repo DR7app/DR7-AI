@@ -261,7 +261,6 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
  * Filtri:
  *  - target_membership_tier — confronta case-insensitive con
  *    customer.membership_tier oppure active_membership.package_name.
- *  - target_language — confronta con customer.language (alias: lingua).
  *  - target_min_prev_bookings — conta le prenotazioni precedenti del cliente
  *    (escludendo quella corrente) e confronta col valore minimo.
  *  - target_customer_tags — CSV; match se ALMENO un tag e' presente nei
@@ -270,7 +269,6 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function passesCustomerFilters(tpl: any, booking: any, supabase: any): Promise<boolean> {
     const tier = tpl.target_membership_tier ? String(tpl.target_membership_tier).toLowerCase().trim() : null
-    const lang = tpl.target_language ? String(tpl.target_language).toLowerCase().trim() : null
     const minPrev = tpl.target_min_prev_bookings == null ? null : Number(tpl.target_min_prev_bookings)
     const maxPrev = tpl.target_max_prev_bookings == null ? null : Number(tpl.target_max_prev_bookings)
     const tagsCsv = tpl.target_customer_tags ? String(tpl.target_customer_tags) : null
@@ -287,7 +285,6 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
 
     // Se NESSUN filtro customer-dependent e' attivo, esci subito.
     const allDisabled = (!tier || tier === 'all')
-        && (!lang || lang === 'all')
         && (minPrev == null || isNaN(minPrev))
         && (maxPrev == null || isNaN(maxPrev))
         && (!tagsCsv || !tagsCsv.trim())
@@ -330,12 +327,6 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
             ?? ''
         ).toLowerCase().trim()
         if (!cTier || cTier !== tier) return false
-    }
-
-    // Lingua
-    if (lang && lang !== 'all') {
-        const cLang = String(customer?.language ?? customer?.lingua ?? booking?.language ?? '').toLowerCase().trim()
-        if (!cLang || !cLang.startsWith(lang)) return false
     }
 
     // Tag — match se almeno UNO dei tag richiesti e' nei tag del cliente
@@ -499,7 +490,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     //    saranno gestiti dal cron, non qui.
     const { data: templates } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_language, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_vehicle_fuel, target_vehicle_transmission, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
+        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_vehicle_fuel, target_vehicle_transmission, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
         .eq('is_automatic', true)
         .eq('is_enabled', true)
         .eq('trigger_event', event)
