@@ -42,6 +42,7 @@ type SectionId =
     | 'press'
     | 'contatti'
     | 'meccanica'
+    | 'lavaggio'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -55,6 +56,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'press', title: 'Press', ready: true },
     { id: 'contatti', title: 'Contatti', ready: true },
     { id: 'meccanica', title: 'Servizi Meccanica', ready: true },
+    { id: 'lavaggio', title: 'Servizi Lavaggio', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -289,6 +291,52 @@ function emptyLegalPage(id: LegalPageId): LegalPageCopy {
 
 const INITIAL_LEGAL: LegalCopy = {
     pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
+}
+
+// ─── Car Wash chrome (mirror website utils/siteCopy.ts) ────────────────────
+interface CarWashCopy {
+    plate_label_it: string; plate_label_en: string
+    plate_helper_it: string; plate_helper_en: string
+    plate_placeholder_it: string; plate_placeholder_en: string
+    plate_search_it: string; plate_search_en: string
+    plate_searching_it: string; plate_searching_en: string
+    plate_manual_prompt_it: string; plate_manual_prompt_en: string
+    plate_change_it: string; plate_change_en: string
+    add_to_cart_it: string; add_to_cart_en: string
+    cart_title_it: string; cart_title_en: string
+    cart_empty_it: string; cart_empty_en: string
+    cart_remove_it: string; cart_remove_en: string
+    cart_total_it: string; cart_total_en: string
+    cart_checkout_it: string; cart_checkout_en: string
+    upsell_review_cart_it: string; upsell_review_cart_en: string
+    upsell_step1_title_it: string; upsell_step1_title_en: string
+    upsell_step1_text_it: string; upsell_step1_text_en: string
+    upsell_step2_title_it: string; upsell_step2_title_en: string
+    upsell_step2_text_it: string; upsell_step2_text_en: string
+    upsell_added_it: string; upsell_added_en: string
+    upsell_add_it: string; upsell_add_en: string
+}
+const INITIAL_CARWASH: CarWashCopy = {
+    plate_label_it: '', plate_label_en: '',
+    plate_helper_it: '', plate_helper_en: '',
+    plate_placeholder_it: '', plate_placeholder_en: '',
+    plate_search_it: '', plate_search_en: '',
+    plate_searching_it: '', plate_searching_en: '',
+    plate_manual_prompt_it: '', plate_manual_prompt_en: '',
+    plate_change_it: '', plate_change_en: '',
+    add_to_cart_it: '', add_to_cart_en: '',
+    cart_title_it: '', cart_title_en: '',
+    cart_empty_it: '', cart_empty_en: '',
+    cart_remove_it: '', cart_remove_en: '',
+    cart_total_it: '', cart_total_en: '',
+    cart_checkout_it: '', cart_checkout_en: '',
+    upsell_review_cart_it: '', upsell_review_cart_en: '',
+    upsell_step1_title_it: '', upsell_step1_title_en: '',
+    upsell_step1_text_it: '', upsell_step1_text_en: '',
+    upsell_step2_title_it: '', upsell_step2_title_en: '',
+    upsell_step2_text_it: '', upsell_step2_text_en: '',
+    upsell_added_it: '', upsell_added_en: '',
+    upsell_add_it: '', upsell_add_en: '',
 }
 
 // ─── Mechanical Services chrome (mirror website utils/siteCopy.ts) ────────
@@ -531,6 +579,7 @@ interface SiteCopySnapshot {
     press?: PressCopy
     contact?: ContactCopy
     mechanical?: MechanicalCopy
+    carwash?: CarWashCopy
 }
 
 interface CurrentState {
@@ -545,6 +594,7 @@ interface CurrentState {
     press: PressCopy
     contact: ContactCopy
     mechanical: MechanicalCopy
+    carwash: CarWashCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -625,6 +675,8 @@ export default function SitoTab() {
     const [savedContact, setSavedContact] = useState<ContactCopy>(INITIAL_CONTACT)
     const [mechanical, setMechanical] = useState<MechanicalCopy>(INITIAL_MECHANICAL)
     const [savedMechanical, setSavedMechanical] = useState<MechanicalCopy>(INITIAL_MECHANICAL)
+    const [carwash, setCarwash] = useState<CarWashCopy>(INITIAL_CARWASH)
+    const [savedCarwash, setSavedCarwash] = useState<CarWashCopy>(INITIAL_CARWASH)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -696,6 +748,10 @@ export default function SitoTab() {
                     setMechanical(remote.mechanical)
                     setSavedMechanical(remote.mechanical)
                 }
+                if (remote?.carwash && remote.carwash.cart_title_it) {
+                    setCarwash(remote.carwash)
+                    setSavedCarwash(remote.carwash)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -708,10 +764,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash]
     )
     const dirty = changes.length > 0
 
@@ -722,7 +778,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -734,6 +790,7 @@ export default function SitoTab() {
             setSavedPress(press)
             setSavedContact(contact)
             setSavedMechanical(mechanical)
+            setSavedCarwash(carwash)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -779,6 +836,7 @@ export default function SitoTab() {
         setPress(savedPress)
         setContact(savedContact)
         setMechanical(savedMechanical)
+        setCarwash(savedCarwash)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -917,6 +975,9 @@ export default function SitoTab() {
                         {hydrated && section === 'meccanica' && (
                             <MechanicalEditor copy={mechanical} setCopy={setMechanical} />
                         )}
+                        {hydrated && section === 'lavaggio' && (
+                            <CarWashEditor copy={carwash} setCopy={setCarwash} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1017,6 +1078,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.mechanical) !== JSON.stringify(saved.mechanical)) {
         out.push('Meccanica: contenuti modificati')
+    }
+    if (JSON.stringify(current.carwash) !== JSON.stringify(saved.carwash)) {
+        out.push('Lavaggio: contenuti modificati')
     }
     return out
 }
@@ -3114,3 +3178,90 @@ function MechanicalEditor({ copy, setCopy }: { copy: MechanicalCopy; setCopy: (n
 
 // MechanicalServiceCard removed: catalogo meccanica vive in tab "Catalogo
 // Prime Wash" (filtro MECCANICA), non in Sito CMS.
+
+// ─── Car Wash editor (chrome only — catalog lives in Catalogo Prime Wash) ──
+function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: CarWashCopy) => void }) {
+    const update = <K extends keyof CarWashCopy>(key: K, value: CarWashCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Servizi Lavaggio</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/car-wash-services</code> — etichette UI editabili.
+                </p>
+                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[12px] text-blue-700">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    Il <b>catalogo lavaggi</b> (servizi, prezzi, immagini) si gestisce dal tab <b>Catalogo Prime Wash</b> con il filtro <b>LAVAGGIO</b>.
+                </div>
+            </div>
+
+            {/* Plate entry */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Inserimento targa (sezione iniziale)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Etichetta input (IT)" value={copy.plate_label_it} onChange={v => update('plate_label_it', v)} />
+                    <FieldText label="Etichetta input (EN)" value={copy.plate_label_en} onChange={v => update('plate_label_en', v)} />
+                    <FieldTextArea label="Testo helper (IT)" value={copy.plate_helper_it} onChange={v => update('plate_helper_it', v)} />
+                    <FieldTextArea label="Testo helper (EN)" value={copy.plate_helper_en} onChange={v => update('plate_helper_en', v)} />
+                    <FieldText label="Placeholder (IT)" value={copy.plate_placeholder_it} onChange={v => update('plate_placeholder_it', v)} />
+                    <FieldText label="Placeholder (EN)" value={copy.plate_placeholder_en} onChange={v => update('plate_placeholder_en', v)} />
+                    <FieldText label='Bottone Cerca (IT)' value={copy.plate_search_it} onChange={v => update('plate_search_it', v)} />
+                    <FieldText label="Search button (EN)" value={copy.plate_search_en} onChange={v => update('plate_search_en', v)} />
+                    <FieldText label='Stato "Cercando..." (IT)' value={copy.plate_searching_it} onChange={v => update('plate_searching_it', v)} />
+                    <FieldText label='State "Searching..." (EN)' value={copy.plate_searching_en} onChange={v => update('plate_searching_en', v)} />
+                    <FieldTextArea label="Prompt categoria manuale (IT)" value={copy.plate_manual_prompt_it} onChange={v => update('plate_manual_prompt_it', v)} />
+                    <FieldTextArea label="Manual category prompt (EN)" value={copy.plate_manual_prompt_en} onChange={v => update('plate_manual_prompt_en', v)} />
+                    <FieldText label='"Cambia veicolo" (IT)' value={copy.plate_change_it} onChange={v => update('plate_change_it', v)} />
+                    <FieldText label='"Change vehicle" (EN)' value={copy.plate_change_en} onChange={v => update('plate_change_en', v)} />
+                </div>
+            </section>
+
+            {/* Card servizio */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card servizio</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Bottone "AGGIUNGI AL CARRELLO" (IT)' value={copy.add_to_cart_it} onChange={v => update('add_to_cart_it', v)} />
+                    <FieldText label='Button "ADD TO CART" (EN)' value={copy.add_to_cart_en} onChange={v => update('add_to_cart_en', v)} />
+                </div>
+            </section>
+
+            {/* Cart drawer */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Drawer carrello</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo carrello (IT)" value={copy.cart_title_it} onChange={v => update('cart_title_it', v)} />
+                    <FieldText label="Cart title (EN)" value={copy.cart_title_en} onChange={v => update('cart_title_en', v)} />
+                    <FieldText label='Stato vuoto (IT)' value={copy.cart_empty_it} onChange={v => update('cart_empty_it', v)} />
+                    <FieldText label='Empty state (EN)' value={copy.cart_empty_en} onChange={v => update('cart_empty_en', v)} />
+                    <FieldText label='"Rimuovi" link (IT)' value={copy.cart_remove_it} onChange={v => update('cart_remove_it', v)} />
+                    <FieldText label='"Remove" link (EN)' value={copy.cart_remove_en} onChange={v => update('cart_remove_en', v)} />
+                    <FieldText label='Etichetta "Totale" (IT)' value={copy.cart_total_it} onChange={v => update('cart_total_it', v)} />
+                    <FieldText label='Label "Total" (EN)' value={copy.cart_total_en} onChange={v => update('cart_total_en', v)} />
+                    <FieldText label='Bottone "PROCEDI" (IT)' value={copy.cart_checkout_it} onChange={v => update('cart_checkout_it', v)} />
+                    <FieldText label='Button "CHECKOUT" (EN)' value={copy.cart_checkout_en} onChange={v => update('cart_checkout_en', v)} />
+                </div>
+            </section>
+
+            {/* Upsell overlay */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Overlay Extra Care (upsell)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Bottone "Rivedi carrello" (IT)' value={copy.upsell_review_cart_it} onChange={v => update('upsell_review_cart_it', v)} />
+                    <FieldText label='Button "Review Cart" (EN)' value={copy.upsell_review_cart_en} onChange={v => update('upsell_review_cart_en', v)} />
+                    <FieldText label="Step 1 — Titolo (IT)" value={copy.upsell_step1_title_it} onChange={v => update('upsell_step1_title_it', v)} />
+                    <FieldText label="Step 1 — Title (EN)" value={copy.upsell_step1_title_en} onChange={v => update('upsell_step1_title_en', v)} />
+                    <FieldTextArea label="Step 1 — Testo (IT)" value={copy.upsell_step1_text_it} onChange={v => update('upsell_step1_text_it', v)} />
+                    <FieldTextArea label="Step 1 — Text (EN)" value={copy.upsell_step1_text_en} onChange={v => update('upsell_step1_text_en', v)} />
+                    <FieldText label="Step 2 — Titolo (IT)" value={copy.upsell_step2_title_it} onChange={v => update('upsell_step2_title_it', v)} />
+                    <FieldText label="Step 2 — Title (EN)" value={copy.upsell_step2_title_en} onChange={v => update('upsell_step2_title_en', v)} />
+                    <FieldTextArea label="Step 2 — Testo (IT)" value={copy.upsell_step2_text_it} onChange={v => update('upsell_step2_text_it', v)} />
+                    <FieldTextArea label="Step 2 — Text (EN)" value={copy.upsell_step2_text_en} onChange={v => update('upsell_step2_text_en', v)} />
+                    <FieldText label='Stato "Aggiunto ✓" (IT)' value={copy.upsell_added_it} onChange={v => update('upsell_added_it', v)} />
+                    <FieldText label='State "Added ✓" (EN)' value={copy.upsell_added_en} onChange={v => update('upsell_added_en', v)} />
+                    <FieldText label='Bottone "Aggiungi" (IT)' value={copy.upsell_add_it} onChange={v => update('upsell_add_it', v)} />
+                    <FieldText label='Button "Add" (EN)' value={copy.upsell_add_en} onChange={v => update('upsell_add_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
