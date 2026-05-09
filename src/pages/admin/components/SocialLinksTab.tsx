@@ -142,62 +142,38 @@ export default function SocialLinksTab() {
             </div>
 
             <div className="bg-theme-bg-tertiary p-5 rounded-lg border border-theme-border space-y-4 max-w-2xl">
-                <label className="block">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Sito web</span>
-                        <code className="text-[10px] text-dr7-gold bg-dr7-gold/10 border border-dr7-gold/30 px-1.5 py-0.5 rounded">{'{website}'}</code>
-                    </div>
-                    <input
-                        type="url"
-                        value={marketing.website_url}
-                        onChange={(e) => update({ website_url: e.target.value })}
-                        placeholder="https://dr7empire.com"
-                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
-                    />
-                </label>
+                <FixedLinkRow
+                    label="Sito web"
+                    variableName="website"
+                    value={marketing.website_url}
+                    placeholder="https://dr7empire.com"
+                    onChange={(v) => update({ website_url: v })}
+                />
 
-                <label className="block">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Link Google Review</span>
-                        <code className="text-[10px] text-dr7-gold bg-dr7-gold/10 border border-dr7-gold/30 px-1.5 py-0.5 rounded">{'{review_link}'}</code>
-                    </div>
-                    <input
-                        type="url"
-                        value={marketing.google_review_link}
-                        onChange={(e) => update({ google_review_link: e.target.value })}
-                        placeholder="https://g.page/r/.../review"
-                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
-                    />
-                    <p className="text-[11px] text-theme-text-muted mt-1.5">Inserito automaticamente nei messaggi di richiesta recensione.</p>
-                </label>
+                <FixedLinkRow
+                    label="Link Google Review"
+                    variableName="review_link"
+                    value={marketing.google_review_link}
+                    placeholder="https://g.page/r/.../review"
+                    onChange={(v) => update({ google_review_link: v })}
+                    hint="Inserito automaticamente nei messaggi di richiesta recensione."
+                />
 
-                <label className="block">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Instagram</span>
-                        <code className="text-[10px] text-dr7-gold bg-dr7-gold/10 border border-dr7-gold/30 px-1.5 py-0.5 rounded">{'{instagram}'}</code>
-                    </div>
-                    <input
-                        type="url"
-                        value={marketing.instagram_url}
-                        onChange={(e) => update({ instagram_url: e.target.value })}
-                        placeholder="https://instagram.com/dr7empire"
-                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
-                    />
-                </label>
+                <FixedLinkRow
+                    label="Instagram"
+                    variableName="instagram"
+                    value={marketing.instagram_url}
+                    placeholder="https://instagram.com/dr7empire"
+                    onChange={(v) => update({ instagram_url: v })}
+                />
 
-                <label className="block">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Facebook</span>
-                        <code className="text-[10px] text-dr7-gold bg-dr7-gold/10 border border-dr7-gold/30 px-1.5 py-0.5 rounded">{'{facebook}'}</code>
-                    </div>
-                    <input
-                        type="url"
-                        value={marketing.facebook_url}
-                        onChange={(e) => update({ facebook_url: e.target.value })}
-                        placeholder="https://facebook.com/dr7empire"
-                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
-                    />
-                </label>
+                <FixedLinkRow
+                    label="Facebook"
+                    variableName="facebook"
+                    value={marketing.facebook_url}
+                    placeholder="https://facebook.com/dr7empire"
+                    onChange={(v) => update({ facebook_url: v })}
+                />
 
                 {/* Link personalizzati — admin puo' aggiungere/modificare/eliminare
                     qualsiasi numero di link aggiuntivi (es. TikTok, YouTube,
@@ -284,5 +260,54 @@ export default function SocialLinksTab() {
                 </div>
             </div>
         </div>
+    )
+}
+
+/**
+ * FixedLinkRow — input per uno dei 4 link "fissi" (Sito, Review, IG, FB).
+ * Cestino svuota il campo (URL → '') che fa sparire la variabile dai
+ * messaggi inviati. Salva confermare il vuoto.
+ */
+function FixedLinkRow({
+    label,
+    variableName,
+    value,
+    placeholder,
+    onChange,
+    hint,
+}: {
+    label: string
+    variableName: string
+    value: string
+    placeholder: string
+    onChange: (v: string) => void
+    hint?: string
+}) {
+    return (
+        <label className="block">
+            <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">{label}</span>
+                <code className="text-[10px] text-dr7-gold bg-dr7-gold/10 border border-dr7-gold/30 px-1.5 py-0.5 rounded">{`{${variableName}}`}</code>
+            </div>
+            <div className="flex gap-2">
+                <input
+                    type="url"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder={placeholder}
+                    className="flex-1 px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                />
+                <button
+                    type="button"
+                    onClick={() => onChange('')}
+                    disabled={!value}
+                    className="px-2 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Svuota campo (poi salva per confermare)"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+            </div>
+            {hint && <p className="text-[11px] text-theme-text-muted mt-1.5">{hint}</p>}
+        </label>
     )
 }
