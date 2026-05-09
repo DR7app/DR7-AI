@@ -41,7 +41,7 @@ type SectionId =
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
-    { id: 'cancellazione', title: 'Cancellazione', ready: false },
+    { id: 'cancellazione', title: 'Cancellazione', ready: true },
     { id: 'membership', title: 'Membership / DR7 Club', ready: false },
     { id: 'hero', title: 'Home / Hero', ready: false },
     { id: 'chi-siamo', title: 'Chi Siamo', ready: false },
@@ -54,6 +54,45 @@ interface FaqEntry {
     id: string
     question: string
     answer: string
+}
+
+// ─── Cancellazione schema (mirror of website utils/siteCopy.ts) ─────────────
+type CancellazioneBlock =
+    | { type: 'p'; text_it: string; text_en: string }
+    | { type: 'p-bold'; text_it: string; text_en: string }
+    | { type: 'p-italic'; text_it: string; text_en: string }
+    | { type: 'ul'; items_it: string[]; items_en: string[]; tone?: 'default' | 'green' }
+
+interface CancellazioneSection {
+    id: string
+    variant: 'standard' | 'flex'
+    title_it: string
+    title_en: string
+    blocks: CancellazioneBlock[]
+}
+
+interface CancellazioneCopy {
+    page_title_it: string
+    page_title_en: string
+    sections: CancellazioneSection[]
+    contact_label_it: string
+    contact_label_en: string
+    contact_email: string
+    contact_address: string
+    last_updated_it: string
+    last_updated_en: string
+}
+
+const INITIAL_CANCELLAZIONE: CancellazioneCopy = {
+    page_title_it: 'Policy di Cancellazione e Modifica Prenotazioni',
+    page_title_en: 'Cancellation and Booking Modification Policy',
+    contact_label_it: 'Per assistenza o informazioni:',
+    contact_label_en: 'For assistance or information:',
+    contact_email: 'info@dr7.app',
+    contact_address: 'Dubai Rent 7.0 S.p.A. - Viale Marconi, 229, 09131 Cagliari CA',
+    last_updated_it: 'Ultimo aggiornamento: 10 aprile 2026',
+    last_updated_en: 'Last updated: April 10, 2026',
+    sections: [],  // Hydrated from DB; full default lives on website side.
 }
 
 // Italian translations of the legacy English FAQ on /faq.
@@ -83,11 +122,13 @@ const INITIAL_FAQ: FaqEntry[] = [
 // ─── Persistence helpers ─────────────────────────────────────────────────────
 interface SiteCopySnapshot {
     faq?: FaqEntry[]
-    // Future: cancellazione, membership, hero, chi_siamo, footer, legali
+    cancellazione?: CancellazioneCopy
+    // Future: membership, hero, chi_siamo, footer, legali
 }
 
 interface CurrentState {
     faq: FaqEntry[]
+    cancellazione: CancellazioneCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -148,6 +189,8 @@ export default function SitoTab() {
     // ─── State (current + saved snapshots per section) ───────────────────────
     const [faq, setFaq] = useState<FaqEntry[]>(INITIAL_FAQ)
     const [savedFaq, setSavedFaq] = useState<FaqEntry[]>(INITIAL_FAQ)
+    const [cancellazione, setCancellazione] = useState<CancellazioneCopy>(INITIAL_CANCELLAZIONE)
+    const [savedCancellazione, setSavedCancellazione] = useState<CancellazioneCopy>(INITIAL_CANCELLAZIONE)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -161,6 +204,10 @@ export default function SitoTab() {
                     setFaq(remote.faq)
                     setSavedFaq(remote.faq)
                 }
+                if (remote?.cancellazione && Array.isArray(remote.cancellazione.sections)) {
+                    setCancellazione(remote.cancellazione)
+                    setSavedCancellazione(remote.cancellazione)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -171,7 +218,10 @@ export default function SitoTab() {
     }, [tabUnlocked])
 
     // ─── Changes detection ───────────────────────────────────────────────────
-    const changes = useMemo(() => computeChanges({ faq }, { faq: savedFaq }), [faq, savedFaq])
+    const changes = useMemo(
+        () => computeChanges({ faq, cancellazione }, { faq: savedFaq, cancellazione: savedCancellazione }),
+        [faq, savedFaq, cancellazione, savedCancellazione]
+    )
     const dirty = changes.length > 0
 
     // ─── Save / Discard (gated by OTP for non-direzione) ─────────────────────
@@ -181,8 +231,9 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq })
+            await savePersisted({ faq, cancellazione })
             setSavedFaq(faq)
+            setSavedCancellazione(cancellazione)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -218,6 +269,7 @@ export default function SitoTab() {
     const handleDiscard = () => {
         if (!dirty) return
         setFaq(savedFaq)
+        setCancellazione(savedCancellazione)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -326,7 +378,10 @@ export default function SitoTab() {
                         {hydrated && section === 'faq' && (
                             <FaqEditor entries={faq} setEntries={setFaq} />
                         )}
-                        {hydrated && section !== 'faq' && (
+                        {hydrated && section === 'cancellazione' && (
+                            <CancellazioneEditor copy={cancellazione} setCopy={setCancellazione} />
+                        )}
+                        {hydrated && section !== 'faq' && section !== 'cancellazione' && (
                             <PlaceholderSection
                                 title={SECTIONS.find(s => s.id === section)?.title || section}
                             />
@@ -365,24 +420,29 @@ export default function SitoTab() {
 // ─── Changes detection ───────────────────────────────────────────────────────
 function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     const out: string[] = []
-    const curIds = new Set(current.faq.map(e => e.id))
-    const savIds = new Set(saved.faq.map(e => e.id))
-    const added = current.faq.filter(e => !savIds.has(e.id))
-    const removed = saved.faq.filter(e => !curIds.has(e.id))
-    added.forEach(e => out.push(`FAQ: nuova "${e.question.slice(0, 40) || '(senza titolo)'}"`))
-    removed.forEach(e => out.push(`FAQ: rimossa "${e.question.slice(0, 40) || e.id}"`))
-    // Edits to existing entries
-    current.faq.forEach(c => {
-        const s = saved.faq.find(x => x.id === c.id)
-        if (!s) return // already counted as added
-        if (c.question !== s.question || c.answer !== s.answer) {
-            out.push(`FAQ: modificata "${(s.question || c.question).slice(0, 40)}"`)
+    // FAQ
+    {
+        const curIds = new Set(current.faq.map(e => e.id))
+        const savIds = new Set(saved.faq.map(e => e.id))
+        const added = current.faq.filter(e => !savIds.has(e.id))
+        const removed = saved.faq.filter(e => !curIds.has(e.id))
+        added.forEach(e => out.push(`FAQ: nuova "${e.question.slice(0, 40) || '(senza titolo)'}"`))
+        removed.forEach(e => out.push(`FAQ: rimossa "${e.question.slice(0, 40) || e.id}"`))
+        current.faq.forEach(c => {
+            const s = saved.faq.find(x => x.id === c.id)
+            if (!s) return
+            if (c.question !== s.question || c.answer !== s.answer) {
+                out.push(`FAQ: modificata "${(s.question || c.question).slice(0, 40)}"`)
+            }
+        })
+        if (current.faq.length === saved.faq.length && added.length === 0 && removed.length === 0) {
+            const reordered = current.faq.some((e, i) => saved.faq[i]?.id !== e.id)
+            if (reordered) out.push('FAQ: ordine modificato')
         }
-    })
-    // Reorder
-    if (current.faq.length === saved.faq.length && added.length === 0 && removed.length === 0) {
-        const reordered = current.faq.some((e, i) => saved.faq[i]?.id !== e.id)
-        if (reordered) out.push('FAQ: ordine modificato')
+    }
+    // Cancellazione (compare as JSON — covers titles, blocks, sections, footer)
+    if (JSON.stringify(current.cancellazione) !== JSON.stringify(saved.cancellazione)) {
+        out.push('Cancellazione: testi modificati')
     }
     return out
 }
@@ -484,6 +544,367 @@ function FaqEditor({
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Aggiungi domanda
             </button>
+        </div>
+    )
+}
+
+// ─── Cancellazione editor ───────────────────────────────────────────────────
+function CancellazioneEditor({
+    copy,
+    setCopy,
+}: {
+    copy: CancellazioneCopy
+    setCopy: (next: CancellazioneCopy) => void
+}) {
+    const updateField = <K extends keyof CancellazioneCopy>(key: K, value: CancellazioneCopy[K]) => {
+        setCopy({ ...copy, [key]: value })
+    }
+    const updateSection = (idx: number, patch: Partial<CancellazioneSection>) => {
+        const next = [...copy.sections]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, sections: next })
+    }
+    const moveSection = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (idx < 0 || j < 0 || j >= copy.sections.length) return
+        const next = [...copy.sections]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, sections: next })
+    }
+    const removeSection = (idx: number) => {
+        if (!confirm('Rimuovere questa sezione dalla pagina Cancellazione?')) return
+        setCopy({ ...copy, sections: copy.sections.filter((_, i) => i !== idx) })
+    }
+    const addSection = () => {
+        const id = `sec-${Date.now().toString(36)}`
+        setCopy({
+            ...copy,
+            sections: [...copy.sections, {
+                id, variant: 'standard',
+                title_it: 'Nuova sezione', title_en: 'New section',
+                blocks: [{ type: 'p', text_it: '', text_en: '' }],
+            }],
+        })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Cancellazione</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/cancellation</code>. Modifica titoli e paragrafi in italiano e inglese. I numeri (giorni soglia, % rimborso/penale) vengono dalle regole in Centralina Pro &gt; Automazioni e si inseriscono coi placeholder <code>{'{thresholdDays}'}</code>, <code>{'{refundPercent}'}</code>, <code>{'{penaltyPercent}'}</code>, <code>{'{daysWord}'}</code>.
+                </p>
+            </div>
+
+            {/* Page header + footer fields */}
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header & Footer pagina</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.page_title_it} onChange={v => updateField('page_title_it', v)} />
+                    <FieldText label="Titolo (EN)" value={copy.page_title_en} onChange={v => updateField('page_title_en', v)} />
+                    <FieldText label="Etichetta contatto (IT)" value={copy.contact_label_it} onChange={v => updateField('contact_label_it', v)} />
+                    <FieldText label="Etichetta contatto (EN)" value={copy.contact_label_en} onChange={v => updateField('contact_label_en', v)} />
+                    <FieldText label="Email contatto" value={copy.contact_email} onChange={v => updateField('contact_email', v)} />
+                    <FieldText label="Indirizzo (footer)" value={copy.contact_address} onChange={v => updateField('contact_address', v)} />
+                    <FieldText label="Ultimo aggiornamento (IT)" value={copy.last_updated_it} onChange={v => updateField('last_updated_it', v)} />
+                    <FieldText label="Ultimo aggiornamento (EN)" value={copy.last_updated_en} onChange={v => updateField('last_updated_en', v)} />
+                </div>
+            </section>
+
+            {/* Sections */}
+            <div className="space-y-3">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sezioni ({copy.sections.length})</h3>
+                {copy.sections.map((sec, i) => (
+                    <SectionCard
+                        key={sec.id}
+                        section={sec}
+                        first={i === 0}
+                        last={i === copy.sections.length - 1}
+                        onChange={(patch) => updateSection(i, patch)}
+                        onMoveUp={() => moveSection(i, -1)}
+                        onMoveDown={() => moveSection(i, 1)}
+                        onRemove={() => removeSection(i)}
+                    />
+                ))}
+                <button
+                    onClick={addSection}
+                    className="w-full py-3 rounded-2xl border-2 border-dashed border-black/15 text-[13px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi sezione
+                </button>
+            </div>
+        </div>
+    )
+}
+
+function FieldText({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+    return (
+        <label className="block">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">{label}</span>
+            <input
+                type="text"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="mt-1 w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+        </label>
+    )
+}
+
+function SectionCard({
+    section, first, last, onChange, onMoveUp, onMoveDown, onRemove,
+}: {
+    section: CancellazioneSection
+    first: boolean
+    last: boolean
+    onChange: (patch: Partial<CancellazioneSection>) => void
+    onMoveUp: () => void
+    onMoveDown: () => void
+    onRemove: () => void
+}) {
+    const [open, setOpen] = useState(false)
+
+    const updateBlock = (idx: number, next: CancellazioneBlock) => {
+        const blocks = [...section.blocks]
+        blocks[idx] = next
+        onChange({ blocks })
+    }
+    const moveBlock = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= section.blocks.length) return
+        const blocks = [...section.blocks]
+        ;[blocks[idx], blocks[j]] = [blocks[j], blocks[idx]]
+        onChange({ blocks })
+    }
+    const removeBlock = (idx: number) => {
+        if (!confirm('Rimuovere questo blocco?')) return
+        onChange({ blocks: section.blocks.filter((_, i) => i !== idx) })
+    }
+    const addBlock = (type: CancellazioneBlock['type']) => {
+        let block: CancellazioneBlock
+        if (type === 'ul') block = { type: 'ul', items_it: [''], items_en: [''], tone: 'default' }
+        else block = { type, text_it: '', text_en: '' }
+        onChange({ blocks: [...section.blocks, block] })
+    }
+
+    const variantBadge = section.variant === 'flex'
+        ? <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700">Flex</span>
+        : <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-black/5 text-[#6e6e73]">Standard</span>
+
+    return (
+        <div className="border border-black/10 rounded-2xl bg-white shadow-sm">
+            <header className="px-4 py-3 flex items-center gap-3">
+                <button
+                    onClick={() => setOpen(o => !o)}
+                    className="flex-1 text-left flex items-center gap-3"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-[#6e6e73] transition-transform ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
+                    <span className="text-[13px] font-semibold text-[#1d1d1f] flex-1 truncate">{section.title_it || '(senza titolo)'}</span>
+                    {variantBadge}
+                </button>
+                <div className="flex items-center gap-1">
+                    <button onClick={onMoveUp} disabled={first} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                    <button onClick={onMoveDown} disabled={last} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                    <button onClick={onRemove} className="w-7 h-7 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina sezione"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg></button>
+                </div>
+            </header>
+
+            {open && (
+                <div className="px-4 pb-4 space-y-4 border-t border-black/5 pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <FieldText label="Titolo sezione (IT)" value={section.title_it} onChange={v => onChange({ title_it: v })} />
+                        <FieldText label="Titolo sezione (EN)" value={section.title_en} onChange={v => onChange({ title_en: v })} />
+                    </div>
+                    <label className="block">
+                        <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Variante stile</span>
+                        <select
+                            value={section.variant}
+                            onChange={(e) => onChange({ variant: e.target.value as 'standard' | 'flex' })}
+                            className="mt-1 w-full md:w-48 bg-white border border-black/10 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        >
+                            <option value="standard">Standard (border grigio)</option>
+                            <option value="flex">Flex (border verde)</option>
+                        </select>
+                    </label>
+
+                    {/* Blocks */}
+                    <div className="space-y-2">
+                        <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#a1a1a6]">Blocchi ({section.blocks.length})</h4>
+                        {section.blocks.map((block, i) => (
+                            <BlockCard
+                                key={i}
+                                block={block}
+                                first={i === 0}
+                                last={i === section.blocks.length - 1}
+                                onChange={(b) => updateBlock(i, b)}
+                                onMoveUp={() => moveBlock(i, -1)}
+                                onMoveDown={() => moveBlock(i, 1)}
+                                onRemove={() => removeBlock(i)}
+                            />
+                        ))}
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            <AddBlockButton label="+ Paragrafo" onClick={() => addBlock('p')} />
+                            <AddBlockButton label="+ Paragrafo grassetto" onClick={() => addBlock('p-bold')} />
+                            <AddBlockButton label="+ Paragrafo corsivo" onClick={() => addBlock('p-italic')} />
+                            <AddBlockButton label="+ Lista puntata" onClick={() => addBlock('ul')} />
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+function AddBlockButton({ label, onClick }: { label: string; onClick: () => void }) {
+    return (
+        <button
+            onClick={onClick}
+            className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-[#1d1d1f] bg-black/5 hover:bg-black/10"
+        >{label}</button>
+    )
+}
+
+function BlockCard({
+    block, first, last, onChange, onMoveUp, onMoveDown, onRemove,
+}: {
+    block: CancellazioneBlock
+    first: boolean
+    last: boolean
+    onChange: (next: CancellazioneBlock) => void
+    onMoveUp: () => void
+    onMoveDown: () => void
+    onRemove: () => void
+}) {
+    const typeLabel = {
+        'p': 'Paragrafo',
+        'p-bold': 'Grassetto',
+        'p-italic': 'Corsivo',
+        'ul': 'Lista',
+    }[block.type]
+
+    return (
+        <div className="border border-black/10 rounded-xl p-3 bg-[#fafafa]">
+            <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1">{typeLabel}</span>
+                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+
+            {block.type === 'ul' ? (
+                <UlEditor
+                    items_it={block.items_it}
+                    items_en={block.items_en}
+                    tone={block.tone || 'default'}
+                    onChange={(patch) => onChange({ ...block, ...patch })}
+                />
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <label className="block">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-[#a1a1a6]">Italiano</span>
+                        <textarea
+                            value={block.text_it}
+                            onChange={(e) => onChange({ ...block, text_it: e.target.value })}
+                            rows={3}
+                            className="mt-0.5 w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
+                        />
+                    </label>
+                    <label className="block">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-[#a1a1a6]">English</span>
+                        <textarea
+                            value={block.text_en}
+                            onChange={(e) => onChange({ ...block, text_en: e.target.value })}
+                            rows={3}
+                            className="mt-0.5 w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
+                        />
+                    </label>
+                </div>
+            )}
+        </div>
+    )
+}
+
+function UlEditor({
+    items_it, items_en, tone, onChange,
+}: {
+    items_it: string[]
+    items_en: string[]
+    tone: 'default' | 'green'
+    onChange: (patch: { items_it?: string[]; items_en?: string[]; tone?: 'default' | 'green' }) => void
+}) {
+    // Items are aligned by index. Track the LONGER of the two so the editor
+    // doesn't drop trailing untranslated items.
+    const len = Math.max(items_it.length, items_en.length)
+    const updateIt = (i: number, v: string) => {
+        const next = [...items_it]
+        while (next.length <= i) next.push('')
+        next[i] = v
+        onChange({ items_it: next })
+    }
+    const updateEn = (i: number, v: string) => {
+        const next = [...items_en]
+        while (next.length <= i) next.push('')
+        next[i] = v
+        onChange({ items_en: next })
+    }
+    const removeRow = (i: number) => {
+        onChange({
+            items_it: items_it.filter((_, j) => j !== i),
+            items_en: items_en.filter((_, j) => j !== i),
+        })
+    }
+    const addRow = () => {
+        onChange({ items_it: [...items_it, ''], items_en: [...items_en, ''] })
+    }
+    const moveRow = (i: number, dir: -1 | 1) => {
+        const j = i + dir
+        if (j < 0 || j >= len) return
+        const it = [...items_it]; const en = [...items_en]
+        ;[it[i], it[j]] = [it[j] || '', it[i] || '']
+        ;[en[i], en[j]] = [en[j] || '', en[i] || '']
+        onChange({ items_it: it, items_en: en })
+    }
+
+    return (
+        <div className="space-y-2">
+            <label className="flex items-center gap-2 text-[11px] text-[#6e6e73]">
+                <span>Tono:</span>
+                <select
+                    value={tone}
+                    onChange={(e) => onChange({ tone: e.target.value as 'default' | 'green' })}
+                    className="bg-white border border-black/10 rounded-md px-2 py-0.5 text-[12px]"
+                >
+                    <option value="default">Default (grigio)</option>
+                    <option value="green">Verde (Flex)</option>
+                </select>
+            </label>
+            <ul className="space-y-1.5">
+                {Array.from({ length: len }).map((_, i) => (
+                    <li key={i} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-start">
+                        <input
+                            type="text"
+                            value={items_it[i] || ''}
+                            onChange={(e) => updateIt(i, e.target.value)}
+                            placeholder="punto IT"
+                            className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]"
+                        />
+                        <input
+                            type="text"
+                            value={items_en[i] || ''}
+                            onChange={(e) => updateEn(i, e.target.value)}
+                            placeholder="bullet EN"
+                            className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]"
+                        />
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => moveRow(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveRow(i, 1)} disabled={i === len - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => removeRow(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+            <button onClick={addRow} className="text-[12px] font-medium text-blue-500 hover:text-blue-600">+ Aggiungi voce</button>
         </div>
     )
 }
