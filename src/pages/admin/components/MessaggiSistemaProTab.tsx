@@ -21,6 +21,13 @@ interface SystemMessage {
     send_email?: boolean
     /** Oggetto email; se vuoto, fallback al label del template. */
     email_subject?: string | null
+    // Filtri avanzati (migration 20260509_system_messages_more_filters)
+    target_service_type?: string  // 'rental'|'car_wash'|'mechanical'|'all'
+    target_with_deposit?: string  // 'yes'|'no'|'all'
+    target_plate?: string | null  // targa esatta opzionale
+    target_payment_method?: string // 'card'|'wallet'|'cash'|'bonifico'|'all'
+    target_amount_min?: number | null  // euro
+    target_amount_max?: number | null  // euro
     created_at: string
     updated_at: string
 }
@@ -739,6 +746,13 @@ export default function MessaggiSistemaProTab() {
     const [newTriggerOffset, setNewTriggerOffset] = useState(24)
     const [newSendHour, setNewSendHour] = useState<number | null>(9)
     const [newTargetCategory, setNewTargetCategory] = useState('all')
+    // Filtri avanzati (migration 20260509)
+    const [newTargetServiceType, setNewTargetServiceType] = useState('all')
+    const [newTargetWithDeposit, setNewTargetWithDeposit] = useState('all')
+    const [newTargetPlate, setNewTargetPlate] = useState('')
+    const [newTargetPaymentMethod, setNewTargetPaymentMethod] = useState('all')
+    const [newTargetAmountMin, setNewTargetAmountMin] = useState('')
+    const [newTargetAmountMax, setNewTargetAmountMax] = useState('')
     const [creatingNew, setCreatingNew] = useState(false)
 
     // Send section state
@@ -954,6 +968,12 @@ export default function MessaggiSistemaProTab() {
                     send_hour: newSendHour,
                     target_category: newTargetCategory,
                     target_status: 'confirmed,active',
+                    target_service_type: newTargetServiceType,
+                    target_with_deposit: newTargetWithDeposit,
+                    target_plate: newTargetPlate.trim() || null,
+                    target_payment_method: newTargetPaymentMethod,
+                    target_amount_min: newTargetAmountMin ? parseFloat(newTargetAmountMin) : null,
+                    target_amount_max: newTargetAmountMax ? parseFloat(newTargetAmountMax) : null,
                 })
                 .select()
                 .single()
@@ -1395,6 +1415,76 @@ export default function MessaggiSistemaProTab() {
                                                 <option key={k} value={k}>{v}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                </div>
+
+                                {/* Filtri avanzati — phase 1 */}
+                                <div className="mt-4 pt-4 border-t border-theme-border/40">
+                                    <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Filtri avanzati</div>
+                                    <p className="text-[11px] text-theme-text-muted mb-3 italic">
+                                        Restringi quando il messaggio parte. Esempio: solo prenotazioni noleggio con cauzione, oppure solo veicolo "AB123CD".
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">Tipo servizio</label>
+                                            <select value={newTargetServiceType} onChange={e => setNewTargetServiceType(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                <option value="all">Tutti i servizi</option>
+                                                <option value="rental">Solo noleggio veicoli</option>
+                                                <option value="car_wash">Solo lavaggio</option>
+                                                <option value="mechanical">Solo meccanica</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">Cauzione</label>
+                                            <select value={newTargetWithDeposit} onChange={e => setNewTargetWithDeposit(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                <option value="all">Tutte le prenotazioni</option>
+                                                <option value="yes">Solo con cauzione</option>
+                                                <option value="no">Solo senza cauzione</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">Targa specifica</label>
+                                            <input
+                                                type="text"
+                                                value={newTargetPlate}
+                                                onChange={e => setNewTargetPlate(e.target.value.toUpperCase())}
+                                                placeholder="es. AB123CD (vuoto = tutti)"
+                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm font-mono uppercase"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">Metodo pagamento</label>
+                                            <select value={newTargetPaymentMethod} onChange={e => setNewTargetPaymentMethod(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                <option value="all">Tutti i metodi</option>
+                                                <option value="card">Carta di credito</option>
+                                                <option value="wallet">Credit Wallet</option>
+                                                <option value="cash">Contanti</option>
+                                                <option value="bonifico">Bonifico</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">Importo min (€)</label>
+                                            <input
+                                                type="number"
+                                                value={newTargetAmountMin}
+                                                onChange={e => setNewTargetAmountMin(e.target.value)}
+                                                placeholder="vuoto = nessun limite"
+                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">Importo max (€)</label>
+                                            <input
+                                                type="number"
+                                                value={newTargetAmountMax}
+                                                onChange={e => setNewTargetAmountMax(e.target.value)}
+                                                placeholder="vuoto = nessun limite"
+                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                                 </>

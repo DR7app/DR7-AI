@@ -21,6 +21,77 @@ interface TriggerArgs {
     maxOffsetHours?: number
 }
 
+/**
+ * Applica i filtri avanzati alla coppia (template, booking).
+ * Ritorna true se il template DEVE partire per questa booking, false
+ * se va saltato perche' il booking non rispetta uno dei filtri.
+ *
+ * Filtri (tutti opzionali, default = nessuna restrizione):
+ *  - target_service_type: rental | car_wash | mechanical | all
+ *  - target_with_deposit: yes | no | all (booking ha cauzione?)
+ *  - target_plate: targa esatta del veicolo
+ *  - target_payment_method: card | wallet | cash | bonifico | all
+ *  - target_amount_min/max: range importo booking in euro
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
+    // Service type
+    const tplSvc = String(tpl.target_service_type || 'all').toLowerCase()
+    if (tplSvc !== 'all') {
+        const bSvc = String(booking.service_type || 'rental').toLowerCase()
+        // Normalizza: noleggio veicoli = service_type vuoto/null o 'rental'/'car_rental'
+        const bookingIsRental = !booking.service_type || bSvc === 'rental' || bSvc === 'car_rental'
+        if (tplSvc === 'rental' && !bookingIsRental) return false
+        if (tplSvc === 'car_wash' && bSvc !== 'car_wash') return false
+        if (tplSvc === 'mechanical' && bSvc !== 'mechanical' && bSvc !== 'mechanical_service') return false
+    }
+
+    // With deposit?
+    const tplDep = String(tpl.target_with_deposit || 'all').toLowerCase()
+    if (tplDep !== 'all') {
+        const depAmount = Number(booking.deposit_amount ?? booking.booking_details?.deposit ?? 0)
+        const depOption = booking.booking_details?.depositOption
+        const hasDeposit = depAmount > 0 && depOption !== 'no_deposit'
+        if (tplDep === 'yes' && !hasDeposit) return false
+        if (tplDep === 'no' && hasDeposit) return false
+    }
+
+    // Plate
+    if (tpl.target_plate && typeof tpl.target_plate === 'string') {
+        const want = tpl.target_plate.toUpperCase().replace(/\s/g, '')
+        const have = String(booking.vehicle_plate || booking.plate || '').toUpperCase().replace(/\s/g, '')
+        if (want && have !== want) return false
+    }
+
+    // Payment method
+    const tplPM = String(tpl.target_payment_method || 'all').toLowerCase()
+    if (tplPM !== 'all') {
+        const m = String(booking.payment_method || '').toLowerCase()
+        const isCard = m.includes('card') || m.includes('carta') || m.includes('nexi') || m.includes('stripe') || m.includes('bancomat') || m.includes('pos') || m.includes('debit')
+        const isWallet = m === 'credit' || m.includes('wallet') || m.includes('credit_wallet')
+        const isCash = m.includes('contanti') || m.includes('cash')
+        const isBonifico = m.includes('bonifico') || m.includes('wire') || m.includes('bank')
+        if (tplPM === 'card' && !isCard) return false
+        if (tplPM === 'wallet' && !isWallet) return false
+        if (tplPM === 'cash' && !isCash) return false
+        if (tplPM === 'bonifico' && !isBonifico) return false
+    }
+
+    // Amount range (booking.price_total e' in cents in alcuni schemi,
+    // booking.total_amount in euro in altri — proviamo entrambi).
+    const min = tpl.target_amount_min == null ? null : Number(tpl.target_amount_min)
+    const max = tpl.target_amount_max == null ? null : Number(tpl.target_amount_max)
+    if (min != null || max != null) {
+        let amountEur = 0
+        if (typeof booking.total_amount === 'number') amountEur = booking.total_amount
+        else if (typeof booking.price_total === 'number') amountEur = booking.price_total / 100
+        if (min != null && amountEur < min) return false
+        if (max != null && amountEur > max) return false
+    }
+
+    return true
+}
+
 export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHours = 1 }: TriggerArgs): Promise<{ sent: number; skipped: number; errors: number }> {
     const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
@@ -38,7 +109,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     //    saranno gestiti dal cron, non qui.
     const { data: templates } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, trigger_offset_hours, target_status, target_category')
+        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max')
         .eq('is_automatic', true)
         .eq('is_enabled', true)
         .eq('trigger_event', event)
@@ -48,6 +119,8 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     let sent = 0, skipped = 0, errors = 0
 
     for (const tpl of templates) {
+        if (!matchesAdvancedFilters(tpl, booking)) continue
+
         // 3. Filtri: status + categoria
         const statuses = (tpl.target_status || 'confirmed,active').split(',').map((s: string) => s.trim()).filter(Boolean)
         if (statuses.length > 0 && !statuses.includes(booking.status)) continue

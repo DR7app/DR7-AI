@@ -27,6 +27,7 @@
  */
 import { schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { matchesAdvancedFilters } from './utils/triggerSystemMessageEvent';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -46,6 +47,12 @@ interface SystemMessage {
     send_hour: number | null;
     target_category: string;
     target_status: string;
+    target_service_type?: string;
+    target_with_deposit?: string;
+    target_plate?: string | null;
+    target_payment_method?: string;
+    target_amount_min?: number | null;
+    target_amount_max?: number | null;
 }
 
 const LOOKBACK_MS = 30 * 60 * 1000;  // 30 min: forgive previous-cron failures
@@ -153,7 +160,7 @@ const cronHandler = async () => {
     // 1. Carica tutti i template automatici attivi
     const { data: templates, error: tplErr } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, is_automatic, is_enabled, trigger_event, trigger_offset_hours, send_hour, target_category, target_status')
+        .select('id, message_key, label, is_automatic, is_enabled, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max')
         .eq('is_automatic', true)
         .eq('is_enabled', true);
 
@@ -219,6 +226,9 @@ const cronHandler = async () => {
         if (!candidates?.length) continue;
 
         for (const booking of candidates as Booking[]) {
+            // Filtri avanzati (service_type / cauzione / targa / metodo / importo)
+            if (!matchesAdvancedFilters(tpl, booking)) continue
+
             // Filtro categoria veicolo (best-effort: prima top-level, poi booking_details)
             if (tpl.target_category && tpl.target_category !== 'all') {
                 const cat =
