@@ -44,6 +44,7 @@ type SectionId =
     | 'meccanica'
     | 'lavaggio'
     | 'investitori'
+    | 'franchising'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -59,6 +60,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'meccanica', title: 'Servizi Meccanica', ready: true },
     { id: 'lavaggio', title: 'Servizi Lavaggio', ready: true },
     { id: 'investitori', title: 'Investitori', ready: true },
+    { id: 'franchising', title: 'Franchising', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -293,6 +295,45 @@ function emptyLegalPage(id: LegalPageId): LegalPageCopy {
 
 const INITIAL_LEGAL: LegalCopy = {
     pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
+}
+
+// ─── Franchising (IT-only sales page) ──────────────────────────────────────
+type FranchisingExpansionIcon = 'square' | 'diamond' | 'lines'
+type FranchisingBenefitIcon = 'check' | 'shield' | 'star'
+interface FranchisingExpansionLocation { id: string; icon: FranchisingExpansionIcon; name: string; description: string }
+interface FranchisingBenefit { id: string; icon: FranchisingBenefitIcon; title: string; description: string }
+interface FranchisingCopy {
+    hero_h2: string
+    hero_p1: string
+    hero_p2: string
+    stats_heading: string
+    stats_lines: string[]
+    stats_footer_main: string
+    stats_footer_sub: string
+    expansion_heading: string
+    expansion_locations: FranchisingExpansionLocation[]
+    about_heading: string
+    about_paragraphs: string[]
+    benefits: FranchisingBenefit[]
+    cta_heading: string
+    cta_intro: string
+    cta_box_main: string
+    cta_box_sub: string
+    contact_heading: string
+    contact_intro: string
+    contact_email: string
+    footer_statement: string
+}
+const INITIAL_FRANCHISING: FranchisingCopy = {
+    hero_h2: '', hero_p1: '', hero_p2: '',
+    stats_heading: 'In soli 18 mesi di attività', stats_lines: [],
+    stats_footer_main: '', stats_footer_sub: '',
+    expansion_heading: 'Il Nostro Piano di Espansione', expansion_locations: [],
+    about_heading: '', about_paragraphs: [],
+    benefits: [],
+    cta_heading: '', cta_intro: '', cta_box_main: '', cta_box_sub: '',
+    contact_heading: '', contact_intro: '', contact_email: '',
+    footer_statement: '',
 }
 
 // ─── Investitori (IT-only sales page) ──────────────────────────────────────
@@ -618,6 +659,7 @@ interface SiteCopySnapshot {
     mechanical?: MechanicalCopy
     carwash?: CarWashCopy
     investitori?: InvestitoriCopy
+    franchising?: FranchisingCopy
 }
 
 interface CurrentState {
@@ -634,6 +676,7 @@ interface CurrentState {
     mechanical: MechanicalCopy
     carwash: CarWashCopy
     investitori: InvestitoriCopy
+    franchising: FranchisingCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -718,6 +761,8 @@ export default function SitoTab() {
     const [savedCarwash, setSavedCarwash] = useState<CarWashCopy>(INITIAL_CARWASH)
     const [investitori, setInvestitori] = useState<InvestitoriCopy>(INITIAL_INVESTITORI)
     const [savedInvestitori, setSavedInvestitori] = useState<InvestitoriCopy>(INITIAL_INVESTITORI)
+    const [franchising, setFranchising] = useState<FranchisingCopy>(INITIAL_FRANCHISING)
+    const [savedFranchising, setSavedFranchising] = useState<FranchisingCopy>(INITIAL_FRANCHISING)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -797,6 +842,10 @@ export default function SitoTab() {
                     setInvestitori(remote.investitori)
                     setSavedInvestitori(remote.investitori)
                 }
+                if (remote?.franchising && remote.franchising.hero_h2) {
+                    setFranchising(remote.franchising)
+                    setSavedFranchising(remote.franchising)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -809,10 +858,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising]
     )
     const dirty = changes.length > 0
 
@@ -823,7 +872,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -837,6 +886,7 @@ export default function SitoTab() {
             setSavedMechanical(mechanical)
             setSavedCarwash(carwash)
             setSavedInvestitori(investitori)
+            setSavedFranchising(franchising)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -884,6 +934,7 @@ export default function SitoTab() {
         setMechanical(savedMechanical)
         setCarwash(savedCarwash)
         setInvestitori(savedInvestitori)
+        setFranchising(savedFranchising)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1028,6 +1079,9 @@ export default function SitoTab() {
                         {hydrated && section === 'investitori' && (
                             <InvestitoriEditor copy={investitori} setCopy={setInvestitori} />
                         )}
+                        {hydrated && section === 'franchising' && (
+                            <FranchisingEditor copy={franchising} setCopy={setFranchising} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1134,6 +1188,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.investitori) !== JSON.stringify(saved.investitori)) {
         out.push('Investitori: contenuti modificati')
+    }
+    if (JSON.stringify(current.franchising) !== JSON.stringify(saved.franchising)) {
+        out.push('Franchising: contenuti modificati')
     }
     return out
 }
@@ -3447,6 +3504,159 @@ function InvestitoriEditor({ copy, setCopy }: { copy: InvestitoriCopy; setCopy: 
                 <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Avvertenza legale (banda rossa)</h3>
                 <FieldText label="Heading" value={copy.legal_heading} onChange={v => update('legal_heading', v)} />
                 <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.legal_paragraphs.join('\n\n')} onChange={v => updateParagraphList('legal_paragraphs', v)} />
+            </section>
+        </div>
+    )
+}
+
+// ─── Franchising editor (IT-only sales page) ───────────────────────────────
+const FRANCHISING_EXPANSION_ICONS: FranchisingExpansionIcon[] = ['square', 'diamond', 'lines']
+const FRANCHISING_BENEFIT_ICONS: FranchisingBenefitIcon[] = ['check', 'shield', 'star']
+
+function FranchisingEditor({ copy, setCopy }: { copy: FranchisingCopy; setCopy: (next: FranchisingCopy) => void }) {
+    const update = <K extends keyof FranchisingCopy>(key: K, value: FranchisingCopy[K]) => setCopy({ ...copy, [key]: value })
+    // List helpers
+    const setStringList = (key: 'stats_lines' | 'about_paragraphs', v: string) => {
+        const lines = key === 'stats_lines' ? v.split('\n').filter(s => s.length > 0) : v.split('\n\n').filter(s => s.trim().length > 0)
+        setCopy({ ...copy, [key]: lines })
+    }
+    // Expansion locations
+    const updateLoc = (idx: number, patch: Partial<FranchisingExpansionLocation>) => {
+        const next = [...copy.expansion_locations]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, expansion_locations: next })
+    }
+    const moveLoc = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.expansion_locations.length) return
+        const next = [...copy.expansion_locations]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, expansion_locations: next })
+    }
+    const removeLoc = (idx: number) => {
+        if (!confirm('Rimuovere questa sede?')) return
+        setCopy({ ...copy, expansion_locations: copy.expansion_locations.filter((_, i) => i !== idx) })
+    }
+    const addLoc = () => {
+        setCopy({ ...copy, expansion_locations: [...copy.expansion_locations, { id: `loc-${Date.now().toString(36)}`, icon: 'square', name: '', description: '' }] })
+    }
+    // Benefits
+    const updateBenefit = (idx: number, patch: Partial<FranchisingBenefit>) => {
+        const next = [...copy.benefits]
+        next[idx] = { ...next[idx], ...patch }
+        setCopy({ ...copy, benefits: next })
+    }
+    const moveBenefit = (idx: number, dir: -1 | 1) => {
+        const j = idx + dir
+        if (j < 0 || j >= copy.benefits.length) return
+        const next = [...copy.benefits]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        setCopy({ ...copy, benefits: next })
+    }
+    const removeBenefit = (idx: number) => {
+        if (!confirm('Rimuovere questo benefit?')) return
+        setCopy({ ...copy, benefits: copy.benefits.filter((_, i) => i !== idx) })
+    }
+    const addBenefit = () => {
+        setCopy({ ...copy, benefits: [...copy.benefits, { id: `b-${Date.now().toString(36)}`, icon: 'check', title: '', description: '' }] })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Franchising</h2>
+                <p className="text-[13px] text-[#6e6e73] mt-1">
+                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/franchising</code> — pagina IT-only. Placeholder <code>{'{reviewCount}'}</code> nelle stats viene risolto a runtime con il conteggio Google Reviews live.
+                </p>
+            </div>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+                <FieldText label="Titolo (h2)" value={copy.hero_h2} onChange={v => update('hero_h2', v)} />
+                <FieldText label="Sottotitolo principale" value={copy.hero_p1} onChange={v => update('hero_p1', v)} />
+                <FieldTextArea label="Sottotitolo secondario (newline = a-capo)" value={copy.hero_p2} onChange={v => update('hero_p2', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stats — In soli X mesi</h3>
+                <FieldText label="Heading" value={copy.stats_heading} onChange={v => update('stats_heading', v)} />
+                <FieldTextArea label='Righe stats (una per linea — usa "* xxx" per il pallino. Placeholder {reviewCount})' value={copy.stats_lines.join('\n')} onChange={v => setStringList('stats_lines', v)} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Footer principale" value={copy.stats_footer_main} onChange={v => update('stats_footer_main', v)} />
+                    <FieldText label="Footer sotto-riga" value={copy.stats_footer_sub} onChange={v => update('stats_footer_sub', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Piano di Espansione ({copy.expansion_locations.length})</h3>
+                <FieldText label="Heading" value={copy.expansion_heading} onChange={v => update('expansion_heading', v)} />
+                {copy.expansion_locations.map((loc, i) => (
+                    <div key={loc.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[120px_1fr_1fr_auto] gap-2 items-center">
+                        <select value={loc.icon} onChange={e => updateLoc(i, { icon: e.target.value as FranchisingExpansionIcon })} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]">
+                            {FRANCHISING_EXPANSION_ICONS.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                        <input type="text" value={loc.name} onChange={e => updateLoc(i, { name: e.target.value })} placeholder="Nome (es. Cagliari)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={loc.description} onChange={e => updateLoc(i, { description: e.target.value })} placeholder='Descrizione (es. "Sede Principale")' className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => moveLoc(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveLoc(i, 1)} disabled={i === copy.expansion_locations.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => removeLoc(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        </div>
+                    </div>
+                ))}
+                <button onClick={addLoc} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi sede
+                </button>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">L'Impero DR7 (about)</h3>
+                <FieldText label="Heading" value={copy.about_heading} onChange={v => update('about_heading', v)} />
+                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.about_paragraphs.join('\n\n')} onChange={v => setStringList('about_paragraphs', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Benefits ({copy.benefits.length})</h3>
+                {copy.benefits.map((b, i) => (
+                    <div key={b.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                        <div className="flex items-center gap-2">
+                            <select value={b.icon} onChange={e => updateBenefit(i, { icon: e.target.value as FranchisingBenefitIcon })} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]">
+                                {FRANCHISING_BENEFIT_ICONS.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{b.title || '(senza titolo)'}</span>
+                            <button onClick={() => moveBenefit(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveBenefit(i, 1)} disabled={i === copy.benefits.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => removeBenefit(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        </div>
+                        <input type="text" value={b.title} onChange={e => updateBenefit(i, { title: e.target.value })} placeholder="Titolo benefit" className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-semibold" />
+                        <textarea value={b.description} onChange={e => updateBenefit(i, { description: e.target.value })} placeholder="Descrizione" rows={2} className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                    </div>
+                ))}
+                <button onClick={addBenefit} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Aggiungi benefit
+                </button>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Call to Action</h3>
+                <FieldText label="Heading" value={copy.cta_heading} onChange={v => update('cta_heading', v)} />
+                <FieldText label="Intro" value={copy.cta_intro} onChange={v => update('cta_intro', v)} />
+                <FieldText label="Box riga principale" value={copy.cta_box_main} onChange={v => update('cta_box_main', v)} />
+                <FieldText label="Box riga secondaria" value={copy.cta_box_sub} onChange={v => update('cta_box_sub', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Contatti</h3>
+                <FieldText label="Heading" value={copy.contact_heading} onChange={v => update('contact_heading', v)} />
+                <FieldText label="Intro" value={copy.contact_intro} onChange={v => update('contact_intro', v)} />
+                <FieldText label="Email candidature" value={copy.contact_email} onChange={v => update('contact_email', v)} />
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Footer statement</h3>
+                <FieldTextArea label="Statement (newline = a-capo)" value={copy.footer_statement} onChange={v => update('footer_statement', v)} />
             </section>
         </div>
     )
