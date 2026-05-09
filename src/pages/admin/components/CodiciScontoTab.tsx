@@ -1,9 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import DiscountCodeGeneratorModal from './DiscountCodeGeneratorModal'
 import { QRCodeSVG } from 'qrcode.react'
 import toast from 'react-hot-toast'
+
+// Static accent palette mirrored on the screenshot — keeps each panel
+// visually distinct without inventing data.
+const SCOPE_COLORS: Record<string, string> = {
+    supercar: 'bg-cyan-500',
+    lavaggi: 'bg-blue-500',
+    noleggio: 'bg-purple-500',
+    rental: 'bg-purple-500',
+    vip: 'bg-amber-500',
+    aziendali: 'bg-emerald-500',
+    moto: 'bg-rose-500',
+}
 
 interface DiscountCode {
     id: string
@@ -343,16 +355,123 @@ export default function CodiciScontoTab() {
         return true
     })
 
+    // Panoramica metrics derived from real loaded data.
+    const metrics = useMemo(() => {
+        const now = new Date()
+        const codiciAttivi = discountCodes.filter(c => c.status === 'active').length
+        const utilizziTotali = discountCodes.reduce((s, c) => s + (c.usage_count || 0), 0)
+        const fatturatoGenerato = discountCodes.reduce((s, c) => s + (c.usage_total || 0), 0)
+        const scontoMedio = (() => {
+            const used = discountCodes.filter(c => (c.usage_count || 0) > 0)
+            if (!used.length) return 0
+            const avg = used.reduce((s, c) => s + (c.value_amount || 0), 0) / used.length
+            return -avg
+        })()
+        // Conversion rate proxy: % of codes that have at least one usage.
+        const usedCount = discountCodes.filter(c => (c.usage_count || 0) > 0).length
+        const conversionRate = discountCodes.length > 0
+            ? (usedCount / discountCodes.length) * 100
+            : 0
+        // ROI proxy: fatturato generato / sconto totale concesso (only with
+        // value_type=fixed; percentage values can't be summed directly).
+        const scontoTotale = discountCodes.reduce(
+            (s, c) => s + (c.value_type === 'fixed' ? (c.value_amount || 0) * (c.usage_count || 0) : 0),
+            0
+        )
+        const roi = scontoTotale > 0 ? fatturatoGenerato / scontoTotale : 0
+
+        // Distribuzione per ambito
+        const scopeBuckets: Record<string, number> = {}
+        discountCodes.forEach(c => {
+            const scopes = c.scope && c.scope.length > 0 ? c.scope : ['altri']
+            scopes.forEach(s => { scopeBuckets[s] = (scopeBuckets[s] || 0) + 1 })
+        })
+        const totalScopeWeight = Object.values(scopeBuckets).reduce((s, v) => s + v, 0)
+        const distribuzione = Object.entries(scopeBuckets)
+            .map(([key, count]) => ({
+                key,
+                count,
+                pct: totalScopeWeight > 0 ? (count / totalScopeWeight) * 100 : 0,
+            }))
+            .sort((a, b) => b.count - a.count)
+
+        // Top codici per fatturato
+        const topByFatturato = [...discountCodes]
+            .filter(c => (c.usage_total || 0) > 0)
+            .sort((a, b) => (b.usage_total || 0) - (a.usage_total || 0))
+            .slice(0, 5)
+
+        // Codici scaduti (informational, used by hero subtitle)
+        const expiredSoon = discountCodes.filter(c => {
+            if (c.status !== 'active') return false
+            const expiry = new Date(c.valid_until)
+            const days = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+            return days >= 0 && days <= 7
+        }).length
+
+        return {
+            codiciAttivi, utilizziTotali, fatturatoGenerato,
+            scontoMedio, conversionRate, roi, scontoTotale,
+            distribuzione, topByFatturato, expiredSoon,
+        }
+    }, [discountCodes])
+
+    const fmtEur = (v: number) => `€ ${v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    const fmtEurShort = (v: number) => `€ ${v.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+    const scopeLabel = (key: string): string => {
+        const map: Record<string, string> = {
+            supercar: 'Supercar',
+            lavaggi: 'Lavaggio',
+            noleggio: 'Noleggio',
+            rental: 'Noleggio',
+            vip: 'VIP / servizi',
+            aziendali: 'Aziendali',
+            moto: 'Moto & Scooter',
+            altri: 'Altri',
+        }
+        return map[key] || key
+    }
+
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h3 className="text-lg font-bold text-theme-text-primary">Codici Sconto & Gift Card</h3>
-                    <p className="text-theme-text-muted text-sm">Genera, gestisci e traccia codici sconto e gift card</p>
+            {/* Hero header */}
+            <div className="rounded-2xl border border-theme-border bg-gradient-to-br from-theme-bg-secondary to-theme-bg-primary p-6 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 min-w-0">
+                        <div className="w-12 h-12 rounded-2xl bg-dr7-gold/15 text-dr7-gold flex items-center justify-center shrink-0">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/>
+                                <path d="M20 12v4H6a2 2 0 0 0 0 4h12v-4"/>
+                                <line x1="12" y1="6" x2="12" y2="6.01"/>
+                                <line x1="12" y1="18" x2="12" y2="18.01"/>
+                            </svg>
+                        </div>
+                        <div className="min-w-0">
+                            <h2 className="text-xl sm:text-2xl font-semibold text-theme-text-primary">Codici Sconto Marketing</h2>
+                            <p className="text-sm text-theme-text-muted mt-1 max-w-2xl">
+                                Crea, gestisci e traccia tutti i codici sconto e gift card per aumentare le conversioni.
+                                {metrics.expiredSoon > 0 && (
+                                    <span className="ml-2 text-amber-400 font-medium">
+                                        {metrics.expiredSoon} codici in scadenza nei prossimi 7 giorni.
+                                    </span>
+                                )}
+                            </p>
+                        </div>
+                    </div>
+                    <Button onClick={() => { setEditingCode(null); setShowDiscountCodeModal(true) }}>
+                        + Genera Nuovo Codice
+                    </Button>
                 </div>
-                <Button onClick={() => { setEditingCode(null); setShowDiscountCodeModal(true) }}>
-                    Genera Codice
-                </Button>
+            </div>
+
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                <KpiCardCS label="Codici Attivi" value={String(metrics.codiciAttivi)} accent="cyan" icon="ticket" />
+                <KpiCardCS label="Utilizzi Totali" value={String(metrics.utilizziTotali)} accent="green" icon="check" />
+                <KpiCardCS label="Fatturato Generato" value={fmtEurShort(metrics.fatturatoGenerato)} accent="amber" icon="trending" />
+                <KpiCardCS label="Sconto Medio" value={`${metrics.scontoMedio === 0 ? '0' : metrics.scontoMedio.toFixed(1)}%`} accent="purple" icon="percent" />
+                <KpiCardCS label="Conversion Rate" value={`${metrics.conversionRate.toFixed(1)}%`} accent="green" icon="users" />
+                <KpiCardCS label="ROI Stimato" value={metrics.roi > 0 ? `${metrics.roi.toFixed(1)}x` : '—'} accent="gold" icon="zap" />
             </div>
 
             {/* Filter bar */}
@@ -538,6 +657,154 @@ export default function CodiciScontoTab() {
                     </div>
                 </div>
             )}
+
+            {/* Side panels + bottom strip — overview & insights */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Distribuzione per Ambito */}
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <h3 className="text-sm font-semibold text-theme-text-primary mb-4">Distribuzione per Ambito</h3>
+                    <div className="flex items-center gap-4">
+                        <DonutMulti
+                            slices={metrics.distribuzione.map(d => ({
+                                value: d.count,
+                                color: SCOPE_COLORS[d.key] || 'bg-theme-text-muted',
+                            }))}
+                            total={discountCodes.length}
+                        />
+                        <ul className="flex-1 space-y-2 text-xs">
+                            {metrics.distribuzione.length === 0 && (
+                                <li className="text-theme-text-muted">Nessun codice ancora creato.</li>
+                            )}
+                            {metrics.distribuzione.map(d => (
+                                <li key={d.key} className="flex items-center justify-between gap-2">
+                                    <span className="flex items-center gap-2 min-w-0">
+                                        <span className={`w-2.5 h-2.5 rounded-sm shrink-0 ${SCOPE_COLORS[d.key] || 'bg-theme-text-muted'}`} />
+                                        <span className="text-theme-text-secondary truncate">{scopeLabel(d.key)}</span>
+                                    </span>
+                                    <span className="text-theme-text-primary font-semibold tabular-nums">{Math.round(d.pct)}%</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+
+                {/* Performance Codici */}
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-theme-text-primary">Performance Codici</h3>
+                        <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">live</span>
+                    </div>
+                    <ul className="space-y-3 text-sm">
+                        <li className="flex items-center justify-between">
+                            <span className="text-theme-text-muted">Fatturato generato</span>
+                            <span className="text-theme-text-primary font-semibold">{fmtEur(metrics.fatturatoGenerato)}</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                            <span className="text-theme-text-muted">Sconto totale concesso</span>
+                            <span className="text-amber-400 font-semibold">{fmtEur(metrics.scontoTotale)}</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                            <span className="text-theme-text-muted">Conversion Rate</span>
+                            <span className="text-green-400 font-semibold">{metrics.conversionRate.toFixed(1)}%</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                            <span className="text-theme-text-muted">Codici utilizzati</span>
+                            <span className="text-theme-text-primary font-semibold">
+                                {discountCodes.filter(c => (c.usage_count || 0) > 0).length} / {discountCodes.length}
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+
+                {/* Top Codici per Fatturato */}
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <h3 className="text-sm font-semibold text-theme-text-primary mb-4">Top Codici per Fatturato</h3>
+                    {metrics.topByFatturato.length === 0 ? (
+                        <p className="text-xs text-theme-text-muted">Nessun utilizzo registrato.</p>
+                    ) : (
+                        <ul className="space-y-2.5 text-xs">
+                            {metrics.topByFatturato.map(c => (
+                                <li key={c.id} className="flex items-center justify-between gap-2">
+                                    <span className="font-mono font-semibold text-theme-text-primary truncate">{c.code}</span>
+                                    <span className="text-green-400 font-semibold shrink-0">{fmtEur(c.usage_total || 0)}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            </div>
+
+            {/* Bottom strip: Regole / Automazioni / Insights / Azioni Rapide (all decorative) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <InfoCardCS
+                    title="Regole Attive"
+                    decorative
+                    rows={[
+                        { label: 'Sconto compatibili', value: '30%' },
+                        { label: 'Massimi codici per cliente', value: 'max 3' },
+                        { label: 'Limite globale al mese', value: '€ 30.000' },
+                    ]}
+                />
+                <InfoCardCS
+                    title="Automazioni Attive"
+                    decorative
+                    rows={[
+                        { label: 'Invia automaticamente in mail', value: 'ON' },
+                        { label: 'Notifica al cliente', value: 'ON' },
+                        { label: 'Avvisa quando scaduto', value: 'ON' },
+                        { label: 'Blocca codici doppioni', value: 'ON' },
+                    ]}
+                />
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <h3 className="text-sm font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        </svg>
+                        Insights Intelligenti
+                    </h3>
+                    {metrics.topByFatturato.length > 0 ? (
+                        <p className="text-xs text-theme-text-secondary leading-relaxed">
+                            Il codice <span className="font-mono font-semibold text-theme-text-primary">{metrics.topByFatturato[0].code}</span>{' '}
+                            ha generato {fmtEur(metrics.topByFatturato[0].usage_total || 0)} di fatturato — è il tuo top performer.
+                        </p>
+                    ) : (
+                        <p className="text-xs text-theme-text-muted">Nessun insight disponibile finché i codici non vengono utilizzati.</p>
+                    )}
+                </div>
+                <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+                    <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Azioni Rapide</h3>
+                    <div className="space-y-2">
+                        <button
+                            onClick={() => { setEditingCode(null); setShowDiscountCodeModal(true) }}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-primary text-xs font-medium text-theme-text-secondary hover:border-dr7-gold/40 hover:text-theme-text-primary transition-colors"
+                        >
+                            <span className="text-dr7-gold">+</span>
+                            Genera Codice Sconto
+                        </button>
+                        <button
+                            onClick={() => { setEditingCode(null); setShowDiscountCodeModal(true) }}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-primary text-xs font-medium text-theme-text-secondary hover:border-dr7-gold/40 hover:text-theme-text-primary transition-colors"
+                        >
+                            <span className="text-purple-400">🎁</span>
+                            Genera Gift Card
+                        </button>
+                        <button
+                            disabled
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-primary text-xs font-medium text-theme-text-muted opacity-60 cursor-not-allowed"
+                        >
+                            <span>📥</span>
+                            Importa Codici
+                        </button>
+                        <button
+                            disabled
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-theme-border bg-theme-bg-primary text-xs font-medium text-theme-text-muted opacity-60 cursor-not-allowed"
+                        >
+                            <span>📊</span>
+                            Esporta Report
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             {showDiscountCodeModal && (
                 <DiscountCodeGeneratorModal
@@ -852,6 +1119,116 @@ export default function CodiciScontoTab() {
                     </div>
                 </div>
             )}
+        </div>
+    )
+}
+
+/* ── Sub-components for the new Panoramica layout ──────────────── */
+
+function KpiCardCS(props: {
+    label: string
+    value: string
+    accent: 'cyan' | 'green' | 'amber' | 'purple' | 'gold'
+    icon: 'ticket' | 'check' | 'trending' | 'percent' | 'users' | 'zap'
+}) {
+    const accentMap: Record<typeof props.accent, { bg: string; text: string }> = {
+        cyan: { bg: 'bg-cyan-500/10', text: 'text-cyan-400' },
+        green: { bg: 'bg-green-500/10', text: 'text-green-400' },
+        amber: { bg: 'bg-amber-500/10', text: 'text-amber-400' },
+        purple: { bg: 'bg-purple-500/10', text: 'text-purple-400' },
+        gold: { bg: 'bg-dr7-gold/10', text: 'text-dr7-gold' },
+    }
+    const a = accentMap[props.accent]
+    const iconMap: Record<typeof props.icon, React.ReactElement> = {
+        ticket: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 5h18a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2z"/><line x1="13" y1="5" x2="13" y2="19"/></svg>,
+        check: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>,
+        trending: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+        percent: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>,
+        users: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+        zap: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+    }
+    return (
+        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between gap-2 mb-2">
+                <span className="text-[11px] text-theme-text-muted uppercase tracking-wider">{props.label}</span>
+                <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${a.bg} ${a.text}`}>
+                    {iconMap[props.icon]}
+                </span>
+            </div>
+            <p className="text-xl font-bold text-theme-text-primary truncate">{props.value}</p>
+        </div>
+    )
+}
+
+function DonutMulti({ slices, total }: { slices: { value: number; color: string }[]; total: number }) {
+    const sum = slices.reduce((s, x) => s + x.value, 0) || 1
+    const r = 28
+    const c = 2 * Math.PI * r
+    let offset = 0
+    // Map Tailwind bg-* to a stroke color via a dynamic style — fall back
+    // to a CSS variable would be cleaner, but Tailwind palette mirrors
+    // are stable enough as inline strokes here.
+    const tailwindToHex: Record<string, string> = {
+        'bg-cyan-500': '#06b6d4',
+        'bg-blue-500': '#3b82f6',
+        'bg-purple-500': '#a855f7',
+        'bg-amber-500': '#f59e0b',
+        'bg-emerald-500': '#10b981',
+        'bg-rose-500': '#f43f5e',
+        'bg-theme-text-muted': '#9ca3af',
+    }
+    return (
+        <div className="relative w-24 h-24 shrink-0">
+            <svg viewBox="0 0 64 64" className="w-full h-full -rotate-90">
+                <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" strokeWidth="8" className="text-theme-bg-tertiary" />
+                {slices.map((s, i) => {
+                    const len = (s.value / sum) * c
+                    const dasharray = `${len} ${c - len}`
+                    const dashoffset = -offset
+                    offset += len
+                    const stroke = tailwindToHex[s.color] || '#9ca3af'
+                    return (
+                        <circle
+                            key={i}
+                            cx="32"
+                            cy="32"
+                            r={r}
+                            fill="none"
+                            stroke={stroke}
+                            strokeWidth="8"
+                            strokeDasharray={dasharray}
+                            strokeDashoffset={dashoffset}
+                        />
+                    )
+                })}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-xl font-bold text-theme-text-primary leading-none">{total}</span>
+                <span className="text-[9px] uppercase tracking-wider text-theme-text-muted mt-0.5">Total</span>
+            </div>
+        </div>
+    )
+}
+
+function InfoCardCS({ title, rows, decorative }: {
+    title: string
+    rows: { label: string; value: string }[]
+    decorative?: boolean
+}) {
+    return (
+        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-theme-text-primary">{title}</h3>
+                {decorative && <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">decorativo</span>}
+            </div>
+            <ul className="space-y-2 text-xs">
+                {rows.map((r, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2">
+                        <span className="text-theme-text-muted">{r.label}</span>
+                        <span className="text-theme-text-primary font-semibold">{r.value}</span>
+                    </li>
+                ))}
+            </ul>
         </div>
     )
 }
