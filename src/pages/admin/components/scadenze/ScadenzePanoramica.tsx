@@ -189,6 +189,25 @@ export default function ScadenzePanoramica({ stats, topUrgent, onNavigate }: Sca
           <PriorityDonut stats={stats}/>
         </div>
       </div>
+
+      {/* ── Charts row: Per mese + Trend impatto ─────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider">Scadenze per mese</h3>
+            <span className="text-[10px] text-theme-text-muted">prossimi 12 mesi</span>
+          </div>
+          <MonthlyBarsChart stats={stats}/>
+        </div>
+
+        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider">Trend impatto (€)</h3>
+            <span className="text-[10px] text-theme-text-muted">cumulativo</span>
+          </div>
+          <CumulativeTrendChart stats={stats}/>
+        </div>
+      </div>
     </div>
   )
 }
@@ -329,6 +348,91 @@ function CategoryAmountBars({ stats, onNavigate }: { stats: ScadenzeStats; onNav
           </button>
         )
       })}
+    </div>
+  )
+}
+
+function MonthlyBarsChart({ stats }: { stats: ScadenzeStats }) {
+  const data = stats.byMonth
+  const maxCount = Math.max(...data.map(m => m.count), 1)
+  const totalCount = data.reduce((s, m) => s + m.count, 0)
+  if (totalCount === 0) {
+    return <div className="text-xs text-theme-text-muted py-12 text-center">Nessuna scadenza nei prossimi 12 mesi</div>
+  }
+  return (
+    <div>
+      <div className="flex items-end gap-1.5 h-32 px-1">
+        {data.map(m => {
+          const h = m.count > 0 ? Math.max(8, Math.round((m.count / maxCount) * 100)) : 0
+          return (
+            <div key={m.key} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${m.label}: ${m.count} scadenze · ${formatAmount(m.amount)}`}>
+              <div className="w-full flex flex-col justify-end h-full">
+                {m.count > 0 && (
+                  <div
+                    className="w-full rounded-t bg-gradient-to-t from-dr7-gold/40 via-dr7-gold/70 to-dr7-gold transition-all duration-300 hover:from-dr7-gold/60"
+                    style={{ height: `${h}%` }}
+                  />
+                )}
+              </div>
+              <div className="text-[9px] text-theme-text-muted truncate w-full text-center">{m.label}</div>
+              <div className="text-[10px] font-bold text-theme-text-primary tabular-nums">{m.count > 0 ? m.count : ''}</div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-3 pt-3 border-t border-theme-border flex items-center justify-between text-[11px]">
+        <span className="text-theme-text-muted">Totale 12 mesi</span>
+        <span className="text-theme-text-primary font-bold tabular-nums">{totalCount} scadenze</span>
+      </div>
+    </div>
+  )
+}
+
+function CumulativeTrendChart({ stats }: { stats: ScadenzeStats }) {
+  const data = stats.trendCumulative
+  const max = Math.max(...data.map(d => d.cumulative), 1)
+  const finalAmount = data[data.length - 1]?.cumulative || 0
+  if (finalAmount === 0) {
+    return <div className="text-xs text-theme-text-muted py-12 text-center">Nessun importo cumulato nei prossimi 12 mesi</div>
+  }
+  const W = 320
+  const H = 100
+  const stepX = data.length > 1 ? W / (data.length - 1) : 0
+  const points = data.map((d, i) => ({
+    x: i * stepX,
+    y: H - (d.cumulative / max) * H,
+    ...d,
+  }))
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const areaPath = `${path} L${W},${H} L0,${H} Z`
+  return (
+    <div>
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H + 20}`} className="w-full h-32" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="trend-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#19C2D6" stopOpacity="0.5"/>
+              <stop offset="100%" stopColor="#19C2D6" stopOpacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d={areaPath} fill="url(#trend-grad)"/>
+          <path d={path} stroke="#19C2D6" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+          {points.map(p => (
+            <circle key={p.key} cx={p.x} cy={p.y} r="2.5" fill="#19C2D6">
+              <title>{`${p.label}: ${formatAmount(p.cumulative)}`}</title>
+            </circle>
+          ))}
+        </svg>
+        <div className="flex justify-between mt-1 text-[9px] text-theme-text-muted px-0.5">
+          {data.map((d, i) => (
+            <span key={d.key} className={i % 2 === 0 ? '' : 'opacity-0'}>{d.label}</span>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 pt-3 border-t border-theme-border flex items-center justify-between text-[11px]">
+        <span className="text-theme-text-muted">Impatto totale a 12 mesi</span>
+        <span className="text-dr7-gold font-bold tabular-nums">{formatAmount(finalAmount)}</span>
+      </div>
     </div>
   )
 }

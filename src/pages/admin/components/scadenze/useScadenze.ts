@@ -19,6 +19,13 @@ export interface ScadenzeStats {
   amountByCategory: Record<string, number>
   amountByPriority: { critica: number; alta: number; media: number; bassa: number }
   countByPriority: { critica: number; alta: number; media: number; bassa: number }
+  // 12 mesi a partire dal mese corrente — count e importo delle scadenze
+  // attive con due_date in quel mese (esclude scadenze a km).
+  byMonth: Array<{ key: string; label: string; count: number; amount: number }>
+  // Trend impatto: array di 12 punti, ogni punto e' il TOTALE cumulato
+  // dell'importo in scadenza fino a fine mese (utile per vedere
+  // "quanto avro' speso per scadenze entro fine giugno", "fine luglio", ...).
+  trendCumulative: Array<{ key: string; label: string; cumulative: number }>
 }
 
 export function useScadenze() {
@@ -616,6 +623,44 @@ export function useScadenze() {
       }
     })
 
+    // ── Aggregato per mese (prossimi 12 mesi) ──────────────────────────
+    const byMonthMap = new Map<string, { count: number; amount: number }>()
+    const trendKeys: string[] = []
+    const now = new Date()
+    now.setDate(1)
+    now.setHours(0, 0, 0, 0)
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now)
+      d.setMonth(d.getMonth() + i)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      trendKeys.push(key)
+      byMonthMap.set(key, { count: 0, amount: 0 })
+    }
+    allActive.forEach(s => {
+      if (!s.due_date) return
+      const d = new Date(s.due_date)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const bucket = byMonthMap.get(key)
+      if (!bucket) return // out of 12-month window
+      bucket.count++
+      bucket.amount += s.amount || 0
+    })
+    const monthLabel = (key: string) => {
+      const [y, m] = key.split('-').map(Number)
+      const d = new Date(y, m - 1, 1)
+      return d.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' })
+    }
+    const byMonth = trendKeys.map(key => {
+      const b = byMonthMap.get(key)!
+      return { key, label: monthLabel(key), count: b.count, amount: b.amount }
+    })
+    // Trend cumulativo: somma progressiva dell'importo mese dopo mese.
+    let running = 0
+    const trendCumulative = byMonth.map(m => {
+      running += m.amount
+      return { key: m.key, label: m.label, cumulative: running }
+    })
+
     return {
       totalActive: allActive.length,
       overdue,
@@ -632,6 +677,8 @@ export function useScadenze() {
       amountByCategory,
       amountByPriority,
       countByPriority,
+      byMonth,
+      trendCumulative,
     }
   }, [scadenze, getScadenzeByCategory])
 
