@@ -13,6 +13,8 @@ import { validateScheduling } from '../../../utils/schedulingRules'
 import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '../../../utils/vehicleClassification'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+// Orari lavaggio dinamici da Centralina Pro > Orari Lavaggio
+import { generateLavaggioSlotsForDate, getAllowedTimeRangesForDate } from '../../../utils/lavaggioHours'
 
 interface Customer {
   id: string
@@ -79,72 +81,6 @@ function parseDurationToMinutes(duration: string): number {
   return 30 // Default
 }
 
-// Helper to get allowed time ranges based on duration
-// Saturday: continuous 9:00-17:00, Weekdays: 9:00-13:00 + 15:00-19:00
-function getAllowedTimeRanges(durationMinutes: number, isSaturday: boolean = false): { start: string; end: string }[] {
-  if (isSaturday) {
-    const satEnd = 17 * 60 - durationMinutes // Must finish by 17:00
-    const satEndHour = Math.floor(satEnd / 60)
-    const satEndMin = satEnd % 60
-    return [
-      { start: '09:00', end: `${satEndHour.toString().padStart(2, '0')}:${satEndMin.toString().padStart(2, '0')}` }
-    ]
-  }
-
-  // Weekdays: split schedule
-  const morningEnd = 13 * 60 - durationMinutes // Must finish by 13:00
-  const afternoonEnd = 19 * 60 - durationMinutes // Must finish by 19:00
-
-  const morningEndHour = Math.floor(morningEnd / 60)
-  const morningEndMin = morningEnd % 60
-  const afternoonEndHour = Math.floor(afternoonEnd / 60)
-  const afternoonEndMin = afternoonEnd % 60
-
-  return [
-    { start: '09:00', end: `${morningEndHour.toString().padStart(2, '0')}:${morningEndMin.toString().padStart(2, '0')}` },
-    { start: '15:00', end: `${afternoonEndHour.toString().padStart(2, '0')}:${afternoonEndMin.toString().padStart(2, '0')}` }
-  ]
-}
-
-
-// Generate time slots for car wash, every 5 minutes
-// Weekdays: 9h-13h and 15h-18h | Saturday: 9h-17h continuous
-const generateTimeSlots = (isSaturday: boolean = false) => {
-  const slots: string[] = []
-
-  if (isSaturday) {
-    // Saturday: continuous 9:00-17:00
-    for (let hour = 9; hour <= 17; hour++) {
-      for (let minute = 0; minute < 60; minute += 5) {
-        if (hour === 17 && minute > 0) break // Stop at 17:00
-        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-        slots.push(time)
-      }
-    }
-  } else {
-    // Weekdays: Morning 9h-13h
-    for (let hour = 9; hour < 13; hour++) {
-      for (let minute = 0; minute < 60; minute += 5) {
-        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-        slots.push(time)
-      }
-    }
-
-    // Weekdays: Afternoon 15h-18h (18:00 is the maximum/last slot)
-    for (let hour = 15; hour < 19; hour++) {
-      for (let minute = 0; minute < 60; minute += 5) {
-        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-        if (hour === 18 && minute > 0) break
-        slots.push(time)
-      }
-    }
-  }
-
-  return slots
-}
-
-const CAR_WASH_TIME_SLOTS = generateTimeSlots(false)
-const CAR_WASH_TIME_SLOTS_SATURDAY = generateTimeSlots(true)
 
 interface CarWashBookingsTabProps {
   initialData?: { appointmentDate?: string, appointmentTime?: string } | null
@@ -677,7 +613,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const mappedServices: CarWashService[] = (servicesData || []).map((s: any) => ({
         ...s,
         durationMinutes: parseDurationToMinutes(s.duration),
-        allowedTimeRanges: getAllowedTimeRanges(parseDurationToMinutes(s.duration))
+        // Pre-compute weekday-typical ranges for display only (today's date used as a sample;
+        // actual booking validation uses getAllowedTimeRangesForDate(appointmentDate, duration))
+        allowedTimeRanges: getAllowedTimeRangesForDate(new Date(), parseDurationToMinutes(s.duration))
       }))
 
       // Map customers_extended to Customer interface
@@ -2331,7 +2269,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {(() => {
                       const selectedDay = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00').getDay() : -1
                       const isSat = selectedDay === 6
-                      const allSlots = isSat ? CAR_WASH_TIME_SLOTS_SATURDAY : CAR_WASH_TIME_SLOTS
+                      // Slot dinamici da Centralina Pro > Orari Lavaggio
+                      const dateForSlots = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00') : new Date()
+                      const allSlots = generateLavaggioSlotsForDate(dateForSlots)
 
                       // Filter out past times if today
                       const now = new Date()
