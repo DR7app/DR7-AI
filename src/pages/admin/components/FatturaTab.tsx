@@ -5,6 +5,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildFatturaContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 import IncomingInvoicesView from './IncomingInvoicesView'
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 
 interface Invoice {
   id: string
@@ -117,6 +118,164 @@ function KpiCard({ icon, label, value, delta, deltaIsPp, deltaSuffix, tone }: Kp
         {deltaSuffix && (
           <p className="text-[11px] text-theme-text-muted mt-1">{deltaSuffix}</p>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Bottom-row charts ─────────────────────────────────────────────
+// Tutti e tre leggono dalla stessa lista invoices già caricata: niente
+// query extra. Aggregazioni lato client (lista è in memoria comunque).
+
+interface ChartInvoice {
+  numero_fattura: string
+  data_emissione: string
+  data_scadenza?: string | null
+  importo_totale: number
+  stato: string
+  customer_name: string
+  tipo_fattura?: string
+}
+
+function FatturaTrendChart({ invoices }: { invoices: ChartInvoice[] }) {
+  const data = useMemo(() => {
+    const months: { key: string; label: string; emesso: number; incassato: number }[] = []
+    const now = new Date()
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      months.push({ key, label: d.toLocaleDateString('it-IT', { month: 'short' }), emesso: 0, incassato: 0 })
+    }
+    for (const inv of invoices) {
+      if (inv.tipo_fattura === 'nota_credito') continue
+      const d = inv.data_emissione ? new Date(inv.data_emissione) : null
+      if (!d) continue
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const m = months.find(x => x.key === key)
+      if (!m) continue
+      const total = Number(inv.importo_totale) || 0
+      m.emesso += total
+      if (inv.stato === 'paid') m.incassato += total
+    }
+    return months
+  }, [invoices])
+
+  return (
+    <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+      <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Andamento Fatturato (ultimi 6 mesi)</h3>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="fatturaEmesso" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#d4af37" stopOpacity={0.4} />
+                <stop offset="95%" stopColor="#d4af37" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="fatturaIncassato" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="#374151" strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
+            <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+            <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => formatEur(v)} />
+            <Area type="monotone" dataKey="emesso" stroke="#d4af37" fill="url(#fatturaEmesso)" strokeWidth={2} name="Emesso" />
+            <Area type="monotone" dataKey="incassato" stroke="#10b981" fill="url(#fatturaIncassato)" strokeWidth={2} name="Incassato" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex items-center gap-4 text-[11px] mt-2">
+        <span className="flex items-center gap-1.5 text-theme-text-muted"><span className="w-2 h-2 rounded-full bg-dr7-gold" />Emesso</span>
+        <span className="flex items-center gap-1.5 text-theme-text-muted"><span className="w-2 h-2 rounded-full bg-emerald-500" />Incassato</span>
+      </div>
+    </div>
+  )
+}
+
+function TopClientiChart({ invoices }: { invoices: ChartInvoice[] }) {
+  const data = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const inv of invoices) {
+      if (inv.tipo_fattura === 'nota_credito') continue
+      const name = (inv.customer_name || '—').trim() || '—'
+      const total = Number(inv.importo_totale) || 0
+      map.set(name, (map.get(name) || 0) + total)
+    }
+    return Array.from(map.entries())
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
+  }, [invoices])
+
+  return (
+    <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+      <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Top Clienti per Fatturato</h3>
+      {data.length === 0 ? (
+        <p className="text-xs text-theme-text-muted italic py-8 text-center">Nessun dato.</p>
+      ) : (
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <CartesianGrid stroke="#374151" strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+              <YAxis dataKey="name" type="category" stroke="#9ca3af" fontSize={11} width={120} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => formatEur(v)} />
+              <Bar dataKey="total" fill="#d4af37" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AnalisiIncassiChart({ invoices }: { invoices: ChartInvoice[] }) {
+  const { data, totale, incassato, daIncassare, pct } = useMemo(() => {
+    let inc = 0, da = 0
+    for (const i of invoices) {
+      if (i.tipo_fattura === 'nota_credito') continue
+      if (i.stato === 'cancelled') continue
+      const total = Number(i.importo_totale) || 0
+      if (i.stato === 'paid') inc += total
+      else da += total
+    }
+    const tot = inc + da
+    return {
+      data: [
+        { name: 'Incassato', value: inc },
+        { name: 'Da incassare', value: da },
+      ],
+      totale: tot,
+      incassato: inc,
+      daIncassare: da,
+      pct: tot > 0 ? (inc / tot) * 100 : 0,
+    }
+  }, [invoices])
+
+  const COLORS = ['#10b981', '#f59e0b']
+
+  return (
+    <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+      <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Analisi Incassi</h3>
+      <div className="relative h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={2} stroke="none">
+              {data.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
+            </Pie>
+            <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => formatEur(v)} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <p className="text-2xl font-bold text-theme-text-primary tabular-nums">{pct.toFixed(1)}%</p>
+          <p className="text-[10px] uppercase tracking-wider text-theme-text-muted">Incassato</p>
+        </div>
+      </div>
+      <div className="space-y-1 text-xs mt-2">
+        <div className="flex justify-between"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500" />Incassato</span><span className="tabular-nums">{formatEur(incassato)}</span></div>
+        <div className="flex justify-between"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500" />Da incassare</span><span className="tabular-nums">{formatEur(daIncassare)}</span></div>
+        <div className="flex justify-between border-t border-theme-border pt-1 mt-1"><span className="text-theme-text-muted">Totale</span><span className="tabular-nums font-semibold">{formatEur(totale)}</span></div>
       </div>
     </div>
   )
@@ -737,6 +896,11 @@ export default function FatturaTab() {
         />
       </div>
 
+      {/* ─── Two-column layout: main (search + table) | sidebar ──── */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+
+      <div className="xl:col-span-9 space-y-4 min-w-0">
+
       {/* Search Bar */}
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border space-y-3">
         <input
@@ -1015,6 +1179,171 @@ export default function FatturaTab() {
           ))}
         </div>
       )}
+
+      </div>{/* /main column */}
+
+      {/* ─── Sidebar destra ──────────────────────────────────────── */}
+      <aside className="xl:col-span-3 space-y-4 min-w-0">
+        {/* Riepilogo Finanziario */}
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-theme-text-primary">Riepilogo Finanziario</h3>
+            <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Mese</span>
+          </div>
+          {(() => {
+            const now = new Date()
+            const startMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+            let pagate = 0, daIncassare = 0, inRitardo = 0
+            for (const i of invoices) {
+              if (i.tipo_fattura === 'nota_credito') continue
+              const issued = i.data_emissione ? new Date(i.data_emissione) : null
+              if (!issued || issued < startMonth) continue
+              const total = Number(i.importo_totale) || 0
+              if (i.stato === 'paid') pagate += total
+              else if (i.stato === 'cancelled') continue
+              else if (isInvoiceOverdue(i)) inRitardo += total
+              else daIncassare += total
+            }
+            const totale = pagate + daIncassare + inRitardo
+            const pct = (n: number) => totale > 0 ? Math.round((n / totale) * 100) : 0
+            return (
+              <>
+                <div className="text-2xl font-bold text-theme-text-primary tabular-nums">{formatEur(totale)}</div>
+                <div className="text-[11px] text-theme-text-muted mb-3">Totale fatturato del mese</div>
+                <div className="flex h-2 rounded-full overflow-hidden bg-theme-bg-tertiary mb-3">
+                  <div className="bg-emerald-500" style={{ width: `${pct(pagate)}%` }} />
+                  <div className="bg-amber-500" style={{ width: `${pct(daIncassare)}%` }} />
+                  <div className="bg-rose-500" style={{ width: `${pct(inRitardo)}%` }} />
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500" />Pagate</span><span className="tabular-nums text-theme-text-primary">{formatEur(pagate)} <span className="text-theme-text-muted">({pct(pagate)}%)</span></span></div>
+                  <div className="flex justify-between"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500" />Da incassare</span><span className="tabular-nums text-theme-text-primary">{formatEur(daIncassare)} <span className="text-theme-text-muted">({pct(daIncassare)}%)</span></span></div>
+                  <div className="flex justify-between"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-rose-500" />In ritardo</span><span className="tabular-nums text-theme-text-primary">{formatEur(inRitardo)} <span className="text-theme-text-muted">({pct(inRitardo)}%)</span></span></div>
+                </div>
+              </>
+            )
+          })()}
+        </div>
+
+        {/* Scadenze a breve */}
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-theme-text-primary">Scadenze a breve</h3>
+            <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">7 giorni</span>
+          </div>
+          {(() => {
+            const now = new Date()
+            const in7 = new Date(now.getTime() + 7 * 86400000)
+            const upcoming = invoices
+              .filter(i => i.stato !== 'paid' && i.stato !== 'cancelled' && i.tipo_fattura !== 'nota_credito')
+              .map(i => ({ inv: i, due: getInvoiceDueDate(i) }))
+              .filter(x => x.due && x.due >= now && x.due <= in7)
+              .sort((a, b) => (a.due!.getTime() - b.due!.getTime()))
+              .slice(0, 5)
+            if (upcoming.length === 0) {
+              return <p className="text-xs text-theme-text-muted italic">Nessuna scadenza nei prossimi 7 giorni.</p>
+            }
+            return (
+              <ul className="space-y-2">
+                {upcoming.map(({ inv, due }) => {
+                  const daysLeft = Math.max(0, Math.ceil((due!.getTime() - now.getTime()) / 86400000))
+                  return (
+                    <li key={inv.id} className="flex items-start justify-between gap-2 text-xs">
+                      <div className="min-w-0">
+                        <p className="font-medium text-theme-text-primary truncate">{inv.customer_name || '—'}</p>
+                        <p className="text-theme-text-muted text-[11px]">{inv.numero_fattura}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="tabular-nums text-theme-text-primary">{formatEur(Number(inv.importo_totale) || 0)}</p>
+                        <p className={`text-[11px] ${daysLeft <= 2 ? 'text-rose-400' : 'text-amber-400'}`}>
+                          {daysLeft === 0 ? 'oggi' : daysLeft === 1 ? 'domani' : `tra ${daysLeft}g`}
+                        </p>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )
+          })()}
+        </div>
+
+        {/* Rimborsi (Note di Credito recenti) */}
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-theme-text-primary">Rimborsi</h3>
+            <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Note di credito</span>
+          </div>
+          {(() => {
+            const ndc = invoices
+              .filter(i => i.tipo_fattura === 'nota_credito')
+              .sort((a, b) => (new Date(b.data_emissione).getTime() - new Date(a.data_emissione).getTime()))
+              .slice(0, 4)
+            if (ndc.length === 0) {
+              return <p className="text-xs text-theme-text-muted italic">Nessuna nota di credito emessa.</p>
+            }
+            return (
+              <ul className="space-y-2">
+                {ndc.map(i => (
+                  <li key={i.id} className="flex items-start justify-between gap-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="font-medium text-theme-text-primary truncate">{i.customer_name || '—'}</p>
+                      <p className="text-theme-text-muted text-[11px]">{i.numero_fattura} · {new Date(i.data_emissione).toLocaleDateString('it-IT')}</p>
+                    </div>
+                    <p className="tabular-nums text-rose-400 shrink-0">−{formatEur(Math.abs(Number(i.importo_totale) || 0))}</p>
+                  </li>
+                ))}
+              </ul>
+            )
+          })()}
+        </div>
+
+        {/* Azioni Rapide */}
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Azioni Rapide</h3>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <button onClick={() => refreshAllSdi()} disabled={refreshingAll} className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg px-3 py-2 text-left disabled:opacity-50">
+              <div className="font-semibold">Aggiorna SDI</div>
+              <div className="text-[10px] text-theme-text-muted">Stati Aruba</div>
+            </button>
+            <button onClick={() => reconcileWithAruba()} disabled={reconciling} className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg px-3 py-2 text-left disabled:opacity-50">
+              <div className="font-semibold">Riconcilia</div>
+              <div className="text-[10px] text-theme-text-muted">Allinea Aruba</div>
+            </button>
+            <button onClick={() => setFilterSdi('rejected')} className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg px-3 py-2 text-left">
+              <div className="font-semibold">Filtra Scartate</div>
+              <div className="text-[10px] text-theme-text-muted">Stato SDI</div>
+            </button>
+            <button onClick={() => setFilterTipo('nota_credito')} className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg px-3 py-2 text-left">
+              <div className="font-semibold">Note di Credito</div>
+              <div className="text-[10px] text-theme-text-muted">Solo NdC</div>
+            </button>
+            <button onClick={() => { setFilterSdi('all'); setFilterTipo('all'); setFilterCliente('all'); setFilterDateFrom(''); setFilterDateTo(''); setSearchQuery('') }} className="bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary rounded-lg px-3 py-2 text-left col-span-2">
+              <div className="font-semibold">Reset filtri</div>
+              <div className="text-[10px] text-theme-text-muted">Mostra tutte</div>
+            </button>
+          </div>
+        </div>
+
+        {/* Report Veloci */}
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Report Veloci</h3>
+          <ul className="text-xs space-y-1.5">
+            <li><button onClick={() => setFilterSdi('rejected')} className="text-blue-400 hover:underline">Fatture scartate da SDI</button></li>
+            <li><button onClick={() => { setSearchQuery(''); setFilterCliente('all'); setFilterTipo('all'); setFilterSdi('all') }} className="text-blue-400 hover:underline">Tutte le fatture</button></li>
+            <li><button onClick={() => setFilterTipo('nota_credito')} className="text-blue-400 hover:underline">Solo Note di Credito</button></li>
+            <li><button onClick={() => setFilterTipo('fattura')} className="text-blue-400 hover:underline">Solo Fatture</button></li>
+          </ul>
+        </div>
+      </aside>
+
+      </div>{/* /two-column grid */}
+
+      {/* ─── Bottom: 3 grafici ──────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <FatturaTrendChart invoices={invoices} />
+        <TopClientiChart invoices={invoices} />
+        <AnalisiIncassiChart invoices={invoices} />
+      </div>
       </>
       )}
     </div>
