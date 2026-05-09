@@ -461,6 +461,19 @@ type AutomationsConfig = {
   cross_vehicle_gap_minutes: number | ''
   pre_pickup_carwash_buffer_minutes: number | ''
   late_return_grace_minutes: number | ''
+  /** Lista regole di cancellazione, valutate per `daysUntilPickup` discendente.
+   *  Vince la prima regola attiva con `min_days_notice <= daysUntilPickup`. */
+  cancellation_rules: CancellationRule[]
+}
+
+type CancellationRule = {
+  id: string
+  label: string
+  /** Min giorni di preavviso al pickup per applicare questa regola. */
+  min_days_notice: number | ''
+  /** % rimborsata come credito DR7 Wallet (penale = 100 − questo). */
+  refund_pct: number | ''
+  is_active: boolean
 }
 
 const INITIAL_AUTOMATIONS: AutomationsConfig = {
@@ -468,6 +481,9 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   cross_vehicle_gap_minutes: 15,
   pre_pickup_carwash_buffer_minutes: 90,
   late_return_grace_minutes: 90,
+  cancellation_rules: [
+    { id: 'standard', label: 'Cancellazione standard', min_days_notice: 5, refund_pct: 90, is_active: true },
+  ],
 }
 
 // === Marketing ===
@@ -1600,6 +1616,23 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   }
   if (current.automations.late_return_grace_minutes !== saved.automations.late_return_grace_minutes) {
     out.push(`Grace ritardo riconsegna: ${saved.automations.late_return_grace_minutes || 0} → ${current.automations.late_return_grace_minutes || 0} minuti`)
+  }
+  // Cancellation rules
+  {
+    const cur = current.automations.cancellation_rules || []
+    const sav = saved.automations.cancellation_rules || []
+    const curIds = new Set(cur.map(r => r.id))
+    const savIds = new Set(sav.map(r => r.id))
+    cur.forEach(r => { if (!savIds.has(r.id)) out.push(`Cancellazione: regola aggiunta "${r.label || r.id}"`) })
+    sav.forEach(r => { if (!curIds.has(r.id)) out.push(`Cancellazione: regola rimossa "${r.label}"`) })
+    cur.forEach(c => {
+      const p = sav.find(r => r.id === c.id)
+      if (!p) return
+      if (p.label !== c.label) out.push(`Cancellazione: "${p.label}" rinominata in "${c.label}"`)
+      if (p.min_days_notice !== c.min_days_notice) out.push(`Cancellazione / ${c.label}: soglia ${p.min_days_notice || 0} → ${c.min_days_notice || 0} giorni`)
+      if (p.refund_pct !== c.refund_pct) out.push(`Cancellazione / ${c.label}: rimborso ${p.refund_pct || 0}% → ${c.refund_pct || 0}%`)
+      if (p.is_active !== c.is_active) out.push(`Cancellazione / ${c.label}: ${c.is_active ? 'attivata' : 'disattivata'}`)
+    })
   }
 
   // Marketing
@@ -5109,6 +5142,12 @@ function AutomazioniSection({
               <b>Grace ritardo riconsegna.</b> Sul giorno di riconsegna, l'auto deve rientrare almeno <b>questi minuti</b> prima dell'ora di ritiro. Altrimenti il cliente paga <b>1 giorno extra</b>. Esempio default 90: pickup lun 10:00 → return mar 09:00 (entro le 08:30) = 1 giorno; return mar 09:00 (oltre le 08:30) = 2 giorni. Sito e admin.
             </div>
           </li>
+          <li className="flex gap-3">
+            <span className="inline-flex shrink-0 w-6 h-6 rounded-full bg-[#ff3b30] text-white items-center justify-center text-[11px] font-bold mt-0.5">5</span>
+            <div>
+              <b>Cancellazione standard.</b> Cliente puo' cancellare se mancano almeno <b>X giorni</b> al pickup → riceve <b>Y%</b> come credito DR7 Wallet (penale = 100−Y). Sotto la soglia, cancellazione bloccata salvo DR7 Flex / Prime Flex / Elite (regole definite nei rispettivi servizi). Default: 5 giorni / 90% rimborso (10% penale).
+            </div>
+          </li>
         </ul>
         <div className="mt-4 pt-3 border-t border-[#007aff]/10 text-[12px] text-[#6e6e73]">
           <span className="font-semibold text-[#1d1d1f]">Importante:</span> dopo aver salvato un nuovo valore, l'admin va aggiornato (refresh pagina). Il sito propaga entro ~60 secondi grazie alla cache server-side.
@@ -5179,6 +5218,128 @@ function AutomazioniSection({
             <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 15. Esempio: cliente A ritira alle 10:30 → cliente B non puo' ritirare prima delle 10:45.</p>
           </label>
         </div>
+      </section>
+
+      {/* 5) Cancellation rules */}
+      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#fff5f5] border-b border-[#ff3b30]/15 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+              <span className="inline-flex w-6 h-6 rounded-full bg-[#ff3b30] text-white items-center justify-center text-[12px] font-bold">5</span>
+              Regole di cancellazione
+            </h3>
+            <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
+              Lista di regole valutate per giorni di preavviso decrescenti. Vince la prima regola attiva con preavviso ≥ soglia. Penale = 100 − rimborso. DR7 Flex / Prime Flex / Elite hanno regole proprie (servizi).
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              const newRule: CancellationRule = { id: uid(), label: 'Nuova regola', min_days_notice: 0, refund_pct: 50, is_active: true }
+              update({ cancellation_rules: [...(automations.cancellation_rules || []), newRule] })
+            }}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#ff3b30] hover:text-[#d70015] transition-colors shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+            Aggiungi regola
+          </button>
+        </header>
+
+        <div className="px-5 pb-2">
+          <div className="grid grid-cols-[44px_1fr_120px_100px_32px] gap-2 items-center px-1 mb-2">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Attiva</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Etichetta</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Preavviso</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Rimborso</span>
+            <span />
+          </div>
+        </div>
+
+        <ul className="divide-y divide-black/5">
+          {(automations.cancellation_rules || [])
+            .slice()
+            .sort((a, b) => {
+              const av = typeof a.min_days_notice === 'number' ? a.min_days_notice : 0
+              const bv = typeof b.min_days_notice === 'number' ? b.min_days_notice : 0
+              return bv - av
+            })
+            .map((r) => {
+              const penalty = typeof r.refund_pct === 'number' ? Math.max(0, 100 - r.refund_pct) : 0
+              const patch = (p: Partial<CancellationRule>) =>
+                update({ cancellation_rules: (automations.cancellation_rules || []).map(x => x.id === r.id ? { ...x, ...p } : x) })
+              return (
+                <li key={r.id} className="px-5 py-3 grid grid-cols-[44px_1fr_120px_100px_32px] gap-2 items-center group">
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={r.is_active}
+                      onChange={(e) => patch({ is_active: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
+                      <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={r.label}
+                    onChange={(e) => patch({ label: e.target.value })}
+                    placeholder="Nome regola"
+                    className={`bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40 ${!r.is_active ? 'opacity-50' : ''}`}
+                  />
+                  <div className={`relative ${!r.is_active ? 'opacity-50' : ''}`}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={365}
+                      step={1}
+                      value={r.min_days_notice}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        patch({ min_days_notice: v === '' ? '' : Number(v) })
+                      }}
+                      className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">gg</span>
+                  </div>
+                  <div className={`relative ${!r.is_active ? 'opacity-50' : ''}`}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={r.refund_pct}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        patch({ refund_pct: v === '' ? '' : Number(v) })
+                      }}
+                      className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
+                  </div>
+                  <button
+                    onClick={() => update({ cancellation_rules: (automations.cancellation_rules || []).filter(x => x.id !== r.id) })}
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                    aria-label="Rimuovi regola"
+                    title="Rimuovi regola"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+                    </svg>
+                  </button>
+                  <span className="col-span-5 text-[11px] text-[#6e6e73] pl-[52px]">
+                    ≥ {typeof r.min_days_notice === 'number' ? r.min_days_notice : 0} gg → rimborso {typeof r.refund_pct === 'number' ? r.refund_pct : 0}% (penale {penalty}%)
+                  </span>
+                </li>
+              )
+            })}
+          {(automations.cancellation_rules || []).length === 0 && (
+            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+              Nessuna regola configurata. Tutte le cancellazioni saranno bloccate.
+            </li>
+          )}
+        </ul>
       </section>
 
       {/* 4) Late return grace */}
