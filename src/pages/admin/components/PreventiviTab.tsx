@@ -1758,8 +1758,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           lineDelivery, linePickup, lineExperience,
         ].filter(Boolean).join('\n')
 
+        // Sconto split in pezzi atomici cosi' il template puo' comporre la
+        // riga come preferisce (es. "Sconto 15% (€285) valido 24h: €1.290").
+        const scontoAmount = Number(p.sconto || 0)
+        const scontoPre = Number(p.subtotal || 0)
+        const scontoPost = Number(p.total_final || p.subtotal || 0)
+        const scontoPerc = scontoAmount > 0 && scontoPre > 0
+          ? Math.round((scontoAmount / scontoPre) * 100)
+          : 0
+        const scontoNote = (p.sconto_note || '').trim()
+
         let discountLine = ''
-        if (p.sconto > 0) discountLine = `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}`
+        if (scontoAmount > 0) discountLine = `sconto ${scontoNote} ${formatEur(scontoPost)}`.replace(/\s+/g, ' ').trim()
 
         // Coefficienti Centralina Pro: leggiamo dal pricing_trace salvato al
         // momento della creazione del preventivo. Mostriamo TUTTI i coefficienti
@@ -1834,7 +1844,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           ),
           subtotal: formatEur(p.subtotal),
           total: formatEur(p.total_final || p.subtotal),
+          // Sconto — variabili granulari (admin compone la riga nel template).
+          // {sconto} resta la riga pronta come prima per retrocompatibilita'.
           sconto: discountLine,
+          sconto_line: discountLine,
+          sconto_amount: scontoAmount > 0 ? formatEur(scontoAmount) : '',
+          sconto_perc: scontoPerc > 0 ? `${scontoPerc}%` : '',
+          sconto_note: scontoNote,
+          sconto_pre: scontoAmount > 0 ? formatEur(scontoPre) : '',
+          sconto_post: scontoAmount > 0 ? formatEur(scontoPost) : '',
           // Centralina Pro: blocco multilinea con tutti i coefficienti
           // applicati al preventivo + il moltiplicatore combinato.
           coefficienti: coefficientiBlock,

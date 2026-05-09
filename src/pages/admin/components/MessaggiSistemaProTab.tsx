@@ -306,9 +306,21 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
             { key: 'subtotal_listino', description: 'Subtotale a listino (prima dei coefficienti Pro)', example: '€1.575,00' },
             { key: 'subtotal', description: 'Subtotale dopo coefficienti', example: '€1.434,22' },
             { key: 'total', description: 'Totale finale (sconto applicato se presente)', example: '€1.290,00' },
-            { key: 'sconto', description: 'Riga sconto (vuoto se nessuno sconto)', example: 'sconto valido 24h €1.290,00' },
             { key: 'coefficienti', description: 'Blocco multilinea con tutti i coefficienti applicati', example: 'Coefficienti applicati:\\n- Stagione: x1,15\\n...' },
             { key: 'coefficiente_combinato', description: 'Solo il moltiplicatore combinato', example: 'x1,2143' },
+        ],
+    },
+    {
+        label: 'Preventivo — Sconto (per riga)',
+        scope: 'specific',
+        scopeNote: 'Tutte vuote se il preventivo non ha sconto. Componi la riga nel template come preferisci. Esempio: "Sconto {sconto_perc} ({sconto_amount}) {sconto_note}: {sconto_post}".',
+        items: [
+            { key: 'sconto_line', description: 'Riga sconto pronta all\'uso', example: 'sconto valido 24h €1.290,00', aliases: ['sconto'] },
+            { key: 'sconto_amount', description: 'Importo dello sconto in euro', example: '€285,00' },
+            { key: 'sconto_perc', description: 'Percentuale di sconto applicata', example: '15%' },
+            { key: 'sconto_note', description: 'Solo la nota dello sconto (senza prezzo)', example: 'valido solo 24h' },
+            { key: 'sconto_pre', description: 'Prezzo prima dello sconto (subtotale)', example: '€1.575,00' },
+            { key: 'sconto_post', description: 'Prezzo finale dopo lo sconto', example: '€1.290,00' },
         ],
     },
 ]
