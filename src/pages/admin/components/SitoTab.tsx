@@ -1807,6 +1807,7 @@ interface SiteCopySnapshot {
     bookingSearchBox?: BookingSearchBoxCopy
     paymentCancel?: PaymentCancelCopy
     locations?: LocationsCopy
+    aviationMarine?: AviationMarineCopy
 }
 
 interface CurrentState {
