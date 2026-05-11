@@ -3360,7 +3360,9 @@ export default function UnpaidBookingsTab() {
           const donutColor = probScore >= 70 ? 'stroke-emerald-400' : probScore >= 40 ? 'stroke-amber-400' : 'stroke-red-400'
 
           const isActionsOpen = openActionsRowKey === group.customerKey
-          const isExpanded = expandedCustomers.has(group.customerKey)
+          // Per-service detail (Noleggio/Prime Wash/Penali/Danni) is always
+          // shown on desktop — user explicitly wanted the original data
+          // visible inline, not behind a "Mostra dettaglio" click.
 
           return (
             <div key={group.customerKey} className="border-b border-theme-border/30 hover:bg-theme-bg-tertiary/30">
@@ -3485,21 +3487,19 @@ export default function UnpaidBookingsTab() {
                           onClick={() => { setOpenActionsRowKey(null); openAddebitoNexi(group) }}
                           className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-orange-400"
                         >Addebito MIT</button>
-                        <div className="border-t border-theme-border my-1" />
-                        <button
-                          onClick={() => { setOpenActionsRowKey(null); toggleExpanded(group.customerKey) }}
-                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-theme-text-primary"
-                        >{isExpanded ? 'Nascondi dettaglio' : 'Mostra dettaglio'}</button>
                       </div>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* Inline detail — opens via "Mostra dettaglio" in actions menu.
-                  Riusa i componenti NoleggioCell/PrimeWashCell/PendingItemsCell
-                  esistenti per non perdere la business logic gia\' funzionante. */}
-              {isExpanded && (
+              {/* Inline detail — sempre visibile. Riusa i componenti
+                  NoleggioCell/PrimeWashCell/PendingItemsCell esistenti per
+                  non perdere la business logic (Pagato / Pay by Link /
+                  Link Parziale / Parziale / Addebito / Modifica per ogni
+                  voce). I 4 sub-header colorati replicano le vecchie
+                  colonne del table. */}
+              {(
                 <div className="bg-theme-bg-primary/30 border-t border-theme-border/30 px-4 py-3 grid grid-cols-2 xl:grid-cols-4 gap-3">
                   <div>
                     <div className="text-[10px] uppercase tracking-wider text-blue-400 font-semibold mb-1">Noleggio</div>
