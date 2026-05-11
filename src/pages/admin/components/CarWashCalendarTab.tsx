@@ -530,15 +530,15 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       {/* View tabs + date display + Oggi button — mockup style: dark pill
           row with bright cyan accent on the active tab. */}
       <div className="flex flex-wrap items-center gap-3 px-3 sm:px-4 py-2.5 bg-theme-bg-primary/10 border-b border-theme-border/30">
-        <div className="flex items-center gap-1 bg-theme-bg-primary/40 rounded-full p-1 border border-theme-border/40">
+        <div className="flex items-center gap-2 bg-theme-bg-primary/30 rounded-full p-1 border border-theme-border/40">
           {(['giorno', 'settimana', 'mese'] as const).map(v => (
             <button
               key={v}
               onClick={() => setViewMode(v)}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold capitalize transition-all ${
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold capitalize transition-all border ${
                 viewMode === v
-                  ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30'
-                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-text-primary/5'
+                  ? 'border-cyan-400 text-cyan-400 bg-transparent shadow-[0_0_0_1px_rgba(34,211,238,0.4)]'
+                  : 'border-transparent text-theme-text-primary hover:text-theme-text-primary hover:bg-theme-text-primary/5'
               }`}
             >
               {v}
