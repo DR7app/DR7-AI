@@ -121,7 +121,34 @@ const handler: Handler = async (event) => {
 
       if (tpl?.message_body) {
         let rendered = tpl.message_body;
+
+        // CUSTOM VARIABLES — pre-load all enabled rows from
+        // system_message_variables and merge into templateVars (caller-provided
+        // vars win on collision). Cosi' {address_main} / {promo_ferragosto} /
+        // etc. definiti dall'admin si sostituiscono automaticamente in OGNI
+        // template senza dover toccare i singoli body.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let mergedVars: Record<string, any> = {};
+        try {
+          const { data: customVars } = await sb
+            .from('system_message_variables')
+            .select('key, value, is_enabled')
+            .eq('is_enabled', true);
+          if (Array.isArray(customVars)) {
+            for (const row of customVars) {
+              const k = String((row as { key?: unknown }).key || '').trim();
+              const v = String((row as { value?: unknown }).value ?? '');
+              if (k) mergedVars[k] = v;
+            }
+          }
+        } catch (e) {
+          console.error('[send-whatsapp-notification] custom vars load failed (non-fatal):', e instanceof Error ? e.message : String(e));
+        }
+        // Caller-provided vars overlay the custom ones
         if (templateVars && typeof templateVars === 'object') {
+          mergedVars = { ...mergedVars, ...templateVars };
+        }
+        if (Object.keys(mergedVars).length > 0) {
           // Normalise each key: strip optional leading/trailing braces and any
           // surrounding whitespace, then substitute EVERY wrapped form the
           // template may contain:
@@ -152,7 +179,7 @@ const handler: Handler = async (event) => {
             // (key), ( key ) → parens variant (Italian admin templates)
             rendered = rendered.replace(new RegExp(`\\(\\s*${escRx(key)}\\s*\\)`, 'g'), value);
           };
-          for (const [rawKey, val] of Object.entries(templateVars)) {
+          for (const [rawKey, val] of Object.entries(mergedVars)) {
             const cleanKey = String(rawKey).replace(/^\s*\{+\s*|\s*\}+\s*$/g, '').trim();
             if (!cleanKey) continue;
             const value = String(val ?? '');

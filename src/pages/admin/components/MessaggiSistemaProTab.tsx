@@ -877,6 +877,14 @@ export default function MessaggiSistemaProTab() {
 
     // New template form
     const [showNewForm, setShowNewForm] = useState(false)
+    // Custom variables management (Sprint autonomia 3)
+    const [showCustomVars, setShowCustomVars] = useState(false)
+    const [customVarsList, setCustomVarsList] = useState<Array<{
+        id: string; key: string; value: string; description: string | null; is_enabled: boolean
+    }>>([])
+    const [newCustomVarKey, setNewCustomVarKey] = useState('')
+    const [newCustomVarValue, setNewCustomVarValue] = useState('')
+    const [newCustomVarDescription, setNewCustomVarDescription] = useState('')
     const [newLabel, setNewLabel] = useState('')
     const [newDescription, setNewDescription] = useState('')
     const [newBody, setNewBody] = useState('')
@@ -1035,6 +1043,67 @@ export default function MessaggiSistemaProTab() {
         document.addEventListener('mousedown', handleClickOutside)
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
+
+    // Carica le variabili custom (riusate via {key} nei template)
+    async function loadCustomVariables() {
+        const { data, error } = await supabase
+            .from('system_message_variables')
+            .select('id, key, value, description, is_enabled')
+            .order('key', { ascending: true })
+        if (error) {
+            console.error('loadCustomVariables error:', error)
+            return
+        }
+        if (Array.isArray(data)) setCustomVarsList(data)
+    }
+    useEffect(() => { loadCustomVariables() }, [])
+
+    async function handleCreateCustomVar() {
+        const key = newCustomVarKey.trim()
+        if (!key) { toast.error('La chiave e\' obbligatoria'); return }
+        // Validate: only [a-z0-9_]
+        if (!/^[a-z0-9_]+$/.test(key)) {
+            toast.error('Solo lettere minuscole, numeri e underscore (es. address_main)')
+            return
+        }
+        const { error } = await supabase
+            .from('system_message_variables')
+            .insert({
+                key,
+                value: newCustomVarValue,
+                description: newCustomVarDescription.trim() || null,
+                is_enabled: true,
+            })
+        if (error) {
+            toast.error(`Errore: ${error.message}`)
+            return
+        }
+        toast.success(`Variabile {${key}} creata`)
+        setNewCustomVarKey('')
+        setNewCustomVarValue('')
+        setNewCustomVarDescription('')
+        loadCustomVariables()
+    }
+
+    async function handleUpdateCustomVar(id: string, patch: Partial<{ value: string; description: string | null; is_enabled: boolean }>) {
+        const { error } = await supabase
+            .from('system_message_variables')
+            .update(patch)
+            .eq('id', id)
+        if (error) { toast.error(`Errore: ${error.message}`); return }
+        setCustomVarsList(prev => prev.map(v => v.id === id ? { ...v, ...patch } : v))
+    }
+
+    async function handleDeleteCustomVar(id: string, key: string) {
+        if (!confirm(`Eliminare la variabile {${key}}? I template che la usano lasceranno il testo "{${key}}" grezzo.`)) return
+        const { error } = await supabase
+            .from('system_message_variables')
+            .delete()
+            .eq('id', id)
+        if (error) { toast.error(`Errore: ${error.message}`); return }
+        toast.success(`Variabile {${key}} eliminata`)
+        setCustomVarsList(prev => prev.filter(v => v.id !== id))
+    }
 
     async function loadTemplates() {
         setLoading(true)
@@ -1699,6 +1768,17 @@ export default function MessaggiSistemaProTab() {
                     </div>
                     <div className="flex gap-2">
                         <button
+                            onClick={() => setShowCustomVars(!showCustomVars)}
+                            className={`px-4 py-2.5 rounded-full font-semibold text-sm transition-colors border ${
+                                showCustomVars
+                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                                    : 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border hover:bg-theme-bg-hover'
+                            }`}
+                            title="Variabili custom riusabili nei template"
+                        >
+                            {`{variabili}`} ({customVarsList.length})
+                        </button>
+                        <button
                             onClick={() => setShowNewForm(!showNewForm)}
                             className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#0A8FA3]"
                         >
@@ -1706,6 +1786,108 @@ export default function MessaggiSistemaProTab() {
                         </button>
                     </div>
                 </div>
+
+                {/* CUSTOM VARIABLES PANEL */}
+                {showCustomVars && (
+                    <div className="bg-theme-bg-secondary rounded-xl border border-emerald-500/30 p-5 space-y-4 animate-fadeIn">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h4 className="text-base font-bold text-theme-text-primary">Variabili custom</h4>
+                                <p className="text-theme-text-muted text-xs mt-1">
+                                    Definisci stringhe riusabili (es. indirizzo, promo stagionale). Inseriscile nei template come <code className="px-1.5 py-0.5 rounded bg-theme-bg-tertiary text-emerald-300">{`{chiave}`}</code> — vengono sostituite automaticamente.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* New variable form */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 p-3 rounded-lg bg-theme-bg-tertiary border border-theme-border">
+                            <div className="md:col-span-3">
+                                <input
+                                    type="text"
+                                    value={newCustomVarKey}
+                                    onChange={e => setNewCustomVarKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                    placeholder="chiave (es. address_main)"
+                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm font-mono"
+                                />
+                            </div>
+                            <div className="md:col-span-5">
+                                <input
+                                    type="text"
+                                    value={newCustomVarValue}
+                                    onChange={e => setNewCustomVarValue(e.target.value)}
+                                    placeholder="valore (es. DR7 Cagliari, Via Sonnino 1)"
+                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
+                                />
+                            </div>
+                            <div className="md:col-span-3">
+                                <input
+                                    type="text"
+                                    value={newCustomVarDescription}
+                                    onChange={e => setNewCustomVarDescription(e.target.value)}
+                                    placeholder="nota (opz.)"
+                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
+                                />
+                            </div>
+                            <button
+                                onClick={handleCreateCustomVar}
+                                disabled={!newCustomVarKey.trim()}
+                                className="md:col-span-1 px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-sm font-semibold hover:bg-emerald-500/30 disabled:opacity-50"
+                            >
+                                +
+                            </button>
+                        </div>
+
+                        {/* Existing variables list */}
+                        {customVarsList.length === 0 ? (
+                            <div className="text-center py-6 text-theme-text-muted text-sm">
+                                Nessuna variabile definita. Aggiungine una sopra.
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {customVarsList.map(v => (
+                                    <div key={v.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 p-2 rounded-lg bg-theme-bg-tertiary border border-theme-border items-center">
+                                        <div className="md:col-span-3 font-mono text-sm text-emerald-300">
+                                            {`{${v.key}}`}
+                                        </div>
+                                        <div className="md:col-span-5">
+                                            <input
+                                                type="text"
+                                                defaultValue={v.value}
+                                                onBlur={e => {
+                                                    if (e.target.value !== v.value) handleUpdateCustomVar(v.id, { value: e.target.value })
+                                                }}
+                                                className="w-full px-3 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2 text-xs text-theme-text-muted truncate">
+                                            {v.description || '—'}
+                                        </div>
+                                        <div className="md:col-span-1 flex items-center justify-center">
+                                            <label className="inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={v.is_enabled}
+                                                    onChange={e => handleUpdateCustomVar(v.id, { is_enabled: e.target.checked })}
+                                                    className="w-4 h-4 accent-emerald-500"
+                                                />
+                                            </label>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeleteCustomVar(v.id, v.key)}
+                                            className="md:col-span-1 px-2 py-1.5 rounded text-xs font-semibold bg-red-500/10 text-red-300 hover:bg-red-500/20 border border-red-500/30"
+                                        >
+                                            Elimina
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <p className="text-[11px] text-theme-text-muted">
+                            Suggerimento: i template editor mostrano le variabili sopra come placeholder. La sostituzione avviene a send-time — modifica il valore qui e tutti i template si aggiornano subito.
+                        </p>
+                    </div>
+                )}
 
                 {/* New Template Form */}
                 {showNewForm && (
