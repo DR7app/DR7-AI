@@ -12,6 +12,7 @@
  * already used in the team dashboard.
  */
 import { useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 
@@ -259,6 +260,11 @@ export default function OperatorProfileModal({
                     </div>
                 </div>
 
+                {/* Contratto — sezione editabile con condizioni del contratto */}
+                <div className="px-4 sm:px-6 pt-3 sm:pt-4">
+                    <ContrattoSection operatoreId={operatore.id} />
+                </div>
+
                 {/* KPI cards */}
                 <div className="px-4 sm:px-6 py-3 sm:py-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
                     <KpiCard label="Ore Lavorate" value={fmtMin(stats.totMinLavorati)} tone="emerald" />
@@ -360,6 +366,477 @@ function KpiCard({ label, value, sub, tone = 'emerald' }: { label: string; value
             <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">{label}</div>
             <div className={`text-xl font-bold mt-1 tabular-nums`}>{value}</div>
             {sub && <div className="text-[10px] text-theme-text-muted mt-0.5">{sub}</div>}
+        </div>
+    )
+}
+
+// ─── Contratto: editabile inline, visibile SOLO a direzione ─────────────
+// Solo Valerio / Ilenia / ophe vedono compensi e flag dell'operatore.
+// Gli altri admin che aprono il proprio profilo non vedono nulla qui.
+
+const DIREZIONE_EMAILS = new Set(['valerio@dr7.app', 'ilenia@dr7.app', 'ophe@dr7.app'])
+
+interface Contratto {
+    id?: string
+    tipo_rapporto: string | null
+    ore_target_giornaliere: number | null
+    ore_target_settimanali: number | null
+    ore_target_mensili: number | null
+    giorni_lavorativi_settimana: number | null
+    stipendio_mensile_eur: number | null
+    paga_oraria_eur: number | null
+    paga_straordinario_eur: number | null
+    straordinario_abilitato: boolean
+    lavora_festivi: boolean
+    notifiche_attive: boolean
+    visibilita_fatturato: boolean
+    data_inizio: string
+    note: string | null
+    pdf_path: string | null
+    pdf_filename: string | null
+    pdf_uploaded_at: string | null
+}
+
+function emptyContratto(): Contratto {
+    return {
+        tipo_rapporto: null,
+        ore_target_giornaliere: 8,
+        ore_target_settimanali: 40,
+        ore_target_mensili: 160,
+        giorni_lavorativi_settimana: 5,
+        stipendio_mensile_eur: null,
+        paga_oraria_eur: null,
+        paga_straordinario_eur: null,
+        straordinario_abilitato: false,
+        lavora_festivi: false,
+        notifiche_attive: true,
+        visibilita_fatturato: false,
+        data_inizio: new Date().toISOString().slice(0, 10),
+        note: null,
+        pdf_path: null,
+        pdf_filename: null,
+        pdf_uploaded_at: null,
+    }
+}
+
+function ContrattoSection({ operatoreId }: { operatoreId: string }) {
+    const [isDirezione, setIsDirezione] = useState(false)
+    const [contratto, setContratto] = useState<Contratto | null>(null)
+    const [draft, setDraft] = useState<Contratto | null>(null)
+    const [editMode, setEditMode] = useState(false)
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+    const [loadError, setLoadError] = useState<string | null>(null)
+
+    // Direzione gate
+    useEffect(() => {
+        let cancelled = false
+        supabase.auth.getUser().then(({ data }) => {
+            if (cancelled) return
+            const email = (data.user?.email || '').toLowerCase()
+            setIsDirezione(DIREZIONE_EMAILS.has(email))
+        })
+        return () => { cancelled = true }
+    }, [])
+
+    // Load contract
+    useEffect(() => {
+        if (!isDirezione) return
+        let cancelled = false
+        setLoading(true)
+        setLoadError(null)
+        ;(async () => {
+            const { data, error } = await supabase
+                .from('operatore_contratto')
+                .select('*')
+                .eq('operatore_id', operatoreId)
+                .eq('attivo', true)
+                .maybeSingle()
+            if (cancelled) return
+            setLoading(false)
+            if (error) {
+                console.error('[Contratto] load error', error)
+                setLoadError(error.message || error.code || 'errore sconosciuto')
+                return
+            }
+            if (data) {
+                setContratto(data as unknown as Contratto)
+            } else {
+                setContratto(null)
+            }
+        })()
+        return () => { cancelled = true }
+    }, [operatoreId, isDirezione])
+
+    if (!isDirezione) return null
+
+    function startEdit() {
+        setDraft(contratto ? { ...contratto } : emptyContratto())
+        setEditMode(true)
+    }
+
+    function cancelEdit() {
+        setDraft(null)
+        setEditMode(false)
+    }
+
+    function updateDraft<K extends keyof Contratto>(k: K, v: Contratto[K]) {
+        setDraft(prev => prev ? { ...prev, [k]: v } : prev)
+    }
+
+    function num(s: string): number | null {
+        if (!s.trim()) return null
+        const n = Number(s)
+        return Number.isFinite(n) ? n : null
+    }
+
+    async function save() {
+        if (!draft) return
+        setSaving(true)
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            const payload = {
+                operatore_id: operatoreId,
+                user_id: user?.id || null,
+                attivo: true,
+                data_inizio: draft.data_inizio,
+                tipo_rapporto: draft.tipo_rapporto || null,
+                ore_target_giornaliere: draft.ore_target_giornaliere,
+                ore_target_settimanali: draft.ore_target_settimanali,
+                ore_target_mensili: draft.ore_target_mensili,
+                giorni_lavorativi_settimana: draft.giorni_lavorativi_settimana,
+                stipendio_mensile_eur: draft.stipendio_mensile_eur,
+                paga_oraria_eur: draft.paga_oraria_eur,
+                paga_straordinario_eur: draft.paga_straordinario_eur,
+                straordinario_abilitato: draft.straordinario_abilitato,
+                lavora_festivi: draft.lavora_festivi,
+                notifiche_attive: draft.notifiche_attive,
+                visibilita_fatturato: draft.visibilita_fatturato,
+                note: draft.note,
+            }
+            if (contratto?.id) {
+                const { error } = await supabase.from('operatore_contratto').update(payload).eq('id', contratto.id)
+                if (error) throw error
+            } else {
+                const { error } = await supabase.from('operatore_contratto').insert({ ...payload, created_by: user?.id || null })
+                if (error) throw error
+            }
+            toast.success('Contratto salvato')
+            const { data: refreshed } = await supabase
+                .from('operatore_contratto')
+                .select('*')
+                .eq('operatore_id', operatoreId)
+                .eq('attivo', true)
+                .maybeSingle()
+            setContratto(refreshed as unknown as Contratto)
+            setEditMode(false)
+            setDraft(null)
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            toast.error(`Errore salvataggio: ${msg}`)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3 sm:p-4">
+            <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
+                    Contratto
+                    <span className="text-[10px] uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5">Solo direzione</span>
+                </h3>
+                {!editMode && !loading && (
+                    <button
+                        onClick={startEdit}
+                        className="px-3 py-1 rounded-full text-xs font-semibold border border-dr7-gold/40 text-dr7-gold hover:bg-dr7-gold/10"
+                    >
+                        {contratto ? 'Modifica' : '+ Crea contratto'}
+                    </button>
+                )}
+            </div>
+
+            {loading && <p className="text-xs text-theme-text-muted">Caricamento…</p>}
+            {loadError && <p className="text-xs text-red-400">Errore: {loadError}{loadError.includes('relation') ? ' — esegui la migrazione 20260511_operatore_contratto.sql' : ''}</p>}
+
+            {!loading && !loadError && !editMode && !contratto && (
+                <p className="text-xs text-theme-text-muted italic">Nessun contratto configurato. Clicca "Crea contratto" per impostare ore, compenso e flag.</p>
+            )}
+
+            {!loading && !loadError && !editMode && contratto && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                    <Field label="Tipo rapporto" value={contratto.tipo_rapporto || '—'} />
+                    <Field label="Ore/giorno" value={contratto.ore_target_giornaliere != null ? `${contratto.ore_target_giornaliere}h` : '—'} />
+                    <Field label="Ore/settimana" value={contratto.ore_target_settimanali != null ? `${contratto.ore_target_settimanali}h` : '—'} />
+                    <Field label="Ore/mese" value={contratto.ore_target_mensili != null ? `${contratto.ore_target_mensili}h` : '—'} />
+                    <Field label="Giorni/sett." value={contratto.giorni_lavorativi_settimana != null ? String(contratto.giorni_lavorativi_settimana) : '—'} />
+                    <Field label="Stipendio mensile" value={contratto.stipendio_mensile_eur != null ? `€${contratto.stipendio_mensile_eur}` : '—'} />
+                    <Field label="Paga oraria" value={contratto.paga_oraria_eur != null ? `€${contratto.paga_oraria_eur}/h` : '—'} />
+                    <Field label="Straordinario" value={contratto.paga_straordinario_eur != null ? `€${contratto.paga_straordinario_eur}/h` : '—'} />
+                    <Field label="Data inizio" value={contratto.data_inizio} />
+                    <Flag label="Straordinario abilitato" on={contratto.straordinario_abilitato} />
+                    <Flag label="Lavora festivi" on={contratto.lavora_festivi} />
+                    <Flag label="Notifiche attive" on={contratto.notifiche_attive} />
+                    <Flag label="Vede fatturato" on={contratto.visibilita_fatturato} />
+                    {contratto.note && (
+                        <div className="col-span-full">
+                            <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Note</div>
+                            <div className="text-xs text-theme-text-primary whitespace-pre-wrap">{contratto.note}</div>
+                        </div>
+                    )}
+                    <div className="col-span-full pt-2 border-t border-theme-border">
+                        <ContrattoPdfArea contratto={contratto} onChange={(updated) => setContratto(updated)} />
+                    </div>
+                </div>
+            )}
+
+            {editMode && draft && (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <LabeledSelect label="Tipo rapporto" value={draft.tipo_rapporto || ''} onChange={v => updateDraft('tipo_rapporto', v || null)} options={[
+                            { value: '', label: 'Seleziona…' },
+                            { value: 'dipendente', label: 'Dipendente' },
+                            { value: 'collaboratore', label: 'Collaboratore' },
+                            { value: 'stagista', label: 'Stagista' },
+                            { value: 'occasionale', label: 'Occasionale / Babysitter' },
+                            { value: 'partita_iva', label: 'Partita IVA' },
+                        ]} />
+                        <LabeledInput label="Data inizio" type="date" value={draft.data_inizio} onChange={v => updateDraft('data_inizio', v)} />
+                    </div>
+
+                    <fieldset className="border border-theme-border rounded p-3">
+                        <legend className="px-2 text-[10px] uppercase tracking-wider text-theme-text-muted">Ore obiettivo</legend>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <LabeledInput label="Giornaliere" type="number" step="0.5" value={draft.ore_target_giornaliere ?? ''} onChange={v => updateDraft('ore_target_giornaliere', num(v))} />
+                            <LabeledInput label="Settimanali" type="number" step="0.5" value={draft.ore_target_settimanali ?? ''} onChange={v => updateDraft('ore_target_settimanali', num(v))} />
+                            <LabeledInput label="Mensili" type="number" step="0.5" value={draft.ore_target_mensili ?? ''} onChange={v => updateDraft('ore_target_mensili', num(v))} />
+                            <LabeledInput label="Giorni/sett." type="number" min={1} max={7} value={draft.giorni_lavorativi_settimana ?? ''} onChange={v => updateDraft('giorni_lavorativi_settimana', num(v))} />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border border-theme-border rounded p-3">
+                        <legend className="px-2 text-[10px] uppercase tracking-wider text-theme-text-muted">Compenso</legend>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <LabeledInput label="Stipendio mensile (€)" type="number" step="0.01" value={draft.stipendio_mensile_eur ?? ''} onChange={v => updateDraft('stipendio_mensile_eur', num(v))} placeholder="es. 1500.00" />
+                            <LabeledInput label="Paga oraria (€/h)" type="number" step="0.01" value={draft.paga_oraria_eur ?? ''} onChange={v => updateDraft('paga_oraria_eur', num(v))} placeholder="es. 9.50" />
+                            <LabeledInput label="Straordinario (€/h)" type="number" step="0.01" value={draft.paga_straordinario_eur ?? ''} onChange={v => updateDraft('paga_straordinario_eur', num(v))} placeholder="es. 14.00" />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border border-theme-border rounded p-3">
+                        <legend className="px-2 text-[10px] uppercase tracking-wider text-theme-text-muted">Permessi e flag</legend>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {([
+                                { k: 'straordinario_abilitato', label: 'Può fare straordinari' },
+                                { k: 'lavora_festivi', label: 'Lavora domenica/festivi' },
+                                { k: 'notifiche_attive', label: 'Riceve notifiche direzione' },
+                                { k: 'visibilita_fatturato', label: 'Vede il fatturato nei report' },
+                            ] as const).map(f => (
+                                <button
+                                    key={f.k}
+                                    type="button"
+                                    onClick={() => updateDraft(f.k, !draft[f.k] as never)}
+                                    className="flex items-center justify-between gap-3 p-2 rounded border border-theme-border bg-theme-bg-primary hover:border-dr7-gold/40 text-left"
+                                >
+                                    <span className="text-xs text-theme-text-primary">{f.label}</span>
+                                    <span className={`relative inline-flex flex-shrink-0 items-center w-9 h-5 rounded-full transition-colors ${draft[f.k] ? 'bg-emerald-500' : 'bg-theme-bg-hover border border-theme-border'}`}>
+                                        <span className={`inline-block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${draft[f.k] ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </fieldset>
+
+                    <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">Note interne</label>
+                        <textarea
+                            value={draft.note || ''}
+                            onChange={e => updateDraft('note', e.target.value || null)}
+                            rows={2}
+                            placeholder="Es. orari particolari, deroghe..."
+                            className="w-full px-2 py-1.5 text-xs bg-theme-bg-primary border border-theme-border rounded text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold"
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-theme-border">
+                        <button onClick={cancelEdit} disabled={saving} className="px-3 py-1.5 rounded text-xs text-theme-text-secondary hover:text-theme-text-primary">Annulla</button>
+                        <button onClick={save} disabled={saving} className="px-4 py-1.5 rounded text-xs font-semibold bg-dr7-gold text-black hover:bg-dr7-gold/90 disabled:opacity-50">
+                            {saving ? 'Salvataggio…' : 'Salva'}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+    return (
+        <div>
+            <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">{label}</div>
+            <div className="text-xs font-medium text-theme-text-primary tabular-nums">{value}</div>
+        </div>
+    )
+}
+
+function Flag({ label, on }: { label: string; on: boolean }) {
+    return (
+        <div className="flex items-center gap-2">
+            <span className={`inline-block w-3 h-3 rounded-full ${on ? 'bg-emerald-500' : 'bg-theme-bg-hover border border-theme-border'}`} />
+            <span className="text-xs text-theme-text-primary">{label}</span>
+        </div>
+    )
+}
+
+function LabeledInput({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement> & { onChange: (v: string) => void }) {
+    const { onChange, ...rest } = props as React.InputHTMLAttributes<HTMLInputElement> & { onChange: (v: string) => void }
+    return (
+        <label className="block">
+            <span className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">{label}</span>
+            <input
+                {...rest}
+                onChange={e => onChange(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs bg-theme-bg-primary border border-theme-border rounded text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold"
+            />
+        </label>
+    )
+}
+
+function LabeledSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+    return (
+        <label className="block">
+            <span className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">{label}</span>
+            <select
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs bg-theme-bg-primary border border-theme-border rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+            >
+                {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+        </label>
+    )
+}
+
+// PDF del contratto firmato: upload nel bucket privato "operatori-contratti"
+// e signed-URL preview/download on-demand. Visibile solo a direzione (la
+// sezione padre e' gia' gated).
+function ContrattoPdfArea({ contratto, onChange }: { contratto: Contratto; onChange: (c: Contratto) => void }) {
+    const [uploading, setUploading] = useState(false)
+    const [signedUrl, setSignedUrl] = useState<string | null>(null)
+
+    // Ogni volta che cambia pdf_path richiediamo una signed URL valida 1h.
+    useEffect(() => {
+        let cancelled = false
+        if (!contratto.pdf_path) { setSignedUrl(null); return }
+        ;(async () => {
+            const { data, error } = await supabase.storage
+                .from('operatori-contratti')
+                .createSignedUrl(contratto.pdf_path!, 60 * 60)
+            if (cancelled) return
+            if (error) { console.error('[contratto-pdf] signed url error', error); setSignedUrl(null); return }
+            setSignedUrl(data?.signedUrl || null)
+        })()
+        return () => { cancelled = true }
+    }, [contratto.pdf_path])
+
+    async function handleUpload(file: File) {
+        if (!contratto.id) {
+            toast.error('Salva prima il contratto, poi allega il PDF')
+            return
+        }
+        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+            toast.error('Carica un file PDF')
+            return
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            toast.error('File troppo grande (max 10 MB)')
+            return
+        }
+        setUploading(true)
+        try {
+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
+            const path = `${contratto.id}/${Date.now()}_${safeName}`
+            const { error: upErr } = await supabase.storage
+                .from('operatori-contratti')
+                .upload(path, file, { contentType: 'application/pdf', upsert: false })
+            if (upErr) throw upErr
+            const { error: updErr } = await supabase
+                .from('operatore_contratto')
+                .update({
+                    pdf_path: path,
+                    pdf_filename: file.name,
+                    pdf_uploaded_at: new Date().toISOString(),
+                })
+                .eq('id', contratto.id)
+            if (updErr) throw updErr
+            onChange({ ...contratto, pdf_path: path, pdf_filename: file.name, pdf_uploaded_at: new Date().toISOString() })
+            toast.success('PDF allegato')
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            toast.error(`Upload fallito: ${msg}`)
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    async function handleRemove() {
+        if (!contratto.id || !contratto.pdf_path) return
+        if (!confirm('Rimuovere il PDF allegato?')) return
+        try {
+            await supabase.storage.from('operatori-contratti').remove([contratto.pdf_path])
+            const { error } = await supabase
+                .from('operatore_contratto')
+                .update({ pdf_path: null, pdf_filename: null, pdf_uploaded_at: null })
+                .eq('id', contratto.id)
+            if (error) throw error
+            onChange({ ...contratto, pdf_path: null, pdf_filename: null, pdf_uploaded_at: null })
+            toast.success('PDF rimosso')
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            toast.error(`Errore: ${msg}`)
+        }
+    }
+
+    return (
+        <div>
+            <div className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">Contratto firmato (PDF)</div>
+            {contratto.pdf_path && contratto.pdf_filename ? (
+                <div className="flex flex-wrap items-center gap-2 bg-theme-bg-primary border border-theme-border rounded p-2">
+                    <svg className="w-5 h-5 text-red-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 4a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm0 4a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" /></svg>
+                    <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-theme-text-primary truncate">{contratto.pdf_filename}</div>
+                        {contratto.pdf_uploaded_at && (
+                            <div className="text-[10px] text-theme-text-muted">Caricato {new Date(contratto.pdf_uploaded_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                        )}
+                    </div>
+                    {signedUrl && (
+                        <a href={signedUrl} target="_blank" rel="noreferrer" className="px-3 py-1 rounded-full text-xs font-semibold border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10">Apri</a>
+                    )}
+                    <button onClick={handleRemove} className="px-3 py-1 rounded-full text-xs font-semibold border border-red-500/40 text-red-400 hover:bg-red-500/10">Rimuovi</button>
+                </div>
+            ) : (
+                <label className="flex items-center gap-3 bg-theme-bg-primary border border-dashed border-theme-border rounded p-3 cursor-pointer hover:border-dr7-gold/50">
+                    <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                    <div className="flex-1 text-xs">
+                        <div className="font-medium text-theme-text-primary">{uploading ? 'Caricamento…' : 'Carica PDF contratto'}</div>
+                        <div className="text-[10px] text-theme-text-muted">Solo PDF · max 10 MB · visibile solo a direzione</div>
+                    </div>
+                    <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        disabled={uploading || !contratto.id}
+                        onChange={e => {
+                            const f = e.target.files?.[0]
+                            if (f) handleUpload(f)
+                            e.currentTarget.value = ''
+                        }}
+                        className="hidden"
+                    />
+                </label>
+            )}
+            {!contratto.id && (
+                <p className="text-[10px] text-amber-400 mt-1">Salva prima il contratto per poter allegare il PDF.</p>
+            )}
         </div>
     )
 }
