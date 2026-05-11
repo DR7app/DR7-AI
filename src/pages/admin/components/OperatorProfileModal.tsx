@@ -383,10 +383,16 @@ interface Contratto {
     ore_target_settimanali: number | null
     ore_target_mensili: number | null
     giorni_lavorativi_settimana: number | null
+    // Importo stipendio (settimanale o mensile, vedi stipendio_frequenza).
+    // Nome colonna DB e' stipendio_mensile_eur per backwards compat.
     stipendio_mensile_eur: number | null
+    stipendio_frequenza: 'settimanale' | 'mensile'
     paga_oraria_eur: number | null
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean
+    // Soglia ore lavorate / giorno oltre cui scatta lo straordinario.
+    // Se null e straordinario_abilitato, usa ore_target_giornaliere.
+    ore_soglia_straordinario: number | null
     lavora_festivi: boolean
     notifiche_attive: boolean
     visibilita_fatturato: boolean
@@ -405,9 +411,11 @@ function emptyContratto(): Contratto {
         ore_target_mensili: 160,
         giorni_lavorativi_settimana: 5,
         stipendio_mensile_eur: null,
+        stipendio_frequenza: 'mensile',
         paga_oraria_eur: null,
         paga_straordinario_eur: null,
         straordinario_abilitato: false,
+        ore_soglia_straordinario: null,
         lavora_festivi: false,
         notifiche_attive: true,
         visibilita_fatturato: false,
@@ -506,14 +514,17 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                 ore_target_mensili: draft.ore_target_mensili,
                 giorni_lavorativi_settimana: draft.giorni_lavorativi_settimana,
                 stipendio_mensile_eur: draft.stipendio_mensile_eur,
+                stipendio_frequenza: draft.stipendio_frequenza || 'mensile',
                 paga_oraria_eur: draft.paga_oraria_eur,
                 paga_straordinario_eur: draft.paga_straordinario_eur,
                 straordinario_abilitato: draft.straordinario_abilitato,
+                ore_soglia_straordinario: draft.ore_soglia_straordinario,
                 lavora_festivi: draft.lavora_festivi,
                 notifiche_attive: draft.notifiche_attive,
                 visibilita_fatturato: draft.visibilita_fatturato,
                 note: draft.note,
             }
+            console.log('[Contratto] saving payload', payload)
             if (contratto?.id) {
                 const { error } = await supabase.from('operatore_contratto').update(payload).eq('id', contratto.id)
                 if (error) throw error
@@ -528,6 +539,7 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                 .eq('operatore_id', operatoreId)
                 .eq('attivo', true)
                 .maybeSingle()
+            console.log('[Contratto] refreshed from DB', refreshed)
             setContratto(refreshed as unknown as Contratto)
             setEditMode(false)
             setDraft(null)
@@ -570,9 +582,24 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                     <Field label="Ore/settimana" value={contratto.ore_target_settimanali != null ? `${contratto.ore_target_settimanali}h` : '—'} />
                     <Field label="Ore/mese" value={contratto.ore_target_mensili != null ? `${contratto.ore_target_mensili}h` : '—'} />
                     <Field label="Giorni/sett." value={contratto.giorni_lavorativi_settimana != null ? String(contratto.giorni_lavorativi_settimana) : '—'} />
-                    <Field label="Stipendio mensile" value={contratto.stipendio_mensile_eur != null ? `€${contratto.stipendio_mensile_eur}` : '—'} />
+                    <Field
+                        label={`Stipendio ${contratto.stipendio_frequenza || 'mensile'}`}
+                        value={contratto.stipendio_mensile_eur != null
+                            ? `€${contratto.stipendio_mensile_eur} / ${contratto.stipendio_frequenza === 'settimanale' ? 'sett.' : 'mese'}`
+                            : '—'}
+                    />
                     <Field label="Paga oraria" value={contratto.paga_oraria_eur != null ? `€${contratto.paga_oraria_eur}/h` : '—'} />
                     <Field label="Straordinario" value={contratto.paga_straordinario_eur != null ? `€${contratto.paga_straordinario_eur}/h` : '—'} />
+                    <Field
+                        label="Soglia straordinario"
+                        value={contratto.straordinario_abilitato
+                            ? (contratto.ore_soglia_straordinario != null
+                                ? `dopo ${contratto.ore_soglia_straordinario}h`
+                                : (contratto.ore_target_giornaliere != null
+                                    ? `dopo ${contratto.ore_target_giornaliere}h (=target)`
+                                    : '—'))
+                            : 'disabilitato'}
+                    />
                     <Field label="Data inizio" value={contratto.data_inizio} />
                     <Flag label="Straordinario abilitato" on={contratto.straordinario_abilitato} />
                     <Flag label="Lavora festivi" on={contratto.lavora_festivi} />
@@ -616,11 +643,45 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
 
                     <fieldset className="border border-theme-border rounded p-3">
                         <legend className="px-2 text-[10px] uppercase tracking-wider text-theme-text-muted">Compenso</legend>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <LabeledInput label="Stipendio mensile (€)" type="number" step="0.01" value={draft.stipendio_mensile_eur ?? ''} onChange={v => updateDraft('stipendio_mensile_eur', num(v))} placeholder="es. 1500.00" />
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                            <LabeledInput
+                                label={`Stipendio (€${draft.stipendio_frequenza === 'settimanale' ? '/sett.' : '/mese'})`}
+                                type="number"
+                                step="0.01"
+                                value={draft.stipendio_mensile_eur ?? ''}
+                                onChange={v => updateDraft('stipendio_mensile_eur', num(v))}
+                                placeholder={draft.stipendio_frequenza === 'settimanale' ? 'es. 375.00' : 'es. 1500.00'}
+                            />
+                            <LabeledSelect
+                                label="Frequenza"
+                                value={draft.stipendio_frequenza}
+                                onChange={v => updateDraft('stipendio_frequenza', (v === 'settimanale' ? 'settimanale' : 'mensile'))}
+                                options={[
+                                    { value: 'mensile', label: 'Mensile' },
+                                    { value: 'settimanale', label: 'Settimanale' },
+                                ]}
+                            />
                             <LabeledInput label="Paga oraria (€/h)" type="number" step="0.01" value={draft.paga_oraria_eur ?? ''} onChange={v => updateDraft('paga_oraria_eur', num(v))} placeholder="es. 9.50" />
                             <LabeledInput label="Straordinario (€/h)" type="number" step="0.01" value={draft.paga_straordinario_eur ?? ''} onChange={v => updateDraft('paga_straordinario_eur', num(v))} placeholder="es. 14.00" />
                         </div>
+                        {draft.straordinario_abilitato && (
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <LabeledInput
+                                    label="Soglia straordinario (h/giorno)"
+                                    type="number"
+                                    step="0.5"
+                                    min={0}
+                                    max={24}
+                                    value={draft.ore_soglia_straordinario ?? ''}
+                                    onChange={v => updateDraft('ore_soglia_straordinario', num(v))}
+                                    placeholder={`default ${draft.ore_target_giornaliere ?? 8}h (=target)`}
+                                />
+                                <div className="text-[10px] text-theme-text-muted self-end pb-1">
+                                    Ore di lavoro al giorno oltre cui scatta lo straordinario.
+                                    Lascia vuoto per usare il target giornaliero.
+                                </div>
+                            </div>
+                        )}
                     </fieldset>
 
                     <fieldset className="border border-theme-border rounded p-3">
