@@ -166,7 +166,12 @@ function buildScheduleSummary(
   const lines: string[] = []
 
   if (t.is_automatic) {
-    const triggerLabel = TRIGGER_LABELS[t.trigger_event || ''] || (t.trigger_event || 'evento sconosciuto')
+    // Il triggerLabel contiene già "prima/dopo" (es. "Prima della
+    // riconsegna"); strippare quel prefisso dal label prima di
+    // concatenare il nostro "${offset}h prima/dopo", altrimenti
+    // otteniamo "24h prima prima della riconsegna".
+    const rawTriggerLabel = TRIGGER_LABELS[t.trigger_event || ''] || (t.trigger_event || 'evento sconosciuto')
+    const cleanTriggerLabel = rawTriggerLabel.replace(/^(prima|dopo)\s+(del|della|dell'|di)\s+/i, '$2 ').toLowerCase()
     const offset = Math.abs(Number(t.trigger_offset_hours) || 0)
     const event = String(t.trigger_event || '')
     const offsetText = offset === 0
@@ -184,7 +189,7 @@ function buildScheduleSummary(
     const catLabel = cat === 'all' || !cat
       ? 'tutti i veicoli'
       : `solo ${categoryLabels[cat] || cat}`
-    lines.push(`Cron · invia ${offsetText} ${triggerLabel.toLowerCase()} · ${sendHourText} · ${statusLabel} · ${catLabel}`)
+    lines.push(`Cron · invia ${offsetText} ${cleanTriggerLabel} · ${sendHourText} · ${statusLabel} · ${catLabel}`)
   }
 
   // Eventi di codice che instradano qui (callback Nexi, conferma
@@ -2487,6 +2492,16 @@ export default function MessaggiSistemaProTab() {
                                                         </span>
                                                     )}
                                                     <span className="font-semibold text-theme-text-primary text-sm min-w-0">{template.label}</span>
+                                                    {/* message_key visibile: serve per diagnosticare
+                                                        se la chiave è quella canonica (pro_*) o un
+                                                        pro_custom_* (a cui i callback di codice non
+                                                        sanno arrivare → niente "Evento" nel preview). */}
+                                                    <code
+                                                        className="hidden md:inline-block shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono text-theme-text-muted bg-theme-bg-tertiary/60 border border-theme-border/40 max-w-[220px] truncate"
+                                                        title={template.message_key}
+                                                    >
+                                                        {template.message_key}
+                                                    </code>
                                                     <div className="flex items-center gap-1.5 ml-auto shrink-0">
                                                         <button
                                                             onClick={(e) => { e.preventDefault(); handleToggleAutomatic(template) }}
