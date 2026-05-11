@@ -51,6 +51,7 @@ type SectionId =
     | 'confirmation'
     | 'header'
     | 'signup'
+    | 'payment'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -73,6 +74,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'confirmation', title: 'Conferma Prenotazione', ready: true },
     { id: 'header', title: 'Header / Navigazione', ready: true },
     { id: 'signup', title: 'Registrazione Cliente', ready: true },
+    { id: 'payment', title: 'Pagina Pagamento (Nexi)', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -371,6 +373,60 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Payment page (Nexi XPay wrapper) ────────────────────────────────────
+interface PaymentCopy {
+    subtitle_it: string; subtitle_en: string
+    loading_it: string; loading_en: string
+    ready_title_it: string; ready_title_en: string
+    ready_subtitle_it: string; ready_subtitle_en: string
+    ready_prepaid_warning_it: string; ready_prepaid_warning_en: string
+    checking_title_it: string; checking_title_en: string
+    checking_subtitle_it: string; checking_subtitle_en: string
+    blocked_title_it: string; blocked_title_en: string
+    blocked_default_message_it: string; blocked_default_message_en: string
+    blocked_help_it: string; blocked_help_en: string
+    blocked_retry_cta_it: string; blocked_retry_cta_en: string
+    success_title_it: string; success_title_en: string
+    success_redirect_it: string; success_redirect_en: string
+    cancelled_title_it: string; cancelled_title_en: string
+    cancelled_subtitle_it: string; cancelled_subtitle_en: string
+    cancelled_retry_cta_it: string; cancelled_retry_cta_en: string
+    error_title_it: string; error_title_en: string
+    error_invalid_link_it: string; error_invalid_link_en: string
+    error_sdk_load_it: string; error_sdk_load_en: string
+    error_sdk_unavailable_it: string; error_sdk_unavailable_en: string
+    error_sdk_init_it: string; error_sdk_init_en: string
+    error_check_card_it: string; error_check_card_en: string
+    error_payment_failed_it: string; error_payment_failed_en: string
+    footer_secure_note_it: string; footer_secure_note_en: string
+}
+const INITIAL_PAYMENT: PaymentCopy = {
+    subtitle_it: '', subtitle_en: '',
+    loading_it: '', loading_en: '',
+    ready_title_it: '', ready_title_en: '',
+    ready_subtitle_it: '', ready_subtitle_en: '',
+    ready_prepaid_warning_it: '', ready_prepaid_warning_en: '',
+    checking_title_it: '', checking_title_en: '',
+    checking_subtitle_it: '', checking_subtitle_en: '',
+    blocked_title_it: '', blocked_title_en: '',
+    blocked_default_message_it: '', blocked_default_message_en: '',
+    blocked_help_it: '', blocked_help_en: '',
+    blocked_retry_cta_it: '', blocked_retry_cta_en: '',
+    success_title_it: '', success_title_en: '',
+    success_redirect_it: '', success_redirect_en: '',
+    cancelled_title_it: '', cancelled_title_en: '',
+    cancelled_subtitle_it: '', cancelled_subtitle_en: '',
+    cancelled_retry_cta_it: '', cancelled_retry_cta_en: '',
+    error_title_it: '', error_title_en: '',
+    error_invalid_link_it: '', error_invalid_link_en: '',
+    error_sdk_load_it: '', error_sdk_load_en: '',
+    error_sdk_unavailable_it: '', error_sdk_unavailable_en: '',
+    error_sdk_init_it: '', error_sdk_init_en: '',
+    error_check_card_it: '', error_check_card_en: '',
+    error_payment_failed_it: '', error_payment_failed_en: '',
+    footer_secure_note_it: '', footer_secure_note_en: '',
 }
 
 // ─── SignUp (registrazione cliente) ──────────────────────────────────────
@@ -1084,6 +1140,7 @@ interface SiteCopySnapshot {
     confirmationSuccess?: ConfirmationSuccessCopy
     header?: HeaderCopy
     signUp?: SignUpCopy
+    payment?: PaymentCopy
 }
 
 interface CurrentState {
@@ -1107,6 +1164,7 @@ interface CurrentState {
     confirmationSuccess: ConfirmationSuccessCopy
     header: HeaderCopy
     signUp: SignUpCopy
+    payment: PaymentCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -1205,6 +1263,8 @@ export default function SitoTab() {
     const [savedHeader, setSavedHeader] = useState<HeaderCopy>(INITIAL_HEADER)
     const [signUp, setSignUp] = useState<SignUpCopy>(INITIAL_SIGNUP)
     const [savedSignUp, setSavedSignUp] = useState<SignUpCopy>(INITIAL_SIGNUP)
+    const [payment, setPayment] = useState<PaymentCopy>(INITIAL_PAYMENT)
+    const [savedPayment, setSavedPayment] = useState<PaymentCopy>(INITIAL_PAYMENT)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -1312,6 +1372,10 @@ export default function SitoTab() {
                     setSignUp(remote.signUp)
                     setSavedSignUp(remote.signUp)
                 }
+                if (remote?.payment && remote.payment.ready_title_it) {
+                    setPayment(remote.payment)
+                    setSavedPayment(remote.payment)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -1324,10 +1388,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment]
     )
     const dirty = changes.length > 0
 
@@ -1338,7 +1402,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1359,6 +1423,7 @@ export default function SitoTab() {
             setSavedConfirmationSuccess(confirmationSuccess)
             setSavedHeader(header)
             setSavedSignUp(signUp)
+            setSavedPayment(payment)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1413,6 +1478,7 @@ export default function SitoTab() {
         setConfirmationSuccess(savedConfirmationSuccess)
         setHeader(savedHeader)
         setSignUp(savedSignUp)
+        setPayment(savedPayment)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1578,6 +1644,9 @@ export default function SitoTab() {
                         {hydrated && section === 'signup' && (
                             <SignUpEditor copy={signUp} setCopy={setSignUp} />
                         )}
+                        {hydrated && section === 'payment' && (
+                            <PaymentEditor copy={payment} setCopy={setPayment} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1705,6 +1774,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.signUp) !== JSON.stringify(saved.signUp)) {
         out.push('Registrazione Cliente: contenuti modificati')
+    }
+    if (JSON.stringify(current.payment) !== JSON.stringify(saved.payment)) {
+        out.push('Pagina Pagamento: contenuti modificati')
     }
     return out
 }
@@ -4771,6 +4843,109 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                     <FieldText label="City required (EN)" value={copy.err_city_required_en} onChange={v => update('err_city_required_en', v)} />
                     <FieldText label="Indirizzo obbligatorio PA (IT)" value={copy.err_pa_address_required_it} onChange={v => update('err_pa_address_required_it', v)} />
                     <FieldText label="PA address required (EN)" value={copy.err_pa_address_required_en} onChange={v => update('err_pa_address_required_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Payment editor (Nexi XPay wrapper chrome) ─────────────────────────────
+function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: PaymentCopy) => void }) {
+    const update = <K extends keyof PaymentCopy>(key: K, value: PaymentCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-[#6e6e73]">
+                Testi del wrapper Nexi XPay. L'iframe Nexi stesso resta in italiano (vincolo SDK), solo il
+                contorno DR7 è bilingue e modificabile qui.
+            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Chrome pagina</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Sottotitolo logo (IT)" value={copy.subtitle_it} onChange={v => update('subtitle_it', v)} />
+                    <FieldText label="Logo subtitle (EN)" value={copy.subtitle_en} onChange={v => update('subtitle_en', v)} />
+                    <FieldText label="Caricamento (IT)" value={copy.loading_it} onChange={v => update('loading_it', v)} />
+                    <FieldText label="Loading (EN)" value={copy.loading_en} onChange={v => update('loading_en', v)} />
+                    <FieldText label="Footer pagamento sicuro (IT)" value={copy.footer_secure_note_it} onChange={v => update('footer_secure_note_it', v)} />
+                    <FieldText label="Footer secure note (EN)" value={copy.footer_secure_note_en} onChange={v => update('footer_secure_note_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato pronto al pagamento</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.ready_title_it} onChange={v => update('ready_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.ready_title_en} onChange={v => update('ready_title_en', v)} />
+                    <FieldText label="Sottotitolo (IT)" value={copy.ready_subtitle_it} onChange={v => update('ready_subtitle_it', v)} />
+                    <FieldText label="Subtitle (EN)" value={copy.ready_subtitle_en} onChange={v => update('ready_subtitle_en', v)} />
+                    <FieldText label="Avviso prepagate (IT)" value={copy.ready_prepaid_warning_it} onChange={v => update('ready_prepaid_warning_it', v)} />
+                    <FieldText label="Prepaid warning (EN)" value={copy.ready_prepaid_warning_en} onChange={v => update('ready_prepaid_warning_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato verifica in corso</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.checking_title_it} onChange={v => update('checking_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.checking_title_en} onChange={v => update('checking_title_en', v)} />
+                    <FieldText label="Sottotitolo (IT)" value={copy.checking_subtitle_it} onChange={v => update('checking_subtitle_it', v)} />
+                    <FieldText label="Subtitle (EN)" value={copy.checking_subtitle_en} onChange={v => update('checking_subtitle_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato bloccato (carta prepagata)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.blocked_title_it} onChange={v => update('blocked_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.blocked_title_en} onChange={v => update('blocked_title_en', v)} />
+                    <FieldText label="Messaggio default (IT)" value={copy.blocked_default_message_it} onChange={v => update('blocked_default_message_it', v)} />
+                    <FieldText label="Default message (EN)" value={copy.blocked_default_message_en} onChange={v => update('blocked_default_message_en', v)} />
+                    <FieldText label="Aiuto (IT)" value={copy.blocked_help_it} onChange={v => update('blocked_help_it', v)} />
+                    <FieldText label="Help (EN)" value={copy.blocked_help_en} onChange={v => update('blocked_help_en', v)} />
+                    <FieldText label="CTA riprova (IT)" value={copy.blocked_retry_cta_it} onChange={v => update('blocked_retry_cta_it', v)} />
+                    <FieldText label="Retry CTA (EN)" value={copy.blocked_retry_cta_en} onChange={v => update('blocked_retry_cta_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato successo</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.success_title_it} onChange={v => update('success_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.success_title_en} onChange={v => update('success_title_en', v)} />
+                    <FieldText label="Reindirizzamento (IT)" value={copy.success_redirect_it} onChange={v => update('success_redirect_it', v)} />
+                    <FieldText label="Redirect (EN)" value={copy.success_redirect_en} onChange={v => update('success_redirect_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato annullato</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.cancelled_title_it} onChange={v => update('cancelled_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.cancelled_title_en} onChange={v => update('cancelled_title_en', v)} />
+                    <FieldText label="Sottotitolo (IT)" value={copy.cancelled_subtitle_it} onChange={v => update('cancelled_subtitle_it', v)} />
+                    <FieldText label="Subtitle (EN)" value={copy.cancelled_subtitle_en} onChange={v => update('cancelled_subtitle_en', v)} />
+                    <FieldText label="CTA riprova (IT)" value={copy.cancelled_retry_cta_it} onChange={v => update('cancelled_retry_cta_it', v)} />
+                    <FieldText label="Retry CTA (EN)" value={copy.cancelled_retry_cta_en} onChange={v => update('cancelled_retry_cta_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato errore + messaggi diagnostici</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo generico errore (IT)" value={copy.error_title_it} onChange={v => update('error_title_it', v)} />
+                    <FieldText label="Generic error title (EN)" value={copy.error_title_en} onChange={v => update('error_title_en', v)} />
+                    <FieldText label="Link non valido (IT)" value={copy.error_invalid_link_it} onChange={v => update('error_invalid_link_it', v)} />
+                    <FieldText label="Invalid link (EN)" value={copy.error_invalid_link_en} onChange={v => update('error_invalid_link_en', v)} />
+                    <FieldText label="SDK caricamento fallito (IT)" value={copy.error_sdk_load_it} onChange={v => update('error_sdk_load_it', v)} />
+                    <FieldText label="SDK load failed (EN)" value={copy.error_sdk_load_en} onChange={v => update('error_sdk_load_en', v)} />
+                    <FieldText label="SDK non disponibile (IT)" value={copy.error_sdk_unavailable_it} onChange={v => update('error_sdk_unavailable_it', v)} />
+                    <FieldText label="SDK unavailable (EN)" value={copy.error_sdk_unavailable_en} onChange={v => update('error_sdk_unavailable_en', v)} />
+                    <FieldText label="SDK init error (IT)" value={copy.error_sdk_init_it} onChange={v => update('error_sdk_init_it', v)} />
+                    <FieldText label="SDK init error (EN)" value={copy.error_sdk_init_en} onChange={v => update('error_sdk_init_en', v)} />
+                    <FieldText label="Verifica carta (IT)" value={copy.error_check_card_it} onChange={v => update('error_check_card_it', v)} />
+                    <FieldText label="Check card error (EN)" value={copy.error_check_card_en} onChange={v => update('error_check_card_en', v)} />
+                    <FieldText label="Pagamento fallito (IT)" value={copy.error_payment_failed_it} onChange={v => update('error_payment_failed_it', v)} />
+                    <FieldText label="Payment failed (EN)" value={copy.error_payment_failed_en} onChange={v => update('error_payment_failed_en', v)} />
                 </div>
             </section>
         </div>
