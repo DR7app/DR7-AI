@@ -899,14 +899,24 @@ export default function MessaggiSistemaProTab() {
     const [newTargetStatus, setNewTargetStatus] = useState<Set<string>>(new Set(['confirmed', 'active']))
 
     // Diagnostica per ogni template: ultimi invii dal cron + bottone di
-    // test che bypassa finestra temporale, dedup e filtri (l'admin non
-    // deve dover creare una prenotazione fittizia per verificare un
-    // template). Stati locali, niente persistenza.
+    // test che bypassa finestra temporale, dedup e filtri. Il test
+    // NON usa booking fittizie: l'admin sceglie una prenotazione REALE
+    // tra le ultime salvate in DB, così le variabili del template
+    // vengono sostituite con dati veri.
     const [expandedDiagnostics, setExpandedDiagnostics] = useState<Set<string>>(new Set())
     const [templateSendLogs, setTemplateSendLogs] = useState<Record<string, Array<{ id: string; booking_id: string | null; customer_phone: string | null; status: string; error: string | null; created_at: string }>>>({})
     const [loadingLogsFor, setLoadingLogsFor] = useState<string | null>(null)
     const [testPhones, setTestPhones] = useState<Record<string, string>>({})
+    const [testBookingIds, setTestBookingIds] = useState<Record<string, string>>({})
     const [testingId, setTestingId] = useState<string | null>(null)
+    // Elenco delle ultime prenotazioni reali, caricate dal DB al primo
+    // utilizzo della diagnostica. Servono per popolare la dropdown
+    // "Seleziona prenotazione" del test — l'admin sceglie SOLO da dati
+    // veri presenti in `bookings`, niente record sintetici.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [recentBookings, setRecentBookings] = useState<any[]>([])
+    const [recentBookingsLoading, setRecentBookingsLoading] = useState(false)
+    const [recentBookingsLoaded, setRecentBookingsLoaded] = useState(false)
     // Filtri avanzati (migration 20260509)
     const [newTargetServiceType, setNewTargetServiceType] = useState('all')
     const [newTargetWithDeposit, setNewTargetWithDeposit] = useState('all')
@@ -967,6 +977,26 @@ export default function MessaggiSistemaProTab() {
             setSourceChannels(Array.from(seen).sort())
         }
         loadChannels()
+        return () => { cancelled = true }
+    }, [])
+    // Payment methods caricati da payment_methods table (admin-managed).
+    const [paymentMethods, setPaymentMethods] = useState<Array<{ key: string; label: string }>>([])
+    useEffect(() => {
+        let cancelled = false
+        const load = async () => {
+            const { data } = await supabase
+                .from('payment_methods')
+                .select('key, label, is_enabled, sort_order')
+                .eq('is_enabled', true)
+                .order('sort_order', { ascending: true })
+            if (cancelled || !data) return
+            setPaymentMethods(
+                data
+                    .filter((r: { key?: unknown; label?: unknown }) => typeof r?.key === 'string' && typeof r?.label === 'string')
+                    .map((r: { key: string; label: string }) => ({ key: r.key, label: r.label }))
+            )
+        }
+        load()
         return () => { cancelled = true }
     }, [])
     useEffect(() => {
@@ -1418,9 +1448,33 @@ export default function MessaggiSistemaProTab() {
                 next.add(template.id)
                 // Lazy-load logs the first time the panel opens for this template
                 if (!templateSendLogs[template.id]) loadTemplateSendLog(template.id)
+                // Lazy-load the recent-bookings list once (shared across templates)
+                if (!recentBookingsLoaded && !recentBookingsLoading) loadRecentBookings()
             }
             return next
         })
+    }
+
+    /** Carica le ultime 30 prenotazioni reali (in ordine di creazione)
+        per popolare la dropdown di selezione del test. Solo dati veri:
+        l'admin sceglie una prenotazione esistente, niente sintetico. */
+    async function loadRecentBookings() {
+        setRecentBookingsLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('bookings')
+                .select('id, customer_name, customer_phone, vehicle_name, pickup_date, dropoff_date, appointment_date, status, payment_status, service_type, created_at')
+                .order('created_at', { ascending: false })
+                .limit(30)
+            if (error) throw error
+            setRecentBookings(data || [])
+            setRecentBookingsLoaded(true)
+        } catch (err) {
+            console.error('Error loading recent bookings:', err)
+            setRecentBookings([])
+        } finally {
+            setRecentBookingsLoading(false)
+        }
     }
 
     /**
@@ -1428,9 +1482,13 @@ export default function MessaggiSistemaProTab() {
      * stesso pipeline del cron (send-whatsapp-notification → renderTemplate
      * dal DB → Green API). Bypassa finestra temporale e dedup: serve a
      * verificare che il TEMPLATE arrivi correttamente, non che le regole
-     * di scheduling siano soddisfatte. Costruisce una booking sintetica
-     * con valori d'esempio così le variabili tipo {nome}, {vehicle_name},
-     * ecc. vengono comunque sostituite (non lasciate come placeholder).
+     * di scheduling siano soddisfatte.
+     *
+     * NIENTE DATI HARDCODED: l'admin sceglie una PRENOTAZIONE REALE dalla
+     * dropdown e la funzione carica quella riga completa da Supabase. Le
+     * variabili del template ({nome}, {vehicle_name}, {pickup_date}…)
+     * vengono quindi sostituite con i valori effettivi di quella booking,
+     * esattamente come farebbe il cron.
      */
     async function handleTestSend(template: SystemMessage) {
         const phoneRaw = (testPhones[template.id] || '').trim()
@@ -1443,43 +1501,35 @@ export default function MessaggiSistemaProTab() {
             toast.error('Numero di telefono non valido')
             return
         }
+        const bookingId = (testBookingIds[template.id] || '').trim()
+        if (!bookingId) {
+            toast.error('Seleziona una prenotazione reale dalla lista')
+            return
+        }
         if (!template.message_body || !template.message_body.trim()) {
             toast.error('Il template è vuoto: scrivi prima il messaggio')
             return
         }
         setTestingId(template.id)
         try {
-            // Booking sintetica con valori realistici per la sostituzione
-            // delle variabili. Non viene salvata in DB.
-            const inDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString()
-            const syntheticBooking = {
-                id: `test-${template.id}-${Date.now()}`,
-                customer_name: 'Mario Rossi (Test)',
-                customer_email: 'test@dr7.app',
-                customer_phone: phone,
-                vehicle_name: 'Audi RS3',
-                vehicle_plate: 'AB123CD',
-                pickup_date: inDays(1),
-                dropoff_date: inDays(4),
-                pickup_location: 'DR7 Cagliari',
-                dropoff_location: 'DR7 Cagliari',
-                price_total: 45000,
-                payment_status: 'paid',
-                status: 'confirmed',
-                appointment_date: inDays(1),
-                appointment_time: '15:30',
-                service_name: 'Test',
-                booking_details: {
-                    insurance_option: 'KASKO_BASE',
-                    deposit: 500,
-                    km_limit: '300',
-                },
+            // Carica la riga COMPLETA della prenotazione scelta — la
+            // dropdown ha solo le colonne minime; send-whatsapp-notification
+            // ha bisogno dei booking_details per sostituire tutte le
+            // variabili del template.
+            const { data: realBooking, error: bkErr } = await supabase
+                .from('bookings')
+                .select('*')
+                .eq('id', bookingId)
+                .single()
+            if (bkErr || !realBooking) {
+                toast.error('Prenotazione non trovata: ' + (bkErr?.message || bookingId))
+                return
             }
             const res = await authFetch('/.netlify/functions/send-whatsapp-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    booking: syntheticBooking,
+                    booking: realBooking,
                     customPhone: phone,
                     messageKey: template.message_key,
                 }),
@@ -2044,10 +2094,9 @@ export default function MessaggiSistemaProTab() {
                                             <select value={newTargetPaymentMethod} onChange={e => setNewTargetPaymentMethod(e.target.value)}
                                                 className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                                 <option value="all">Tutti i metodi</option>
-                                                <option value="card">Carta di credito</option>
-                                                <option value="wallet">Credit Wallet</option>
-                                                <option value="cash">Contanti</option>
-                                                <option value="bonifico">Bonifico</option>
+                                                {paymentMethods.map(pm => (
+                                                    <option key={pm.key} value={pm.key}>{pm.label}</option>
+                                                ))}
                                             </select>
                                         </div>
                                         <div>
@@ -2649,28 +2698,60 @@ export default function MessaggiSistemaProTab() {
 
                                                     {expandedDiagnostics.has(template.id) && (
                                                         <div className="border-t border-theme-border/40 p-3 space-y-3">
-                                                            {/* Test invio */}
+                                                            {/* Test invio — solo dati REALI: l'admin sceglie una
+                                                                prenotazione esistente dalla dropdown e il numero
+                                                                arriva precompilato dal cliente di quella
+                                                                prenotazione (modificabile). Nessun valore
+                                                                inventato. */}
                                                             <div className="space-y-1.5">
                                                                 <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold">Invia di prova</label>
+                                                                <select
+                                                                    value={testBookingIds[template.id] || ''}
+                                                                    onChange={e => {
+                                                                        const bid = e.target.value
+                                                                        setTestBookingIds(prev => ({ ...prev, [template.id]: bid }))
+                                                                        // Auto-fill phone from the selected booking
+                                                                        // (admin can still edit it before sending).
+                                                                        const picked = recentBookings.find(b => b.id === bid)
+                                                                        if (picked?.customer_phone) {
+                                                                            setTestPhones(prev => ({ ...prev, [template.id]: String(picked.customer_phone) }))
+                                                                        }
+                                                                    }}
+                                                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                >
+                                                                    <option value="">{recentBookingsLoading ? 'Caricamento prenotazioni…' : 'Seleziona una prenotazione reale…'}</option>
+                                                                    {recentBookings.map(b => {
+                                                                        const date = b.pickup_date || b.appointment_date || b.created_at
+                                                                        const when = date ? new Date(date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit' }) : ''
+                                                                        const name = b.customer_name || '(senza nome)'
+                                                                        const veh = b.vehicle_name || b.service_type || ''
+                                                                        const short = String(b.id).slice(0, 8)
+                                                                        return (
+                                                                            <option key={b.id} value={b.id}>
+                                                                                {when} · {name}{veh ? ` · ${veh}` : ''} · {short}
+                                                                            </option>
+                                                                        )
+                                                                    })}
+                                                                </select>
                                                                 <div className="flex gap-2">
                                                                     <input
                                                                         type="tel"
                                                                         value={testPhones[template.id] || ''}
                                                                         onChange={e => setTestPhones(prev => ({ ...prev, [template.id]: e.target.value }))}
-                                                                        placeholder="es. 393457905205 (con prefisso, senza +)"
+                                                                        placeholder="Numero di telefono del destinatario"
                                                                         className="flex-1 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
                                                                     />
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleTestSend(template)}
-                                                                        disabled={testingId === template.id || !template.is_enabled || !template.message_body}
+                                                                        disabled={testingId === template.id || !template.is_enabled || !template.message_body || !testBookingIds[template.id]}
                                                                         className="px-3 py-2 rounded-lg bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold text-xs font-semibold border border-dr7-gold/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                                                     >
                                                                         {testingId === template.id ? 'Invio…' : 'Invia di prova'}
                                                                     </button>
                                                                 </div>
                                                                 <p className="text-[10px] text-theme-text-muted leading-snug">
-                                                                    Bypassa finestra temporale, dedup e filtri. Le variabili tipo {'{nome}'}, {'{vehicle_name}'} vengono sostituite con valori d'esempio. Il template deve essere abilitato e non vuoto.
+                                                                    Usa i dati di una prenotazione vera caricata dal DB. Bypassa finestra temporale, dedup e filtri di stato. Il telefono è precompilato dal cliente della prenotazione scelta ma puoi modificarlo per inviare a un numero diverso.
                                                                 </p>
                                                             </div>
 

@@ -22,12 +22,13 @@
  * target_category: 'all' o categoria veicolo (matching su vehicle_category top-level oppure
  *                  booking_details.vehicle.category).
  *
- * Cadenza cron: ogni 15 minuti. Finestra leggermente sovrapposta per non perdere sends
- * se un cron precedente fallisce.
+ * Cadenza cron: ogni 2 minuti (allineata a netlify.toml). Finestra
+ * leggermente sovrapposta per non perdere sends se un cron precedente
+ * fallisce.
  */
 import { schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
-import { matchesAdvancedFilters, passesCustomerFilters } from './utils/triggerSystemMessageEvent';
+import { matchesAdvancedFilters, passesCustomerFilters, loadPaymentMethodAliases } from './utils/triggerSystemMessageEvent';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -406,6 +407,9 @@ const cronHandler = async () => {
     let totalSkipped = 0;
     let totalErrors = 0;
     const results: Array<{ template: string; booking_id: string; status: string; reason?: string }> = [];
+
+    // Carica la cache aliases payment_methods (5min TTL) prima di iniziare
+    await loadPaymentMethodAliases(supabase);
 
     for (const tpl of templates as SystemMessage[]) {
         // Skip eventi non gestiti (preventivo gestito altrove)
