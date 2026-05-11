@@ -99,6 +99,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // synchronous, so the second call bails immediately and we don't fire
   // duplicate WhatsApp confirmations / duplicate inserts.
   const submitLockRef = useRef(false)
+  // Lock dedicato per la chiamata createBooking (insert + WhatsApp).
+  // Distinto da submitLockRef cosi' protegge anche i replay OTP / force.
+  const createBookingLockRef = useRef(false)
   const [showForm, setShowForm] = useState(false)
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const [editService, setEditService] = useState<CarWashService | null>(null)
@@ -1135,9 +1138,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   }
 
   async function createBooking(forceBooking: boolean = false) {
+    // Re-entry guard dedicato per l'INSERT: handleSubmit ha gia' il suo
+    // lock per il flusso form, ma createBooking viene invocata anche dal
+    // replay OTP (useEffect) e dal force=true. Senza questo guard, un
+    // secondo click su 'Salva' durante l'OTP-pending puo' causare due
+    // INSERT + due WhatsApp.
+    if (createBookingLockRef.current) {
+      logger.log('[createBooking] re-entry blocked: insert gia in corso')
+      return
+    }
+    createBookingLockRef.current = true
+
     // Get customer details from selected customer
     const customer = customers.find(c => c.id === formData.customer_id)
-    if (!customer) throw new Error('Cliente non trovato')
+    if (!customer) {
+      createBookingLockRef.current = false
+      throw new Error('Cliente non trovato')
+    }
 
     // Supercar Experience guard: block save until the operator picks the
     // car. The shadow rental row inserted at the end of this function
@@ -1145,6 +1162,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // effect (booking insert, fattura, payment link).
     if (supercarExperienceExtra && supercarExperienceOption && !experienceVehicle) {
       toast.error('Seleziona la supercar per il Supercar Experience prima di salvare.')
+      createBookingLockRef.current = false
       return
     }
 
@@ -1155,6 +1173,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // OFF, quindi quando off questa chiamata non blocca nulla.
     if (!override.hasOverride('prenotazione_lavaggio_conferma')) {
       pendingCreateBookingRef.current = { force: forceBooking }
+      createBookingLockRef.current = false
       override.requestOverride('prenotazione_lavaggio_conferma', 'Conferma prenotazione lavaggio richiede autorizzazione direzionale')
       return
     }
@@ -1652,6 +1671,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setShowForm(false)
     resetWizard()
     loadData()
+    createBookingLockRef.current = false
   }
 
   // Helper function to check if two time ranges overlap
@@ -1837,6 +1857,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     } finally {
       setSubmitting(false)
       submitLockRef.current = false
+      // Safety: anche se createBooking ha rilasciato il lock al successo,
+      // se ha throwato prima rimaneva acquired. Garantiamo il rilascio.
+      createBookingLockRef.current = false
     }
   }
 
