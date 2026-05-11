@@ -57,6 +57,7 @@ type SectionId =
     | 'credit-wallet'
     | 'token'
     | 'firma'
+    | 'registrazione-cliente'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -85,6 +86,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'credit-wallet', title: 'Credit Wallet', ready: true },
     { id: 'token', title: 'DR7 Token (Coin/Up/APP)', ready: true },
     { id: 'firma', title: 'Firma Contratto (OTP)', ready: true },
+    { id: 'registrazione-cliente', title: 'Registrazione Cliente (Invito)', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -383,6 +385,96 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Registrazione Cliente page (token-gated customer data form) ─────────
+interface RegistrazioneClienteCopy {
+    intro_title_it: string; intro_title_en: string
+    intro_subtitle_it: string; intro_subtitle_en: string
+    tipo_persona_fisica_it: string; tipo_persona_fisica_en: string
+    tipo_azienda_it: string; tipo_azienda_en: string
+    tipo_pa_it: string; tipo_pa_en: string
+    section_1_tipo_it: string; section_1_tipo_en: string
+    section_2_anagrafica_it: string; section_2_anagrafica_en: string
+    section_2_azienda_it: string; section_2_azienda_en: string
+    section_2_pa_it: string; section_2_pa_en: string
+    section_3_residenza_it: string; section_3_residenza_en: string
+    section_3_sede_it: string; section_3_sede_en: string
+    section_4_contatti_it: string; section_4_contatti_en: string
+    section_docs_it: string; section_docs_en: string
+    required_hint_it: string; required_hint_en: string
+    verifica_link_it: string; verifica_link_en: string
+    invalid_title_it: string; invalid_title_en: string
+    invalid_reason_expired_it: string; invalid_reason_expired_en: string
+    invalid_reason_used_it: string; invalid_reason_used_en: string
+    invalid_reason_revoked_it: string; invalid_reason_revoked_en: string
+    invalid_reason_fallback_it: string; invalid_reason_fallback_en: string
+    invalid_reason_incomplete_it: string; invalid_reason_incomplete_en: string
+    invalid_reason_validation_it: string; invalid_reason_validation_en: string
+    invalid_help_it: string; invalid_help_en: string
+    done_title_it: string; done_title_en: string
+    done_body_it: string; done_body_en: string
+    docs_intro_it: string; docs_intro_en: string
+    docs_label_identity_it: string; docs_label_identity_en: string
+    docs_label_license_it: string; docs_label_license_en: string
+    docs_label_codice_fiscale_it: string; docs_label_codice_fiscale_en: string
+    docs_chip_uploaded_it: string; docs_chip_uploaded_en: string
+    docs_chip_uploading_it: string; docs_chip_uploading_en: string
+    docs_chip_remove_it: string; docs_chip_remove_en: string
+    cta_submit_it: string; cta_submit_en: string
+    cta_submitting_it: string; cta_submitting_en: string
+    cta_skip_docs_it: string; cta_skip_docs_en: string
+    cta_upload_selected_it: string; cta_upload_selected_en: string
+    cta_finish_it: string; cta_finish_en: string
+    err_missing_prefix_it: string; err_missing_prefix_en: string
+    err_phone_invalid_it: string; err_phone_invalid_en: string
+    err_email_invalid_it: string; err_email_invalid_en: string
+    err_cf_length_it: string; err_cf_length_en: string
+    err_piva_length_it: string; err_piva_length_en: string
+}
+const INITIAL_REGISTRAZIONE_CLIENTE: RegistrazioneClienteCopy = {
+    intro_title_it: '', intro_title_en: '',
+    intro_subtitle_it: '', intro_subtitle_en: '',
+    tipo_persona_fisica_it: '', tipo_persona_fisica_en: '',
+    tipo_azienda_it: '', tipo_azienda_en: '',
+    tipo_pa_it: '', tipo_pa_en: '',
+    section_1_tipo_it: '', section_1_tipo_en: '',
+    section_2_anagrafica_it: '', section_2_anagrafica_en: '',
+    section_2_azienda_it: '', section_2_azienda_en: '',
+    section_2_pa_it: '', section_2_pa_en: '',
+    section_3_residenza_it: '', section_3_residenza_en: '',
+    section_3_sede_it: '', section_3_sede_en: '',
+    section_4_contatti_it: '', section_4_contatti_en: '',
+    section_docs_it: '', section_docs_en: '',
+    required_hint_it: '', required_hint_en: '',
+    verifica_link_it: '', verifica_link_en: '',
+    invalid_title_it: '', invalid_title_en: '',
+    invalid_reason_expired_it: '', invalid_reason_expired_en: '',
+    invalid_reason_used_it: '', invalid_reason_used_en: '',
+    invalid_reason_revoked_it: '', invalid_reason_revoked_en: '',
+    invalid_reason_fallback_it: '', invalid_reason_fallback_en: '',
+    invalid_reason_incomplete_it: '', invalid_reason_incomplete_en: '',
+    invalid_reason_validation_it: '', invalid_reason_validation_en: '',
+    invalid_help_it: '', invalid_help_en: '',
+    done_title_it: '', done_title_en: '',
+    done_body_it: '', done_body_en: '',
+    docs_intro_it: '', docs_intro_en: '',
+    docs_label_identity_it: '', docs_label_identity_en: '',
+    docs_label_license_it: '', docs_label_license_en: '',
+    docs_label_codice_fiscale_it: '', docs_label_codice_fiscale_en: '',
+    docs_chip_uploaded_it: '', docs_chip_uploaded_en: '',
+    docs_chip_uploading_it: '', docs_chip_uploading_en: '',
+    docs_chip_remove_it: '', docs_chip_remove_en: '',
+    cta_submit_it: '', cta_submit_en: '',
+    cta_submitting_it: '', cta_submitting_en: '',
+    cta_skip_docs_it: '', cta_skip_docs_en: '',
+    cta_upload_selected_it: '', cta_upload_selected_en: '',
+    cta_finish_it: '', cta_finish_en: '',
+    err_missing_prefix_it: '', err_missing_prefix_en: '',
+    err_phone_invalid_it: '', err_phone_invalid_en: '',
+    err_email_invalid_it: '', err_email_invalid_en: '',
+    err_cf_length_it: '', err_cf_length_en: '',
+    err_piva_length_it: '', err_piva_length_en: '',
 }
 
 // ─── Firma page (contract e-signature OTP flow) ──────────────────────────
@@ -1496,6 +1588,7 @@ interface SiteCopySnapshot {
     creditWallet?: CreditWalletCopy
     token?: TokenCopy
     firma?: FirmaCopy
+    registrazioneCliente?: RegistrazioneClienteCopy
 }
 
 interface CurrentState {
@@ -1525,6 +1618,7 @@ interface CurrentState {
     creditWallet: CreditWalletCopy
     token: TokenCopy
     firma: FirmaCopy
+    registrazioneCliente: RegistrazioneClienteCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -1635,6 +1729,8 @@ export default function SitoTab() {
     const [savedToken, setSavedToken] = useState<TokenCopy>(INITIAL_TOKEN)
     const [firma, setFirma] = useState<FirmaCopy>(INITIAL_FIRMA)
     const [savedFirma, setSavedFirma] = useState<FirmaCopy>(INITIAL_FIRMA)
+    const [registrazioneCliente, setRegistrazioneCliente] = useState<RegistrazioneClienteCopy>(INITIAL_REGISTRAZIONE_CLIENTE)
+    const [savedRegistrazioneCliente, setSavedRegistrazioneCliente] = useState<RegistrazioneClienteCopy>(INITIAL_REGISTRAZIONE_CLIENTE)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -1762,6 +1858,10 @@ export default function SitoTab() {
                     setFirma(remote.firma)
                     setSavedFirma(remote.firma)
                 }
+                if (remote?.registrazioneCliente && remote.registrazioneCliente.intro_title_it) {
+                    setRegistrazioneCliente(remote.registrazioneCliente)
+                    setSavedRegistrazioneCliente(remote.registrazioneCliente)
+                }
                 if (remote?.token && remote.token.coin_section_title_it) {
                     setToken(remote.token)
                     setSavedToken(remote.token)
@@ -1778,10 +1878,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente]
     )
     const dirty = changes.length > 0
 
@@ -1792,7 +1892,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1819,6 +1919,7 @@ export default function SitoTab() {
             setSavedCreditWallet(creditWallet)
             setSavedToken(token)
             setSavedFirma(firma)
+            setSavedRegistrazioneCliente(registrazioneCliente)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1879,6 +1980,7 @@ export default function SitoTab() {
         setCreditWallet(savedCreditWallet)
         setToken(savedToken)
         setFirma(savedFirma)
+        setRegistrazioneCliente(savedRegistrazioneCliente)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -2062,6 +2164,9 @@ export default function SitoTab() {
                         {hydrated && section === 'firma' && (
                             <FirmaEditor copy={firma} setCopy={setFirma} />
                         )}
+                        {hydrated && section === 'registrazione-cliente' && (
+                            <RegistrazioneClienteEditor copy={registrazioneCliente} setCopy={setRegistrazioneCliente} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -2207,6 +2312,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.firma) !== JSON.stringify(saved.firma)) {
         out.push('Firma Contratto: contenuti modificati')
+    }
+    if (JSON.stringify(current.registrazioneCliente) !== JSON.stringify(saved.registrazioneCliente)) {
+        out.push('Registrazione Cliente: contenuti modificati')
     }
     return out
 }
@@ -5980,6 +6088,147 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
                     <FieldText label="Terms required (EN)" value={copy.err_terms_required_en} onChange={v => update('err_terms_required_en', v)} />
                     <FieldText label="Firma (IT)" value={copy.err_signing_it} onChange={v => update('err_signing_it', v)} />
                     <FieldText label="Signing (EN)" value={copy.err_signing_en} onChange={v => update('err_signing_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Registrazione Cliente editor (token-gated invite form chrome) ────────
+function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClienteCopy; setCopy: (next: RegistrazioneClienteCopy) => void }) {
+    const update = <K extends keyof RegistrazioneClienteCopy>(key: K, value: RegistrazioneClienteCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-[#6e6e73]">
+                Pagina link-token che il cliente apre dall'invito operatore per completare i dati anagrafici e
+                caricare i documenti. Le etichette dei singoli campi del form restano hardcoded (verranno
+                migrate in un secondo passaggio); qui modifichi chrome, titoli sezione, gates (link
+                scaduto/usato/revocato), step documenti, pulsanti e messaggi di validazione.
+            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Intro pagina</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.intro_title_it} onChange={v => update('intro_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.intro_title_en} onChange={v => update('intro_title_en', v)} />
+                    <FieldTextArea label="Sottotitolo (IT)" value={copy.intro_subtitle_it} onChange={v => update('intro_subtitle_it', v)} />
+                    <FieldTextArea label="Subtitle (EN)" value={copy.intro_subtitle_en} onChange={v => update('intro_subtitle_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Bottoni tipo cliente</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='"Persona Fisica" (IT)' value={copy.tipo_persona_fisica_it} onChange={v => update('tipo_persona_fisica_it', v)} />
+                    <FieldText label='"Individual" (EN)' value={copy.tipo_persona_fisica_en} onChange={v => update('tipo_persona_fisica_en', v)} />
+                    <FieldText label='"Azienda" (IT)' value={copy.tipo_azienda_it} onChange={v => update('tipo_azienda_it', v)} />
+                    <FieldText label='"Company" (EN)' value={copy.tipo_azienda_en} onChange={v => update('tipo_azienda_en', v)} />
+                    <FieldText label='"Pubblica Amm." (IT)' value={copy.tipo_pa_it} onChange={v => update('tipo_pa_it', v)} />
+                    <FieldText label='"Public Admin." (EN)' value={copy.tipo_pa_en} onChange={v => update('tipo_pa_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Titoli sezione (numerati)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='1. Tipo Cliente (IT)' value={copy.section_1_tipo_it} onChange={v => update('section_1_tipo_it', v)} />
+                    <FieldText label='1. Client Type (EN)' value={copy.section_1_tipo_en} onChange={v => update('section_1_tipo_en', v)} />
+                    <FieldText label='2. Dati Anagrafici (IT)' value={copy.section_2_anagrafica_it} onChange={v => update('section_2_anagrafica_it', v)} />
+                    <FieldText label='2. Personal Data (EN)' value={copy.section_2_anagrafica_en} onChange={v => update('section_2_anagrafica_en', v)} />
+                    <FieldText label='2. Dati Azienda (IT)' value={copy.section_2_azienda_it} onChange={v => update('section_2_azienda_it', v)} />
+                    <FieldText label='2. Company Data (EN)' value={copy.section_2_azienda_en} onChange={v => update('section_2_azienda_en', v)} />
+                    <FieldText label='2. Pubblica Amministrazione (IT)' value={copy.section_2_pa_it} onChange={v => update('section_2_pa_it', v)} />
+                    <FieldText label='2. Public Administration (EN)' value={copy.section_2_pa_en} onChange={v => update('section_2_pa_en', v)} />
+                    <FieldText label='3. Residenza (IT)' value={copy.section_3_residenza_it} onChange={v => update('section_3_residenza_it', v)} />
+                    <FieldText label='3. Residence (EN)' value={copy.section_3_residenza_en} onChange={v => update('section_3_residenza_en', v)} />
+                    <FieldText label='3. Sede (IT)' value={copy.section_3_sede_it} onChange={v => update('section_3_sede_it', v)} />
+                    <FieldText label='3. Address (EN)' value={copy.section_3_sede_en} onChange={v => update('section_3_sede_en', v)} />
+                    <FieldText label='4. Contatti (IT)' value={copy.section_4_contatti_it} onChange={v => update('section_4_contatti_it', v)} />
+                    <FieldText label='4. Contacts (EN)' value={copy.section_4_contatti_en} onChange={v => update('section_4_contatti_en', v)} />
+                    <FieldText label='✓ Documenti (IT)' value={copy.section_docs_it} onChange={v => update('section_docs_it', v)} />
+                    <FieldText label='✓ Documents (EN)' value={copy.section_docs_en} onChange={v => update('section_docs_en', v)} />
+                    <FieldText label="Suggerimento campi obbligatori (IT)" value={copy.required_hint_it} onChange={v => update('required_hint_it', v)} />
+                    <FieldText label="Required-fields hint (EN)" value={copy.required_hint_en} onChange={v => update('required_hint_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Gate link (verifica + invalidi + done)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Verifica link... (IT)" value={copy.verifica_link_it} onChange={v => update('verifica_link_it', v)} />
+                    <FieldText label="Verifying link... (EN)" value={copy.verifica_link_en} onChange={v => update('verifica_link_en', v)} />
+                    <FieldText label="Titolo Link non utilizzabile (IT)" value={copy.invalid_title_it} onChange={v => update('invalid_title_it', v)} />
+                    <FieldText label="Link not usable title (EN)" value={copy.invalid_title_en} onChange={v => update('invalid_title_en', v)} />
+                    <FieldText label="Motivo: scaduto (IT)" value={copy.invalid_reason_expired_it} onChange={v => update('invalid_reason_expired_it', v)} />
+                    <FieldText label="Reason: expired (EN)" value={copy.invalid_reason_expired_en} onChange={v => update('invalid_reason_expired_en', v)} />
+                    <FieldText label="Motivo: già usato (IT)" value={copy.invalid_reason_used_it} onChange={v => update('invalid_reason_used_it', v)} />
+                    <FieldText label="Reason: already used (EN)" value={copy.invalid_reason_used_en} onChange={v => update('invalid_reason_used_en', v)} />
+                    <FieldText label="Motivo: revocato (IT)" value={copy.invalid_reason_revoked_it} onChange={v => update('invalid_reason_revoked_it', v)} />
+                    <FieldText label="Reason: revoked (EN)" value={copy.invalid_reason_revoked_en} onChange={v => update('invalid_reason_revoked_en', v)} />
+                    <FieldText label="Motivo: fallback (IT)" value={copy.invalid_reason_fallback_it} onChange={v => update('invalid_reason_fallback_it', v)} />
+                    <FieldText label="Reason: fallback (EN)" value={copy.invalid_reason_fallback_en} onChange={v => update('invalid_reason_fallback_en', v)} />
+                    <FieldText label="Motivo: incompleto (IT)" value={copy.invalid_reason_incomplete_it} onChange={v => update('invalid_reason_incomplete_it', v)} />
+                    <FieldText label="Reason: incomplete (EN)" value={copy.invalid_reason_incomplete_en} onChange={v => update('invalid_reason_incomplete_en', v)} />
+                    <FieldText label="Motivo: validation error (IT)" value={copy.invalid_reason_validation_it} onChange={v => update('invalid_reason_validation_it', v)} />
+                    <FieldText label="Reason: validation error (EN)" value={copy.invalid_reason_validation_en} onChange={v => update('invalid_reason_validation_en', v)} />
+                    <FieldTextArea label="Aiuto contatto (IT)" value={copy.invalid_help_it} onChange={v => update('invalid_help_it', v)} />
+                    <FieldTextArea label="Contact help (EN)" value={copy.invalid_help_en} onChange={v => update('invalid_help_en', v)} />
+                    <FieldText label="Titolo Registrazione completata (IT)" value={copy.done_title_it} onChange={v => update('done_title_it', v)} />
+                    <FieldText label="Registration complete title (EN)" value={copy.done_title_en} onChange={v => update('done_title_en', v)} />
+                    <FieldTextArea label="Body completato (IT)" value={copy.done_body_it} onChange={v => update('done_body_it', v)} />
+                    <FieldTextArea label="Done body (EN)" value={copy.done_body_en} onChange={v => update('done_body_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Step Documenti</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldTextArea label="Intro documenti (IT)" value={copy.docs_intro_it} onChange={v => update('docs_intro_it', v)} />
+                    <FieldTextArea label="Docs intro (EN)" value={copy.docs_intro_en} onChange={v => update('docs_intro_en', v)} />
+                    <FieldText label={`"Carta d'identita o Passaporto" (IT)`} value={copy.docs_label_identity_it} onChange={v => update('docs_label_identity_it', v)} />
+                    <FieldText label='"ID Card or Passport" (EN)' value={copy.docs_label_identity_en} onChange={v => update('docs_label_identity_en', v)} />
+                    <FieldText label='"Patente di guida" (IT)' value={copy.docs_label_license_it} onChange={v => update('docs_label_license_it', v)} />
+                    <FieldText label='"Driving licence" (EN)' value={copy.docs_label_license_en} onChange={v => update('docs_label_license_en', v)} />
+                    <FieldText label='"Codice Fiscale / Tessera Sanitaria" (IT)' value={copy.docs_label_codice_fiscale_it} onChange={v => update('docs_label_codice_fiscale_it', v)} />
+                    <FieldText label='"Tax Code / Health Card" (EN)' value={copy.docs_label_codice_fiscale_en} onChange={v => update('docs_label_codice_fiscale_en', v)} />
+                    <FieldText label="Chip caricato (IT)" value={copy.docs_chip_uploaded_it} onChange={v => update('docs_chip_uploaded_it', v)} />
+                    <FieldText label="Uploaded chip (EN)" value={copy.docs_chip_uploaded_en} onChange={v => update('docs_chip_uploaded_en', v)} />
+                    <FieldText label="Chip caricamento... (IT)" value={copy.docs_chip_uploading_it} onChange={v => update('docs_chip_uploading_it', v)} />
+                    <FieldText label="Uploading chip (EN)" value={copy.docs_chip_uploading_en} onChange={v => update('docs_chip_uploading_en', v)} />
+                    <FieldText label="Link rimuovi (IT)" value={copy.docs_chip_remove_it} onChange={v => update('docs_chip_remove_it', v)} />
+                    <FieldText label="Remove link (EN)" value={copy.docs_chip_remove_en} onChange={v => update('docs_chip_remove_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Bottoni</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='"Continua →" (IT)' value={copy.cta_submit_it} onChange={v => update('cta_submit_it', v)} />
+                    <FieldText label='"Continue →" (EN)' value={copy.cta_submit_en} onChange={v => update('cta_submit_en', v)} />
+                    <FieldText label='Stato "Invio..." (IT)' value={copy.cta_submitting_it} onChange={v => update('cta_submitting_it', v)} />
+                    <FieldText label='"Submitting..." state (EN)' value={copy.cta_submitting_en} onChange={v => update('cta_submitting_en', v)} />
+                    <FieldText label='"Salta i documenti per ora" (IT)' value={copy.cta_skip_docs_it} onChange={v => update('cta_skip_docs_it', v)} />
+                    <FieldText label='"Skip documents for now" (EN)' value={copy.cta_skip_docs_en} onChange={v => update('cta_skip_docs_en', v)} />
+                    <FieldText label='"Carica selezionati" (IT)' value={copy.cta_upload_selected_it} onChange={v => update('cta_upload_selected_it', v)} />
+                    <FieldText label='"Upload selected" (EN)' value={copy.cta_upload_selected_en} onChange={v => update('cta_upload_selected_en', v)} />
+                    <FieldText label='"Concludi" (IT)' value={copy.cta_finish_it} onChange={v => update('cta_finish_it', v)} />
+                    <FieldText label='"Finish" (EN)' value={copy.cta_finish_en} onChange={v => update('cta_finish_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Messaggi di validazione</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Prefisso campi mancanti con {list} (IT)" value={copy.err_missing_prefix_it} onChange={v => update('err_missing_prefix_it', v)} />
+                    <FieldText label="Missing fields prefix with {list} (EN)" value={copy.err_missing_prefix_en} onChange={v => update('err_missing_prefix_en', v)} />
+                    <FieldText label="Telefono non valido (IT)" value={copy.err_phone_invalid_it} onChange={v => update('err_phone_invalid_it', v)} />
+                    <FieldText label="Phone invalid (EN)" value={copy.err_phone_invalid_en} onChange={v => update('err_phone_invalid_en', v)} />
+                    <FieldText label="Email non valida (IT)" value={copy.err_email_invalid_it} onChange={v => update('err_email_invalid_it', v)} />
+                    <FieldText label="Email invalid (EN)" value={copy.err_email_invalid_en} onChange={v => update('err_email_invalid_en', v)} />
+                    <FieldText label="CF lunghezza (IT)" value={copy.err_cf_length_it} onChange={v => update('err_cf_length_it', v)} />
+                    <FieldText label="Tax code length (EN)" value={copy.err_cf_length_en} onChange={v => update('err_cf_length_en', v)} />
+                    <FieldText label="P.IVA lunghezza (IT)" value={copy.err_piva_length_it} onChange={v => update('err_piva_length_it', v)} />
+                    <FieldText label="VAT length (EN)" value={copy.err_piva_length_en} onChange={v => update('err_piva_length_en', v)} />
                 </div>
             </section>
         </div>
