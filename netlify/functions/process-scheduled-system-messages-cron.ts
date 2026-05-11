@@ -28,7 +28,7 @@
  */
 import { schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
-import { matchesAdvancedFilters, passesCustomerFilters, loadPaymentMethodAliases } from './utils/triggerSystemMessageEvent';
+import { matchesAdvancedFilters, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -408,8 +408,9 @@ const cronHandler = async () => {
     let totalErrors = 0;
     const results: Array<{ template: string; booking_id: string; status: string; reason?: string }> = [];
 
-    // Carica la cache aliases payment_methods (5min TTL) prima di iniziare
+    // Carica le cache config-driven (5min TTL ciascuna) prima di iniziare
     await loadPaymentMethodAliases(supabase);
+    await loadResidentProvinces(supabase);
 
     for (const tpl of templates as SystemMessage[]) {
         // Skip eventi non gestiti (preventivo gestito altrove)

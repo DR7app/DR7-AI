@@ -70,6 +70,39 @@ let __paymentMethodCache: PaymentMethodMap = {}
 let __paymentMethodCacheLoadedAt = 0
 const PAYMENT_METHOD_CACHE_TTL_MS = 5 * 60 * 1000 // 5 min
 
+/**
+ * Cache delle province considerate "residente" per DR7. Lette da
+ * centralina_pro_config.config.geography.resident_provinces. Se vuota o
+ * il campo manca, fallback al canonico ['CA', 'SU'] (mirror di
+ * src/data/sardegnaProvince.ts RESIDENT_PROVINCE_CODES).
+ */
+let __residentProvincesCache: string[] = ['CA', 'SU']
+let __residentProvincesLoadedAt = 0
+const RESIDENT_PROVINCES_CACHE_TTL_MS = 5 * 60 * 1000
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function loadResidentProvinces(supabase: any): Promise<void> {
+    const now = Date.now()
+    if (now - __residentProvincesLoadedAt < RESIDENT_PROVINCES_CACHE_TTL_MS && __residentProvincesCache.length > 0) return
+    try {
+        const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cfg = ((data?.config || {}) as any).geography?.resident_provinces
+        if (Array.isArray(cfg) && cfg.length > 0) {
+            __residentProvincesCache = cfg
+                .map((v: unknown) => String(v).toUpperCase().trim())
+                .filter(Boolean)
+        }
+        __residentProvincesLoadedAt = now
+    } catch (e) {
+        console.error('[residentProvinces] cache load failed (using fallback CA+SU):', e instanceof Error ? e.message : String(e))
+    }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function loadPaymentMethodAliases(supabase: any): Promise<void> {
     const now = Date.now()
@@ -363,15 +396,13 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
         }
     }
 
-    // Residenza secondo la definizione canonica DR7:
-    //   resident = provincia di residenza in {CA (Cagliari), SU (Sud Sardegna)}.
-    // Mirror esatto di src/data/sardegnaProvince.ts RESIDENT_PROVINCE_CODES
-    // e di Centralina Pro (tariffe / depositi residente vs non_residente).
-    // Province sarde NON residenti per DR7: SS (Sassari), NU (Nuoro), OR (Oristano).
+    // Residenza secondo la definizione di Centralina Pro
+    // (config.geography.resident_provinces, default ['CA','SU']).
+    // Cache 5 min in process; refreshata da loadResidentProvinces().
     if (residency && residency !== 'all') {
-        const RESIDENT_PROVINCE_CODES = new Set(['CA', 'SU'])
+        const allowed = new Set(__residentProvincesCache)
         const cProv = String(customer?.provincia_residenza ?? customer?.provincia ?? customer?.province ?? '').toUpperCase().trim()
-        const isDr7Resident = RESIDENT_PROVINCE_CODES.has(cProv)
+        const isDr7Resident = allowed.has(cProv)
         if (residency === 'resident' && !isDr7Resident) return false
         if (residency === 'non_resident' && isDr7Resident) return false
     }
@@ -516,8 +547,9 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
         .lte('trigger_offset_hours', maxOffsetHours)
     if (!templates?.length) return { sent: 0, skipped: 0, errors: 0 }
 
-    // Carica/refresha la cache degli alias payment_methods (5min TTL)
+    // Carica/refresha le cache config-driven (5min TTL ciascuna)
     await loadPaymentMethodAliases(supabase)
+    await loadResidentProvinces(supabase)
 
     let sent = 0, skipped = 0, errors = 0
 
