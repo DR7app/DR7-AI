@@ -45,16 +45,47 @@ interface Vehicle {
 
 interface ProCategory { id: string; label: string }
 
-// La foto del veicolo puo\' essere salvata in piu\' posti a seconda di chi
-// l'ha caricata (form admin, import precedente, edit dal sito). Provo tutti
-// i campi noti in ordine di probabilita\'. Senza questa funzione i veicoli
-// con foto in `image_url` o `metadata.image_url` apparivano col placeholder.
+// La foto del veicolo viene scelta seguendo lo stesso ordine del sito
+// (hooks/useVehicles.ts su DR7-empire): prima `metadata.image` salvata
+// dall'admin, poi fallback su un name-map che punta agli asset statici
+// pubblicati su dr7empire.com (rs3.jpeg, bmw-m3.jpeg, ecc.). Cosi\' anche
+// i veicoli senza upload mostrano la foto giusta.
+const WEBSITE_BASE_URL = 'https://dr7empire.com'
+function nameBasedImage(name: string): string | undefined {
+  const n = (name || '').toLowerCase()
+  if (!n) return undefined
+  const url = (p: string) => `${WEBSITE_BASE_URL}${p}`
+  if (n.includes('rs3')) return url('/rs3.jpeg')
+  if (n.includes('m340')) return url('/bmw-m340i.jpeg')
+  if (n.includes('m3')) return url('/bmw-m3.jpeg')
+  if (n.includes('m4')) return url('/bmw-m4.jpeg')
+  if (n.includes('911') || n.includes('carrera')) return url('/porsche-911.jpeg')
+  if (n.includes('c63')) return url('/c63.jpeg')
+  if (n.includes('a45')) return url('/mercedes_amg.jpeg')
+  if (n.includes('cayenne')) return url('/cayenne.jpeg')
+  if (n.includes('macan')) return url('/macan.jpeg')
+  if (n.includes('gle')) return url('/mercedes-gle.jpeg')
+  if (n.includes('ducato')) return url('/ducato.jpeg')
+  if (n.includes('vito') || n.includes('v class') || n.includes('v-class')) return url('/vito.jpeg')
+  if (n.includes('208')) return url('/208.jpeg')
+  if (n.includes('clio') && (n.includes('arancio') || n.includes('orange'))) return url('/clio4a.jpeg')
+  if (n.includes('clio') && (n.includes('blu') || n.includes('blue'))) return url('/clio4b.jpeg')
+  if (n.includes('c3') && (n.includes('red') || n.includes('rosso'))) return url('/c3r.jpeg')
+  if (n.includes('c3') && (n.includes('white') || n.includes('bianca'))) return url('/cr3w.jpeg')
+  if (n.includes('c3')) return url('/c3.jpeg')
+  if (n.includes('captur')) return url('/captur.jpeg')
+  if (n.includes('panda') && (n.includes('bianca') || n.includes('white'))) return url('/panda2.jpeg')
+  if (n.includes('panda') && (n.includes('aranci') || n.includes('orange'))) return url('/panda3.jpeg')
+  if (n.includes('panda')) return url('/panda1.jpeg')
+  return undefined
+}
+
 function pickVehicleImage(v: Vehicle): string | undefined {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const m = (v.metadata as any) || {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const direct = v as any
-  const candidates = [
+  const candidates: unknown[] = [
     m.image,
     m.image_url,
     m.hero_image,
@@ -66,7 +97,7 @@ function pickVehicleImage(v: Vehicle): string | undefined {
   for (const c of candidates) {
     if (typeof c === 'string' && c.trim()) return c
   }
-  return undefined
+  return nameBasedImage(v.display_name)
 }
 
 // Palette ciclata definita in utils/categoryPalettes.ts e condivisa con
