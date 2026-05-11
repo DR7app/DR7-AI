@@ -55,6 +55,7 @@ type SectionId =
     | 'payment-success'
     | 'booking'
     | 'credit-wallet'
+    | 'token'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -81,6 +82,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'payment-success', title: 'Pagamento Riuscito', ready: true },
     { id: 'booking', title: 'Prenotazione (Yacht/Jet/Heli)', ready: true },
     { id: 'credit-wallet', title: 'Credit Wallet', ready: true },
+    { id: 'token', title: 'DR7 Token (Coin/Up/APP)', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -379,6 +381,40 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Token page (DR7 Coin / Up / APP manifesto — chrome only) ────────────
+interface TokenCopy {
+    hero_subtitle_it: string; hero_subtitle_en: string
+    hero_eyebrow_it: string; hero_eyebrow_en: string
+    coin_section_title_it: string; coin_section_title_en: string
+    coin_lead_it: string; coin_lead_en: string
+    coin_intro_1_it: string; coin_intro_1_en: string
+    coin_intro_2_it: string; coin_intro_2_en: string
+    up_section_title_it: string; up_section_title_en: string
+    up_lead_it: string; up_lead_en: string
+    up_cta_badge_it: string; up_cta_badge_en: string
+    app_section_title_it: string; app_section_title_en: string
+    app_lead_it: string; app_lead_en: string
+    cta_title_it: string; cta_title_en: string
+    cta_subtitle_it: string; cta_subtitle_en: string
+    cta_button_it: string; cta_button_en: string
+}
+const INITIAL_TOKEN: TokenCopy = {
+    hero_subtitle_it: '', hero_subtitle_en: '',
+    hero_eyebrow_it: '', hero_eyebrow_en: '',
+    coin_section_title_it: '', coin_section_title_en: '',
+    coin_lead_it: '', coin_lead_en: '',
+    coin_intro_1_it: '', coin_intro_1_en: '',
+    coin_intro_2_it: '', coin_intro_2_en: '',
+    up_section_title_it: '', up_section_title_en: '',
+    up_lead_it: '', up_lead_en: '',
+    up_cta_badge_it: '', up_cta_badge_en: '',
+    app_section_title_it: '', app_section_title_en: '',
+    app_lead_it: '', app_lead_en: '',
+    cta_title_it: '', cta_title_en: '',
+    cta_subtitle_it: '', cta_subtitle_en: '',
+    cta_button_it: '', cta_button_en: '',
 }
 
 // ─── Credit Wallet page (marketing + checkout modal + errors) ────────────
@@ -1362,6 +1398,7 @@ interface SiteCopySnapshot {
     paymentSuccess?: PaymentSuccessCopy
     booking?: BookingCopy
     creditWallet?: CreditWalletCopy
+    token?: TokenCopy
 }
 
 interface CurrentState {
@@ -1389,6 +1426,7 @@ interface CurrentState {
     paymentSuccess: PaymentSuccessCopy
     booking: BookingCopy
     creditWallet: CreditWalletCopy
+    token: TokenCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -1495,6 +1533,8 @@ export default function SitoTab() {
     const [savedBooking, setSavedBooking] = useState<BookingCopy>(INITIAL_BOOKING)
     const [creditWallet, setCreditWallet] = useState<CreditWalletCopy>(INITIAL_CREDIT_WALLET)
     const [savedCreditWallet, setSavedCreditWallet] = useState<CreditWalletCopy>(INITIAL_CREDIT_WALLET)
+    const [token, setToken] = useState<TokenCopy>(INITIAL_TOKEN)
+    const [savedToken, setSavedToken] = useState<TokenCopy>(INITIAL_TOKEN)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -1618,6 +1658,10 @@ export default function SitoTab() {
                     setCreditWallet(remote.creditWallet)
                     setSavedCreditWallet(remote.creditWallet)
                 }
+                if (remote?.token && remote.token.coin_section_title_it) {
+                    setToken(remote.token)
+                    setSavedToken(remote.token)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -1630,10 +1674,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken]
     )
     const dirty = changes.length > 0
 
@@ -1644,7 +1688,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1669,6 +1713,7 @@ export default function SitoTab() {
             setSavedPaymentSuccess(paymentSuccess)
             setSavedBooking(booking)
             setSavedCreditWallet(creditWallet)
+            setSavedToken(token)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1727,6 +1772,7 @@ export default function SitoTab() {
         setPaymentSuccess(savedPaymentSuccess)
         setBooking(savedBooking)
         setCreditWallet(savedCreditWallet)
+        setToken(savedToken)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1904,6 +1950,9 @@ export default function SitoTab() {
                         {hydrated && section === 'credit-wallet' && (
                             <CreditWalletEditor copy={creditWallet} setCopy={setCreditWallet} />
                         )}
+                        {hydrated && section === 'token' && (
+                            <TokenEditor copy={token} setCopy={setToken} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -2043,6 +2092,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.creditWallet) !== JSON.stringify(saved.creditWallet)) {
         out.push('Credit Wallet: contenuti modificati')
+    }
+    if (JSON.stringify(current.token) !== JSON.stringify(saved.token)) {
+        out.push('DR7 Token: contenuti modificati')
     }
     return out
 }
@@ -5589,6 +5641,82 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                     <FieldText label="Payment not ready (EN)" value={copy.err_payment_not_ready_en} onChange={v => update('err_payment_not_ready_en', v)} />
                     <FieldText label="Pagamento fallito (IT)" value={copy.err_payment_failed_it} onChange={v => update('err_payment_failed_it', v)} />
                     <FieldText label="Payment failed (EN)" value={copy.err_payment_failed_en} onChange={v => update('err_payment_failed_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Token editor (DR7 Coin / Up / APP manifesto chrome) ──────────────────
+// Solo chrome (titoli, lead, CTA finale). I corpi dei card della pagina
+// restano hardcoded per ora — verranno migrati in un secondo passaggio
+// quando la pagina andra' in produzione. Markdown supportato: **grassetto**.
+function TokenEditor({ copy, setCopy }: { copy: TokenCopy; setCopy: (next: TokenCopy) => void }) {
+    const update = <K extends keyof TokenCopy>(key: K, value: TokenCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-[#6e6e73]">
+                Manifesto DR7 Token / Coin / Up / APP. Qui modifichi titoli sezione, lead, badge e CTA finale.
+                I corpi dei card di dettaglio restano nel codice (pagina in lavorazione). Usa
+                <code className="px-1 mx-1 bg-black/10 rounded">**testo**</code>
+                per applicare il grassetto bianco inline.
+            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Sottotitolo (IT)" value={copy.hero_subtitle_it} onChange={v => update('hero_subtitle_it', v)} />
+                    <FieldText label="Subtitle (EN)" value={copy.hero_subtitle_en} onChange={v => update('hero_subtitle_en', v)} />
+                    <FieldText label='Eyebrow "In Lavorazione" (IT)' value={copy.hero_eyebrow_it} onChange={v => update('hero_eyebrow_it', v)} />
+                    <FieldText label='Eyebrow "In Development" (EN)' value={copy.hero_eyebrow_en} onChange={v => update('hero_eyebrow_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">DR7 Coin</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo sezione (IT)" value={copy.coin_section_title_it} onChange={v => update('coin_section_title_it', v)} />
+                    <FieldText label="Section title (EN)" value={copy.coin_section_title_en} onChange={v => update('coin_section_title_en', v)} />
+                    <FieldTextArea label="Lead (IT)" value={copy.coin_lead_it} onChange={v => update('coin_lead_it', v)} />
+                    <FieldTextArea label="Lead (EN)" value={copy.coin_lead_en} onChange={v => update('coin_lead_en', v)} />
+                    <FieldTextArea label="Intro paragrafo 1 (IT)" value={copy.coin_intro_1_it} onChange={v => update('coin_intro_1_it', v)} />
+                    <FieldTextArea label="Intro paragraph 1 (EN)" value={copy.coin_intro_1_en} onChange={v => update('coin_intro_1_en', v)} />
+                    <FieldTextArea label="Intro paragrafo 2 (IT)" value={copy.coin_intro_2_it} onChange={v => update('coin_intro_2_it', v)} />
+                    <FieldTextArea label="Intro paragraph 2 (EN)" value={copy.coin_intro_2_en} onChange={v => update('coin_intro_2_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">DR7 Up</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo sezione (IT)" value={copy.up_section_title_it} onChange={v => update('up_section_title_it', v)} />
+                    <FieldText label="Section title (EN)" value={copy.up_section_title_en} onChange={v => update('up_section_title_en', v)} />
+                    <FieldTextArea label="Lead (IT)" value={copy.up_lead_it} onChange={v => update('up_lead_it', v)} />
+                    <FieldTextArea label="Lead (EN)" value={copy.up_lead_en} onChange={v => update('up_lead_en', v)} />
+                    <FieldText label='Badge "Pagamento in cripto disponibile" (IT)' value={copy.up_cta_badge_it} onChange={v => update('up_cta_badge_it', v)} />
+                    <FieldText label='"Crypto payment available" badge (EN)' value={copy.up_cta_badge_en} onChange={v => update('up_cta_badge_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">DR7 APP</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo sezione (IT)" value={copy.app_section_title_it} onChange={v => update('app_section_title_it', v)} />
+                    <FieldText label="Section title (EN)" value={copy.app_section_title_en} onChange={v => update('app_section_title_en', v)} />
+                    <FieldTextArea label="Lead (IT)" value={copy.app_lead_it} onChange={v => update('app_lead_it', v)} />
+                    <FieldTextArea label="Lead (EN)" value={copy.app_lead_en} onChange={v => update('app_lead_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">CTA finale</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.cta_title_it} onChange={v => update('cta_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.cta_title_en} onChange={v => update('cta_title_en', v)} />
+                    <FieldText label="Sottotitolo (IT)" value={copy.cta_subtitle_it} onChange={v => update('cta_subtitle_it', v)} />
+                    <FieldText label="Subtitle (EN)" value={copy.cta_subtitle_en} onChange={v => update('cta_subtitle_en', v)} />
+                    <FieldText label="Bottone (IT)" value={copy.cta_button_it} onChange={v => update('cta_button_it', v)} />
+                    <FieldText label="Button (EN)" value={copy.cta_button_en} onChange={v => update('cta_button_en', v)} />
                 </div>
             </section>
         </div>
