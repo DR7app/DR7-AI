@@ -61,6 +61,8 @@ type SectionId =
     | 'booking-search-box'
     | 'payment-cancel'
     | 'locations'
+    | 'yacht-jet-heli'
+    | 'flotta'
 
 type SectionCategoryId = 'chrome' | 'public' | 'auth' | 'booking' | 'legal'
 
@@ -78,8 +80,10 @@ const SECTIONS: { id: SectionId; title: string; category: SectionCategoryId; rea
     { id: 'footer', title: 'Footer', category: 'chrome', ready: true },
     { id: 'booking-search-box', title: 'Booking Search Box', category: 'chrome', ready: true },
     { id: 'locations', title: 'Aeroporti & Luoghi', category: 'chrome', ready: true },
+    { id: 'yacht-jet-heli', title: 'Yacht / Jet / Heli', category: 'public', ready: true },
     // Pagine pubbliche
     { id: 'hero', title: 'Home / Hero', category: 'public', ready: true },
+    { id: 'flotta', title: 'Flotta (categorie visibili)', category: 'public', ready: true },
     { id: 'chi-siamo', title: 'Chi Siamo', category: 'public', ready: true },
     { id: 'faq', title: 'FAQ', category: 'public', ready: true },
     { id: 'membership', title: 'Membership / DR7 Club', category: 'public', ready: true },
@@ -426,6 +430,39 @@ const INITIAL_LOCATIONS: LocationsCopy = {
     yacht_marinas: [],
     heli_departure_points: [],
     heli_arrival_points: [],
+}
+
+// ─── Aviation/Marine catalog (yachts, jets, helis) ──────────────────────
+type AviationMarineSpecKey =
+    | 'passengers' | 'year' | 'type'
+    | 'range' | 'speed'
+    | 'guests' | 'length' | 'cabins'
+interface AviationMarineSpec { key: AviationMarineSpecKey; value: string }
+interface AviationMarineItem {
+    id: string
+    name: string
+    image: string
+    images?: string[]
+    price_per_day_eur?: number
+    pets_allowed?: boolean
+    smoking_allowed?: boolean
+    specs: AviationMarineSpec[]
+}
+interface AviationMarineCopy {
+    yachts: AviationMarineItem[]
+    jets: AviationMarineItem[]
+    helis: AviationMarineItem[]
+}
+const INITIAL_AVIATION_MARINE: AviationMarineCopy = { yachts: [], jets: [], helis: [] }
+const SPEC_KEY_LABEL: Record<AviationMarineSpecKey, string> = {
+    passengers: 'Passeggeri',
+    year: 'Anno',
+    type: 'Tipo',
+    range: 'Autonomia',
+    speed: 'Velocità',
+    guests: 'Ospiti',
+    length: 'Lunghezza',
+    cabins: 'Cabine',
 }
 
 // ─── Payment Cancel page (post-Nexi cancel landing) ─────────────────────
@@ -1732,7 +1769,14 @@ const INITIAL_FAQ: FaqCopy = {
 }
 
 // ─── Persistence helpers ─────────────────────────────────────────────────────
+interface FlottaCopy {
+    // Empty array means "fallback to all categories from centralina_pro_config.categories".
+    visible_category_ids: string[]
+}
+const INITIAL_FLOTTA: FlottaCopy = { visible_category_ids: [] }
+
 interface SiteCopySnapshot {
+    flotta?: FlottaCopy
     faq?: FaqCopy | FaqEntry[]   // accept legacy raw-array shape too
     cancellazione?: CancellazioneCopy
     membership?: MembershipCopy
@@ -1766,6 +1810,7 @@ interface SiteCopySnapshot {
 }
 
 interface CurrentState {
+    flotta: FlottaCopy
     faq: FaqCopy
     cancellazione: CancellazioneCopy
     membership: MembershipCopy
@@ -1796,6 +1841,7 @@ interface CurrentState {
     bookingSearchBox: BookingSearchBoxCopy
     paymentCancel: PaymentCancelCopy
     locations: LocationsCopy
+    aviationMarine: AviationMarineCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -1973,6 +2019,8 @@ export default function SitoTab() {
     const [section, setSection] = useState<SectionId>('faq')
 
     // ─── State (current + saved snapshots per section) ───────────────────────
+    const [flotta, setFlotta] = useState<FlottaCopy>(INITIAL_FLOTTA)
+    const [savedFlotta, setSavedFlotta] = useState<FlottaCopy>(INITIAL_FLOTTA)
     const [faq, setFaq] = useState<FaqCopy>(INITIAL_FAQ)
     const [savedFaq, setSavedFaq] = useState<FaqCopy>(INITIAL_FAQ)
     const [cancellazione, setCancellazione] = useState<CancellazioneCopy>(INITIAL_CANCELLAZIONE)
@@ -2033,6 +2081,8 @@ export default function SitoTab() {
     const [savedPaymentCancel, setSavedPaymentCancel] = useState<PaymentCancelCopy>(INITIAL_PAYMENT_CANCEL)
     const [locations, setLocations] = useState<LocationsCopy>(INITIAL_LOCATIONS)
     const [savedLocations, setSavedLocations] = useState<LocationsCopy>(INITIAL_LOCATIONS)
+    const [aviationMarine, setAviationMarine] = useState<AviationMarineCopy>(INITIAL_AVIATION_MARINE)
+    const [savedAviationMarine, setSavedAviationMarine] = useState<AviationMarineCopy>(INITIAL_AVIATION_MARINE)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -2099,6 +2149,10 @@ export default function SitoTab() {
                 if (remote?.contact && remote.contact.email_address) {
                     setContact(remote.contact)
                     setSavedContact(remote.contact)
+                }
+                if (remote?.flotta && Array.isArray(remote.flotta.visible_category_ids)) {
+                    setFlotta(remote.flotta)
+                    setSavedFlotta(remote.flotta)
                 }
                 if (remote?.mechanical && remote.mechanical.hero_title) {
                     setMechanical(remote.mechanical)
@@ -2176,6 +2230,10 @@ export default function SitoTab() {
                     setLocations(remote.locations)
                     setSavedLocations(remote.locations)
                 }
+                if (remote?.aviationMarine && (Array.isArray(remote.aviationMarine.yachts) || Array.isArray(remote.aviationMarine.jets) || Array.isArray(remote.aviationMarine.helis))) {
+                    setAviationMarine(remote.aviationMarine)
+                    setSavedAviationMarine(remote.aviationMarine)
+                }
                 if (remote?.token && remote.token.hero_title_it) {
                     setToken(remote.token)
                     setSavedToken(remote.token)
@@ -2192,10 +2250,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel, locations: savedLocations }
+            { flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine },
+            { flotta: savedFlotta, faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel, locations: savedLocations, aviationMarine: savedAviationMarine }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel, locations, savedLocations]
+        [flotta, savedFlotta, faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel, locations, savedLocations, aviationMarine, savedAviationMarine]
     )
     const dirty = changes.length > 0
 
@@ -2206,7 +2264,8 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations })
+            await savePersisted({ flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine })
+            setSavedFlotta(flotta)
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -2237,6 +2296,7 @@ export default function SitoTab() {
             setSavedBookingSearchBox(bookingSearchBox)
             setSavedPaymentCancel(paymentCancel)
             setSavedLocations(locations)
+            setSavedAviationMarine(aviationMarine)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -2271,6 +2331,7 @@ export default function SitoTab() {
 
     const handleDiscard = () => {
         if (!dirty) return
+        setFlotta(savedFlotta)
         setFaq(savedFaq)
         setCancellazione(savedCancellazione)
         setMembership(savedMembership)
@@ -2301,6 +2362,7 @@ export default function SitoTab() {
         setBookingSearchBox(savedBookingSearchBox)
         setPaymentCancel(savedPaymentCancel)
         setLocations(savedLocations)
+        setAviationMarine(savedAviationMarine)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -2413,6 +2475,9 @@ export default function SitoTab() {
                         {hydrated && section === 'contatti' && (
                             <ContactEditor copy={contact} setCopy={setContact} />
                         )}
+                        {hydrated && section === 'flotta' && (
+                            <FlottaEditor copy={flotta} setCopy={setFlotta} />
+                        )}
                         {hydrated && section === 'meccanica' && (
                             <MechanicalEditor copy={mechanical} setCopy={setMechanical} />
                         )}
@@ -2469,6 +2534,9 @@ export default function SitoTab() {
                         )}
                         {hydrated && section === 'locations' && (
                             <LocationsEditor copy={locations} setCopy={setLocations} />
+                        )}
+                        {hydrated && section === 'yacht-jet-heli' && (
+                            <AviationMarineEditor copy={aviationMarine} setCopy={setAviationMarine} />
                         )}
                     </main>
                 </div>
@@ -2627,6 +2695,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.locations) !== JSON.stringify(saved.locations)) {
         out.push('Aeroporti & Luoghi: catalogo modificato')
+    }
+    if (JSON.stringify(current.aviationMarine) !== JSON.stringify(saved.aviationMarine)) {
+        out.push('Yacht / Jet / Heli: catalogo modificato')
     }
     return out
 }
@@ -4613,6 +4684,111 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                         <iframe title={copy.map_title || 'preview'} src={copy.map_iframe_url} width="100%" height="200" style={{ border: 0 }} loading="lazy" />
                     </div>
                 )}
+            </section>
+        </div>
+    )
+}
+
+// ─── Flotta page editor (visible categories only — catalog lives in Veicoli) ─
+// Loads vehicle categories from centralina_pro_config.config.categories and
+// lets admin pick which to expose as filter chips on the public RentalPage.
+// Empty selection => website falls back to "show all categories".
+function FlottaEditor({ copy, setCopy }: { copy: FlottaCopy; setCopy: (next: FlottaCopy) => void }) {
+    const [categories, setCategories] = useState<{ id: string; label: string }[]>([])
+    const [loadingCats, setLoadingCats] = useState(true)
+
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            const { data } = await supabase
+                .from('centralina_pro_config')
+                .select('config')
+                .eq('id', 'main')
+                .maybeSingle()
+            if (cancelled) return
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cats = ((data?.config || {}) as any).categories
+            if (Array.isArray(cats)) {
+                setCategories(cats.filter((c: { id?: unknown; label?: unknown }) => typeof c?.id === 'string' && typeof c?.label === 'string') as { id: string; label: string }[])
+            }
+            setLoadingCats(false)
+        })()
+        return () => { cancelled = true }
+    }, [])
+
+    const selected = new Set(copy.visible_category_ids)
+    const toggle = (id: string) => {
+        const next = new Set(selected)
+        if (next.has(id)) next.delete(id); else next.add(id)
+        setCopy({ visible_category_ids: Array.from(next) })
+    }
+
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-theme-text-secondary">
+                Scegli quali categorie veicoli del Centralina Pro mostrare come filtri/chip nella pagina pubblica
+                <strong> "La Nostra Flotta"</strong>. Le categorie deselezionate non appariranno tra i filtri (i veicoli
+                di quella categoria restano nel catalogo ma non sono filtrabili dalla landing). Se non selezioni
+                nulla, il sito mostra <strong>tutte</strong> le categorie disponibili (comportamento di default).
+            </p>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Categorie visibili</h3>
+                    <span className="text-[11px] text-theme-text-muted">
+                        {selected.size === 0 ? 'Nessuna selezione (mostra tutte)' : `${selected.size} di ${categories.length} selezionate`}
+                    </span>
+                </div>
+                {loadingCats ? (
+                    <div className="text-sm text-theme-text-muted">Carico categorie da Centralina Pro...</div>
+                ) : categories.length === 0 ? (
+                    <div className="text-sm text-theme-text-muted">
+                        Nessuna categoria trovata in Centralina Pro. Aggiungile dalla tab Centralina Pro &gt; Categorie.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {categories.map(cat => {
+                            const on = selected.has(cat.id)
+                            return (
+                                <label
+                                    key={cat.id}
+                                    className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                                        on
+                                            ? 'border-theme-text-primary bg-theme-bg-tertiary'
+                                            : 'border-theme-border bg-theme-bg-secondary hover:bg-theme-bg-tertiary'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={on}
+                                        onChange={() => toggle(cat.id)}
+                                        className="w-4 h-4 rounded border-theme-border"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium text-theme-text-primary truncate">{cat.label}</div>
+                                        <div className="text-[10px] text-theme-text-muted font-mono">{cat.id}</div>
+                                    </div>
+                                </label>
+                            )
+                        })}
+                    </div>
+                )}
+                <div className="flex gap-2 pt-2">
+                    <button
+                        type="button"
+                        onClick={() => setCopy({ visible_category_ids: categories.map(c => c.id) })}
+                        className="text-[11px] px-3 py-1.5 rounded-full border border-theme-border bg-theme-bg-secondary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+                    >
+                        Seleziona tutte
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setCopy({ visible_category_ids: [] })}
+                        className="text-[11px] px-3 py-1.5 rounded-full border border-theme-border bg-theme-bg-secondary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+                    >
+                        Deseleziona tutte
+                    </button>
+                </div>
             </section>
         </div>
     )
@@ -6860,6 +7036,133 @@ function LocationsEditor({ copy, setCopy }: { copy: LocationsCopy; setCopy: (nex
                     </section>
                 )
             })}
+        </div>
+    )
+}
+
+// ─── Yacht / Jet / Heli editor (centralina_pro_config.site_copy.aviationMarine) ──
+// Operators add/remove items in the three buckets. Spec icons + bilingual
+// labels are resolved on the website by SPEC_REGISTRY (utils/getAviationFleet.ts),
+// so admin only edits values here. Cars are NOT here — they live in Veicoli tab.
+function AviationMarineEditor({ copy, setCopy }: { copy: AviationMarineCopy; setCopy: (next: AviationMarineCopy) => void }) {
+    type BucketKey = 'yachts' | 'jets' | 'helis'
+    const BUCKET_LABEL: Record<BucketKey, string> = { yachts: 'Yacht', jets: 'Jet', helis: 'Elicotteri' }
+    const BUCKET_SPEC_KEYS: Record<BucketKey, AviationMarineSpecKey[]> = {
+        yachts: ['guests', 'length', 'cabins'],
+        jets: ['passengers', 'year', 'type'],
+        helis: ['passengers', 'range', 'speed'],
+    }
+
+    const updateItem = (bucket: BucketKey, i: number, patch: Partial<AviationMarineItem>) =>
+        setCopy({ ...copy, [bucket]: copy[bucket].map((it, idx) => idx === i ? { ...it, ...patch } : it) })
+
+    const addItem = (bucket: BucketKey) => {
+        const defaultSpecs: AviationMarineSpec[] = BUCKET_SPEC_KEYS[bucket].map(k => ({ key: k, value: '' }))
+        const newId = `${bucket === 'helis' ? 'heli' : bucket.slice(0, -1)}-${copy[bucket].length + 1}`
+        setCopy({ ...copy, [bucket]: [...copy[bucket], { id: newId, name: '', image: '', specs: defaultSpecs }] })
+    }
+
+    const removeItem = (bucket: BucketKey, i: number) =>
+        setCopy({ ...copy, [bucket]: copy[bucket].filter((_, idx) => idx !== i) })
+
+    const moveItem = (bucket: BucketKey, i: number, dir: -1 | 1) => {
+        const next = [...copy[bucket]]; const j = i + dir
+        if (j < 0 || j >= next.length) return
+        ;[next[i], next[j]] = [next[j], next[i]]
+        setCopy({ ...copy, [bucket]: next })
+    }
+
+    const updateSpecValue = (bucket: BucketKey, i: number, specKey: AviationMarineSpecKey, value: string) => {
+        const item = copy[bucket][i]
+        const existing = item.specs.find(s => s.key === specKey)
+        const nextSpecs = existing
+            ? item.specs.map(s => s.key === specKey ? { ...s, value } : s)
+            : [...item.specs, { key: specKey, value }]
+        updateItem(bucket, i, { specs: nextSpecs })
+    }
+
+    const updateImagesText = (bucket: BucketKey, i: number, text: string) => {
+        const list = text.split(/\n+/).map(s => s.trim()).filter(Boolean)
+        updateItem(bucket, i, { images: list.length > 0 ? list : undefined })
+    }
+
+    const renderBucket = (bucket: BucketKey) => {
+        const items = copy[bucket]
+        const specKeys = BUCKET_SPEC_KEYS[bucket]
+        return (
+            <section key={bucket} className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">{BUCKET_LABEL[bucket]} ({items.length})</h3>
+                </div>
+                {items.map((it, i) => (
+                    <div key={i} className="border border-theme-border rounded-xl p-4 space-y-3 bg-theme-bg-secondary">
+                        <div className="grid grid-cols-12 gap-2">
+                            <input type="text" value={it.id} onChange={e => updateItem(bucket, i, { id: e.target.value })} placeholder="id" className="col-span-3 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                            <input type="text" value={it.name} onChange={e => updateItem(bucket, i, { name: e.target.value })} placeholder="Nome / Modello" className="col-span-7 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                            <div className="col-span-2 flex justify-end items-center gap-1">
+                                <button type="button" onClick={() => moveItem(bucket, i, -1)} disabled={i === 0} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-primary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                                <button type="button" onClick={() => moveItem(bucket, i, 1)} disabled={i === items.length - 1} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-primary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                                <button type="button" onClick={() => removeItem(bucket, i)} className="w-7 h-7 rounded-md text-red-500 hover:bg-red-500/10 flex items-center justify-center" title="Rimuovi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg></button>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-12 gap-2">
+                            <div className="col-span-6">
+                                <label className="block text-[11px] font-medium text-theme-text-secondary mb-1">Immagine principale (URL o /percorso)</label>
+                                <input type="text" value={it.image} onChange={e => updateItem(bucket, i, { image: e.target.value })} placeholder="/yacht1.jpeg" className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                            </div>
+                            <div className="col-span-6">
+                                <label className="block text-[11px] font-medium text-theme-text-secondary mb-1">Galleria (un percorso per riga, facoltativo)</label>
+                                <textarea value={(it.images || []).join('\n')} onChange={e => updateImagesText(bucket, i, e.target.value)} placeholder={'/img1.jpeg\n/img2.jpeg'} rows={2} className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                            </div>
+                        </div>
+                        {bucket === 'yachts' && (
+                            <div className="grid grid-cols-12 gap-2">
+                                <div className="col-span-4">
+                                    <label className="block text-[11px] font-medium text-theme-text-secondary mb-1">Prezzo al giorno (€)</label>
+                                    <input type="number" min={0} value={it.price_per_day_eur ?? ''} onChange={e => updateItem(bucket, i, { price_per_day_eur: e.target.value === '' ? undefined : Number(e.target.value) })} placeholder="es. 11000" className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                                </div>
+                            </div>
+                        )}
+                        {(bucket === 'jets' || bucket === 'helis') && (
+                            <div className="grid grid-cols-12 gap-2">
+                                <label className="col-span-6 flex items-center gap-2 text-[12px] text-theme-text-primary">
+                                    <input type="checkbox" checked={!!it.pets_allowed} onChange={e => updateItem(bucket, i, { pets_allowed: e.target.checked })} />
+                                    Animali ammessi
+                                </label>
+                                <label className="col-span-6 flex items-center gap-2 text-[12px] text-theme-text-primary">
+                                    <input type="checkbox" checked={!!it.smoking_allowed} onChange={e => updateItem(bucket, i, { smoking_allowed: e.target.checked })} />
+                                    Fumatori ammessi
+                                </label>
+                            </div>
+                        )}
+                        <div className="grid grid-cols-12 gap-2">
+                            {specKeys.map(specKey => {
+                                const spec = it.specs.find(s => s.key === specKey)
+                                return (
+                                    <div key={specKey} className="col-span-4">
+                                        <label className="block text-[11px] font-medium text-theme-text-secondary mb-1">{SPEC_KEY_LABEL[specKey]}</label>
+                                        <input type="text" value={spec?.value || ''} onChange={e => updateSpecValue(bucket, i, specKey, e.target.value)} placeholder="es. 4 oppure 70m" className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                ))}
+                <button type="button" onClick={() => addItem(bucket)} className="w-full py-2 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">+ Aggiungi {BUCKET_LABEL[bucket].toLowerCase()}</button>
+            </section>
+        )
+    }
+
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-theme-text-secondary">
+                Catalogo della flotta Yacht / Jet / Elicotteri mostrato sul sito pubblico. Le auto stanno nel tab
+                <code className="text-[11px] bg-theme-bg-tertiary px-1 rounded mx-1">Veicoli</code> (database operativo), qui solo aviation &amp; marine.
+                Le icone delle specifiche e le etichette IT/EN sono fisse nel codice — qui editi solo i valori.
+            </p>
+            {renderBucket('yachts')}
+            {renderBucket('jets')}
+            {renderBucket('helis')}
         </div>
     )
 }
