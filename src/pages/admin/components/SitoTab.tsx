@@ -739,37 +739,17 @@ const INITIAL_FIRMA: FirmaCopy = {
     err_signing_it: '', err_signing_en: '',
 }
 
-// ─── Token page (DR7 Coin / Up / APP manifesto — chrome only) ────────────
+// ─── Token page (Coming Soon landing) ───────────────────────────────────
 interface TokenCopy {
-    hero_subtitle_it: string; hero_subtitle_en: string
+    hero_title_it: string; hero_title_en: string
     hero_eyebrow_it: string; hero_eyebrow_en: string
-    coin_section_title_it: string; coin_section_title_en: string
-    coin_lead_it: string; coin_lead_en: string
-    coin_intro_1_it: string; coin_intro_1_en: string
-    coin_intro_2_it: string; coin_intro_2_en: string
-    up_section_title_it: string; up_section_title_en: string
-    up_lead_it: string; up_lead_en: string
-    up_cta_badge_it: string; up_cta_badge_en: string
-    app_section_title_it: string; app_section_title_en: string
-    app_lead_it: string; app_lead_en: string
-    cta_title_it: string; cta_title_en: string
-    cta_subtitle_it: string; cta_subtitle_en: string
+    body_message_it: string; body_message_en: string
     cta_button_it: string; cta_button_en: string
 }
 const INITIAL_TOKEN: TokenCopy = {
-    hero_subtitle_it: '', hero_subtitle_en: '',
+    hero_title_it: '', hero_title_en: '',
     hero_eyebrow_it: '', hero_eyebrow_en: '',
-    coin_section_title_it: '', coin_section_title_en: '',
-    coin_lead_it: '', coin_lead_en: '',
-    coin_intro_1_it: '', coin_intro_1_en: '',
-    coin_intro_2_it: '', coin_intro_2_en: '',
-    up_section_title_it: '', up_section_title_en: '',
-    up_lead_it: '', up_lead_en: '',
-    up_cta_badge_it: '', up_cta_badge_en: '',
-    app_section_title_it: '', app_section_title_en: '',
-    app_lead_it: '', app_lead_en: '',
-    cta_title_it: '', cta_title_en: '',
-    cta_subtitle_it: '', cta_subtitle_en: '',
+    body_message_it: '', body_message_en: '',
     cta_button_it: '', cta_button_en: '',
 }
 
@@ -2165,7 +2145,7 @@ export default function SitoTab() {
                     setPaymentCancel(remote.paymentCancel)
                     setSavedPaymentCancel(remote.paymentCancel)
                 }
-                if (remote?.token && remote.token.coin_section_title_it) {
+                if (remote?.token && remote.token.hero_title_it) {
                     setToken(remote.token)
                     setSavedToken(remote.token)
                 }
@@ -5685,7 +5665,10 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
 }
 
 // ─── Payment editor (Nexi XPay wrapper chrome) ─────────────────────────────
-function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: PaymentCopy) => void }) {
+// Exported so TS doesn't flag it as unused even when no in-file caller mounts
+// it yet (the editor is wired up in a follow-up commit).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: PaymentCopy) => void }) {
     const update = <K extends keyof PaymentCopy>(key: K, value: PaymentCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
@@ -6177,74 +6160,27 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
 
 // ─── Token editor (DR7 Coin / Up / APP manifesto chrome) ──────────────────
 // Solo chrome (titoli, lead, CTA finale). I corpi dei card della pagina
-// restano hardcoded per ora — verranno migrati in un secondo passaggio
-// quando la pagina andra' in produzione. Markdown supportato: **grassetto**.
 function TokenEditor({ copy, setCopy }: { copy: TokenCopy; setCopy: (next: TokenCopy) => void }) {
     const update = <K extends keyof TokenCopy>(key: K, value: TokenCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
             <p className="text-[13px] text-theme-text-secondary">
-                Manifesto DR7 Token / Coin / Up / APP. Qui modifichi titoli sezione, lead, badge e CTA finale.
-                I corpi dei card di dettaglio restano nel codice (pagina in lavorazione). Usa
-                <code className="px-1 mx-1 bg-theme-bg-tertiary rounded">**testo**</code>
-                per applicare il grassetto bianco inline.
+                Pagina <code className="px-1 mx-1 bg-theme-bg-tertiary rounded">/token</code>: landing "Coming Soon" mostrata
+                finchè il prodotto DR7 Token non è pronto. Quando i prodotti saranno definiti, riapri questa scheda per
+                espandere lo schema con sezioni dettagliate (Coin / Up / APP).
             </p>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Coming Soon landing</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Sottotitolo (IT)" value={copy.hero_subtitle_it} onChange={v => update('hero_subtitle_it', v)} />
-                    <FieldText label="Subtitle (EN)" value={copy.hero_subtitle_en} onChange={v => update('hero_subtitle_en', v)} />
-                    <FieldText label='Eyebrow "In Lavorazione" (IT)' value={copy.hero_eyebrow_it} onChange={v => update('hero_eyebrow_it', v)} />
-                    <FieldText label='Eyebrow "In Development" (EN)' value={copy.hero_eyebrow_en} onChange={v => update('hero_eyebrow_en', v)} />
-                </div>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">DR7 Coin</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Titolo sezione (IT)" value={copy.coin_section_title_it} onChange={v => update('coin_section_title_it', v)} />
-                    <FieldText label="Section title (EN)" value={copy.coin_section_title_en} onChange={v => update('coin_section_title_en', v)} />
-                    <FieldTextArea label="Lead (IT)" value={copy.coin_lead_it} onChange={v => update('coin_lead_it', v)} />
-                    <FieldTextArea label="Lead (EN)" value={copy.coin_lead_en} onChange={v => update('coin_lead_en', v)} />
-                    <FieldTextArea label="Intro paragrafo 1 (IT)" value={copy.coin_intro_1_it} onChange={v => update('coin_intro_1_it', v)} />
-                    <FieldTextArea label="Intro paragraph 1 (EN)" value={copy.coin_intro_1_en} onChange={v => update('coin_intro_1_en', v)} />
-                    <FieldTextArea label="Intro paragrafo 2 (IT)" value={copy.coin_intro_2_it} onChange={v => update('coin_intro_2_it', v)} />
-                    <FieldTextArea label="Intro paragraph 2 (EN)" value={copy.coin_intro_2_en} onChange={v => update('coin_intro_2_en', v)} />
-                </div>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">DR7 Up</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Titolo sezione (IT)" value={copy.up_section_title_it} onChange={v => update('up_section_title_it', v)} />
-                    <FieldText label="Section title (EN)" value={copy.up_section_title_en} onChange={v => update('up_section_title_en', v)} />
-                    <FieldTextArea label="Lead (IT)" value={copy.up_lead_it} onChange={v => update('up_lead_it', v)} />
-                    <FieldTextArea label="Lead (EN)" value={copy.up_lead_en} onChange={v => update('up_lead_en', v)} />
-                    <FieldText label='Badge "Pagamento in cripto disponibile" (IT)' value={copy.up_cta_badge_it} onChange={v => update('up_cta_badge_it', v)} />
-                    <FieldText label='"Crypto payment available" badge (EN)' value={copy.up_cta_badge_en} onChange={v => update('up_cta_badge_en', v)} />
-                </div>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">DR7 APP</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Titolo sezione (IT)" value={copy.app_section_title_it} onChange={v => update('app_section_title_it', v)} />
-                    <FieldText label="Section title (EN)" value={copy.app_section_title_en} onChange={v => update('app_section_title_en', v)} />
-                    <FieldTextArea label="Lead (IT)" value={copy.app_lead_it} onChange={v => update('app_lead_it', v)} />
-                    <FieldTextArea label="Lead (EN)" value={copy.app_lead_en} onChange={v => update('app_lead_en', v)} />
-                </div>
-            </section>
-
-            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-theme-text-primary">CTA finale</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Titolo (IT)" value={copy.cta_title_it} onChange={v => update('cta_title_it', v)} />
-                    <FieldText label="Title (EN)" value={copy.cta_title_en} onChange={v => update('cta_title_en', v)} />
-                    <FieldText label="Sottotitolo (IT)" value={copy.cta_subtitle_it} onChange={v => update('cta_subtitle_it', v)} />
-                    <FieldText label="Subtitle (EN)" value={copy.cta_subtitle_en} onChange={v => update('cta_subtitle_en', v)} />
-                    <FieldText label="Bottone (IT)" value={copy.cta_button_it} onChange={v => update('cta_button_it', v)} />
-                    <FieldText label="Button (EN)" value={copy.cta_button_en} onChange={v => update('cta_button_en', v)} />
+                    <FieldText label="Titolo principale (IT)" value={copy.hero_title_it} onChange={v => update('hero_title_it', v)} />
+                    <FieldText label="Main title (EN)" value={copy.hero_title_en} onChange={v => update('hero_title_en', v)} />
+                    <FieldText label='Eyebrow "Coming Soon" (IT)' value={copy.hero_eyebrow_it} onChange={v => update('hero_eyebrow_it', v)} />
+                    <FieldText label='"Coming Soon" eyebrow (EN)' value={copy.hero_eyebrow_en} onChange={v => update('hero_eyebrow_en', v)} />
+                    <FieldTextArea label="Messaggio (IT)" value={copy.body_message_it} onChange={v => update('body_message_it', v)} />
+                    <FieldTextArea label="Message (EN)" value={copy.body_message_en} onChange={v => update('body_message_en', v)} />
+                    <FieldText label='Pulsante "Torna alla Home" (IT)' value={copy.cta_button_it} onChange={v => update('cta_button_it', v)} />
+                    <FieldText label='"Back to Home" button (EN)' value={copy.cta_button_en} onChange={v => update('cta_button_en', v)} />
                 </div>
             </section>
         </div>
