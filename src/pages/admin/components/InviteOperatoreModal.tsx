@@ -24,7 +24,7 @@ const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[
   { name: 'Flotta', tabs: [
     { key: 'vehicles', label: 'Veicoli' },
     { key: 'fleet', label: 'Gestione Flotta' },
-    { key: 'gps-keyless', label: 'GPS & Keyless' },
+    { key: 'gps-keyless', label: 'GPS Flotta' },
   ]},
   { name: 'Clienti', tabs: [
     { key: 'customers', label: 'Lead' },
