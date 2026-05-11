@@ -52,7 +52,6 @@ type SectionId =
     | 'confirmation'
     | 'header'
     | 'signup'
-    | 'payment'
     | 'payment-success'
     | 'booking'
     | 'credit-wallet'
@@ -98,7 +97,6 @@ const SECTIONS: { id: SectionId; title: string; category: SectionCategoryId; rea
     { id: 'booking', title: 'Prenotazione (Yacht/Jet/Heli)', category: 'booking', ready: true },
     { id: 'aviation', title: 'Aviation Quote', category: 'booking', ready: true },
     { id: 'jet-search', title: 'Jet Search Results', category: 'booking', ready: true },
-    { id: 'payment', title: 'Pagina Pagamento (Nexi)', category: 'booking', ready: true },
     { id: 'payment-success', title: 'Pagamento Riuscito', category: 'booking', ready: true },
     { id: 'confirmation', title: 'Conferma Prenotazione', category: 'booking', ready: true },
     { id: 'credit-wallet', title: 'Credit Wallet', category: 'booking', ready: true },
@@ -2373,9 +2371,6 @@ export default function SitoTab() {
                         )}
                         {hydrated && section === 'signup' && (
                             <SignUpEditor copy={signUp} setCopy={setSignUp} />
-                        )}
-                        {hydrated && section === 'payment' && (
-                            <PaymentEditor copy={payment} setCopy={setPayment} />
                         )}
                         {hydrated && section === 'payment-success' && (
                             <PaymentSuccessEditor copy={paymentSuccess} setCopy={setPaymentSuccess} />
