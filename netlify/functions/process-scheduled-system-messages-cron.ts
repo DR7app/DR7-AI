@@ -463,19 +463,32 @@ const cronHandler = async () => {
         if (statuses.length > 0) q = q.in('status', statuses);
         // Ottimizzazione: per before_pickup/after_pickup ecc. restringiamo per data
         // intorno alla finestra utile = (now ± window) ∓ offset.
-        // Tradotto: pickup_date ∈ [now - offset - lookback, now - offset + lookforward]
-        // Non applichiamo questo filtro per on_booking/on_payment/on_signature/on_extension
-        // dove l'event_time non vive in un singolo timestamp colonna.
+        //
+        // BUG FIX: quando send_hour è impostato (es. "24h prima del ritiro
+        // alle 09:00"), il TARGET reale è send_hour:00 Rome del giorno
+        // calendario corrispondente, NON pickup_date − offset esatto. Una
+        // pickup tomorrow ALLE 14:00 con offset 24h e send_hour=9 produce
+        // target = oggi 09:00 Rome — non oggi 14:00. Con la finestra
+        // stretta ±30/+8 min sul "now + offset", l'orario di pickup non-09:00
+        // veniva filtrato fuori e il cron non vedeva mai il booking
+        // (sintomo: "il promemoria 24h prima del ritiro non parte se la
+        // pickup non è alle 09:00"). Adesso, se send_hour è impostato,
+        // espandiamo la finestra a ±24h così tutte le pickup del giorno
+        // target rientrano. Il filtro fine per-booking lo fa comunque
+        // computeTargetMs + il check now ∈ [target−30min, target+8min].
         const offsetH = tpl.trigger_offset_hours || 0;
+        const usesSendHour = tpl.send_hour != null;
+        const wideBackMs = usesSendHour ? 24 * 3600 * 1000 : LOOKBACK_MS;
+        const wideFwdMs = usesSendHour ? 24 * 3600 * 1000 : LOOKFORWARD_MS;
         if (tpl.trigger_event === 'before_pickup' || tpl.trigger_event === 'after_pickup') {
             const sign = tpl.trigger_event === 'before_pickup' ? +1 : -1;
-            const lo = new Date(now + sign * offsetH * 3600 * 1000 - LOOKBACK_MS).toISOString();
-            const hi = new Date(now + sign * offsetH * 3600 * 1000 + LOOKFORWARD_MS).toISOString();
+            const lo = new Date(now + sign * offsetH * 3600 * 1000 - wideBackMs).toISOString();
+            const hi = new Date(now + sign * offsetH * 3600 * 1000 + wideFwdMs).toISOString();
             q = q.gte('pickup_date', lo).lte('pickup_date', hi);
         } else if (tpl.trigger_event === 'before_dropoff' || tpl.trigger_event === 'after_dropoff') {
             const sign = tpl.trigger_event === 'before_dropoff' ? +1 : -1;
-            const lo = new Date(now + sign * offsetH * 3600 * 1000 - LOOKBACK_MS).toISOString();
-            const hi = new Date(now + sign * offsetH * 3600 * 1000 + LOOKFORWARD_MS).toISOString();
+            const lo = new Date(now + sign * offsetH * 3600 * 1000 - wideBackMs).toISOString();
+            const hi = new Date(now + sign * offsetH * 3600 * 1000 + wideFwdMs).toISOString();
             q = q.gte('dropoff_date', lo).lte('dropoff_date', hi);
         } else if (tpl.trigger_event === 'on_booking') {
             const lo = new Date(now - offsetH * 3600 * 1000 - LOOKBACK_MS).toISOString();
@@ -490,8 +503,11 @@ const cronHandler = async () => {
         } else if (tpl.trigger_event === 'before_signature') {
             // Promemoria firma: ancorato al pickup_date come before_pickup,
             // poi computeTargetMs/getEventTimeMs filtra via signed!=null.
-            const lo = new Date(now + offsetH * 3600 * 1000 - LOOKBACK_MS).toISOString();
-            const hi = new Date(now + offsetH * 3600 * 1000 + LOOKFORWARD_MS).toISOString();
+            // Stesso fix di before_pickup: espandi la finestra quando
+            // send_hour è impostato così pickup di qualsiasi ora del
+            // giorno target viene catturata.
+            const lo = new Date(now + offsetH * 3600 * 1000 - wideBackMs).toISOString();
+            const hi = new Date(now + offsetH * 3600 * 1000 + wideFwdMs).toISOString();
             q = q.gte('pickup_date', lo).lte('pickup_date', hi);
         } else if (tpl.trigger_event === 'on_late_return') {
             // Ritardo: dropoff_date in passato, status non completato.
