@@ -194,11 +194,15 @@ export async function getMessageTemplate(
     replaceFor(cleanKey, cleanV)
     for (const alias of ALIASES[cleanKey] || []) replaceFor(alias, cleanV)
   }
-  // Defensive cleanup for templates authored with stray spaces inside markers
-  // (`* word *` / `_ word _`): convert them to tight `*word*` / `_word_` so
-  // WhatsApp's formatter actually fires.
-  body = body.replace(/(\*)\s+([^\s*][^*]*?)\s+(\*)(?=\s|[.,;:!?)\]]|$)/g, '$1$2$3')
-  body = body.replace(/(_)\s+([^\s_][^_]*?)\s+(_)(?=\s|[.,;:!?)\]]|$)/g, '$1$2$3')
+  // Defensive cleanup for `*bold*` / `_italic_` — ONLY when the leading
+  // marker is clearly NOT a bullet (a bullet `*` lives at line start with
+  // a trailing space). Previous version false-positived on bulleted lines
+  // like `* Buono sconto di *€100*`, eating bullet spaces and merging
+  // surrounding text. The (?<=\S) lookbehind requires a non-whitespace
+  // char immediately before the opening marker, so list items at line
+  // start are skipped entirely.
+  body = body.replace(/(?<=\S)(\*)\s+([^\s*][^*\n]*?)\s+(\*)(?=\s|[.,;:!?)\]]|$)/g, '$1$2$3')
+  body = body.replace(/(?<=\S)(_)\s+([^\s_][^_\n]*?)\s+(_)(?=\s|[.,;:!?)\]]|$)/g, '$1$2$3')
 
   // Add header/footer ONLY if the template explicitly opts in
   // (include_header === true). Default is OFF — admin must tick the
