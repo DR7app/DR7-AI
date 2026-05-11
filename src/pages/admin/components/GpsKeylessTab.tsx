@@ -371,7 +371,7 @@ export default function GpsKeylessTab() {
   const recentEvents = useMemo(() => events.slice(0, 6), [events])
 
   return (
-    <div className="bg-white text-black dark:bg-black dark:text-white min-h-screen -mx-4 -my-6 px-3 py-4 sm:-mx-6 sm:px-6 sm:py-6">
+    <div className="bg-theme-bg-primary text-theme-text-primary min-h-screen -mx-4 -my-6 px-3 py-4 sm:-mx-6 sm:px-6 sm:py-6">
       <style>{`@keyframes sf-pulse{0%{transform:scale(.6);opacity:.5}100%{transform:scale(2);opacity:0}}`}</style>
 
       {/* Header */}

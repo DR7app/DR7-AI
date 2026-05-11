@@ -62,6 +62,7 @@ type SectionId =
     | 'payment-cancel'
     | 'locations'
     | 'yacht-jet-heli'
+    | 'dr7-club-plan'
     | 'flotta'
 
 type SectionCategoryId = 'chrome' | 'public' | 'auth' | 'booking' | 'legal'
@@ -81,6 +82,7 @@ const SECTIONS: { id: SectionId; title: string; category: SectionCategoryId; rea
     { id: 'booking-search-box', title: 'Booking Search Box', category: 'chrome', ready: true },
     { id: 'locations', title: 'Aeroporti & Luoghi', category: 'chrome', ready: true },
     { id: 'yacht-jet-heli', title: 'Yacht / Jet / Heli', category: 'public', ready: true },
+    { id: 'dr7-club-plan', title: 'DR7 Club — Piano & Benefit', category: 'public', ready: true },
     // Pagine pubbliche
     { id: 'hero', title: 'Home / Hero', category: 'public', ready: true },
     { id: 'flotta', title: 'Flotta (categorie visibili)', category: 'public', ready: true },
@@ -454,6 +456,25 @@ interface AviationMarineCopy {
     helis: AviationMarineItem[]
 }
 const INITIAL_AVIATION_MARINE: AviationMarineCopy = { yachts: [], jets: [], helis: [] }
+
+// ─── DR7 Club plan (price + features) ───────────────────────────────────
+interface Dr7ClubPlanCopy {
+    id: string
+    name_it: string; name_en: string
+    monthly_eur: number
+    annually_eur: number
+    features_it: string[]
+    features_en: string[]
+}
+const INITIAL_DR7_CLUB_PLAN: Dr7ClubPlanCopy = {
+    id: 'dr7club',
+    name_it: 'DR7 Club', name_en: 'DR7 Club',
+    monthly_eur: 0,
+    annually_eur: 0,
+    features_it: [],
+    features_en: [],
+}
+
 const SPEC_KEY_LABEL: Record<AviationMarineSpecKey, string> = {
     passengers: 'Passeggeri',
     year: 'Anno',
@@ -1808,6 +1829,7 @@ interface SiteCopySnapshot {
     paymentCancel?: PaymentCancelCopy
     locations?: LocationsCopy
     aviationMarine?: AviationMarineCopy
+    dr7ClubPlan?: Dr7ClubPlanCopy
 }
 
 interface CurrentState {
@@ -1843,6 +1865,7 @@ interface CurrentState {
     paymentCancel: PaymentCancelCopy
     locations: LocationsCopy
     aviationMarine: AviationMarineCopy
+    dr7ClubPlan: Dr7ClubPlanCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -2084,6 +2107,8 @@ export default function SitoTab() {
     const [savedLocations, setSavedLocations] = useState<LocationsCopy>(INITIAL_LOCATIONS)
     const [aviationMarine, setAviationMarine] = useState<AviationMarineCopy>(INITIAL_AVIATION_MARINE)
     const [savedAviationMarine, setSavedAviationMarine] = useState<AviationMarineCopy>(INITIAL_AVIATION_MARINE)
+    const [dr7ClubPlan, setDr7ClubPlan] = useState<Dr7ClubPlanCopy>(INITIAL_DR7_CLUB_PLAN)
+    const [savedDr7ClubPlan, setSavedDr7ClubPlan] = useState<Dr7ClubPlanCopy>(INITIAL_DR7_CLUB_PLAN)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -2235,6 +2260,10 @@ export default function SitoTab() {
                     setAviationMarine(remote.aviationMarine)
                     setSavedAviationMarine(remote.aviationMarine)
                 }
+                if (remote?.dr7ClubPlan && remote.dr7ClubPlan.id) {
+                    setDr7ClubPlan(remote.dr7ClubPlan)
+                    setSavedDr7ClubPlan(remote.dr7ClubPlan)
+                }
                 if (remote?.token && remote.token.hero_title_it) {
                     setToken(remote.token)
                     setSavedToken(remote.token)
@@ -2251,10 +2280,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine },
-            { flotta: savedFlotta, faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel, locations: savedLocations, aviationMarine: savedAviationMarine }
+            { flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan },
+            { flotta: savedFlotta, faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel, locations: savedLocations, aviationMarine: savedAviationMarine, dr7ClubPlan: savedDr7ClubPlan }
         ),
-        [flotta, savedFlotta, faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel, locations, savedLocations, aviationMarine, savedAviationMarine]
+        [flotta, savedFlotta, faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel, locations, savedLocations, aviationMarine, savedAviationMarine, dr7ClubPlan, savedDr7ClubPlan]
     )
     const dirty = changes.length > 0
 
@@ -2265,7 +2294,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine })
+            await savePersisted({ flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan })
             setSavedFlotta(flotta)
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
@@ -2298,6 +2327,7 @@ export default function SitoTab() {
             setSavedPaymentCancel(paymentCancel)
             setSavedLocations(locations)
             setSavedAviationMarine(aviationMarine)
+            setSavedDr7ClubPlan(dr7ClubPlan)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -2364,6 +2394,7 @@ export default function SitoTab() {
         setPaymentCancel(savedPaymentCancel)
         setLocations(savedLocations)
         setAviationMarine(savedAviationMarine)
+        setDr7ClubPlan(savedDr7ClubPlan)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -2539,6 +2570,9 @@ export default function SitoTab() {
                         {hydrated && section === 'yacht-jet-heli' && (
                             <AviationMarineEditor copy={aviationMarine} setCopy={setAviationMarine} />
                         )}
+                        {hydrated && section === 'dr7-club-plan' && (
+                            <Dr7ClubPlanEditor copy={dr7ClubPlan} setCopy={setDr7ClubPlan} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -2699,6 +2733,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.aviationMarine) !== JSON.stringify(saved.aviationMarine)) {
         out.push('Yacht / Jet / Heli: catalogo modificato')
+    }
+    if (JSON.stringify(current.dr7ClubPlan) !== JSON.stringify(saved.dr7ClubPlan)) {
+        out.push('DR7 Club — Piano & Benefit: modificato')
     }
     return out
 }
@@ -7037,6 +7074,51 @@ function LocationsEditor({ copy, setCopy }: { copy: LocationsCopy; setCopy: (nex
                     </section>
                 )
             })}
+        </div>
+    )
+}
+
+// ─── DR7 Club piano (centralina_pro_config.site_copy.dr7ClubPlan) ──
+// Editor minimo per nome bilingue, prezzi mensile/annuale e feature list.
+// Stub generato per sbloccare il build; espandere quando arriva il design.
+function Dr7ClubPlanEditor({ copy, setCopy }: { copy: Dr7ClubPlanCopy; setCopy: (next: Dr7ClubPlanCopy) => void }) {
+    const set = (patch: Partial<Dr7ClubPlanCopy>) => setCopy({ ...copy, ...patch })
+    const setFeatures = (lang: 'features_it' | 'features_en', value: string) => {
+        const list = value.split('\n').map(s => s.trim()).filter(Boolean)
+        set({ [lang]: list } as Partial<Dr7ClubPlanCopy>)
+    }
+    return (
+        <div className="space-y-6">
+            <div>
+                <h3 className="text-lg font-semibold text-theme-text-primary">DR7 Club — Piano</h3>
+                <p className="text-sm text-theme-text-muted mt-1">Configura il piano DR7 Club mostrato sul sito (nome bilingue, prezzi, vantaggi).</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block">
+                    <span className="block text-xs text-theme-text-muted mb-1">Nome (IT)</span>
+                    <input value={copy.name_it} onChange={(e) => set({ name_it: e.target.value })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"/>
+                </label>
+                <label className="block">
+                    <span className="block text-xs text-theme-text-muted mb-1">Nome (EN)</span>
+                    <input value={copy.name_en} onChange={(e) => set({ name_en: e.target.value })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"/>
+                </label>
+                <label className="block">
+                    <span className="block text-xs text-theme-text-muted mb-1">Prezzo mensile (€)</span>
+                    <input type="number" min="0" step="1" value={copy.monthly_eur} onChange={(e) => set({ monthly_eur: Number(e.target.value) || 0 })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"/>
+                </label>
+                <label className="block">
+                    <span className="block text-xs text-theme-text-muted mb-1">Prezzo annuale (€)</span>
+                    <input type="number" min="0" step="1" value={copy.annually_eur} onChange={(e) => set({ annually_eur: Number(e.target.value) || 0 })} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"/>
+                </label>
+                <label className="block md:col-span-2">
+                    <span className="block text-xs text-theme-text-muted mb-1">Vantaggi (IT) — uno per riga</span>
+                    <textarea rows={6} value={copy.features_it.join('\n')} onChange={(e) => setFeatures('features_it', e.target.value)} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-xl px-3 py-2 text-sm text-theme-text-primary"/>
+                </label>
+                <label className="block md:col-span-2">
+                    <span className="block text-xs text-theme-text-muted mb-1">Vantaggi (EN) — uno per riga</span>
+                    <textarea rows={6} value={copy.features_en.join('\n')} onChange={(e) => setFeatures('features_en', e.target.value)} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-xl px-3 py-2 text-sm text-theme-text-primary"/>
+                </label>
+            </div>
         </div>
     )
 }
