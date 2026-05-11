@@ -535,20 +535,69 @@ const handler: Handler = async (event) => {
                     console.log(`[nexi-payment-callback] Extension marked as paid in booking_details`);
                 }
 
-                // Generate fattura for EXTENSION AMOUNT ONLY (not full booking)
+                // Generate fattura for EXTENSION AMOUNT ONLY (not full booking).
+                // Verifichiamo la risposta — prima era fire-and-forget e i
+                // fallimenti silenziosi facevano sparire la fattura senza che
+                // nessuno se ne accorgesse.
                 try {
                     const extensionAmountEur = transaction.amount_cents / 100;
-                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-invoice-from-booking`, {
+                    const invRes = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
                         body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: extensionAmountEur })
                     });
-                    console.log(`[nexi-payment-callback] Extension fattura generated — €${amountEur}`);
+                    if (invRes.ok) {
+                        console.log(`[nexi-payment-callback] Extension fattura generated — €${amountEur}`);
+                    } else {
+                        const errBody = await invRes.text().catch(() => '');
+                        console.error(`[nexi-payment-callback] Extension fattura HTTP ${invRes.status}: ${errBody.slice(0, 300)}`);
+                    }
                 } catch (invErr) {
                     console.error('[nexi-payment-callback] Extension fattura failed:', invErr);
                 }
 
-                // Send WhatsApp confirmation to customer
+                // Rigenera il contratto con la NUOVA data di riconsegna +
+                // re-invio firma. Senza questo il cliente paga l'estensione
+                // ma il contratto firmato mostra ancora la vecchia data e
+                // l'auto-fattura non aggiorna i campi durata. Stesso pattern
+                // del flusso topup qui sotto.
+                try {
+                    const contractRes = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-contract`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
+                        body: JSON.stringify({ bookingId: booking.id })
+                    });
+                    if (contractRes.ok) {
+                        console.log('[nexi-payment-callback] Contract regenerated after extension payment');
+                        const { data: contractRow } = await supabase
+                            .from('contracts')
+                            .select('id')
+                            .eq('booking_id', booking.id)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        if (contractRow?.id) {
+                            await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/signature-init`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ contractId: contractRow.id, bookingId: booking.id })
+                            });
+                            console.log('[nexi-payment-callback] Signature-init fired for extension contract');
+                        }
+                    } else {
+                        const errBody = await contractRes.text().catch(() => '');
+                        console.error(`[nexi-payment-callback] Extension contract regen HTTP ${contractRes.status}: ${errBody.slice(0, 300)}`);
+                    }
+                } catch (ctrErr) {
+                    console.error('[nexi-payment-callback] Extension contract regen/send failed:', ctrErr);
+                }
+
+                // Send WhatsApp confirmation to customer:
+                //   1. Receipt "Pagamento estensione ricevuto" (payment_received_extension)
+                //   2. Conferma noleggio aggiornata (pro_conferma_noleggio) — quella
+                //      che ReservationsTab.handleConfirmExtend NON manda più subito
+                //      per evitare di confermare prima del pagamento. Adesso parte
+                //      qui, con il booking aggiornato (nuova dropoff_date).
                 const custPhone = booking.customer_phone || details.customer?.phone;
                 if (custPhone) {
                     const custName = booking.customer_name || details.customer?.fullName || 'Cliente';
@@ -564,6 +613,32 @@ const handler: Handler = async (event) => {
                                 customMessage: customerMsg
                             })
                         });
+                    }
+
+                    // Conferma noleggio aggiornata — ri-leggiamo il booking
+                    // fresh dal DB così send-whatsapp-notification ha la nuova
+                    // dropoff_date e il template pro_conferma_noleggio mostra
+                    // le date corrette.
+                    try {
+                        const { data: fullBooking } = await supabase
+                            .from('bookings')
+                            .select('*')
+                            .eq('id', booking.id)
+                            .single();
+                        if (fullBooking) {
+                            await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    customPhone: custPhone,
+                                    booking: { ...fullBooking, isEdit: false },
+                                    skipHeader: true,
+                                })
+                            });
+                            console.log('[nexi-payment-callback] Conferma noleggio (post-extension) inviata');
+                        }
+                    } catch (confErr) {
+                        console.error('[nexi-payment-callback] Conferma noleggio post-extension fallita:', confErr);
                     }
                 }
 
