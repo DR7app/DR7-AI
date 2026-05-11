@@ -485,6 +485,48 @@ interface RegistrazioneClienteCopy {
     err_email_invalid_it: string; err_email_invalid_en: string
     err_cf_length_it: string; err_cf_length_en: string
     err_piva_length_it: string; err_piva_length_en: string
+    field_nome_it: string; field_nome_en: string
+    field_cognome_it: string; field_cognome_en: string
+    field_cf_label_it: string; field_cf_label_en: string
+    field_cf_placeholder: string
+    field_sesso_label_it: string; field_sesso_label_en: string
+    field_sesso_default_it: string; field_sesso_default_en: string
+    field_sesso_m_it: string; field_sesso_m_en: string
+    field_sesso_f_it: string; field_sesso_f_en: string
+    field_birth_date_it: string; field_birth_date_en: string
+    field_birth_city_it: string; field_birth_city_en: string
+    field_birth_city_placeholder_it: string; field_birth_city_placeholder_en: string
+    field_birth_province_it: string; field_birth_province_en: string
+    field_birth_province_placeholder_it: string; field_birth_province_placeholder_en: string
+    field_ragione_sociale_it: string; field_ragione_sociale_en: string
+    field_piva_it: string; field_piva_en: string
+    field_piva_placeholder_it: string; field_piva_placeholder_en: string
+    field_pec_no_sdi_it: string; field_pec_no_sdi_en: string
+    field_pec_placeholder: string
+    field_sdi_no_pec_it: string; field_sdi_no_pec_en: string
+    field_sdi_placeholder_it: string; field_sdi_placeholder_en: string
+    field_cf_rappresentante_it: string; field_cf_rappresentante_en: string
+    field_ente_ufficio_it: string; field_ente_ufficio_en: string
+    field_codice_univoco_it: string; field_codice_univoco_en: string
+    field_codice_univoco_placeholder_it: string; field_codice_univoco_placeholder_en: string
+    field_cf_ente_it: string; field_cf_ente_en: string
+    field_pec_simple_it: string; field_pec_simple_en: string
+    field_indirizzo_it: string; field_indirizzo_en: string
+    field_indirizzo_placeholder_it: string; field_indirizzo_placeholder_en: string
+    field_civico_it: string; field_civico_en: string
+    field_civico_placeholder_it: string; field_civico_placeholder_en: string
+    field_citta_it: string; field_citta_en: string
+    field_citta_placeholder_it: string; field_citta_placeholder_en: string
+    field_provincia_it: string; field_provincia_en: string
+    field_provincia_placeholder_it: string; field_provincia_placeholder_en: string
+    field_cap_it: string; field_cap_en: string
+    field_cap_placeholder_it: string; field_cap_placeholder_en: string
+    field_nazione_it: string; field_nazione_en: string
+    field_nazione_placeholder: string
+    field_telefono_it: string; field_telefono_en: string
+    field_telefono_placeholder: string
+    field_email_it: string; field_email_en: string
+    field_email_placeholder: string
 }
 const INITIAL_REGISTRAZIONE_CLIENTE: RegistrazioneClienteCopy = {
     intro_title_it: '', intro_title_en: '',
@@ -529,6 +571,48 @@ const INITIAL_REGISTRAZIONE_CLIENTE: RegistrazioneClienteCopy = {
     err_email_invalid_it: '', err_email_invalid_en: '',
     err_cf_length_it: '', err_cf_length_en: '',
     err_piva_length_it: '', err_piva_length_en: '',
+    field_nome_it: '', field_nome_en: '',
+    field_cognome_it: '', field_cognome_en: '',
+    field_cf_label_it: '', field_cf_label_en: '',
+    field_cf_placeholder: '',
+    field_sesso_label_it: '', field_sesso_label_en: '',
+    field_sesso_default_it: '', field_sesso_default_en: '',
+    field_sesso_m_it: '', field_sesso_m_en: '',
+    field_sesso_f_it: '', field_sesso_f_en: '',
+    field_birth_date_it: '', field_birth_date_en: '',
+    field_birth_city_it: '', field_birth_city_en: '',
+    field_birth_city_placeholder_it: '', field_birth_city_placeholder_en: '',
+    field_birth_province_it: '', field_birth_province_en: '',
+    field_birth_province_placeholder_it: '', field_birth_province_placeholder_en: '',
+    field_ragione_sociale_it: '', field_ragione_sociale_en: '',
+    field_piva_it: '', field_piva_en: '',
+    field_piva_placeholder_it: '', field_piva_placeholder_en: '',
+    field_pec_no_sdi_it: '', field_pec_no_sdi_en: '',
+    field_pec_placeholder: '',
+    field_sdi_no_pec_it: '', field_sdi_no_pec_en: '',
+    field_sdi_placeholder_it: '', field_sdi_placeholder_en: '',
+    field_cf_rappresentante_it: '', field_cf_rappresentante_en: '',
+    field_ente_ufficio_it: '', field_ente_ufficio_en: '',
+    field_codice_univoco_it: '', field_codice_univoco_en: '',
+    field_codice_univoco_placeholder_it: '', field_codice_univoco_placeholder_en: '',
+    field_cf_ente_it: '', field_cf_ente_en: '',
+    field_pec_simple_it: '', field_pec_simple_en: '',
+    field_indirizzo_it: '', field_indirizzo_en: '',
+    field_indirizzo_placeholder_it: '', field_indirizzo_placeholder_en: '',
+    field_civico_it: '', field_civico_en: '',
+    field_civico_placeholder_it: '', field_civico_placeholder_en: '',
+    field_citta_it: '', field_citta_en: '',
+    field_citta_placeholder_it: '', field_citta_placeholder_en: '',
+    field_provincia_it: '', field_provincia_en: '',
+    field_provincia_placeholder_it: '', field_provincia_placeholder_en: '',
+    field_cap_it: '', field_cap_en: '',
+    field_cap_placeholder_it: '', field_cap_placeholder_en: '',
+    field_nazione_it: '', field_nazione_en: '',
+    field_nazione_placeholder: '',
+    field_telefono_it: '', field_telefono_en: '',
+    field_telefono_placeholder: '',
+    field_email_it: '', field_email_en: '',
+    field_email_placeholder: '',
 }
 
 // ─── Firma page (contract e-signature OTP flow) ──────────────────────────
@@ -6299,6 +6383,115 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                     <FieldText label="Tax code length (EN)" value={copy.err_cf_length_en} onChange={v => update('err_cf_length_en', v)} />
                     <FieldText label="P.IVA lunghezza (IT)" value={copy.err_piva_length_it} onChange={v => update('err_piva_length_it', v)} />
                     <FieldText label="VAT length (EN)" value={copy.err_piva_length_en} onChange={v => update('err_piva_length_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Persona Fisica</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Nome (IT)" value={copy.field_nome_it} onChange={v => update('field_nome_it', v)} />
+                    <FieldText label="First Name (EN)" value={copy.field_nome_en} onChange={v => update('field_nome_en', v)} />
+                    <FieldText label="Cognome (IT)" value={copy.field_cognome_it} onChange={v => update('field_cognome_it', v)} />
+                    <FieldText label="Last Name (EN)" value={copy.field_cognome_en} onChange={v => update('field_cognome_en', v)} />
+                    <FieldText label="Etichetta CF (IT)" value={copy.field_cf_label_it} onChange={v => update('field_cf_label_it', v)} />
+                    <FieldText label="Tax Code label (EN)" value={copy.field_cf_label_en} onChange={v => update('field_cf_label_en', v)} />
+                    <FieldText label="Placeholder CF" value={copy.field_cf_placeholder} onChange={v => update('field_cf_placeholder', v)} />
+                    <FieldText label="Sesso (IT)" value={copy.field_sesso_label_it} onChange={v => update('field_sesso_label_it', v)} />
+                    <FieldText label="Gender (EN)" value={copy.field_sesso_label_en} onChange={v => update('field_sesso_label_en', v)} />
+                    <FieldText label='"Seleziona…" default (IT)' value={copy.field_sesso_default_it} onChange={v => update('field_sesso_default_it', v)} />
+                    <FieldText label='"Select…" default (EN)' value={copy.field_sesso_default_en} onChange={v => update('field_sesso_default_en', v)} />
+                    <FieldText label="Maschio (IT)" value={copy.field_sesso_m_it} onChange={v => update('field_sesso_m_it', v)} />
+                    <FieldText label="Male (EN)" value={copy.field_sesso_m_en} onChange={v => update('field_sesso_m_en', v)} />
+                    <FieldText label="Femmina (IT)" value={copy.field_sesso_f_it} onChange={v => update('field_sesso_f_it', v)} />
+                    <FieldText label="Female (EN)" value={copy.field_sesso_f_en} onChange={v => update('field_sesso_f_en', v)} />
+                    <FieldText label="Data di Nascita (IT)" value={copy.field_birth_date_it} onChange={v => update('field_birth_date_it', v)} />
+                    <FieldText label="Date of Birth (EN)" value={copy.field_birth_date_en} onChange={v => update('field_birth_date_en', v)} />
+                    <FieldText label="Luogo di Nascita (IT)" value={copy.field_birth_city_it} onChange={v => update('field_birth_city_it', v)} />
+                    <FieldText label="Place of Birth (EN)" value={copy.field_birth_city_en} onChange={v => update('field_birth_city_en', v)} />
+                    <FieldText label="Placeholder Luogo (IT)" value={copy.field_birth_city_placeholder_it} onChange={v => update('field_birth_city_placeholder_it', v)} />
+                    <FieldText label="Place placeholder (EN)" value={copy.field_birth_city_placeholder_en} onChange={v => update('field_birth_city_placeholder_en', v)} />
+                    <FieldText label="Provincia di Nascita (IT)" value={copy.field_birth_province_it} onChange={v => update('field_birth_province_it', v)} />
+                    <FieldText label="Province of Birth (EN)" value={copy.field_birth_province_en} onChange={v => update('field_birth_province_en', v)} />
+                    <FieldText label="Placeholder Provincia (IT)" value={copy.field_birth_province_placeholder_it} onChange={v => update('field_birth_province_placeholder_it', v)} />
+                    <FieldText label="Province placeholder (EN)" value={copy.field_birth_province_placeholder_en} onChange={v => update('field_birth_province_placeholder_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Azienda</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Ragione Sociale (IT)" value={copy.field_ragione_sociale_it} onChange={v => update('field_ragione_sociale_it', v)} />
+                    <FieldText label="Company Name (EN)" value={copy.field_ragione_sociale_en} onChange={v => update('field_ragione_sociale_en', v)} />
+                    <FieldText label="P.IVA (IT)" value={copy.field_piva_it} onChange={v => update('field_piva_it', v)} />
+                    <FieldText label="VAT Number (EN)" value={copy.field_piva_en} onChange={v => update('field_piva_en', v)} />
+                    <FieldText label="Placeholder P.IVA (IT)" value={copy.field_piva_placeholder_it} onChange={v => update('field_piva_placeholder_it', v)} />
+                    <FieldText label="VAT placeholder (EN)" value={copy.field_piva_placeholder_en} onChange={v => update('field_piva_placeholder_en', v)} />
+                    <FieldText label='"PEC (se nessun SDI)" (IT)' value={copy.field_pec_no_sdi_it} onChange={v => update('field_pec_no_sdi_it', v)} />
+                    <FieldText label='"PEC (if no SDI)" (EN)' value={copy.field_pec_no_sdi_en} onChange={v => update('field_pec_no_sdi_en', v)} />
+                    <FieldText label="Placeholder PEC" value={copy.field_pec_placeholder} onChange={v => update('field_pec_placeholder', v)} />
+                    <FieldText label='"Codice SDI (se nessuna PEC)" (IT)' value={copy.field_sdi_no_pec_it} onChange={v => update('field_sdi_no_pec_it', v)} />
+                    <FieldText label='"SDI Code (if no PEC)" (EN)' value={copy.field_sdi_no_pec_en} onChange={v => update('field_sdi_no_pec_en', v)} />
+                    <FieldText label="Placeholder SDI (IT)" value={copy.field_sdi_placeholder_it} onChange={v => update('field_sdi_placeholder_it', v)} />
+                    <FieldText label="SDI placeholder (EN)" value={copy.field_sdi_placeholder_en} onChange={v => update('field_sdi_placeholder_en', v)} />
+                    <FieldText label="CF Rappresentante (IT)" value={copy.field_cf_rappresentante_it} onChange={v => update('field_cf_rappresentante_it', v)} />
+                    <FieldText label="Representative Tax Code (EN)" value={copy.field_cf_rappresentante_en} onChange={v => update('field_cf_rappresentante_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Pubblica Amministrazione</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Ente / Ufficio (IT)" value={copy.field_ente_ufficio_it} onChange={v => update('field_ente_ufficio_it', v)} />
+                    <FieldText label="Agency / Office (EN)" value={copy.field_ente_ufficio_en} onChange={v => update('field_ente_ufficio_en', v)} />
+                    <FieldText label="Codice Univoco IPA (IT)" value={copy.field_codice_univoco_it} onChange={v => update('field_codice_univoco_it', v)} />
+                    <FieldText label="IPA Unique Code (EN)" value={copy.field_codice_univoco_en} onChange={v => update('field_codice_univoco_en', v)} />
+                    <FieldText label="Placeholder Codice Univoco (IT)" value={copy.field_codice_univoco_placeholder_it} onChange={v => update('field_codice_univoco_placeholder_it', v)} />
+                    <FieldText label="Unique Code placeholder (EN)" value={copy.field_codice_univoco_placeholder_en} onChange={v => update('field_codice_univoco_placeholder_en', v)} />
+                    <FieldText label="Codice Fiscale Ente (IT)" value={copy.field_cf_ente_it} onChange={v => update('field_cf_ente_it', v)} />
+                    <FieldText label="Agency Tax Code (EN)" value={copy.field_cf_ente_en} onChange={v => update('field_cf_ente_en', v)} />
+                    <FieldText label='"PEC" semplice (IT)' value={copy.field_pec_simple_it} onChange={v => update('field_pec_simple_it', v)} />
+                    <FieldText label='"PEC" simple (EN)' value={copy.field_pec_simple_en} onChange={v => update('field_pec_simple_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Residenza / Sede</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Indirizzo (IT)" value={copy.field_indirizzo_it} onChange={v => update('field_indirizzo_it', v)} />
+                    <FieldText label="Address (EN)" value={copy.field_indirizzo_en} onChange={v => update('field_indirizzo_en', v)} />
+                    <FieldText label="Placeholder Indirizzo (IT)" value={copy.field_indirizzo_placeholder_it} onChange={v => update('field_indirizzo_placeholder_it', v)} />
+                    <FieldText label="Address placeholder (EN)" value={copy.field_indirizzo_placeholder_en} onChange={v => update('field_indirizzo_placeholder_en', v)} />
+                    <FieldText label="Civico (IT)" value={copy.field_civico_it} onChange={v => update('field_civico_it', v)} />
+                    <FieldText label="Street Number (EN)" value={copy.field_civico_en} onChange={v => update('field_civico_en', v)} />
+                    <FieldText label="Placeholder Civico (IT)" value={copy.field_civico_placeholder_it} onChange={v => update('field_civico_placeholder_it', v)} />
+                    <FieldText label="Street Number placeholder (EN)" value={copy.field_civico_placeholder_en} onChange={v => update('field_civico_placeholder_en', v)} />
+                    <FieldText label="Città (IT)" value={copy.field_citta_it} onChange={v => update('field_citta_it', v)} />
+                    <FieldText label="City (EN)" value={copy.field_citta_en} onChange={v => update('field_citta_en', v)} />
+                    <FieldText label="Placeholder Città (IT)" value={copy.field_citta_placeholder_it} onChange={v => update('field_citta_placeholder_it', v)} />
+                    <FieldText label="City placeholder (EN)" value={copy.field_citta_placeholder_en} onChange={v => update('field_citta_placeholder_en', v)} />
+                    <FieldText label="Provincia (IT)" value={copy.field_provincia_it} onChange={v => update('field_provincia_it', v)} />
+                    <FieldText label="Province (EN)" value={copy.field_provincia_en} onChange={v => update('field_provincia_en', v)} />
+                    <FieldText label="Placeholder Provincia (IT)" value={copy.field_provincia_placeholder_it} onChange={v => update('field_provincia_placeholder_it', v)} />
+                    <FieldText label="Province placeholder (EN)" value={copy.field_provincia_placeholder_en} onChange={v => update('field_provincia_placeholder_en', v)} />
+                    <FieldText label="CAP (IT)" value={copy.field_cap_it} onChange={v => update('field_cap_it', v)} />
+                    <FieldText label="ZIP (EN)" value={copy.field_cap_en} onChange={v => update('field_cap_en', v)} />
+                    <FieldText label="Placeholder CAP (IT)" value={copy.field_cap_placeholder_it} onChange={v => update('field_cap_placeholder_it', v)} />
+                    <FieldText label="ZIP placeholder (EN)" value={copy.field_cap_placeholder_en} onChange={v => update('field_cap_placeholder_en', v)} />
+                    <FieldText label="Nazione (IT)" value={copy.field_nazione_it} onChange={v => update('field_nazione_it', v)} />
+                    <FieldText label="Country (EN)" value={copy.field_nazione_en} onChange={v => update('field_nazione_en', v)} />
+                    <FieldText label="Placeholder Nazione" value={copy.field_nazione_placeholder} onChange={v => update('field_nazione_placeholder', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Contatti</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Telefono (IT)" value={copy.field_telefono_it} onChange={v => update('field_telefono_it', v)} />
+                    <FieldText label="Phone (EN)" value={copy.field_telefono_en} onChange={v => update('field_telefono_en', v)} />
+                    <FieldText label="Placeholder Telefono" value={copy.field_telefono_placeholder} onChange={v => update('field_telefono_placeholder', v)} />
+                    <FieldText label="Email (IT)" value={copy.field_email_it} onChange={v => update('field_email_it', v)} />
+                    <FieldText label="Email (EN)" value={copy.field_email_en} onChange={v => update('field_email_en', v)} />
+                    <FieldText label="Placeholder Email" value={copy.field_email_placeholder} onChange={v => update('field_email_placeholder', v)} />
                 </div>
             </section>
         </div>
