@@ -100,6 +100,14 @@ const hasNotes = (booking: CarWashBooking): boolean => {
   return !!(booking.booking_details?.notes && booking.booking_details.notes.trim())
 }
 
+/** Lavaggio shop hours per weekday (minutes/day) — Mon-Fri 9-13+15-19 = 480,
+ *  Sat 9-13+14-18 = 480, Sun closed. Total open minutes for a given date. */
+const openMinutesForDate = (d: Date): number => {
+  const dow = d.getDay() // 0=Sun, 6=Sat
+  if (dow === 0) return 0
+  return 480 // Mon-Sat: 8 hours total
+}
+
 const formatDuration = (minutes: number): string => {
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -412,6 +420,71 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     today.getFullYear() === currentDate.getFullYear()
   const todayDay = isCurrentMonth ? today.getDate() : null
 
+  // KPI strip metrics — computed from the same `bookings` array the grid
+  // uses. Comparisons "vs ieri" pull yesterday's same metric so the admin
+  // sees the day-over-day delta inline. Currency in cents in DB → ÷100 for €.
+  const kpis = useMemo(() => {
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    const todayDate = new Date()
+    const yesterdayDate = new Date(todayDate.getTime() - 24 * 60 * 60 * 1000)
+
+    const todayBookings = bookings.filter(b => {
+      if (isRientroBooking(b)) return false
+      const d = new Date(b.appointment_date)
+      return sameDay(d, todayDate)
+    })
+    const yesterdayBookings = bookings.filter(b => {
+      if (isRientroBooking(b)) return false
+      const d = new Date(b.appointment_date)
+      return sameDay(d, yesterdayDate)
+    })
+
+    const sumMinutes = (list: CarWashBooking[]) =>
+      list.reduce((sum, b) => sum + getServiceDuration(b.service_name || '', b.booking_details?.vehicle_category, b.booking_details), 0)
+    const sumRevenueCents = (list: CarWashBooking[]) =>
+      list.reduce((sum, b) => sum + (b.price_total || 0), 0)
+
+    const todayBooked = sumMinutes(todayBookings)
+    const yBooked = sumMinutes(yesterdayBookings)
+    const todayOpen = openMinutesForDate(todayDate)
+    const yOpen = openMinutesForDate(yesterdayDate)
+
+    const occupazionePct = todayOpen > 0 ? Math.round((todayBooked / todayOpen) * 100) : 0
+    const yOccPct = yOpen > 0 ? Math.round((yBooked / yOpen) * 100) : 0
+    const freeMin = Math.max(0, todayOpen - todayBooked)
+    // Conservative slot count: ~30-min average wash slot for free-time display.
+    const freeSlots = Math.floor(freeMin / 30)
+    const todayRevenue = sumRevenueCents(todayBookings) / 100
+    const yRevenue = sumRevenueCents(yesterdayBookings) / 100
+    const tempoMedio = todayBookings.length > 0 ? Math.round(todayBooked / todayBookings.length) : 0
+    const yTempoMedio = yesterdayBookings.length > 0 ? Math.round(yBooked / yesterdayBookings.length) : 0
+
+    const pct = (cur: number, prev: number): string => {
+      if (prev === 0) return cur > 0 ? '+∞%' : '—'
+      const delta = ((cur - prev) / prev) * 100
+      const sign = delta >= 0 ? '+' : ''
+      return `${sign}${Math.round(delta)}%`
+    }
+
+    return {
+      lavaggiOggi: todayBookings.length,
+      lavaggiDelta: pct(todayBookings.length, yesterdayBookings.length),
+      occupazionePct,
+      occupazioneDelta: pct(occupazionePct, yOccPct),
+      slotLiberi: freeSlots,
+      bookedMinTotal: todayBooked,
+      openMinTotal: todayOpen,
+      fatturatoOggi: todayRevenue,
+      fatturatoDelta: pct(todayRevenue, yRevenue),
+      tempoMedio,
+      tempoMedioDelta: pct(tempoMedio, yTempoMedio),
+      saturazione: occupazionePct,
+    }
+  }, [bookings])
+
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -421,8 +494,64 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     )
   }
 
+  // KPI strip — 6 metric cards above the calendar grid. Same data the grid
+  // already shows but surfaced in a glanceable header so the admin doesn't
+  // have to count bars to know "how busy is today vs yesterday".
+  const deltaClass = (s: string) =>
+    s.startsWith('+') && s !== '+0%' ? 'text-emerald-400' :
+    s.startsWith('-') ? 'text-red-400' :
+    'text-theme-text-muted'
+
+  const kpiCard = (label: string, value: string, delta?: string, sub?: string) => (
+    <div className="flex-1 min-w-[140px] bg-theme-bg-primary/30 backdrop-blur-sm border border-theme-border/40 rounded-xl px-4 py-3">
+      <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold">{label}</div>
+      <div className="text-2xl font-bold text-theme-text-primary mt-1 tabular-nums">{value}</div>
+      <div className="flex items-center gap-2 mt-0.5 text-[11px]">
+        {delta && <span className={deltaClass(delta)}>{delta} vs ieri</span>}
+        {sub && <span className="text-theme-text-muted">{sub}</span>}
+      </div>
+    </div>
+  )
+
   return (
     <div className="flex flex-col h-[calc(100vh-240px)] sm:h-[calc(100vh-200px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
+
+      {/* 0. KPI Strip — today's snapshot, day-over-day comparison */}
+      <div className="flex flex-wrap gap-2 sm:gap-3 p-3 sm:p-4 bg-theme-bg-primary/10 border-b border-theme-border/30">
+        {kpiCard(
+          'Lavaggi Oggi',
+          String(kpis.lavaggiOggi),
+          kpis.lavaggiDelta,
+        )}
+        {kpiCard(
+          'Slot Occupati',
+          `${kpis.occupazionePct}%`,
+          kpis.occupazioneDelta,
+          `${formatDuration(kpis.bookedMinTotal)} / ${formatDuration(kpis.openMinTotal)}`,
+        )}
+        {kpiCard(
+          'Slot Liberi',
+          String(kpis.slotLiberi),
+          undefined,
+          `${formatDuration(Math.max(0, kpis.openMinTotal - kpis.bookedMinTotal))} disp.`,
+        )}
+        {canViewFinancials && !hideFinancials && kpiCard(
+          'Fatturato Oggi',
+          `€${kpis.fatturatoOggi.toFixed(2).replace('.', ',')}`,
+          kpis.fatturatoDelta,
+        )}
+        {kpiCard(
+          'Tempo Medio',
+          kpis.tempoMedio > 0 ? formatDuration(kpis.tempoMedio) : '—',
+          kpis.tempoMedio > 0 ? kpis.tempoMedioDelta : undefined,
+        )}
+        {kpiCard(
+          'Saturazione',
+          `${kpis.saturazione}%`,
+          undefined,
+          kpis.saturazione >= 85 ? 'Alta' : kpis.saturazione >= 50 ? 'Media' : 'Bassa',
+        )}
+      </div>
 
       {/* 1. Control Bar */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 sm:p-4 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
