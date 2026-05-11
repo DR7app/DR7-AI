@@ -195,59 +195,72 @@ export default function OperatorProfileModal({
     const tone = avatarTone(operatore.email || operatore.nome)
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+        <div
+            className="fixed inset-0 z-50 bg-black/80 sm:flex sm:items-center sm:justify-center sm:p-4"
+            onClick={onClose}
+        >
             <div
-                className="bg-theme-bg-secondary rounded-2xl border border-theme-border max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+                className="bg-theme-bg-secondary border-theme-border h-full w-full overflow-y-auto sm:h-auto sm:max-h-[90vh] sm:max-w-6xl sm:rounded-2xl sm:border"
                 onClick={e => e.stopPropagation()}
+                style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
             >
-                {/* Header */}
-                <div className="flex items-start justify-between gap-4 p-6 border-b border-theme-border sticky top-0 bg-theme-bg-secondary z-10">
-                    <div className="flex items-start gap-4">
-                        <div className="w-20 h-20 rounded-full overflow-hidden flex items-center justify-center text-white text-3xl font-bold flex-shrink-0" style={!operatore.avatar_url ? { } : undefined}>
+                {/* Header — sticky, app-style */}
+                <div
+                    className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-theme-border bg-theme-bg-secondary px-4 py-3 sm:px-6 sm:py-4"
+                    style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+                >
+                    <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+                        <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden flex items-center justify-center text-white text-xl sm:text-3xl font-bold flex-shrink-0">
                             {operatore.avatar_url ? (
                                 <img src={operatore.avatar_url} alt="" className="w-full h-full object-cover" />
                             ) : (
                                 <span className={`w-full h-full ${tone} flex items-center justify-center rounded-full`}>{initials}</span>
                             )}
                         </div>
-                        <div>
-                            <h2 className="text-2xl font-bold text-theme-text-primary">{operatore.nome} {operatore.cognome || ''}</h2>
-                            <p className="text-sm text-theme-text-muted">{operatore.ruolo || 'Operatore'} · {operatore.email}</p>
-                            <p className="text-xs text-theme-text-muted mt-1">Target: {operatore.ore_target_giornaliere}h / giorno</p>
+                        <div className="min-w-0">
+                            <h2 className="text-lg sm:text-2xl font-bold text-theme-text-primary truncate">{operatore.nome} {operatore.cognome || ''}</h2>
+                            <p className="text-xs sm:text-sm text-theme-text-muted truncate">{operatore.ruolo || 'Operatore'} · {operatore.email}</p>
+                            <p className="text-[10px] sm:text-xs text-theme-text-muted mt-0.5">Target: {operatore.ore_target_giornaliere}h / giorno</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none" aria-label="Chiudi">×</button>
+                    <button
+                        onClick={onClose}
+                        aria-label="Chiudi"
+                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-theme-bg-tertiary text-theme-text-secondary hover:text-theme-text-primary text-xl"
+                    >×</button>
                 </div>
 
-                {/* Period selector */}
-                <div className="px-6 pt-4 flex flex-wrap items-center gap-2">
-                    {(['7gg', '30gg', 'mese', 'custom'] as Period[]).map(p => (
-                        <button
-                            key={p}
-                            onClick={() => setPeriod(p)}
-                            className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
-                                period === p
-                                    ? 'bg-dr7-gold text-black'
-                                    : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
-                            }`}
-                        >
-                            {p === '7gg' ? '7 giorni' : p === '30gg' ? '30 giorni' : p === 'mese' ? 'Mese corrente' : 'Personalizzato'}
-                        </button>
-                    ))}
+                {/* Period selector — horizontally scrollable on mobile so pills don't crush */}
+                <div className="px-4 sm:px-6 pt-3 sm:pt-4">
+                    <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {(['7gg', '30gg', 'mese', 'custom'] as Period[]).map(p => (
+                            <button
+                                key={p}
+                                onClick={() => setPeriod(p)}
+                                className={`whitespace-nowrap text-xs px-3 py-2 rounded-full font-medium transition-colors min-h-[36px] ${
+                                    period === p
+                                        ? 'bg-dr7-gold text-black'
+                                        : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'
+                                }`}
+                            >
+                                {p === '7gg' ? '7 giorni' : p === '30gg' ? '30 giorni' : p === 'mese' ? 'Mese corrente' : 'Personalizzato'}
+                            </button>
+                        ))}
+                    </div>
                     {period === 'custom' && (
-                        <div className="flex items-center gap-2 ml-2">
-                            <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-xs text-theme-text-primary min-h-[36px]" />
                             <span className="text-theme-text-muted text-xs">→</span>
-                            <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
+                            <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-xs text-theme-text-primary min-h-[36px]" />
                         </div>
                     )}
-                    <span className="ml-auto text-xs text-theme-text-muted">
+                    <div className="mt-2 text-[11px] text-theme-text-muted">
                         {fmtDate(range.start)} → {fmtDate(range.end)} · {range.days.length} giorni
-                    </span>
+                    </div>
                 </div>
 
                 {/* KPI cards */}
-                <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="px-4 sm:px-6 py-3 sm:py-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
                     <KpiCard label="Ore Lavorate" value={fmtMin(stats.totMinLavorati)} tone="emerald" />
                     <KpiCard label="Target" value={fmtMin(stats.targetMin)} sub={`${stats.giorniAttivi} giorni attivi`} tone="sky" />
                     <KpiCard label="Completamento" value={`${stats.completion}%`} tone={stats.completion >= 100 ? 'emerald' : stats.completion >= 75 ? 'amber' : 'rose'} />
@@ -257,9 +270,9 @@ export default function OperatorProfileModal({
                 </div>
 
                 {/* Trend chart */}
-                <div className="px-6 pb-4">
-                    <div className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-4">
-                        <div className="flex items-baseline justify-between mb-3">
+                <div className="px-4 sm:px-6 pb-3 sm:pb-4">
+                    <div className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3 sm:p-4">
+                        <div className="flex items-baseline justify-between mb-2 sm:mb-3">
                             <h3 className="text-sm font-semibold text-theme-text-primary">Andamento Ore Lavorate</h3>
                             <span className="text-[10px] text-theme-text-muted">minuti per giorno</span>
                         </div>
@@ -294,8 +307,8 @@ export default function OperatorProfileModal({
                 </div>
 
                 {/* Per-day breakdown */}
-                <div className="px-6 pb-6">
-                    <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Dettaglio per giornata</h3>
+                <div className="px-4 sm:px-6 pb-6">
+                    <h3 className="text-sm font-semibold text-theme-text-primary mb-2 sm:mb-3">Dettaglio per giornata</h3>
                     {loading ? (
                         <p className="text-xs text-theme-text-muted py-8 text-center">Caricamento…</p>
                     ) : days.filter(d => d.entrata || d.uscita || d.pauseWindows.length > 0).length === 0 ? (
@@ -304,19 +317,19 @@ export default function OperatorProfileModal({
                         <div className="space-y-2">
                             {days.filter(d => d.entrata || d.uscita || d.pauseWindows.length > 0).reverse().map(d => (
                                 <div key={d.data} className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3">
-                                    <div className="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
+                                    <div className="mb-2 flex items-baseline justify-between gap-3">
                                         <div className="text-sm font-semibold text-theme-text-primary">{fmtDate(d.data)}</div>
-                                        <div className="flex items-center gap-4 text-xs">
-                                            <span className="text-theme-text-muted">Entrata: <span className="font-mono text-theme-text-primary">{fmtTime(d.entrata)}</span></span>
-                                            <span className="text-theme-text-muted">Uscita: <span className="font-mono text-theme-text-primary">{fmtTime(d.uscita)}</span></span>
-                                            <span className="text-emerald-400 font-semibold">{fmtMin(d.minutiLavorati)}</span>
-                                            <span className="text-amber-400">Pausa {fmtMin(d.minutiPausa)}</span>
-                                        </div>
+                                        <span className="text-sm font-semibold text-emerald-400">{fmtMin(d.minutiLavorati)}</span>
+                                    </div>
+                                    <div className="mb-2 grid grid-cols-2 gap-2 text-[11px] sm:flex sm:flex-wrap sm:items-center sm:gap-4 sm:text-xs">
+                                        <span className="text-theme-text-muted">Entrata: <span className="font-mono text-theme-text-primary">{fmtTime(d.entrata)}</span></span>
+                                        <span className="text-theme-text-muted">Uscita: <span className="font-mono text-theme-text-primary">{fmtTime(d.uscita)}</span></span>
+                                        <span className="text-amber-400">Pausa {fmtMin(d.minutiPausa)}</span>
                                     </div>
                                     {d.pauseWindows.length > 0 && (
                                         <div className="flex flex-wrap gap-1.5">
                                             {d.pauseWindows.map((p, i) => (
-                                                <span key={i} className="text-[11px] bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded px-2 py-0.5 font-mono">
+                                                <span key={i} className="text-[10px] sm:text-[11px] bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded px-2 py-0.5 font-mono">
                                                     #{i + 1} {fmtTime(p.start)}→{p.end ? fmtTime(p.end) : 'in corso'} · {p.durMin}m
                                                 </span>
                                             ))}

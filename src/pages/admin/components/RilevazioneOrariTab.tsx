@@ -469,7 +469,71 @@ export default function RilevazioneOrariTab() {
                     <KpiCard label="Pausa Totale" value={fmtMin(totMinPausa)} sub={fmtMinShort(totMinPausa)} tone="amber" />
                     <KpiCard label="Straordinari" value={fmtMin(totStraordinari)} sub={fmtMinShort(totStraordinari)} tone={totStraordinari > 0 ? 'sky' : 'muted'} />
                 </div>
-                <div className="bg-theme-bg-secondary rounded border border-theme-border overflow-x-auto">
+                {/* Mobile card list */}
+                <div className="sm:hidden space-y-2">
+                    {dailyRows.length === 0 && (
+                        <p className="text-center py-6 text-theme-text-muted text-xs">Nessun operatore attivo.</p>
+                    )}
+                    {dailyRows.map(r => {
+                        const isMine = r.operatore.id === me?.id
+                        const target = Math.round((r.operatore.ore_target_giornaliere || 8) * 60)
+                        const straord = Math.max(0, r.minuti_lavorati - target)
+                        return (
+                            <button
+                                key={r.operatore.id}
+                                type="button"
+                                onClick={() => setProfileOp(r.operatore)}
+                                className={`w-full text-left rounded-xl border border-theme-border bg-theme-bg-secondary p-3 active:scale-[0.99] transition-transform ${isMine ? 'ring-1 ring-dr7-gold/50' : ''}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <OperatoreAvatar op={r.operatore} size={40} />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-semibold text-theme-text-primary truncate">
+                                                {r.operatore.nome} {r.operatore.cognome || ''}
+                                            </span>
+                                            {isMine && <span className="text-[9px] px-1.5 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
+                                        </div>
+                                        <div className="text-[11px] text-theme-text-muted truncate">{r.operatore.ruolo || '—'}</div>
+                                    </div>
+                                    <StatoLabel s={r.stato} />
+                                </div>
+                                <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+                                    <div>
+                                        <div className="text-[9px] uppercase text-theme-text-muted">Entrata</div>
+                                        <div className="font-mono text-theme-text-primary">{fmtTime(r.entrata)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[9px] uppercase text-theme-text-muted">Uscita</div>
+                                        <div className="font-mono text-theme-text-primary">{fmtTime(r.uscita)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[9px] uppercase text-theme-text-muted">Pause</div>
+                                        <div className="font-mono text-theme-text-primary">{r.pausa_inizi.length}</div>
+                                    </div>
+                                </div>
+                                <div className="mt-3 flex items-center justify-between rounded-lg bg-theme-bg-primary/40 px-3 py-2">
+                                    <div>
+                                        <div className="text-[9px] uppercase text-theme-text-muted">Ore Lav.</div>
+                                        <div className="text-base font-bold text-emerald-400 tabular-nums">{fmtMin(r.minuti_lavorati)}</div>
+                                    </div>
+                                    {straord > 0 && (
+                                        <div className="text-right">
+                                            <div className="text-[9px] uppercase text-theme-text-muted">Straord.</div>
+                                            <div className="text-sm font-semibold text-sky-400 tabular-nums">{fmtMin(straord)}</div>
+                                        </div>
+                                    )}
+                                    <span className="text-[10px] px-2 py-1 rounded-full bg-dr7-gold text-black font-semibold">
+                                        Vedi report →
+                                    </span>
+                                </div>
+                            </button>
+                        )
+                    })}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden sm:block bg-theme-bg-secondary rounded border border-theme-border overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-theme-bg-tertiary text-theme-text-secondary">
                             <tr>
