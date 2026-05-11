@@ -56,6 +56,7 @@ type SectionId =
     | 'booking'
     | 'credit-wallet'
     | 'token'
+    | 'firma'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -83,6 +84,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'booking', title: 'Prenotazione (Yacht/Jet/Heli)', ready: true },
     { id: 'credit-wallet', title: 'Credit Wallet', ready: true },
     { id: 'token', title: 'DR7 Token (Coin/Up/APP)', ready: true },
+    { id: 'firma', title: 'Firma Contratto (OTP)', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -381,6 +383,100 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Firma page (contract e-signature OTP flow) ──────────────────────────
+interface FirmaCopy {
+    header_pill_it: string; header_pill_en: string
+    expired_title_it: string; expired_title_en: string
+    expired_body_it: string; expired_body_en: string
+    error_title_it: string; error_title_en: string
+    pdf_section_title_it: string; pdf_section_title_en: string
+    pdf_pages_suffix_it: string; pdf_pages_suffix_en: string
+    pdf_page_overlay_template_it: string; pdf_page_overlay_template_en: string
+    pdf_page_alt_template_it: string; pdf_page_alt_template_en: string
+    pdf_iframe_title_it: string; pdf_iframe_title_en: string
+    pdf_loading_it: string; pdf_loading_en: string
+    contract_loading_it: string; contract_loading_en: string
+    contract_number_prefix_it: string; contract_number_prefix_en: string
+    label_cliente_it: string; label_cliente_en: string
+    label_veicolo_it: string; label_veicolo_en: string
+    label_ritiro_it: string; label_ritiro_en: string
+    label_riconsegna_it: string; label_riconsegna_en: string
+    na_fallback_it: string; na_fallback_en: string
+    otp_step1_title_it: string; otp_step1_title_en: string
+    otp_step1_body_template_it: string; otp_step1_body_template_en: string
+    otp_step1_cta_it: string; otp_step1_cta_en: string
+    otp_sending_it: string; otp_sending_en: string
+    otp_step2_title_it: string; otp_step2_title_en: string
+    otp_step2_body_template_it: string; otp_step2_body_template_en: string
+    otp_attempts_template_it: string; otp_attempts_template_en: string
+    otp_verify_cta_it: string; otp_verify_cta_en: string
+    otp_verifying_it: string; otp_verifying_en: string
+    otp_resend_it: string; otp_resend_en: string
+    signing_step_title_it: string; signing_step_title_en: string
+    signing_identity_verified_it: string; signing_identity_verified_en: string
+    signing_ack_template_1_it: string; signing_ack_template_1_en: string
+    signing_ack_template_2_it: string; signing_ack_template_2_en: string
+    signing_terms_checkbox_it: string; signing_terms_checkbox_en: string
+    signing_submit_cta_it: string; signing_submit_cta_en: string
+    signed_title_it: string; signed_title_en: string
+    signed_body_template_it: string; signed_body_template_en: string
+    signed_email_note_it: string; signed_email_note_en: string
+    signed_download_cta_it: string; signed_download_cta_en: string
+    err_load_fallback_it: string; err_load_fallback_en: string
+    err_load_contract_it: string; err_load_contract_en: string
+    err_send_otp_it: string; err_send_otp_en: string
+    err_incomplete_code_it: string; err_incomplete_code_en: string
+    err_verify_otp_it: string; err_verify_otp_en: string
+    err_terms_required_it: string; err_terms_required_en: string
+    err_signing_it: string; err_signing_en: string
+}
+const INITIAL_FIRMA: FirmaCopy = {
+    header_pill_it: '', header_pill_en: '',
+    expired_title_it: '', expired_title_en: '',
+    expired_body_it: '', expired_body_en: '',
+    error_title_it: '', error_title_en: '',
+    pdf_section_title_it: '', pdf_section_title_en: '',
+    pdf_pages_suffix_it: '', pdf_pages_suffix_en: '',
+    pdf_page_overlay_template_it: '', pdf_page_overlay_template_en: '',
+    pdf_page_alt_template_it: '', pdf_page_alt_template_en: '',
+    pdf_iframe_title_it: '', pdf_iframe_title_en: '',
+    pdf_loading_it: '', pdf_loading_en: '',
+    contract_loading_it: '', contract_loading_en: '',
+    contract_number_prefix_it: '', contract_number_prefix_en: '',
+    label_cliente_it: '', label_cliente_en: '',
+    label_veicolo_it: '', label_veicolo_en: '',
+    label_ritiro_it: '', label_ritiro_en: '',
+    label_riconsegna_it: '', label_riconsegna_en: '',
+    na_fallback_it: '', na_fallback_en: '',
+    otp_step1_title_it: '', otp_step1_title_en: '',
+    otp_step1_body_template_it: '', otp_step1_body_template_en: '',
+    otp_step1_cta_it: '', otp_step1_cta_en: '',
+    otp_sending_it: '', otp_sending_en: '',
+    otp_step2_title_it: '', otp_step2_title_en: '',
+    otp_step2_body_template_it: '', otp_step2_body_template_en: '',
+    otp_attempts_template_it: '', otp_attempts_template_en: '',
+    otp_verify_cta_it: '', otp_verify_cta_en: '',
+    otp_verifying_it: '', otp_verifying_en: '',
+    otp_resend_it: '', otp_resend_en: '',
+    signing_step_title_it: '', signing_step_title_en: '',
+    signing_identity_verified_it: '', signing_identity_verified_en: '',
+    signing_ack_template_1_it: '', signing_ack_template_1_en: '',
+    signing_ack_template_2_it: '', signing_ack_template_2_en: '',
+    signing_terms_checkbox_it: '', signing_terms_checkbox_en: '',
+    signing_submit_cta_it: '', signing_submit_cta_en: '',
+    signed_title_it: '', signed_title_en: '',
+    signed_body_template_it: '', signed_body_template_en: '',
+    signed_email_note_it: '', signed_email_note_en: '',
+    signed_download_cta_it: '', signed_download_cta_en: '',
+    err_load_fallback_it: '', err_load_fallback_en: '',
+    err_load_contract_it: '', err_load_contract_en: '',
+    err_send_otp_it: '', err_send_otp_en: '',
+    err_incomplete_code_it: '', err_incomplete_code_en: '',
+    err_verify_otp_it: '', err_verify_otp_en: '',
+    err_terms_required_it: '', err_terms_required_en: '',
+    err_signing_it: '', err_signing_en: '',
 }
 
 // ─── Token page (DR7 Coin / Up / APP manifesto — chrome only) ────────────
@@ -1399,6 +1495,7 @@ interface SiteCopySnapshot {
     booking?: BookingCopy
     creditWallet?: CreditWalletCopy
     token?: TokenCopy
+    firma?: FirmaCopy
 }
 
 interface CurrentState {
@@ -1427,6 +1524,7 @@ interface CurrentState {
     booking: BookingCopy
     creditWallet: CreditWalletCopy
     token: TokenCopy
+    firma: FirmaCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -1535,6 +1633,8 @@ export default function SitoTab() {
     const [savedCreditWallet, setSavedCreditWallet] = useState<CreditWalletCopy>(INITIAL_CREDIT_WALLET)
     const [token, setToken] = useState<TokenCopy>(INITIAL_TOKEN)
     const [savedToken, setSavedToken] = useState<TokenCopy>(INITIAL_TOKEN)
+    const [firma, setFirma] = useState<FirmaCopy>(INITIAL_FIRMA)
+    const [savedFirma, setSavedFirma] = useState<FirmaCopy>(INITIAL_FIRMA)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -1658,6 +1758,10 @@ export default function SitoTab() {
                     setCreditWallet(remote.creditWallet)
                     setSavedCreditWallet(remote.creditWallet)
                 }
+                if (remote?.firma && remote.firma.otp_step1_title_it) {
+                    setFirma(remote.firma)
+                    setSavedFirma(remote.firma)
+                }
                 if (remote?.token && remote.token.coin_section_title_it) {
                     setToken(remote.token)
                     setSavedToken(remote.token)
@@ -1674,10 +1778,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma]
     )
     const dirty = changes.length > 0
 
@@ -1688,7 +1792,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1714,6 +1818,7 @@ export default function SitoTab() {
             setSavedBooking(booking)
             setSavedCreditWallet(creditWallet)
             setSavedToken(token)
+            setSavedFirma(firma)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1773,6 +1878,7 @@ export default function SitoTab() {
         setBooking(savedBooking)
         setCreditWallet(savedCreditWallet)
         setToken(savedToken)
+        setFirma(savedFirma)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1953,6 +2059,9 @@ export default function SitoTab() {
                         {hydrated && section === 'token' && (
                             <TokenEditor copy={token} setCopy={setToken} />
                         )}
+                        {hydrated && section === 'firma' && (
+                            <FirmaEditor copy={firma} setCopy={setFirma} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -2095,6 +2204,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.token) !== JSON.stringify(saved.token)) {
         out.push('DR7 Token: contenuti modificati')
+    }
+    if (JSON.stringify(current.firma) !== JSON.stringify(saved.firma)) {
+        out.push('Firma Contratto: contenuti modificati')
     }
     return out
 }
@@ -5717,6 +5829,157 @@ function TokenEditor({ copy, setCopy }: { copy: TokenCopy; setCopy: (next: Token
                     <FieldText label="Subtitle (EN)" value={copy.cta_subtitle_en} onChange={v => update('cta_subtitle_en', v)} />
                     <FieldText label="Bottone (IT)" value={copy.cta_button_it} onChange={v => update('cta_button_it', v)} />
                     <FieldText label="Button (EN)" value={copy.cta_button_en} onChange={v => update('cta_button_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Firma editor (contract OTP e-signature flow chrome + errors) ──────────
+// Token segnaposto supportati nei template: {email} {name} {num} {attempts}
+// {date} {i} {n}. Sostituiti a runtime — lasciali nei testi.
+function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: FirmaCopy) => void }) {
+    const update = <K extends keyof FirmaCopy>(key: K, value: FirmaCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-[#6e6e73]">
+                Pagina di firma elettronica del contratto (Trustera360 backend). Token segnaposto supportati
+                nei testi: <code className="px-1 bg-black/10 rounded">{`{email}`}</code> <code className="px-1 bg-black/10 rounded">{`{name}`}</code> <code className="px-1 bg-black/10 rounded">{`{num}`}</code> <code className="px-1 bg-black/10 rounded">{`{attempts}`}</code> <code className="px-1 bg-black/10 rounded">{`{date}`}</code> <code className="px-1 bg-black/10 rounded">{`{i}`}</code> <code className="px-1 bg-black/10 rounded">{`{n}`}</code>.
+            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header + stati globali</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Pill header (IT)" value={copy.header_pill_it} onChange={v => update('header_pill_it', v)} />
+                    <FieldText label="Header pill (EN)" value={copy.header_pill_en} onChange={v => update('header_pill_en', v)} />
+                    <FieldText label="Caricamento contratto (IT)" value={copy.contract_loading_it} onChange={v => update('contract_loading_it', v)} />
+                    <FieldText label="Loading contract (EN)" value={copy.contract_loading_en} onChange={v => update('contract_loading_en', v)} />
+                    <FieldText label="Titolo Link Scaduto (IT)" value={copy.expired_title_it} onChange={v => update('expired_title_it', v)} />
+                    <FieldText label="Link Expired title (EN)" value={copy.expired_title_en} onChange={v => update('expired_title_en', v)} />
+                    <FieldTextArea label="Body Link Scaduto (IT)" value={copy.expired_body_it} onChange={v => update('expired_body_it', v)} />
+                    <FieldTextArea label="Link Expired body (EN)" value={copy.expired_body_en} onChange={v => update('expired_body_en', v)} />
+                    <FieldText label="Titolo Errore (IT)" value={copy.error_title_it} onChange={v => update('error_title_it', v)} />
+                    <FieldText label="Error title (EN)" value={copy.error_title_en} onChange={v => update('error_title_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Riepilogo contratto</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Prefisso "Contratto" (IT)' value={copy.contract_number_prefix_it} onChange={v => update('contract_number_prefix_it', v)} />
+                    <FieldText label='"Contract" prefix (EN)' value={copy.contract_number_prefix_en} onChange={v => update('contract_number_prefix_en', v)} />
+                    <FieldText label="Etichetta Cliente (IT)" value={copy.label_cliente_it} onChange={v => update('label_cliente_it', v)} />
+                    <FieldText label="Customer label (EN)" value={copy.label_cliente_en} onChange={v => update('label_cliente_en', v)} />
+                    <FieldText label="Etichetta Veicolo (IT)" value={copy.label_veicolo_it} onChange={v => update('label_veicolo_it', v)} />
+                    <FieldText label="Vehicle label (EN)" value={copy.label_veicolo_en} onChange={v => update('label_veicolo_en', v)} />
+                    <FieldText label="Etichetta Ritiro (IT)" value={copy.label_ritiro_it} onChange={v => update('label_ritiro_it', v)} />
+                    <FieldText label="Pickup label (EN)" value={copy.label_ritiro_en} onChange={v => update('label_ritiro_en', v)} />
+                    <FieldText label="Etichetta Riconsegna (IT)" value={copy.label_riconsegna_it} onChange={v => update('label_riconsegna_it', v)} />
+                    <FieldText label="Return label (EN)" value={copy.label_riconsegna_en} onChange={v => update('label_riconsegna_en', v)} />
+                    <FieldText label="Fallback N/A (IT)" value={copy.na_fallback_it} onChange={v => update('na_fallback_it', v)} />
+                    <FieldText label="N/A fallback (EN)" value={copy.na_fallback_en} onChange={v => update('na_fallback_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Viewer PDF</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo sezione (IT)" value={copy.pdf_section_title_it} onChange={v => update('pdf_section_title_it', v)} />
+                    <FieldText label="Section title (EN)" value={copy.pdf_section_title_en} onChange={v => update('pdf_section_title_en', v)} />
+                    <FieldText label="Suffisso pagine (IT)" value={copy.pdf_pages_suffix_it} onChange={v => update('pdf_pages_suffix_it', v)} />
+                    <FieldText label="Pages suffix (EN)" value={copy.pdf_pages_suffix_en} onChange={v => update('pdf_pages_suffix_en', v)} />
+                    <FieldText label="Overlay numero pagina (IT)" value={copy.pdf_page_overlay_template_it} onChange={v => update('pdf_page_overlay_template_it', v)} />
+                    <FieldText label="Page overlay template (EN)" value={copy.pdf_page_overlay_template_en} onChange={v => update('pdf_page_overlay_template_en', v)} />
+                    <FieldText label="Alt text pagina (IT)" value={copy.pdf_page_alt_template_it} onChange={v => update('pdf_page_alt_template_it', v)} />
+                    <FieldText label="Page alt text (EN)" value={copy.pdf_page_alt_template_en} onChange={v => update('pdf_page_alt_template_en', v)} />
+                    <FieldText label="Titolo iframe PDF (IT)" value={copy.pdf_iframe_title_it} onChange={v => update('pdf_iframe_title_it', v)} />
+                    <FieldText label="PDF iframe title (EN)" value={copy.pdf_iframe_title_en} onChange={v => update('pdf_iframe_title_en', v)} />
+                    <FieldText label="Caricamento documento (IT)" value={copy.pdf_loading_it} onChange={v => update('pdf_loading_it', v)} />
+                    <FieldText label="Loading document (EN)" value={copy.pdf_loading_en} onChange={v => update('pdf_loading_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Step 1 — invia codice OTP</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo step (IT)" value={copy.otp_step1_title_it} onChange={v => update('otp_step1_title_it', v)} />
+                    <FieldText label="Step title (EN)" value={copy.otp_step1_title_en} onChange={v => update('otp_step1_title_en', v)} />
+                    <FieldTextArea label="Body con {email} (IT)" value={copy.otp_step1_body_template_it} onChange={v => update('otp_step1_body_template_it', v)} />
+                    <FieldTextArea label="Body with {email} (EN)" value={copy.otp_step1_body_template_en} onChange={v => update('otp_step1_body_template_en', v)} />
+                    <FieldText label="CTA invio codice (IT)" value={copy.otp_step1_cta_it} onChange={v => update('otp_step1_cta_it', v)} />
+                    <FieldText label="Send code CTA (EN)" value={copy.otp_step1_cta_en} onChange={v => update('otp_step1_cta_en', v)} />
+                    <FieldText label="Stato 'Invio in corso...' (IT)" value={copy.otp_sending_it} onChange={v => update('otp_sending_it', v)} />
+                    <FieldText label="'Sending...' state (EN)" value={copy.otp_sending_en} onChange={v => update('otp_sending_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Step 2 — inserisci OTP</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo step (IT)" value={copy.otp_step2_title_it} onChange={v => update('otp_step2_title_it', v)} />
+                    <FieldText label="Step title (EN)" value={copy.otp_step2_title_en} onChange={v => update('otp_step2_title_en', v)} />
+                    <FieldTextArea label="Body con {email} (IT)" value={copy.otp_step2_body_template_it} onChange={v => update('otp_step2_body_template_it', v)} />
+                    <FieldTextArea label="Body with {email} (EN)" value={copy.otp_step2_body_template_en} onChange={v => update('otp_step2_body_template_en', v)} />
+                    <FieldText label="Tentativi rimanenti con {attempts} (IT)" value={copy.otp_attempts_template_it} onChange={v => update('otp_attempts_template_it', v)} />
+                    <FieldText label="Attempts with {attempts} (EN)" value={copy.otp_attempts_template_en} onChange={v => update('otp_attempts_template_en', v)} />
+                    <FieldText label="CTA verifica (IT)" value={copy.otp_verify_cta_it} onChange={v => update('otp_verify_cta_it', v)} />
+                    <FieldText label="Verify CTA (EN)" value={copy.otp_verify_cta_en} onChange={v => update('otp_verify_cta_en', v)} />
+                    <FieldText label="Stato 'Verifica...' (IT)" value={copy.otp_verifying_it} onChange={v => update('otp_verifying_it', v)} />
+                    <FieldText label="'Verifying...' (EN)" value={copy.otp_verifying_en} onChange={v => update('otp_verifying_en', v)} />
+                    <FieldText label="Link reinvio (IT)" value={copy.otp_resend_it} onChange={v => update('otp_resend_it', v)} />
+                    <FieldText label="Resend link (EN)" value={copy.otp_resend_en} onChange={v => update('otp_resend_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Step 3 — conferma firma</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo step (IT)" value={copy.signing_step_title_it} onChange={v => update('signing_step_title_it', v)} />
+                    <FieldText label="Step title (EN)" value={copy.signing_step_title_en} onChange={v => update('signing_step_title_en', v)} />
+                    <FieldText label="Banner identita verificata (IT)" value={copy.signing_identity_verified_it} onChange={v => update('signing_identity_verified_it', v)} />
+                    <FieldText label="Identity verified banner (EN)" value={copy.signing_identity_verified_en} onChange={v => update('signing_identity_verified_en', v)} />
+                    <FieldTextArea label="Dichiarazione 1 con {name} {num} (IT)" value={copy.signing_ack_template_1_it} onChange={v => update('signing_ack_template_1_it', v)} />
+                    <FieldTextArea label="Acknowledgment 1 with {name} {num} (EN)" value={copy.signing_ack_template_1_en} onChange={v => update('signing_ack_template_1_en', v)} />
+                    <FieldTextArea label="Dichiarazione 2 con {email} (IT)" value={copy.signing_ack_template_2_it} onChange={v => update('signing_ack_template_2_it', v)} />
+                    <FieldTextArea label="Acknowledgment 2 with {email} (EN)" value={copy.signing_ack_template_2_en} onChange={v => update('signing_ack_template_2_en', v)} />
+                    <FieldTextArea label="Testo checkbox termini (IT)" value={copy.signing_terms_checkbox_it} onChange={v => update('signing_terms_checkbox_it', v)} />
+                    <FieldTextArea label="Terms checkbox text (EN)" value={copy.signing_terms_checkbox_en} onChange={v => update('signing_terms_checkbox_en', v)} />
+                    <FieldText label="CTA firma (IT)" value={copy.signing_submit_cta_it} onChange={v => update('signing_submit_cta_it', v)} />
+                    <FieldText label="Sign CTA (EN)" value={copy.signing_submit_cta_en} onChange={v => update('signing_submit_cta_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Documento firmato (successo)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.signed_title_it} onChange={v => update('signed_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.signed_title_en} onChange={v => update('signed_title_en', v)} />
+                    <FieldTextArea label="Body con {date} (IT)" value={copy.signed_body_template_it} onChange={v => update('signed_body_template_it', v)} />
+                    <FieldTextArea label="Body with {date} (EN)" value={copy.signed_body_template_en} onChange={v => update('signed_body_template_en', v)} />
+                    <FieldText label="Nota email (IT)" value={copy.signed_email_note_it} onChange={v => update('signed_email_note_it', v)} />
+                    <FieldText label="Email note (EN)" value={copy.signed_email_note_en} onChange={v => update('signed_email_note_en', v)} />
+                    <FieldText label="CTA download (IT)" value={copy.signed_download_cta_it} onChange={v => update('signed_download_cta_it', v)} />
+                    <FieldText label="Download CTA (EN)" value={copy.signed_download_cta_en} onChange={v => update('signed_download_cta_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Messaggi di errore</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Caricamento fallback (IT)" value={copy.err_load_fallback_it} onChange={v => update('err_load_fallback_it', v)} />
+                    <FieldText label="Load fallback (EN)" value={copy.err_load_fallback_en} onChange={v => update('err_load_fallback_en', v)} />
+                    <FieldText label="Caricamento contratto (IT)" value={copy.err_load_contract_it} onChange={v => update('err_load_contract_it', v)} />
+                    <FieldText label="Load contract (EN)" value={copy.err_load_contract_en} onChange={v => update('err_load_contract_en', v)} />
+                    <FieldText label="Invio OTP (IT)" value={copy.err_send_otp_it} onChange={v => update('err_send_otp_it', v)} />
+                    <FieldText label="Send OTP (EN)" value={copy.err_send_otp_en} onChange={v => update('err_send_otp_en', v)} />
+                    <FieldText label="Codice incompleto (IT)" value={copy.err_incomplete_code_it} onChange={v => update('err_incomplete_code_it', v)} />
+                    <FieldText label="Incomplete code (EN)" value={copy.err_incomplete_code_en} onChange={v => update('err_incomplete_code_en', v)} />
+                    <FieldText label="Verifica OTP (IT)" value={copy.err_verify_otp_it} onChange={v => update('err_verify_otp_it', v)} />
+                    <FieldText label="Verify OTP (EN)" value={copy.err_verify_otp_en} onChange={v => update('err_verify_otp_en', v)} />
+                    <FieldText label="Termini obbligatori (IT)" value={copy.err_terms_required_it} onChange={v => update('err_terms_required_it', v)} />
+                    <FieldText label="Terms required (EN)" value={copy.err_terms_required_en} onChange={v => update('err_terms_required_en', v)} />
+                    <FieldText label="Firma (IT)" value={copy.err_signing_it} onChange={v => update('err_signing_it', v)} />
+                    <FieldText label="Signing (EN)" value={copy.err_signing_en} onChange={v => update('err_signing_en', v)} />
                 </div>
             </section>
         </div>
