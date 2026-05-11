@@ -1819,23 +1819,23 @@ function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id:
     }).filter(g => g.items.length > 0)
 
     return (
-        <div className="bg-white rounded-2xl p-3 border border-black/5 shadow-sm space-y-3">
+        <div className="bg-theme-bg-primary rounded-2xl p-3 border border-theme-border shadow-sm space-y-3">
             <div className="relative">
                 <input
                     type="search"
                     placeholder="Cerca sezione…"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl text-[13px] bg-black/[0.03] border border-transparent focus:bg-white focus:border-black/10 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl text-[13px] bg-theme-bg-secondary border border-transparent focus:bg-theme-bg-primary focus:border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
                 />
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6e6e73] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-secondary pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                     <circle cx="11" cy="11" r="7" />
                     <path strokeLinecap="round" d="m20 20-3-3" />
                 </svg>
             </div>
 
             {filteredByCategory.length === 0 && (
-                <p className="px-3 py-6 text-center text-[12px] text-[#6e6e73]">Nessuna sezione corrisponde.</p>
+                <p className="px-3 py-6 text-center text-[12px] text-theme-text-secondary">Nessuna sezione corrisponde.</p>
             )}
 
             {filteredByCategory.map(({ cat, items }) => {
@@ -1845,12 +1845,12 @@ function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id:
                         <button
                             type="button"
                             onClick={() => q === '' && setCollapsed(s => ({ ...s, [cat.id]: !s[cat.id] }))}
-                            className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#6e6e73] hover:text-[#1d1d1f]"
+                            className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-theme-text-secondary hover:text-theme-text-primary"
                             title={cat.description}
                         >
                             <span>{cat.label}</span>
                             <span className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-semibold bg-black/5 rounded-full px-1.5 py-0.5">{items.length}</span>
+                                <span className="text-[10px] font-semibold bg-theme-bg-secondary rounded-full px-1.5 py-0.5">{items.length}</span>
                                 {q === '' && (
                                     <svg className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="currentColor"><path d="M6 8 1 3h10z" /></svg>
                                 )}
@@ -1867,7 +1867,7 @@ function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id:
                                                 className={`w-full text-left px-3 py-2 rounded-xl text-[13px] font-medium transition-colors flex items-center gap-2 ${
                                                     active
                                                         ? 'bg-blue-500 text-white shadow-sm'
-                                                        : 'text-[#1d1d1f] hover:bg-black/5'
+                                                        : 'text-theme-text-primary hover:bg-theme-bg-secondary'
                                                 }`}
                                             >
                                                 <span className="flex-1">{s.title}</span>
@@ -2283,11 +2283,11 @@ export default function SitoTab() {
             />
 
             {/* Header */}
-            <div className="px-6 pt-6 pb-4 bg-white border-b border-black/5">
+            <div className="px-6 pt-6 pb-4 bg-theme-bg-primary border-b border-theme-border">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Sito</h1>
-                        <p className="text-[14px] text-[#6e6e73] mt-1">Modifica testi visibili sul sito senza intervento sviluppatore.</p>
+                        <h1 className="text-[28px] font-semibold tracking-tight text-theme-text-primary">Sito</h1>
+                        <p className="text-[14px] text-theme-text-secondary mt-1">Modifica testi visibili sul sito senza intervento sviluppatore.</p>
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -2308,9 +2308,9 @@ export default function SitoTab() {
                     </aside>
 
                     {/* Main content */}
-                    <main className="bg-white rounded-2xl p-6 border border-black/5 shadow-sm min-h-[400px]">
+                    <main className="bg-theme-bg-primary rounded-2xl p-6 border border-theme-border shadow-sm min-h-[400px]">
                         {!hydrated && (
-                            <p className="text-sm text-[#6e6e73]">Caricamento dati…</p>
+                            <p className="text-sm text-theme-text-secondary">Caricamento dati…</p>
                         )}
                         {hydrated && section === 'faq' && (
                             <FaqEditor copy={faq} setCopy={setFaq} />
@@ -2399,17 +2399,17 @@ export default function SitoTab() {
 
             {/* SaveBar */}
             {dirty && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-black/10 shadow-lg z-40">
+                <div className="fixed bottom-0 left-0 right-0 bg-theme-bg-primary border-t border-theme-border shadow-lg z-40">
                     <div className="px-6 py-3 flex items-center justify-between gap-4">
-                        <div className="text-[13px] text-[#1d1d1f]">
+                        <div className="text-[13px] text-theme-text-primary">
                             <b>{changes.length}</b> modific{changes.length === 1 ? 'a' : 'he'} non salvat{changes.length === 1 ? 'a' : 'e'}.
-                            {' '}<span className="text-[#6e6e73]">{changes[0]}{changes.length > 1 ? `, +${changes.length - 1} altre` : ''}</span>
+                            {' '}<span className="text-theme-text-secondary">{changes[0]}{changes.length > 1 ? `, +${changes.length - 1} altre` : ''}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={handleDiscard}
                                 disabled={saving}
-                                className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#1d1d1f] bg-black/5 hover:bg-black/10 disabled:opacity-50"
+                                className="px-4 py-2 rounded-xl text-[13px] font-medium text-theme-text-primary bg-theme-bg-secondary hover:bg-theme-bg-tertiary disabled:opacity-50"
                             >Annulla</button>
                             <button
                                 onClick={handleSave}
@@ -2584,15 +2584,15 @@ function FaqEditor({
     return (
         <div className="space-y-5">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">FAQ</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/faq</code>. Modifica titolo pagina, eyebrow, sottotitolo e voci.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">FAQ</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/faq</code>. Modifica titolo pagina, eyebrow, sottotitolo e voci.
                 </p>
             </div>
 
             {/* Page chrome (title + eyebrow + subtitle) */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero pagina</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero pagina</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Eyebrow (IT) — es. "DR7 · Supporto"' value={copy.eyebrow_it} onChange={v => updateField('eyebrow_it', v)} />
                     <FieldText label="Eyebrow (EN)" value={copy.eyebrow_en} onChange={v => updateField('eyebrow_en', v)} />
@@ -2605,20 +2605,20 @@ function FaqEditor({
 
             <ul className="space-y-3">
                 {entries.map((e, i) => (
-                    <li key={e.id} className="border border-black/10 rounded-2xl p-4 bg-white shadow-sm">
+                    <li key={e.id} className="border border-theme-border rounded-2xl p-4 bg-theme-bg-primary shadow-sm">
                         <div className="flex items-start gap-3">
                             {/* Reorder controls */}
                             <div className="flex flex-col gap-1 pt-1">
                                 <button
                                     onClick={() => move(e.id, -1)}
                                     disabled={i === 0}
-                                    className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center"
+                                    className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center"
                                     title="Sposta su"
                                 ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
                                 <button
                                     onClick={() => move(e.id, 1)}
                                     disabled={i === entries.length - 1}
-                                    className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center"
+                                    className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center"
                                     title="Sposta giù"
                                 ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                             </div>
@@ -2631,7 +2631,7 @@ function FaqEditor({
                                         value={e.question}
                                         onChange={(ev) => update(e.id, { question: ev.target.value })}
                                         placeholder="Es. Quali sono i requisiti per noleggiare un'auto?"
-                                        className="mt-1 w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                                        className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                                     />
                                 </label>
                                 <label className="block">
@@ -2641,7 +2641,7 @@ function FaqEditor({
                                         onChange={(ev) => update(e.id, { answer: ev.target.value })}
                                         placeholder="Es. Il conducente deve avere almeno 25 anni…"
                                         rows={3}
-                                        className="mt-1 w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
+                                        className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
                                     />
                                 </label>
                             </div>
@@ -2658,7 +2658,7 @@ function FaqEditor({
 
             <button
                 onClick={add}
-                className="w-full py-3 rounded-2xl border-2 border-dashed border-black/15 text-[13px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-2xl border-2 border-dashed border-theme-border text-[13px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
             >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Aggiungi domanda
@@ -2709,15 +2709,15 @@ function CancellazioneEditor({
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Cancellazione</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/cancellation</code>. Modifica titoli e paragrafi in italiano e inglese. I numeri (giorni soglia, % rimborso/penale) vengono dalle regole in Centralina Pro &gt; Automazioni e si inseriscono coi placeholder <code>{'{thresholdDays}'}</code>, <code>{'{refundPercent}'}</code>, <code>{'{penaltyPercent}'}</code>, <code>{'{daysWord}'}</code>.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Cancellazione</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/cancellation</code>. Modifica titoli e paragrafi in italiano e inglese. I numeri (giorni soglia, % rimborso/penale) vengono dalle regole in Centralina Pro &gt; Automazioni e si inseriscono coi placeholder <code>{'{thresholdDays}'}</code>, <code>{'{refundPercent}'}</code>, <code>{'{penaltyPercent}'}</code>, <code>{'{daysWord}'}</code>.
                 </p>
             </div>
 
             {/* Page header + footer fields */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header & Footer pagina</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Header & Footer pagina</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.page_title_it} onChange={v => updateField('page_title_it', v)} />
                     <FieldText label="Titolo (EN)" value={copy.page_title_en} onChange={v => updateField('page_title_en', v)} />
@@ -2732,7 +2732,7 @@ function CancellazioneEditor({
 
             {/* Sections */}
             <div className="space-y-3">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sezioni ({copy.sections.length})</h3>
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Sezioni ({copy.sections.length})</h3>
                 {copy.sections.map((sec, i) => (
                     <SectionCard
                         key={sec.id}
@@ -2747,7 +2747,7 @@ function CancellazioneEditor({
                 ))}
                 <button
                     onClick={addSection}
-                    className="w-full py-3 rounded-2xl border-2 border-dashed border-black/15 text-[13px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-2xl border-2 border-dashed border-theme-border text-[13px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi sezione
@@ -2765,7 +2765,7 @@ function FieldText({ label, value, onChange }: { label: string; value: string; o
                 type="text"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                className="mt-1 w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40"
             />
         </label>
     )
@@ -2809,28 +2809,28 @@ function SectionCard({
 
     const variantBadge = section.variant === 'flex'
         ? <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700">Flex</span>
-        : <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-black/5 text-[#6e6e73]">Standard</span>
+        : <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-theme-bg-secondary text-theme-text-secondary">Standard</span>
 
     return (
-        <div className="border border-black/10 rounded-2xl bg-white shadow-sm">
+        <div className="border border-theme-border rounded-2xl bg-theme-bg-primary shadow-sm">
             <header className="px-4 py-3 flex items-center gap-3">
                 <button
                     onClick={() => setOpen(o => !o)}
                     className="flex-1 text-left flex items-center gap-3"
                 >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-[#6e6e73] transition-transform ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
-                    <span className="text-[13px] font-semibold text-[#1d1d1f] flex-1 truncate">{section.title_it || '(senza titolo)'}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-theme-text-secondary transition-transform ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
+                    <span className="text-[13px] font-semibold text-theme-text-primary flex-1 truncate">{section.title_it || '(senza titolo)'}</span>
                     {variantBadge}
                 </button>
                 <div className="flex items-center gap-1">
-                    <button onClick={onMoveUp} disabled={first} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                    <button onClick={onMoveDown} disabled={last} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                    <button onClick={onMoveUp} disabled={first} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                    <button onClick={onMoveDown} disabled={last} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                     <button onClick={onRemove} className="w-7 h-7 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina sezione"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg></button>
                 </div>
             </header>
 
             {open && (
-                <div className="px-4 pb-4 space-y-4 border-t border-black/5 pt-4">
+                <div className="px-4 pb-4 space-y-4 border-t border-theme-border pt-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <FieldText label="Titolo sezione (IT)" value={section.title_it} onChange={v => onChange({ title_it: v })} />
                         <FieldText label="Titolo sezione (EN)" value={section.title_en} onChange={v => onChange({ title_en: v })} />
@@ -2840,7 +2840,7 @@ function SectionCard({
                         <select
                             value={section.variant}
                             onChange={(e) => onChange({ variant: e.target.value as 'standard' | 'flex' })}
-                            className="mt-1 w-full md:w-48 bg-white border border-black/10 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                            className="mt-1 w-full md:w-48 bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                         >
                             <option value="standard">Standard (border grigio)</option>
                             <option value="flex">Flex (border verde)</option>
@@ -2879,7 +2879,7 @@ function AddBlockButton({ label, onClick }: { label: string; onClick: () => void
     return (
         <button
             onClick={onClick}
-            className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-[#1d1d1f] bg-black/5 hover:bg-black/10"
+            className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-theme-text-primary bg-theme-bg-secondary hover:bg-theme-bg-tertiary"
         >{label}</button>
     )
 }
@@ -2903,11 +2903,11 @@ function BlockCard({
     }[block.type]
 
     return (
-        <div className="border border-black/10 rounded-xl p-3 bg-[#fafafa]">
+        <div className="border border-theme-border rounded-xl p-3 bg-[#fafafa]">
             <div className="flex items-center gap-2 mb-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1">{typeLabel}</span>
-                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1">{typeLabel}</span>
+                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                 <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
 
@@ -2926,7 +2926,7 @@ function BlockCard({
                             value={block.text_it}
                             onChange={(e) => onChange({ ...block, text_it: e.target.value })}
                             rows={3}
-                            className="mt-0.5 w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
+                            className="mt-0.5 w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
                         />
                     </label>
                     <label className="block">
@@ -2935,7 +2935,7 @@ function BlockCard({
                             value={block.text_en}
                             onChange={(e) => onChange({ ...block, text_en: e.target.value })}
                             rows={3}
-                            className="mt-0.5 w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
+                            className="mt-0.5 w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
                         />
                     </label>
                 </div>
@@ -2987,12 +2987,12 @@ function UlEditor({
 
     return (
         <div className="space-y-2">
-            <label className="flex items-center gap-2 text-[11px] text-[#6e6e73]">
+            <label className="flex items-center gap-2 text-[11px] text-theme-text-secondary">
                 <span>Tono:</span>
                 <select
                     value={tone}
                     onChange={(e) => onChange({ tone: e.target.value as 'default' | 'green' })}
-                    className="bg-white border border-black/10 rounded-md px-2 py-0.5 text-[12px]"
+                    className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-0.5 text-[12px]"
                 >
                     <option value="default">Default (grigio)</option>
                     <option value="green">Verde (Flex)</option>
@@ -3006,18 +3006,18 @@ function UlEditor({
                             value={items_it[i] || ''}
                             onChange={(e) => updateIt(i, e.target.value)}
                             placeholder="punto IT"
-                            className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]"
+                            className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]"
                         />
                         <input
                             type="text"
                             value={items_en[i] || ''}
                             onChange={(e) => updateEn(i, e.target.value)}
                             placeholder="bullet EN"
-                            className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]"
+                            className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]"
                         />
                         <div className="flex items-center gap-1">
-                            <button onClick={() => moveRow(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveRow(i, 1)} disabled={i === len - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => moveRow(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveRow(i, 1)} disabled={i === len - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                             <button onClick={() => removeRow(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                         </div>
                     </li>
@@ -3095,15 +3095,15 @@ function MembershipEditor({
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Membership / DR7 Club</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/membership</code>. I prezzi €/mese €/anno restano calcolati dai tier reali (constants/MEMBERSHIP_TIERS) — qui modifichi solo i testi. Placeholder utilizzabili: <code>{'{monthlyPrice}'}</code>, <code>{'{annualPrice}'}</code>, <code>{'{annualMonthly}'}</code>, <code>{'{annualSavings}'}</code>.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Membership / DR7 Club</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/membership</code>. I prezzi €/mese €/anno restano calcolati dai tier reali (constants/MEMBERSHIP_TIERS) — qui modifichi solo i testi. Placeholder utilizzabili: <code>{'{monthlyPrice}'}</code>, <code>{'{annualPrice}'}</code>, <code>{'{annualMonthly}'}</code>, <code>{'{annualSavings}'}</code>.
                 </p>
             </div>
 
             {/* HERO */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Eyebrow (IT) — es. "Exclusive"' value={copy.hero_eyebrow_it} onChange={v => updateField('hero_eyebrow_it', v)} />
                     <FieldText label="Eyebrow (EN)" value={copy.hero_eyebrow_en} onChange={v => updateField('hero_eyebrow_en', v)} />
@@ -3120,8 +3120,8 @@ function MembershipEditor({
             </section>
 
             {/* PRICING */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Pricing card</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Pricing card</h3>
                 <FieldText label="Titolo card" value={copy.pricing_card_title} onChange={v => updateField('pricing_card_title', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Toggle Mensile (IT)" value={copy.pricing_billing_monthly_it} onChange={v => updateField('pricing_billing_monthly_it', v)} />
@@ -3149,8 +3149,8 @@ function MembershipEditor({
             </section>
 
             {/* DR7 ELITE REWARDS */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">DR7 Elite Rewards</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">DR7 Elite Rewards</h3>
                 <FieldText label='Titolo (es. "DR7 Elite Rewards")' value={copy.elite_title} onChange={v => updateField('elite_title', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Sottotitolo (IT)" value={copy.elite_subtitle_it} onChange={v => updateField('elite_subtitle_it', v)} />
@@ -3175,14 +3175,14 @@ function MembershipEditor({
                     ))}
                     <button
                         onClick={addEliteSection}
-                        className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         Aggiungi sotto-sezione
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-black/5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-theme-border">
                     <FieldText label="CTA finale — Titolo (IT)" value={copy.elite_cta_title_it} onChange={v => updateField('elite_cta_title_it', v)} />
                     <FieldText label="CTA finale — Titolo (EN)" value={copy.elite_cta_title_en} onChange={v => updateField('elite_cta_title_en', v)} />
                     <FieldTextArea label="CTA finale — Testo (IT)" value={copy.elite_cta_text_it} onChange={v => updateField('elite_cta_text_it', v)} />
@@ -3195,8 +3195,8 @@ function MembershipEditor({
             </section>
 
             {/* REWARD SYSTEM */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sezione "Come funziona il Reward"</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Sezione "Come funziona il Reward"</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.reward_title_it} onChange={v => updateField('reward_title_it', v)} />
                     <FieldText label="Titolo (EN)" value={copy.reward_title_en} onChange={v => updateField('reward_title_en', v)} />
@@ -3220,14 +3220,14 @@ function MembershipEditor({
                     ))}
                     <button
                         onClick={addRewardItem}
-                        className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         Aggiungi voce reward
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-black/5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-theme-border">
                     <FieldText label="Footnote (IT)" value={copy.reward_footnote_it} onChange={v => updateField('reward_footnote_it', v)} />
                     <FieldText label="Footnote (EN)" value={copy.reward_footnote_en} onChange={v => updateField('reward_footnote_en', v)} />
                 </div>
@@ -3245,7 +3245,7 @@ function FieldTextArea({ label, value, onChange, placeholder }: { label: string;
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
                 rows={2}
-                className="mt-1 w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
+                className="mt-1 w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
             />
         </label>
     )
@@ -3263,22 +3263,22 @@ function RewardItemCard({
     onRemove: () => void
 }) {
     return (
-        <div className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+        <div className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
             <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{item.label_it || '(senza titolo)'}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{item.label_it || '(senza titolo)'}</span>
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700">{item.reward}</span>
-                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                 <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px] gap-2">
-                <input type="text" value={item.label_it} onChange={e => onChange({ label_it: e.target.value })} placeholder="Etichetta IT" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                <input type="text" value={item.label_en} onChange={e => onChange({ label_en: e.target.value })} placeholder="Label EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                <input type="text" value={item.reward} onChange={e => onChange({ reward: e.target.value })} placeholder='Reward (es. "2%")' className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-center font-semibold" />
+                <input type="text" value={item.label_it} onChange={e => onChange({ label_it: e.target.value })} placeholder="Etichetta IT" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={item.label_en} onChange={e => onChange({ label_en: e.target.value })} placeholder="Label EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={item.reward} onChange={e => onChange({ reward: e.target.value })} placeholder='Reward (es. "2%")' className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-center font-semibold" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <input type="text" value={item.note_it ?? ''} onChange={e => onChange({ note_it: e.target.value || null })} placeholder="Nota IT (opzionale)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]" />
-                <input type="text" value={item.note_en ?? ''} onChange={e => onChange({ note_en: e.target.value || null })} placeholder="Note EN (optional)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]" />
+                <input type="text" value={item.note_it ?? ''} onChange={e => onChange({ note_it: e.target.value || null })} placeholder="Nota IT (opzionale)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px]" />
+                <input type="text" value={item.note_en ?? ''} onChange={e => onChange({ note_en: e.target.value || null })} placeholder="Note EN (optional)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px]" />
             </div>
         </div>
     )
@@ -3350,16 +3350,16 @@ function HomeEditor({
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Home / Hero</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/</code>. Modifica il titolo SEO, i video del carosello hero (path sotto <code>/public</code>) e le card categorie (titolo IT/EN + immagine). Le voci categoria sono override: se non c'e' override per un id, la card mostra il default hardcoded.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Home / Hero</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/</code>. Modifica il titolo SEO, i video del carosello hero (path sotto <code>/public</code>) e le card categorie (titolo IT/EN + immagine). Le voci categoria sono override: se non c'e' override per un id, la card mostra il default hardcoded.
                 </p>
             </div>
 
             {/* SEO */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">SEO</h3>
-                <p className="text-[12px] text-[#6e6e73]">
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">SEO</h3>
+                <p className="text-[12px] text-theme-text-secondary">
                     Titolo H1 nascosto nella pagina, indicizzato dai motori di ricerca. Non visibile nella UI.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3369,11 +3369,11 @@ function HomeEditor({
             </section>
 
             {/* Hero slides */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Carosello Hero (video)</h3>
-                        <p className="text-[12px] text-[#6e6e73] mt-1">Lista dei video che ruotano in homepage. Ogni path e' relativo alla cartella <code>/public</code> (es. <code>/main.mp4</code>).</p>
+                        <h3 className="text-[14px] font-semibold text-theme-text-primary">Carosello Hero (video)</h3>
+                        <p className="text-[12px] text-theme-text-secondary mt-1">Lista dei video che ruotano in homepage. Ogni path e' relativo alla cartella <code>/public</code> (es. <code>/main.mp4</code>).</p>
                     </div>
                     <label className="block shrink-0">
                         <span className="block text-[10px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Autoplay</span>
@@ -3384,7 +3384,7 @@ function HomeEditor({
                                 max={120}
                                 value={copy.hero_autoplay_seconds}
                                 onChange={(e) => updateField('hero_autoplay_seconds', Number(e.target.value) || 8)}
-                                className="mt-0.5 w-24 bg-white border border-black/10 rounded-lg pl-3 pr-10 py-1.5 text-[13px] text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                                className="mt-0.5 w-24 bg-theme-bg-primary border border-theme-border rounded-lg pl-3 pr-10 py-1.5 text-[13px] text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                             />
                             <span className="absolute right-2 top-1/2 -translate-y-[3px] text-[11px] text-[#a1a1a6] pointer-events-none">sec</span>
                         </div>
@@ -3393,18 +3393,18 @@ function HomeEditor({
 
                 <ul className="space-y-2">
                     {copy.hero_slides.map((s, i) => (
-                        <li key={s.id} className="grid grid-cols-1 md:grid-cols-[24px_1fr_auto] gap-2 items-center bg-[#fafafa] border border-black/10 rounded-xl p-3">
-                            <span className="text-[11px] font-mono text-[#6e6e73] text-center">{i + 1}</span>
+                        <li key={s.id} className="grid grid-cols-1 md:grid-cols-[24px_1fr_auto] gap-2 items-center bg-[#fafafa] border border-theme-border rounded-xl p-3">
+                            <span className="text-[11px] font-mono text-theme-text-secondary text-center">{i + 1}</span>
                             <input
                                 type="text"
                                 value={s.video_src}
                                 onChange={(e) => updateSlide(i, { video_src: e.target.value })}
                                 placeholder="/main.mp4"
-                                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono"
+                                className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono"
                             />
                             <div className="flex items-center gap-1">
-                                <button onClick={() => moveSlide(i, -1)} disabled={i === 0} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                                <button onClick={() => moveSlide(i, 1)} disabled={i === copy.hero_slides.length - 1} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                                <button onClick={() => moveSlide(i, -1)} disabled={i === 0} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                                <button onClick={() => moveSlide(i, 1)} disabled={i === copy.hero_slides.length - 1} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                                 <button onClick={() => removeSlide(i)} className="w-7 h-7 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                             </div>
                         </li>
@@ -3412,7 +3412,7 @@ function HomeEditor({
                 </ul>
                 <button
                     onClick={addSlide}
-                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi video
@@ -3420,9 +3420,9 @@ function HomeEditor({
             </section>
 
             {/* Categories */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card categorie ({copy.categories.length})</h3>
-                <p className="text-[12px] text-[#6e6e73]">
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Card categorie ({copy.categories.length})</h3>
+                <p className="text-[12px] text-theme-text-secondary">
                     Override per le card della sezione "Categorie" della home. ID validi: <code className="text-[11px]">{KNOWN_CATEGORY_IDS.join(', ')}</code>. Se l'override per un id manca, la card mostra titolo + immagine di default hardcoded.
                 </p>
                 {copy.categories.map((c, i) => (
@@ -3439,7 +3439,7 @@ function HomeEditor({
                 ))}
                 <button
                     onClick={addCategory}
-                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi override categoria
@@ -3462,27 +3462,27 @@ function CategoryCard({
 }) {
     const knownId = KNOWN_CATEGORY_IDS.includes(cat.id)
     return (
-        <div className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+        <div className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
             <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">
                     {cat.id || '(id mancante)'}
                 </span>
                 {!knownId && cat.id && (
                     <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700" title="Id non corrisponde a una categoria nota">id sconosciuto</span>
                 )}
-                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                 <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <input type="text" value={cat.id} onChange={e => onChange({ id: e.target.value.trim() })} placeholder="cars" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
-                <input type="text" value={cat.display_title_it} onChange={e => onChange({ display_title_it: e.target.value })} placeholder="Titolo IT" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                <input type="text" value={cat.display_title_en} onChange={e => onChange({ display_title_en: e.target.value })} placeholder="Title EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={cat.id} onChange={e => onChange({ id: e.target.value.trim() })} placeholder="cars" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                <input type="text" value={cat.display_title_it} onChange={e => onChange({ display_title_it: e.target.value })} placeholder="Titolo IT" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={cat.display_title_en} onChange={e => onChange({ display_title_en: e.target.value })} placeholder="Title EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
             </div>
             <div className="flex items-center gap-3">
-                <input type="text" value={cat.image_src} onChange={e => onChange({ image_src: e.target.value })} placeholder="/car.jpeg" className="flex-1 bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                <input type="text" value={cat.image_src} onChange={e => onChange({ image_src: e.target.value })} placeholder="/car.jpeg" className="flex-1 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
                 {cat.image_src && (
-                    <img src={cat.image_src} alt="" className="w-12 h-8 object-cover rounded border border-black/10" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                    <img src={cat.image_src} alt="" className="w-12 h-8 object-cover rounded border border-theme-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                 )}
             </div>
         </div>
@@ -3552,16 +3552,16 @@ function AboutEditor({
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Chi Siamo</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/about</code>. Modifica i fondatori, la story e l'outro firmato. Il blocco "Careers" in fondo (Join_Our_Team) usa ancora le traduzioni globali, non e' editabile da qui.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Chi Siamo</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/about</code>. Modifica i fondatori, la story e l'outro firmato. Il blocco "Careers" in fondo (Join_Our_Team) usa ancora le traduzioni globali, non e' editabile da qui.
                 </p>
             </div>
 
             {/* Founders */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Fondatori ({copy.founders.length})</h3>
-                <p className="text-[12px] text-[#6e6e73]">
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Fondatori ({copy.founders.length})</h3>
+                <p className="text-[12px] text-theme-text-secondary">
                     Massimo 4 ritratti per riga su desktop. Foto in <code>/public</code> (es. <code>/Valerio.jpg</code>). Add/remove/reorder liberamente.
                 </p>
                 {copy.founders.map((f, i) => (
@@ -3578,7 +3578,7 @@ function AboutEditor({
                 ))}
                 <button
                     onClick={addFounder}
-                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi fondatore
@@ -3586,8 +3586,8 @@ function AboutEditor({
             </section>
 
             {/* Story */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Story</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Story</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.story_title_it} onChange={v => updateField('story_title_it', v)} />
                     <FieldText label="Titolo (EN)" value={copy.story_title_en} onChange={v => updateField('story_title_en', v)} />
@@ -3610,14 +3610,14 @@ function AboutEditor({
                     ))}
                     <button
                         onClick={addParagraph}
-                        className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         Aggiungi paragrafo
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-black/5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-theme-border">
                     <FieldText label='Outro principale (IT) — es. "Benvenuti in DR7 Empire"' value={copy.story_outro_main_it} onChange={v => updateField('story_outro_main_it', v)} />
                     <FieldText label="Outro principale (EN)" value={copy.story_outro_main_en} onChange={v => updateField('story_outro_main_en', v)} />
                     <FieldTextArea label="Outro sub (IT)" value={copy.story_outro_sub_it} onChange={v => updateField('story_outro_sub_it', v)} />
@@ -3642,27 +3642,27 @@ function FounderCard({
     onRemove: () => void
 }) {
     return (
-        <div className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+        <div className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
             <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{founder.name || '(senza nome)'}</span>
-                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{founder.name || '(senza nome)'}</span>
+                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                 <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <input type="text" value={founder.name} onChange={e => onChange({ name: e.target.value })} placeholder="Nome" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                <input type="text" value={founder.role_it} onChange={e => onChange({ role_it: e.target.value })} placeholder="Ruolo IT (es. Co-fondatore)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                <input type="text" value={founder.role_en} onChange={e => onChange({ role_en: e.target.value })} placeholder="Role EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={founder.name} onChange={e => onChange({ name: e.target.value })} placeholder="Nome" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={founder.role_it} onChange={e => onChange({ role_it: e.target.value })} placeholder="Ruolo IT (es. Co-fondatore)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                <input type="text" value={founder.role_en} onChange={e => onChange({ role_en: e.target.value })} placeholder="Role EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
             </div>
             <div className="flex items-center gap-3">
-                <input type="text" value={founder.photo_src} onChange={e => onChange({ photo_src: e.target.value })} placeholder="/Valerio.jpg" className="flex-1 bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                <input type="text" value={founder.photo_src} onChange={e => onChange({ photo_src: e.target.value })} placeholder="/Valerio.jpg" className="flex-1 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
                 {founder.photo_src && (
-                    <img src={founder.photo_src} alt="" className="w-12 h-12 object-cover rounded border border-black/10" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                    <img src={founder.photo_src} alt="" className="w-12 h-12 object-cover rounded border border-theme-border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                 )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <input type="text" value={founder.alt_it} onChange={e => onChange({ alt_it: e.target.value })} placeholder='Alt foto IT (es. "Valerio - Co-fondatore...")' className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]" />
-                <input type="text" value={founder.alt_en} onChange={e => onChange({ alt_en: e.target.value })} placeholder="Alt photo EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]" />
+                <input type="text" value={founder.alt_it} onChange={e => onChange({ alt_it: e.target.value })} placeholder='Alt foto IT (es. "Valerio - Co-fondatore...")' className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px]" />
+                <input type="text" value={founder.alt_en} onChange={e => onChange({ alt_en: e.target.value })} placeholder="Alt photo EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px]" />
             </div>
         </div>
     )
@@ -3681,17 +3681,17 @@ function ParagraphCard({
     onRemove: () => void
 }) {
     return (
-        <div className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+        <div className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
             <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono text-[#6e6e73]">P{index + 1}</span>
-                <span className="text-[11px] text-[#6e6e73] flex-1 truncate">{paragraph.text_it.slice(0, 60) || '(vuoto)'}</span>
-                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <span className="text-[11px] font-mono text-theme-text-secondary">P{index + 1}</span>
+                <span className="text-[11px] text-theme-text-secondary flex-1 truncate">{paragraph.text_it.slice(0, 60) || '(vuoto)'}</span>
+                <button onClick={onMoveUp} disabled={first} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onClick={onMoveDown} disabled={last} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                 <button onClick={onRemove} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <textarea value={paragraph.text_it} onChange={e => onChange({ text_it: e.target.value })} placeholder="Testo IT" rows={4} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
-                <textarea value={paragraph.text_en} onChange={e => onChange({ text_en: e.target.value })} placeholder="Text EN" rows={4} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                <textarea value={paragraph.text_it} onChange={e => onChange({ text_it: e.target.value })} placeholder="Testo IT" rows={4} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                <textarea value={paragraph.text_en} onChange={e => onChange({ text_en: e.target.value })} placeholder="Text EN" rows={4} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
             </div>
         </div>
     )
@@ -3764,15 +3764,15 @@ function FooterEditor({
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Footer</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Footer</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
                     Footer del sito (visibile su ogni pagina). I social link qui sono indipendenti dalla tab <b>Marketing &gt; Social Links</b> (quella alimenta i template messaggi).
                 </p>
             </div>
 
             {/* Network band */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Network (banda social)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Network (banda social)</h3>
                 <FieldText label="Titolo" value={copy.network_title} onChange={v => updateField('network_title', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldTextArea label="Testo (IT)" value={copy.network_text_it} onChange={v => updateField('network_text_it', v)} />
@@ -3781,24 +3781,24 @@ function FooterEditor({
                 <div className="space-y-2">
                     <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[#a1a1a6]">Social ({copy.social_links.length})</h4>
                     {copy.social_links.map((s, i) => (
-                        <div key={s.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[120px_1fr_minmax(0,1fr)_auto] gap-2 items-center">
+                        <div key={s.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[120px_1fr_minmax(0,1fr)_auto] gap-2 items-center">
                             <select
                                 value={s.icon}
                                 onChange={(e) => updateSocial(i, { icon: e.target.value as FooterSocialIcon })}
-                                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f]"
+                                className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary"
                             >
-                                {SOCIAL_ICON_OPTIONS.map(o => <option key={o} value={o} className="text-[#1d1d1f]">{o}</option>)}
+                                {SOCIAL_ICON_OPTIONS.map(o => <option key={o} value={o} className="text-theme-text-primary">{o}</option>)}
                             </select>
-                            <input type="text" value={s.label} onChange={e => updateSocial(i, { label: e.target.value })} placeholder="aria-label (es. Instagram)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f]" />
-                            <input type="text" value={s.href} onChange={e => updateSocial(i, { href: e.target.value })} placeholder="https://www.instagram.com/..." className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] font-mono" />
+                            <input type="text" value={s.label} onChange={e => updateSocial(i, { label: e.target.value })} placeholder="aria-label (es. Instagram)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary" />
+                            <input type="text" value={s.href} onChange={e => updateSocial(i, { href: e.target.value })} placeholder="https://www.instagram.com/..." className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary font-mono" />
                             <div className="flex items-center gap-1">
-                                <button onClick={() => moveSocial(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                                <button onClick={() => moveSocial(i, 1)} disabled={i === copy.social_links.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                                <button onClick={() => moveSocial(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                                <button onClick={() => moveSocial(i, 1)} disabled={i === copy.social_links.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                                 <button onClick={() => removeSocial(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                             </div>
                         </div>
                     ))}
-                    <button onClick={addSocial} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                    <button onClick={addSocial} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         Aggiungi social
                     </button>
@@ -3806,19 +3806,19 @@ function FooterEditor({
             </section>
 
             {/* Reviews band */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Recensioni (banda)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Recensioni (banda)</h3>
                 <FieldText label="Titolo" value={copy.reviews_title} onChange={v => updateField('reviews_title', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldTextArea label="Testo (IT)" value={copy.reviews_text_it} onChange={v => updateField('reviews_text_it', v)} />
                     <FieldTextArea label="Testo (EN)" value={copy.reviews_text_en} onChange={v => updateField('reviews_text_en', v)} />
                 </div>
-                <p className="text-[11px] text-[#6e6e73]">La lista recensioni sotto e' renderizzata da ReviewsSection (dinamico, non editabile da qui).</p>
+                <p className="text-[11px] text-theme-text-secondary">La lista recensioni sotto e' renderizzata da ReviewsSection (dinamico, non editabile da qui).</p>
             </section>
 
             {/* Contact band */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Contatti & Legale</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Contatti & Legale</h3>
                 <FieldText label="Titolo (es. Contact)" value={copy.contact_title} onChange={v => updateField('contact_title', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Numero WhatsApp visualizzato" value={copy.contact_whatsapp_number} onChange={v => updateField('contact_whatsapp_number', v)} />
@@ -3871,8 +3871,8 @@ function FooterEditor({
             />
 
             {/* Bottom band */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Banda inferiore</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Banda inferiore</h3>
                 <FieldText label="Riga brand (es. DR7 Cagliari – Global Mobility...)" value={copy.bottom_brand_line} onChange={v => updateField('bottom_brand_line', v)} />
                 <FieldText label="Copyright (es. © 2024 - 2026 DR7...)" value={copy.bottom_copyright} onChange={v => updateField('bottom_copyright', v)} />
             </section>
@@ -3893,34 +3893,34 @@ function FooterLinkSection({
     onAdd: () => void
 }) {
     return (
-        <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+        <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
             <div>
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">{title} ({links.length})</h3>
-                <p className="text-[12px] text-[#6e6e73] mt-1">{hint}</p>
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">{title} ({links.length})</h3>
+                <p className="text-[12px] text-theme-text-secondary mt-1">{hint}</p>
             </div>
             {links.map((l, i) => (
-                <div key={l.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                <div key={l.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
                     <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{l.label_it || '(senza titolo)'}</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{l.label_it || '(senza titolo)'}</span>
                         {l.external && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700">esterno</span>}
-                        <button onClick={() => onMoveUp(i)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                        <button onClick={() => onMoveDown(i)} disabled={i === links.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                        <button onClick={() => onMoveUp(i)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                        <button onClick={() => onMoveDown(i)} disabled={i === links.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                         <button onClick={() => onRemove(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <input type="text" value={l.label_it} onChange={e => onChange(i, { label_it: e.target.value })} placeholder="Etichetta IT" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={l.label_en} onChange={e => onChange(i, { label_en: e.target.value })} placeholder="Label EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={l.label_it} onChange={e => onChange(i, { label_it: e.target.value })} placeholder="Etichetta IT" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={l.label_en} onChange={e => onChange(i, { label_en: e.target.value })} placeholder="Label EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-center">
-                        <input type="text" value={l.to} onChange={e => onChange(i, { to: e.target.value })} placeholder="/about oppure https://..." className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
-                        <label className="flex items-center gap-2 text-[12px] text-[#6e6e73] whitespace-nowrap">
+                        <input type="text" value={l.to} onChange={e => onChange(i, { to: e.target.value })} placeholder="/about oppure https://..." className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                        <label className="flex items-center gap-2 text-[12px] text-theme-text-secondary whitespace-nowrap">
                             <input type="checkbox" checked={!!l.external} onChange={e => onChange(i, { external: e.target.checked || undefined })} />
                             forza link esterno
                         </label>
                     </div>
                 </div>
             ))}
-            <button onClick={onAdd} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+            <button onClick={onAdd} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Aggiungi link
             </button>
@@ -4007,8 +4007,8 @@ function LegalEditor({
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Privacy & Termini</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Privacy & Termini</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
                     Modifica le pagine legali. Inline supportato: <code>**grassetto**</code> e <code>[testo](https://link)</code> (anche <code>mailto:</code>). Newline nei testi diventano a-capo a video.
                 </p>
             </div>
@@ -4025,7 +4025,7 @@ function LegalEditor({
                             className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border ${
                                 isActive
                                     ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
-                                    : 'bg-white border-black/10 text-[#1d1d1f] hover:bg-black/5'
+                                    : 'bg-theme-bg-primary border-theme-border text-theme-text-primary hover:bg-theme-bg-secondary'
                             }`}
                         >
                             {LEGAL_PAGE_LABELS[id]}
@@ -4038,11 +4038,11 @@ function LegalEditor({
             </div>
 
             {/* Page meta */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <div className="flex items-center justify-between gap-4">
-                    <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Impostazioni pagina</h3>
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Impostazioni pagina</h3>
                     <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <span className="text-[12px] text-[#6e6e73]">Pagina attiva</span>
+                        <span className="text-[12px] text-theme-text-secondary">Pagina attiva</span>
                         <input
                             type="checkbox"
                             checked={active.enabled}
@@ -4054,7 +4054,7 @@ function LegalEditor({
                         </span>
                     </label>
                 </div>
-                <p className="text-[11px] text-[#6e6e73] -mt-2">Disattivata = il sito mostra il testo legacy hardcoded della pagina.</p>
+                <p className="text-[11px] text-theme-text-secondary -mt-2">Disattivata = il sito mostra il testo legacy hardcoded della pagina.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo pagina (IT)" value={active.title_it} onChange={v => updatePage({ title_it: v })} />
                     <FieldText label="Titolo pagina (EN)" value={active.title_en} onChange={v => updatePage({ title_en: v })} />
@@ -4066,7 +4066,7 @@ function LegalEditor({
                             checked={active.last_updated_dynamic}
                             onChange={(e) => updatePage({ last_updated_dynamic: e.target.checked })}
                         />
-                        <span className="text-[12px] text-[#1d1d1f]">Mostra "ultimo aggiornamento" con data odierna</span>
+                        <span className="text-[12px] text-theme-text-primary">Mostra "ultimo aggiornamento" con data odierna</span>
                     </label>
                     <FieldText label='Etichetta (IT)' value={active.last_updated_label_it} onChange={v => updatePage({ last_updated_label_it: v })} />
                     <FieldText label='Etichetta (EN)' value={active.last_updated_label_en} onChange={v => updatePage({ last_updated_label_en: v })} />
@@ -4074,8 +4074,8 @@ function LegalEditor({
             </section>
 
             {/* Intro band */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Intro (sopra le sezioni) — {active.intro_blocks.length} blocchi</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Intro (sopra le sezioni) — {active.intro_blocks.length} blocchi</h3>
                 {active.intro_blocks.map((block, i) => (
                     <BlockCard
                         key={`intro-${i}`}
@@ -4097,8 +4097,8 @@ function LegalEditor({
             </section>
 
             {/* Sections */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sezioni numerate ({active.sections.length})</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Sezioni numerate ({active.sections.length})</h3>
                 {active.sections.map((sec, i) => (
                     <LegalSectionCard
                         key={sec.id}
@@ -4113,7 +4113,7 @@ function LegalEditor({
                 ))}
                 <button
                     onClick={addSection}
-                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi sezione
@@ -4121,8 +4121,8 @@ function LegalEditor({
             </section>
 
             {/* Outro band */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Outro (sotto le sezioni) — {active.outro_blocks.length} blocchi</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Outro (sotto le sezioni) — {active.outro_blocks.length} blocchi</h3>
                 {active.outro_blocks.map((block, i) => (
                     <BlockCard
                         key={`outro-${i}`}
@@ -4182,20 +4182,20 @@ function LegalSectionCard({
     }
 
     return (
-        <div className="border border-black/10 rounded-2xl bg-white shadow-sm">
+        <div className="border border-theme-border rounded-2xl bg-theme-bg-primary shadow-sm">
             <header className="px-4 py-3 flex items-center gap-3">
                 <button onClick={() => setOpen(o => !o)} className="flex-1 text-left flex items-center gap-3">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-[#6e6e73] transition-transform ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
-                    <span className="text-[13px] font-semibold text-[#1d1d1f] flex-1 truncate">{section.heading_it || '(senza titolo)'}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-theme-text-secondary transition-transform ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
+                    <span className="text-[13px] font-semibold text-theme-text-primary flex-1 truncate">{section.heading_it || '(senza titolo)'}</span>
                 </button>
                 <div className="flex items-center gap-1">
-                    <button onClick={onMoveUp} disabled={first} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                    <button onClick={onMoveDown} disabled={last} className="w-7 h-7 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                    <button onClick={onMoveUp} disabled={first} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                    <button onClick={onMoveDown} disabled={last} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                     <button onClick={onRemove} className="w-7 h-7 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg></button>
                 </div>
             </header>
             {open && (
-                <div className="px-4 pb-4 space-y-4 border-t border-black/5 pt-4">
+                <div className="px-4 pb-4 space-y-4 border-t border-theme-border pt-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <FieldText label="Heading (IT)" value={section.heading_it} onChange={v => onChange({ heading_it: v })} />
                         <FieldText label="Heading (EN)" value={section.heading_en} onChange={v => onChange({ heading_en: v })} />
@@ -4266,14 +4266,14 @@ function CareersEditor({ copy, setCopy }: { copy: CareersCopy; setCopy: (next: C
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Careers</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/careers</code>. Inline supportato nel testo "Come Candidarsi": <code>**grassetto**</code> e <code>[testo](mailto:...)</code>.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Careers</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/careers</code>. Inline supportato nel testo "Come Candidarsi": <code>**grassetto**</code> e <code>[testo](mailto:...)</code>.
                 </p>
             </div>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero pagina</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero pagina</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo pagina (IT)" value={copy.page_title_it} onChange={v => update('page_title_it', v)} />
                     <FieldText label="Titolo pagina (EN)" value={copy.page_title_en} onChange={v => update('page_title_en', v)} />
@@ -4282,42 +4282,42 @@ function CareersEditor({ copy, setCopy }: { copy: CareersCopy; setCopy: (next: C
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Posizioni Aperte ({copy.jobs.length})</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Posizioni Aperte ({copy.jobs.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Heading sezione (IT)" value={copy.jobs_heading_it} onChange={v => update('jobs_heading_it', v)} />
                     <FieldText label="Heading sezione (EN)" value={copy.jobs_heading_en} onChange={v => update('jobs_heading_en', v)} />
                 </div>
                 {copy.jobs.map((job, i) => (
-                    <div key={job.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                    <div key={job.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
                         <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{job.title_it || '(senza titolo)'}</span>
-                            <button onClick={() => moveJob(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveJob(i, 1)} disabled={i === copy.jobs.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{job.title_it || '(senza titolo)'}</span>
+                            <button onClick={() => moveJob(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveJob(i, 1)} disabled={i === copy.jobs.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                             <button onClick={() => removeJob(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <input type="text" value={job.title_it} onChange={e => updateJob(i, { title_it: e.target.value })} placeholder="Titolo IT" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                            <input type="text" value={job.title_en} onChange={e => updateJob(i, { title_en: e.target.value })} placeholder="Title EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                            <input type="text" value={job.location_it} onChange={e => updateJob(i, { location_it: e.target.value })} placeholder="Sede IT (es. Sede: Cagliari, Italia)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                            <input type="text" value={job.location_en} onChange={e => updateJob(i, { location_en: e.target.value })} placeholder="Location EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                            <input type="text" value={job.type_it} onChange={e => updateJob(i, { type_it: e.target.value })} placeholder="Tempo (IT) — es. Tempo pieno" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                            <input type="text" value={job.type_en} onChange={e => updateJob(i, { type_en: e.target.value })} placeholder="Type EN — e.g. Full-time" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.title_it} onChange={e => updateJob(i, { title_it: e.target.value })} placeholder="Titolo IT" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.title_en} onChange={e => updateJob(i, { title_en: e.target.value })} placeholder="Title EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.location_it} onChange={e => updateJob(i, { location_it: e.target.value })} placeholder="Sede IT (es. Sede: Cagliari, Italia)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.location_en} onChange={e => updateJob(i, { location_en: e.target.value })} placeholder="Location EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.type_it} onChange={e => updateJob(i, { type_it: e.target.value })} placeholder="Tempo (IT) — es. Tempo pieno" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={job.type_en} onChange={e => updateJob(i, { type_en: e.target.value })} placeholder="Type EN — e.g. Full-time" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <textarea value={job.description_it} onChange={e => updateJob(i, { description_it: e.target.value })} placeholder="Descrizione IT" rows={3} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
-                            <textarea value={job.description_en} onChange={e => updateJob(i, { description_en: e.target.value })} placeholder="Description EN" rows={3} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                            <textarea value={job.description_it} onChange={e => updateJob(i, { description_it: e.target.value })} placeholder="Descrizione IT" rows={3} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                            <textarea value={job.description_en} onChange={e => updateJob(i, { description_en: e.target.value })} placeholder="Description EN" rows={3} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
                         </div>
                     </div>
                 ))}
-                <button onClick={addJob} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                <button onClick={addJob} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi posizione
                 </button>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Come Candidarsi</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Come Candidarsi</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Heading (IT)" value={copy.apply_heading_it} onChange={v => update('apply_heading_it', v)} />
                     <FieldText label="Heading (EN)" value={copy.apply_heading_en} onChange={v => update('apply_heading_en', v)} />
@@ -4364,14 +4364,14 @@ function PressEditor({ copy, setCopy }: { copy: PressCopy; setCopy: (next: Press
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Press</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/press</code>. Hero, sezione "Richieste Stampa", lista articoli, sezione "Comunicati Stampa".
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Press</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/press</code>. Hero, sezione "Richieste Stampa", lista articoli, sezione "Comunicati Stampa".
                 </p>
             </div>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo pagina (IT)" value={copy.page_title_it} onChange={v => update('page_title_it', v)} />
                     <FieldText label="Titolo pagina (EN)" value={copy.page_title_en} onChange={v => update('page_title_en', v)} />
@@ -4380,8 +4380,8 @@ function PressEditor({ copy, setCopy }: { copy: PressCopy; setCopy: (next: Press
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Richieste Stampa (banda)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Richieste Stampa (banda)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Heading (IT)" value={copy.inquiries_heading_it} onChange={v => update('inquiries_heading_it', v)} />
                     <FieldText label="Heading (EN)" value={copy.inquiries_heading_en} onChange={v => update('inquiries_heading_en', v)} />
@@ -4393,8 +4393,8 @@ function PressEditor({ copy, setCopy }: { copy: PressCopy; setCopy: (next: Press
                 <FieldText label="Email contatto" value={copy.inquiries_email} onChange={v => update('inquiries_email', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sui Media — Articoli ({copy.articles.length})</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Sui Media — Articoli ({copy.articles.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Heading sezione (IT) — es. "Sui Media"' value={copy.news_heading_it} onChange={v => update('news_heading_it', v)} />
                     <FieldText label="Heading sezione (EN)" value={copy.news_heading_en} onChange={v => update('news_heading_en', v)} />
@@ -4402,33 +4402,33 @@ function PressEditor({ copy, setCopy }: { copy: PressCopy; setCopy: (next: Press
                     <FieldText label="Etichetta (EN)" value={copy.read_more_label_en} onChange={v => update('read_more_label_en', v)} />
                 </div>
                 {copy.articles.map((a, i) => (
-                    <div key={a.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                    <div key={a.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
                         <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{a.title || '(senza titolo)'}</span>
-                            <button onClick={() => moveArt(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveArt(i, 1)} disabled={i === copy.articles.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{a.title || '(senza titolo)'}</span>
+                            <button onClick={() => moveArt(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveArt(i, 1)} disabled={i === copy.articles.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                             <button onClick={() => removeArt(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                         </div>
-                        <input type="text" value={a.title} onChange={e => updateArt(i, { title: e.target.value })} placeholder="Titolo articolo (lingua originale)" className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={a.title} onChange={e => updateArt(i, { title: e.target.value })} placeholder="Titolo articolo (lingua originale)" className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <input type="text" value={a.publication} onChange={e => updateArt(i, { publication: e.target.value })} placeholder="Testata (es. Casteddu Online)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                            <input type="text" value={a.date} onChange={e => updateArt(i, { date: e.target.value })} placeholder="Data (es. 28 Maggio 2025)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={a.publication} onChange={e => updateArt(i, { publication: e.target.value })} placeholder="Testata (es. Casteddu Online)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={a.date} onChange={e => updateArt(i, { date: e.target.value })} placeholder="Data (es. 28 Maggio 2025)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
                         </div>
-                        <input type="text" value={a.link} onChange={e => updateArt(i, { link: e.target.value })} placeholder="https://..." className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                        <input type="text" value={a.link} onChange={e => updateArt(i, { link: e.target.value })} placeholder="https://..." className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <textarea value={a.summary_it} onChange={e => updateArt(i, { summary_it: e.target.value })} placeholder="Sommario IT" rows={3} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
-                            <textarea value={a.summary_en} onChange={e => updateArt(i, { summary_en: e.target.value })} placeholder="Summary EN" rows={3} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                            <textarea value={a.summary_it} onChange={e => updateArt(i, { summary_it: e.target.value })} placeholder="Sommario IT" rows={3} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                            <textarea value={a.summary_en} onChange={e => updateArt(i, { summary_en: e.target.value })} placeholder="Summary EN" rows={3} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
                         </div>
                     </div>
                 ))}
-                <button onClick={addArt} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                <button onClick={addArt} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi articolo
                 </button>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Comunicati Stampa (banda)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Comunicati Stampa (banda)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Heading (IT)" value={copy.releases_heading_it} onChange={v => update('releases_heading_it', v)} />
                     <FieldText label="Heading (EN)" value={copy.releases_heading_en} onChange={v => update('releases_heading_en', v)} />
@@ -4449,14 +4449,14 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Contatti</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/contact</code>. Hero, 4 card (Telefono / WhatsApp / Email / Orari), info azienda, mappa.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Contatti</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/contact</code>. Hero, 4 card (Telefono / WhatsApp / Email / Orari), info azienda, mappa.
                 </p>
             </div>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo pagina (IT)" value={copy.page_title_it} onChange={v => update('page_title_it', v)} />
                     <FieldText label="Titolo pagina (EN)" value={copy.page_title_en} onChange={v => update('page_title_en', v)} />
@@ -4465,8 +4465,8 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card: Telefono</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Card: Telefono</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Etichetta (IT)" value={copy.phone_label_it} onChange={v => update('phone_label_it', v)} />
                     <FieldText label="Etichetta (EN)" value={copy.phone_label_en} onChange={v => update('phone_label_en', v)} />
@@ -4475,8 +4475,8 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card: WhatsApp</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Card: WhatsApp</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Etichetta card (IT)" value={copy.whatsapp_label_it} onChange={v => update('whatsapp_label_it', v)} />
                     <FieldText label="Etichetta card (EN)" value={copy.whatsapp_label_en} onChange={v => update('whatsapp_label_en', v)} />
@@ -4486,8 +4486,8 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                 <FieldText label="URL WhatsApp" value={copy.whatsapp_url} onChange={v => update('whatsapp_url', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card: Email</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Card: Email</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Etichetta (IT)" value={copy.email_label_it} onChange={v => update('email_label_it', v)} />
                     <FieldText label="Etichetta (EN)" value={copy.email_label_en} onChange={v => update('email_label_en', v)} />
@@ -4495,8 +4495,8 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                 <FieldText label="Indirizzo email" value={copy.email_address} onChange={v => update('email_address', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card: Orari</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Card: Orari</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Etichetta (IT)" value={copy.hours_label_it} onChange={v => update('hours_label_it', v)} />
                     <FieldText label="Etichetta (EN)" value={copy.hours_label_en} onChange={v => update('hours_label_en', v)} />
@@ -4507,8 +4507,8 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sede Operativa</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Sede Operativa</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Heading (IT)" value={copy.office_heading_it} onChange={v => update('office_heading_it', v)} />
                     <FieldText label="Heading (EN)" value={copy.office_heading_en} onChange={v => update('office_heading_en', v)} />
@@ -4521,12 +4521,12 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
                 <FieldText label="P.IVA / C.F." value={copy.office_piva} onChange={v => update('office_piva', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Mappa</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Mappa</h3>
                 <FieldText label="Title (accessibilità)" value={copy.map_title} onChange={v => update('map_title', v)} />
                 <FieldText label="URL iframe (OpenStreetMap embed)" value={copy.map_iframe_url} onChange={v => update('map_iframe_url', v)} />
                 {copy.map_iframe_url && (
-                    <div className="rounded-xl overflow-hidden border border-black/10">
+                    <div className="rounded-xl overflow-hidden border border-theme-border">
                         <iframe title={copy.map_title || 'preview'} src={copy.map_iframe_url} width="100%" height="200" style={{ border: 0 }} loading="lazy" />
                     </div>
                 )}
@@ -4566,9 +4566,9 @@ function MechanicalEditor({ copy, setCopy }: { copy: MechanicalCopy; setCopy: (n
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Servizi Meccanica</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/mechanical-services</code> — chrome editabile (hero, "Come Funziona", orari, label bottoni).
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Servizi Meccanica</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/mechanical-services</code> — chrome editabile (hero, "Come Funziona", orari, label bottoni).
                 </p>
                 <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[12px] text-blue-700">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
@@ -4576,8 +4576,8 @@ function MechanicalEditor({ copy, setCopy }: { copy: MechanicalCopy; setCopy: (n
                 </div>
             </div>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
                 <FieldText label='Titolo (es. "DR7 RAPID SERVICE")' value={copy.hero_title} onChange={v => update('hero_title', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Sottotitolo (IT)" value={copy.hero_subtitle_it} onChange={v => update('hero_subtitle_it', v)} />
@@ -4587,45 +4587,45 @@ function MechanicalEditor({ copy, setCopy }: { copy: MechanicalCopy; setCopy: (n
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Etichette card servizi</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Etichette card servizi</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Bottone (IT) — es. "PRENOTA ORA"' value={copy.book_now_label_it} onChange={v => update('book_now_label_it', v)} />
                     <FieldText label="Bottone (EN)" value={copy.book_now_label_en} onChange={v => update('book_now_label_en', v)} />
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">"Come Funziona" ({copy.how_steps.length} step)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">"Come Funziona" ({copy.how_steps.length} step)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Heading (IT)" value={copy.how_heading_it} onChange={v => update('how_heading_it', v)} />
                     <FieldText label="Heading (EN)" value={copy.how_heading_en} onChange={v => update('how_heading_en', v)} />
                 </div>
                 {copy.how_steps.map((step, i) => (
-                    <div key={i} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                    <div key={i} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
                         <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-mono text-[#6e6e73]">Step {i + 1}</span>
-                            <span className="text-[11px] text-[#6e6e73] flex-1 truncate">{step.title_it || '(senza titolo)'}</span>
-                            <button onClick={() => moveStep(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveStep(i, 1)} disabled={i === copy.how_steps.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <span className="text-[11px] font-mono text-theme-text-secondary">Step {i + 1}</span>
+                            <span className="text-[11px] text-theme-text-secondary flex-1 truncate">{step.title_it || '(senza titolo)'}</span>
+                            <button onClick={() => moveStep(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveStep(i, 1)} disabled={i === copy.how_steps.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                             <button onClick={() => removeStep(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <input type="text" value={step.title_it} onChange={e => updateStep(i, { title_it: e.target.value })} placeholder='Titolo IT (es. "1. Prenota Online")' className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                            <input type="text" value={step.title_en} onChange={e => updateStep(i, { title_en: e.target.value })} placeholder="Title EN" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                            <textarea value={step.text_it} onChange={e => updateStep(i, { text_it: e.target.value })} placeholder="Testo IT" rows={2} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
-                            <textarea value={step.text_en} onChange={e => updateStep(i, { text_en: e.target.value })} placeholder="Text EN" rows={2} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                            <input type="text" value={step.title_it} onChange={e => updateStep(i, { title_it: e.target.value })} placeholder='Titolo IT (es. "1. Prenota Online")' className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                            <input type="text" value={step.title_en} onChange={e => updateStep(i, { title_en: e.target.value })} placeholder="Title EN" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                            <textarea value={step.text_it} onChange={e => updateStep(i, { text_it: e.target.value })} placeholder="Testo IT" rows={2} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                            <textarea value={step.text_en} onChange={e => updateStep(i, { text_en: e.target.value })} placeholder="Text EN" rows={2} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
                         </div>
                     </div>
                 ))}
-                <button onClick={addStep} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                <button onClick={addStep} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi step
                 </button>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Orari di Apertura</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Orari di Apertura</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Heading (IT)" value={copy.hours_heading_it} onChange={v => update('hours_heading_it', v)} />
                     <FieldText label="Heading (EN)" value={copy.hours_heading_en} onChange={v => update('hours_heading_en', v)} />
@@ -4648,9 +4648,9 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Servizi Lavaggio</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/car-wash-services</code> — etichette UI editabili.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Servizi Lavaggio</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/car-wash-services</code> — etichette UI editabili.
                 </p>
                 <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[12px] text-blue-700">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
@@ -4659,8 +4659,8 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
             </div>
 
             {/* Plate entry */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Inserimento targa (sezione iniziale)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Inserimento targa (sezione iniziale)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Etichetta input (IT)" value={copy.plate_label_it} onChange={v => update('plate_label_it', v)} />
                     <FieldText label="Etichetta input (EN)" value={copy.plate_label_en} onChange={v => update('plate_label_en', v)} />
@@ -4680,8 +4680,8 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
             </section>
 
             {/* Card servizio */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card servizio</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Card servizio</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Bottone "AGGIUNGI AL CARRELLO" (IT)' value={copy.add_to_cart_it} onChange={v => update('add_to_cart_it', v)} />
                     <FieldText label='Button "ADD TO CART" (EN)' value={copy.add_to_cart_en} onChange={v => update('add_to_cart_en', v)} />
@@ -4689,8 +4689,8 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
             </section>
 
             {/* Cart drawer */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Drawer carrello</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Drawer carrello</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo carrello (IT)" value={copy.cart_title_it} onChange={v => update('cart_title_it', v)} />
                     <FieldText label="Cart title (EN)" value={copy.cart_title_en} onChange={v => update('cart_title_en', v)} />
@@ -4706,8 +4706,8 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
             </section>
 
             {/* Upsell overlay */}
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Overlay Extra Care (upsell)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Overlay Extra Care (upsell)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Bottone "Rivedi carrello" (IT)' value={copy.upsell_review_cart_it} onChange={v => update('upsell_review_cart_it', v)} />
                     <FieldText label='Button "Review Cart" (EN)' value={copy.upsell_review_cart_en} onChange={v => update('upsell_review_cart_en', v)} />
@@ -4779,52 +4779,52 @@ function InvestitoriEditor({ copy, setCopy }: { copy: InvestitoriCopy; setCopy: 
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Investitori</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/investitori</code> — pagina IT-only (no traduzioni EN). I paragrafi multipli si separano con <b>riga vuota</b> (doppio invio).
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Investitori</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/investitori</code> — pagina IT-only (no traduzioni EN). I paragrafi multipli si separano con <b>riga vuota</b> (doppio invio).
                 </p>
             </div>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
                 <FieldText label="Titolo" value={copy.hero_title} onChange={v => update('hero_title', v)} />
                 <FieldText label="Sottotitolo" value={copy.hero_subtitle} onChange={v => update('hero_subtitle', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Introduzione</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Introduzione</h3>
                 <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.intro_paragraphs.join('\n\n')} onChange={v => updateParagraphList('intro_paragraphs', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Opportunità di partecipazione</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Opportunità di partecipazione</h3>
                 <FieldText label="Heading" value={copy.opportunity_heading} onChange={v => update('opportunity_heading', v)} />
                 <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.opportunity_paragraphs.join('\n\n')} onChange={v => updateParagraphList('opportunity_paragraphs', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Punti di forza ({copy.strength_points.length})</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Punti di forza ({copy.strength_points.length})</h3>
                 <FieldText label="Heading" value={copy.strength_heading} onChange={v => update('strength_heading', v)} />
                 {copy.strength_points.map((s, i) => (
-                    <div key={s.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                    <div key={s.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
                         <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{s.title || '(senza titolo)'}</span>
-                            <button onClick={() => moveStrength(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveStrength(i, 1)} disabled={i === copy.strength_points.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{s.title || '(senza titolo)'}</span>
+                            <button onClick={() => moveStrength(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveStrength(i, 1)} disabled={i === copy.strength_points.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                             <button onClick={() => removeStrength(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                         </div>
-                        <input type="text" value={s.title} onChange={e => updateStrength(i, { title: e.target.value })} placeholder="Titolo punto di forza" className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-semibold" />
-                        <textarea value={s.description} onChange={e => updateStrength(i, { description: e.target.value })} placeholder="Descrizione" rows={2} className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                        <input type="text" value={s.title} onChange={e => updateStrength(i, { title: e.target.value })} placeholder="Titolo punto di forza" className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-semibold" />
+                        <textarea value={s.description} onChange={e => updateStrength(i, { description: e.target.value })} placeholder="Descrizione" rows={2} className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
                     </div>
                 ))}
-                <button onClick={addStrength} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                <button onClick={addStrength} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi punto di forza
                 </button>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">CTA — Modalità di adesione</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">CTA — Modalità di adesione</h3>
                 <FieldText label="Heading" value={copy.cta_heading} onChange={v => update('cta_heading', v)} />
                 <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.cta_paragraphs.join('\n\n')} onChange={v => updateParagraphList('cta_paragraphs', v)} />
                 <FieldText label="Etichetta bottone primario" value={copy.cta_button_label} onChange={v => update('cta_button_label', v)} />
@@ -4832,29 +4832,29 @@ function InvestitoriEditor({ copy, setCopy }: { copy: InvestitoriCopy; setCopy: 
                 <FieldText label="Email investitori (bottone secondario)" value={copy.cta_email} onChange={v => update('cta_email', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Informazioni sintetiche ({copy.info_items.length})</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Informazioni sintetiche ({copy.info_items.length})</h3>
                 <FieldText label="Heading" value={copy.info_heading} onChange={v => update('info_heading', v)} />
                 {copy.info_items.map((it, i) => (
-                    <div key={i} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[200px_1fr_auto] gap-2 items-center">
-                        <input type="text" value={it.label} onChange={e => updateInfo(i, { label: e.target.value })} placeholder="Etichetta (es. Denominazione)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={it.value} onChange={e => updateInfo(i, { value: e.target.value })} placeholder="Valore" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                    <div key={i} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[200px_1fr_auto] gap-2 items-center">
+                        <input type="text" value={it.label} onChange={e => updateInfo(i, { label: e.target.value })} placeholder="Etichetta (es. Denominazione)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={it.value} onChange={e => updateInfo(i, { value: e.target.value })} placeholder="Valore" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
                         <div className="flex items-center gap-1">
-                            <button onClick={() => moveInfo(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveInfo(i, 1)} disabled={i === copy.info_items.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => moveInfo(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveInfo(i, 1)} disabled={i === copy.info_items.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                             <button onClick={() => removeInfo(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                         </div>
                     </div>
                 ))}
-                <button onClick={addInfo} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                <button onClick={addInfo} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi riga
                 </button>
                 <FieldTextArea label="Footnote sotto la tabella (corsivo)" value={copy.info_footnote} onChange={v => update('info_footnote', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Avvertenza legale (banda rossa)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Avvertenza legale (banda rossa)</h3>
                 <FieldText label="Heading" value={copy.legal_heading} onChange={v => update('legal_heading', v)} />
                 <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.legal_paragraphs.join('\n\n')} onChange={v => updateParagraphList('legal_paragraphs', v)} />
             </section>
@@ -4917,21 +4917,21 @@ function FranchisingEditor({ copy, setCopy }: { copy: FranchisingCopy; setCopy: 
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Franchising</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/franchising</code> — pagina IT-only. Placeholder <code>{'{reviewCount}'}</code> nelle stats viene risolto a runtime con il conteggio Google Reviews live.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Franchising</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/franchising</code> — pagina IT-only. Placeholder <code>{'{reviewCount}'}</code> nelle stats viene risolto a runtime con il conteggio Google Reviews live.
                 </p>
             </div>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
                 <FieldText label="Titolo (h2)" value={copy.hero_h2} onChange={v => update('hero_h2', v)} />
                 <FieldText label="Sottotitolo principale" value={copy.hero_p1} onChange={v => update('hero_p1', v)} />
                 <FieldTextArea label="Sottotitolo secondario (newline = a-capo)" value={copy.hero_p2} onChange={v => update('hero_p2', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stats — In soli X mesi</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stats — In soli X mesi</h3>
                 <FieldText label="Heading" value={copy.stats_heading} onChange={v => update('stats_heading', v)} />
                 <FieldTextArea label='Righe stats (una per linea — usa "* xxx" per il pallino. Placeholder {reviewCount})' value={copy.stats_lines.join('\n')} onChange={v => setStringList('stats_lines', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4940,75 +4940,75 @@ function FranchisingEditor({ copy, setCopy }: { copy: FranchisingCopy; setCopy: 
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Piano di Espansione ({copy.expansion_locations.length})</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Piano di Espansione ({copy.expansion_locations.length})</h3>
                 <FieldText label="Heading" value={copy.expansion_heading} onChange={v => update('expansion_heading', v)} />
                 {copy.expansion_locations.map((loc, i) => (
-                    <div key={loc.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[120px_1fr_1fr_auto] gap-2 items-center">
-                        <select value={loc.icon} onChange={e => updateLoc(i, { icon: e.target.value as FranchisingExpansionIcon })} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]">
+                    <div key={loc.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[120px_1fr_1fr_auto] gap-2 items-center">
+                        <select value={loc.icon} onChange={e => updateLoc(i, { icon: e.target.value as FranchisingExpansionIcon })} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]">
                             {FRANCHISING_EXPANSION_ICONS.map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
-                        <input type="text" value={loc.name} onChange={e => updateLoc(i, { name: e.target.value })} placeholder="Nome (es. Cagliari)" className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
-                        <input type="text" value={loc.description} onChange={e => updateLoc(i, { description: e.target.value })} placeholder='Descrizione (es. "Sede Principale")' className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={loc.name} onChange={e => updateLoc(i, { name: e.target.value })} placeholder="Nome (es. Cagliari)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={loc.description} onChange={e => updateLoc(i, { description: e.target.value })} placeholder='Descrizione (es. "Sede Principale")' className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
                         <div className="flex items-center gap-1">
-                            <button onClick={() => moveLoc(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveLoc(i, 1)} disabled={i === copy.expansion_locations.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <button onClick={() => moveLoc(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveLoc(i, 1)} disabled={i === copy.expansion_locations.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                             <button onClick={() => removeLoc(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                         </div>
                     </div>
                 ))}
-                <button onClick={addLoc} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                <button onClick={addLoc} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi sede
                 </button>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">L'Impero DR7 (about)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">L'Impero DR7 (about)</h3>
                 <FieldText label="Heading" value={copy.about_heading} onChange={v => update('about_heading', v)} />
                 <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.about_paragraphs.join('\n\n')} onChange={v => setStringList('about_paragraphs', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Benefits ({copy.benefits.length})</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Benefits ({copy.benefits.length})</h3>
                 {copy.benefits.map((b, i) => (
-                    <div key={b.id} className="border border-black/10 rounded-xl p-3 bg-[#fafafa] space-y-2">
+                    <div key={b.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
                         <div className="flex items-center gap-2">
-                            <select value={b.icon} onChange={e => updateBenefit(i, { icon: e.target.value as FranchisingBenefitIcon })} className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[12px]">
+                            <select value={b.icon} onChange={e => updateBenefit(i, { icon: e.target.value as FranchisingBenefitIcon })} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px]">
                                 {FRANCHISING_BENEFIT_ICONS.map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] flex-1 truncate">{b.title || '(senza titolo)'}</span>
-                            <button onClick={() => moveBenefit(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-                            <button onClick={() => moveBenefit(i, 1)} disabled={i === copy.benefits.length - 1} className="w-6 h-6 rounded-md text-[#6e6e73] hover:bg-black/5 disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary flex-1 truncate">{b.title || '(senza titolo)'}</span>
+                            <button onClick={() => moveBenefit(i, -1)} disabled={i === 0} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                            <button onClick={() => moveBenefit(i, 1)} disabled={i === copy.benefits.length - 1} className="w-6 h-6 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
                             <button onClick={() => removeBenefit(i)} className="w-6 h-6 rounded-md text-[#ff3b30] hover:bg-[#ff3b30]/10 flex items-center justify-center" title="Elimina"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                         </div>
-                        <input type="text" value={b.title} onChange={e => updateBenefit(i, { title: e.target.value })} placeholder="Titolo benefit" className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] font-semibold" />
-                        <textarea value={b.description} onChange={e => updateBenefit(i, { description: e.target.value })} placeholder="Descrizione" rows={2} className="w-full bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] resize-y" />
+                        <input type="text" value={b.title} onChange={e => updateBenefit(i, { title: e.target.value })} placeholder="Titolo benefit" className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-semibold" />
+                        <textarea value={b.description} onChange={e => updateBenefit(i, { description: e.target.value })} placeholder="Descrizione" rows={2} className="w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] resize-y" />
                     </div>
                 ))}
-                <button onClick={addBenefit} className="w-full py-2.5 rounded-xl border-2 border-dashed border-black/15 text-[12px] font-medium text-[#1d1d1f] hover:bg-black/5 hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
+                <button onClick={addBenefit} className="w-full py-2.5 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors flex items-center justify-center gap-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi benefit
                 </button>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Call to Action</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Call to Action</h3>
                 <FieldText label="Heading" value={copy.cta_heading} onChange={v => update('cta_heading', v)} />
                 <FieldText label="Intro" value={copy.cta_intro} onChange={v => update('cta_intro', v)} />
                 <FieldText label="Box riga principale" value={copy.cta_box_main} onChange={v => update('cta_box_main', v)} />
                 <FieldText label="Box riga secondaria" value={copy.cta_box_sub} onChange={v => update('cta_box_sub', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Contatti</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Contatti</h3>
                 <FieldText label="Heading" value={copy.contact_heading} onChange={v => update('contact_heading', v)} />
                 <FieldText label="Intro" value={copy.contact_intro} onChange={v => update('contact_intro', v)} />
                 <FieldText label="Email candidature" value={copy.contact_email} onChange={v => update('contact_email', v)} />
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Footer statement</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Footer statement</h3>
                 <FieldTextArea label="Statement (newline = a-capo)" value={copy.footer_statement} onChange={v => update('footer_statement', v)} />
             </section>
         </div>
@@ -5021,22 +5021,22 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Aviation Quote</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagine <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/aviation-quote-request</code> + <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/helicopter-quote-request</code>. Token <code>{'{service}'}</code> nel titolo si risolve a "Jet Privato" o "Elicottero" in base alla pagina. Il template WhatsApp supporta i placeholder: <code>{'{service}'}</code>, <code>{'{nome}'}</code>, <code>{'{email}'}</code>, <code>{'{telefono}'}</code>, <code>{'{partenza}'}</code>, <code>{'{arrivo}'}</code>, <code>{'{data_partenza}'}</code>, <code>{'{data_ritorno}'}</code>, <code>{'{passeggeri}'}</code>, <code>{'{note}'}</code>.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Aviation Quote</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagine <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/aviation-quote-request</code> + <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/helicopter-quote-request</code>. Token <code>{'{service}'}</code> nel titolo si risolve a "Jet Privato" o "Elicottero" in base alla pagina. Il template WhatsApp supporta i placeholder: <code>{'{service}'}</code>, <code>{'{nome}'}</code>, <code>{'{email}'}</code>, <code>{'{telefono}'}</code>, <code>{'{partenza}'}</code>, <code>{'{arrivo}'}</code>, <code>{'{data_partenza}'}</code>, <code>{'{data_ritorno}'}</code>, <code>{'{passeggeri}'}</code>, <code>{'{note}'}</code>.
                 </p>
             </div>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Etichette servizio (per token {'{service}'})</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Etichette servizio (per token {'{service}'})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Label Jet Privato" value={copy.service_label_jet} onChange={v => update('service_label_jet', v)} />
                     <FieldText label="Label Elicottero" value={copy.service_label_helicopter} onChange={v => update('service_label_helicopter', v)} />
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Loading + Auth gate</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Loading + Auth gate</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Loading (IT)" value={copy.loading_it} onChange={v => update('loading_it', v)} />
                     <FieldText label="Loading (EN)" value={copy.loading_en} onChange={v => update('loading_en', v)} />
@@ -5051,8 +5051,8 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header pagina</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Header pagina</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo template (IT) — usa {service}" value={copy.header_title_template_it} onChange={v => update('header_title_template_it', v)} />
                     <FieldText label="Title template (EN) — uses {service}" value={copy.header_title_template_en} onChange={v => update('header_title_template_en', v)} />
@@ -5061,8 +5061,8 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Sezioni form</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Sezioni form</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Heading Customer (IT)" value={copy.section_customer_it} onChange={v => update('section_customer_it', v)} />
                     <FieldText label="Heading Customer (EN)" value={copy.section_customer_en} onChange={v => update('section_customer_en', v)} />
@@ -5071,8 +5071,8 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi form (label + placeholder)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi form (label + placeholder)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Nome label (IT)" value={copy.field_name_label_it} onChange={v => update('field_name_label_it', v)} />
                     <FieldText label="Name label (EN)" value={copy.field_name_label_en} onChange={v => update('field_name_label_en', v)} />
@@ -5107,8 +5107,8 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Submit + alerts</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Submit + alerts</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Bottone submit (IT)" value={copy.submit_idle_it} onChange={v => update('submit_idle_it', v)} />
                     <FieldText label="Submit button (EN)" value={copy.submit_idle_en} onChange={v => update('submit_idle_en', v)} />
@@ -5123,8 +5123,8 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Numero WhatsApp destinazione</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Numero WhatsApp destinazione</h3>
                 <FieldText label='Numero WhatsApp (formato wa.me — es. "393457905205")' value={copy.whatsapp_phone} onChange={v => update('whatsapp_phone', v)} />
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[12px] text-blue-700">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
@@ -5141,12 +5141,12 @@ function CheckEmailEditor({ copy, setCopy }: { copy: CheckEmailCopy; setCopy: (n
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Check Email</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/check-email</code> mostrata dopo signup. Solo 3 stringhe IT/EN.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Check Email</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/check-email</code> mostrata dopo signup. Solo 3 stringhe IT/EN.
                 </p>
             </div>
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.title_it} onChange={v => update('title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.title_en} onChange={v => update('title_en', v)} />
@@ -5166,13 +5166,13 @@ function JetSearchResultsEditor({ copy, setCopy }: { copy: JetSearchResultsCopy;
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Jet Search Results</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/jet-search-results</code> — chrome editabile (titolo, connettori, empty state). Il catalogo jet vive in RENTAL_CATEGORIES (constants).
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Jet Search Results</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/jet-search-results</code> — chrome editabile (titolo, connettori, empty state). Il catalogo jet vive in RENTAL_CATEGORIES (constants).
                 </p>
             </div>
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header risultati</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Header risultati</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.title_it} onChange={v => update('title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.title_en} onChange={v => update('title_en', v)} />
@@ -5185,8 +5185,8 @@ function JetSearchResultsEditor({ copy, setCopy }: { copy: JetSearchResultsCopy;
                 </div>
                 <FieldText label='Fallback aeroporto sconosciuto (es. "N/A")' value={copy.airport_fallback} onChange={v => update('airport_fallback', v)} />
             </section>
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato vuoto (nessun jet trovato)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato vuoto (nessun jet trovato)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.empty_title_it} onChange={v => update('empty_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.empty_title_en} onChange={v => update('empty_title_en', v)} />
@@ -5204,14 +5204,14 @@ function ConfirmationSuccessEditor({ copy, setCopy }: { copy: ConfirmationSucces
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-[20px] font-semibold tracking-tight text-[#1d1d1f]">Conferma Prenotazione</h2>
-                <p className="text-[13px] text-[#6e6e73] mt-1">
-                    Pagina <code className="text-[12px] bg-black/5 px-1.5 py-0.5 rounded">/confirmation-success</code>. Mostrata dopo prenotazione completata o conferma email. Placeholder <code>{'{total}'}</code> nel footnote rental viene sostituito con il prezzo formattato.
+                <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Conferma Prenotazione</h2>
+                <p className="text-[13px] text-theme-text-secondary mt-1">
+                    Pagina <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/confirmation-success</code>. Mostrata dopo prenotazione completata o conferma email. Placeholder <code>{'{total}'}</code> nel footnote rental viene sostituito con il prezzo formattato.
                 </p>
             </div>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Branch "Booking confermato"</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Branch "Booking confermato"</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.booking_title_it} onChange={v => update('booking_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.booking_title_en} onChange={v => update('booking_title_en', v)} />
@@ -5224,8 +5224,8 @@ function ConfirmationSuccessEditor({ copy, setCopy }: { copy: ConfirmationSucces
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Variante Lavaggio (riepilogo)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Variante Lavaggio (riepilogo)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='"Servizio:" (IT)' value={copy.carwash_row_servizio_it} onChange={v => update('carwash_row_servizio_it', v)} />
                     <FieldText label='"Service:" (EN)' value={copy.carwash_row_servizio_en} onChange={v => update('carwash_row_servizio_en', v)} />
@@ -5248,8 +5248,8 @@ function ConfirmationSuccessEditor({ copy, setCopy }: { copy: ConfirmationSucces
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Variante Noleggio (riepilogo)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Variante Noleggio (riepilogo)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='"Veicolo:" (IT)' value={copy.rental_row_veicolo_it} onChange={v => update('rental_row_veicolo_it', v)} />
                     <FieldText label='"Vehicle:" (EN)' value={copy.rental_row_veicolo_en} onChange={v => update('rental_row_veicolo_en', v)} />
@@ -5276,8 +5276,8 @@ function ConfirmationSuccessEditor({ copy, setCopy }: { copy: ConfirmationSucces
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Branch "Email confermata" (fallback)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Branch "Email confermata" (fallback)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.email_title_it} onChange={v => update('email_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.email_title_en} onChange={v => update('email_title_en', v)} />
@@ -5303,13 +5303,13 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
     const update = <K extends keyof HeaderCopy>(key: K, value: HeaderCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Testi di Header e menu di navigazione (barra in alto + drawer EXPLORE). Il vocabolario di brand
                 (DR7 Club, Aviation Division, Prime Wash, ecc.) resta fisso nel sito e non è modificabile qui.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Logo & aria-label</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Logo & aria-label</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Logo alt (testo alternativo)" value={copy.logo_alt} onChange={v => update('logo_alt', v)} />
                     <div />
@@ -5320,8 +5320,8 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Barra superiore</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Barra superiore</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Bottone "EXPLORE" (IT)' value={copy.explore_label_it} onChange={v => update('explore_label_it', v)} />
                     <FieldText label='Button "EXPLORE" (EN)' value={copy.explore_label_en} onChange={v => update('explore_label_en', v)} />
@@ -5330,8 +5330,8 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Drawer (menu laterale)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Drawer (menu laterale)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='CTA "Prenota Ora" (IT)' value={copy.drawer_book_cta_it} onChange={v => update('drawer_book_cta_it', v)} />
                     <FieldText label='CTA "Book Now" (EN)' value={copy.drawer_book_cta_en} onChange={v => update('drawer_book_cta_en', v)} />
@@ -5352,8 +5352,8 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Popup prenotazione (apre dal drawer)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Popup prenotazione (apre dal drawer)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo popup (IT)" value={copy.popup_title_it} onChange={v => update('popup_title_it', v)} />
                     <FieldText label="Popup title (EN)" value={copy.popup_title_en} onChange={v => update('popup_title_en', v)} />
@@ -5370,22 +5370,22 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
     const update = <K extends keyof SignUpCopy>(key: K, value: SignUpCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Testi della pagina di registrazione cliente: tre rami (Azienda, Persona Fisica, Pubblica
                 Amministrazione) + sezione credenziali + consenso marketing. I messaggi di errore di
                 validazione sono modificabili e mostrati inline accanto al campo invalido.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Chrome pagina</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Chrome pagina</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Sottotitolo (IT)" value={copy.subtitle_it} onChange={v => update('subtitle_it', v)} />
                     <FieldText label="Subtitle (EN)" value={copy.subtitle_en} onChange={v => update('subtitle_en', v)} />
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Selettore tipo cliente</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Selettore tipo cliente</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Etichetta selettore (IT)" value={copy.client_type_label_it} onChange={v => update('client_type_label_it', v)} />
                     <FieldText label="Selector label (EN)" value={copy.client_type_label_en} onChange={v => update('client_type_label_en', v)} />
@@ -5398,8 +5398,8 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Titoli sezione (Azienda + Persona Fisica)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Titoli sezione (Azienda + Persona Fisica)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Titolo "Rappresentante Legale" (IT)' value={copy.section_legal_rep_it} onChange={v => update('section_legal_rep_it', v)} />
                     <FieldText label='Heading "Legal Representative" (EN)' value={copy.section_legal_rep_en} onChange={v => update('section_legal_rep_en', v)} />
@@ -5410,8 +5410,8 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi comuni</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi comuni</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Nazione (IT)" value={copy.field_country_it} onChange={v => update('field_country_it', v)} />
                     <FieldText label="Country (EN)" value={copy.field_country_en} onChange={v => update('field_country_en', v)} />
@@ -5428,8 +5428,8 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Azienda</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi Azienda</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Denominazione (IT)" value={copy.field_denominazione_it} onChange={v => update('field_denominazione_it', v)} />
                     <FieldText label="Company Name (EN)" value={copy.field_denominazione_en} onChange={v => update('field_denominazione_en', v)} />
@@ -5462,8 +5462,8 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Documento d'identità (Azienda)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Documento d'identità (Azienda)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Tipo documento (IT)" value={copy.field_doc_type_it} onChange={v => update('field_doc_type_it', v)} />
                     <FieldText label="Document type (EN)" value={copy.field_doc_type_en} onChange={v => update('field_doc_type_en', v)} />
@@ -5482,8 +5482,8 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Persona Fisica</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi Persona Fisica</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Placeholder Nome (IT)" value={copy.field_nome_placeholder_it} onChange={v => update('field_nome_placeholder_it', v)} />
                     <FieldText label="Placeholder First Name (EN)" value={copy.field_nome_placeholder_en} onChange={v => update('field_nome_placeholder_en', v)} />
@@ -5526,8 +5526,8 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Pubblica Amministrazione</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi Pubblica Amministrazione</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Codice Univoco (IT)" value={copy.field_codice_univoco_it} onChange={v => update('field_codice_univoco_it', v)} />
                     <FieldText label="Unique Code (EN)" value={copy.field_codice_univoco_en} onChange={v => update('field_codice_univoco_en', v)} />
@@ -5542,8 +5542,8 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Credenziali + consenso</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Credenziali + consenso</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Password (IT)" value={copy.field_password_it} onChange={v => update('field_password_it', v)} />
                     <FieldText label="Password (EN)" value={copy.field_password_en} onChange={v => update('field_password_en', v)} />
@@ -5556,9 +5556,9 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Messaggi di validazione</h3>
-                <p className="text-[12px] text-[#6e6e73] -mt-2">Mostrati inline accanto al campo invalido al momento del submit.</p>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Messaggi di validazione</h3>
+                <p className="text-[12px] text-theme-text-secondary -mt-2">Mostrati inline accanto al campo invalido al momento del submit.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Tipo cliente obbligatorio (IT)" value={copy.err_select_client_type_it} onChange={v => update('err_select_client_type_it', v)} />
                     <FieldText label="Client type required (EN)" value={copy.err_select_client_type_en} onChange={v => update('err_select_client_type_en', v)} />
@@ -5621,13 +5621,13 @@ function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: P
     const update = <K extends keyof PaymentCopy>(key: K, value: PaymentCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Testi del wrapper Nexi XPay. L'iframe Nexi stesso resta in italiano (vincolo SDK), solo il
                 contorno DR7 è bilingue e modificabile qui.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Chrome pagina</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Chrome pagina</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Sottotitolo logo (IT)" value={copy.subtitle_it} onChange={v => update('subtitle_it', v)} />
                     <FieldText label="Logo subtitle (EN)" value={copy.subtitle_en} onChange={v => update('subtitle_en', v)} />
@@ -5638,8 +5638,8 @@ function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: P
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato pronto al pagamento</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato pronto al pagamento</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.ready_title_it} onChange={v => update('ready_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.ready_title_en} onChange={v => update('ready_title_en', v)} />
@@ -5650,8 +5650,8 @@ function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: P
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato verifica in corso</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato verifica in corso</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.checking_title_it} onChange={v => update('checking_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.checking_title_en} onChange={v => update('checking_title_en', v)} />
@@ -5660,8 +5660,8 @@ function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: P
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato bloccato (carta prepagata)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato bloccato (carta prepagata)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.blocked_title_it} onChange={v => update('blocked_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.blocked_title_en} onChange={v => update('blocked_title_en', v)} />
@@ -5674,8 +5674,8 @@ function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: P
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato successo</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato successo</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.success_title_it} onChange={v => update('success_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.success_title_en} onChange={v => update('success_title_en', v)} />
@@ -5684,8 +5684,8 @@ function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: P
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato annullato</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato annullato</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.cancelled_title_it} onChange={v => update('cancelled_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.cancelled_title_en} onChange={v => update('cancelled_title_en', v)} />
@@ -5696,8 +5696,8 @@ function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: P
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato errore + messaggi diagnostici</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato errore + messaggi diagnostici</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo generico errore (IT)" value={copy.error_title_it} onChange={v => update('error_title_it', v)} />
                     <FieldText label="Generic error title (EN)" value={copy.error_title_en} onChange={v => update('error_title_en', v)} />
@@ -5727,14 +5727,14 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
     const update = <K extends keyof PaymentSuccessCopy>(key: K, value: PaymentSuccessCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Pagina di conferma post-pagamento. Quattro varianti del messaggio (booking generica, DR7 Club,
                 Membership con {`{tierName}`} {`{cycle}`}, Wallet con {`{packageName}`} {`{amount}`}). Lascia i
                 segnaposto fra parentesi graffe — vengono sostituiti dal sito.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato caricamento</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato caricamento</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.loading_title_it} onChange={v => update('loading_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.loading_title_en} onChange={v => update('loading_title_en', v)} />
@@ -5743,8 +5743,8 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato successo + corpo messaggio</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato successo + corpo messaggio</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo successo (IT)" value={copy.success_title_it} onChange={v => update('success_title_it', v)} />
                     <FieldText label="Success title (EN)" value={copy.success_title_en} onChange={v => update('success_title_en', v)} />
@@ -5759,8 +5759,8 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Ciclo fatturazione (Membership)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Ciclo fatturazione (Membership)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Mensile (IT)' value={copy.billing_cycle_monthly_it} onChange={v => update('billing_cycle_monthly_it', v)} />
                     <FieldText label='Monthly (EN)' value={copy.billing_cycle_monthly_en} onChange={v => update('billing_cycle_monthly_en', v)} />
@@ -5769,8 +5769,8 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Dettagli transazione</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Dettagli transazione</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo sezione (IT)" value={copy.transaction_heading_it} onChange={v => update('transaction_heading_it', v)} />
                     <FieldText label="Section heading (EN)" value={copy.transaction_heading_en} onChange={v => update('transaction_heading_en', v)} />
@@ -5783,8 +5783,8 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Pulsanti azione</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Pulsanti azione</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Home CTA (IT)" value={copy.cta_home_it} onChange={v => update('cta_home_it', v)} />
                     <FieldText label="Home CTA (EN)" value={copy.cta_home_en} onChange={v => update('cta_home_en', v)} />
@@ -5799,8 +5799,8 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Messaggi di errore</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Messaggi di errore</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Creazione prenotazione (IT)" value={copy.err_booking_create_it} onChange={v => update('err_booking_create_it', v)} />
                     <FieldText label="Booking create error (EN)" value={copy.err_booking_create_en} onChange={v => update('err_booking_create_en', v)} />
@@ -5828,14 +5828,14 @@ function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: B
     const update = <K extends keyof BookingCopy>(key: K, value: BookingCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Pagina prenotazione (yacht / jet / elicottero). Le etichette dei campi del modulo restano nel
                 dizionario i18n; qui modifichi solo gate di login, schermate di conferma, blocco riepilogo
                 preventivo, messaggi di errore Stripe/salvataggio e label default del select.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stati comuni</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Stati comuni</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Caricamento (IT)" value={copy.loading_it} onChange={v => update('loading_it', v)} />
                     <FieldText label="Loading (EN)" value={copy.loading_en} onChange={v => update('loading_en', v)} />
@@ -5848,8 +5848,8 @@ function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: B
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Gate "Accesso Richiesto"</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Gate "Accesso Richiesto"</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Titolo (IT)' value={copy.auth_required_title_it} onChange={v => update('auth_required_title_it', v)} />
                     <FieldText label='Title (EN)' value={copy.auth_required_title_en} onChange={v => update('auth_required_title_en', v)} />
@@ -5862,8 +5862,8 @@ function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: B
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Schermata "Prenotazione Confermata"</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Schermata "Prenotazione Confermata"</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Titolo (IT)' value={copy.booking_confirmed_title_it} onChange={v => update('booking_confirmed_title_it', v)} />
                     <FieldText label='Title (EN)' value={copy.booking_confirmed_title_en} onChange={v => update('booking_confirmed_title_en', v)} />
@@ -5876,8 +5876,8 @@ function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: B
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Riepilogo richiesta preventivo</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Riepilogo richiesta preventivo</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Titolo (IT)' value={copy.quote_review_title_it} onChange={v => update('quote_review_title_it', v)} />
                     <FieldText label='Title (EN)' value={copy.quote_review_title_en} onChange={v => update('quote_review_title_en', v)} />
@@ -5886,8 +5886,8 @@ function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: B
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Messaggi di errore</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Messaggi di errore</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Pagamento non configurato (IT)" value={copy.err_payment_not_configured_it} onChange={v => update('err_payment_not_configured_it', v)} />
                     <FieldText label="Payment not configured (EN)" value={copy.err_payment_not_configured_en} onChange={v => update('err_payment_not_configured_en', v)} />
@@ -5915,14 +5915,14 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
     const update = <K extends keyof CreditWalletCopy>(key: K, value: CreditWalletCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Testi marketing + chrome del modale di acquisto crediti. Gli importi dei pacchetti restano nel
                 codice (CREDIT_PACKAGES). Il segnaposto {`{amount}`} nel bottone "Paga" del modale viene
                 sostituito a runtime con l'importo selezionato.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo hero (IT)" value={copy.hero_title_eyebrow_it} onChange={v => update('hero_title_eyebrow_it', v)} />
                     <FieldText label="Hero title (EN)" value={copy.hero_title_eyebrow_en} onChange={v => update('hero_title_eyebrow_en', v)} />
@@ -5933,8 +5933,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Tre vantaggi sopra i pacchetti</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Tre vantaggi sopra i pacchetti</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label={`"Fino all'80% Extra" titolo (IT)`} value={copy.benefit_extra_title_it} onChange={v => update('benefit_extra_title_it', v)} />
                     <FieldText label='"Up to 80% Extra" title (EN)' value={copy.benefit_extra_title_en} onChange={v => update('benefit_extra_title_en', v)} />
@@ -5951,8 +5951,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Blocco "Come si usa"</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Blocco "Come si usa"</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.services_heading_it} onChange={v => update('services_heading_it', v)} />
                     <FieldText label="Heading (EN)" value={copy.services_heading_en} onChange={v => update('services_heading_en', v)} />
@@ -5963,8 +5963,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Selettore pacchetti</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Selettore pacchetti</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='"SCEGLI IL TUO PACCHETTO:" (IT)' value={copy.packages_section_label_it} onChange={v => update('packages_section_label_it', v)} />
                     <FieldText label='"CHOOSE YOUR PACKAGE:" (EN)' value={copy.packages_section_label_en} onChange={v => update('packages_section_label_en', v)} />
@@ -5973,8 +5973,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card pacchetto (etichette ripetute su ogni card)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Card pacchetto (etichette ripetute su ogni card)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Badge "PIÙ SCELTO" (IT)' value={copy.card_popular_badge_it} onChange={v => update('card_popular_badge_it', v)} />
                     <FieldText label='"MOST POPULAR" badge (EN)' value={copy.card_popular_badge_en} onChange={v => update('card_popular_badge_en', v)} />
@@ -5989,8 +5989,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Slogan promo sotto i pacchetti</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Slogan promo sotto i pacchetti</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Riga 1 (IT)" value={copy.promo_line1_it} onChange={v => update('promo_line1_it', v)} />
                     <FieldText label="Line 1 (EN)" value={copy.promo_line1_en} onChange={v => update('promo_line1_en', v)} />
@@ -5999,8 +5999,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Vantaggi (4 card)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Vantaggi (4 card)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo sezione (IT)" value={copy.advantages_heading_it} onChange={v => update('advantages_heading_it', v)} />
                     <FieldText label="Section heading (EN)" value={copy.advantages_heading_en} onChange={v => update('advantages_heading_en', v)} />
@@ -6023,8 +6023,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Trasparenza & sicurezza</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Trasparenza & sicurezza</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.transparency_heading_it} onChange={v => update('transparency_heading_it', v)} />
                     <FieldText label="Heading (EN)" value={copy.transparency_heading_en} onChange={v => update('transparency_heading_en', v)} />
@@ -6037,8 +6037,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">CTA finale</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">CTA finale</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.cta_title_it} onChange={v => update('cta_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.cta_title_en} onChange={v => update('cta_title_en', v)} />
@@ -6049,8 +6049,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Modale di checkout</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Modale di checkout</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo modale (IT)" value={copy.modal_title_it} onChange={v => update('modal_title_it', v)} />
                     <FieldText label="Modal title (EN)" value={copy.modal_title_en} onChange={v => update('modal_title_en', v)} />
@@ -6075,8 +6075,8 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Errori modale</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Errori modale</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Nome obbligatorio (IT)" value={copy.err_name_required_it} onChange={v => update('err_name_required_it', v)} />
                     <FieldText label="Name required (EN)" value={copy.err_name_required_en} onChange={v => update('err_name_required_en', v)} />
@@ -6104,15 +6104,15 @@ function TokenEditor({ copy, setCopy }: { copy: TokenCopy; setCopy: (next: Token
     const update = <K extends keyof TokenCopy>(key: K, value: TokenCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Manifesto DR7 Token / Coin / Up / APP. Qui modifichi titoli sezione, lead, badge e CTA finale.
                 I corpi dei card di dettaglio restano nel codice (pagina in lavorazione). Usa
-                <code className="px-1 mx-1 bg-black/10 rounded">**testo**</code>
+                <code className="px-1 mx-1 bg-theme-bg-tertiary rounded">**testo**</code>
                 per applicare il grassetto bianco inline.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Sottotitolo (IT)" value={copy.hero_subtitle_it} onChange={v => update('hero_subtitle_it', v)} />
                     <FieldText label="Subtitle (EN)" value={copy.hero_subtitle_en} onChange={v => update('hero_subtitle_en', v)} />
@@ -6121,8 +6121,8 @@ function TokenEditor({ copy, setCopy }: { copy: TokenCopy; setCopy: (next: Token
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">DR7 Coin</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">DR7 Coin</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo sezione (IT)" value={copy.coin_section_title_it} onChange={v => update('coin_section_title_it', v)} />
                     <FieldText label="Section title (EN)" value={copy.coin_section_title_en} onChange={v => update('coin_section_title_en', v)} />
@@ -6135,8 +6135,8 @@ function TokenEditor({ copy, setCopy }: { copy: TokenCopy; setCopy: (next: Token
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">DR7 Up</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">DR7 Up</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo sezione (IT)" value={copy.up_section_title_it} onChange={v => update('up_section_title_it', v)} />
                     <FieldText label="Section title (EN)" value={copy.up_section_title_en} onChange={v => update('up_section_title_en', v)} />
@@ -6147,8 +6147,8 @@ function TokenEditor({ copy, setCopy }: { copy: TokenCopy; setCopy: (next: Token
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">DR7 APP</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">DR7 APP</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo sezione (IT)" value={copy.app_section_title_it} onChange={v => update('app_section_title_it', v)} />
                     <FieldText label="Section title (EN)" value={copy.app_section_title_en} onChange={v => update('app_section_title_en', v)} />
@@ -6157,8 +6157,8 @@ function TokenEditor({ copy, setCopy }: { copy: TokenCopy; setCopy: (next: Token
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">CTA finale</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">CTA finale</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.cta_title_it} onChange={v => update('cta_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.cta_title_en} onChange={v => update('cta_title_en', v)} />
@@ -6179,13 +6179,13 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
     const update = <K extends keyof FirmaCopy>(key: K, value: FirmaCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Pagina di firma elettronica del contratto (Trustera360 backend). Token segnaposto supportati
-                nei testi: <code className="px-1 bg-black/10 rounded">{`{email}`}</code> <code className="px-1 bg-black/10 rounded">{`{name}`}</code> <code className="px-1 bg-black/10 rounded">{`{num}`}</code> <code className="px-1 bg-black/10 rounded">{`{attempts}`}</code> <code className="px-1 bg-black/10 rounded">{`{date}`}</code> <code className="px-1 bg-black/10 rounded">{`{i}`}</code> <code className="px-1 bg-black/10 rounded">{`{n}`}</code>.
+                nei testi: <code className="px-1 bg-theme-bg-tertiary rounded">{`{email}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{name}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{num}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{attempts}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{date}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{i}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{n}`}</code>.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header + stati globali</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Header + stati globali</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Pill header (IT)" value={copy.header_pill_it} onChange={v => update('header_pill_it', v)} />
                     <FieldText label="Header pill (EN)" value={copy.header_pill_en} onChange={v => update('header_pill_en', v)} />
@@ -6200,8 +6200,8 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Riepilogo contratto</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Riepilogo contratto</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Prefisso "Contratto" (IT)' value={copy.contract_number_prefix_it} onChange={v => update('contract_number_prefix_it', v)} />
                     <FieldText label='"Contract" prefix (EN)' value={copy.contract_number_prefix_en} onChange={v => update('contract_number_prefix_en', v)} />
@@ -6218,8 +6218,8 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Viewer PDF</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Viewer PDF</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo sezione (IT)" value={copy.pdf_section_title_it} onChange={v => update('pdf_section_title_it', v)} />
                     <FieldText label="Section title (EN)" value={copy.pdf_section_title_en} onChange={v => update('pdf_section_title_en', v)} />
@@ -6236,8 +6236,8 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Step 1 — invia codice OTP</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Step 1 — invia codice OTP</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo step (IT)" value={copy.otp_step1_title_it} onChange={v => update('otp_step1_title_it', v)} />
                     <FieldText label="Step title (EN)" value={copy.otp_step1_title_en} onChange={v => update('otp_step1_title_en', v)} />
@@ -6250,8 +6250,8 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Step 2 — inserisci OTP</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Step 2 — inserisci OTP</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo step (IT)" value={copy.otp_step2_title_it} onChange={v => update('otp_step2_title_it', v)} />
                     <FieldText label="Step title (EN)" value={copy.otp_step2_title_en} onChange={v => update('otp_step2_title_en', v)} />
@@ -6268,8 +6268,8 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Step 3 — conferma firma</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Step 3 — conferma firma</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo step (IT)" value={copy.signing_step_title_it} onChange={v => update('signing_step_title_it', v)} />
                     <FieldText label="Step title (EN)" value={copy.signing_step_title_en} onChange={v => update('signing_step_title_en', v)} />
@@ -6286,8 +6286,8 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Documento firmato (successo)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Documento firmato (successo)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.signed_title_it} onChange={v => update('signed_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.signed_title_en} onChange={v => update('signed_title_en', v)} />
@@ -6300,8 +6300,8 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Messaggi di errore</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Messaggi di errore</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Caricamento fallback (IT)" value={copy.err_load_fallback_it} onChange={v => update('err_load_fallback_it', v)} />
                     <FieldText label="Load fallback (EN)" value={copy.err_load_fallback_en} onChange={v => update('err_load_fallback_en', v)} />
@@ -6328,15 +6328,15 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
     const update = <K extends keyof RegistrazioneClienteCopy>(key: K, value: RegistrazioneClienteCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Pagina link-token che il cliente apre dall'invito operatore per completare i dati anagrafici e
                 caricare i documenti. Le etichette dei singoli campi del form restano hardcoded (verranno
                 migrate in un secondo passaggio); qui modifichi chrome, titoli sezione, gates (link
                 scaduto/usato/revocato), step documenti, pulsanti e messaggi di validazione.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Intro pagina</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Intro pagina</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.intro_title_it} onChange={v => update('intro_title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.intro_title_en} onChange={v => update('intro_title_en', v)} />
@@ -6345,8 +6345,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Bottoni tipo cliente</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Bottoni tipo cliente</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='"Persona Fisica" (IT)' value={copy.tipo_persona_fisica_it} onChange={v => update('tipo_persona_fisica_it', v)} />
                     <FieldText label='"Individual" (EN)' value={copy.tipo_persona_fisica_en} onChange={v => update('tipo_persona_fisica_en', v)} />
@@ -6357,8 +6357,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Titoli sezione (numerati)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Titoli sezione (numerati)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='1. Tipo Cliente (IT)' value={copy.section_1_tipo_it} onChange={v => update('section_1_tipo_it', v)} />
                     <FieldText label='1. Client Type (EN)' value={copy.section_1_tipo_en} onChange={v => update('section_1_tipo_en', v)} />
@@ -6381,8 +6381,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Gate link (verifica + invalidi + done)</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Gate link (verifica + invalidi + done)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Verifica link... (IT)" value={copy.verifica_link_it} onChange={v => update('verifica_link_it', v)} />
                     <FieldText label="Verifying link... (EN)" value={copy.verifica_link_en} onChange={v => update('verifica_link_en', v)} />
@@ -6409,8 +6409,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Step Documenti</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Step Documenti</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldTextArea label="Intro documenti (IT)" value={copy.docs_intro_it} onChange={v => update('docs_intro_it', v)} />
                     <FieldTextArea label="Docs intro (EN)" value={copy.docs_intro_en} onChange={v => update('docs_intro_en', v)} />
@@ -6429,8 +6429,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Bottoni</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Bottoni</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='"Continua →" (IT)' value={copy.cta_submit_it} onChange={v => update('cta_submit_it', v)} />
                     <FieldText label='"Continue →" (EN)' value={copy.cta_submit_en} onChange={v => update('cta_submit_en', v)} />
@@ -6445,8 +6445,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Messaggi di validazione</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Messaggi di validazione</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Prefisso campi mancanti con {list} (IT)" value={copy.err_missing_prefix_it} onChange={v => update('err_missing_prefix_it', v)} />
                     <FieldText label="Missing fields prefix with {list} (EN)" value={copy.err_missing_prefix_en} onChange={v => update('err_missing_prefix_en', v)} />
@@ -6461,8 +6461,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Persona Fisica</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi Persona Fisica</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Nome (IT)" value={copy.field_nome_it} onChange={v => update('field_nome_it', v)} />
                     <FieldText label="First Name (EN)" value={copy.field_nome_en} onChange={v => update('field_nome_en', v)} />
@@ -6492,8 +6492,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Azienda</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi Azienda</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Ragione Sociale (IT)" value={copy.field_ragione_sociale_it} onChange={v => update('field_ragione_sociale_it', v)} />
                     <FieldText label="Company Name (EN)" value={copy.field_ragione_sociale_en} onChange={v => update('field_ragione_sociale_en', v)} />
@@ -6513,8 +6513,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Pubblica Amministrazione</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi Pubblica Amministrazione</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Ente / Ufficio (IT)" value={copy.field_ente_ufficio_it} onChange={v => update('field_ente_ufficio_it', v)} />
                     <FieldText label="Agency / Office (EN)" value={copy.field_ente_ufficio_en} onChange={v => update('field_ente_ufficio_en', v)} />
@@ -6529,8 +6529,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Residenza / Sede</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi Residenza / Sede</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Indirizzo (IT)" value={copy.field_indirizzo_it} onChange={v => update('field_indirizzo_it', v)} />
                     <FieldText label="Address (EN)" value={copy.field_indirizzo_en} onChange={v => update('field_indirizzo_en', v)} />
@@ -6558,8 +6558,8 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Campi Contatti</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Campi Contatti</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Telefono (IT)" value={copy.field_telefono_it} onChange={v => update('field_telefono_it', v)} />
                     <FieldText label="Phone (EN)" value={copy.field_telefono_en} onChange={v => update('field_telefono_en', v)} />
@@ -6578,13 +6578,13 @@ function BookingSearchBoxEditor({ copy, setCopy }: { copy: BookingSearchBoxCopy;
     const update = <K extends keyof BookingSearchBoxCopy>(key: K, value: BookingSearchBoxCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
-            <p className="text-[13px] text-[#6e6e73]">
+            <p className="text-[13px] text-theme-text-secondary">
                 Form di ricerca veicolo che appare nel popup del menu Header e nella variante hero. Tutti i
                 testi sono bilingue e modificabili qui.
             </p>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header + posizioni</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Header + posizioni</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo (IT)" value={copy.title_it} onChange={v => update('title_it', v)} />
                     <FieldText label="Title (EN)" value={copy.title_en} onChange={v => update('title_en', v)} />
@@ -6601,8 +6601,8 @@ function BookingSearchBoxEditor({ copy, setCopy }: { copy: BookingSearchBoxCopy;
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Date e orari</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Date e orari</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label='Eyebrow "Ritiro" (IT)' value={copy.pickup_section_label_it} onChange={v => update('pickup_section_label_it', v)} />
                     <FieldText label='Eyebrow "Pickup" (EN)' value={copy.pickup_section_label_en} onChange={v => update('pickup_section_label_en', v)} />
@@ -6615,8 +6615,8 @@ function BookingSearchBoxEditor({ copy, setCopy }: { copy: BookingSearchBoxCopy;
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Avviso tariffa + consegna a domicilio</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Avviso tariffa + consegna a domicilio</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo avviso tariffa (IT)" value={copy.rate_warning_title_it} onChange={v => update('rate_warning_title_it', v)} />
                     <FieldText label="Rate warning title (EN)" value={copy.rate_warning_title_en} onChange={v => update('rate_warning_title_en', v)} />
@@ -6633,8 +6633,8 @@ function BookingSearchBoxEditor({ copy, setCopy }: { copy: BookingSearchBoxCopy;
                 </div>
             </section>
 
-            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
-                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">CTA + errori</h3>
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">CTA + errori</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="CTA ricerca (IT)" value={copy.search_cta_it} onChange={v => update('search_cta_it', v)} />
                     <FieldText label="Search CTA (EN)" value={copy.search_cta_en} onChange={v => update('search_cta_en', v)} />
