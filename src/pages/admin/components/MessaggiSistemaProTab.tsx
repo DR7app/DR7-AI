@@ -146,6 +146,51 @@ function statusCsvLabel(csv: string | null | undefined): string {
 }
 
 /**
+ * Calcola la prossima finestra utile in cui il cron tenterà di
+ * inviare il template, basata su send_hour (Europe/Rome).
+ *
+ *   - send_hour valorizzato: la finestra cron è centrata su
+ *     send_hour:00 Rome del giorno target (±19 min: il cron gira
+ *     ogni 2 min, finestra LOOKBACK 30 min + LOOKFORWARD 8 min,
+ *     centrata sul target). Mostriamo quindi "domani 09:00 Rome"
+ *     o "oggi 09:00 Rome" se l'ora non è ancora passata.
+ *   - send_hour null: il cron tenta ogni 2 minuti senza vincoli di
+ *     ora. Mostriamo semplicemente "entro 2 minuti".
+ *
+ * Importante: l'invio EFFETTIVO avviene solo se una prenotazione
+ * esiste con la data+ora che cade nella finestra di ricerca dei
+ * candidati. Questa funzione mostra il PROSSIMO MOMENTO IN CUI IL
+ * CRON CONTROLLERÀ, non la garanzia che parta davvero.
+ */
+function nextCronAttemptText(sendHour: number | null): string {
+  if (sendHour == null) {
+    return 'entro 2 minuti (cron gira di continuo)'
+  }
+  // Stato attuale Rome (YYYY-MM-DD HH:mm)
+  const now = new Date()
+  const romeNow = now.toLocaleString('sv-SE', { timeZone: 'Europe/Rome' }) // "YYYY-MM-DD HH:MM:SS"
+  const [datePart, timePart] = romeNow.split(' ')
+  const [hh, mm] = (timePart || '00:00').split(':').map(Number)
+  const nowMinutes = hh * 60 + mm
+  const targetMinutes = sendHour * 60
+  // Finestra cron: [target - 30 min, target + 8 min]
+  const windowOpen = targetMinutes - 30
+  const windowClose = targetMinutes + 8
+  const hourStr = `${String(sendHour).padStart(2, '0')}:00 Rome`
+  if (nowMinutes < windowOpen) {
+    return `oggi alle ${hourStr} (finestra ${String(Math.floor(windowOpen / 60)).padStart(2, '0')}:${String(windowOpen % 60).padStart(2, '0')}–${String(Math.floor(windowClose / 60)).padStart(2, '0')}:${String(windowClose % 60).padStart(2, '0')})`
+  }
+  if (nowMinutes <= windowClose) {
+    return `ADESSO — il cron è nella finestra utile (${hourStr} ±19 min)`
+  }
+  // Finestra di oggi già chiusa → prossima è domani
+  const tomorrow = new Date(`${datePart}T00:00:00`)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowDate = tomorrow.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit' })
+  return `domani ${tomorrowDate} alle ${hourStr} (finestra ${String(Math.floor(windowOpen / 60)).padStart(2, '0')}:${String(windowOpen % 60).padStart(2, '0')}–${String(Math.floor(windowClose / 60)).padStart(2, '0')}:${String(windowClose % 60).padStart(2, '0')})`
+}
+
+/**
  * Costruisce un riassunto in italiano semplice di QUANDO partirà
  * davvero un template. Considera DUE fonti distinte di invio:
  *   1. Il cron `process-scheduled-system-messages-cron` (controllato da
@@ -190,6 +235,16 @@ function buildScheduleSummary(
       ? 'tutti i veicoli'
       : `solo ${categoryLabels[cat] || cat}`
     lines.push(`Cron · invia ${offsetText} ${cleanTriggerLabel} · ${sendHourText} · ${statusLabel} · ${catLabel}`)
+
+    // Calcolo "Prossimo tentativo" — quando il cron POTREBBE far
+    // partire questo template. Considera SOLO il send_hour: se
+    // valorizzato, è quell'ora Rome di oggi (se non passata) o di
+    // domani; se null, il cron tenta in qualsiasi momento appena
+    // c'è una prenotazione che soddisfa la finestra ±19 min intorno
+    // al target = booking_date ± offset. Non possiamo prevedere il
+    // momento esatto senza scansionare le prenotazioni, quindi
+    // mostriamo la prossima finestra cron utile.
+    lines.push(`Prossimo tentativo: ${nextCronAttemptText(t.send_hour ?? null)}`)
   }
 
   // Eventi di codice che instradano qui (callback Nexi, conferma
