@@ -216,8 +216,40 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
             })
         }).length
 
-        return { total, attivi, inUso, fermi, totalKm, meanDailyRate, byCategory, topByRate, dueSoon }
-    }, [vehicles])
+        // Aggregati su vehicleStats per le 3 KPI nuove (Fatturato / Utilizzo /
+        // ROI) e per gli alert intelligenti.
+        let totalFatturato = 0
+        let utilizzoSum = 0
+        let utilizzoCount = 0
+        let roiSum = 0
+        let roiCount = 0
+        let fermiOltre3gg = 0
+        let sottoTargetUtilizzo = 0
+        vehicleStats.forEach((s, vid) => {
+            totalFatturato += s.fatturato || 0
+            if (typeof s.utilizzoPct === 'number') {
+                utilizzoSum += s.utilizzoPct
+                utilizzoCount++
+                if (s.utilizzoPct < 40) sottoTargetUtilizzo++
+            }
+            if (s.giorniFermo >= 3) fermiOltre3gg++
+            // ROI proxy: fatturato / (daily_rate * 30) * 100 = utilizzo% del
+            // potenziale mensile. Conservatore ma usa solo dati reali.
+            const veh = vehicles.find(v => v.id === vid)
+            const monthlyPotential = (veh?.daily_rate || 0) * 30
+            if (monthlyPotential > 0) {
+                roiSum += (s.fatturato / monthlyPotential) * 100
+                roiCount++
+            }
+        })
+        const utilizzoMedio = utilizzoCount > 0 ? Math.round(utilizzoSum / utilizzoCount) : 0
+        const roiMedio = roiCount > 0 ? Math.round((roiSum / roiCount) * 10) / 10 : 0
+
+        return {
+            total, attivi, inUso, fermi, totalKm, meanDailyRate, byCategory, topByRate, dueSoon,
+            totalFatturato, utilizzoMedio, roiMedio, fermiOltre3gg, sottoTargetUtilizzo,
+        }
+    }, [vehicles, vehicleStats])
 
     // Lista filtrata
     const filtered = useMemo(() => {
@@ -261,17 +293,50 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                 </div>
             </div>
 
-            {/* KPI cards (solo dati reali) */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                <KpiCard label="Totale Veicoli" value={stats.total} ring="#3B82F6"/>
-                <KpiCard label="Attivi" value={stats.attivi} subtitle={stats.total > 0 ? `${Math.round((stats.attivi / stats.total) * 100)}% della flotta` : '—'} ring="#10B981"/>
-                <KpiCard label="In Uso" value={stats.inUso} subtitle={stats.total > 0 ? `${Math.round((stats.inUso / stats.total) * 100)}% della flotta` : '—'} ring="#06B6D4"/>
-                <KpiCard label="Fermi (Manutenzione)" value={stats.fermi} subtitle={stats.total > 0 ? `${Math.round((stats.fermi / stats.total) * 100)}% della flotta` : '—'} ring="#F59E0B" urgent={stats.fermi > 0}/>
-                <KpiCard label="Scadenze 30 gg" value={stats.dueSoon} subtitle="ass. / bollo / rev. / leasing" ring="#EF4444" urgent={stats.dueSoon > 0}/>
+            {/* KPI cards — 6 metriche come da mockup. Tutti i numeri vengono
+                dai dati reali (vehicleStats + vehicles), niente mock. */}
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                <KpiCard label="Totale Veicoli" value={stats.total} subtitle="100% della flotta" ring="#3B82F6"/>
+                <KpiCard label="Veicoli Attivi" value={stats.attivi} subtitle={stats.total > 0 ? `${Math.round((stats.attivi / stats.total) * 100)}% della flotta` : '—'} ring="#10B981"/>
+                <KpiCard label="Veicoli Fermi" value={stats.fermi} subtitle={stats.total > 0 ? `${Math.round((stats.fermi / stats.total) * 100)}% della flotta` : '—'} ring="#EF4444" urgent={stats.fermi > 0}/>
+                <KpiCard label="Fatturato Flotta" value={`€${stats.totalFatturato.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} subtitle="ultimi 30 giorni" ring="#F59E0B"/>
+                <KpiCard label="Utilizzo Medio" value={`${stats.utilizzoMedio}%`} subtitle="media veicolare" ring="#06B6D4"/>
+                <KpiCard label="ROI Medio Flotta" value={`${stats.roiMedio.toString().replace('.', ',')}%`} subtitle="fatturato/potenziale" ring="#A855F7"/>
             </div>
 
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-2">
+            {/* Alert Intelligenti — sezione condizionale che mostra gli avvisi
+                derivati direttamente dai dati. Non rendering se non ci sono
+                alert da mostrare. */}
+            {(() => {
+                const alerts: { tone: 'red' | 'amber' | 'yellow'; text: string }[] = []
+                if (stats.fermiOltre3gg > 0) alerts.push({ tone: 'red', text: `${stats.fermiOltre3gg} ${stats.fermiOltre3gg === 1 ? 'veicolo fermo' : 'veicoli fermi'} da oltre 3 giorni` })
+                if (stats.sottoTargetUtilizzo > 0) alerts.push({ tone: 'amber', text: `${stats.sottoTargetUtilizzo} ${stats.sottoTargetUtilizzo === 1 ? 'veicolo sotto' : 'veicoli sotto'} il target di utilizzo` })
+                if (stats.dueSoon > 0) alerts.push({ tone: 'yellow', text: `${stats.dueSoon} ${stats.dueSoon === 1 ? 'scadenza' : 'scadenze'} entro 30 giorni (ass. / bollo / rev. / leasing)` })
+                if (alerts.length === 0) return null
+                const dotColor = { red: 'bg-red-500', amber: 'bg-amber-500', yellow: 'bg-yellow-500' }
+                return (
+                    <div className="bg-gradient-to-br from-red-500/8 via-amber-500/5 to-transparent border border-amber-500/20 rounded-2xl px-4 py-3">
+                        <div className="flex items-center gap-2 mb-2">
+                            <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M4.93 4.93l14.14 14.14M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Alert Intelligenti</span>
+                            <span className="text-[11px] text-theme-text-muted">{alerts.length} {alerts.length === 1 ? 'avviso disponibile' : 'avvisi disponibili'}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {alerts.map((a, i) => (
+                                <div key={i} className="flex items-center gap-2 bg-theme-bg-primary/40 border border-theme-border/50 rounded-full px-3 py-1.5">
+                                    <span className={`w-2 h-2 rounded-full ${dotColor[a.tone]}`}/>
+                                    <span className="text-[11px] text-theme-text-primary">{a.text}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )
+            })()}
+
+            {/* Filters — search + 3 dropdowns + Filtri pill + Nuovo Veicolo CTA */}
+            <div className="flex flex-col lg:flex-row gap-2 items-stretch lg:items-center">
                 <div className="relative flex-1">
                     <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -281,29 +346,61 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Cerca per targa, nome o modello..."
-                        className="w-full pl-9 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                        className="w-full pl-9 pr-3 py-2 min-h-[40px] bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                     />
                 </div>
-                <select
-                    value={filterCategory}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-sm focus:outline-none"
-                >
-                    <option value="all">Tutti i gruppi</option>
-                    {proCategories.map(c => (
-                        <option key={c.id} value={c.id}>{c.label}</option>
-                    ))}
-                </select>
-                <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-sm focus:outline-none"
-                >
-                    <option value="all">Tutti gli stati</option>
-                    <option value="available">Attivo</option>
-                    <option value="rented">In uso</option>
-                    <option value="maintenance">Manutenzione</option>
-                </select>
+                <div className="flex gap-2 flex-wrap">
+                    <select
+                        value={filterCategory}
+                        onChange={(e) => setFilterCategory(e.target.value)}
+                        className="px-3 py-2 min-h-[40px] bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-sm focus:outline-none"
+                    >
+                        <option value="all">Tutti i gruppi</option>
+                        {proCategories.map(c => (
+                            <option key={c.id} value={c.id}>{c.label}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="px-3 py-2 min-h-[40px] bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-sm focus:outline-none"
+                    >
+                        <option value="all">Tutti gli stati</option>
+                        <option value="available">Attivo</option>
+                        <option value="rented">In uso</option>
+                        <option value="maintenance">Manutenzione</option>
+                    </select>
+                    <select
+                        defaultValue=""
+                        className="px-3 py-2 min-h-[40px] bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-sm focus:outline-none"
+                        title="Filtro disponibilità (in arrivo)"
+                    >
+                        <option value="">Disponibilità</option>
+                        <option value="available">Disponibili oggi</option>
+                        <option value="busy">Occupati oggi</option>
+                    </select>
+                    <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-sm bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                        title="Filtri avanzati (in arrivo)"
+                    >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M6 12h12M10 20h4"/>
+                        </svg>
+                        Filtri
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { try { window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'vehicles' } })) } catch { /* ignore */ } }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-sm font-semibold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30 hover:bg-cyan-600 transition-colors"
+                        title="Apri la tab Veicoli per aggiungere un nuovo veicolo"
+                    >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Nuovo Veicolo
+                    </button>
+                </div>
             </div>
 
             {/* Layout: tabella + sidebar */}
@@ -531,6 +628,39 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                             <Row label="Veicoli attivi" value={`${stats.attivi} / ${stats.total}`}/>
                         </div>
                     </div>
+
+                    {/* Suggerimenti Smart — heuristics su dati reali. */}
+                    {(() => {
+                        const lines: string[] = []
+                        if (stats.sottoTargetUtilizzo > 0) lines.push(`${stats.sottoTargetUtilizzo} ${stats.sottoTargetUtilizzo === 1 ? 'veicolo ha' : 'veicoli hanno'} un utilizzo basso. Valuta una promozione mirata per aumentare le prenotazioni.`)
+                        if (stats.fermiOltre3gg > 0) lines.push(`${stats.fermiOltre3gg} ${stats.fermiOltre3gg === 1 ? 'veicolo fermo' : 'veicoli fermi'} da oltre 3 giorni — controlla la disponibilità e gli interventi.`)
+                        if (stats.dueSoon > 0) lines.push(`${stats.dueSoon} ${stats.dueSoon === 1 ? 'scadenza' : 'scadenze'} entro 30 giorni: pianifica i rinnovi.`)
+                        if (lines.length === 0) lines.push('Tutto sotto controllo: nessuna anomalia rilevata sulla flotta.')
+                        return (
+                            <div className="rounded-2xl border border-dr7-gold/25 bg-gradient-to-br from-dr7-gold/8 via-dr7-gold/4 to-transparent p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                    </svg>
+                                    <h3 className="text-xs font-bold text-dr7-gold uppercase tracking-wider">Suggerimenti Smart</h3>
+                                </div>
+                                <ul className="space-y-1.5 text-[11px] text-theme-text-secondary leading-relaxed">
+                                    {lines.map((l, i) => <li key={i}>{l}</li>)}
+                                </ul>
+                                {stats.sottoTargetUtilizzo > 0 && (
+                                    <button
+                                        onClick={() => { try { window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'campagna-marketing' } })) } catch { /* ignore */ } }}
+                                        className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-dr7-gold/90 transition-colors"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/>
+                                        </svg>
+                                        Crea Promozione
+                                    </button>
+                                )}
+                            </div>
+                        )
+                    })()}
                 </aside>
             </div>
         </div>
