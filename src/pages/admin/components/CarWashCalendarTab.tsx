@@ -783,8 +783,18 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               </p>
               {/* Status pills */}
               <div className="flex items-center gap-2 mt-3">
-                <span className={`px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide ${paid ? 'bg-emerald-500/15 text-emerald-500' : 'bg-red-500/15 text-red-500'}`}>
-                  {paid ? 'Pagato' : 'Non Pagato'}
+                <span className={`px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide ${
+                  paid
+                    ? 'bg-emerald-500/15 text-emerald-500'
+                    : selectedBooking.payment_status === 'pending'
+                      ? 'bg-orange-500/15 text-orange-500'
+                      : 'bg-red-500/15 text-red-500'
+                }`}>
+                  {paid
+                    ? 'Pagato'
+                    : selectedBooking.payment_status === 'pending'
+                      ? 'In Attesa'
+                      : 'Non Pagato'}
                 </span>
                 <span className="px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-theme-text-muted/10 text-theme-text-muted uppercase">
                   {selectedBooking.status}
