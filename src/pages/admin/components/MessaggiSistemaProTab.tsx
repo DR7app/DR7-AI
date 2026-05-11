@@ -976,6 +976,55 @@ export default function MessaggiSistemaProTab() {
     const [newTargetUsedPromoBefore, setNewTargetUsedPromoBefore] = useState<'any' | 'yes' | 'no'>('any')
     const [newTargetExtensionCountMin, setNewTargetExtensionCountMin] = useState('')
     const [newTargetExtensionCountMax, setNewTargetExtensionCountMax] = useState('')
+
+    /**
+     * Riporta TUTTI i campi del form "Nuovo Messaggio" ai default. Va
+     * invocata sia quando si apre il form (così non si trascina lo stato
+     * della sessione precedente) sia quando si annulla. Prima il bug era
+     * che soltanto label/description/body venivano resettati al Cancel:
+     * `is_automatic` e i campi schedule (trigger_event, offset, send_hour,
+     * target_status, ecc.) restavano dalla volta precedente e potevano
+     * finire silenziosamente nell'insert successivo, generando il caso
+     * "ho selezionato Automatico ma in lista appare Manuale" o viceversa.
+     */
+    function resetNewForm() {
+        setNewLabel('')
+        setNewDescription('')
+        setNewBody('')
+        setNewIsAutomatic(false)
+        setNewTriggerEvent('before_dropoff')
+        setNewTriggerOffset(24)
+        setNewSendHour(9)
+        setNewTargetCategory('all')
+        setNewTargetStatus(new Set(['confirmed', 'active']))
+        setNewTargetServiceType('all')
+        setNewTargetWithDeposit('all')
+        setNewTargetPaymentMethod('all')
+        setNewTargetAmountMin('')
+        setNewTargetAmountMax('')
+        setNewTargetDays(new Set([0, 1, 2, 3, 4, 5, 6]))
+        setNewQuietHoursEnabled(false)
+        setNewQuietStart(22)
+        setNewQuietEnd(7)
+        setNewTargetMembershipTier('all')
+        setNewTargetMinPrevBookings('')
+        setNewTargetRentalDurationMin('')
+        setNewTargetRentalDurationMax('')
+        setNewTargetCustomerTags('')
+        setNewTargetResidency('all')
+        setNewTargetMaxPrevBookings('')
+        setNewTargetAgeMin('')
+        setNewTargetAgeMax('')
+        setNewTargetPickupHourMin('')
+        setNewTargetPickupHourMax('')
+        setNewTargetSourceChannel('all')
+        setNewTargetProvince('')
+        setNewTargetMinLifetimeValue('')
+        setNewTargetHasUnpaidInvoices('any')
+        setNewTargetUsedPromoBefore('any')
+        setNewTargetExtensionCountMin('')
+        setNewTargetExtensionCountMax('')
+    }
     // Categorie reali caricate da Centralina Pro (config.categories) — niente
     // hardcoded fallback. Aggiornamento real-time via postgres_changes.
     const [proCategories, setProCategories] = useState<Array<{ id: string; label: string }>>([])
@@ -1857,7 +1906,13 @@ export default function MessaggiSistemaProTab() {
                             {`{variabili}`} ({customVarsList.length})
                         </button>
                         <button
-                            onClick={() => setShowNewForm(!showNewForm)}
+                            onClick={() => {
+                                // Reset i campi del form ogni volta che si apre,
+                                // così non si trascina lo stato della sessione
+                                // precedente (es. is_automatic lasciato a true).
+                                if (!showNewForm) resetNewForm()
+                                setShowNewForm(!showNewForm)
+                            }}
                             className="px-5 py-2.5 rounded-full font-semibold text-sm transition-colors bg-dr7-gold text-white hover:bg-[#0A8FA3]"
                         >
                             + Nuovo Messaggio
@@ -2427,9 +2482,48 @@ export default function MessaggiSistemaProTab() {
                             )}
                         </div>
 
+                        {/* Anteprima Programmazione live — usa esattamente la
+                            stessa logica usata nella card della lista, così
+                            ciò che vedi qui prima di salvare è ESATTAMENTE
+                            quello che vedrai nel template salvato. Niente più
+                            "ho selezionato Automatico e in lista appare Manuale". */}
+                        {(() => {
+                            const previewTpl = {
+                                message_key: 'pro_custom_<verrà_generato_al_salvataggio>',
+                                is_automatic: newIsAutomatic,
+                                trigger_event: newTriggerEvent,
+                                trigger_offset_hours: newTriggerOffset,
+                                send_hour: newSendHour,
+                                target_status: Array.from(newTargetStatus).join(','),
+                                target_category: newTargetCategory,
+                            }
+                            const lines = buildScheduleSummary(previewTpl, Object.fromEntries(proCategories.map(c => [c.id, c.label])))
+                            const hasCron = lines.some(l => l.startsWith('Cron ·'))
+                            return (
+                                <div className={`px-3 py-2 rounded-lg border text-xs ${
+                                    hasCron
+                                        ? 'bg-emerald-500/5 border-emerald-500/30 text-emerald-300/95'
+                                        : 'bg-theme-bg-primary border-theme-border/50 text-theme-text-muted'
+                                }`}>
+                                    <div className="font-semibold mb-1">Anteprima Programmazione (dopo salvataggio)</div>
+                                    <ul className="space-y-0.5">
+                                        {lines.map((l, i) => (
+                                            <li key={i} className="flex gap-1.5">
+                                                <span className="text-theme-text-muted/80 shrink-0">›</span>
+                                                <span>{l}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <p className="text-[10px] text-theme-text-muted/80 mt-1.5">
+                                        Se vuoi che parta automaticamente assicurati che "Invio Automatico" qui sopra sia spuntato e che lo stato della prenotazione di test sia tra gli "Stati ammessi".
+                                    </p>
+                                </div>
+                            )
+                        })()}
+
                         <div className="flex gap-2 justify-end">
                             <button
-                                onClick={() => { setShowNewForm(false); setNewLabel(''); setNewDescription(''); setNewBody('') }}
+                                onClick={() => { setShowNewForm(false); resetNewForm() }}
                                 className="px-4 py-2 rounded-full text-sm font-medium bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors"
                             >
                                 Annulla
