@@ -59,6 +59,7 @@ const PromoIncassiTab = lazyWithRetry(() => import('./components/PromoIncassiTab
 const GestioneOtpTab = lazyWithRetry(() => import('./components/GestioneOtpTab'))
 const DocumentsVerificationTab = lazyWithRetry(() => import('./components/DocumentsVerificationTab'))
 const EMTNTab = lazyWithRetry(() => import('./components/EMTNTab'))
+const GpsKeylessTab = lazyWithRetry(() => import('./components/GpsKeylessTab'))
 
 const TabLoader = () => (
   <div className="flex items-center justify-center py-12">
@@ -239,7 +240,7 @@ export default function AdminDashboard() {
     { name: 'Flotta', tabs: [
       { tab: 'vehicles', label: 'Veicoli' },
       { tab: 'fleet', label: 'Gestione Flotta' },
-      { tab: 'gps-keyless', label: 'GPS & Keyless' },
+      { tab: 'gps-keyless', label: 'GPS Flotta' },
     ] },
     { name: 'Clienti', tabs: [
       { tab: 'customers', label: 'Lead' },
@@ -322,7 +323,7 @@ export default function AdminDashboard() {
     'carwash-catalog': 'Catalogo Prime Wash',
     'vehicles': 'Veicoli',
     'fleet': 'Gestione Flotta',
-    'gps-keyless': 'GPS & Keyless',
+    'gps-keyless': 'GPS Flotta',
     'unpaid': 'In attesa di pagamento',
     'customers': 'Lead',
     'birthdays': 'Compleanni',
@@ -612,17 +613,31 @@ export default function AdminDashboard() {
               {userMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                  <div className="absolute right-0 top-12 z-50 w-60 bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl py-2 text-sm">
+                  {/* Dropdown — width capped to viewport so it never clips
+                      off-screen on narrow phones. Touch targets >=44px. */}
+                  <div className="absolute right-0 top-12 z-50 w-64 max-w-[calc(100vw-1rem)] bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl py-2 text-sm overflow-hidden">
                     <div className="px-3 pb-2 border-b border-theme-border">
                       <div className="text-xs font-bold text-theme-text-primary truncate">{adminName || 'Operatore'}</div>
                       <div className="text-[11px] text-theme-text-muted truncate">{adminEmail || '—'}</div>
                       <div className="text-[10px] text-theme-text-muted mt-0.5">{adminRole === 'superadmin' ? 'Super Admin' : 'Admin'}</div>
                     </div>
+                    {/* I miei orari — quick access to the operator's own
+                        Rilevazione Orari tab. */}
+                    <button
+                      onClick={() => { setUserMenuOpen(false); setActiveTab('rilevazione-orari') }}
+                      className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
+                    >
+                      <svg className="w-4 h-4 text-dr7-gold shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      I miei orari
+                    </button>
+                    <div className="border-t border-theme-border my-1" />
                     <button
                       onClick={() => { setUserMenuOpen(false); handleSignOut() }}
-                      className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-red-400 flex items-center gap-2"
+                      className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-red-400 flex items-center gap-2 min-h-[44px]"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                       </svg>
                       Esci
@@ -733,7 +748,7 @@ export default function AdminDashboard() {
           {activeTab === 'cargos' && <CargosTab />}
           {activeTab === 'trustera' && <TrusteraTab />}
           {activeTab === 'emtn' && <EMTNTab />}
-          {activeTab === 'gps-keyless' && <PlaceholderTab title="GPS & Keyless" />}
+          {activeTab === 'gps-keyless' && <GpsKeylessTab />}
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && (isTabRestricted('report-lavaggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportLavaggioTab />)}
           {activeTab === 'report-clienti' && (isTabRestricted('report-clienti') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportClientiTab />)}
