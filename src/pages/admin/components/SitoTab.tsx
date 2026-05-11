@@ -49,6 +49,7 @@ type SectionId =
     | 'check-email'
     | 'jet-search'
     | 'confirmation'
+    | 'header'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -69,6 +70,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'check-email', title: 'Check Email', ready: true },
     { id: 'jet-search', title: 'Jet Search Results', ready: true },
     { id: 'confirmation', title: 'Conferma Prenotazione', ready: true },
+    { id: 'header', title: 'Header / Navigazione', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -367,6 +369,45 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Header (site chrome — top bar + slide-out drawer) ───────────────────
+// Brand vocabulary like "DR7 Club", "Aviation Division" stays hardcoded;
+// only localized chrome (CTAs, section headings, popup labels, aria) is
+// editable here.
+interface HeaderCopy {
+    logo_alt: string
+    open_menu_aria_it: string; open_menu_aria_en: string
+    close_menu_aria_it: string; close_menu_aria_en: string
+    explore_label_it: string; explore_label_en: string
+    credit_wallet_label_it: string; credit_wallet_label_en: string
+    drawer_book_cta_it: string; drawer_book_cta_en: string
+    flotta_label_it: string; flotta_label_en: string
+    servizi_heading_it: string; servizi_heading_en: string
+    esperienze_heading_it: string; esperienze_heading_en: string
+    prime_wash_heading_it: string; prime_wash_heading_en: string
+    business_heading_it: string; business_heading_en: string
+    digital_heading_it: string; digital_heading_en: string
+    contact_cta_it: string; contact_cta_en: string
+    popup_title_it: string; popup_title_en: string
+    popup_subtitle_it: string; popup_subtitle_en: string
+}
+const INITIAL_HEADER: HeaderCopy = {
+    logo_alt: '',
+    open_menu_aria_it: '', open_menu_aria_en: '',
+    close_menu_aria_it: '', close_menu_aria_en: '',
+    explore_label_it: '', explore_label_en: '',
+    credit_wallet_label_it: '', credit_wallet_label_en: '',
+    drawer_book_cta_it: '', drawer_book_cta_en: '',
+    flotta_label_it: '', flotta_label_en: '',
+    servizi_heading_it: '', servizi_heading_en: '',
+    esperienze_heading_it: '', esperienze_heading_en: '',
+    prime_wash_heading_it: '', prime_wash_heading_en: '',
+    business_heading_it: '', business_heading_en: '',
+    digital_heading_it: '', digital_heading_en: '',
+    contact_cta_it: '', contact_cta_en: '',
+    popup_title_it: '', popup_title_en: '',
+    popup_subtitle_it: '', popup_subtitle_en: '',
 }
 
 // ─── Check Email + Jet Search Results (small bilingual pages) ─────────────
@@ -839,6 +880,7 @@ interface SiteCopySnapshot {
     checkEmail?: CheckEmailCopy
     jetSearchResults?: JetSearchResultsCopy
     confirmationSuccess?: ConfirmationSuccessCopy
+    header?: HeaderCopy
 }
 
 interface CurrentState {
@@ -860,6 +902,7 @@ interface CurrentState {
     checkEmail: CheckEmailCopy
     jetSearchResults: JetSearchResultsCopy
     confirmationSuccess: ConfirmationSuccessCopy
+    header: HeaderCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -954,6 +997,8 @@ export default function SitoTab() {
     const [savedJetSearchResults, setSavedJetSearchResults] = useState<JetSearchResultsCopy>(INITIAL_JET_SEARCH)
     const [confirmationSuccess, setConfirmationSuccess] = useState<ConfirmationSuccessCopy>(INITIAL_CONFIRMATION_SUCCESS)
     const [savedConfirmationSuccess, setSavedConfirmationSuccess] = useState<ConfirmationSuccessCopy>(INITIAL_CONFIRMATION_SUCCESS)
+    const [header, setHeader] = useState<HeaderCopy>(INITIAL_HEADER)
+    const [savedHeader, setSavedHeader] = useState<HeaderCopy>(INITIAL_HEADER)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -1053,6 +1098,10 @@ export default function SitoTab() {
                     setConfirmationSuccess(remote.confirmationSuccess)
                     setSavedConfirmationSuccess(remote.confirmationSuccess)
                 }
+                if (remote?.header && remote.header.explore_label_it) {
+                    setHeader(remote.header)
+                    setSavedHeader(remote.header)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -1065,10 +1114,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader]
     )
     const dirty = changes.length > 0
 
@@ -1079,7 +1128,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1098,6 +1147,7 @@ export default function SitoTab() {
             setSavedCheckEmail(checkEmail)
             setSavedJetSearchResults(jetSearchResults)
             setSavedConfirmationSuccess(confirmationSuccess)
+            setSavedHeader(header)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1150,6 +1200,7 @@ export default function SitoTab() {
         setCheckEmail(savedCheckEmail)
         setJetSearchResults(savedJetSearchResults)
         setConfirmationSuccess(savedConfirmationSuccess)
+        setHeader(savedHeader)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1309,6 +1360,9 @@ export default function SitoTab() {
                         {hydrated && section === 'confirmation' && (
                             <ConfirmationSuccessEditor copy={confirmationSuccess} setCopy={setConfirmationSuccess} />
                         )}
+                        {hydrated && section === 'header' && (
+                            <HeaderEditor copy={header} setCopy={setHeader} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1430,6 +1484,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.confirmationSuccess) !== JSON.stringify(saved.confirmationSuccess)) {
         out.push('Conferma Prenotazione: contenuti modificati')
+    }
+    if (JSON.stringify(current.header) !== JSON.stringify(saved.header)) {
+        out.push('Header: contenuti modificati')
     }
     return out
 }
@@ -4175,6 +4232,76 @@ function ConfirmationSuccessEditor({ copy, setCopy }: { copy: ConfirmationSucces
                     <FieldText label="CTA if signed in (EN)" value={copy.email_cta_logged_in_en} onChange={v => update('email_cta_logged_in_en', v)} />
                     <FieldText label="CTA se non loggato (IT)" value={copy.email_cta_logged_out_it} onChange={v => update('email_cta_logged_out_it', v)} />
                     <FieldText label="CTA if signed out (EN)" value={copy.email_cta_logged_out_en} onChange={v => update('email_cta_logged_out_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Header / Navigation editor ────────────────────────────────────────────
+// Brand vocabulary like "DR7 Club", "Aviation Division", "Prime Wash" stays
+// hardcoded in the website. Only localized chrome (CTAs, section headings,
+// popup labels, aria) is editable here.
+function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: HeaderCopy) => void }) {
+    const update = <K extends keyof HeaderCopy>(key: K, value: HeaderCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-[#6e6e73]">
+                Testi di Header e menu di navigazione (barra in alto + drawer EXPLORE). Il vocabolario di brand
+                (DR7 Club, Aviation Division, Prime Wash, ecc.) resta fisso nel sito e non è modificabile qui.
+            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Logo & aria-label</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Logo alt (testo alternativo)" value={copy.logo_alt} onChange={v => update('logo_alt', v)} />
+                    <div />
+                    <FieldText label='Aria "Apri menu" (IT)' value={copy.open_menu_aria_it} onChange={v => update('open_menu_aria_it', v)} />
+                    <FieldText label='Aria "Open menu" (EN)' value={copy.open_menu_aria_en} onChange={v => update('open_menu_aria_en', v)} />
+                    <FieldText label='Aria "Chiudi menu" (IT)' value={copy.close_menu_aria_it} onChange={v => update('close_menu_aria_it', v)} />
+                    <FieldText label='Aria "Close menu" (EN)' value={copy.close_menu_aria_en} onChange={v => update('close_menu_aria_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Barra superiore</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Bottone "EXPLORE" (IT)' value={copy.explore_label_it} onChange={v => update('explore_label_it', v)} />
+                    <FieldText label='Button "EXPLORE" (EN)' value={copy.explore_label_en} onChange={v => update('explore_label_en', v)} />
+                    <FieldText label='Pill "Credit Wallet" (IT)' value={copy.credit_wallet_label_it} onChange={v => update('credit_wallet_label_it', v)} />
+                    <FieldText label='Pill "Credit Wallet" (EN)' value={copy.credit_wallet_label_en} onChange={v => update('credit_wallet_label_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Drawer (menu laterale)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='CTA "Prenota Ora" (IT)' value={copy.drawer_book_cta_it} onChange={v => update('drawer_book_cta_it', v)} />
+                    <FieldText label='CTA "Book Now" (EN)' value={copy.drawer_book_cta_en} onChange={v => update('drawer_book_cta_en', v)} />
+                    <FieldText label='Etichetta "La Nostra Flotta" (IT)' value={copy.flotta_label_it} onChange={v => update('flotta_label_it', v)} />
+                    <FieldText label='Label "Our Fleet" (EN)' value={copy.flotta_label_en} onChange={v => update('flotta_label_en', v)} />
+                    <FieldText label='Titolo sezione "Servizi" (IT)' value={copy.servizi_heading_it} onChange={v => update('servizi_heading_it', v)} />
+                    <FieldText label='Section heading "Services" (EN)' value={copy.servizi_heading_en} onChange={v => update('servizi_heading_en', v)} />
+                    <FieldText label='Titolo sezione "Esperienze" (IT)' value={copy.esperienze_heading_it} onChange={v => update('esperienze_heading_it', v)} />
+                    <FieldText label='Section heading "Experiences" (EN)' value={copy.esperienze_heading_en} onChange={v => update('esperienze_heading_en', v)} />
+                    <FieldText label='Titolo sezione "Prime Wash" (IT)' value={copy.prime_wash_heading_it} onChange={v => update('prime_wash_heading_it', v)} />
+                    <FieldText label='Section heading "Prime Wash" (EN)' value={copy.prime_wash_heading_en} onChange={v => update('prime_wash_heading_en', v)} />
+                    <FieldText label='Titolo sezione "Business" (IT)' value={copy.business_heading_it} onChange={v => update('business_heading_it', v)} />
+                    <FieldText label='Section heading "Business" (EN)' value={copy.business_heading_en} onChange={v => update('business_heading_en', v)} />
+                    <FieldText label='Titolo sezione "Digital" (IT)' value={copy.digital_heading_it} onChange={v => update('digital_heading_it', v)} />
+                    <FieldText label='Section heading "Digital" (EN)' value={copy.digital_heading_en} onChange={v => update('digital_heading_en', v)} />
+                    <FieldText label='CTA "Contattaci" (IT)' value={copy.contact_cta_it} onChange={v => update('contact_cta_it', v)} />
+                    <FieldText label='CTA "Contact us" (EN)' value={copy.contact_cta_en} onChange={v => update('contact_cta_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Popup prenotazione (apre dal drawer)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo popup (IT)" value={copy.popup_title_it} onChange={v => update('popup_title_it', v)} />
+                    <FieldText label="Popup title (EN)" value={copy.popup_title_en} onChange={v => update('popup_title_en', v)} />
+                    <FieldText label="Sottotitolo popup (IT)" value={copy.popup_subtitle_it} onChange={v => update('popup_subtitle_it', v)} />
+                    <FieldText label="Popup subtitle (EN)" value={copy.popup_subtitle_en} onChange={v => update('popup_subtitle_en', v)} />
                 </div>
             </section>
         </div>
