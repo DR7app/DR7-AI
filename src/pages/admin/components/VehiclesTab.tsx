@@ -764,7 +764,7 @@ export default function VehiclesTab() {
             { label: 'TOTALE VEICOLI', value: String(total), sub: '100% della flotta', tone: '#3B82F6', icon: 'car' },
             { label: 'VEICOLI ATTIVI', value: String(fleetKpi.attivi), sub: pct(fleetKpi.attivi), tone: '#10B981', icon: 'check' },
             { label: 'VEICOLI FERMI', value: String(fleetKpi.fermi), sub: pct(fleetKpi.fermi), tone: '#EF4444', icon: 'wrench' },
-            { label: 'FATTURATO FLOTTA', value: `€${fleetKpi.totalFatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`, sub: currentMonthLabel, tone: '#F59E0B', icon: 'euro' },
+            { label: 'FATTURATO FLOTTA', value: `€${fleetKpi.totalFatturato.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: currentMonthLabel, tone: '#F59E0B', icon: 'euro' },
             { label: 'UTILIZZO MEDIO', value: `${fleetKpi.utilizzoMedio}%`, sub: 'media veicolare', tone: '#06B6D4', icon: 'chart' },
             { label: 'ROI MEDIO FLOTTA', value: `${String(fleetKpi.roiMedio).replace('.', ',')}%`, sub: 'fatturato/potenziale', tone: '#A855F7', icon: 'trend' },
           ]
@@ -1346,7 +1346,7 @@ export default function VehiclesTab() {
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <div className="text-sm font-bold text-theme-text-primary tabular-nums">€{(stats?.fatturato || 0).toLocaleString('it-IT', { maximumFractionDigits: 0 })}</div>
+                          <div className="text-sm font-bold text-theme-text-primary tabular-nums">€{(stats?.fatturato || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                           <div className="text-[10px] text-theme-text-muted">mese</div>
                         </div>
                       </div>
@@ -1438,7 +1438,7 @@ export default function VehiclesTab() {
                               <span className="text-[11px] text-theme-text-primary font-semibold tabular-nums">{utilizzo}%</span>
                             </div>
                           </td>
-                          <td className="px-1.5 py-2 text-xs text-theme-text-primary tabular-nums text-right whitespace-nowrap">€{fatt.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</td>
+                          <td className="px-1.5 py-2 text-xs text-theme-text-primary tabular-nums text-right whitespace-nowrap">€{fatt.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="px-1.5 py-2 whitespace-nowrap">
                             <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-medium border whitespace-nowrap ${dispClass}`}>{dispLabel}</span>
                           </td>
@@ -1511,7 +1511,7 @@ export default function VehiclesTab() {
                         <div className="text-xs font-medium text-theme-text-primary truncate">{r.vehicle.display_name}</div>
                         <div className="text-[10px] text-theme-text-muted truncate">{r.sectionLabel}</div>
                       </div>
-                      <span className="text-xs font-bold text-theme-text-primary tabular-nums">€{r.fatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</span>
+                      <span className="text-xs font-bold text-theme-text-primary tabular-nums">€{r.fatturato.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   ))}
                 </div>
