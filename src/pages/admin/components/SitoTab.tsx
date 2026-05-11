@@ -60,6 +60,7 @@ type SectionId =
     | 'registrazione-cliente'
     | 'booking-search-box'
     | 'payment-cancel'
+    | 'locations'
 
 type SectionCategoryId = 'chrome' | 'public' | 'auth' | 'booking' | 'legal'
 
@@ -76,6 +77,7 @@ const SECTIONS: { id: SectionId; title: string; category: SectionCategoryId; rea
     { id: 'header', title: 'Header / Navigazione', category: 'chrome', ready: true },
     { id: 'footer', title: 'Footer', category: 'chrome', ready: true },
     { id: 'booking-search-box', title: 'Booking Search Box', category: 'chrome', ready: true },
+    { id: 'locations', title: 'Aeroporti & Luoghi', category: 'chrome', ready: true },
     // Pagine pubbliche
     { id: 'hero', title: 'Home / Hero', category: 'public', ready: true },
     { id: 'chi-siamo', title: 'Chi Siamo', category: 'public', ready: true },
@@ -403,6 +405,27 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Locations catalog (airports / pickup / marinas / heli points) ──────
+interface AirportItem { iata: string; name: string; city: string }
+interface BilingualLocationItem { id: string; label_it: string; label_en: string }
+interface SimpleLocationItem { id: string; name: string }
+interface LocationsCopy {
+    airports: AirportItem[]
+    pickup_locations: BilingualLocationItem[]
+    return_locations: BilingualLocationItem[]
+    yacht_marinas: BilingualLocationItem[]
+    heli_departure_points: SimpleLocationItem[]
+    heli_arrival_points: SimpleLocationItem[]
+}
+const INITIAL_LOCATIONS: LocationsCopy = {
+    airports: [],
+    pickup_locations: [],
+    return_locations: [],
+    yacht_marinas: [],
+    heli_departure_points: [],
+    heli_arrival_points: [],
 }
 
 // ─── Payment Cancel page (post-Nexi cancel landing) ─────────────────────
@@ -1739,6 +1762,7 @@ interface SiteCopySnapshot {
     registrazioneCliente?: RegistrazioneClienteCopy
     bookingSearchBox?: BookingSearchBoxCopy
     paymentCancel?: PaymentCancelCopy
+    locations?: LocationsCopy
 }
 
 interface CurrentState {
@@ -1771,6 +1795,7 @@ interface CurrentState {
     registrazioneCliente: RegistrazioneClienteCopy
     bookingSearchBox: BookingSearchBoxCopy
     paymentCancel: PaymentCancelCopy
+    locations: LocationsCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -2006,6 +2031,8 @@ export default function SitoTab() {
     const [savedBookingSearchBox, setSavedBookingSearchBox] = useState<BookingSearchBoxCopy>(INITIAL_BOOKING_SEARCH_BOX)
     const [paymentCancel, setPaymentCancel] = useState<PaymentCancelCopy>(INITIAL_PAYMENT_CANCEL)
     const [savedPaymentCancel, setSavedPaymentCancel] = useState<PaymentCancelCopy>(INITIAL_PAYMENT_CANCEL)
+    const [locations, setLocations] = useState<LocationsCopy>(INITIAL_LOCATIONS)
+    const [savedLocations, setSavedLocations] = useState<LocationsCopy>(INITIAL_LOCATIONS)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -2145,6 +2172,10 @@ export default function SitoTab() {
                     setPaymentCancel(remote.paymentCancel)
                     setSavedPaymentCancel(remote.paymentCancel)
                 }
+                if (remote?.locations && Array.isArray(remote.locations.airports)) {
+                    setLocations(remote.locations)
+                    setSavedLocations(remote.locations)
+                }
                 if (remote?.token && remote.token.hero_title_it) {
                     setToken(remote.token)
                     setSavedToken(remote.token)
@@ -2161,10 +2192,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel, locations: savedLocations }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel, locations, savedLocations]
     )
     const dirty = changes.length > 0
 
@@ -2175,7 +2206,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -2205,6 +2236,7 @@ export default function SitoTab() {
             setSavedRegistrazioneCliente(registrazioneCliente)
             setSavedBookingSearchBox(bookingSearchBox)
             setSavedPaymentCancel(paymentCancel)
+            setSavedLocations(locations)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -2268,6 +2300,7 @@ export default function SitoTab() {
         setRegistrazioneCliente(savedRegistrazioneCliente)
         setBookingSearchBox(savedBookingSearchBox)
         setPaymentCancel(savedPaymentCancel)
+        setLocations(savedLocations)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -2434,6 +2467,9 @@ export default function SitoTab() {
                         {hydrated && section === 'payment-cancel' && (
                             <PaymentCancelEditor copy={paymentCancel} setCopy={setPaymentCancel} />
                         )}
+                        {hydrated && section === 'locations' && (
+                            <LocationsEditor copy={locations} setCopy={setLocations} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -2588,6 +2624,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.paymentCancel) !== JSON.stringify(saved.paymentCancel)) {
         out.push('Pagamento Annullato: contenuti modificati')
+    }
+    if (JSON.stringify(current.locations) !== JSON.stringify(saved.locations)) {
+        out.push('Aeroporti & Luoghi: catalogo modificato')
     }
     return out
 }
@@ -6693,6 +6732,134 @@ function PaymentCancelEditor({ copy, setCopy }: { copy: PaymentCancelCopy; setCo
                     <FieldText label="CTA Retry (EN)" value={copy.cta_retry_en} onChange={v => update('cta_retry_en', v)} />
                 </div>
             </section>
+        </div>
+    )
+}
+
+// ─── Locations editor (airports / pickup / marinas / heli) ────────────────
+// Operators add / remove / reorder items. IDs (left column) are referenced
+// by stored bookings — change with care; renaming an id breaks history.
+function LocationsEditor({ copy, setCopy }: { copy: LocationsCopy; setCopy: (next: LocationsCopy) => void }) {
+    const updateAirport = (i: number, patch: Partial<AirportItem>) =>
+        setCopy({ ...copy, airports: copy.airports.map((a, idx) => idx === i ? { ...a, ...patch } : a) })
+    const addAirport = () =>
+        setCopy({ ...copy, airports: [...copy.airports, { iata: '', name: '', city: '' }] })
+    const removeAirport = (i: number) =>
+        setCopy({ ...copy, airports: copy.airports.filter((_, idx) => idx !== i) })
+    const moveAirport = (i: number, dir: -1 | 1) => {
+        const next = [...copy.airports]; const j = i + dir
+        if (j < 0 || j >= next.length) return
+        ;[next[i], next[j]] = [next[j], next[i]]
+        setCopy({ ...copy, airports: next })
+    }
+
+    const updateBilingual = (key: 'pickup_locations' | 'return_locations' | 'yacht_marinas', i: number, patch: Partial<BilingualLocationItem>) =>
+        setCopy({ ...copy, [key]: copy[key].map((it, idx) => idx === i ? { ...it, ...patch } : it) })
+    const addBilingual = (key: 'pickup_locations' | 'return_locations' | 'yacht_marinas') =>
+        setCopy({ ...copy, [key]: [...copy[key], { id: '', label_it: '', label_en: '' }] })
+    const removeBilingual = (key: 'pickup_locations' | 'return_locations' | 'yacht_marinas', i: number) =>
+        setCopy({ ...copy, [key]: copy[key].filter((_, idx) => idx !== i) })
+    const moveBilingual = (key: 'pickup_locations' | 'return_locations' | 'yacht_marinas', i: number, dir: -1 | 1) => {
+        const next = [...copy[key]]; const j = i + dir
+        if (j < 0 || j >= next.length) return
+        ;[next[i], next[j]] = [next[j], next[i]]
+        setCopy({ ...copy, [key]: next })
+    }
+
+    const updateSimple = (key: 'heli_departure_points' | 'heli_arrival_points', i: number, patch: Partial<SimpleLocationItem>) =>
+        setCopy({ ...copy, [key]: copy[key].map((it, idx) => idx === i ? { ...it, ...patch } : it) })
+    const addSimple = (key: 'heli_departure_points' | 'heli_arrival_points') =>
+        setCopy({ ...copy, [key]: [...copy[key], { id: '', name: '' }] })
+    const removeSimple = (key: 'heli_departure_points' | 'heli_arrival_points', i: number) =>
+        setCopy({ ...copy, [key]: copy[key].filter((_, idx) => idx !== i) })
+    const moveSimple = (key: 'heli_departure_points' | 'heli_arrival_points', i: number, dir: -1 | 1) => {
+        const next = [...copy[key]]; const j = i + dir
+        if (j < 0 || j >= next.length) return
+        ;[next[i], next[j]] = [next[j], next[i]]
+        setCopy({ ...copy, [key]: next })
+    }
+
+    const RowControls: React.FC<{ onUp: () => void; onDown: () => void; onRemove: () => void; first: boolean; last: boolean }> = ({ onUp, onDown, onRemove, first, last }) => (
+        <div className="flex items-center gap-1">
+            <button type="button" onClick={onUp} disabled={first} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
+            <button type="button" onClick={onDown} disabled={last} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <button type="button" onClick={onRemove} className="w-7 h-7 rounded-md text-red-500 hover:bg-red-500/10 flex items-center justify-center" title="Rimuovi">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg>
+            </button>
+        </div>
+    )
+
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-theme-text-secondary">
+                Catalogo di aeroporti, luoghi di ritiro/riconsegna, marine yacht e punti elicottero usati dai form di
+                prenotazione. Modifica nome / etichetta / città. Gli <code className="text-[11px] bg-theme-bg-tertiary px-1 rounded">id</code> sono referenziati
+                dalle prenotazioni storiche — rinominare un id rompe la cronologia, meglio aggiungere voci nuove.
+            </p>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Aeroporti ({copy.airports.length})</h3>
+                </div>
+                {copy.airports.map((a, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                        <input type="text" value={a.iata} onChange={e => updateAirport(i, { iata: e.target.value.toUpperCase() })} placeholder="IATA" className="col-span-2 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono uppercase" maxLength={3} />
+                        <input type="text" value={a.name} onChange={e => updateAirport(i, { name: e.target.value })} placeholder="Nome aeroporto" className="col-span-5 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                        <input type="text" value={a.city} onChange={e => updateAirport(i, { city: e.target.value })} placeholder="Città" className="col-span-3 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                        <div className="col-span-2 flex justify-end">
+                            <RowControls onUp={() => moveAirport(i, -1)} onDown={() => moveAirport(i, 1)} onRemove={() => removeAirport(i)} first={i === 0} last={i === copy.airports.length - 1} />
+                        </div>
+                    </div>
+                ))}
+                <button type="button" onClick={addAirport} className="w-full py-2 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">+ Aggiungi aeroporto</button>
+            </section>
+
+            {(['pickup_locations', 'return_locations', 'yacht_marinas'] as const).map(key => {
+                const labels = { pickup_locations: 'Luoghi di ritiro', return_locations: 'Luoghi di riconsegna', yacht_marinas: 'Marine yacht' }
+                return (
+                    <section key={key} className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-[14px] font-semibold text-theme-text-primary">{labels[key]} ({copy[key].length})</h3>
+                        </div>
+                        {copy[key].map((it, i) => (
+                            <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                                <input type="text" value={it.id} onChange={e => updateBilingual(key, i, { id: e.target.value })} placeholder="id" className="col-span-2 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                                <input type="text" value={it.label_it} onChange={e => updateBilingual(key, i, { label_it: e.target.value })} placeholder="Etichetta IT" className="col-span-4 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                                <input type="text" value={it.label_en} onChange={e => updateBilingual(key, i, { label_en: e.target.value })} placeholder="Label EN" className="col-span-4 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                                <div className="col-span-2 flex justify-end">
+                                    <RowControls onUp={() => moveBilingual(key, i, -1)} onDown={() => moveBilingual(key, i, 1)} onRemove={() => removeBilingual(key, i)} first={i === 0} last={i === copy[key].length - 1} />
+                                </div>
+                            </div>
+                        ))}
+                        <button type="button" onClick={() => addBilingual(key)} className="w-full py-2 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">+ Aggiungi voce</button>
+                    </section>
+                )
+            })}
+
+            {(['heli_departure_points', 'heli_arrival_points'] as const).map(key => {
+                const labels = { heli_departure_points: 'Punti partenza elicottero', heli_arrival_points: 'Punti arrivo elicottero' }
+                return (
+                    <section key={key} className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-[14px] font-semibold text-theme-text-primary">{labels[key]} ({copy[key].length})</h3>
+                        </div>
+                        {copy[key].map((it, i) => (
+                            <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                                <input type="text" value={it.id} onChange={e => updateSimple(key, i, { id: e.target.value })} placeholder="id" className="col-span-3 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] font-mono" />
+                                <input type="text" value={it.name} onChange={e => updateSimple(key, i, { name: e.target.value })} placeholder="Nome" className="col-span-7 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
+                                <div className="col-span-2 flex justify-end">
+                                    <RowControls onUp={() => moveSimple(key, i, -1)} onDown={() => moveSimple(key, i, 1)} onRemove={() => removeSimple(key, i)} first={i === 0} last={i === copy[key].length - 1} />
+                                </div>
+                            </div>
+                        ))}
+                        <button type="button" onClick={() => addSimple(key)} className="w-full py-2 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">+ Aggiungi voce</button>
+                    </section>
+                )
+            })}
         </div>
     )
 }
