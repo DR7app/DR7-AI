@@ -239,7 +239,12 @@ export default function VehiclesTab() {
         if (v) vid = v.id
       }
       if (!vid) continue
-      // Overlap del booking col mese corrente. Se nessuna sovrapposizione, skip.
+      // Overlap del booking col mese corrente + PRORAZIONE come monthly-report:
+      //   rev_month = (price_total/100 / total_booking_days) * overlap_days
+      // Senza proration, un noleggio €1000 da 10 giorni a cavallo del mese
+      // contava interamente nel mese in cui pickup_date cadeva, gonfiando
+      // il fatturato vs Report Noleggio.
+      let overlapDays = 0
       if (b.pickup_date && b.dropoff_date) {
         const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
         const e = new Date(b.dropoff_date); e.setHours(0, 0, 0, 0)
@@ -249,18 +254,26 @@ export default function VehiclesTab() {
         const set = occupied.get(vid) || new Set<string>()
         for (let t = sC.getTime(); t <= eC.getTime(); t += 86400000) set.add(new Date(t).toISOString().slice(0, 10))
         occupied.set(vid, set)
-      } else {
-        // Senza date robuste, considera valido solo se pickup_date dentro il mese.
-        if (b.pickup_date) {
-          const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
-          if (s < monthStart || s > today) continue
-        } else continue
-      }
+        overlapDays = Math.round((eC.getTime() - sC.getTime()) / 86400000) + 1
+      } else if (b.pickup_date) {
+        // Senza dropoff: considera 1 giorno se pickup nel mese, altrimenti skip.
+        const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
+        if (s < monthStart || s > today) continue
+        overlapDays = 1
+      } else continue
       const cur = stats.get(vid) || { fatturato: 0, giorniNoleggio: 0, giorniFermo: 0, utilizzoPct: 0 }
-      // price_total puo\' essere numerico o stringa (wallet RPC casta a numeric).
       const raw = b.price_total
-      const eur = (typeof raw === 'string' ? parseFloat(raw) : (raw || 0)) / 100
-      if (Number.isFinite(eur) && eur > 0) cur.fatturato += eur
+      const fullEur = (typeof raw === 'string' ? parseFloat(raw) : (raw || 0)) / 100
+      if (Number.isFinite(fullEur) && fullEur > 0) {
+        // Total booking days = pickup -> dropoff inclusive, min 1.
+        let totalBookingDays = 1
+        if (b.pickup_date && b.dropoff_date) {
+          const ps = new Date(b.pickup_date); ps.setHours(0, 0, 0, 0)
+          const pe = new Date(b.dropoff_date); pe.setHours(0, 0, 0, 0)
+          totalBookingDays = Math.max(1, Math.round((pe.getTime() - ps.getTime()) / 86400000) + 1)
+        }
+        cur.fatturato += (fullEur / totalBookingDays) * overlapDays
+      }
       stats.set(vid, cur)
     }
     for (const [vid, set] of occupied.entries()) {
