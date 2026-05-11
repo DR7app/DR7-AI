@@ -1830,13 +1830,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         }
       }
 
-      // Log overlap info but don't block the admin
+      // Regola di business: NON si possono avere due lavaggi nello
+      // stesso slot. Se il check ha trovato un conflitto, blocchiamo
+      // con un messaggio chiaro all'operatore. L'admin doveva non poter
+      // ignorare il conflitto: prima il codice loggava e proseguiva,
+      // creando appuntamenti sovrapposti (caso reale verificato).
       if (hasConflict && conflictingBooking) {
-        logger.log('ℹ️ Overlap with existing booking:', conflictingBooking.customer_name, conflictDetails)
+        logger.warn('Conflitto orario lavaggio:', conflictingBooking.customer_name, conflictDetails)
+        toast.error(
+          `Slot occupato — ${conflictingBooking.customer_name || 'altro cliente'} ha gia' un appuntamento ${conflictDetails}. ` +
+          `Scegli un orario diverso o sposta l'altra prenotazione.`,
+          { duration: 7000 }
+        )
+        return
       }
 
-      // Admin panel: ALWAYS create as forced booking (bypass all backend checks)
-      logger.log('🔧 ADMIN PANEL: Creating booking with admin override')
+      // Nessun conflitto: procediamo con la creazione (force=true per
+      // bypassare i check backend visto che li abbiamo gia' validati qui).
+      logger.log('ADMIN PANEL: Creating booking with admin override (no conflict)')
       await createBooking(true)
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
