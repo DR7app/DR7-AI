@@ -26,8 +26,9 @@ import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 
 // ─── Whitelist ───────────────────────────────────────────────────────────────
-// Strict: only direzione (Valerio + Ilenia) can open the tab without OTP.
-const SITO_DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
+// Strict: only direzione (Valerio + Ilenia) + developer (Ophe) can open the
+// tab without OTP. Everyone else requires gestione_sito_access OTP.
+const SITO_DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app', 'ophe@dr7.app']
 
 // ─── Sections ────────────────────────────────────────────────────────────────
 type SectionId =
