@@ -145,6 +145,147 @@ function statusCsvLabel(csv: string | null | undefined): string {
   return `${labels.slice(0, 3).join(', ')} +${labels.length - 3}`
 }
 
+// Italian day-of-week labels (0=Domenica per JS Date)
+const DAY_LABELS_IT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
+
+/**
+ * Restituisce una lista di righe in italiano descrivendo TUTTI i
+ * filtri "advanced" attivi sul template. Solo i filtri esplicitamente
+ * impostati appaiono — quelli al valore di default (es. "all", null)
+ * vengono omessi così la lista non si gonfia di righe inutili.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function listActiveFilters(t: Record<string, any>): string[] {
+  const out: string[] = []
+
+  // Tipo servizio
+  const svc = (t.target_service_type || 'all').toLowerCase()
+  if (svc !== 'all') {
+    const map: Record<string, string> = { rental: 'Noleggio', car_wash: 'Lavaggio', mechanical: 'Meccanica' }
+    out.push(`Tipo servizio: solo ${map[svc] || svc}`)
+  }
+
+  // Cauzione
+  const dep = (t.target_with_deposit || 'all').toLowerCase()
+  if (dep !== 'all') {
+    const map: Record<string, string> = {
+      yes: 'solo con cauzione',
+      no: 'solo senza cauzione',
+      vehicle: 'solo con cauzione veicolo',
+      standard: 'solo con cauzione standard (in denaro)',
+    }
+    out.push(`Cauzione: ${map[dep] || dep}`)
+  }
+
+  // Targa
+  if (t.target_plate && String(t.target_plate).trim()) {
+    out.push(`Targa specifica: ${t.target_plate}`)
+  }
+
+  // Metodo pagamento
+  const pm = (t.target_payment_method || 'all').toLowerCase()
+  if (pm !== 'all') out.push(`Metodo pagamento: solo ${pm}`)
+
+  // Importo
+  const amtMin = t.target_amount_min
+  const amtMax = t.target_amount_max
+  if (amtMin != null || amtMax != null) {
+    const lo = amtMin != null ? `€${amtMin}` : '—'
+    const hi = amtMax != null ? `€${amtMax}` : '—'
+    out.push(`Importo: ${lo} → ${hi}`)
+  }
+
+  // Membership tier
+  if (t.target_membership_tier && t.target_membership_tier !== 'all') {
+    out.push(`Tier DR7 Club: ${t.target_membership_tier}`)
+  }
+
+  // Prenotazioni precedenti del cliente
+  const pbMin = t.target_min_prev_bookings
+  const pbMax = t.target_max_prev_bookings
+  if (pbMin != null || pbMax != null) {
+    out.push(`Prenotazioni precedenti del cliente: ${pbMin ?? '0'} → ${pbMax ?? '∞'}`)
+  }
+
+  // Durata noleggio (giorni)
+  const dMin = t.target_rental_duration_min
+  const dMax = t.target_rental_duration_max
+  if (dMin != null || dMax != null) {
+    out.push(`Durata noleggio: ${dMin ?? '1'} → ${dMax ?? '∞'} giorni`)
+  }
+
+  // Tag cliente
+  if (t.target_customer_tags && String(t.target_customer_tags).trim()) {
+    out.push(`Tag cliente: ${t.target_customer_tags}`)
+  }
+
+  // Residenza
+  if (t.target_residency && t.target_residency !== 'all') {
+    out.push(`Residenza: ${t.target_residency}`)
+  }
+
+  // Età cliente
+  const aMin = t.target_age_min
+  const aMax = t.target_age_max
+  if (aMin != null || aMax != null) {
+    out.push(`Età cliente: ${aMin ?? '—'} → ${aMax ?? '—'} anni`)
+  }
+
+  // Ora pickup
+  const hMin = t.target_pickup_hour_min
+  const hMax = t.target_pickup_hour_max
+  if (hMin != null || hMax != null) {
+    const fmt = (h: number | null | undefined) => h == null ? '—' : `${String(h).padStart(2, '0')}:00`
+    out.push(`Ora ritiro: ${fmt(hMin)} → ${fmt(hMax)}`)
+  }
+
+  // Canale acquisizione
+  if (t.target_source_channel && t.target_source_channel !== 'all') {
+    out.push(`Canale acquisizione: ${t.target_source_channel}`)
+  }
+
+  // Provincia
+  if (t.target_province && String(t.target_province).trim()) {
+    out.push(`Provincia: ${t.target_province}`)
+  }
+
+  // Lifetime value
+  if (t.target_min_lifetime_value != null) {
+    out.push(`Lifetime value minimo: €${t.target_min_lifetime_value}`)
+  }
+
+  // Fatture non pagate
+  if (t.target_has_unpaid_invoices != null) {
+    out.push(`Fatture non pagate: ${t.target_has_unpaid_invoices ? 'sì' : 'no'}`)
+  }
+
+  // Promo precedenti
+  if (t.target_used_promo_before != null) {
+    out.push(`Ha usato promo in passato: ${t.target_used_promo_before ? 'sì' : 'no'}`)
+  }
+
+  // Estensioni
+  const eMin = t.target_extension_count_min
+  const eMax = t.target_extension_count_max
+  if (eMin != null || eMax != null) {
+    out.push(`Estensioni booking: ${eMin ?? '0'} → ${eMax ?? '∞'}`)
+  }
+
+  // Giorni della settimana (escludi se "tutti i giorni 0,1,2,3,4,5,6")
+  const days = (t.target_days_of_week || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+  if (days.length > 0 && days.length < 7) {
+    const sorted = days.map(Number).sort((a, b) => a - b)
+    out.push(`Giorni della settimana: ${sorted.map((d: number) => DAY_LABELS_IT[d]).join(', ')}`)
+  }
+
+  // Fascia silenziosa
+  if (t.quiet_hours_start != null && t.quiet_hours_end != null) {
+    out.push(`Fascia silenziosa (non invia): ${String(t.quiet_hours_start).padStart(2, '0')}:00 → ${String(t.quiet_hours_end).padStart(2, '0')}:00`)
+  }
+
+  return out
+}
+
 /**
  * Calcola la prossima finestra utile in cui il cron tenterà di
  * inviare il template, basata su send_hour (Europe/Rome).
@@ -231,6 +372,16 @@ function buildScheduleSummary(
     for (const ev of eventTriggers) {
       lines.push(`Evento · ${ev}`)
     }
+    // Per i template event-driven mostriamo comunque i filtri advanced
+    // attivi (cauzione, payment method, tier, ecc.) così l'admin sa che
+    // l'invio è condizionato anche per il path event-driven (anche se,
+    // a oggi, il path event-driven NON applica gli stessi filtri del
+    // cron — è un limite noto: callback come signature-complete
+    // chiamano renderTemplate diretto. I filtri qui sotto valgono come
+    // promemoria di cosa il template "dice di volere".
+    for (const f of listActiveFilters(t)) {
+      lines.push(`Filtro · ${f}`)
+    }
     return lines
   }
 
@@ -263,6 +414,14 @@ function buildScheduleSummary(
       : `solo ${categoryLabels[cat] || cat}`
     lines.push(`Cron · invia ${offsetText} ${cleanTriggerLabel} · ${sendHourText} · ${statusLabel} · ${catLabel}`)
     lines.push(`Prossimo tentativo: ${nextCronAttemptText(t.send_hour ?? null)}`)
+    // Filtri advanced del cron — il cron li applica davvero, quindi
+    // mostrare tutti quelli attivi è essenziale per capire perché un
+    // template "non parte": un filtro stretto (es. "solo cauzione
+    // veicolo" o "solo Mastercard") può bloccare l'invio senza
+    // segnalazione.
+    for (const f of listActiveFilters(t)) {
+      lines.push(`Filtro · ${f}`)
+    }
   }
 
   if (lines.length === 0) {
