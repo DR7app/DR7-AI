@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
 import OperatoriReportDashboard from './OperatoriReportDashboard'
 import InviteOperatoreModal from './InviteOperatoreModal'
+import ContrattiOperatoreView from './ContrattiOperatoreView'
 
 interface Admin {
   id: string
@@ -194,20 +195,42 @@ function previousMonthRange(): { from: string; to: string } {
 
 const AGG_HARD_LIMIT = 5000  // cap aggregation fetch to avoid OOM
 
+type OperatoriView = 'dashboard' | 'audit' | 'contratti'
+
+function OperatoriViewSwitch({ view, setView }: { view: OperatoriView; setView: (v: OperatoriView) => void }) {
+  return (
+    <div className="flex justify-end">
+      <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
+        {(['dashboard', 'contratti', 'audit'] as const).map(v => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`px-3 py-1.5 rounded-full ${view === v ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+          >
+            {v === 'dashboard' ? 'Dashboard' : v === 'contratti' ? 'Contratti' : 'Audit log'}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function OperatoriTab() {
-  const [view, setView] = useState<'dashboard' | 'audit'>('dashboard')
+  const [view, setView] = useState<OperatoriView>('dashboard')
+
   if (view === 'dashboard') {
     return (
       <div className="space-y-3">
-        <div className="flex justify-end">
-          <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
-            <button onClick={() => setView('dashboard')}
-              className="px-3 py-1.5 rounded-full bg-dr7-gold text-black font-semibold">Dashboard</button>
-            <button onClick={() => setView('audit')}
-              className="px-3 py-1.5 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Audit log</button>
-          </div>
-        </div>
+        <OperatoriViewSwitch view={view} setView={setView} />
         <OperatoriReportDashboard />
+      </div>
+    )
+  }
+  if (view === 'contratti') {
+    return (
+      <div className="space-y-3">
+        <OperatoriViewSwitch view={view} setView={setView} />
+        <ContrattiOperatoreView />
       </div>
     )
   }
