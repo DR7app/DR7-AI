@@ -29,6 +29,7 @@
 import { schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { matchesAdvancedFilters, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
+import { getProKeyEventTriggers } from '../../src/utils/proTemplateRouting';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -415,6 +416,19 @@ const cronHandler = async () => {
     for (const tpl of templates as SystemMessage[]) {
         // Skip eventi non gestiti (preventivo gestito altrove)
         if (tpl.trigger_event === 'on_preventivo') continue;
+
+        // Skip i template guidati da eventi di codice (Conferma Noleggio,
+        // Wallet Bonus, Firma, ecc.). Il loro invio avviene quando l'evento
+        // si verifica (callback Nexi, signature-complete, booking creato,
+        // ecc.) — il cron NON deve aggiungere un secondo invio. Prima senza
+        // questo check, un template "Conferma Noleggio" con is_automatic=true
+        // e trigger=before_dropoff veniva inviato due volte: una via evento
+        // alla creazione, una via cron 24h prima della riconsegna.
+        const eventTriggersForTpl = getProKeyEventTriggers((tpl as { message_key?: string }).message_key, (tpl as { label?: string }).label)
+        if (eventTriggersForTpl.length > 0) {
+            console.log(`[scheduled-msgs] Skipping event-driven template ${tpl.label} (${tpl.message_key}) — handled by code callbacks`)
+            continue;
+        }
 
         // ── Eventi non-booking gestiti dal cron ───────────────────────────
         if (tpl.trigger_event === 'on_cauzione_due' || tpl.trigger_event === 'on_cauzione_overdue') {

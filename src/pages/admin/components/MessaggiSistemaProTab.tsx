@@ -223,11 +223,13 @@ function buildScheduleSummary(
   // di automazione per chi volesse aggiungere un cron secondario,
   // ma il preview Programmazione non lo riflette.
   if (eventTriggers.length > 0) {
+    // Template guidato da eventi di codice: il cron lo ignora a monte
+    // (vedi process-scheduled-system-messages-cron.ts, skip per
+    // eventTriggers.length > 0), quindi il toggle "Automatico" sui
+    // template event-driven è di fatto irrilevante. Mostriamo solo le
+    // righe Evento e basta — niente cron, niente warning sull'Automatico.
     for (const ev of eventTriggers) {
       lines.push(`Evento · ${ev}`)
-    }
-    if (t.is_automatic) {
-      lines.push('⚠ Cron impostato ma ridondante — il template parte già sull\'evento. Disattiva "Automatico" per evitare un doppio invio.')
     }
     return lines
   }
@@ -2805,7 +2807,14 @@ export default function MessaggiSistemaProTab() {
                                                     )
                                                 })()}
 
-                                                {template.is_automatic && (
+                                                {/* Cron config (trigger_event/offset/send_hour/target_*)
+                                                    visibile SOLO quando il template non è event-driven.
+                                                    Per i template event-driven (Conferma Noleggio,
+                                                    Wallet Bonus, Firma, ecc.) il cron viene saltato
+                                                    a monte dal cron stesso (vedi
+                                                    process-scheduled-system-messages-cron.ts) — questi
+                                                    campi sarebbero inerti e mostrarli confondeva. */}
+                                                {template.is_automatic && getProKeyEventTriggers(template.message_key, template.label).length === 0 && (
                                                     <div className="rounded-lg bg-theme-bg-primary border border-theme-border/50 p-3 space-y-2">
                                                         <div className="flex flex-wrap items-center gap-3">
                                                             <div className="flex items-center gap-2">
