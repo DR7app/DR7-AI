@@ -9,7 +9,7 @@
  * Variables in templates use {variable_name} syntax.
  */
 import { createClient } from '@supabase/supabase-js'
-import { OLD_TO_PRO as SHARED_OLD_TO_PRO } from '../../../src/utils/proTemplateRouting'
+import { OLD_TO_PRO as SHARED_OLD_TO_PRO, LABEL_FALLBACKS as SHARED_LABEL_FALLBACKS } from '../../../src/utils/proTemplateRouting'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -23,112 +23,19 @@ interface MessageTemplate {
 }
 
 /**
- * Fallback label matchers. Each entry is an ordered list of AND-groups:
- * the FIRST group where all fragments are present in the template's label
- * wins. This lets a specific template ("Link pagamento penali e danni")
- * beat a generic one ("Link Pagamento") for the penali flow, while the
- * generic "Link Pagamento" still serves the plain pay-by-link flow.
+ * Fallback label matchers. SINGLE SOURCE OF TRUTH in
+ * `src/utils/proTemplateRouting.ts` — sia il resolver server (qui)
+ * sia la UI client (MessaggiSistemaProTab) leggono dalla stessa
+ * mappa così non possono divergere. Importato come
+ * SHARED_LABEL_FALLBACKS in testa al file.
+ *
+ * Per la sintassi: ogni voce mappa pro_key → lista ordinata di
+ * AND-group. Il primo gruppo dove tutti i frammenti sono presenti
+ * nella label del template enabled+non-vuoto vince. Pattern più
+ * specifici stanno prima per non essere "rubati" da pattern più
+ * generici.
  */
-const LABEL_FALLBACKS: Record<string, string[][]> = {
-  pro_richiesta_pagamento: [
-    ['link pagamento'],
-    ['richiesta pagamento'],
-    ['invio link pagamento'],
-    ['pay by link'],
-    ['payment link'],
-  ],
-  pro_modifica_noleggio: [
-    ['modifica', 'noleggio'],
-    ['modifica', 'prenotazione'],
-    ['modifica', 'rental'],
-    ['modifica', 'rent'],
-  ],
-  pro_modifica_lavaggio: [
-    ['modifica', 'lavaggio'],
-    ['modifica', 'prime wash'],
-    ['modifica', 'primewash'],
-    ['modifica', 'wash'],
-  ],
-  // Penali / Danni — prefer a template whose label explicitly mentions the
-  // word, then fall through to a generic "Link Pagamento".
-  pro_richiesta_penali: [
-    ['link', 'pagamento', 'penal'],      // "Link pagamento penali e danni"
-    ['penal'],
-    ['link pagamento'],
-    ['pay by link'],
-  ],
-  pro_richiesta_danni: [
-    ['link', 'pagamento', 'dann'],        // "Link pagamento penali e danni"
-    ['dann'],
-    ['link pagamento'],
-    ['pay by link'],
-  ],
-  pro_richiesta_danni_penali: [
-    ['link', 'pagamento', 'dann', 'penal'], // most specific: both keywords
-    ['link', 'pagamento', 'penal'],
-    ['link', 'pagamento', 'dann'],
-    ['dann'],
-    ['penal'],
-    ['link pagamento'],
-  ],
-  pro_richiesta_addebito: [
-    ['link', 'pagamento', 'addebit'],
-    ['addebit'],
-    ['link pagamento'],
-  ],
-  pro_richiesta_estensione: [
-    ['link', 'pagamento', 'estension'],
-    ['estension'],
-    ['link pagamento'],
-  ],
-  // Fidelity Card voucher — admin creates this template manually in Pro
-  // with whatever name they prefer. We match by label keywords so the
-  // exact name/key doesn't matter.
-  pro_fidelity_voucher: [
-    ['fidelity', 'voucher'],
-    ['fidelity'],
-    ['fedeltà'],
-    ['buono', 'fidelity'],
-    ['250', 'punti'],
-    ['buono', 'prime', 'wash'],
-  ],
-  // Codice sconto post-recensione — admin generates real DR7-XXXX codes from
-  // ReviewManagementTab and sends this template with the codes filled in.
-  // Match a few plausible label spellings the admin may use.
-  pro_marketing_codice_sconto: [
-    ['codice', 'sconto', 'recensione'],
-    ['codice', 'recensione'],
-    ['sconto', 'recensione'],
-    ['codice', 'sconto'],
-    ['discount', 'review'],
-  ],
-  // Richiesta Recensione — il body inviato al cliente per chiedere il
-  // feedback. Match il primo gruppo "richiesta recensione", poi gruppi
-  // più larghi per template rinominati ("recensione", "review request").
-  pro_marketing_recensione: [
-    ['richiesta', 'recensione'],
-    ['review', 'request'],
-    ['recensione'],
-  ],
-  // Maxi Promo Gap 1GG — message #21 in Messaggi di Sistema Pro, body fully
-  // editable by admin. Match by a few plausible label spellings so the
-  // template resolves even when the admin-created row has a custom key.
-  pro_maxi_promo_gap_1gg: [
-    ['maxi', 'promo', 'gap', '1gg'],
-    ['maxi', 'promo', 'gap'],
-    ['maxi', 'promo'],
-    ['gap', '1gg'],
-    ['gap', '1', 'giorno'],
-    ['promo', 'gap'],
-  ],
-  // Promo Incassi — sent when a vehicle's monthly revenue target hits its
-  // 0.8-or-lower coefficient threshold. Body editable in Messaggi di Sistema Pro.
-  pro_promo_incassi: [
-    ['promo', 'incassi'],
-    ['promo', 'incasso'],
-    ['incassi', 'promo'],
-  ],
-}
+const LABEL_FALLBACKS: Record<string, string[][]> = SHARED_LABEL_FALLBACKS
 
 /**
  * Old-key → Pro-key router.

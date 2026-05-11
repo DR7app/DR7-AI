@@ -205,7 +205,7 @@ function nextCronAttemptText(sendHour: number | null): string {
  * invio solo a mano dall'admin".
  */
 function buildScheduleSummary(
-  t: { message_key?: string; is_automatic?: boolean; trigger_event?: string; trigger_offset_hours?: number; send_hour?: number | null; target_status?: string | null; target_category?: string | null },
+  t: { message_key?: string; label?: string | null; is_automatic?: boolean; trigger_event?: string; trigger_offset_hours?: number; send_hour?: number | null; target_status?: string | null; target_category?: string | null },
   categoryLabels: Record<string, string>,
 ): string[] {
   const lines: string[] = []
@@ -247,9 +247,11 @@ function buildScheduleSummary(
     lines.push(`Prossimo tentativo: ${nextCronAttemptText(t.send_hour ?? null)}`)
   }
 
-  // Eventi di codice che instradano qui (callback Nexi, conferma
-  // prenotazione, firma, ecc.). Lista derivata da proTemplateRouting.
-  const eventTriggers = getProKeyEventTriggers(t.message_key)
+  // Eventi di codice che instradano qui — usa SIA message_key SIA label.
+  // I template custom (message_key `pro_custom_*`) la cui label corrisponde
+  // a uno slot canonico (es. "Conferma Noleggio") vengono riconosciuti
+  // tramite LABEL_FALLBACKS, esattamente come fa il resolver server.
+  const eventTriggers = getProKeyEventTriggers(t.message_key, t.label)
   for (const ev of eventTriggers) {
     lines.push(`Evento · ${ev}`)
   }
@@ -2545,6 +2547,12 @@ export default function MessaggiSistemaProTab() {
                         {(() => {
                             const previewTpl = {
                                 message_key: 'pro_custom_<verrà_generato_al_salvataggio>',
+                                // Passing the label lets buildScheduleSummary
+                                // detect via LABEL_FALLBACKS if the template
+                                // will respond to code events (e.g. label
+                                // "Conferma Noleggio" → fires on booking
+                                // creation anche per chiavi pro_custom_*).
+                                label: newLabel,
                                 is_automatic: newIsAutomatic,
                                 trigger_event: newTriggerEvent,
                                 trigger_offset_hours: newTriggerOffset,

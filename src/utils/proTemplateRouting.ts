@@ -126,19 +126,234 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
 }
 
 /**
- * Per un dato `pro_key`, restituisce la lista di descrizioni italiane
- * di TUTTI gli eventi di codice che lo fanno partire. Vuota se il
- * template è gestito SOLO dal cron `process-scheduled-system-messages-cron`
- * (quindi davvero "manuale o solo cron") oppure è un template custom
- * usato solo manualmente dall'admin.
+ * Fallback label matchers: ogni voce mappa un pro_key alle liste di
+ * AND-group da cercare nella label di un template enabled+non-vuoto.
+ * Il resolver server (messageTemplates.resolveKeyForContext) usa questi
+ * pattern quando il pro_key canonico è vuoto/disabilitato, così l'admin
+ * può tenere un template "Conferma Noleggio" custom (con message_key
+ * `pro_custom_*_<ts>`) e il codice lo trova comunque per label.
+ *
+ * Il client (MessaggiSistemaProTab) usa la stessa mappa al contrario:
+ * dato un template (label + message_key) capisce a quali eventi di
+ * codice il template risponderà davvero.
+ *
+ * AND-group: tutti i frammenti devono essere presenti (case-insensitive)
+ * nella label. L'ordine delle entries conta — i pattern più specifici
+ * stanno prima dei più generici per evitare match indesiderati.
  */
-export function getProKeyEventTriggers(proKey: string | null | undefined): string[] {
-  if (!proKey) return []
+export const LABEL_FALLBACKS: Record<string, string[][]> = {
+  // ── Conferma — eventi di creazione prenotazione (BUG FIX: prima
+  // mancavano completamente, quindi `renderTemplate('rental_new_customer')`
+  // tornava null se l'admin aveva messo il body in un custom invece
+  // che nel canonico pro_conferma_noleggio → invio saltato in silenzio.
+  pro_conferma_noleggio: [
+    ['conferma', 'noleggio'],
+    ['nuova', 'prenotazione', 'noleggio'],
+    ['nuova', 'prenotazione', 'rental'],
+    ['conferma', 'rental'],
+    ['conferma', 'prenotazione'],
+  ],
+  pro_conferma_lavaggio: [
+    ['conferma', 'lavaggio'],
+    ['nuova', 'prenotazione', 'lavaggio'],
+    ['conferma', 'wash'],
+    ['conferma', 'prime', 'wash'],
+  ],
+  pro_conferma_meccanica: [
+    ['conferma', 'meccanica'],
+    ['nuova', 'prenotazione', 'meccanica'],
+    ['conferma', 'mechanical'],
+  ],
+  pro_conferma_pagamento: [
+    ['conferma', 'pagamento'],
+    ['pagamento', 'ricevuto'],
+    ['pagamento', 'confermato'],
+    ['payment', 'received'],
+    ['payment', 'confirmed'],
+  ],
+  pro_conferma_contratto_firmato: [
+    ['conferma', 'contratto', 'firmat'],
+    ['contratto', 'firmat'],
+  ],
+
+  // ── Firma & OTP ─────────────────────────────────────────────────
+  pro_richiesta_firma: [
+    ['link', 'firma', 'contratto'],
+    ['link', 'firma'],
+    ['richiesta', 'firma'],
+    ['firma', 'contratto'],
+    ['signature', 'request'],
+    ['signing', 'link'],
+  ],
+  pro_promemoria_firma: [
+    ['promemoria', 'firma'],
+    ['reminder', 'sign'],
+    ['ricordo', 'firma'],
+  ],
+  pro_richiesta_otp: [
+    ['otp', 'firma'],
+    ['codice', 'otp'],
+    ['otp', 'contratto'],
+    ['richiesta', 'otp'],
+  ],
+  pro_richiesta_iban: [
+    ['richiesta', 'iban'],
+    ['iban', 'rimborso'],
+    ['rimborso', 'iban'],
+    ['iban'],
+  ],
+
+  // ── Pagamenti / Pay-by-link (già presenti nel server, ricopiate qui) ─
+  pro_richiesta_pagamento: [
+    ['link pagamento'],
+    ['richiesta pagamento'],
+    ['invio link pagamento'],
+    ['pay by link'],
+    ['payment link'],
+  ],
+  pro_modifica_noleggio: [
+    ['modifica', 'noleggio'],
+    ['modifica', 'prenotazione'],
+    ['modifica', 'rental'],
+    ['modifica', 'rent'],
+  ],
+  pro_modifica_lavaggio: [
+    ['modifica', 'lavaggio'],
+    ['modifica', 'prime wash'],
+    ['modifica', 'primewash'],
+    ['modifica', 'wash'],
+  ],
+  pro_richiesta_penali: [
+    ['link', 'pagamento', 'penal'],
+    ['penal'],
+    ['link pagamento'],
+    ['pay by link'],
+  ],
+  pro_richiesta_danni: [
+    ['link', 'pagamento', 'dann'],
+    ['dann'],
+    ['link pagamento'],
+    ['pay by link'],
+  ],
+  pro_richiesta_danni_penali: [
+    ['link', 'pagamento', 'dann', 'penal'],
+    ['link', 'pagamento', 'penal'],
+    ['link', 'pagamento', 'dann'],
+    ['dann'],
+    ['penal'],
+    ['link pagamento'],
+  ],
+  pro_richiesta_addebito: [
+    ['link', 'pagamento', 'addebit'],
+    ['addebit'],
+    ['link pagamento'],
+  ],
+  pro_richiesta_estensione: [
+    ['link', 'pagamento', 'estension'],
+    ['estension'],
+    ['link pagamento'],
+  ],
+
+  // ── Marketing & Wallet & Fidelity ──────────────────────────────
+  pro_marketing_recensione: [
+    ['richiesta', 'recensione'],
+    ['review', 'request'],
+    ['recensione'],
+  ],
+  pro_marketing_codice_sconto: [
+    ['codice', 'sconto', 'recensione'],
+    ['codice', 'recensione'],
+    ['sconto', 'recensione'],
+    ['codice', 'sconto'],
+    ['discount', 'review'],
+  ],
+  pro_marketing_compleanno: [
+    ['compleanno'],
+    ['birthday'],
+    ['auguri', 'cliente'],
+  ],
+  pro_wallet_bonus_cliente: [
+    ['bonus', 'wallet'],
+    ['wallet', 'bonus'],
+    ['cashback'],
+    ['accredito', 'wallet'],
+    ['bonus', 'carta'],
+  ],
+  pro_fidelity_voucher: [
+    ['fidelity', 'voucher'],
+    ['fidelity'],
+    ['fedeltà'],
+    ['buono', 'fidelity'],
+    ['250', 'punti'],
+    ['buono', 'prime', 'wash'],
+  ],
+  pro_maxi_promo_gap_1gg: [
+    ['maxi', 'promo', 'gap', '1gg'],
+    ['maxi', 'promo', 'gap'],
+    ['maxi', 'promo'],
+    ['gap', '1gg'],
+    ['gap', '1', 'giorno'],
+    ['promo', 'gap'],
+  ],
+  pro_promo_incassi: [
+    ['promo', 'incassi'],
+    ['promo', 'incasso'],
+    ['incassi', 'promo'],
+  ],
+}
+
+/** Verifica se la label del template fa match con uno dei pattern di
+    LABEL_FALLBACKS per il pro_key dato. Match case-insensitive. */
+function labelMatchesProKey(label: string | null | undefined, proKey: string): boolean {
+  if (!label) return false
+  const groups = LABEL_FALLBACKS[proKey]
+  if (!groups) return false
+  const lbl = label.toLowerCase()
+  return groups.some(group => group.every(frag => lbl.includes(frag.toLowerCase())))
+}
+
+/**
+ * Per un dato template (message_key + label), restituisce la lista di
+ * descrizioni italiane di TUTTI gli eventi di codice che lo fanno
+ * partire. Usa DUE meccanismi:
+ *
+ *   1. Match diretto su message_key in OLD_TO_PRO (template con la
+ *      chiave canonica pro_*).
+ *   2. Match per label via LABEL_FALLBACKS — necessario per i template
+ *      custom (message_key `pro_custom_*`) la cui label corrisponde a
+ *      uno slot canonico. Esempio: un template `pro_custom_conferma_noleggio_<ts>`
+ *      con label "Conferma Noleggio" risponde agli eventi di
+ *      pro_conferma_noleggio se quest'ultimo è vuoto/disabilitato.
+ *
+ * Vuota se il template è davvero solo manuale o gestito solo dal cron.
+ */
+export function getProKeyEventTriggers(
+  messageKey: string | null | undefined,
+  label?: string | null,
+): string[] {
   const matches: string[] = []
-  for (const [legacy, pro] of Object.entries(OLD_TO_PRO)) {
-    if (pro !== proKey) continue
-    const desc = EVENT_DESCRIPTIONS[legacy]
-    if (desc && !matches.includes(desc)) matches.push(desc)
+
+  // 1. Match diretto su message_key (canonico)
+  if (messageKey) {
+    for (const [legacy, pro] of Object.entries(OLD_TO_PRO)) {
+      if (pro !== messageKey) continue
+      const desc = EVENT_DESCRIPTIONS[legacy]
+      if (desc && !matches.includes(desc)) matches.push(desc)
+    }
   }
+
+  // 2. Match per label (template custom che agiscono come uno slot canonico)
+  if (label) {
+    for (const proKey of Object.keys(LABEL_FALLBACKS)) {
+      if (proKey === messageKey) continue // già coperto dal match diretto
+      if (!labelMatchesProKey(label, proKey)) continue
+      for (const [legacy, pro] of Object.entries(OLD_TO_PRO)) {
+        if (pro !== proKey) continue
+        const desc = EVENT_DESCRIPTIONS[legacy]
+        if (desc && !matches.includes(desc)) matches.push(desc)
+      }
+    }
+  }
+
   return matches
 }
