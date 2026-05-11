@@ -429,8 +429,15 @@ const cronHandler = async () => {
         }
 
         // Filtri
-        const statuses = (tpl.target_status || 'confirmed,active')
-            .split(',').map(s => s.trim()).filter(Boolean);
+        // target_status semantics:
+        //   - undefined / null  → fallback storico `confirmed,active`
+        //   - stringa vuota ''  → NESSUN filtro (admin ha esplicitamente
+        //     deselezionato tutti gli stati nel form: vuole TUTTI gli stati)
+        //   - CSV non vuoto     → filtro IN(...stati...)
+        const rawStatus = tpl.target_status
+        const statuses = rawStatus == null
+            ? ['confirmed', 'active']
+            : rawStatus.split(',').map(s => s.trim()).filter(Boolean);
 
         // 2. Carica candidati (limita per evitare scan tabella intera)
         let q = supabase.from('bookings').select('*');
@@ -582,4 +589,9 @@ const cronHandler = async () => {
     };
 };
 
-export const handler = schedule('*/15 * * * *', cronHandler);
+// Cadenza */2 * * * * (ogni 2 min) — DEVE corrispondere a netlify.toml
+// → `[functions."process-scheduled-system-messages-cron"] schedule = "*/2 * * * *"`.
+// In passato c'era un mismatch (file `*/15`, toml `*/2`) che lasciava il
+// comportamento ambiguo: i messaggi automatici a volte non partivano nei
+// tempi previsti perché la pianificazione effettiva era indeterminata.
+export const handler = schedule('*/2 * * * *', cronHandler);

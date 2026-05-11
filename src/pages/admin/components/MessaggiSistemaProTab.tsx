@@ -114,6 +114,69 @@ const TRIGGER_LABELS: Record<string, string> = {
     'on_promo_gap': 'Gap disponibilita\' veicolo',
 }
 
+// Stati prenotazione validi per il filtro `target_status` (CSV nel DB).
+// Storicamente il default era 'confirmed,active', il che escludeva
+// silenziosamente le prenotazioni `pending` (es. on_booking parte solo
+// quando il cliente paga). Adesso l'admin sceglie esplicitamente quali
+// stati far passare.
+const BOOKING_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'pending', label: 'In attesa' },
+  { value: 'confirmed', label: 'Confermata' },
+  { value: 'active', label: 'Attiva (in corso)' },
+  { value: 'in_corso', label: 'In corso' },
+  { value: 'completed', label: 'Completata' },
+  { value: 'completata', label: 'Completata (legacy)' },
+  { value: 'cancelled', label: 'Annullata' },
+  { value: 'annullata', label: 'Annullata (legacy)' },
+]
+
+function parseStatusCsv(csv: string | null | undefined): Set<string> {
+  if (!csv) return new Set()
+  return new Set(csv.split(',').map(s => s.trim()).filter(Boolean))
+}
+
+function statusCsvLabel(csv: string | null | undefined): string {
+  const set = parseStatusCsv(csv)
+  if (set.size === 0) return 'Tutti gli stati'
+  const labels = BOOKING_STATUS_OPTIONS.filter(o => set.has(o.value)).map(o => o.label)
+  if (labels.length === 0) return csv || 'Tutti gli stati'
+  if (labels.length <= 3) return labels.join(', ')
+  return `${labels.slice(0, 3).join(', ')} +${labels.length - 3}`
+}
+
+/**
+ * Construct a plain-Italian preview describing when a template will fire.
+ * Examples:
+ *   "Manuale — non parte automaticamente"
+ *   "Invia 24h prima del Ritiro · alle 09:00 Rome · stato: Confermata, Attiva (in corso) · solo Exotic"
+ *   "Invia 2h dopo il Pagamento ricevuto · subito · tutti gli stati · tutti i veicoli"
+ */
+function buildScheduleSummary(
+  t: { is_automatic?: boolean; trigger_event?: string; trigger_offset_hours?: number; send_hour?: number | null; target_status?: string | null; target_category?: string | null },
+  categoryLabels: Record<string, string>,
+): string {
+  if (!t.is_automatic) return 'Manuale — non parte automaticamente'
+  const triggerLabel = TRIGGER_LABELS[t.trigger_event || ''] || (t.trigger_event || 'evento sconosciuto')
+  const offset = Math.abs(Number(t.trigger_offset_hours) || 0)
+  const event = String(t.trigger_event || '')
+  const offsetText = offset === 0
+    ? 'subito'
+    : event.startsWith('before_')
+      ? `${offset}h prima`
+      : event.startsWith('after_') || event.startsWith('on_')
+        ? `${offset}h dopo`
+        : `±${offset}h`
+  const sendHourText = t.send_hour == null
+    ? 'subito'
+    : `alle ${String(t.send_hour).padStart(2, '0')}:00 Rome`
+  const statusLabel = `stato: ${statusCsvLabel(t.target_status)}`
+  const cat = (t.target_category || 'all').toLowerCase()
+  const catLabel = cat === 'all' || !cat
+    ? 'tutti i veicoli'
+    : `solo ${categoryLabels[cat] || cat}`
+  return `Invia ${offsetText} ${triggerLabel.toLowerCase()} · ${sendHourText} · ${statusLabel} · ${catLabel}`
+}
+
 // Descrizioni in linguaggio naturale per ogni evento — mostrate sotto la select.
 const TRIGGER_DESCRIPTIONS: Record<string, string> = {
     'before_pickup': 'Il messaggio parte prima del ritiro veicolo. Es. 24 ore prima per ricordare al cliente.',
@@ -822,6 +885,20 @@ export default function MessaggiSistemaProTab() {
     const [newTriggerOffset, setNewTriggerOffset] = useState(24)
     const [newSendHour, setNewSendHour] = useState<number | null>(9)
     const [newTargetCategory, setNewTargetCategory] = useState('all')
+    // Stati prenotazione esplicitamente selezionati nel form di creazione.
+    // Default `confirmed,active` per retro-compat: prima era hardcoded e
+    // l'admin non aveva modo di saperlo. Set vuoto = "tutti gli stati".
+    const [newTargetStatus, setNewTargetStatus] = useState<Set<string>>(new Set(['confirmed', 'active']))
+
+    // Diagnostica per ogni template: ultimi invii dal cron + bottone di
+    // test che bypassa finestra temporale, dedup e filtri (l'admin non
+    // deve dover creare una prenotazione fittizia per verificare un
+    // template). Stati locali, niente persistenza.
+    const [expandedDiagnostics, setExpandedDiagnostics] = useState<Set<string>>(new Set())
+    const [templateSendLogs, setTemplateSendLogs] = useState<Record<string, Array<{ id: string; booking_id: string | null; customer_phone: string | null; status: string; error: string | null; created_at: string }>>>({})
+    const [loadingLogsFor, setLoadingLogsFor] = useState<string | null>(null)
+    const [testPhones, setTestPhones] = useState<Record<string, string>>({})
+    const [testingId, setTestingId] = useState<string | null>(null)
     // Filtri avanzati (migration 20260509)
     const [newTargetServiceType, setNewTargetServiceType] = useState('all')
     const [newTargetWithDeposit, setNewTargetWithDeposit] = useState('all')
@@ -1139,7 +1216,11 @@ export default function MessaggiSistemaProTab() {
                     trigger_offset_hours: newTriggerOffset,
                     send_hour: newSendHour,
                     target_category: newTargetCategory,
-                    target_status: 'confirmed,active',
+                    // Stati esplicitamente scelti dall'admin nel form. Se
+                    // l'utente non ne ha selezionato nessuno passa stringa
+                    // vuota = "tutti gli stati" (la cron tratta vuoto come
+                    // fallback al default `confirmed,active`).
+                    target_status: Array.from(newTargetStatus).join(','),
                     target_service_type: newTargetServiceType,
                     target_with_deposit: newTargetWithDeposit,
                     target_payment_method: newTargetPaymentMethod,
@@ -1181,6 +1262,7 @@ export default function MessaggiSistemaProTab() {
             setNewTriggerOffset(24)
             setNewSendHour(9)
             setNewTargetCategory('all')
+            setNewTargetStatus(new Set(['confirmed', 'active']))
             toast.success('Nuovo messaggio Pro creato')
         } catch (err: unknown) {
             const _errMsg = err instanceof Error ? err.message : String(err)
@@ -1235,6 +1317,119 @@ export default function MessaggiSistemaProTab() {
         } catch (err: unknown) {
             const _errMsg = err instanceof Error ? err.message : String(err)
             toast.error('Errore: ' + _errMsg)
+        }
+    }
+
+    /** Carica gli ultimi 10 invii dal cron per uno specifico template. */
+    async function loadTemplateSendLog(templateId: string) {
+        setLoadingLogsFor(templateId)
+        try {
+            const { data, error } = await supabase
+                .from('system_message_send_log')
+                .select('id, booking_id, customer_phone, status, error, created_at')
+                .eq('system_message_id', templateId)
+                .order('created_at', { ascending: false })
+                .limit(10)
+            if (error && error.code !== '42P01') throw error
+            setTemplateSendLogs(prev => ({ ...prev, [templateId]: data || [] }))
+        } catch (err) {
+            console.error('Error loading template send log:', err)
+            setTemplateSendLogs(prev => ({ ...prev, [templateId]: [] }))
+        } finally {
+            setLoadingLogsFor(null)
+        }
+    }
+
+    function toggleDiagnostics(template: SystemMessage) {
+        setExpandedDiagnostics(prev => {
+            const next = new Set(prev)
+            if (next.has(template.id)) {
+                next.delete(template.id)
+            } else {
+                next.add(template.id)
+                // Lazy-load logs the first time the panel opens for this template
+                if (!templateSendLogs[template.id]) loadTemplateSendLog(template.id)
+            }
+            return next
+        })
+    }
+
+    /**
+     * Invia un messaggio di prova al numero indicato usando esattamente lo
+     * stesso pipeline del cron (send-whatsapp-notification → renderTemplate
+     * dal DB → Green API). Bypassa finestra temporale e dedup: serve a
+     * verificare che il TEMPLATE arrivi correttamente, non che le regole
+     * di scheduling siano soddisfatte. Costruisce una booking sintetica
+     * con valori d'esempio così le variabili tipo {nome}, {vehicle_name},
+     * ecc. vengono comunque sostituite (non lasciate come placeholder).
+     */
+    async function handleTestSend(template: SystemMessage) {
+        const phoneRaw = (testPhones[template.id] || '').trim()
+        if (!phoneRaw) {
+            toast.error('Inserisci un numero di telefono per il test')
+            return
+        }
+        const phone = phoneRaw.replace(/[^\d+]/g, '')
+        if (phone.length < 8) {
+            toast.error('Numero di telefono non valido')
+            return
+        }
+        if (!template.message_body || !template.message_body.trim()) {
+            toast.error('Il template è vuoto: scrivi prima il messaggio')
+            return
+        }
+        setTestingId(template.id)
+        try {
+            // Booking sintetica con valori realistici per la sostituzione
+            // delle variabili. Non viene salvata in DB.
+            const inDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString()
+            const syntheticBooking = {
+                id: `test-${template.id}-${Date.now()}`,
+                customer_name: 'Mario Rossi (Test)',
+                customer_email: 'test@dr7.app',
+                customer_phone: phone,
+                vehicle_name: 'Audi RS3',
+                vehicle_plate: 'AB123CD',
+                pickup_date: inDays(1),
+                dropoff_date: inDays(4),
+                pickup_location: 'DR7 Cagliari',
+                dropoff_location: 'DR7 Cagliari',
+                price_total: 45000,
+                payment_status: 'paid',
+                status: 'confirmed',
+                appointment_date: inDays(1),
+                appointment_time: '15:30',
+                service_name: 'Test',
+                booking_details: {
+                    insurance_option: 'KASKO_BASE',
+                    deposit: 500,
+                    km_limit: '300',
+                },
+            }
+            const res = await authFetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    booking: syntheticBooking,
+                    customPhone: phone,
+                    messageKey: template.message_key,
+                }),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                toast.error('Errore invio test: ' + (json?.message || `HTTP ${res.status}`))
+                return
+            }
+            if (json?.skipped) {
+                toast.error(`Test saltato: ${json.reason || json.message || 'template non disponibile'}`)
+                return
+            }
+            toast.success(`Test inviato a ${phone}`)
+        } catch (err: unknown) {
+            const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore di rete: ' + _errMsg)
+        } finally {
+            setTestingId(null)
         }
     }
 
@@ -1556,7 +1751,7 @@ export default function MessaggiSistemaProTab() {
                             {newIsAutomatic && (
                                 <>
                                 <div className="mt-3 mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-300/90 leading-relaxed">
-                                    Il messaggio verrà inviato automaticamente da un cron che gira ogni 15 minuti. Per ogni cliente verrà inviato una sola volta (no doppioni).
+                                    Il messaggio verrà inviato automaticamente da un cron che gira ogni 2 minuti. Per ogni cliente verrà inviato una sola volta (no doppioni).
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="col-span-2">
@@ -1596,6 +1791,43 @@ export default function MessaggiSistemaProTab() {
                                                 <option key={c.id} value={c.id}>{c.label}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                                            Stati prenotazione ammessi
+                                            <span className="ml-1 text-[10px] text-theme-text-muted/70 font-normal">
+                                                ({newTargetStatus.size === 0 ? 'tutti gli stati' : `${newTargetStatus.size} selezionati`})
+                                            </span>
+                                        </label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {BOOKING_STATUS_OPTIONS.map(opt => {
+                                                const checked = newTargetStatus.has(opt.value)
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={opt.value}
+                                                        onClick={() => {
+                                                            setNewTargetStatus(prev => {
+                                                                const next = new Set(prev)
+                                                                if (next.has(opt.value)) next.delete(opt.value)
+                                                                else next.add(opt.value)
+                                                                return next
+                                                            })
+                                                        }}
+                                                        className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                                                            checked
+                                                                ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold'
+                                                                : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:border-theme-text-muted'
+                                                        }`}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                        <p className="text-[11px] text-theme-text-muted mt-1.5">
+                                            Il messaggio parte SOLO per prenotazioni in uno di questi stati. Lascia vuoto per accettare tutti gli stati. <strong>Importante:</strong> per i trigger "Alla creazione della prenotazione" su sito (cliente non ancora pagato) seleziona anche "In attesa".
+                                        </p>
                                     </div>
                                 </div>
 
@@ -2111,50 +2343,203 @@ export default function MessaggiSistemaProTab() {
                                                         </p>
                                                     </div>
                                                 )}
+                                                {/* Programmazione — preview sempre visibile (anche per i manuali).
+                                                    Permette all'admin di capire al volo se/quando un
+                                                    template parte senza dover aprire i controlli. */}
+                                                <div className={`px-3 py-2 rounded-lg border text-xs ${
+                                                    template.is_automatic
+                                                        ? 'bg-emerald-500/5 border-emerald-500/30 text-emerald-300/95'
+                                                        : 'bg-theme-bg-primary border-theme-border/50 text-theme-text-muted'
+                                                }`}>
+                                                    <span className="font-semibold">Programmazione:</span>{' '}
+                                                    {buildScheduleSummary(template, Object.fromEntries(proCategories.map(c => [c.id, c.label])))}
+                                                </div>
+
                                                 {template.is_automatic && (
-                                                    <div className="flex flex-wrap items-center gap-3 px-3 py-2.5 rounded-lg bg-theme-bg-primary border border-theme-border/50">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
-                                                            <select value={template.trigger_event || 'before_dropoff'}
-                                                                onChange={e => handleUpdateAutomation(template.id, 'trigger_event', e.target.value)}
-                                                                className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                                                {Object.entries(TRIGGER_LABELS).map(([k, v]) => (
-                                                                    <option key={k} value={k}>{v}</option>
-                                                                ))}
-                                                            </select>
+                                                    <div className="rounded-lg bg-theme-bg-primary border border-theme-border/50 p-3 space-y-2">
+                                                        <div className="flex flex-wrap items-center gap-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+                                                                <select value={template.trigger_event || 'before_dropoff'}
+                                                                    onChange={e => handleUpdateAutomation(template.id, 'trigger_event', e.target.value)}
+                                                                    className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                                    {Object.entries(TRIGGER_LABELS).map(([k, v]) => (
+                                                                        <option key={k} value={k}>{v}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            <span className="text-theme-text-muted text-xs">―</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <input type="number" value={template.trigger_offset_hours || 24}
+                                                                    onChange={e => handleUpdateAutomation(template.id, 'trigger_offset_hours', parseInt(e.target.value) || 0)}
+                                                                    className="w-12 text-xs text-center bg-dr7-gold/15 text-dr7-gold font-bold rounded-full px-2 py-1 border-none focus:outline-none" />
+                                                                <span className="text-xs text-dr7-gold font-bold">ore</span>
+                                                            </div>
+                                                            <span className="text-theme-text-muted text-xs">―</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <select value={template.send_hour ?? ''}
+                                                                    onChange={e => handleUpdateAutomation(template.id, 'send_hour', e.target.value === '' ? null : parseInt(e.target.value))}
+                                                                    className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                                    <option value="">Subito</option>
+                                                                    {Array.from({ length: 24 }, (_, i) => (
+                                                                        <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            <span className="text-theme-text-muted text-xs">―</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                                                                <select value={template.target_category || 'all'}
+                                                                    onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
+                                                                    className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                                    <option value="all">Tutti i veicoli</option>
+                                                                    {proCategories.map(c => (
+                                                                        <option key={c.id} value={c.id}>{c.label}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
                                                         </div>
-                                                        <span className="text-theme-text-muted text-xs">―</span>
-                                                        <div className="flex items-center gap-1">
-                                                            <input type="number" value={template.trigger_offset_hours || 24}
-                                                                onChange={e => handleUpdateAutomation(template.id, 'trigger_offset_hours', parseInt(e.target.value) || 0)}
-                                                                className="w-12 text-xs text-center bg-dr7-gold/15 text-dr7-gold font-bold rounded-full px-2 py-1 border-none focus:outline-none" />
-                                                            <span className="text-xs text-dr7-gold font-bold">ore</span>
-                                                        </div>
-                                                        <span className="text-theme-text-muted text-xs">―</span>
-                                                        <div className="flex items-center gap-1">
-                                                            <select value={template.send_hour ?? ''}
-                                                                onChange={e => handleUpdateAutomation(template.id, 'send_hour', e.target.value === '' ? null : parseInt(e.target.value))}
-                                                                className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                                                <option value="">Subito</option>
-                                                                {Array.from({ length: 24 }, (_, i) => (
-                                                                    <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
-                                                        <span className="text-theme-text-muted text-xs">―</span>
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                                                            <select value={template.target_category || 'all'}
-                                                                onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
-                                                                className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                                                <option value="all">Tutti i veicoli</option>
-                                                                {proCategories.map(c => (
-                                                                    <option key={c.id} value={c.id}>{c.label}</option>
-                                                                ))}
-                                                            </select>
+                                                        {/* Stati prenotazione (target_status) — pillole on/off.
+                                                            Prima erano hardcoded a 'confirmed,active' senza UI;
+                                                            risultato: i messaggi non partivano su prenotazioni
+                                                            in stato `pending` (es. on_booking pre-pagamento)
+                                                            e l'admin non aveva modo di accorgersene. */}
+                                                        <div className="pt-2 border-t border-theme-border/40">
+                                                            <div className="flex items-center justify-between mb-1.5">
+                                                                <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold">Stati ammessi</span>
+                                                                <span className="text-[10px] text-theme-text-muted">
+                                                                    {(() => {
+                                                                        const set = parseStatusCsv(template.target_status)
+                                                                        return set.size === 0 ? 'tutti gli stati' : `${set.size} selezionati`
+                                                                    })()}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {BOOKING_STATUS_OPTIONS.map(opt => {
+                                                                    const set = parseStatusCsv(template.target_status)
+                                                                    const checked = set.has(opt.value)
+                                                                    return (
+                                                                        <button
+                                                                            type="button"
+                                                                            key={opt.value}
+                                                                            onClick={() => {
+                                                                                const next = new Set(set)
+                                                                                if (next.has(opt.value)) next.delete(opt.value)
+                                                                                else next.add(opt.value)
+                                                                                handleUpdateAutomation(template.id, 'target_status', Array.from(next).join(','))
+                                                                            }}
+                                                                            className={`px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
+                                                                                checked
+                                                                                    ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold'
+                                                                                    : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:border-theme-text-muted'
+                                                                            }`}
+                                                                        >
+                                                                            {opt.label}
+                                                                        </button>
+                                                                    )
+                                                                })}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 )}
+
+                                                {/* Diagnostica per-template: ultimi invii + bottone Invia di prova.
+                                                    Sempre disponibile (anche per template manuali) così l'admin
+                                                    può capire al volo se il template parte e a chi arriva. */}
+                                                <div className="rounded-lg border border-theme-border/40 bg-theme-bg-primary/40">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleDiagnostics(template)}
+                                                        className="w-full px-3 py-2 flex items-center justify-between text-xs text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
+                                                    >
+                                                        <span className="flex items-center gap-2">
+                                                            <svg className={`w-3.5 h-3.5 transition-transform ${expandedDiagnostics.has(template.id) ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                            <span className="font-medium">Diagnostica · Ultimi invii e Test</span>
+                                                        </span>
+                                                        <span className="text-[10px] text-theme-text-muted">
+                                                            {templateSendLogs[template.id]?.length != null
+                                                                ? `${templateSendLogs[template.id].length} eventi`
+                                                                : 'apri per caricare'}
+                                                        </span>
+                                                    </button>
+
+                                                    {expandedDiagnostics.has(template.id) && (
+                                                        <div className="border-t border-theme-border/40 p-3 space-y-3">
+                                                            {/* Test invio */}
+                                                            <div className="space-y-1.5">
+                                                                <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold">Invia di prova</label>
+                                                                <div className="flex gap-2">
+                                                                    <input
+                                                                        type="tel"
+                                                                        value={testPhones[template.id] || ''}
+                                                                        onChange={e => setTestPhones(prev => ({ ...prev, [template.id]: e.target.value }))}
+                                                                        placeholder="es. 393457905205 (con prefisso, senza +)"
+                                                                        className="flex-1 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleTestSend(template)}
+                                                                        disabled={testingId === template.id || !template.is_enabled || !template.message_body}
+                                                                        className="px-3 py-2 rounded-lg bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold text-xs font-semibold border border-dr7-gold/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                                                    >
+                                                                        {testingId === template.id ? 'Invio…' : 'Invia di prova'}
+                                                                    </button>
+                                                                </div>
+                                                                <p className="text-[10px] text-theme-text-muted leading-snug">
+                                                                    Bypassa finestra temporale, dedup e filtri. Le variabili tipo {'{nome}'}, {'{vehicle_name}'} vengono sostituite con valori d'esempio. Il template deve essere abilitato e non vuoto.
+                                                                </p>
+                                                            </div>
+
+                                                            {/* Ultimi invii dal cron */}
+                                                            <div className="space-y-1.5">
+                                                                <div className="flex items-center justify-between">
+                                                                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold">Ultimi invii (cron)</label>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => loadTemplateSendLog(template.id)}
+                                                                        disabled={loadingLogsFor === template.id}
+                                                                        className="text-[10px] text-blue-400 hover:text-blue-300 disabled:opacity-40"
+                                                                    >
+                                                                        {loadingLogsFor === template.id ? 'Ricarico…' : 'Ricarica'}
+                                                                    </button>
+                                                                </div>
+                                                                {templateSendLogs[template.id] == null || loadingLogsFor === template.id ? (
+                                                                    <div className="text-[11px] text-theme-text-muted italic">Caricamento…</div>
+                                                                ) : templateSendLogs[template.id].length === 0 ? (
+                                                                    <div className="text-[11px] text-theme-text-muted italic">
+                                                                        Nessun invio registrato. Possibili cause: il template non ha mai matchato una prenotazione, oppure il cron non è ancora partito da quando hai salvato.
+                                                                    </div>
+                                                                ) : (
+                                                                    <ul className="space-y-1 max-h-48 overflow-y-auto">
+                                                                        {templateSendLogs[template.id].map(log => {
+                                                                            const statusColor = log.status === 'sent'
+                                                                                ? 'text-emerald-400'
+                                                                                : log.status === 'skipped'
+                                                                                    ? 'text-amber-400'
+                                                                                    : 'text-red-400'
+                                                                            return (
+                                                                                <li key={log.id} className="flex items-start gap-2 px-2 py-1.5 rounded bg-theme-bg-tertiary/50 text-[11px]">
+                                                                                    <span className={`font-semibold ${statusColor} shrink-0`}>{log.status}</span>
+                                                                                    <span className="text-theme-text-muted shrink-0">
+                                                                                        {new Date(log.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                                                    </span>
+                                                                                    {log.customer_phone && (
+                                                                                        <span className="text-theme-text-secondary font-mono shrink-0">{log.customer_phone}</span>
+                                                                                    )}
+                                                                                    {log.error && (
+                                                                                        <span className="text-red-400/80 truncate" title={log.error}>{log.error}</span>
+                                                                                    )}
+                                                                                </li>
+                                                                            )
+                                                                        })}
+                                                                    </ul>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
 
                                                 {editingId === template.id ? (
                                                     <div className="space-y-3">
