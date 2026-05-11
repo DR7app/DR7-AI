@@ -61,6 +61,59 @@ function romeDayOfWeek(): number {
 }
 
 /**
+ * Cache in-process degli alias dei metodi di pagamento da payment_methods.
+ * Ricaricata via loadPaymentMethodAliases(). matchPaymentMethodKey usa la
+ * cache; se vuota, fallback al literal check di key.
+ */
+type PaymentMethodMap = Record<string, string[]>
+let __paymentMethodCache: PaymentMethodMap = {}
+let __paymentMethodCacheLoadedAt = 0
+const PAYMENT_METHOD_CACHE_TTL_MS = 5 * 60 * 1000 // 5 min
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function loadPaymentMethodAliases(supabase: any): Promise<void> {
+    const now = Date.now()
+    if (now - __paymentMethodCacheLoadedAt < PAYMENT_METHOD_CACHE_TTL_MS && Object.keys(__paymentMethodCache).length > 0) return
+    try {
+        const { data } = await supabase
+            .from('payment_methods')
+            .select('key, aliases, is_enabled')
+            .eq('is_enabled', true)
+        const map: PaymentMethodMap = {}
+        if (Array.isArray(data)) {
+            for (const row of data) {
+                const k = String((row as { key?: unknown }).key || '').toLowerCase().trim()
+                if (!k) continue
+                const aliases = String((row as { aliases?: unknown }).aliases || '')
+                    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+                // assicura che il key stesso sia sempre alias di se stesso
+                if (!aliases.includes(k)) aliases.unshift(k)
+                map[k] = aliases
+            }
+        }
+        __paymentMethodCache = map
+        __paymentMethodCacheLoadedAt = now
+    } catch (e) {
+        console.error('[paymentMethods] cache load failed:', e instanceof Error ? e.message : String(e))
+    }
+}
+
+/**
+ * Ritorna true se il payment_method del booking matcha la canonical key
+ * scelta dall'admin (es. key='card', booking m='nexi-pos-12345' → true
+ * perche' 'nexi' e' alias di 'card').
+ */
+function matchPaymentMethodKey(canonicalKey: string, bookingMethod: string): boolean {
+    if (!canonicalKey || !bookingMethod) return false
+    const aliases = __paymentMethodCache[canonicalKey]
+    if (!aliases || aliases.length === 0) {
+        // Fallback al literal substring check sulla key
+        return bookingMethod.includes(canonicalKey)
+    }
+    return aliases.some(a => bookingMethod.includes(a))
+}
+
+/**
  * Ora corrente (0..23) in fuso Europe/Rome.
  */
 function romeHour(): number {
@@ -149,18 +202,17 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
         if (want && have !== want) return false
     }
 
-    // Payment method
+    // Payment method — gli alias canonici sono SEEDED nella tabella
+    // payment_methods (vedi migration 20260511_payment_methods.sql). Il
+    // controllo di match qui usa la cache caricata da loadPaymentMethodAliases
+    // attraverso matchPaymentMethodKey(). Se la cache non e' ancora
+    // popolata, fallback al confronto literal di key (utile per il primo
+    // run del cron, raro).
     const tplPM = String(tpl.target_payment_method || 'all').toLowerCase()
     if (tplPM !== 'all') {
         const m = String(booking.payment_method || '').toLowerCase()
-        const isCard = m.includes('card') || m.includes('carta') || m.includes('nexi') || m.includes('stripe') || m.includes('bancomat') || m.includes('pos') || m.includes('debit')
-        const isWallet = m === 'credit' || m.includes('wallet') || m.includes('credit_wallet')
-        const isCash = m.includes('contanti') || m.includes('cash')
-        const isBonifico = m.includes('bonifico') || m.includes('wire') || m.includes('bank')
-        if (tplPM === 'card' && !isCard) return false
-        if (tplPM === 'wallet' && !isWallet) return false
-        if (tplPM === 'cash' && !isCash) return false
-        if (tplPM === 'bonifico' && !isBonifico) return false
+        const matched = matchPaymentMethodKey(tplPM, m)
+        if (!matched) return false
     }
 
     // Amount range (booking.price_total e' in cents in alcuni schemi,
@@ -463,6 +515,9 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
         .eq('trigger_event', event)
         .lte('trigger_offset_hours', maxOffsetHours)
     if (!templates?.length) return { sent: 0, skipped: 0, errors: 0 }
+
+    // Carica/refresha la cache degli alias payment_methods (5min TTL)
+    await loadPaymentMethodAliases(supabase)
 
     let sent = 0, skipped = 0, errors = 0
 
