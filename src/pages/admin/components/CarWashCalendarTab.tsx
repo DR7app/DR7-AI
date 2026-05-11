@@ -142,32 +142,6 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   const [editExtras, setEditExtras] = useState<CarWashService[]>([])
   const [editExtraPriceOptions, setEditExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
   const [editExtraQuantities, setEditExtraQuantities] = useState<Record<string, number>>({})
-  // View mode: Oggi = day view with operator columns. Settimana / Operatori
-  // fall back to the existing month grid until those phases land.
-  const [viewMode, setViewMode] = useState<'oggi' | 'settimana' | 'operatori'>('oggi')
-  // Operators loaded from operatori_persone (Centralina Pro). The Oggi view
-  // renders one column per attivo operator.
-  const [operators, setOperators] = useState<Array<{ id: string; nome: string; cognome: string | null; ruolo: string | null }>>([])
-
-  useEffect(() => {
-    let cancelled = false
-    async function loadOperators() {
-      const { data } = await supabase
-        .from('operatori_persone')
-        .select('id, nome, cognome, ruolo')
-        .eq('attivo', true)
-        .order('nome', { ascending: true })
-      if (cancelled) return
-      setOperators((data || []).map(o => ({
-        id: String(o.id),
-        nome: String(o.nome || ''),
-        cognome: o.cognome ? String(o.cognome) : null,
-        ruolo: o.ruolo ? String(o.ruolo) : null,
-      })))
-    }
-    loadOperators()
-    return () => { cancelled = true }
-  }, [])
 
   // Load car wash services catalog
   useEffect(() => {
@@ -639,109 +613,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         </div>
       </div>
 
-      {/* 1.5 View tabs — Oggi / Settimana / Operatori */}
-      <div className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-theme-bg-primary/10 border-b border-theme-border/30">
-        {(['oggi', 'settimana', 'operatori'] as const).map(v => (
-          <button
-            key={v}
-            onClick={() => setViewMode(v)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold capitalize transition-colors ${
-              viewMode === v
-                ? 'bg-dr7-gold text-white shadow'
-                : 'bg-theme-text-primary/5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-text-primary/10'
-            }`}
-          >
-            {v}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2 text-xs text-theme-text-muted">
-          {viewMode === 'oggi' && (
-            <span className="text-theme-text-primary capitalize">
-              {today.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {viewMode === 'oggi' ? (
-        // ─── OGGI VIEW — operator-column day layout ────────────────────────
-        <div className="flex-1 flex overflow-hidden bg-theme-bg-primary">
-          {/* Left: time + operator columns */}
-          <div className="flex-1 overflow-auto">
-            <DayView
-              operators={operators.length > 0 ? operators : [{ id: '__alessio__', nome: 'Alessio', cognome: null, ruolo: 'lavaggio' }]}
-              bookings={bookings.filter(b => {
-                if (isRientroBooking(b)) return false
-                const d = new Date(b.appointment_date)
-                return d.getFullYear() === today.getFullYear()
-                  && d.getMonth() === today.getMonth()
-                  && d.getDate() === today.getDate()
-              })}
-              onClickBooking={setSelectedBooking}
-            />
-          </div>
-
-          {/* Right: sidebar with legend + operator load */}
-          <aside className="hidden lg:flex flex-col w-72 border-l border-theme-border/30 bg-theme-bg-primary/20 p-4 gap-4 overflow-auto">
-            <div>
-              <h4 className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-2">Legenda</h4>
-              <ul className="space-y-1.5 text-xs">
-                <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-emerald-500/70" /><span className="text-theme-text-primary">Prenotazione confermata</span></li>
-                <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-blue-500/70" /><span className="text-theme-text-primary">In esecuzione</span></li>
-                <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-purple-500/70" /><span className="text-theme-text-primary">Servizio premium</span></li>
-                <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-orange-500/70" /><span className="text-theme-text-primary">Check-in atteso</span></li>
-                <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-theme-bg-tertiary border border-theme-border" /><span className="text-theme-text-primary">Slot libero</span></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-2">Carico Operatori</h4>
-              <div className="space-y-2">
-                {(operators.length > 0 ? operators : [{ id: '__alessio__', nome: 'Alessio', cognome: null, ruolo: 'lavaggio' }]).map(op => {
-                  const opBookings = bookings.filter(b => {
-                    if (isRientroBooking(b)) return false
-                    const d = new Date(b.appointment_date)
-                    return d.getFullYear() === today.getFullYear()
-                      && d.getMonth() === today.getMonth()
-                      && d.getDate() === today.getDate()
-                  })
-                  const minBooked = opBookings.reduce((s, b) => s + getServiceDuration(b.service_name || '', b.booking_details?.vehicle_category, b.booking_details), 0)
-                  const minOpen = openMinutesForDate(today) || 1
-                  const pct = Math.min(100, Math.round((minBooked / minOpen) * 100))
-                  return (
-                    <div key={op.id}>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-theme-text-primary">{op.nome}{op.cognome ? ` ${op.cognome.charAt(0)}.` : ''}</span>
-                        <span className="text-theme-text-muted tabular-nums">{pct}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
-                        <div className="h-full bg-dr7-gold" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="mt-auto bg-dr7-gold/5 border border-dr7-gold/20 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span className="text-[11px] font-semibold text-dr7-gold uppercase tracking-wider">Suggerimenti Smart</span>
-              </div>
-              <p className="text-[11px] text-theme-text-secondary leading-relaxed">
-                {kpis.saturazione < 50
-                  ? `Slot disponibili nel pomeriggio. Considera una promozione mirata.`
-                  : kpis.saturazione >= 85
-                    ? `Saturazione alta. Valuta di aprire slot extra o riassegnare operatori.`
-                    : `Carico bilanciato. Nessun intervento necessario.`}
-              </p>
-            </div>
-          </aside>
-        </div>
-      ) : (
-      // ─── SETTIMANA / OPERATORI — fall back to existing month grid ──────
+      {/* 2. Scrollable Calendar Area */}
       <div className="flex-1 overflow-auto relative flex flex-col w-full bg-theme-bg-primary">
 
         {/* A. Sticky Header Row - Days */}
@@ -1010,7 +882,6 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         </div>
 
       </div>
-      )}
 
       {/* Booking Details Modal — Apple style */}
       {selectedBooking && (() => {
@@ -1430,119 +1301,6 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-// ─── DayView ─────────────────────────────────────────────────────────────
-// Operator-column day layout: time rows (8:00 → 19:00, 15-min) × N operator
-// columns. Each booking placed in its operator's column at its start time,
-// with a height proportional to its service duration.
-
-interface DayViewProps {
-  operators: Array<{ id: string; nome: string; cognome: string | null; ruolo: string | null }>
-  bookings: CarWashBooking[]
-  onClickBooking: (b: CarWashBooking) => void
-}
-
-const ROW_HEIGHT_PX = 36 // height of one 15-min slot
-const START_HOUR = 8
-const END_HOUR = 19
-
-function DayView({ operators, bookings, onClickBooking }: DayViewProps) {
-  const slots: { label: string; h: number; m: number }[] = []
-  for (let h = START_HOUR; h <= END_HOUR; h++) {
-    for (const m of [0, 15, 30, 45]) {
-      if (h === END_HOUR && m > 0) break
-      slots.push({ label: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, h, m })
-    }
-  }
-
-  const colorForBooking = (b: CarWashBooking): { bg: string; border: string; text: string } => {
-    if (isPaidBooking(b)) return { bg: 'bg-emerald-600/80', border: 'border-emerald-400', text: 'text-white' }
-    if (isPendingPaymentLink(b)) return { bg: 'bg-orange-600/80', border: 'border-orange-400', text: 'text-white' }
-    const svc = (b.service_name || '').toLowerCase()
-    if (svc.includes('premium') || svc.includes('detail') || svc.includes('exclusive')) return { bg: 'bg-purple-600/80', border: 'border-purple-400', text: 'text-white' }
-    if (svc.includes('experience')) return { bg: 'bg-blue-600/80', border: 'border-blue-400', text: 'text-white' }
-    return { bg: 'bg-red-600/80', border: 'border-red-400', text: 'text-white' }
-  }
-
-  return (
-    <div className="flex min-w-max">
-      {/* Time column */}
-      <div className="w-20 shrink-0 border-r border-theme-border/30 bg-theme-bg-primary/50 sticky left-0 z-20">
-        <div className="h-14 border-b border-theme-border/30 bg-theme-bg-primary/80 flex items-center justify-center text-[10px] uppercase tracking-wider text-theme-text-muted font-bold">
-          Orario
-        </div>
-        {slots.map((s, i) => (
-          <div
-            key={i}
-            className={`flex items-start justify-center pt-1 text-[10px] tabular-nums ${s.m === 0 ? 'text-theme-text-primary font-semibold' : 'text-theme-text-muted'}`}
-            style={{ height: ROW_HEIGHT_PX }}
-          >
-            {s.label}
-          </div>
-        ))}
-      </div>
-
-      {/* One column per operator */}
-      {operators.map(op => {
-        const opBookings = bookings // until operator_id exists on bookings, all bookings go to every operator (single operator case)
-        return (
-          <div key={op.id} className="w-64 shrink-0 border-r border-theme-border/30 relative">
-            {/* Operator header */}
-            <div className="h-14 border-b border-theme-border/30 bg-theme-bg-primary/80 flex items-center gap-2 px-3 sticky top-0 z-10">
-              <div className="w-8 h-8 rounded-full bg-dr7-gold/20 text-dr7-gold flex items-center justify-center font-bold text-sm">
-                {op.nome.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-theme-text-primary truncate">
-                  {op.nome}{op.cognome ? ` ${op.cognome.charAt(0).toUpperCase()}.` : ''}
-                </div>
-                {op.ruolo && <div className="text-[10px] text-theme-text-muted truncate">{op.ruolo}</div>}
-              </div>
-            </div>
-
-            {/* Slot rows (background) */}
-            <div className="relative">
-              {slots.map((s, i) => (
-                <div
-                  key={i}
-                  className={`border-b ${s.m === 0 ? 'border-theme-border/30' : 'border-theme-border/10'}`}
-                  style={{ height: ROW_HEIGHT_PX }}
-                />
-              ))}
-
-              {/* Booking cards positioned absolute */}
-              {opBookings.map(b => {
-                const d = new Date(b.appointment_date)
-                const bookH = d.getHours()
-                const bookM = d.getMinutes()
-                if (bookH < START_HOUR || bookH >= END_HOUR) return null
-                const minutesFromStart = (bookH - START_HOUR) * 60 + bookM
-                const top = (minutesFromStart / 15) * ROW_HEIGHT_PX
-                const durationMin = getServiceDuration(b.service_name || '', b.booking_details?.vehicle_category, b.booking_details)
-                const height = Math.max(ROW_HEIGHT_PX - 2, (durationMin / 15) * ROW_HEIGHT_PX - 2)
-                const c = colorForBooking(b)
-                const timeLabel = `${String(bookH).padStart(2, '0')}:${String(bookM).padStart(2, '0')}`
-                return (
-                  <button
-                    key={b.id}
-                    onClick={() => onClickBooking(b)}
-                    className={`absolute left-1 right-1 ${c.bg} ${c.text} border-l-4 ${c.border} rounded-lg px-2 py-1 text-left text-[11px] leading-tight overflow-hidden hover:brightness-110 transition`}
-                    style={{ top, height }}
-                  >
-                    <div className="font-bold tabular-nums">{timeLabel}</div>
-                    <div className="truncate font-semibold">{b.customer_name || 'Cliente'}</div>
-                    <div className="truncate opacity-90">{b.service_name || ''}</div>
-                    {b.vehicle_plate && <div className="truncate opacity-75 font-mono text-[10px]">{b.vehicle_plate}</div>}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
     </div>
   )
 }
