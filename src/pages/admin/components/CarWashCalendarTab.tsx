@@ -560,7 +560,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#c9a84a]" /><span className="text-theme-text-primary">Oggi</span></span>
       </div>
 
-      {/* 2. Scrollable Calendar Area */}
+      {/* 2. Main area: calendar grid + (lg only) right sidebar */}
+      <div className="flex-1 flex overflow-hidden">
+
+      {/* 2A. Scrollable Calendar Area */}
       <div className="flex-1 overflow-auto relative flex flex-col w-full bg-theme-bg-primary">
 
         {/* A. Sticky Header Row - Days */}
@@ -828,6 +831,88 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             </div>
           )}
         </div>
+
+      </div>
+
+      {/* 2B. Right sidebar — mini calendar, vertical legend, smart suggestions.
+            No operator data anywhere. Only renders on lg+ so it doesn't crowd
+            mobile/tablet. */}
+      <aside className="hidden lg:flex flex-col w-72 shrink-0 border-l border-theme-border/30 bg-theme-bg-primary/30 p-4 gap-4 overflow-auto">
+        {/* Mini month calendar — click a day to jump to it */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-bold text-theme-text-primary capitalize">
+              {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
+            </h4>
+            <div className="flex gap-1">
+              <button onClick={() => navigateMonth('prev')} className="w-6 h-6 rounded text-xs text-theme-text-muted hover:bg-theme-text-primary/10 hover:text-theme-text-primary">◄</button>
+              <button onClick={() => navigateMonth('next')} className="w-6 h-6 rounded text-xs text-theme-text-muted hover:bg-theme-text-primary/10 hover:text-theme-text-primary">►</button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-0.5 text-[10px] text-theme-text-muted mb-1 text-center">
+            {['L','M','M','G','V','S','D'].map((d, i) => <div key={i} className="font-semibold">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {(() => {
+              const firstDay = new Date(currentRomeComponents.year, currentRomeComponents.month, 1)
+              const startOffset = (firstDay.getDay() + 6) % 7 // Mon=0
+              const cells: React.ReactNode[] = []
+              for (let i = 0; i < startOffset; i++) cells.push(<div key={`b${i}`} className="h-7" />)
+              for (let d = 1; d <= daysInMonth; d++) {
+                const date = new Date(currentRomeComponents.year, currentRomeComponents.month, d)
+                const isTodayMini = d === todayDay
+                const dayBookingsCount = bookings.filter(b => {
+                  if (isRientroBooking(b)) return false
+                  const bd = new Date(b.appointment_date)
+                  return bd.getFullYear() === date.getFullYear() && bd.getMonth() === date.getMonth() && bd.getDate() === d
+                }).length
+                const hasBk = dayBookingsCount > 0
+                cells.push(
+                  <div key={d} className={`h-7 rounded flex flex-col items-center justify-center text-[11px] tabular-nums relative ${
+                    isTodayMini ? 'bg-[#c9a84a] text-white font-bold' :
+                    hasBk ? 'bg-emerald-500/15 text-theme-text-primary' :
+                    'text-theme-text-muted'
+                  }`}>
+                    {d}
+                    {hasBk && !isTodayMini && <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-emerald-400" />}
+                  </div>
+                )
+              }
+              return cells
+            })()}
+          </div>
+        </div>
+
+        {/* Vertical legend */}
+        <div>
+          <h4 className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-2">Legenda</h4>
+          <ul className="space-y-1.5 text-xs">
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-emerald-500" /><span className="text-theme-text-primary">Pagato</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-amber-500" /><span className="text-theme-text-primary">Link Nexi inviato</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-red-700" /><span className="text-theme-text-primary">Da pagare</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-blue-700" /><span className="text-theme-text-primary">Rientro</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm border-2 border-amber-300" /><span className="text-theme-text-primary">Con note</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#c9a84a]" /><span className="text-theme-text-primary">Oggi</span></li>
+          </ul>
+        </div>
+
+        {/* Smart suggestion — heuristic based on today's saturation */}
+        <div className="mt-auto bg-dr7-gold/5 border border-dr7-gold/20 rounded-xl p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span className="text-[11px] font-semibold text-dr7-gold uppercase tracking-wider">Suggerimenti Smart</span>
+          </div>
+          <p className="text-[11px] text-theme-text-secondary leading-relaxed">
+            {kpis.occ < 50
+              ? `Saturazione bassa oggi (${kpis.occ}%). Hai ${kpis.freeSlots} slot liberi — considera una promo last-minute.`
+              : kpis.occ >= 85
+                ? `Saturazione alta (${kpis.occ}%). Valuta di aprire slot extra o ridurre i tempi di servizio.`
+                : `Carico bilanciato (${kpis.occ}%). Nessun intervento necessario.`}
+          </p>
+        </div>
+      </aside>
 
       </div>
 
