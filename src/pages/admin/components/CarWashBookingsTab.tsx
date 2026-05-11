@@ -103,6 +103,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // Lock dedicato per la chiamata createBooking (insert + WhatsApp).
   // Distinto da submitLockRef cosi' protegge anche i replay OTP / force.
   const createBookingLockRef = useRef(false)
+  // Session lock: una volta che l'utente fa partire un Salva con successo
+  // (la booking e' stata salvata in DB), questo flag NON viene piu' rilasciato
+  // finche' l'utente non apre/riapre la form. Cosi' anche se l'utente clicca
+  // dopo molti secondi, il secondo click su Salva non parte. Reset solo
+  // quando setShowForm(true) (apertura nuova form pulita).
+  const formSubmittedRef = useRef(false)
   const [showForm, setShowForm] = useState(false)
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const [editService, setEditService] = useState<CarWashService | null>(null)
@@ -681,6 +687,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         appointment_date: initialData.appointmentDate!,
         appointment_time: initialData.appointmentTime!
       }))
+      formSubmittedRef.current = false
       setShowForm(true)
       if (onDataConsumed) {
         onDataConsumed()
@@ -1332,6 +1339,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       console.error('❌ Supabase insert error:', error)
       throw error
     }
+    // INSERT confermato dal DB: nessun altro Salva su questa form
+    // puo' partire fino alla riapertura. Protegge anche da delay di
+    // WhatsApp/Calendar che fanno scadere il cooldown 3s.
+    formSubmittedRef.current = true
 
     logger.log('✅ Booking created successfully:', data)
     logAdminAction('create_carwash', 'carwash_booking', data.id, {
@@ -1699,7 +1710,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
   async function handleSubmit() {
     // Sync ref guard prima del setSubmitting (state e' async).
-    if (submitLockRef.current || submitting) return
+    if (submitLockRef.current || submitting || formSubmittedRef.current) return
     submitLockRef.current = true
     // flushSync forza React a renderizzare il pulsante come disabled
     // IMMEDIATAMENTE (sync). Senza, React 18 batcha lo state update e
@@ -1977,7 +1988,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             </span>
             <button
               onClick={() => {
-                if (!showForm) resetWizard()
+                if (!showForm) {
+                  resetWizard()
+                  // Apertura fresh: il session lock dev'essere disarmato
+                  // altrimenti il nuovo Salva non parte (residuo della
+                  // sessione precedente).
+                  formSubmittedRef.current = false
+                }
                 setShowForm(!showForm)
               }}
               className="px-4 py-2 bg-dr7-gold hover:bg-[#0A8FA3] text-white font-semibold rounded-full transition-colors text-sm shadow-lg shadow-dr7-gold/20"
@@ -3112,12 +3129,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
                 <button
                   type="button"
-                  disabled={submitting || submitLockRef.current || !formData.customer_id || !formData.appointment_time}
+                  disabled={submitting || submitLockRef.current || formSubmittedRef.current || !formData.customer_id || !formData.appointment_time}
                   onClick={(e) => {
                     // Click guard SINCRONO al livello del DOM: anche se
                     // React non ha ancora propagato disabled=true, il
                     // ref bocca il click prima di chiamare handleSubmit.
-                    if (submitLockRef.current || submitting) {
+                    // Include formSubmittedRef: una volta partito un Salva
+                    // andato a buon fine, non parte piu' nulla finche'
+                    // la form non viene riaperta.
+                    if (submitLockRef.current || submitting || formSubmittedRef.current) {
                       e.preventDefault()
                       e.stopPropagation()
                       return
