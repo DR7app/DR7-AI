@@ -1370,17 +1370,17 @@ export default function VehiclesTab() {
                           />
                         </th>
                       )}
-                      <th className="px-3 py-3 text-left font-semibold">Veicolo</th>
-                      <th className="px-3 py-3 text-left font-semibold">Gruppo</th>
-                      <th className="px-3 py-3 text-left font-semibold">Targa</th>
-                      <th className="px-3 py-3 text-right font-semibold">Km Attuali</th>
-                      <th className="px-3 py-3 text-left font-semibold">Stato</th>
-                      <th className="px-3 py-3 text-left font-semibold">Utilizzo</th>
-                      <th className="px-3 py-3 text-right font-semibold">Fatturato</th>
-                      <th className="px-3 py-3 text-right font-semibold">Giorni Fermo</th>
-                      <th className="px-3 py-3 text-right font-semibold">ROI</th>
-                      <th className="px-3 py-3 text-left font-semibold">Disponibilita\'</th>
-                      <th className="px-3 py-3 text-center font-semibold">Azioni</th>
+                      <th className="px-1.5 py-2 text-left font-semibold">Veicolo</th>
+                      <th className="px-1.5 py-2 text-left font-semibold">Gruppo</th>
+                      <th className="px-1.5 py-2 text-left font-semibold">Targa</th>
+                      <th className="px-1.5 py-2 text-right font-semibold">Km</th>
+                      <th className="px-1.5 py-2 text-left font-semibold">Stato</th>
+                      <th className="px-1.5 py-2 text-left font-semibold">Utilizzo</th>
+                      <th className="px-1.5 py-2 text-right font-semibold">Fatturato</th>
+                      <th className="px-1.5 py-2 text-right font-semibold">G. Fermo</th>
+                      <th className="px-1.5 py-2 text-right font-semibold">ROI</th>
+                      <th className="px-1.5 py-2 text-left font-semibold">Dispon.</th>
+                      <th className="px-1.5 py-2 text-center font-semibold">Az.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1406,60 +1406,60 @@ export default function VehiclesTab() {
                       return (
                         <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary/40 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/15' : ''}`}>
                           {multiSelectMode && (
-                            <td className="px-3 py-2.5">
+                            <td className="px-1.5 py-2">
                               <input type="checkbox" checked={selectedVehicles.has(vehicle.id)} onChange={() => toggleVehicleSelection(vehicle.id)} className="w-4 h-4 rounded border-theme-border-light"/>
                             </td>
                           )}
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-12 h-9 rounded-md bg-theme-bg-tertiary overflow-hidden flex-shrink-0 flex items-center justify-center">
+                          <td className="px-1.5 py-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-10 h-7 rounded-md bg-theme-bg-tertiary overflow-hidden flex-shrink-0 flex items-center justify-center">
                                 {img ? (
                                   <img src={img} alt={vehicle.display_name} className="w-full h-full object-cover"/>
                                 ) : (
-                                  <svg className="w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                  <svg className="w-3.5 h-3.5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1-4a2 2 0 012-1.5h12a2 2 0 012 1.5l1 4M5 17a2 2 0 100-4 2 2 0 000 4zm14 0a2 2 0 100-4 2 2 0 000 4z"/>
                                   </svg>
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
-                                <div className="text-[10px] text-theme-text-muted">
+                                <div className="text-xs font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
+                                <div className="text-[10px] text-theme-text-muted truncate">
                                   {(vehicle.metadata as { cv?: number } | null)?.cv && <span>{(vehicle.metadata as { cv?: number }).cv} CV</span>}
                                   {(vehicle.metadata as { model_year?: number } | null)?.model_year && <span>{(vehicle.metadata as { cv?: number } | null)?.cv ? ' · ' : ''}{(vehicle.metadata as { model_year?: number }).model_year}</span>}
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5">
-                            <span className={`px-2 py-0.5 ${palette.pillBg} ${palette.pillText} rounded text-[10px] font-medium uppercase tracking-wider`}>{sectionLabel}</span>
+                          <td className="px-1.5 py-2">
+                            <span className={`px-1.5 py-0.5 ${palette.pillBg} ${palette.pillText} rounded text-[9px] font-medium uppercase tracking-wider whitespace-nowrap`}>{sectionLabel}</span>
                           </td>
-                          <td className="px-3 py-2.5 text-xs font-mono text-theme-text-primary tabular-nums">{vehicle.plate || '—'}</td>
-                          <td className="px-3 py-2.5 text-xs text-theme-text-primary tabular-nums text-right">{km.toLocaleString('it-IT')} km</td>
-                          <td className="px-3 py-2.5">
-                            <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${st.text}`}>
+                          <td className="px-1.5 py-2 text-[11px] font-mono text-theme-text-primary tabular-nums">{vehicle.plate || '—'}</td>
+                          <td className="px-1.5 py-2 text-[11px] text-theme-text-primary tabular-nums text-right whitespace-nowrap">{km.toLocaleString('it-IT')}</td>
+                          <td className="px-1.5 py-2">
+                            <span className={`inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap ${st.text}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}/>{st.label}
                             </span>
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-2 min-w-[110px]">
-                              <div className="w-16 h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
+                              <div className="w-10 h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
                                 <div className={`h-full ${utilBar}`} style={{ width: `${Math.min(100, utilizzo)}%` }}/>
                               </div>
-                              <span className="text-xs text-theme-text-primary font-semibold tabular-nums">{utilizzo}%</span>
+                              <span className="text-[11px] text-theme-text-primary font-semibold tabular-nums">{utilizzo}%</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 text-sm text-theme-text-primary tabular-nums text-right">€{fatt.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</td>
-                          <td className="px-3 py-2.5 text-sm text-theme-text-primary tabular-nums text-right">{fermi}</td>
-                          <td className="px-3 py-2.5 text-sm tabular-nums text-right">
+                          <td className="px-1.5 py-2 text-xs text-theme-text-primary tabular-nums text-right whitespace-nowrap">€{fatt.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</td>
+                          <td className="px-1.5 py-2 text-xs text-theme-text-primary tabular-nums text-right">{fermi}</td>
+                          <td className="px-1.5 py-2 text-xs tabular-nums text-right whitespace-nowrap">
                             <span className={roi >= 0 ? 'text-emerald-400' : 'text-red-400'}>{roi >= 0 ? '▲' : '▼'} {String(Math.abs(roi)).replace('.', ',')}%</span>
                           </td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap ${dispClass}`}>{dispLabel}</span>
+                          <td className="px-1.5 py-2 whitespace-nowrap">
+                            <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-medium border whitespace-nowrap ${dispClass}`}>{dispLabel}</span>
                           </td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex justify-center gap-1.5">
-                              <button onClick={() => handleEdit(vehicle)} className="px-2.5 py-1 text-[11px] rounded-md bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border border-blue-500/30">Modifica</button>
-                              <button onClick={() => handleDelete(vehicle.id)} className="px-2.5 py-1 text-[11px] rounded-md bg-red-600/15 hover:bg-red-600/25 text-red-400 border border-red-500/30">×</button>
+                          <td className="px-1.5 py-2">
+                            <div className="flex justify-center gap-1">
+                              <button onClick={() => handleEdit(vehicle)} className="px-2 py-0.5 text-[10px] rounded-md bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border border-blue-500/30">Mod.</button>
+                              <button onClick={() => handleDelete(vehicle.id)} className="px-1.5 py-0.5 text-[10px] rounded-md bg-red-600/15 hover:bg-red-600/25 text-red-400 border border-red-500/30">×</button>
                             </div>
                           </td>
                         </tr>
