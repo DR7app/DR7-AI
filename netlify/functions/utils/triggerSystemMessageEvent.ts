@@ -353,18 +353,17 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
         }
     }
 
-    // Residenza in SARDEGNA (non Italia generale) — DR7 e' a Cagliari, le
-    // tariffe e comunicazioni "residente" si applicano solo ai sardi.
-    // Province sarde: CA (Cagliari), SS (Sassari), NU (Nuoro), OR (Oristano),
-    // SU (Sud Sardegna). Codici legacy pre-riforma 2016 ancora in giro:
-    // VS (Medio Campidano), CI (Carbonia-Iglesias), OG (Ogliastra), OT (Olbia-Tempio).
+    // Residenza secondo la definizione canonica DR7:
+    //   resident = provincia di residenza in {CA (Cagliari), SU (Sud Sardegna)}.
+    // Mirror esatto di src/data/sardegnaProvince.ts RESIDENT_PROVINCE_CODES
+    // e di Centralina Pro (tariffe / depositi residente vs non_residente).
+    // Province sarde NON residenti per DR7: SS (Sassari), NU (Nuoro), OR (Oristano).
     if (residency && residency !== 'all') {
-        const sardProvinces = new Set(['CA', 'SS', 'NU', 'OR', 'SU', 'VS', 'CI', 'OG', 'OT'])
+        const RESIDENT_PROVINCE_CODES = new Set(['CA', 'SU'])
         const cProv = String(customer?.provincia_residenza ?? customer?.provincia ?? customer?.province ?? '').toUpperCase().trim()
-        const cCity = String(customer?.citta_residenza ?? customer?.citta ?? customer?.city ?? '').toLowerCase().trim()
-        const isSardResident = sardProvinces.has(cProv) || cCity.includes('sardegna')
-        if (residency === 'resident' && !isSardResident) return false
-        if (residency === 'non_resident' && isSardResident) return false
+        const isDr7Resident = RESIDENT_PROVINCE_CODES.has(cProv)
+        if (residency === 'resident' && !isDr7Resident) return false
+        if (residency === 'non_resident' && isDr7Resident) return false
     }
 
     // Eta' cliente — calcolata da data_nascita (Date di nascita)
