@@ -2474,11 +2474,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-theme-text-muted">Categoria:</span>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                    vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
+                    vehicleCategory === 'moto' ? 'bg-purple-500/20 text-purple-400'
+                      : vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-400'
+                      : 'bg-orange-500/20 text-orange-400'
                   }`}>
-                    {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                    {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                   </span>
-                  {vehicleMakeModel && <span className="text-theme-text-muted text-xs">({vehicleMakeModel})</span>}
+                  {vehicleMakeModel && vehicleCategory !== 'moto' && (
+                    <span className="text-theme-text-muted text-xs">({vehicleMakeModel})</span>
+                  )}
                 </div>
               )}
 
