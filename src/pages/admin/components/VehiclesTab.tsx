@@ -45,6 +45,30 @@ interface Vehicle {
 
 interface ProCategory { id: string; label: string }
 
+// La foto del veicolo puo\' essere salvata in piu\' posti a seconda di chi
+// l'ha caricata (form admin, import precedente, edit dal sito). Provo tutti
+// i campi noti in ordine di probabilita\'. Senza questa funzione i veicoli
+// con foto in `image_url` o `metadata.image_url` apparivano col placeholder.
+function pickVehicleImage(v: Vehicle): string | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const m = (v.metadata as any) || {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const direct = v as any
+  const candidates = [
+    m.image,
+    m.image_url,
+    m.hero_image,
+    m.photo,
+    m.picture,
+    direct.image_url,
+    direct.image,
+  ]
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return c
+  }
+  return undefined
+}
+
 // Palette ciclata definita in utils/categoryPalettes.ts e condivisa con
 // CalendarTab perche\' il tag categoria deve avere gli stessi colori in
 // entrambi i tab.
@@ -63,11 +87,9 @@ export default function VehiclesTab() {
 
   const [plateSearch, setPlateSearch] = useState('')
 
-  // Filtri tabella unificata (sostituisce il layout per categoria del mockup):
-  // gruppo (categoria) / stato veicolo / disponibilita\' (criticita\' utilizzo).
+  // Filtri tabella unificata: gruppo (categoria) + stato veicolo.
   const [groupFilter, setGroupFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [availabilityFilter, setAvailabilityFilter] = useState<string>('all')
 
   // Multi-select state
   const [multiSelectMode, setMultiSelectMode] = useState(false)
@@ -183,16 +205,18 @@ export default function VehiclesTab() {
     const thirtyAgo = new Date(today.getTime() - 30 * 86400000)
     const { data: bookings } = await supabase
       .from('bookings')
-      .select('id, vehicle_id, vehicle_plate, vehicle_name, pickup_date, dropoff_date, price_total, status, payment_status, service_type')
+      .select('id, vehicle_id, plate, vehicle_name, pickup_date, dropoff_date, total_amount, status, payment_status, service_type')
       .gte('pickup_date', thirtyAgo.toISOString())
       .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
       .limit(2000)
     const stats = new Map<string, VehStats>()
     const byId = new Map<string, Vehicle>()
     const byPlate = new Map<string, Vehicle>()
+    const byName = new Map<string, Vehicle>()
     for (const v of vehicles) {
       byId.set(v.id, v)
       if (v.plate) byPlate.set(v.plate.toLowerCase().replace(/\s/g, ''), v)
+      if (v.display_name) byName.set(v.display_name.toLowerCase().trim(), v)
     }
     const occupied = new Map<string, Set<string>>()
     const PAID = new Set(['paid', 'succeeded', 'completed'])
@@ -201,14 +225,18 @@ export default function VehiclesTab() {
       if (b.status === 'cancelled' || b.status === 'annullata') continue
       let vid: string | null = null
       if (b.vehicle_id && byId.has(b.vehicle_id)) vid = b.vehicle_id
-      else if (b.vehicle_plate) {
-        const v = byPlate.get(String(b.vehicle_plate).toLowerCase().replace(/\s/g, ''))
+      else if (b.plate) {
+        const v = byPlate.get(String(b.plate).toLowerCase().replace(/\s/g, ''))
+        if (v) vid = v.id
+      }
+      if (!vid && b.vehicle_name) {
+        const v = byName.get(String(b.vehicle_name).toLowerCase().trim())
         if (v) vid = v.id
       }
       if (!vid) continue
       const cur = stats.get(vid) || { fatturato: 0, giorniNoleggio: 0, giorniFermo: 0, utilizzoPct: 0 }
       if (PAID.has(String(b.payment_status || '').toLowerCase())) {
-        cur.fatturato += Number(b.price_total || 0) / 100
+        cur.fatturato += Number(b.total_amount || 0)
       }
       if (b.pickup_date && b.dropoff_date) {
         const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
@@ -836,7 +864,12 @@ export default function VehiclesTab() {
         >
           <option value="all">Tutti i gruppi</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-          <option value="__orphan__">Senza categoria</option>
+          {/* "Senza categoria" appare solo se ci sono veicoli orfani: i loro
+              category id non esistono piu\' in Centralina Pro. Si calcola
+              al volo, identico a `orphanVehicles` piu\' in basso.            */}
+          {vehicles.some(v => !v.category || !categories.some(c => c.id === v.category)) && (
+            <option value="__orphan__">Senza categoria</option>
+          )}
         </select>
         <select
           value={statusFilter}
@@ -845,19 +878,8 @@ export default function VehiclesTab() {
         >
           <option value="all">Tutti gli stati</option>
           <option value="available">Disponibile</option>
-          <option value="rented">Noleggiato</option>
           <option value="maintenance">Manutenzione</option>
           <option value="unavailable">Non disponibile</option>
-        </select>
-        <select
-          value={availabilityFilter}
-          onChange={(e) => setAvailabilityFilter(e.target.value)}
-          className="bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"
-        >
-          <option value="all">Disponibilità</option>
-          <option value="ok">Utilizzo OK</option>
-          <option value="warning">Sotto target</option>
-          <option value="critical">Critico</option>
         </select>
         <button
           onClick={() => {
@@ -1239,13 +1261,6 @@ export default function VehiclesTab() {
         const flatRows = allFlat.filter(r => {
           if (groupFilter !== 'all' && r.sectionId !== groupFilter) return false
           if (statusFilter !== 'all' && r.vehicle.status !== statusFilter) return false
-          if (availabilityFilter !== 'all') {
-            const s = vehicleStats.get(r.vehicle.id)
-            const u = s?.utilizzoPct ?? 0
-            if (availabilityFilter === 'ok' && u < 60) return false
-            if (availabilityFilter === 'warning' && (u >= 60 || u < 30)) return false
-            if (availabilityFilter === 'critical' && u >= 30) return false
-          }
           return true
         })
 
@@ -1293,7 +1308,7 @@ export default function VehiclesTab() {
                 )}
                 {flatRows.map(({ vehicle, sectionLabel, palette }) => {
                   const stats = vehicleStats.get(vehicle.id)
-                  const img = (vehicle.metadata as { image?: string } | null)?.image
+                  const img = pickVehicleImage(vehicle)
                   const st = stateOf(vehicle)
                   const km = Number((vehicle as Vehicle & { current_km?: number }).current_km) || 0
                   const roi = roiOf(vehicle)
@@ -1376,7 +1391,7 @@ export default function VehiclesTab() {
                       const fermi = stats?.giorniFermo ?? 0
                       const roi = roiOf(vehicle)
                       const km = Number((vehicle as Vehicle & { current_km?: number }).current_km) || 0
-                      const img = (vehicle.metadata as { image?: string } | null)?.image
+                      const img = pickVehicleImage(vehicle)
                       const st = stateOf(vehicle)
                       const dispLabel = vehicle.status === 'available' ? 'Disponibile' : vehicle.status === 'unavailable' ? 'Non disponibile' : vehicle.status === 'rented' ? 'Noleggiato' : vehicle.status === 'maintenance' ? 'Manutenzione' : '—'
                       const dispClass = vehicle.status === 'available' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : vehicle.status === 'rented' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'
