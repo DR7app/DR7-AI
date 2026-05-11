@@ -303,11 +303,19 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
     }
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-lg w-full p-6 max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4" onClick={onClose}>
+            {/* Bottom-sheet on mobile, centered card on sm+. Body scrolls
+                independently so the footer (Chiudi/Salva) stays pinned and
+                always reachable on iOS — same pattern as
+                LimitationOverrideModal. */}
+            <div
+                className="bg-theme-bg-secondary w-full sm:max-w-lg rounded-t-2xl sm:rounded-lg border border-theme-border flex flex-col max-h-full sm:max-h-[90vh] overflow-hidden"
+                onClick={e => e.stopPropagation()}
+            >
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 pt-5 sm:pt-6 pb-3">
                 <div className="flex items-center justify-between mb-1">
                     <h3 className="text-xl font-semibold text-theme-text-primary">I miei orari</h3>
-                    <button onClick={onClose} className="text-theme-text-muted text-2xl leading-none hover:text-theme-text-primary">×</button>
+                    <button onClick={onClose} className="text-theme-text-muted text-2xl leading-none hover:text-theme-text-primary min-w-[44px] min-h-[44px] -mr-2">×</button>
                 </div>
                 <p className="text-xs text-theme-text-muted mb-4">
                     {new Date(dataRef).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -419,7 +427,12 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                     </>
                 )}
 
-                <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-theme-border">
+            </div>
+                {/* Footer pinned — pb tiene conto della safe-area iOS. */}
+                <div
+                    className="flex justify-end gap-2 px-5 sm:px-6 pt-3 border-t border-theme-border bg-theme-bg-secondary flex-shrink-0"
+                    style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+                >
                     <Button variant="secondary" onClick={onClose} disabled={saving}>Chiudi</Button>
                     {me && (
                         <Button onClick={handleSave} disabled={loading || saving}>

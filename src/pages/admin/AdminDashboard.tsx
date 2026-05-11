@@ -364,8 +364,16 @@ export default function AdminDashboard() {
         <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar — max-w-[280px] on mobile to leave space for closing */}
-      <aside className={`fixed inset-y-3 left-3 z-[70] w-[60vw] max-w-[180px] bg-theme-bg-primary flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
+      {/* Sidebar — width tightened on phone, safe-area-aware top/bottom so
+          notch + home indicator don't eat the close button or bottom
+          action row. */}
+      <aside
+        className={`fixed left-3 z-[70] w-[60vw] max-w-[180px] bg-theme-bg-primary flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}
+        style={{
+          top: 'max(0.75rem, env(safe-area-inset-top))',
+          bottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+        }}
+      >
         {/* Logo + Close.
             The logo (2048×632, ratio ≈ 3.24:1) must NEVER be compressed
             horizontally. object-contain + matched max-width/max-height
@@ -506,7 +514,7 @@ export default function AdminDashboard() {
         {/* Top Bar — segue il tema (light = white bg + dark text,
             dark = black bg + light text). Le classi text-white/border-white
             erano hardcoded per dark; ora usano i token tema-aware. */}
-        <header className="bg-theme-bg-primary border-b border-theme-border px-4 sm:px-8 py-4 flex justify-between items-center">
+        <header className="bg-theme-bg-primary border-b border-theme-border px-3 sm:px-8 py-3 sm:py-4 flex flex-wrap justify-between items-center gap-y-2 gap-x-3 sticky top-0 z-30" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -653,7 +661,7 @@ export default function AdminDashboard() {
             active section. Renders only if the section has more than one
             sub-tab so single-tab sections don't get a one-button bar. */}
         {sectionForActiveTab && sectionForActiveTab.tabs.filter(t => hasPermission(t.tab) && (!t.superadminOnly || adminRole === 'superadmin')).length > 1 && (
-          <div className="bg-theme-bg-primary border-b border-theme-border overflow-x-auto scrollbar-thin">
+          <div className="bg-theme-bg-primary border-b border-theme-border overflow-x-auto scrollbar-thin sticky top-[60px] z-20">
             <div className="flex items-center gap-1 px-3 sm:px-6 lg:px-8">
               {sectionForActiveTab.tabs
                 .filter(t => hasPermission(t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))

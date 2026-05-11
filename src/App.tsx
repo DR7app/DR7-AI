@@ -24,6 +24,12 @@ function App() {
       <BrowserRouter>
         <Toaster
           position="top-right"
+          // Push toasts below the iOS notch / status bar — without this
+          // safe-area offset they overlap the notch on iPhone 14+.
+          containerStyle={{
+            top: 'max(0.5rem, env(safe-area-inset-top))',
+            right: 'max(0.5rem, env(safe-area-inset-right))',
+          }}
           toastOptions={{
             duration: 3000,
             style: {
@@ -31,6 +37,7 @@ function App() {
               color: '#fff',
               border: '1px solid rgba(255,255,255,0.1)',
               borderRadius: '12px',
+              maxWidth: 'calc(100vw - 1rem)',
             },
             success: {
               iconTheme: { primary: '#19C2D6', secondary: '#1a2332' },
