@@ -89,26 +89,21 @@ export const handler: Handler = async (event) => {
         booking_details?: { danni?: DanniItem[]; penali?: PenaliItem[] } | null
     }
 
-    // bookings non ha una colonna CF: il legame al cliente passa da
-    // user_id / customer_id verso customers_extended. Risolviamo prima
-    // gli id da customers_extended (per user_id o per riga PK), poi
-    // tiriamo le bookings di quegli id. Fallback finale su
-    // booking_details (CF salvato nel JSON quando il cliente non era
-    // ancora autenticato).
+    // bookings non ha una colonna CF: l'unica colonna di linkage e\'
+    // user_id, che lega all'auth user e a customers_extended.user_id.
+    // Risolviamo prima gli user_id corrispondenti al CF e poi tiriamo
+    // le loro bookings. Fallback finale su booking_details (CF salvato
+    // nel JSON quando il cliente non era ancora autenticato).
     const { data: profileMatches } = await sb
         .from('customers_extended')
-        .select('id, user_id')
+        .select('user_id')
         .eq('codice_fiscale', cf)
     const matchedUserIds = Array.from(new Set(
         (profileMatches || []).map(p => p.user_id).filter(Boolean) as string[]
     ))
-    const matchedCustomerIds = Array.from(new Set(
-        (profileMatches || []).map(p => p.id).filter(Boolean) as string[]
-    ))
 
     type RawBooking = DR7Booking & {
         user_id?: string | null
-        customer_id?: string | null
         booking_details?: (DR7Booking['booking_details'] & {
             codice_fiscale?: string
             codiceFiscale?: string
@@ -120,29 +115,19 @@ export const handler: Handler = async (event) => {
     if (matchedUserIds.length > 0) {
         const { data } = await sb
             .from('bookings')
-            .select('id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id, customer_id')
+            .select('id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id')
             .in('user_id', matchedUserIds)
             .order('pickup_date', { ascending: false })
             .limit(50)
         for (const b of (data || []) as RawBooking[]) collected.set(b.id, b)
     }
-    if (matchedCustomerIds.length > 0) {
-        const { data } = await sb
-            .from('bookings')
-            .select('id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id, customer_id')
-            .in('customer_id', matchedCustomerIds)
-            .order('pickup_date', { ascending: false })
-            .limit(50)
-        for (const b of (data || []) as RawBooking[]) collected.set(b.id, b)
-    }
-    // Ultimo fallback: bookings dove il CF e\' annidato in booking_details
-    // (records senza user_id risolto). Filtro lato JS perche\' .contains su
-    // shapes annidate e\' fragile, ma teniamo il limite per non leggere
-    // milioni di righe.
+    // Fallback: bookings dove il CF e\' annidato in booking_details
+    // (records senza user_id risolto). Filtro lato JS, limite a 500
+    // righe per non leggere milioni di record.
     if (collected.size === 0) {
         const { data } = await sb
             .from('bookings')
-            .select('id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id, customer_id')
+            .select('id, pickup_date, appointment_date, vehicle_name, vehicle_plate, status, payment_status, booking_details, user_id')
             .not('booking_details', 'is', null)
             .order('pickup_date', { ascending: false })
             .limit(500)

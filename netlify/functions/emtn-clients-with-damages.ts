@@ -37,7 +37,6 @@ interface BookingRow {
     pickup_date: string | null
     appointment_date: string | null
     user_id: string | null
-    customer_id: string | null
     customer_name: string | null
     customer_email: string | null
     customer_phone: string | null
@@ -106,11 +105,11 @@ export const handler: Handler = async (event) => {
     const sb = getServiceSupabase()
 
     // Step 1 — pull bookings con booking_details non null (lato JS poi
-    // filtriamo per danni/penali non vuoti). Senza CF column dobbiamo
-    // portarci dietro user_id + customer_id per risolverlo dopo.
+    // filtriamo per danni/penali non vuoti). L'unica colonna che lega
+    // bookings al cliente e\' user_id; il CF vive su customers_extended.
     const { data, error } = await sb
         .from('bookings')
-        .select('id, pickup_date, appointment_date, user_id, customer_id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, booking_details')
+        .select('id, pickup_date, appointment_date, user_id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, booking_details')
         .not('booking_details', 'is', null)
         .order('pickup_date', { ascending: false })
         .limit(2000)
@@ -124,13 +123,10 @@ export const handler: Handler = async (event) => {
         return d.length > 0 || p.length > 0
     })
 
-    // Step 2 — raccogli user_id e customer_id distinti per fare il
-    // lookup batch su customers_extended e ricavare il CF.
+    // Step 2 — batch fetch dei profili customers_extended via user_id
+    // per risolvere il CF.
     const userIds = Array.from(new Set(interesting.map(b => b.user_id).filter(Boolean) as string[]))
-    const customerIds = Array.from(new Set(interesting.map(b => b.customer_id).filter(Boolean) as string[]))
-
     const cfByUserId = new Map<string, CustomerProfile>()
-    const cfByCustomerId = new Map<string, CustomerProfile>()
 
     if (userIds.length > 0) {
         const { data: profsByUid } = await sb
@@ -141,30 +137,16 @@ export const handler: Handler = async (event) => {
             if (p.user_id) cfByUserId.set(p.user_id, p)
         }
     }
-    if (customerIds.length > 0) {
-        // Fallback: bookings.customer_id puo\' puntare a customers_extended.id
-        // (legacy admin-imported rows). Risolviamo anche quei casi.
-        const { data: profsByCid } = await sb
-            .from('customers_extended')
-            .select('id, user_id, codice_fiscale, nome, cognome')
-            .in('id', customerIds)
-        for (const p of (profsByCid || []) as CustomerProfile[]) {
-            cfByCustomerId.set(p.id, p)
-        }
-    }
 
     const byCf = new Map<string, Aggregated>()
 
     for (const b of interesting) {
         // Risoluzione CF, in ordine di affidabilita\':
         //  1. customers_extended.codice_fiscale via user_id
-        //  2. customers_extended.codice_fiscale via customer_id (legacy)
-        //  3. booking_details.codice_fiscale / codiceFiscale (inserito a mano)
-        //  4. booking_details.customer.codice_fiscale
-        const profile =
-            (b.user_id && cfByUserId.get(b.user_id)) ||
-            (b.customer_id && cfByCustomerId.get(b.customer_id)) ||
-            null
+        //  2. booking_details.codice_fiscale / codiceFiscale (inserito a mano
+        //     da admin prima che il cliente avesse un account)
+        //  3. booking_details.customer.codice_fiscale
+        const profile = (b.user_id && cfByUserId.get(b.user_id)) || null
         const cf =
             normCF(profile?.codice_fiscale) ||
             normCF(b.booking_details?.codice_fiscale) ||
