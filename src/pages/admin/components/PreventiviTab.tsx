@@ -1171,37 +1171,52 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const otpDetails = useMemo<Array<{ label: string; value: string }>>(() => {
     const cust = customers.find((c: any) => c.id === selectedCustomerId)
     const fmtDate = (d: string, t: string) => {
-      if (!d) return '—'
+      if (!d) return ''
       const [y, mo, da] = d.split('-')
       return y && mo && da ? `${da}/${mo}/${y} ${t || ''}`.trim() : `${d} ${t || ''}`.trim()
     }
-    const tierLabel = form.driver_tier === 'TIER_1' ? 'Fascia B' : form.driver_tier === 'TIER_2' ? 'Fascia A' : (form.driver_tier || '—')
-    const rows: Array<{ label: string; value: string }> = [
-      { label: 'Operazione', value: editingId ? 'Modifica preventivo' : 'Nuovo preventivo' },
-      { label: 'Cliente', value: cust?.full_name || '—' },
-      { label: 'Telefono', value: cust?.phone || '—' },
-      { label: 'Veicolo', value: selectedVehicle ? `${selectedVehicle.display_name}${selectedVehicle.plate ? ` (${selectedVehicle.plate})` : ''}` : '—' },
-      { label: 'Ritiro', value: fmtDate(form.pickup_date, form.pickup_time) },
-      { label: 'Riconsegna', value: fmtDate(form.return_date, form.return_time) },
-      { label: 'Giorni', value: String(rentalDays || 0) },
-      { label: 'Fascia', value: tierLabel },
-      { label: 'Residente Sardegna', value: form.residente_sardegna ? 'Sì' : 'No' },
-      { label: 'No Cauzione', value: form.include_no_cauzione ? 'Sì' : 'No' },
-      { label: 'Totale', value: formatEur(pricing.totalFinal) },
-    ]
-    if (editingId) rows.splice(1, 0, { label: 'Preventivo', value: String(editingId).slice(0, 8) })
-    // Quando ci sono motivazioni multiple le elenchiamo come righe
-    // numerate nella tabella dell'email — la direzione vede subito ogni
-    // motivo reale per cui l'OTP è stato richiesto.
-    if (combinedOtpMotivazioni.length > 1) {
-      combinedOtpMotivazioni.forEach((m, i) => {
-        rows.push({ label: `Motivo ${i + 1}`, value: m })
-      })
-    } else if (combinedOtpMotivazioni.length === 1) {
-      rows.push({ label: 'Motivo', value: combinedOtpMotivazioni[0] })
+    const tierLabel = form.driver_tier === 'TIER_1' ? 'Fascia B' : form.driver_tier === 'TIER_2' ? 'Fascia A' : ''
+    const clienteValue = cust?.full_name || ''
+
+    // Costruiamo righe solo con valore non vuoto — labels in italiano.
+    const push = (label: string, value: string | number | null | undefined) => {
+      if (value == null) return
+      const s = String(value).trim()
+      if (!s) return
+      rows.push({ label, value: s })
     }
+    const rows: Array<{ label: string; value: string }> = []
+    push('Operazione', editingId ? 'Modifica preventivo' : 'Nuovo preventivo')
+    if (editingId) push('Preventivo', String(editingId).slice(0, 8))
+    push('Cliente', clienteValue)
+    push('Telefono', cust?.phone)
+    push('Veicolo', selectedVehicle ? `${selectedVehicle.display_name}${selectedVehicle.plate ? ` (${selectedVehicle.plate})` : ''}` : '')
+    push('Ritiro', fmtDate(form.pickup_date, form.pickup_time))
+    push('Riconsegna', fmtDate(form.return_date, form.return_time))
+    push('Giorni', rentalDays > 0 ? rentalDays : null)
+
+    // Fascia cliente — solo se il gate No Cauzione e' tra quelli scattati.
+    if (combinedOtpTripped.includes('no_cauzione')) {
+      push('Fascia cliente', tierLabel)
+      push('Residente Sardegna', form.residente_sardegna ? 'Sì' : 'No')
+      push('No Cauzione', form.include_no_cauzione ? 'Sì' : 'No')
+    }
+
+    // Importo preventivo se calcolato.
+    if (pricing.totalFinal > 0) push('Importo preventivo', formatEur(pricing.totalFinal))
+
+    // Motivazioni esplicite, una riga per gate scattato. Il valore include
+    // il dettaglio reale (slot in conflitto, finestra fuori orario, ecc.)
+    // così la direzione vede ESATTAMENTE cosa sta autorizzando.
+    combinedOtpTripped.forEach((code, i) => {
+      const msg = combinedOtpMotivazioni[i] || ''
+      if (code === 'out_of_hours') push('Motivo orario', msg)
+      else if (code === 'slot') push('Motivo slot', msg)
+      else if (code === 'no_cauzione') push('Motivo cauzione', msg)
+    })
+
     return rows
-  }, [customers, selectedCustomerId, selectedVehicle, form, editingId, rentalDays, pricing.totalFinal, combinedOtpMotivazioni])
+  }, [customers, selectedCustomerId, selectedVehicle, form, editingId, rentalDays, pricing.totalFinal, combinedOtpMotivazioni, combinedOtpTripped])
 
   // ─── Resume Save after OTP approval ─────────────────────────────────────
   // When an OTP gate trips during Salva, pendingSaveRef is set and the

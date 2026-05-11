@@ -548,6 +548,106 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // email to direzione + saved on the limitation_overrides record.
   const [overrideDetails, setOverrideDetails] = useState<Array<{ label: string; value: string }> | undefined>(undefined)
 
+  // Helper: costruisce le righe "Dettaglio richiesta" che finiscono nella
+  // mail OTP a direzione. Legge lo stato corrente (formData, customers,
+  // vehicles, customerTier, modalita' nuovo cliente) e produce solo i
+  // campi con valore. Le righe `extras` vengono accodate cosi' i singoli
+  // gate possono aggiungere contesto specifico (es. "Slot non disponibile",
+  // "Patente scaduta il ...").
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  function buildOverrideDetailsBase(extras: Array<{ label: string; value: string }> = []): Array<{ label: string; value: string }> {
+    const rows: Array<{ label: string; value: string }> = []
+    const push = (label: string, value: string | number | null | undefined) => {
+      if (value === null || value === undefined) return
+      const s = String(value).trim()
+      if (!s || s === '—') return
+      rows.push({ label, value: s })
+    }
+    const eur = (n: unknown) => {
+      const num = typeof n === 'number' ? n : parseFloat(String(n ?? 0))
+      return Number.isFinite(num) && num > 0
+        ? `€${num.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : ''
+    }
+    const fmtDate = (d: string, t: string) => {
+      if (!d) return ''
+      const [y, mo, da] = d.split('-')
+      return y && mo && da ? `${da}/${mo}/${y}${t ? ` ${t}` : ''}` : `${d}${t ? ` ${t}` : ''}`
+    }
+    // Operazione
+    push('Operazione', editingId ? 'Modifica prenotazione' : 'Nuova prenotazione')
+    if (editingId) push('ID prenotazione', editingId.slice(0, 8))
+    // Cliente
+    const cust = customers.find(c => c.id === formData.customer_id)
+    const newFullName = `${newCustomerData?.nome || ''} ${newCustomerData?.cognome || ''}`.trim()
+    const customerName = newCustomerMode
+      ? (newFullName || newCustomerData?.denominazione || '')
+      : (cust?.full_name || '')
+    const customerEmail = newCustomerMode ? (newCustomerData?.email || '') : (cust?.email || '')
+    const customerPhone = newCustomerMode ? (newCustomerData?.telefono || '') : (cust?.phone || '')
+    push('Cliente', customerName)
+    push('Email cliente', customerEmail)
+    push('Telefono cliente', customerPhone)
+    // Veicolo + targa
+    const veh = vehicles.find(v => v.id === formData.vehicle_id)
+    if (veh) {
+      push('Veicolo', `${veh.display_name}${veh.plate ? ` (${veh.plate})` : ''}`)
+    }
+    // Date ritiro/riconsegna + giorni
+    const pickupStr = fmtDate(formData.pickup_date, formData.pickup_time)
+    const dropoffStr = fmtDate(formData.return_date, formData.return_time)
+    push('Ritiro', pickupStr)
+    push('Riconsegna', dropoffStr)
+    if (formData.pickup_date && formData.pickup_time && formData.return_date && formData.return_time) {
+      const p = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
+      const r = new Date(`${formData.return_date}T${formData.return_time}:00`)
+      if (!isNaN(p.getTime()) && !isNaN(r.getTime()) && r > p) {
+        const diffH = (r.getTime() - p.getTime()) / (1000 * 60 * 60)
+        const days = Math.ceil(diffH / 24)
+        push('Giorni noleggio', String(days))
+      }
+    }
+    // Luogo ritiro
+    push('Luogo ritiro', formData.pickup_location || '')
+    // Importi
+    const totEur = eur(formData.total_amount)
+    if (totEur) push('Importo totale', totEur)
+    if (formData.deposit_status === 'no_cauzione') {
+      push('Cauzione', 'No Cauzione')
+    } else {
+      const depEur = eur(formData.deposit)
+      if (depEur) push('Cauzione richiesta', depEur)
+    }
+    push('Pagamento', formData.payment_method || '')
+    push('Stato pagamento', formData.payment_status || '')
+    // Kasko/Assicurazione
+    push('Assicurazione', formData.insurance_option || '')
+    // Fascia cliente (se classificata)
+    if (customerTier) {
+      const fasciaLabel = customerTier.tier === 'TIER_2' ? 'A'
+        : customerTier.tier === 'TIER_1' ? 'B'
+        : 'Bloccata'
+      const ageLic = customerTier.reason ? ` — ${customerTier.reason}` : ''
+      push('Fascia cliente', `${fasciaLabel}${ageLic}`)
+    }
+    // Patente (se presente sul cliente selezionato)
+    if (cust) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c = cust as any
+      const patNum = c.patente || c.numero_patente || c.metadata?.patente?.numero
+      const patScad = c.scadenza_patente || c.data_scadenza_patente || c.metadata?.patente?.scadenza
+      if (patNum) {
+        const scadStr = patScad ? ` (scadenza ${new Date(patScad).toLocaleDateString('it-IT')})` : ''
+        push('Patente', `${patNum}${scadStr}`)
+      }
+    }
+    // Append extras
+    for (const e of extras) {
+      if (e && e.label && e.value) rows.push(e)
+    }
+    return rows
+  }
+
   // Resume submission once a paused-save override is approved. Gates that
   // remember their pending-save state via pendingSubmitRef are
   // `paid_rental_modify` (booking edit guard) and `out_of_office_hours`
@@ -1213,6 +1313,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const year = parseInt(data.year)
       if (isNaN(year) || year < 2020) {
         if (!hasOverride('vehicle_year_too_old')) {
+          setOverrideDetails(buildOverrideDetailsBase([
+            { label: 'Motivo richiesta', value: 'Veicolo cauzione immatricolato prima del 2020' },
+            { label: 'Targa cauzione', value: formData.cauzione_targa },
+            { label: 'Veicolo cauzione', value: `${data.brand || ''} ${data.model || ''}`.trim() || '—' },
+            { label: 'Anno immatricolazione', value: String(data.year || '?') },
+          ]))
           requestOverride('vehicle_year_too_old', `Veicolo immatricolato nel ${data.year || '?'}: deve essere dal 2020 in poi per la cauzione.`)
           setTargaLoading(false)
           return
@@ -2148,6 +2254,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (scadenzaPatente) {
         const expDate = new Date(scadenzaPatente)
         if (expDate < new Date() && !hasOverride('license_expired')) {
+          const patNum = customer.patente || customer.numero_patente || customer.metadata?.patente?.numero || '—'
+          setOverrideDetails(buildOverrideDetailsBase([
+            { label: 'Motivo richiesta', value: 'Patente scaduta' },
+            { label: 'Numero patente', value: String(patNum) },
+            { label: 'Scadenza patente', value: expDate.toLocaleDateString('it-IT') },
+          ]))
           requestOverride('license_expired', `Patente scaduta il ${expDate.toLocaleDateString('it-IT')}. Il cliente non può noleggiare con patente scaduta.`)
           return ['__limitation_override_requested__']
         }
@@ -2158,6 +2270,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (patenteDate) {
         const licYears = calculateLicenseYears(patenteDate)
         if (licYears < 3 && !hasOverride('license_too_recent')) {
+          const patNum = customer.patente || customer.numero_patente || customer.metadata?.patente?.numero || '—'
+          setOverrideDetails(buildOverrideDetailsBase([
+            { label: 'Motivo richiesta', value: 'Patente rilasciata da meno di 3 anni' },
+            { label: 'Numero patente', value: String(patNum) },
+            { label: 'Data rilascio patente', value: new Date(patenteDate).toLocaleDateString('it-IT') },
+            { label: 'Anni patente', value: `${licYears} anni` },
+          ]))
           requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
           return ['__limitation_override_requested__']
         }
@@ -2169,14 +2288,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const licYears = calculateLicenseYears(patenteDate)
         const tier = classifyDriverTier(age, licYears)
         if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+          setOverrideDetails(buildOverrideDetailsBase([
+            { label: 'Motivo richiesta', value: `Cliente non idoneo al noleggio: ${tier.reason}` },
+            { label: 'Eta cliente', value: `${age} anni` },
+            { label: 'Anni patente', value: `${licYears} anni` },
+          ]))
           requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
           return ['__limitation_override_requested__']
         }
         if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
+          setOverrideDetails(buildOverrideDetailsBase([
+            { label: 'Motivo richiesta', value: 'No Cauzione richiesta per cliente Fascia B' },
+            { label: 'Eta cliente', value: `${age} anni` },
+            { label: 'Anni patente', value: `${licYears} anni` },
+          ]))
           requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
           return ['__limitation_override_requested__']
         }
         if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
+          setOverrideDetails(buildOverrideDetailsBase([
+            { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
+          ]))
           requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
           return ['__limitation_override_requested__']
         }
@@ -3699,16 +3831,25 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // Note: data_rilascio_patente not collected in new customer form,
           // so license_too_recent check runs after customer is saved to DB (existing customer path on retry)
           if (newCustomerData.data_nascita && customerTier?.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+            setOverrideDetails(buildOverrideDetailsBase([
+              { label: 'Motivo richiesta', value: `Cliente non idoneo al noleggio: ${customerTier.reason || 'fascia bloccata'}` },
+            ]))
             requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${customerTier.reason}`)
             submitLockRef.current = false
             return
           }
           if (customerTier?.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
+            setOverrideDetails(buildOverrideDetailsBase([
+              { label: 'Motivo richiesta', value: 'No Cauzione richiesta per cliente Fascia B' },
+            ]))
             requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
             submitLockRef.current = false
             return
           }
           if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
+            setOverrideDetails(buildOverrideDetailsBase([
+              { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
+            ]))
             requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
             submitLockRef.current = false
             return
@@ -3864,6 +4005,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (patenteDate) {
               const licYears = calculateLicenseYears(patenteDate)
               if (licYears < 3 && !hasOverride('license_too_recent')) {
+                const patNum = customer.patente || customer.numero_patente || customer.metadata?.patente?.numero || '—'
+                setOverrideDetails(buildOverrideDetailsBase([
+                  { label: 'Motivo richiesta', value: 'Patente rilasciata da meno di 3 anni' },
+                  { label: 'Numero patente', value: String(patNum) },
+                  { label: 'Data rilascio patente', value: new Date(patenteDate).toLocaleDateString('it-IT') },
+                  { label: 'Anni patente', value: `${licYears} anni` },
+                ]))
                 requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
                 submitLockRef.current = false
                 return
@@ -3874,17 +4022,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const licYears = calculateLicenseYears(patenteDate)
               const tier = classifyDriverTier(age, licYears)
               if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+                setOverrideDetails(buildOverrideDetailsBase([
+                  { label: 'Motivo richiesta', value: `Cliente non idoneo al noleggio: ${tier.reason}` },
+                  { label: 'Eta cliente', value: `${age} anni` },
+                  { label: 'Anni patente', value: `${licYears} anni` },
+                ]))
                 requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
                 submitLockRef.current = false
                 return
               }
               if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
+                setOverrideDetails(buildOverrideDetailsBase([
+                  { label: 'Motivo richiesta', value: 'No Cauzione richiesta per cliente Fascia B' },
+                  { label: 'Eta cliente', value: `${age} anni` },
+                  { label: 'Anni patente', value: `${licYears} anni` },
+                ]))
                 requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
                 submitLockRef.current = false
                 return
               }
             }
             if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
+              setOverrideDetails(buildOverrideDetailsBase([
+                { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
+              ]))
               requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
               submitLockRef.current = false
               return
@@ -4039,6 +4200,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const nowRome = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }))
         const pickupCheck = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
         if (pickupCheck < nowRome && !hasOverride('pickup_in_past')) {
+          setOverrideDetails(buildOverrideDetailsBase([
+            { label: 'Motivo richiesta', value: 'Data e ora di ritiro nel passato' },
+            { label: 'Ora attuale (Roma)', value: nowRome.toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) },
+          ]))
           requestOverride('pickup_in_past', 'La data e ora di ritiro è nel passato. Serve autorizzazione per procedere.')
           setIsSubmitting(false)
           submitLockRef.current = false
@@ -4175,6 +4340,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           )
 
           if (!availabilityResult.available && !hasOverride('slot_unavailable')) {
+            setOverrideDetails(buildOverrideDetailsBase([
+              { label: 'Motivo richiesta', value: 'Slot non disponibile / conflitto disponibilita' },
+              { label: 'Dettaglio conflitto', value: availabilityResult.reason || 'Slot non disponibile' },
+            ]))
             requestOverride('slot_unavailable', availabilityResult.reason || 'Slot non disponibile')
             setIsSubmitting(false)
             submitLockRef.current = false
@@ -4601,6 +4770,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // OTP della direzione. useLimitationOverride bypassa server-side se
       // il toggle e' OFF, quindi quando off questa chiamata non blocca nulla.
       if (confirmBooking && !hasOverride('prenotazione_noleggio_conferma')) {
+        setOverrideDetails(buildOverrideDetailsBase([
+          { label: 'Motivo richiesta', value: 'Conferma prenotazione noleggio richiede autorizzazione direzionale' },
+        ]))
         requestOverride('prenotazione_noleggio_conferma', 'Conferma prenotazione noleggio richiede autorizzazione direzionale')
         setIsSubmitting(false)
         submitLockRef.current = false
@@ -5995,14 +6167,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           draftSessionId={draftSessionId}
           flowType={flowType}
           details={
-            ([
-              'paid_rental_modify',
-              'out_of_office_hours',
-              'tier1_no_cauzione',
-              'no_cauzione_rca_only',
-              'driver_blocked',
-            ].includes(limitationState.limitationCode))
-              ? overrideDetails
+            // Mostriamo i dettagli per OGNI gate OTP cosi' la direzione
+            // vede sempre cliente / veicolo / date / importi nella mail.
+            // Se il flusso ha gia' settato overrideDetails (combo Salva,
+            // gate driver, gate slot) usiamo quelli; altrimenti
+            // costruiamo al volo le righe base dallo stato corrente.
+            limitationState.isOpen
+              ? (overrideDetails && overrideDetails.length > 0
+                  ? overrideDetails
+                  : buildOverrideDetailsBase([
+                      { label: 'Motivo richiesta', value: limitationState.limitationMessage || '' },
+                    ]))
               : undefined
           }
           showNotes={[
@@ -6244,9 +6419,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                             // IMMEDIATE checks — OTP required before proceeding
                             if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+                              setOverrideDetails(buildOverrideDetailsBase([
+                                { label: 'Motivo richiesta', value: `Cliente non idoneo al noleggio: ${tier.reason}` },
+                                { label: 'Eta cliente', value: `${age} anni` },
+                                { label: 'Anni patente', value: `${licYears} anni` },
+                              ]))
                               requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason} (Età: ${age} anni — Patente: ${licYears} anni)`)
                             }
                             if (licYears < 3 && !hasOverride('license_too_recent')) {
+                              const patNum = cust?.patente || cust?.numero_patente || cust?.metadata?.patente?.numero || '—'
+                              setOverrideDetails(buildOverrideDetailsBase([
+                                { label: 'Motivo richiesta', value: 'Patente rilasciata da meno di 3 anni' },
+                                { label: 'Numero patente', value: String(patNum) },
+                                { label: 'Anni patente', value: `${licYears} anni` },
+                                { label: 'Data rilascio patente', value: new Date(patenteDate).toLocaleDateString('it-IT') },
+                              ]))
                               requestOverride('license_too_recent', `Patente rilasciata da meno di 3 anni (${licYears} anni). Il cliente non può noleggiare.`)
                             }
 
@@ -6255,6 +6442,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             if (scadenzaP) {
                               const expDate = new Date(scadenzaP)
                               if (expDate < new Date() && !hasOverride('license_expired')) {
+                                const patNum = cust?.patente || cust?.numero_patente || cust?.metadata?.patente?.numero || '—'
+                                setOverrideDetails(buildOverrideDetailsBase([
+                                  { label: 'Motivo richiesta', value: 'Patente scaduta' },
+                                  { label: 'Numero patente', value: String(patNum) },
+                                  { label: 'Scadenza patente', value: expDate.toLocaleDateString('it-IT') },
+                                ]))
                                 requestOverride('license_expired', `Patente scaduta il ${expDate.toLocaleDateString('it-IT')}. Il cliente non può noleggiare con patente scaduta.`)
                               }
                             }
@@ -6278,6 +6471,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             // Only license date available — still check minimum
                             const licYears = calculateLicenseYears(patenteDate)
                             if (licYears < 3 && !hasOverride('license_too_recent')) {
+                              const patNum = cust?.patente || cust?.numero_patente || cust?.metadata?.patente?.numero || '—'
+                              setOverrideDetails(buildOverrideDetailsBase([
+                                { label: 'Motivo richiesta', value: 'Patente rilasciata da meno di 3 anni' },
+                                { label: 'Numero patente', value: String(patNum) },
+                                { label: 'Anni patente', value: `${licYears} anni` },
+                                { label: 'Data rilascio patente', value: new Date(patenteDate).toLocaleDateString('it-IT') },
+                              ]))
                               requestOverride('license_too_recent', `Patente rilasciata da meno di 3 anni (${licYears} anni). Il cliente non può noleggiare.`)
                             }
                           }

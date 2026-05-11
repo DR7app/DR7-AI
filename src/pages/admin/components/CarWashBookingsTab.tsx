@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
@@ -1671,7 +1671,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setShowForm(false)
     resetWizard()
     loadData()
-    createBookingLockRef.current = false
+    // Mantieni il lock attivo per 3 secondi DOPO il successo: copre la
+    // finestra tra setShowForm(false) (state async) e il re-render del
+    // DOM senza la form. Senza questo delay un click rapido sul pulsante
+    // ancora visibile creava una seconda prenotazione.
+    setTimeout(() => { createBookingLockRef.current = false }, 3000)
   }
 
   // Helper function to check if two time ranges overlap
@@ -1855,13 +1859,79 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         toast.error(`Errore nella creazione della prenotazione: ${errorMessage}`)
       }
     } finally {
-      setSubmitting(false)
-      submitLockRef.current = false
-      // Safety: anche se createBooking ha rilasciato il lock al successo,
-      // se ha throwato prima rimaneva acquired. Garantiamo il rilascio.
-      createBookingLockRef.current = false
+      // Cooldown 3s: copre la finestra tra setShowForm(false) (state
+      // async, non immediato) e il re-render senza la form. Un secondo
+      // click su un pulsante ancora visibile creava un'altra prenotazione.
+      setTimeout(() => {
+        setSubmitting(false)
+        submitLockRef.current = false
+        createBookingLockRef.current = false
+      }, 3000)
     }
   }
+
+  // Snapshot inviato alla direzione con la richiesta OTP: la modal mostra
+  // direttamente cliente/servizio/veicolo/data/totale così l'operatore vede
+  // ESATTAMENTE cosa sta autorizzando senza dover aprire l'email.
+  const otpDetails = useMemo<Record<string, string | null | undefined>>(() => {
+    const code = override.limitationState.limitationCode
+    const fmtDateIt = (d: string) => {
+      if (!d) return null
+      const [y, mo, da] = d.split('-')
+      return y && mo && da ? `${da}/${mo}/${y}` : d
+    }
+    const fmtEur = (n: number) => `€ ${n.toFixed(2)}`
+
+    // Modifica di una prenotazione gia' esistente (paid/confirmed) — usiamo
+    // i dati della prenotazione in editing.
+    if (code === 'paid_wash_modify' && pendingEditBookingRef.current) {
+      const b = pendingEditBookingRef.current
+      return {
+        Operazione: 'Modifica prenotazione lavaggio',
+        Cliente: b.customer_name || null,
+        Email: b.customer_email || null,
+        Telefono: b.customer_phone || null,
+        Servizio: b.service_name || null,
+        Veicolo: b.vehicle_name || null,
+        'Data appuntamento': fmtDateIt(b.appointment_date || ''),
+        Ora: b.appointment_time || null,
+        'Importo totale': typeof b.price_total === 'number' ? fmtEur(b.price_total / 100) : null,
+      }
+    }
+
+    // Nuova prenotazione — gate `prenotazione_lavaggio_conferma`. Usiamo lo
+    // stato corrente del wizard (cliente selezionato + servizio + veicolo +
+    // data/ora + totale).
+    const cust = customers.find(c => c.id === formData.customer_id)
+    const serviceLabel = buildServiceNames()
+    return {
+      Operazione: editingBooking ? 'Modifica prenotazione lavaggio' : 'Nuova prenotazione lavaggio',
+      Cliente: cust?.full_name || null,
+      Email: cust?.email || null,
+      Telefono: cust?.phone || null,
+      Servizio: serviceLabel || null,
+      Veicolo: vehicleMakeModel || null,
+      'Data appuntamento': fmtDateIt(formData.appointment_date),
+      Ora: formData.appointment_time || null,
+      'Importo totale': getFinalPrice() > 0 ? fmtEur(getFinalPrice()) : null,
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    override.limitationState.limitationCode,
+    customers,
+    formData.customer_id,
+    formData.appointment_date,
+    formData.appointment_time,
+    selectedService,
+    selectedPriceOption,
+    selectedExtras,
+    extraPriceOptions,
+    extraQuantities,
+    primeFlex,
+    manualPrice,
+    vehicleMakeModel,
+    editingBooking,
+  ])
 
   if (loading) {
     return <div className="text-center py-8 text-theme-text-muted">Loading...</div>
@@ -4009,6 +4079,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         limitationCode={override.limitationState.limitationCode}
         limitationMessage={override.limitationState.limitationMessage}
         actionContext={override.limitationState.actionContext}
+        details={otpDetails}
         draftSessionId={override.draftSessionId}
         flowType={override.flowType}
         onClose={override.closeLimitation}

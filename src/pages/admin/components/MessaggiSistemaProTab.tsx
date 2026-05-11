@@ -274,7 +274,7 @@ function listActiveFilters(t: Record<string, any>): string[] {
   // Giorni della settimana (escludi se "tutti i giorni 0,1,2,3,4,5,6")
   const days = (t.target_days_of_week || '').split(',').map((s: string) => s.trim()).filter(Boolean)
   if (days.length > 0 && days.length < 7) {
-    const sorted = days.map(Number).sort((a, b) => a - b)
+    const sorted = days.map(Number).sort((a: number, b: number) => a - b)
     out.push(`Giorni della settimana: ${sorted.map((d: number) => DAY_LABELS_IT[d]).join(', ')}`)
   }
 
@@ -1101,6 +1101,16 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
     label: 'Richieste Preventivo (sito)',
     templates: [
       { key: 'pro_aviation_quote_request', label: 'Richiesta Preventivo Aviation', description: 'Template WhatsApp inviato dal sito (/aviation-quote-request + /helicopter-quote-request) — token: {service}, {nome}, {email}, {telefono}, {partenza}, {arrivo}, {data_partenza}, {data_ritorno}, {passeggeri}, {note}' },
+      { key: 'pro_booking_helicopter_inquiry', label: 'Richiesta Elicottero (BookingPage)', description: 'WhatsApp inviato dalla pagina /booking quando il cliente richiede preventivo elicottero — token: {nome}, {email}, {telefono}, {partenza}, {arrivo}, {data_partenza}, {ora_partenza}, {data_ritorno}, {ora_ritorno}, {passeggeri}' },
+      { key: 'pro_booking_jet_inquiry', label: 'Richiesta Jet (BookingPage)', description: 'WhatsApp inviato dalla pagina /booking quando il cliente richiede preventivo jet privato — stessi token dell\'elicottero' },
+      { key: 'pro_booking_yacht_confirm', label: 'Conferma Yacht (BookingPage)', description: 'WhatsApp inviato dalla pagina /booking dopo conferma yacht — token: {nome}, {email}, {telefono}, {yacht_name}, {marina}, {check_in}, {check_out}, {nights}, {passeggeri}, {totale}' },
+    ],
+  },
+  {
+    label: 'Pagamento Riuscito (sito)',
+    templates: [
+      { key: 'pro_payment_success_rental', label: 'PaymentSuccess — Noleggio', description: 'WhatsApp inviato dalla pagina /payment-success per prenotazione auto/yacht/jet/helicopter — token: {id}, {cliente}, {email}, {telefono}, {veicolo}, {ritiro}, {ora_ritiro}, {riconsegna}, {ora_riconsegna}, {totale}, {stato_pagamento}' },
+      { key: 'pro_payment_success_appointment', label: 'PaymentSuccess — Appuntamento (lavaggio/meccanica)', description: 'WhatsApp inviato dalla pagina /payment-success per car wash / meccanica — token: {id}, {cliente}, {email}, {telefono}, {servizio}, {data}, {ora}, {totale}, {stato_pagamento}' },
     ],
   },
   {

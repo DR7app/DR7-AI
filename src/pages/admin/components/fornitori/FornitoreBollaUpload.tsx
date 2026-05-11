@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { supabase } from '../../../../supabaseClient'
 import Button from '../Button'
 import LimitationOverrideModal from '../../../../components/LimitationOverrideModal'
-import { hashFile, DOCUMENT_TIPO_LABELS } from './types'
+import { hashFile, DOCUMENT_TIPO_LABELS, fmtEUR } from './types'
 import type { Fornitore, DocumentTipo } from './types'
 
 interface Props {
@@ -44,6 +44,7 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
     const [uploading, setUploading] = useState(false)
     const [otpOpen, setOtpOpen] = useState(false)
     const [confirmingOtp, setConfirmingOtp] = useState(false)
+    const [fatturaImporto, setFatturaImporto] = useState<number | null>(null)
     const fileRef = useRef<HTMLInputElement>(null)
     // draft_session_id deve essere UUID (constraint Postgres su limitation_overrides).
     // Stesso pattern di PreventiviTab.
@@ -54,6 +55,25 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
         window.addEventListener('keydown', handler)
         return () => window.removeEventListener('keydown', handler)
     }, [onClose, uploading])
+
+    // Carica l'importo della fattura collegata cosi' il modal OTP puo'
+    // mostrare l'admin esattamente cosa sta autorizzando senza file.
+    useEffect(() => {
+        let cancelled = false
+        if (!fatturaId) { setFatturaImporto(null); return }
+        ;(async () => {
+            const { data } = await supabase
+                .from('fornitore_documents')
+                .select('importo_totale')
+                .eq('id', fatturaId)
+                .maybeSingle()
+            if (!cancelled) {
+                const v = Number(data?.importo_totale)
+                setFatturaImporto(Number.isFinite(v) ? v : null)
+            }
+        })()
+        return () => { cancelled = true }
+    }, [fatturaId])
 
     const ACCEPTED_EXT = /\.(pdf|jpe?g|png|webp)$/i
     const ACCEPTED_MIME = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']
@@ -351,6 +371,23 @@ export default function FornitoreBollaUpload({ fornitore, onClose, onSaved, fatt
             actionContext={`fornitore_doc_otp_${fornitore.id}_${tipo}`}
             draftSessionId={draftSessionId}
             flowType="fornitori"
+            details={(() => {
+                const d: Record<string, string | number | null | undefined> = {
+                    'Fornitore': fornitore.nome,
+                }
+                if (fornitore.piva) d['P.IVA'] = fornitore.piva
+                d['Tipo documento'] = DOCUMENT_TIPO_LABELS[tipo]
+                const numero = customName.trim()
+                if (numero) d['Numero documento'] = numero
+                if (fatturaId) {
+                    d['Fattura collegata'] = fatturaId
+                    if (fatturaImporto !== null) {
+                        d['Importo fattura'] = fmtEUR(fatturaImporto)
+                    }
+                }
+                d['Operazione'] = 'Autorizza inserimento documento senza file allegato'
+                return d
+            })()}
             onCancel={() => setOtpOpen(false)}
             onOverrideApproved={(overrideId) => {
                 setOtpOpen(false)

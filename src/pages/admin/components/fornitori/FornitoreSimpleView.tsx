@@ -606,6 +606,23 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                 actionContext={`fornitore_${fornitore.id}`}
                 draftSessionId={draftSessionId}
                 flowType="fornitori"
+                details={(() => {
+                    const totApprovare = daApprovare.reduce((s, f) => s + Number(f.importo_totale || 0), 0)
+                    const totPagare = daPagare.reduce((s, f) => s + Number(f.importo_totale || 0), 0)
+                    const d: Record<string, string | number> = {
+                        'Fornitore': fornitore.nome,
+                    }
+                    if (fornitore.piva) d['P.IVA'] = fornitore.piva
+                    d['Anno fiscale'] = anno
+                    d['Mese'] = mese !== 'tutti' ? MESI_IT[mese - 1] : 'Tutti i mesi'
+                    d['Fatture da approvare'] = daApprovare.length
+                    d['Fatture da pagare'] = daPagare.length
+                    d['Anomalie'] = tutteAnomalie.length
+                    d['Importo da approvare'] = fmtEUR(totApprovare)
+                    d['Importo da pagare'] = fmtEUR(totPagare)
+                    d['Operazione'] = 'Sblocca approvazione e pagamento fatture fornitore'
+                    return d
+                })()}
                 onClose={() => setOtpOpen(false)}
                 onCancel={() => setOtpOpen(false)}
                 onOverrideApproved={() => {
