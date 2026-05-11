@@ -730,7 +730,15 @@ function DailyOperatorDetail({
     }
     const TOTAL_MIN = 24 * 60
     const entrataMin = minOfDay(row.entrata)
-    const uscitaMin = minOfDay(row.uscita) ?? (row.stato === 'fuori' ? null : TOTAL_MIN)
+    // Per operatori ancora in lavoro/pausa il bar si ferma a "adesso"
+    // (non a mezzanotte): cosi' la timeline rappresenta veramente le
+    // ore lavorate al momento dello sguardo.
+    const nowMinRome = (() => {
+        const rome = new Date(new Date().toLocaleString('en-US', { timeZone: ROME_TZ }))
+        return rome.getHours() * 60 + rome.getMinutes()
+    })()
+    const uscitaMin = minOfDay(row.uscita)
+        ?? (row.stato === 'fuori' ? null : nowMinRome)
     const pct = (m: number | null) => m === null ? 0 : (m / TOTAL_MIN) * 100
 
     const completionPct = target > 0 ? Math.min(100, Math.round((row.minuti_lavorati / target) * 100)) : 0

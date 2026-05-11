@@ -96,6 +96,9 @@ interface DayRow {
     minuti_lavorati: number
     minuti_pausa: number
     stato: 'fuori' | 'lavoro' | 'pausa' | 'finito'
+    // Numero di giorni del range in cui l'operatore ha almeno una
+    // timbratura. In modalita' single-day vale 0 o 1.
+    giorniPresenti?: number
 }
 
 type Range = 'oggi' | '7gg' | '30gg' | 'mese' | 'custom'
@@ -116,7 +119,12 @@ export default function OperatoriReportDashboard() {
 
     const [range, setRange] = useState<Range>('mese')
     const [today] = useState(toRomeDate(new Date()))
-    const [dataDay, setDataDay] = useState<string>(toRomeDate(new Date()))
+    // Range Da/A per la "Rilevazione Orari".
+    // Default: oggi → oggi (vista giornaliera classica). Quando l'utente
+    // sceglie due date diverse aggreghiamo i totali per operatore sul
+    // range (somma minuti lavorati / pause / giorni presenti).
+    const [fromDay, setFromDay] = useState<string>(toRomeDate(new Date()))
+    const [toDay, setToDay] = useState<string>(toRomeDate(new Date()))
     // Date custom — usate solo quando range === 'custom'. Default: ultimo
     // mese cosi' se l'utente clicca "Personalizzato" parte da uno stato
     // sensato senza dover compilare entrambe le date.
@@ -141,6 +149,24 @@ export default function OperatoriReportDashboard() {
     // Full-profile modal — opened from the "Profilo completo" button
     // inside the expanded row.
     const [profileOp, setProfileOp] = useState<Operatore | null>(null)
+
+    // Lista dei giorni 'YYYY-MM-DD' compresi tra fromDay e toDay (estremi
+    // inclusi). Normalizziamo se l'utente inverte le due date.
+    const rangeDays = useMemo<string[]>(() => {
+        if (!fromDay || !toDay) return []
+        const a = fromDay < toDay ? fromDay : toDay
+        const b = fromDay < toDay ? toDay : fromDay
+        const out: string[] = []
+        const cur = new Date(a + 'T12:00:00')
+        const last = new Date(b + 'T12:00:00')
+        while (toRomeDate(cur) <= toRomeDate(last)) {
+            out.push(toRomeDate(cur))
+            cur.setDate(cur.getDate() + 1)
+        }
+        return out
+    }, [fromDay, toDay])
+    const isSingleDay = rangeDays.length <= 1
+    const dataDay = rangeDays[0] || fromDay
 
     const periodRange = useMemo(() => {
         const end = new Date()
@@ -196,23 +222,33 @@ export default function OperatoriReportDashboard() {
                 || null
             setMe(myRow)
 
-            // 2) timesheet del giorno selezionato (per la tabella principale)
+            // 2) timesheet del range selezionato (Da → A). In modalita'
+            //    single-day (Da == A) la tabella mostra entrata/uscita/pause
+            //    classiche. In modalita' range aggreghiamo i totali (minuti
+            //    lavorati / pause / giorni presenti).
             const operatoreIds = opList.map(o => o.id)
-            if (operatoreIds.length > 0) {
+            if (operatoreIds.length > 0 && rangeDays.length > 0) {
                 const { data: entries } = await supabase
                     .from('timesheet_entries')
-                    .select('operatore_id, tipo, timestamp')
-                    .eq('data', dataDay)
+                    .select('operatore_id, tipo, timestamp, data')
+                    .in('data', rangeDays)
                     .in('operatore_id', operatoreIds)
                     .order('timestamp', { ascending: true })
-                const byOp = new Map<string, { entrata: string | null; uscita: string | null; pi: string[]; pf: string[]; lastTipo: string | null }>()
-                for (const e of (entries || []) as { operatore_id: string; tipo: string; timestamp: string }[]) {
-                    const cur = byOp.get(e.operatore_id) || { entrata: null, uscita: null, pi: [], pf: [], lastTipo: null }
-                    if (e.tipo === 'entrata') cur.entrata = e.timestamp
-                    else if (e.tipo === 'uscita') cur.uscita = e.timestamp
-                    else if (e.tipo === 'pausa_inizio') cur.pi.push(e.timestamp)
-                    else if (e.tipo === 'pausa_fine') cur.pf.push(e.timestamp)
+                // Aggregato globale (range) per la tabella principale.
+                const byOp = new Map<string, { entrata: string | null; uscita: string | null; pi: string[]; pf: string[]; lastTipo: string | null; giorniSet: Set<string> }>()
+                for (const e of (entries || []) as { operatore_id: string; tipo: string; timestamp: string; data: string }[]) {
+                    const cur = byOp.get(e.operatore_id) || { entrata: null, uscita: null, pi: [], pf: [], lastTipo: null, giorniSet: new Set<string>() }
+                    if (e.tipo === 'entrata') {
+                        if (!cur.entrata) cur.entrata = e.timestamp
+                    } else if (e.tipo === 'uscita') {
+                        cur.uscita = e.timestamp
+                    } else if (e.tipo === 'pausa_inizio') {
+                        cur.pi.push(e.timestamp)
+                    } else if (e.tipo === 'pausa_fine') {
+                        cur.pf.push(e.timestamp)
+                    }
                     cur.lastTipo = e.tipo
+                    cur.giorniSet.add(e.data)
                     byOp.set(e.operatore_id, cur)
                 }
                 const rows: DayRow[] = []
@@ -220,8 +256,12 @@ export default function OperatoriReportDashboard() {
                     const data = byOp.get(op.id)
                     let minuti = 0, pausaMin = 0
                     if (data) {
-                        const { data: m } = await supabase.rpc('operatore_minuti_lavorati', { p_operatore_id: op.id, p_data: dataDay })
-                        minuti = Number(m) || 0
+                        // Somma minuti lavorati su tutti i giorni del range
+                        // (RPC per giorno → totale).
+                        for (const d of rangeDays) {
+                            const { data: m } = await supabase.rpc('operatore_minuti_lavorati', { p_operatore_id: op.id, p_data: d })
+                            minuti += Number(m) || 0
+                        }
                         for (let i = 0; i < Math.min(data.pi.length, data.pf.length); i++) {
                             pausaMin += Math.floor((new Date(data.pf[i]).getTime() - new Date(data.pi[i]).getTime()) / 60000)
                         }
@@ -230,7 +270,17 @@ export default function OperatoriReportDashboard() {
                     if (data?.lastTipo === 'entrata' || data?.lastTipo === 'pausa_fine') stato = 'lavoro'
                     else if (data?.lastTipo === 'pausa_inizio') stato = 'pausa'
                     else if (data?.lastTipo === 'uscita') stato = 'finito'
-                    rows.push({ operatore: op, entrata: data?.entrata || null, uscita: data?.uscita || null, pausa_inizi: data?.pi || [], pausa_fini: data?.pf || [], minuti_lavorati: minuti, minuti_pausa: pausaMin, stato })
+                    rows.push({
+                        operatore: op,
+                        entrata: data?.entrata || null,
+                        uscita: data?.uscita || null,
+                        pausa_inizi: data?.pi || [],
+                        pausa_fini: data?.pf || [],
+                        minuti_lavorati: minuti,
+                        minuti_pausa: pausaMin,
+                        stato,
+                        giorniPresenti: data?.giorniSet.size || 0,
+                    })
                 }
                 setDailyRows(rows)
             } else {
@@ -277,7 +327,7 @@ export default function OperatoriReportDashboard() {
         } finally {
             setLoading(false)
         }
-    }, [dataDay, isDirezione, periodRange.days, periodRange.start, periodRange.end])
+    }, [rangeDays, isDirezione, periodRange.days, periodRange.start, periodRange.end])
 
     useEffect(() => { load() }, [load])
 
@@ -409,16 +459,56 @@ export default function OperatoriReportDashboard() {
                 </div>
             )}
 
-            {/* RILEVAZIONE ORARI GIORNALIERA */}
+            {/* RILEVAZIONE ORARI — range Da/A */}
             <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4">
-                <div className="flex items-baseline justify-between mb-3">
+                <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
                     <div>
-                        <h3 className="text-base font-semibold text-theme-text-primary">Rilevazione Orari Giornaliera</h3>
-                        <p className="text-[10px] text-theme-text-muted">{new Date(dataDay).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                        <h3 className="text-base font-semibold text-theme-text-primary">
+                            Rilevazione Orari {isSingleDay ? 'Giornaliera' : `· ${rangeDays.length} giorni`}
+                        </h3>
+                        <p className="text-[10px] text-theme-text-muted">
+                            {isSingleDay
+                                ? new Date(dataDay).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                                : `Dal ${new Date(rangeDays[0]).toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: 'numeric', month: 'short', year: 'numeric' })} al ${new Date(rangeDays[rangeDays.length - 1]).toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: 'numeric', month: 'short', year: 'numeric' })}`}
+                        </p>
                     </div>
-                    <input type="date" value={dataDay} onChange={e => setDataDay(e.target.value)}
-                        max={today}
-                        className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
+                    <div className="flex items-end gap-2">
+                        <div className="flex flex-col">
+                            <label className="text-[10px] text-theme-text-muted mb-0.5">Da</label>
+                            <input type="date" value={fromDay} onChange={e => setFromDay(e.target.value)}
+                                max={today}
+                                className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
+                        </div>
+                        <div className="flex flex-col">
+                            <label className="text-[10px] text-theme-text-muted mb-0.5">A</label>
+                            <input type="date" value={toDay} onChange={e => setToDay(e.target.value)}
+                                max={today}
+                                className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
+                        </div>
+                        <div className="flex gap-1">
+                            <button type="button"
+                                onClick={() => { const t = toRomeDate(new Date()); setFromDay(t); setToDay(t) }}
+                                className="text-[10px] px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-tertiary/70">Oggi</button>
+                            <button type="button"
+                                onClick={() => {
+                                    const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 6)
+                                    setFromDay(toRomeDate(start)); setToDay(toRomeDate(end))
+                                }}
+                                className="text-[10px] px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-tertiary/70">7gg</button>
+                            <button type="button"
+                                onClick={() => {
+                                    const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 29)
+                                    setFromDay(toRomeDate(start)); setToDay(toRomeDate(end))
+                                }}
+                                className="text-[10px] px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-tertiary/70">30gg</button>
+                            <button type="button"
+                                onClick={() => {
+                                    const end = new Date(); const start = new Date(end.getFullYear(), end.getMonth(), 1)
+                                    setFromDay(toRomeDate(start)); setToDay(toRomeDate(end))
+                                }}
+                                className="text-[10px] px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary hover:bg-theme-bg-tertiary/70">Mese</button>
+                        </div>
+                    </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -426,11 +516,22 @@ export default function OperatoriReportDashboard() {
                             <tr className="border-b border-theme-border">
                                 <th className="text-left py-2 font-medium">Operatore</th>
                                 <th className="text-left py-2 font-medium">Ruolo</th>
-                                <th className="text-left py-2 font-medium">Entrata</th>
-                                <th className="text-left py-2 font-medium">Uscita Pausa</th>
-                                <th className="text-left py-2 font-medium">Rientro Pausa</th>
-                                <th className="text-left py-2 font-medium">Uscita</th>
-                                <th className="text-center py-2 font-medium">Pause</th>
+                                {isSingleDay ? (
+                                    <>
+                                        <th className="text-left py-2 font-medium">Entrata</th>
+                                        <th className="text-left py-2 font-medium">Uscita Pausa</th>
+                                        <th className="text-left py-2 font-medium">Rientro Pausa</th>
+                                        <th className="text-left py-2 font-medium">Uscita</th>
+                                    </>
+                                ) : (
+                                    <>
+                                        <th className="text-center py-2 font-medium">Giorni</th>
+                                        <th className="text-right py-2 font-medium">Pause</th>
+                                        <th className="text-right py-2 font-medium">Tot. Pause</th>
+                                        <th className="text-right py-2 font-medium">Media/Giorno</th>
+                                    </>
+                                )}
+                                {isSingleDay && <th className="text-center py-2 font-medium">Pause</th>}
                                 <th className="text-right py-2 font-medium">Ore Lav.</th>
                                 <th className="text-right py-2 font-medium">Straord.</th>
                                 <th className="text-center py-2 font-medium">Stato</th>
@@ -472,11 +573,29 @@ export default function OperatoriReportDashboard() {
                                             </div>
                                         </td>
                                         <td className="py-2 text-theme-text-secondary text-xs">{r.operatore.ruolo || '—'}</td>
-                                        <td className="py-2 font-mono text-xs">{fmtTime(r.entrata)}</td>
-                                        <td className="py-2 font-mono text-xs">{r.pausa_inizi.length > 0 ? r.pausa_inizi.map(fmtTime).join(' · ') : '—'}</td>
-                                        <td className="py-2 font-mono text-xs">{r.pausa_fini.length > 0 ? r.pausa_fini.map(fmtTime).join(' · ') : '—'}</td>
-                                        <td className="py-2 font-mono text-xs">{fmtTime(r.uscita)}</td>
-                                        <td className="py-2 text-center text-xs">{r.pausa_inizi.length}</td>
+                                        {isSingleDay ? (
+                                            <>
+                                                <td className="py-2 font-mono text-xs">{fmtTime(r.entrata)}</td>
+                                                <td className="py-2 font-mono text-xs">{r.pausa_inizi.length > 0 ? r.pausa_inizi.map(fmtTime).join(' · ') : '—'}</td>
+                                                <td className="py-2 font-mono text-xs">{r.pausa_fini.length > 0 ? r.pausa_fini.map(fmtTime).join(' · ') : '—'}</td>
+                                                <td className="py-2 font-mono text-xs">{fmtTime(r.uscita)}</td>
+                                                <td className="py-2 text-center text-xs">{r.pausa_inizi.length}</td>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <td className="py-2 text-center tabular-nums">
+                                                    <span className="text-theme-text-primary font-semibold">{r.giorniPresenti || 0}</span>
+                                                    <span className="text-[9px] text-theme-text-muted"> / {rangeDays.length}</span>
+                                                </td>
+                                                <td className="py-2 text-right tabular-nums text-xs">{r.pausa_inizi.length}</td>
+                                                <td className="py-2 text-right tabular-nums text-xs">{fmtMin(r.minuti_pausa)}</td>
+                                                <td className="py-2 text-right tabular-nums text-xs">
+                                                    {(r.giorniPresenti || 0) > 0
+                                                        ? fmtMin(Math.round(r.minuti_lavorati / (r.giorniPresenti || 1)))
+                                                        : '—'}
+                                                </td>
+                                            </>
+                                        )}
                                         <td className="py-2 text-right tabular-nums">
                                             <div className="font-semibold">{fmtMin(r.minuti_lavorati)}</div>
                                             <div className="text-[9px] text-theme-text-muted">{r.minuti_lavorati} min</div>
@@ -484,15 +603,24 @@ export default function OperatoriReportDashboard() {
                                         <td className="py-2 text-right tabular-nums">
                                             <span className={straord > 0 ? 'text-sky-500 font-semibold' : 'text-theme-text-muted text-xs'}>{fmtMin(straord)}</span>
                                         </td>
-                                        <td className="py-2 text-center"><StatoLabel s={r.stato} /></td>
+                                        <td className="py-2 text-center">{isSingleDay ? <StatoLabel s={r.stato} /> : <span className="text-[10px] text-theme-text-muted">Range</span>}</td>
                                         <td className="py-2 text-right">
-                                            {isMine && (
+                                            {isMine && isSingleDay && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setEditingDay(dataDay) }}
                                                     className="text-[11px] px-2 py-1 rounded bg-dr7-gold text-black hover:opacity-90 font-medium"
                                                     title="Modifica i miei orari per questa giornata"
                                                 >
                                                     Modifica
+                                                </button>
+                                            )}
+                                            {!isSingleDay && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setProfileOp(r.operatore) }}
+                                                    className="text-[11px] px-2 py-1 rounded bg-dr7-gold/80 text-black hover:opacity-90 font-medium"
+                                                    title="Apri il profilo completo dell'operatore"
+                                                >
+                                                    Profilo
                                                 </button>
                                             )}
                                         </td>
@@ -1059,7 +1187,16 @@ function OperatorDailyDetail({
     }
     const TOTAL_MIN = 24 * 60
     const entrataMin = minOfDay(row.entrata)
-    const uscitaMin = minOfDay(row.uscita) ?? (row.stato === 'fuori' ? null : TOTAL_MIN)
+    // Quando l'operatore e' ancora in lavoro/pausa (nessuna uscita
+    // registrata) il bar deve fermarsi a "adesso", non sparare fino a
+    // mezzanotte (24:00). Per giornate passate senza uscita usiamo
+    // l'ultima pausa o l'orario corrente, qualunque sia il piu' tardi.
+    const nowMinRome = (() => {
+        const rome = new Date(new Date().toLocaleString('en-US', { timeZone: ROME_TZ }))
+        return rome.getHours() * 60 + rome.getMinutes()
+    })()
+    const uscitaMin = minOfDay(row.uscita)
+        ?? (row.stato === 'fuori' ? null : nowMinRome)
     const pct = (m: number | null) => m === null ? 0 : (m / TOTAL_MIN) * 100
     const completionPct = target > 0 ? Math.min(100, Math.round((row.minuti_lavorati / target) * 100)) : 0
 
