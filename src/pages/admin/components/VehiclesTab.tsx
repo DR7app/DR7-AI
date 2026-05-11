@@ -193,97 +193,34 @@ export default function VehiclesTab() {
     }
   }
 
-  // Aggregati flotta del MESE CORRENTE (1->oggi). Schema identico a
-  // /monthly-report (Report Noleggio): price_total in cent / vehicle_plate
-  // / status filter. Nessun gate payment_status: e\' ricavo maturato.
+  // Stats per veicolo. Fonte: stessa funzione /monthly-report che alimenta
+  // Report Noleggio. Nessuna logica duplicata: i numeri sono identici by
+  // construction (rental + penalty + danni gia\' inclusi nel totalRevenue).
   type VehStats = { fatturato: number; giorniNoleggio: number; giorniFermo: number; utilizzoPct: number }
   const [vehicleStats, setVehicleStats] = useState<Map<string, VehStats>>(new Map())
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loadBookingStats = async () => {
     if (vehicles.length === 0) return
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    // Mese corrente: 1 del mese 00:00 -> oggi. Reset automatico al cambio mese.
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    const daysElapsed = Math.max(1, Math.round((today.getTime() - monthStart.getTime()) / 86400000) + 1)
-    const STATI_NOLEGGIO_REPORT = ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active']
-    const { data: bookings } = await supabase
-      .from('bookings')
-      .select('id, vehicle_id, vehicle_plate, vehicle_name, pickup_date, dropoff_date, price_total, status, payment_status, service_type')
-      // pickup oltre fine mese e\' escluso (non e\' ancora questo mese);
-      // pickup prima del mese ma con dropoff nel mese viene catturato perche\'
-      // l'overlap calcolato sotto include i giorni clamp-ati al mese.
-      .gte('pickup_date', new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString())
-      .in('status', STATI_NOLEGGIO_REPORT)
-      .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
-      .limit(2000)
-    const stats = new Map<string, VehStats>()
-    const byId = new Map<string, Vehicle>()
-    const byPlate = new Map<string, Vehicle>()
-    const byName = new Map<string, Vehicle>()
-    for (const v of vehicles) {
-      byId.set(v.id, v)
-      if (v.plate) byPlate.set(v.plate.toLowerCase().replace(/\s/g, ''), v)
-      if (v.display_name) byName.set(v.display_name.toLowerCase().trim(), v)
-    }
-    const occupied = new Map<string, Set<string>>()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const b of ((bookings || []) as any[])) {
-      let vid: string | null = null
-      if (b.vehicle_id && byId.has(b.vehicle_id)) vid = b.vehicle_id
-      else if (b.vehicle_plate) {
-        const v = byPlate.get(String(b.vehicle_plate).toLowerCase().replace(/\s/g, ''))
-        if (v) vid = v.id
+    const t = new Date()
+    const month = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`
+    try {
+      const res = await fetch(`/.netlify/functions/monthly-report?type=vehicles&month=${month}`)
+      if (!res.ok) return
+      const data = await res.json() as { vehicles?: { vehicleId: string; rentalRevenue: number; rentedDays: number; idleDays: number; utilizationRate: number }[] }
+      const stats = new Map<string, VehStats>()
+      for (const v of (data.vehicles || [])) {
+        stats.set(v.vehicleId, {
+          // Solo Ricavo Noleggi (esclude penali e danni) — match colonna
+          // Ricavo Noleggi del Report Noleggio.
+          fatturato: v.rentalRevenue || 0,
+          giorniNoleggio: v.rentedDays || 0,
+          giorniFermo: v.idleDays || 0,
+          utilizzoPct: Math.round((v.utilizationRate || 0) * 100),
+        })
       }
-      if (!vid && b.vehicle_name) {
-        const v = byName.get(String(b.vehicle_name).toLowerCase().trim())
-        if (v) vid = v.id
-      }
-      if (!vid) continue
-      // Overlap del booking col mese corrente + PRORAZIONE come monthly-report:
-      //   rev_month = (price_total/100 / total_booking_days) * overlap_days
-      // Senza proration, un noleggio €1000 da 10 giorni a cavallo del mese
-      // contava interamente nel mese in cui pickup_date cadeva, gonfiando
-      // il fatturato vs Report Noleggio.
-      let overlapDays = 0
-      if (b.pickup_date && b.dropoff_date) {
-        const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
-        const e = new Date(b.dropoff_date); e.setHours(0, 0, 0, 0)
-        if (e < monthStart || s > today) continue
-        const sC = s < monthStart ? monthStart : s
-        const eC = e > today ? today : e
-        const set = occupied.get(vid) || new Set<string>()
-        for (let t = sC.getTime(); t <= eC.getTime(); t += 86400000) set.add(new Date(t).toISOString().slice(0, 10))
-        occupied.set(vid, set)
-        overlapDays = Math.round((eC.getTime() - sC.getTime()) / 86400000) + 1
-      } else if (b.pickup_date) {
-        // Senza dropoff: considera 1 giorno se pickup nel mese, altrimenti skip.
-        const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
-        if (s < monthStart || s > today) continue
-        overlapDays = 1
-      } else continue
-      const cur = stats.get(vid) || { fatturato: 0, giorniNoleggio: 0, giorniFermo: 0, utilizzoPct: 0 }
-      const raw = b.price_total
-      const fullEur = (typeof raw === 'string' ? parseFloat(raw) : (raw || 0)) / 100
-      if (Number.isFinite(fullEur) && fullEur > 0) {
-        // Total booking days = pickup -> dropoff inclusive, min 1.
-        let totalBookingDays = 1
-        if (b.pickup_date && b.dropoff_date) {
-          const ps = new Date(b.pickup_date); ps.setHours(0, 0, 0, 0)
-          const pe = new Date(b.dropoff_date); pe.setHours(0, 0, 0, 0)
-          totalBookingDays = Math.max(1, Math.round((pe.getTime() - ps.getTime()) / 86400000) + 1)
-        }
-        cur.fatturato += (fullEur / totalBookingDays) * overlapDays
-      }
-      stats.set(vid, cur)
+      setVehicleStats(stats)
+    } catch (e) {
+      console.error('VehiclesTab: monthly-report fetch failed', e)
     }
-    for (const [vid, set] of occupied.entries()) {
-      const cur = stats.get(vid) || { fatturato: 0, giorniNoleggio: 0, giorniFermo: 0, utilizzoPct: 0 }
-      cur.giorniNoleggio = set.size
-      cur.giorniFermo = Math.max(0, daysElapsed - set.size)
-      cur.utilizzoPct = Math.min(100, Math.round((set.size / daysElapsed) * 100))
-      stats.set(vid, cur)
-    }
-    setVehicleStats(stats)
   }
   useEffect(() => { loadBookingStats() }, [vehicles.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
