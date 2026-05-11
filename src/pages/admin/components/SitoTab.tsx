@@ -59,6 +59,7 @@ type SectionId =
     | 'firma'
     | 'registrazione-cliente'
     | 'booking-search-box'
+    | 'payment-cancel'
 
 type SectionCategoryId = 'chrome' | 'public' | 'auth' | 'booking' | 'legal'
 
@@ -98,6 +99,7 @@ const SECTIONS: { id: SectionId; title: string; category: SectionCategoryId; rea
     { id: 'aviation', title: 'Aviation Quote', category: 'booking', ready: true },
     { id: 'jet-search', title: 'Jet Search Results', category: 'booking', ready: true },
     { id: 'payment-success', title: 'Pagamento Riuscito', category: 'booking', ready: true },
+    { id: 'payment-cancel', title: 'Pagamento Annullato', category: 'booking', ready: true },
     { id: 'confirmation', title: 'Conferma Prenotazione', category: 'booking', ready: true },
     { id: 'credit-wallet', title: 'Credit Wallet', category: 'booking', ready: true },
     // Legale
@@ -401,6 +403,20 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Payment Cancel page (post-Nexi cancel landing) ─────────────────────
+interface PaymentCancelCopy {
+    title_it: string; title_en: string
+    body_it: string; body_en: string
+    cta_home_it: string; cta_home_en: string
+    cta_retry_it: string; cta_retry_en: string
+}
+const INITIAL_PAYMENT_CANCEL: PaymentCancelCopy = {
+    title_it: '', title_en: '',
+    body_it: '', body_en: '',
+    cta_home_it: '', cta_home_en: '',
+    cta_retry_it: '', cta_retry_en: '',
 }
 
 // ─── BookingSearchBox component (Header drawer popup + Hero variant) ─────
@@ -1742,6 +1758,7 @@ interface SiteCopySnapshot {
     firma?: FirmaCopy
     registrazioneCliente?: RegistrazioneClienteCopy
     bookingSearchBox?: BookingSearchBoxCopy
+    paymentCancel?: PaymentCancelCopy
 }
 
 interface CurrentState {
@@ -1773,6 +1790,7 @@ interface CurrentState {
     firma: FirmaCopy
     registrazioneCliente: RegistrazioneClienteCopy
     bookingSearchBox: BookingSearchBoxCopy
+    paymentCancel: PaymentCancelCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -2006,6 +2024,8 @@ export default function SitoTab() {
     const [savedRegistrazioneCliente, setSavedRegistrazioneCliente] = useState<RegistrazioneClienteCopy>(INITIAL_REGISTRAZIONE_CLIENTE)
     const [bookingSearchBox, setBookingSearchBox] = useState<BookingSearchBoxCopy>(INITIAL_BOOKING_SEARCH_BOX)
     const [savedBookingSearchBox, setSavedBookingSearchBox] = useState<BookingSearchBoxCopy>(INITIAL_BOOKING_SEARCH_BOX)
+    const [paymentCancel, setPaymentCancel] = useState<PaymentCancelCopy>(INITIAL_PAYMENT_CANCEL)
+    const [savedPaymentCancel, setSavedPaymentCancel] = useState<PaymentCancelCopy>(INITIAL_PAYMENT_CANCEL)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -2141,6 +2161,10 @@ export default function SitoTab() {
                     setBookingSearchBox(remote.bookingSearchBox)
                     setSavedBookingSearchBox(remote.bookingSearchBox)
                 }
+                if (remote?.paymentCancel && remote.paymentCancel.title_it) {
+                    setPaymentCancel(remote.paymentCancel)
+                    setSavedPaymentCancel(remote.paymentCancel)
+                }
                 if (remote?.token && remote.token.coin_section_title_it) {
                     setToken(remote.token)
                     setSavedToken(remote.token)
@@ -2157,10 +2181,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox, paymentCancel: savedPaymentCancel }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox, paymentCancel, savedPaymentCancel]
     )
     const dirty = changes.length > 0
 
@@ -2171,7 +2195,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -2200,6 +2224,7 @@ export default function SitoTab() {
             setSavedFirma(firma)
             setSavedRegistrazioneCliente(registrazioneCliente)
             setSavedBookingSearchBox(bookingSearchBox)
+            setSavedPaymentCancel(paymentCancel)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -2262,6 +2287,7 @@ export default function SitoTab() {
         setFirma(savedFirma)
         setRegistrazioneCliente(savedRegistrazioneCliente)
         setBookingSearchBox(savedBookingSearchBox)
+        setPaymentCancel(savedPaymentCancel)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -2425,6 +2451,9 @@ export default function SitoTab() {
                         {hydrated && section === 'booking-search-box' && (
                             <BookingSearchBoxEditor copy={bookingSearchBox} setCopy={setBookingSearchBox} />
                         )}
+                        {hydrated && section === 'payment-cancel' && (
+                            <PaymentCancelEditor copy={paymentCancel} setCopy={setPaymentCancel} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -2576,6 +2605,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.bookingSearchBox) !== JSON.stringify(saved.bookingSearchBox)) {
         out.push('Booking Search Box: contenuti modificati')
+    }
+    if (JSON.stringify(current.paymentCancel) !== JSON.stringify(saved.paymentCancel)) {
+        out.push('Pagamento Annullato: contenuti modificati')
     }
     return out
 }
@@ -6697,6 +6729,32 @@ function BookingSearchBoxEditor({ copy, setCopy }: { copy: BookingSearchBoxCopy;
                     <FieldText label="Return before pickup (EN)" value={copy.err_return_before_pickup_en} onChange={v => update('err_return_before_pickup_en', v)} />
                     <FieldText label="Orario riconsegna prima ritiro (IT)" value={copy.err_return_time_before_pickup_it} onChange={v => update('err_return_time_before_pickup_it', v)} />
                     <FieldText label="Return time before pickup (EN)" value={copy.err_return_time_before_pickup_en} onChange={v => update('err_return_time_before_pickup_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Payment Cancel editor (post-Nexi cancel landing) ─────────────────────
+function PaymentCancelEditor({ copy, setCopy }: { copy: PaymentCancelCopy; setCopy: (next: PaymentCancelCopy) => void }) {
+    const update = <K extends keyof PaymentCancelCopy>(key: K, value: PaymentCancelCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-theme-text-secondary">
+                Pagina mostrata se il cliente annulla il pagamento Nexi (no addebito). Pochi testi: titolo,
+                corpo rassicurante, e i due CTA (Home / Riprova).
+            </p>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.title_it} onChange={v => update('title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.title_en} onChange={v => update('title_en', v)} />
+                    <FieldTextArea label="Body (IT)" value={copy.body_it} onChange={v => update('body_it', v)} />
+                    <FieldTextArea label="Body (EN)" value={copy.body_en} onChange={v => update('body_en', v)} />
+                    <FieldText label="CTA Home (IT)" value={copy.cta_home_it} onChange={v => update('cta_home_it', v)} />
+                    <FieldText label="CTA Home (EN)" value={copy.cta_home_en} onChange={v => update('cta_home_en', v)} />
+                    <FieldText label="CTA Riprova (IT)" value={copy.cta_retry_it} onChange={v => update('cta_retry_it', v)} />
+                    <FieldText label="CTA Retry (EN)" value={copy.cta_retry_en} onChange={v => update('cta_retry_en', v)} />
                 </div>
             </section>
         </div>
