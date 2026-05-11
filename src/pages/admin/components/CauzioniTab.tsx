@@ -904,6 +904,57 @@ export default function CauzioniTab() {
     }
 
     // --- Shared table row renderer ---
+    // Mobile-friendly card alternative: same data as the table row, stacked
+    // vertically for phones (<sm). Action buttons are min-h-[44px] for touch.
+    const renderCard = (cauzione: Cauzione, actions: React.ReactNode) => (
+        <div
+            key={`card-${cauzione.id}`}
+            className={`border border-theme-border rounded-2xl bg-theme-bg-secondary p-3 ${cauzione.is_overdue ? 'border-l-4 border-l-red-500' : ''}`}
+        >
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <div className="text-sm font-semibold text-theme-text-primary truncate">{cauzione.cliente_nome}</div>
+                    <div className="text-xs text-theme-text-secondary truncate">{cauzione.veicolo_modello} · {cauzione.veicolo_targa}</div>
+                </div>
+                <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase ${getStatoBadgeClass(cauzione)}`}>
+                    {getStatoLabel(cauzione)}
+                </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2 text-[11px]">
+                <div>
+                    <div className="text-theme-text-muted uppercase tracking-wider">Restituzione</div>
+                    <div className="text-theme-text-primary">{new Date(cauzione.data_restituzione_veicolo + 'T00:00:00').toLocaleDateString('it-IT')}</div>
+                </div>
+                <div>
+                    <div className="text-theme-text-muted uppercase tracking-wider">Scadenza</div>
+                    <div className="text-theme-text-primary">
+                        {new Date(cauzione.scadenza_cauzione + 'T00:00:00').toLocaleDateString('it-IT')}
+                        {cauzione.days_until_deadline !== null && (
+                            <span className="ml-1 text-[10px] text-theme-text-secondary">
+                                ({cauzione.days_until_deadline > 0
+                                    ? `${cauzione.days_until_deadline}g`
+                                    : cauzione.days_until_deadline === 0
+                                        ? 'oggi'
+                                        : `${Math.abs(cauzione.days_until_deadline)}g fa`})
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <div>
+                    <div className="text-theme-text-muted uppercase tracking-wider">Importo</div>
+                    <div className="text-theme-text-primary font-semibold">€{Number(cauzione.importo).toFixed(2)}</div>
+                </div>
+                <div>
+                    <div className="text-theme-text-muted uppercase tracking-wider">Metodo</div>
+                    <div className="text-theme-text-primary capitalize">{cauzione.metodo}</div>
+                </div>
+            </div>
+            <div className="flex gap-2 flex-wrap mt-3 [&_button]:flex-1 [&_button]:min-h-[40px]">
+                {actions}
+            </div>
+        </div>
+    )
+
     const renderRow = (cauzione: Cauzione, actions: React.ReactNode) => (
         <tr
             key={cauzione.id}
@@ -1045,51 +1096,37 @@ export default function CauzioniTab() {
                     INCASSATE
                     <span className="text-sm font-normal text-theme-text-secondary">({incassate.length})</span>
                 </h3>
-                <div className="border border-theme-border rounded-3xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            {tableHeader}
-                            <tbody>
-                                {incassate.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={8} className="px-4 py-6 text-center text-theme-text-secondary">
-                                            Nessuna cauzione incassata
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    incassate.map((cauzione) =>
-                                        renderRow(cauzione, <>
-                                            <button
-                                                onClick={() => handleEdit(cauzione)}
-                                                className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
-                                            >
-                                                Modifica
-                                            </button>
-                                            <button
-                                                onClick={() => handleSegnaDaIncassare(cauzione)}
-                                                className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-[#0A8FA3] transition-colors font-semibold"
-                                            >
-                                                DA INCASSARE
-                                            </button>
-                                            <button
-                                                onClick={() => handleCassa(cauzione)}
-                                                className="px-3 py-2 bg-red-600 text-white text-xs rounded-full hover:bg-red-700 transition-colors"
-                                            >
-                                                CASSA
-                                            </button>
-                                            <button
-                                                onClick={() => handleMarkRestituita(cauzione)}
-                                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
-                                            >
-                                                RESTITUITA
-                                            </button>
-                                        </>)
-                                    )
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                {/* Mobile: card list. Desktop (sm+): full table. */}
+                {(() => {
+                    const actions = (cauzione: Cauzione) => (
+                        <>
+                            <button onClick={() => handleEdit(cauzione)} className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors">Modifica</button>
+                            <button onClick={() => handleSegnaDaIncassare(cauzione)} className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-[#0A8FA3] transition-colors font-semibold">DA INCASSARE</button>
+                            <button onClick={() => handleCassa(cauzione)} className="px-3 py-2 bg-red-600 text-white text-xs rounded-full hover:bg-red-700 transition-colors">CASSA</button>
+                            <button onClick={() => handleMarkRestituita(cauzione)} className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors">RESTITUITA</button>
+                        </>
+                    )
+                    if (incassate.length === 0) {
+                        return <div className="border border-theme-border rounded-2xl px-4 py-6 text-center text-theme-text-secondary">Nessuna cauzione incassata</div>
+                    }
+                    return (
+                        <>
+                            <div className="sm:hidden space-y-3">
+                                {incassate.map(c => renderCard(c, actions(c)))}
+                            </div>
+                            <div className="hidden sm:block border border-theme-border rounded-3xl overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        {tableHeader}
+                                        <tbody>
+                                            {incassate.map(c => renderRow(c, actions(c)))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </>
+                    )
+                })()}
             </div>
 
             {/* === SECTION: DA INCASSARE === */}
@@ -1098,52 +1135,36 @@ export default function CauzioniTab() {
                     DA INCASSARE
                     <span className="text-sm font-normal text-theme-text-secondary">({daIncassare.length})</span>
                 </h3>
-                <div className="border border-theme-border rounded-3xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            {tableHeader}
-                            <tbody>
-                                {daIncassare.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={8} className="px-4 py-6 text-center text-theme-text-secondary">
-                                            Nessuna cauzione da incassare
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    daIncassare.map((cauzione) =>
-                                        renderRow(cauzione, <>
-                                            <button
-                                                onClick={() => handleEdit(cauzione)}
-                                                className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors"
-                                            >
-                                                Modifica
-                                            </button>
-                                            <button
-                                                onClick={() => handleSegnaIncassata(cauzione)}
-                                                className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-[#0A8FA3] transition-colors font-semibold"
-                                            >
-                                                INCASSA
-                                            </button>
-                                            {/* Pre-auth disabled — Nexi Pay by Link doesn't support capture via API */}
-                                            <button
-                                                onClick={() => handleSendPayLink(cauzione)}
-                                                className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-dr7-gold/80 transition-colors font-semibold"
-                                            >
-                                                INVIA LINK
-                                            </button>
-                                            <button
-                                                onClick={() => handleMarkRestituita(cauzione)}
-                                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors"
-                                            >
-                                                RESTITUITA
-                                            </button>
-                                        </>)
-                                    )
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                {(() => {
+                    const actions = (cauzione: Cauzione) => (
+                        <>
+                            <button onClick={() => handleEdit(cauzione)} className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors">Modifica</button>
+                            <button onClick={() => handleSegnaIncassata(cauzione)} className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-[#0A8FA3] transition-colors font-semibold">INCASSA</button>
+                            <button onClick={() => handleSendPayLink(cauzione)} className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-dr7-gold/80 transition-colors font-semibold">INVIA LINK</button>
+                            <button onClick={() => handleMarkRestituita(cauzione)} className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors">RESTITUITA</button>
+                        </>
+                    )
+                    if (daIncassare.length === 0) {
+                        return <div className="border border-theme-border rounded-2xl px-4 py-6 text-center text-theme-text-secondary">Nessuna cauzione da incassare</div>
+                    }
+                    return (
+                        <>
+                            <div className="sm:hidden space-y-3">
+                                {daIncassare.map(c => renderCard(c, actions(c)))}
+                            </div>
+                            <div className="hidden sm:block border border-theme-border rounded-3xl overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        {tableHeader}
+                                        <tbody>
+                                            {daIncassare.map(c => renderRow(c, actions(c)))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </>
+                    )
+                })()}
             </div>
 
             {/* === STORICO SLIDE-OVER PANEL === */}
