@@ -1167,6 +1167,10 @@ export default function MessaggiSistemaProTab() {
     // tra le ultime salvate in DB, così le variabili del template
     // vengono sostituite con dati veri.
     const [expandedDiagnostics, setExpandedDiagnostics] = useState<Set<string>>(new Set())
+    // Pannello "Filtri avanzati" per-template — collapsible, default chiuso.
+    // Permette all'admin di editare days_of_week / cauzione / payment method
+    // / amount range / quiet hours senza ricreare il template.
+    const [expandedAdvanced, setExpandedAdvanced] = useState<Set<string>>(new Set())
     const [templateSendLogs, setTemplateSendLogs] = useState<Record<string, Array<{ id: string; booking_id: string | null; customer_phone: string | null; status: string; error: string | null; created_at: string }>>>({})
     const [loadingLogsFor, setLoadingLogsFor] = useState<string | null>(null)
     const [testPhones, setTestPhones] = useState<Record<string, string>>({})
@@ -3070,6 +3074,211 @@ export default function MessaggiSistemaProTab() {
                                                         </div>
                                                     </div>
                                                 )}
+
+                                                {/* Filtri avanzati per-template — pannello collapsible.
+                                                    Espone TUTTI i filtri che il cron applica oltre a
+                                                    trigger + stato + categoria. Prima erano impostabili
+                                                    solo al momento della creazione e poi nascosti per
+                                                    sempre: cambiare giorni della settimana, metodo
+                                                    pagamento, tipo cauzione, ecc. richiedeva ricreare
+                                                    il template. Visibile anche per template event-driven
+                                                    perché il cron interagisce con questi filtri se mai
+                                                    il template tornasse cron-driven (e per trasparenza). */}
+                                                <div className="rounded-lg border border-theme-border/40 bg-theme-bg-primary/40">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setExpandedAdvanced(prev => {
+                                                                const next = new Set(prev)
+                                                                if (next.has(template.id)) next.delete(template.id)
+                                                                else next.add(template.id)
+                                                                return next
+                                                            })
+                                                        }}
+                                                        className="w-full px-3 py-2 flex items-center justify-between text-xs text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
+                                                    >
+                                                        <span className="flex items-center gap-2">
+                                                            <svg className={`w-3.5 h-3.5 transition-transform ${expandedAdvanced.has(template.id) ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                            <span className="font-medium">Filtri avanzati</span>
+                                                        </span>
+                                                        <span className="text-[10px] text-theme-text-muted">
+                                                            {listActiveFilters(template).length === 0 ? 'nessun filtro extra' : `${listActiveFilters(template).length} attivi`}
+                                                        </span>
+                                                    </button>
+
+                                                    {expandedAdvanced.has(template.id) && (
+                                                        <div className="border-t border-theme-border/40 p-3 space-y-3">
+                                                            {/* Days of week — la causa più frequente di "non parte di sabato/domenica" */}
+                                                            <div>
+                                                                <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1.5">
+                                                                    Giorni della settimana
+                                                                    <span className="ml-1 text-[10px] text-theme-text-muted/70 font-normal normal-case tracking-normal">
+                                                                        ({(() => {
+                                                                            const days = (template.target_days_of_week || '0,1,2,3,4,5,6').split(',').filter(Boolean)
+                                                                            return days.length === 7 ? 'tutti i giorni' : `${days.length} selezionati`
+                                                                        })()})
+                                                                    </span>
+                                                                </label>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {DAY_LABELS_IT.map((dayLabel, idx) => {
+                                                                        const daysCsv = template.target_days_of_week ?? '0,1,2,3,4,5,6'
+                                                                        const days = new Set(daysCsv.split(',').map((s: string) => s.trim()).filter(Boolean))
+                                                                        const checked = days.has(String(idx))
+                                                                        return (
+                                                                            <button
+                                                                                type="button"
+                                                                                key={idx}
+                                                                                onClick={() => {
+                                                                                    const next = new Set(days)
+                                                                                    if (next.has(String(idx))) next.delete(String(idx))
+                                                                                    else next.add(String(idx))
+                                                                                    const csv = Array.from(next).map(Number).sort((a, b) => a - b).join(',')
+                                                                                    handleUpdateAutomation(template.id, 'target_days_of_week', csv)
+                                                                                }}
+                                                                                className={`px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
+                                                                                    checked
+                                                                                        ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold'
+                                                                                        : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:border-theme-text-muted'
+                                                                                }`}
+                                                                            >
+                                                                                {dayLabel}
+                                                                            </button>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                                <p className="text-[10px] text-theme-text-muted mt-1.5 leading-snug">
+                                                                    Il cron invia SOLO se "oggi" (Europe/Rome) è uno dei giorni selezionati. Tutti i giorni = nessun filtro.
+                                                                </p>
+                                                            </div>
+
+                                                            {/* Tipo servizio + Cauzione + Metodo pagamento + Tier — quattro select compatte */}
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div>
+                                                                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Tipo servizio</label>
+                                                                    <select
+                                                                        value={template.target_service_type || 'all'}
+                                                                        onChange={e => handleUpdateAutomation(template.id, 'target_service_type', e.target.value)}
+                                                                        className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                    >
+                                                                        <option value="all">Tutti i servizi</option>
+                                                                        <option value="rental">Solo Noleggio</option>
+                                                                        <option value="car_wash">Solo Lavaggio</option>
+                                                                        <option value="mechanical">Solo Meccanica</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Cauzione</label>
+                                                                    <select
+                                                                        value={template.target_with_deposit || 'all'}
+                                                                        onChange={e => handleUpdateAutomation(template.id, 'target_with_deposit', e.target.value)}
+                                                                        className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                    >
+                                                                        <option value="all">Qualsiasi</option>
+                                                                        <option value="yes">Solo con cauzione</option>
+                                                                        <option value="no">Solo senza cauzione</option>
+                                                                        <option value="vehicle">Solo cauzione veicolo</option>
+                                                                        <option value="standard">Solo cauzione standard (denaro)</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Metodo pagamento</label>
+                                                                    <select
+                                                                        value={template.target_payment_method || 'all'}
+                                                                        onChange={e => handleUpdateAutomation(template.id, 'target_payment_method', e.target.value)}
+                                                                        className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                    >
+                                                                        <option value="all">Qualsiasi metodo</option>
+                                                                        <option value="card">Solo carta</option>
+                                                                        <option value="wallet">Solo wallet</option>
+                                                                        <option value="cash">Solo contanti</option>
+                                                                        <option value="bonifico">Solo bonifico</option>
+                                                                        <option value="nexi">Solo Nexi</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Tier DR7 Club</label>
+                                                                    <select
+                                                                        value={template.target_membership_tier || 'all'}
+                                                                        onChange={e => handleUpdateAutomation(template.id, 'target_membership_tier', e.target.value === 'all' ? null : e.target.value)}
+                                                                        className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                    >
+                                                                        <option value="all">Tutti i tier</option>
+                                                                        {proTiers.map(t => (
+                                                                            <option key={t.id} value={t.id}>{t.label}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Range importo + targa specifica */}
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div>
+                                                                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Importo min (€)</label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={template.target_amount_min ?? ''}
+                                                                        onChange={e => handleUpdateAutomation(template.id, 'target_amount_min', e.target.value === '' ? null : parseFloat(e.target.value))}
+                                                                        placeholder="—"
+                                                                        className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Importo max (€)</label>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={template.target_amount_max ?? ''}
+                                                                        onChange={e => handleUpdateAutomation(template.id, 'target_amount_max', e.target.value === '' ? null : parseFloat(e.target.value))}
+                                                                        placeholder="—"
+                                                                        className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                    />
+                                                                </div>
+                                                                <div className="col-span-2">
+                                                                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Targa specifica</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={template.target_plate ?? ''}
+                                                                        onChange={e => handleUpdateAutomation(template.id, 'target_plate', e.target.value.trim() === '' ? null : e.target.value.trim().toUpperCase())}
+                                                                        placeholder="Lascia vuoto per tutti i veicoli"
+                                                                        className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40 font-mono uppercase"
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Fascia silenziosa */}
+                                                            <div>
+                                                                <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Fascia silenziosa (non invia in queste ore)</label>
+                                                                <div className="flex items-center gap-2">
+                                                                    <select
+                                                                        value={template.quiet_hours_start ?? ''}
+                                                                        onChange={e => handleUpdateAutomation(template.id, 'quiet_hours_start', e.target.value === '' ? null : parseInt(e.target.value))}
+                                                                        className="flex-1 px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                    >
+                                                                        <option value="">Nessuna</option>
+                                                                        {Array.from({ length: 24 }, (_, i) => (
+                                                                            <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <span className="text-theme-text-muted text-xs">→</span>
+                                                                    <select
+                                                                        value={template.quiet_hours_end ?? ''}
+                                                                        onChange={e => handleUpdateAutomation(template.id, 'quiet_hours_end', e.target.value === '' ? null : parseInt(e.target.value))}
+                                                                        className="flex-1 px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                    >
+                                                                        <option value="">Nessuna</option>
+                                                                        {Array.from({ length: 24 }, (_, i) => (
+                                                                            <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                                <p className="text-[10px] text-theme-text-muted mt-1 leading-snug">
+                                                                    Es. 22:00 → 07:00 = silenzio notturno (il messaggio non parte tra le 22 e le 7).
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
 
                                                 {/* Diagnostica per-template: ultimi invii + bottone Invia di prova.
                                                     Sempre disponibile (anche per template manuali) così l'admin
