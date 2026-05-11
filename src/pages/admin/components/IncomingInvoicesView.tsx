@@ -713,7 +713,7 @@ export default function IncomingInvoicesView() {
                   <CartesianGrid stroke="#374151" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="day" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v) => fmtEur(Number(v) || 0)} labelFormatter={(d) => `Giorno ${d}`} />
+                  <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => fmtEur(Number(v) || 0)} labelFormatter={(d) => `Giorno ${d}`} />
                   <Area type="monotone" dataKey="total" stroke="#3b82f6" fill="url(#incomingDaily)" strokeWidth={2} name="Spesa giornaliera" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -732,7 +732,7 @@ export default function IncomingInvoicesView() {
                     <CartesianGrid stroke="#374151" strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
                     <YAxis dataKey="name" type="category" stroke="#9ca3af" fontSize={11} width={120} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v) => fmtEur(Number(v) || 0)} />
+                    <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => fmtEur(Number(v) || 0)} />
                     <Bar dataKey="total" fill="#d4af37" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

@@ -401,7 +401,7 @@ export default function ReportTrafficTab() {
                   <Pie data={data.distribution} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
                     {data.distribution.map((d, i) => <Cell key={i} fill={colorFor(d.name)} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }} formatter={(v) => fmtInt(Number(v))} />
+                  <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => fmtInt(Number(v))} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (

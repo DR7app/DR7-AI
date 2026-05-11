@@ -179,7 +179,7 @@ function FatturaTrendChart({ invoices }: { invoices: ChartInvoice[] }) {
             <CartesianGrid stroke="#374151" strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
             <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-            <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v) => formatEur(Number(v) || 0)} />
+            <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => formatEur(Number(v) || 0)} />
             <Area type="monotone" dataKey="emesso" stroke="#d4af37" fill="url(#fatturaEmesso)" strokeWidth={2} name="Emesso" />
             <Area type="monotone" dataKey="incassato" stroke="#10b981" fill="url(#fatturaIncassato)" strokeWidth={2} name="Incassato" />
           </AreaChart>
@@ -220,7 +220,7 @@ function TopClientiChart({ invoices }: { invoices: ChartInvoice[] }) {
               <CartesianGrid stroke="#374151" strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
               <YAxis dataKey="name" type="category" stroke="#9ca3af" fontSize={11} width={120} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v) => formatEur(Number(v) || 0)} />
+              <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => formatEur(Number(v) || 0)} />
               <Bar dataKey="total" fill="#d4af37" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -264,7 +264,7 @@ function AnalisiIncassiChart({ invoices }: { invoices: ChartInvoice[] }) {
             <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={2} stroke="none">
               {data.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
             </Pie>
-            <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v) => formatEur(Number(v) || 0)} />
+            <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => formatEur(Number(v) || 0)} />
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">

@@ -282,7 +282,7 @@ export default function OperatorProfileModal({
                                         <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${Math.round(v / 60)}h`} />
                                         <Tooltip
                                             contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
-                                            formatter={(v: number) => fmtMin(v)}
+                                            formatter={(v: unknown) => fmtMin(Number(v) || 0)}
                                             labelFormatter={(label) => `Giorno ${label}`}
                                         />
                                         <Area type="monotone" dataKey="minutes" stroke="#10b981" fill="url(#opTrend)" strokeWidth={2} name="Ore lavorate" />
