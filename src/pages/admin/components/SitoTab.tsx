@@ -53,6 +53,7 @@ type SectionId =
     | 'signup'
     | 'payment'
     | 'payment-success'
+    | 'booking'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -77,6 +78,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'signup', title: 'Registrazione Cliente', ready: true },
     { id: 'payment', title: 'Pagina Pagamento (Nexi)', ready: true },
     { id: 'payment-success', title: 'Pagamento Riuscito', ready: true },
+    { id: 'booking', title: 'Prenotazione (Yacht/Jet/Heli)', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -375,6 +377,52 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Booking page (yacht/jet/heli auth gate + chrome + errors) ───────────
+interface BookingCopy {
+    loading_it: string; loading_en: string
+    auth_required_title_it: string; auth_required_title_en: string
+    auth_required_body_it: string; auth_required_body_en: string
+    auth_required_login_cta_it: string; auth_required_login_cta_en: string
+    auth_required_signup_cta_it: string; auth_required_signup_cta_en: string
+    booking_confirmed_title_it: string; booking_confirmed_title_en: string
+    booking_confirmed_body_it: string; booking_confirmed_body_en: string
+    booking_confirmed_cta_bookings_it: string; booking_confirmed_cta_bookings_en: string
+    inquiry_sent_cta_home_it: string; inquiry_sent_cta_home_en: string
+    quote_review_title_it: string; quote_review_title_en: string
+    quote_review_body_it: string; quote_review_body_en: string
+    select_option_default_it: string; select_option_default_en: string
+    payment_initializing_it: string; payment_initializing_en: string
+    item_not_found_it: string; item_not_found_en: string
+    err_payment_not_configured_it: string; err_payment_not_configured_en: string
+    err_payment_server_down_it: string; err_payment_server_down_en: string
+    err_payment_not_ready_it: string; err_payment_not_ready_en: string
+    err_category_unsupported_it: string; err_category_unsupported_en: string
+    err_save_failed_it: string; err_save_failed_en: string
+    err_unexpected_it: string; err_unexpected_en: string
+}
+const INITIAL_BOOKING: BookingCopy = {
+    loading_it: '', loading_en: '',
+    auth_required_title_it: '', auth_required_title_en: '',
+    auth_required_body_it: '', auth_required_body_en: '',
+    auth_required_login_cta_it: '', auth_required_login_cta_en: '',
+    auth_required_signup_cta_it: '', auth_required_signup_cta_en: '',
+    booking_confirmed_title_it: '', booking_confirmed_title_en: '',
+    booking_confirmed_body_it: '', booking_confirmed_body_en: '',
+    booking_confirmed_cta_bookings_it: '', booking_confirmed_cta_bookings_en: '',
+    inquiry_sent_cta_home_it: '', inquiry_sent_cta_home_en: '',
+    quote_review_title_it: '', quote_review_title_en: '',
+    quote_review_body_it: '', quote_review_body_en: '',
+    select_option_default_it: '', select_option_default_en: '',
+    payment_initializing_it: '', payment_initializing_en: '',
+    item_not_found_it: '', item_not_found_en: '',
+    err_payment_not_configured_it: '', err_payment_not_configured_en: '',
+    err_payment_server_down_it: '', err_payment_server_down_en: '',
+    err_payment_not_ready_it: '', err_payment_not_ready_en: '',
+    err_category_unsupported_it: '', err_category_unsupported_en: '',
+    err_save_failed_it: '', err_save_failed_en: '',
+    err_unexpected_it: '', err_unexpected_en: '',
 }
 
 // ─── Payment Success page (post-payment landing) ─────────────────────────
@@ -1198,6 +1246,7 @@ interface SiteCopySnapshot {
     signUp?: SignUpCopy
     payment?: PaymentCopy
     paymentSuccess?: PaymentSuccessCopy
+    booking?: BookingCopy
 }
 
 interface CurrentState {
@@ -1223,6 +1272,7 @@ interface CurrentState {
     signUp: SignUpCopy
     payment: PaymentCopy
     paymentSuccess: PaymentSuccessCopy
+    booking: BookingCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -1325,6 +1375,8 @@ export default function SitoTab() {
     const [savedPayment, setSavedPayment] = useState<PaymentCopy>(INITIAL_PAYMENT)
     const [paymentSuccess, setPaymentSuccess] = useState<PaymentSuccessCopy>(INITIAL_PAYMENT_SUCCESS)
     const [savedPaymentSuccess, setSavedPaymentSuccess] = useState<PaymentSuccessCopy>(INITIAL_PAYMENT_SUCCESS)
+    const [booking, setBooking] = useState<BookingCopy>(INITIAL_BOOKING)
+    const [savedBooking, setSavedBooking] = useState<BookingCopy>(INITIAL_BOOKING)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -1440,6 +1492,10 @@ export default function SitoTab() {
                     setPaymentSuccess(remote.paymentSuccess)
                     setSavedPaymentSuccess(remote.paymentSuccess)
                 }
+                if (remote?.booking && remote.booking.auth_required_title_it) {
+                    setBooking(remote.booking)
+                    setSavedBooking(remote.booking)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -1452,10 +1508,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking]
     )
     const dirty = changes.length > 0
 
@@ -1466,7 +1522,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1489,6 +1545,7 @@ export default function SitoTab() {
             setSavedSignUp(signUp)
             setSavedPayment(payment)
             setSavedPaymentSuccess(paymentSuccess)
+            setSavedBooking(booking)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1545,6 +1602,7 @@ export default function SitoTab() {
         setSignUp(savedSignUp)
         setPayment(savedPayment)
         setPaymentSuccess(savedPaymentSuccess)
+        setBooking(savedBooking)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1716,6 +1774,9 @@ export default function SitoTab() {
                         {hydrated && section === 'payment-success' && (
                             <PaymentSuccessEditor copy={paymentSuccess} setCopy={setPaymentSuccess} />
                         )}
+                        {hydrated && section === 'booking' && (
+                            <BookingEditor copy={booking} setCopy={setBooking} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1849,6 +1910,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.paymentSuccess) !== JSON.stringify(saved.paymentSuccess)) {
         out.push('Pagamento Riuscito: contenuti modificati')
+    }
+    if (JSON.stringify(current.booking) !== JSON.stringify(saved.booking)) {
+        out.push('Prenotazione: contenuti modificati')
     }
     return out
 }
@@ -5119,6 +5183,93 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
                     <FieldText label="Order not found (EN)" value={copy.err_order_not_found_en} onChange={v => update('err_order_not_found_en', v)} />
                     <FieldText label="Errore generico (IT)" value={copy.err_generic_it} onChange={v => update('err_generic_it', v)} />
                     <FieldText label="Generic error (EN)" value={copy.err_generic_en} onChange={v => update('err_generic_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Booking editor (yacht / jet / heli — chrome + auth gate + errors) ────
+// Most form labels live in the website's i18n dictionary (t() lookups). This
+// editor covers only the auth-required gate, completion screens, quote
+// review block, payment error literals, and the generic "Select" option.
+function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: BookingCopy) => void }) {
+    const update = <K extends keyof BookingCopy>(key: K, value: BookingCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-[#6e6e73]">
+                Pagina prenotazione (yacht / jet / elicottero). Le etichette dei campi del modulo restano nel
+                dizionario i18n; qui modifichi solo gate di login, schermate di conferma, blocco riepilogo
+                preventivo, messaggi di errore Stripe/salvataggio e label default del select.
+            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stati comuni</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Caricamento (IT)" value={copy.loading_it} onChange={v => update('loading_it', v)} />
+                    <FieldText label="Loading (EN)" value={copy.loading_en} onChange={v => update('loading_en', v)} />
+                    <FieldText label="Articolo non trovato (IT)" value={copy.item_not_found_it} onChange={v => update('item_not_found_it', v)} />
+                    <FieldText label="Item not found (EN)" value={copy.item_not_found_en} onChange={v => update('item_not_found_en', v)} />
+                    <FieldText label='Default "Seleziona" (IT)' value={copy.select_option_default_it} onChange={v => update('select_option_default_it', v)} />
+                    <FieldText label='Default "Select" (EN)' value={copy.select_option_default_en} onChange={v => update('select_option_default_en', v)} />
+                    <FieldText label='Pagamento in inizializzazione (IT)' value={copy.payment_initializing_it} onChange={v => update('payment_initializing_it', v)} />
+                    <FieldText label='Payment initializing (EN)' value={copy.payment_initializing_en} onChange={v => update('payment_initializing_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Gate "Accesso Richiesto"</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Titolo (IT)' value={copy.auth_required_title_it} onChange={v => update('auth_required_title_it', v)} />
+                    <FieldText label='Title (EN)' value={copy.auth_required_title_en} onChange={v => update('auth_required_title_en', v)} />
+                    <FieldTextArea label='Body (IT)' value={copy.auth_required_body_it} onChange={v => update('auth_required_body_it', v)} />
+                    <FieldTextArea label='Body (EN)' value={copy.auth_required_body_en} onChange={v => update('auth_required_body_en', v)} />
+                    <FieldText label='CTA Accedi (IT)' value={copy.auth_required_login_cta_it} onChange={v => update('auth_required_login_cta_it', v)} />
+                    <FieldText label='Login CTA (EN)' value={copy.auth_required_login_cta_en} onChange={v => update('auth_required_login_cta_en', v)} />
+                    <FieldText label='CTA Registrati (IT)' value={copy.auth_required_signup_cta_it} onChange={v => update('auth_required_signup_cta_it', v)} />
+                    <FieldText label='Sign Up CTA (EN)' value={copy.auth_required_signup_cta_en} onChange={v => update('auth_required_signup_cta_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Schermata "Prenotazione Confermata"</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Titolo (IT)' value={copy.booking_confirmed_title_it} onChange={v => update('booking_confirmed_title_it', v)} />
+                    <FieldText label='Title (EN)' value={copy.booking_confirmed_title_en} onChange={v => update('booking_confirmed_title_en', v)} />
+                    <FieldText label='Body (IT)' value={copy.booking_confirmed_body_it} onChange={v => update('booking_confirmed_body_it', v)} />
+                    <FieldText label='Body (EN)' value={copy.booking_confirmed_body_en} onChange={v => update('booking_confirmed_body_en', v)} />
+                    <FieldText label='CTA Prenotazioni (IT)' value={copy.booking_confirmed_cta_bookings_it} onChange={v => update('booking_confirmed_cta_bookings_it', v)} />
+                    <FieldText label='Bookings CTA (EN)' value={copy.booking_confirmed_cta_bookings_en} onChange={v => update('booking_confirmed_cta_bookings_en', v)} />
+                    <FieldText label='CTA Home (richiesta preventivo) (IT)' value={copy.inquiry_sent_cta_home_it} onChange={v => update('inquiry_sent_cta_home_it', v)} />
+                    <FieldText label='Home CTA (after inquiry sent) (EN)' value={copy.inquiry_sent_cta_home_en} onChange={v => update('inquiry_sent_cta_home_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Riepilogo richiesta preventivo</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Titolo (IT)' value={copy.quote_review_title_it} onChange={v => update('quote_review_title_it', v)} />
+                    <FieldText label='Title (EN)' value={copy.quote_review_title_en} onChange={v => update('quote_review_title_en', v)} />
+                    <FieldTextArea label='Body (IT)' value={copy.quote_review_body_it} onChange={v => update('quote_review_body_it', v)} />
+                    <FieldTextArea label='Body (EN)' value={copy.quote_review_body_en} onChange={v => update('quote_review_body_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Messaggi di errore</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Pagamento non configurato (IT)" value={copy.err_payment_not_configured_it} onChange={v => update('err_payment_not_configured_it', v)} />
+                    <FieldText label="Payment not configured (EN)" value={copy.err_payment_not_configured_en} onChange={v => update('err_payment_not_configured_en', v)} />
+                    <FieldText label="Server pagamento giù (IT)" value={copy.err_payment_server_down_it} onChange={v => update('err_payment_server_down_it', v)} />
+                    <FieldText label="Payment server down (EN)" value={copy.err_payment_server_down_en} onChange={v => update('err_payment_server_down_en', v)} />
+                    <FieldText label="Pagamento non pronto (IT)" value={copy.err_payment_not_ready_it} onChange={v => update('err_payment_not_ready_it', v)} />
+                    <FieldText label="Payment not ready (EN)" value={copy.err_payment_not_ready_en} onChange={v => update('err_payment_not_ready_en', v)} />
+                    <FieldText label="Categoria non supportata (IT)" value={copy.err_category_unsupported_it} onChange={v => update('err_category_unsupported_it', v)} />
+                    <FieldText label="Category unsupported (EN)" value={copy.err_category_unsupported_en} onChange={v => update('err_category_unsupported_en', v)} />
+                    <FieldText label="Salvataggio fallito (IT)" value={copy.err_save_failed_it} onChange={v => update('err_save_failed_it', v)} />
+                    <FieldText label="Save failed (EN)" value={copy.err_save_failed_en} onChange={v => update('err_save_failed_en', v)} />
+                    <FieldText label="Errore imprevisto (IT)" value={copy.err_unexpected_it} onChange={v => update('err_unexpected_it', v)} />
+                    <FieldText label="Unexpected error (EN)" value={copy.err_unexpected_en} onChange={v => update('err_unexpected_en', v)} />
                 </div>
             </section>
         </div>
