@@ -137,6 +137,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   const [editExtras, setEditExtras] = useState<CarWashService[]>([])
   const [editExtraPriceOptions, setEditExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
   const [editExtraQuantities, setEditExtraQuantities] = useState<Record<string, number>>({})
+  // View mode: Mese (default = existing month grid), Settimana (7-day window),
+  // Giorno (single-day chronological timeline). NO Operatori tab — left out
+  // by explicit request.
+  const [viewMode, setViewMode] = useState<'mese' | 'settimana' | 'giorno'>('mese')
+  // For Giorno/Settimana, anchor date is `currentDate`. "Oggi" button below
+  // resets `currentDate` to today.
 
   // Load car wash services catalog
   useEffect(() => {
@@ -455,16 +461,47 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   }, [bookings])
 
   const deltaColor = (s: string) => s.startsWith('+') && s !== '+0%' ? 'text-emerald-400' : s.startsWith('-') ? 'text-red-400' : 'text-theme-text-muted'
-  const KpiCard = ({ label, value, delta, sub }: { label: string; value: string; delta?: string; sub?: string }) => (
-    <div className="flex-1 min-w-[130px] bg-theme-bg-primary/30 backdrop-blur-sm border border-theme-border/40 rounded-xl px-4 py-3">
-      <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold">{label}</div>
-      <div className="text-2xl font-bold text-theme-text-primary mt-1 tabular-nums">{value}</div>
-      <div className="flex items-center gap-2 mt-0.5 text-[11px]">
-        {delta && <span className={deltaColor(delta)}>{delta} vs ieri</span>}
-        {sub && <span className="text-theme-text-muted">{sub}</span>}
+  // Richer KPI card: colored icon square on the left + label / value / delta
+  // stacked on the right. Matches the mockup style.
+  const KpiCard = ({ label, value, delta, sub, icon, accent }: {
+    label: string; value: string; delta?: string; sub?: string;
+    icon: 'cars' | 'clock' | 'slot' | 'euro' | 'timer' | 'fire';
+    accent: 'emerald' | 'blue' | 'cyan' | 'amber' | 'fuchsia' | 'rose';
+  }) => {
+    const accentBg: Record<typeof accent, string> = {
+      emerald: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+      blue: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+      cyan: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+      amber: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+      fuchsia: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30',
+      rose: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+    }
+    const iconPath: Record<typeof icon, string> = {
+      cars: 'M3 13l2-7h14l2 7M5 17h14M7 17v3M17 17v3M5 13h14M7 10h10',
+      clock: 'M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z',
+      slot: 'M4 6h16M4 12h16M4 18h7',
+      euro: 'M14 8a4 4 0 100 8M8 10h8M8 14h6',
+      timer: 'M10 2h4M12 14l4-4M12 22a8 8 0 110-16 8 8 0 010 16z',
+      fire: 'M12 2a7 7 0 015 12c1-3-1-6-3-8 0 4-4 5-4 9a4 4 0 008 0c0 5-5 7-7 7s-7-2-7-7c0-7 8-9 8-13z',
+    }
+    return (
+      <div className="flex-1 min-w-[160px] bg-theme-bg-primary/40 backdrop-blur-sm border border-theme-border/40 rounded-xl p-3 flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${accentBg[accent]}`}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d={iconPath[icon]} />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold">{label}</div>
+          <div className="text-xl font-bold text-theme-text-primary tabular-nums leading-tight">{value}</div>
+          <div className="flex items-center gap-2 text-[10px] mt-0.5 truncate">
+            {delta && <span className={deltaColor(delta)}>{delta} vs ieri</span>}
+            {sub && <span className="text-theme-text-muted truncate">{sub}</span>}
+          </div>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   if (loading) {
     return (
@@ -478,14 +515,52 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   return (
     <div className="flex flex-col h-[calc(100vh-240px)] sm:h-[calc(100vh-200px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
 
-      {/* 0. KPI Strip — snapshot di oggi vs ieri (solo design, niente operatori) */}
+      {/* 0. KPI Strip — bigger cards with icons, mockup style */}
       <div className="flex flex-wrap gap-2 sm:gap-3 p-3 sm:p-4 bg-theme-bg-primary/10 border-b border-theme-border/30">
-        <KpiCard label="Lavaggi Oggi" value={String(kpis.lavaggi)} delta={kpis.lavaggiDelta} />
-        <KpiCard label="Slot Occupati" value={`${kpis.occ}%`} delta={kpis.occDelta} sub={`${formatDuration(kpis.bookedMin)} / ${formatDuration(kpis.openMin)}`} />
-        <KpiCard label="Slot Liberi" value={String(kpis.freeSlots)} sub={`${formatDuration(kpis.freeMin)} disp.`} />
-        {canViewFinancials && !hideFinancials && <KpiCard label="Fatturato Oggi" value={`€${kpis.rev.toFixed(2).replace('.', ',')}`} delta={kpis.revDelta} />}
-        <KpiCard label="Tempo Medio" value={kpis.avg > 0 ? formatDuration(kpis.avg) : '—'} delta={kpis.avg > 0 ? kpis.avgDelta : undefined} />
-        <KpiCard label="Saturazione" value={`${kpis.occ}%`} sub={kpis.occ >= 85 ? 'Alta' : kpis.occ >= 50 ? 'Media' : 'Bassa'} />
+        <KpiCard icon="cars" accent="emerald" label="Lavaggi Oggi" value={String(kpis.lavaggi)} delta={kpis.lavaggiDelta} />
+        <KpiCard icon="clock" accent="blue" label="Slot Occupati" value={`${kpis.occ}%`} delta={kpis.occDelta} sub={`${formatDuration(kpis.bookedMin)} / ${formatDuration(kpis.openMin)}`} />
+        <KpiCard icon="slot" accent="cyan" label="Slot Liberi" value={String(kpis.freeSlots)} sub={`${formatDuration(kpis.freeMin)} disp.`} />
+        {canViewFinancials && !hideFinancials && <KpiCard icon="euro" accent="amber" label="Fatturato Oggi" value={`€${kpis.rev.toFixed(2).replace('.', ',')}`} delta={kpis.revDelta} />}
+        <KpiCard icon="timer" accent="fuchsia" label="Tempo Medio" value={kpis.avg > 0 ? formatDuration(kpis.avg) : '—'} delta={kpis.avg > 0 ? kpis.avgDelta : undefined} />
+        <KpiCard icon="fire" accent="rose" label="Saturazione" value={`${kpis.occ}%`} sub={kpis.occ >= 85 ? 'Alta' : kpis.occ >= 50 ? 'Media' : 'Bassa'} />
+      </div>
+
+      {/* View tabs + date display + Oggi button */}
+      <div className="flex flex-wrap items-center gap-3 px-3 sm:px-4 py-2 bg-theme-bg-primary/10 border-b border-theme-border/30">
+        <div className="flex items-center gap-1 bg-theme-bg-primary/30 rounded-full p-1">
+          {(['giorno', 'settimana', 'mese'] as const).map(v => (
+            <button
+              key={v}
+              onClick={() => setViewMode(v)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-colors ${
+                viewMode === v
+                  ? 'bg-dr7-gold text-white shadow'
+                  : 'text-theme-text-muted hover:text-theme-text-primary'
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 text-center text-sm text-theme-text-primary capitalize">
+          {viewMode === 'giorno' && currentDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          {viewMode === 'settimana' && (() => {
+            const start = new Date(currentDate)
+            const dow = (start.getDay() + 6) % 7
+            start.setDate(start.getDate() - dow)
+            const end = new Date(start)
+            end.setDate(end.getDate() + 6)
+            const f = (d: Date) => d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+            return `Settimana del ${f(start)} – ${f(end)}`
+          })()}
+          {viewMode === 'mese' && currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
+        </div>
+        <button
+          onClick={() => setCurrentDate(new Date())}
+          className="px-3 py-1.5 rounded-full text-xs font-semibold bg-theme-text-primary/5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-text-primary/10 transition-colors"
+        >
+          Oggi
+        </button>
       </div>
 
       {/* 1. Control Bar */}
