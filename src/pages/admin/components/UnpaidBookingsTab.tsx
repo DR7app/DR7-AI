@@ -147,8 +147,6 @@ export default function UnpaidBookingsTab() {
   const [sortBy, setSortBy] = useState<'amount' | 'name'>('amount')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [processingKey, setProcessingKey] = useState<string | null>(null)
-  // Per-row actions dropdown (3-dots menu on desktop row layout)
-  const [openActionsRowKey, setOpenActionsRowKey] = useState<string | null>(null)
 
   // Addebito state
   const [showAddebitoModal, setShowAddebitoModal] = useState(false)
@@ -3302,232 +3300,158 @@ export default function UnpaidBookingsTab() {
         )}
       </div>
 
-      {/* ── Desktop layout: per-customer row list + sidebar ─────────────── */}
+      {/* ── Desktop layout: table + sidebar ─────────────────────────────── */}
       <div className="hidden lg:flex gap-4 items-start">
         <div className="flex-1 min-w-0 bg-theme-bg-secondary rounded-2xl border border-theme-border overflow-hidden">
-        {/* Column headers — 8 colonne come da mockup */}
-        <div className="grid gap-3 px-4 py-3 text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold border-b border-theme-border items-center"
-             style={{ gridTemplateColumns: 'minmax(220px,1.6fr) minmax(110px,0.9fr) minmax(160px,1.4fr) 110px 100px 110px 130px 56px' }}>
-          <div className="flex items-center gap-2">
-            <button onClick={() => handleSort('name')} className="flex items-center text-theme-text-primary hover:text-dr7-gold transition-colors text-[10px] uppercase">
-              Cliente<SortArrow col="name" />
-            </button>
-          </div>
-          <button onClick={() => handleSort('amount')} className="flex items-center text-red-400 hover:text-red-300 transition-colors text-[10px] uppercase">
-            Totale Insoluto<SortArrow col="amount" />
-          </button>
-          <div>Breakdown</div>
-          <div>Stato</div>
-          <div>Priorità</div>
-          <div>Prob. Incasso</div>
-          <div>Ultima Attività</div>
-          <div className="text-right">Azioni</div>
-        </div>
-
-        {/* Rows */}
-        {customerGroups.map(group => {
-          const allDates = [
-            ...group.noleggioBookings.map(b => b.created_at),
-            ...group.primeWashBookings.map(b => b.created_at),
-            ...group.penaliItems.map(p => p.booking.created_at),
-            ...group.danniItems.map(p => p.booking.created_at),
-          ].filter(Boolean) as string[]
-          const latestActivity = allDates.length ? allDates.reduce((a, b) => a > b ? a : b) : null
-          const oldestActivity = allDates.length ? allDates.reduce((a, b) => a < b ? a : b) : null
-          const lastActivityDays = daysSince(latestActivity)
-          const oldestDays = daysSince(oldestActivity)
-          const priority = priorityFromDays(oldestDays)
-          const recoveredEur = group.chargedViaMit / 100
-          const remainingEur = group.totalRemaining / 100
-          const totalGroupEur = recoveredEur + remainingEur
-          const recoveryPct = totalGroupEur > 0 ? Math.min(100, Math.round((recoveredEur / totalGroupEur) * 100)) : 0
-          const initials = getInitials(group.customerName)
-          const avatarColor = paletteFor(group.customerKey)
-          const itemCount = group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length
-
-          // Per-category totals for the BREAKDOWN chips
-          const noleggioCents = group.noleggioBookings.reduce((s, b) => s + Math.max(0, (b.price_total || 0) - (b.booking_details?.amountPaid || 0)), 0)
-          const pwCents = group.primeWashBookings.reduce((s, b) => s + Math.max(0, (b.price_total || 0) - (b.booking_details?.amountPaid || 0)), 0)
-          const penaliCents = group.penaliItems.reduce((s, p) => s + Math.round((p.remaining || 0) * 100), 0)
-          const danniCents = group.danniItems.reduce((s, p) => s + Math.round((p.remaining || 0) * 100), 0)
-          const fmtChip = (cents: number) => `€${(cents / 100).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-
-          // Probability donut: % of total that has been recovered via MIT
-          // (acts as "we can collect" indicator — high = card on file works)
-          const probScore = recoveryPct > 0 ? recoveryPct : (group.chargedViaMit > 0 ? 60 : 30)
-          const donutCircum = 2 * Math.PI * 14 // r=14
-          const donutDash = (probScore / 100) * donutCircum
-          const donutColor = probScore >= 70 ? 'stroke-emerald-400' : probScore >= 40 ? 'stroke-amber-400' : 'stroke-red-400'
-
-          const isActionsOpen = openActionsRowKey === group.customerKey
-          const isExpanded = expandedCustomers.has(group.customerKey)
-
-          return (
-            <div key={group.customerKey} className="border-b border-theme-border/30 hover:bg-theme-bg-tertiary/30">
-              <div className="grid gap-3 px-4 py-3 items-center"
-                   style={{ gridTemplateColumns: 'minmax(220px,1.6fr) minmax(110px,0.9fr) minmax(160px,1.4fr) 110px 100px 110px 130px 56px' }}>
-
-                {/* CLIENTE */}
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className={`w-10 h-10 rounded-full grid place-items-center text-xs font-bold border shrink-0 ${avatarColor}`}>{initials}</div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-theme-text-primary flex items-center gap-1.5">
-                      <span className="truncate">{group.customerName}</span>
-                      <ClientStatusBadge email={group.customerEmail} />
-                    </div>
-                    {group.customerEmail && <div className="text-[11px] text-theme-text-muted truncate max-w-[200px]">{group.customerEmail}</div>}
-                    {group.customerPhone && <div className="text-[10px] text-theme-text-muted truncate font-mono">{group.customerPhone}</div>}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[800px]">
+            <thead>
+              <tr className="border-b-2 border-theme-border">
+                <th className="px-4 py-3 text-left text-sm font-semibold w-[18%]">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleSort('name')} className="flex items-center text-theme-text-primary hover:text-dr7-gold transition-colors">
+                      Cliente<SortArrow col="name" />
+                    </button>
+                    <span className="text-theme-text-muted/40">|</span>
+                    <button onClick={() => handleSort('amount')} className="flex items-center text-red-400 hover:text-red-300 transition-colors text-xs">
+                      €<SortArrow col="amount" />
+                    </button>
                   </div>
-                </div>
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-blue-400 w-[24%] border-l border-theme-border">Noleggio</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-cyan-400 w-[18%] border-l border-theme-border">Prime Wash</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-yellow-400 w-[20%] border-l border-theme-border">Penali</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-red-400 w-[20%] border-l border-theme-border">Danni</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customerGroups.map(group => {
+                const allDates = [
+                  ...group.noleggioBookings.map(b => b.created_at),
+                  ...group.primeWashBookings.map(b => b.created_at),
+                  ...group.penaliItems.map(p => p.booking.created_at),
+                  ...group.danniItems.map(p => p.booking.created_at),
+                ].filter(Boolean) as string[]
+                const latestActivity = allDates.length ? allDates.reduce((a, b) => a > b ? a : b) : null
+                const oldestActivity = allDates.length ? allDates.reduce((a, b) => a < b ? a : b) : null
+                const lastActivityDays = daysSince(latestActivity)
+                const oldestDays = daysSince(oldestActivity)
+                const priority = priorityFromDays(oldestDays)
+                const recoveredEur = group.chargedViaMit / 100
+                const remainingEur = group.totalRemaining / 100
+                const totalGroupEur = recoveredEur + remainingEur
+                const recoveryPct = totalGroupEur > 0 ? Math.min(100, Math.round((recoveredEur / totalGroupEur) * 100)) : 0
+                const initials = getInitials(group.customerName)
+                const avatarColor = paletteFor(group.customerKey)
 
-                {/* TOTALE INSOLUTO */}
-                <div>
-                  <div className="text-red-400 font-bold text-lg tabular-nums leading-none">
-                    €{remainingEur.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-[10px] text-theme-text-muted mt-0.5">
-                    {itemCount} {itemCount === 1 ? 'voce' : 'voci'}
-                  </div>
-                </div>
-
-                {/* BREAKDOWN chips */}
-                <div className="flex flex-wrap gap-1">
-                  {noleggioCents > 0 && <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">N {fmtChip(noleggioCents)}</span>}
-                  {pwCents > 0 && <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">PW {fmtChip(pwCents)}</span>}
-                  {penaliCents > 0 && <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">P {fmtChip(penaliCents)}</span>}
-                  {danniCents > 0 && <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/15 text-red-300 border border-red-500/30">D {fmtChip(danniCents)}</span>}
-                  {noleggioCents === 0 && pwCents === 0 && penaliCents === 0 && danniCents === 0 && (
-                    <span className="text-[10px] text-theme-text-muted">—</span>
-                  )}
-                </div>
-
-                {/* STATO */}
-                <div>
-                  {group.chargedViaMit > 0 && remainingEur === 0 ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Saldato</span>
-                  ) : group.chargedViaMit > 0 ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-500/15 text-amber-400 border border-amber-500/30">Parziale</span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-red-500/15 text-red-400 border border-red-500/30">Aperto</span>
-                  )}
-                </div>
-
-                {/* PRIORITÀ */}
-                <div>
-                  <span className={`px-2 py-0.5 rounded-full border text-[10px] uppercase font-bold tracking-wide ${priority.classes}`}>
-                    {priority.label}
-                  </span>
-                  {oldestDays != null && <div className="text-[10px] text-theme-text-muted mt-0.5">{oldestDays}gg</div>}
-                </div>
-
-                {/* PROB. INCASSO donut */}
-                <div className="flex items-center gap-2">
-                  <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeWidth="3" className="text-theme-bg-tertiary"/>
-                    <circle cx="18" cy="18" r="14" fill="none" strokeWidth="3" className={donutColor} strokeLinecap="round"
-                            strokeDasharray={`${donutDash} ${donutCircum}`} />
-                  </svg>
-                  <div className="text-xs font-bold tabular-nums text-theme-text-primary">{probScore}%</div>
-                </div>
-
-                {/* ULTIMA ATTIVITÀ */}
-                <div className="text-[11px] text-theme-text-muted">
-                  <div className="text-theme-text-primary">{relativeIt(lastActivityDays)}</div>
-                  {oldestDays != null && oldestDays !== lastActivityDays && (
-                    <div className="text-[10px]">primo: {oldestDays}gg</div>
-                  )}
-                </div>
-
-                {/* AZIONI */}
-                <div className="relative flex justify-end">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setOpenActionsRowKey(isActionsOpen ? null : group.customerKey) }}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-primary/50 transition-colors"
-                    title="Azioni"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
-                    </svg>
-                  </button>
-
-                  {isActionsOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setOpenActionsRowKey(null)} />
-                      <div className="absolute right-0 top-9 z-50 w-56 bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl py-1 text-sm">
-                        {itemCount >= 2 ? (
-                          <button
-                            disabled={!!processingKey}
-                            onClick={() => {
-                              setOpenActionsRowKey(null)
-                              askPaymentMethod(`Salda Tutto — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => markAllCustomerPaid(group, method))
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-emerald-400 disabled:opacity-50"
-                          >Salda Tutto (fattura unica)</button>
-                        ) : group.noleggioBookings[0] && (
-                          <button
-                            onClick={() => {
-                              setOpenActionsRowKey(null)
-                              askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method))
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-emerald-400"
-                          >Segna Pagato</button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setOpenActionsRowKey(null)
-                            if (remainingEur <= 0) return
-                            const fb = group.noleggioBookings[0] || group.primeWashBookings[0] || group.penaliItems[0]?.booking || group.danniItems[0]?.booking
-                            if (fb) sendPayByLink(fb, remainingEur, `Saldo completo — ${group.customerName}`)
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-purple-400"
-                        >Pay by Link — €{remainingEur.toFixed(2)}</button>
-                        <button
-                          onClick={() => { setOpenActionsRowKey(null); openAddebitoNexi(group) }}
-                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-orange-400"
-                        >Addebito MIT</button>
-                        <div className="border-t border-theme-border my-1" />
-                        <button
-                          onClick={() => { setOpenActionsRowKey(null); toggleExpanded(group.customerKey) }}
-                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-theme-text-primary"
-                        >{isExpanded ? 'Nascondi dettaglio' : 'Mostra dettaglio'}</button>
+                return (
+                <tr key={group.customerKey} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 align-top">
+                  {/* Cliente column */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className={`w-10 h-10 rounded-full grid place-items-center text-xs font-bold border flex-shrink-0 ${avatarColor}`}>{initials}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-theme-text-primary flex items-center gap-1.5 flex-wrap">
+                          <span className="truncate">{group.customerName}</span>
+                          <ClientStatusBadge email={group.customerEmail} />
+                        </div>
+                        {group.customerEmail && <div className="text-[11px] text-theme-text-muted mt-0.5 truncate max-w-[180px]">{group.customerEmail}</div>}
+                        {group.customerPhone && <div className="text-[11px] text-theme-text-muted truncate">{group.customerPhone}</div>}
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
+                    </div>
 
-              {/* Inline detail — opens via "Mostra dettaglio" in actions menu.
-                  Riusa i componenti NoleggioCell/PrimeWashCell/PendingItemsCell
-                  esistenti per non perdere la business logic gia\' funzionante. */}
-              {isExpanded && (
-                <div className="bg-theme-bg-primary/30 border-t border-theme-border/30 px-4 py-3 grid grid-cols-2 xl:grid-cols-4 gap-3">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-blue-400 font-semibold mb-1">Noleggio</div>
+                    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                      <span className={`px-1.5 py-0.5 rounded-full border text-[9px] uppercase font-bold tracking-wide ${priority.classes}`}>
+                        {priority.label}{oldestDays != null ? ` · ${oldestDays}gg` : ''}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded-full bg-theme-bg-tertiary border border-theme-border text-[10px] text-theme-text-muted whitespace-nowrap">
+                        Attività {relativeIt(lastActivityDays)}
+                      </span>
+                    </div>
+
+                    <div className="text-red-400 font-bold text-xl mt-2 tabular-nums">
+                      €{(group.totalRemaining / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    {totalGroupEur > 0 && group.chargedViaMit > 0 && (
+                      <div className="mt-1.5">
+                        <div className="flex items-center justify-between text-[10px] mb-0.5">
+                          <span className="text-emerald-400 font-semibold">Recuperato {recoveryPct}%</span>
+                          <span className="text-emerald-400/70">€{recoveredEur.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                        </div>
+                        <div className="h-1 bg-theme-bg-tertiary rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${recoveryPct}%` }}/>
+                        </div>
+                      </div>
+                    )}
+                    {(group.noleggioBookings.length + group.primeWashBookings.length + group.penaliItems.length + group.danniItems.length) >= 2 ? (
+                      <button
+                        onClick={() => askPaymentMethod(
+                          `Salda Tutto — €${(group.totalRemaining / 100).toFixed(2)} per ${group.customerName}`,
+                          (method) => markAllCustomerPaid(group, method)
+                        )}
+                        disabled={!!processingKey}
+                        className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >{processingKey ? 'Elaborazione...' : 'Salda Tutto (fattura unica)'}</button>
+                    ) : (
+                      /* Single booking: show direct "Segna Pagato" button */
+                      group.noleggioBookings[0] && (
+                        <button
+                          onClick={() => askPaymentMethod(
+                            `Segna Pagato — €${(group.totalRemaining / 100).toFixed(2)} per ${group.customerName}`,
+                            (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method)
+                          )}
+                          className="w-full mt-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                        >Segna Pagato</button>
+                      )
+                    )}
+                    <button
+                      onClick={() => {
+                        const totalEur = group.totalRemaining / 100
+                        if (totalEur <= 0) return
+                        const firstBooking = group.noleggioBookings[0] || group.primeWashBookings[0] || group.penaliItems[0]?.booking || group.danniItems[0]?.booking
+                        if (!firstBooking) return
+                        sendPayByLink(firstBooking, totalEur, `Saldo completo — ${group.customerName}`)
+                      }}
+                      className="w-full mt-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                    >Pay by Link — €{(group.totalRemaining / 100).toFixed(2)}</button>
+                    <button
+                      onClick={() => openAddebitoNexi(group)}
+                      className="w-full mt-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                    >Addebito</button>
+                  </td>
+
+                  {/* Noleggio column */}
+                  <td className="px-4 py-3 border-l border-theme-border">
                     <NoleggioCell group={group} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-cyan-400 font-semibold mb-1">Prime Wash</div>
-                    <PrimeWashCell group={group} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-yellow-400 font-semibold mb-1">Penali</div>
-                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-red-400 font-semibold mb-1">Danni</div>
-                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        })}
+                  </td>
 
-        {customerGroups.length === 0 && (
-          <div className="px-4 py-12 text-center text-theme-text-muted">
-            {searchQuery ? 'Nessun cliente trovato' : 'Nessuna prenotazione da saldare!'}
-          </div>
-        )}
+                  {/* Prime Wash column */}
+                  <td className="px-4 py-3 border-l border-theme-border">
+                    <PrimeWashCell group={group} />
+                  </td>
+
+                  {/* Penali column */}
+                  <td className="px-4 py-3 border-l border-theme-border">
+                    <PendingItemsCell items={group.penaliItems} type="penalties" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'penalties')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
+                  </td>
+
+                  {/* Danni column */}
+                  <td className="px-4 py-3 border-l border-theme-border">
+                    <PendingItemsCell items={group.danniItems} type="danni" onMarkAllPaid={() => markAllCustomerItemsPaid(group, 'danni')} onAddebito={() => openAddebitoNexi(group)} onAddebitoItem={(amt, label) => openAddebitoNexi(group, amt, label)} chargedViaMit={group.chargedViaMit} />
+                  </td>
+                </tr>
+                )
+              })}
+              {customerGroups.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-theme-text-muted">
+                    {searchQuery ? 'Nessun cliente trovato' : 'Nessuna prenotazione da saldare!'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
         </div>
 
         {/* Right sidebar */}
