@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Select from './Select'
@@ -146,6 +146,93 @@ export default function VehiclesTab() {
       setLoading(false)
     }
   }
+
+  // Aggregati flotta dagli ultimi 30 giorni di bookings (stesso pattern
+  // di FleetList). Pure dati reali — niente mock. Caricati una volta
+  // dopo che `vehicles` e\' pronto, refresh su realtime bookings.
+  type VehStats = { fatturato: number; giorniNoleggio: number; giorniFermo: number; utilizzoPct: number }
+  const [vehicleStats, setVehicleStats] = useState<Map<string, VehStats>>(new Map())
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const loadBookingStats = async () => {
+    if (vehicles.length === 0) return
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const thirtyAgo = new Date(today.getTime() - 30 * 86400000)
+    const { data: bookings } = await supabase
+      .from('bookings')
+      .select('id, vehicle_id, vehicle_plate, vehicle_name, pickup_date, dropoff_date, price_total, status, payment_status, service_type')
+      .gte('pickup_date', thirtyAgo.toISOString())
+      .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
+      .limit(2000)
+    const stats = new Map<string, VehStats>()
+    const byId = new Map<string, Vehicle>()
+    const byPlate = new Map<string, Vehicle>()
+    for (const v of vehicles) {
+      byId.set(v.id, v)
+      if (v.plate) byPlate.set(v.plate.toLowerCase().replace(/\s/g, ''), v)
+    }
+    const occupied = new Map<string, Set<string>>()
+    const PAID = new Set(['paid', 'succeeded', 'completed'])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const b of ((bookings || []) as any[])) {
+      if (b.status === 'cancelled' || b.status === 'annullata') continue
+      let vid: string | null = null
+      if (b.vehicle_id && byId.has(b.vehicle_id)) vid = b.vehicle_id
+      else if (b.vehicle_plate) {
+        const v = byPlate.get(String(b.vehicle_plate).toLowerCase().replace(/\s/g, ''))
+        if (v) vid = v.id
+      }
+      if (!vid) continue
+      const cur = stats.get(vid) || { fatturato: 0, giorniNoleggio: 0, giorniFermo: 0, utilizzoPct: 0 }
+      if (PAID.has(String(b.payment_status || '').toLowerCase())) {
+        cur.fatturato += Number(b.price_total || 0) / 100
+      }
+      if (b.pickup_date && b.dropoff_date) {
+        const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
+        const e = new Date(b.dropoff_date); e.setHours(0, 0, 0, 0)
+        const sC = s < thirtyAgo ? thirtyAgo : s
+        const eC = e > today ? today : e
+        const set = occupied.get(vid) || new Set<string>()
+        for (let t = sC.getTime(); t <= eC.getTime(); t += 86400000) set.add(new Date(t).toISOString().slice(0, 10))
+        occupied.set(vid, set)
+      }
+      stats.set(vid, cur)
+    }
+    for (const [vid, set] of occupied.entries()) {
+      const cur = stats.get(vid)
+      if (!cur) continue
+      cur.giorniNoleggio = set.size
+      cur.giorniFermo = Math.max(0, 30 - set.size)
+      cur.utilizzoPct = Math.min(100, Math.round((set.size / 30) * 100))
+    }
+    setVehicleStats(stats)
+  }
+  useEffect(() => { loadBookingStats() }, [vehicles.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stats aggregate per la dashboard (KPI + alert + suggerimenti).
+  const fleetKpi = useMemo(() => {
+    const total = vehicles.length
+    const attivi = vehicles.filter(v => v.status === 'available').length
+    const fermi = vehicles.filter(v => v.status === 'maintenance').length
+    let totalFatturato = 0
+    let utilSum = 0
+    let utilCount = 0
+    let roiSum = 0
+    let roiCount = 0
+    let sottoTarget = 0
+    let fermiOltre3 = 0
+    vehicleStats.forEach((s, vid) => {
+      totalFatturato += s.fatturato
+      utilSum += s.utilizzoPct; utilCount++
+      if (s.utilizzoPct < 40) sottoTarget++
+      if (s.giorniFermo >= 3) fermiOltre3++
+      const v = vehicles.find(x => x.id === vid)
+      const potential = (v?.daily_rate || 0) * 30
+      if (potential > 0) { roiSum += (s.fatturato / potential) * 100; roiCount++ }
+    })
+    const utilizzoMedio = utilCount > 0 ? Math.round(utilSum / utilCount) : 0
+    const roiMedio = roiCount > 0 ? Math.round((roiSum / roiCount) * 10) / 10 : 0
+    return { total, attivi, fermi, totalFatturato, utilizzoMedio, roiMedio, sottoTarget, fermiOltre3 }
+  }, [vehicles, vehicleStats])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -647,6 +734,55 @@ export default function VehiclesTab() {
 
   return (
     <div>
+      {/* KPI strip — 6 metriche flotta, dati reali da vehicles + bookings 30g */}
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+        {[
+          { label: 'Totale Veicoli', value: String(fleetKpi.total), sub: '100% della flotta', ring: '#3B82F6' },
+          { label: 'Veicoli Attivi', value: String(fleetKpi.attivi), sub: fleetKpi.total > 0 ? `${Math.round((fleetKpi.attivi / fleetKpi.total) * 100)}% della flotta` : '—', ring: '#10B981' },
+          { label: 'Veicoli Fermi', value: String(fleetKpi.fermi), sub: fleetKpi.total > 0 ? `${Math.round((fleetKpi.fermi / fleetKpi.total) * 100)}% della flotta` : '—', ring: '#EF4444' },
+          { label: 'Fatturato Flotta', value: `€${fleetKpi.totalFatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`, sub: 'ultimi 30 giorni', ring: '#F59E0B' },
+          { label: 'Utilizzo Medio', value: `${fleetKpi.utilizzoMedio}%`, sub: 'media veicolare', ring: '#06B6D4' },
+          { label: 'ROI Medio Flotta', value: `${String(fleetKpi.roiMedio).replace('.', ',')}%`, sub: 'fatturato/potenziale', ring: '#A855F7' },
+        ].map((k) => (
+          <div key={k.label} className="relative overflow-hidden rounded-2xl border bg-theme-bg-secondary p-3" style={{ borderColor: `${k.ring}33` }}>
+            <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full blur-2xl pointer-events-none" style={{ background: `${k.ring}22` }}/>
+            <div className="relative">
+              <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${k.ring}cc` }}>{k.label}</div>
+              <div className="text-xl lg:text-2xl font-bold text-theme-text-primary mt-1 tabular-nums">{k.value}</div>
+              <div className="text-[10px] text-theme-text-muted mt-0.5">{k.sub}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Alert intelligenti — appare solo se ci sono avvisi */}
+      {(() => {
+        const alerts: { tone: 'red' | 'amber'; text: string }[] = []
+        if (fleetKpi.fermiOltre3 > 0) alerts.push({ tone: 'red', text: `${fleetKpi.fermiOltre3} ${fleetKpi.fermiOltre3 === 1 ? 'veicolo fermo' : 'veicoli fermi'} da oltre 3 giorni` })
+        if (fleetKpi.sottoTarget > 0) alerts.push({ tone: 'amber', text: `${fleetKpi.sottoTarget} ${fleetKpi.sottoTarget === 1 ? 'veicolo sotto' : 'veicoli sotto'} il target di utilizzo` })
+        if (alerts.length === 0) return null
+        const dot = { red: 'bg-red-500', amber: 'bg-amber-500' }
+        return (
+          <div className="bg-gradient-to-br from-red-500/8 via-amber-500/5 to-transparent border border-amber-500/20 rounded-2xl px-4 py-3 mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Alert Intelligenti</span>
+              <span className="text-[11px] text-theme-text-muted">{alerts.length} {alerts.length === 1 ? 'avviso' : 'avvisi'}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {alerts.map((a, i) => (
+                <div key={i} className="flex items-center gap-2 bg-theme-bg-primary/40 border border-theme-border/50 rounded-full px-3 py-1.5">
+                  <span className={`w-2 h-2 rounded-full ${dot[a.tone]}`}/>
+                  <span className="text-[11px] text-theme-text-primary">{a.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       <div className="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold text-theme-text-primary">Veicoli</h2>
