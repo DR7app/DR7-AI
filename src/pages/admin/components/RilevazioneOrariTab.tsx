@@ -508,16 +508,28 @@ export default function RilevazioneOrariTab() {
                                 return (
                                     <React.Fragment key={r.operatore.id}>
                                     <tr className={`${isMine ? 'bg-amber-50/40 dark:bg-amber-950/20' : ''} ${isExpanded ? 'bg-theme-bg-tertiary/40' : ''} cursor-pointer hover:bg-theme-bg-tertiary/30`}
-                                        onClick={() => setExpandedId(isExpanded ? null : r.operatore.id)}>
+                                        onClick={() => setProfileOp(r.operatore)}
+                                        title="Apri il report completo dell'operatore (come lo vede lui)">
                                         <td className="px-3 py-2 text-theme-text-primary font-semibold">
                                             <div className="flex items-center gap-2">
-                                                <span className={`inline-block transition-transform ${isExpanded ? 'rotate-90' : ''} text-theme-text-muted text-xs`}>▶</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : r.operatore.id) }}
+                                                    className={`inline-block transition-transform ${isExpanded ? 'rotate-90' : ''} text-theme-text-muted hover:text-theme-text-primary text-xs`}
+                                                    title={isExpanded ? 'Chiudi dettaglio inline' : 'Apri dettaglio inline'}
+                                                >▶</button>
                                                 <OperatoreAvatar op={r.operatore} size={32} />
                                                 <div>
                                                     {r.operatore.nome} {r.operatore.cognome || ''}
                                                     {isMine && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
                                                     <div className="text-xs text-theme-text-muted">{r.operatore.ruolo || '—'}</div>
                                                 </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); setProfileOp(r.operatore) }}
+                                                    className="ml-auto text-[11px] px-2 py-1 rounded bg-dr7-gold text-black hover:opacity-90 font-semibold whitespace-nowrap"
+                                                    title={`Apri il report di ${r.operatore.nome} con grafico e KPI`}
+                                                >Vedi report</button>
                                             </div>
                                         </td>
                                         <td className="px-3 py-2"><StatoLabel s={r.stato} /></td>

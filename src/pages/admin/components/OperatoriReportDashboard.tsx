@@ -560,11 +560,17 @@ export default function OperatoriReportDashboard() {
                                     <React.Fragment key={r.operatore.id}>
                                     <tr
                                         className={`${isMine ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''} ${isExpanded ? 'bg-theme-bg-tertiary/40' : ''} cursor-pointer hover:bg-theme-bg-tertiary/30`}
-                                        onClick={() => setExpandedOpId(isExpanded ? null : r.operatore.id)}
+                                        onClick={() => setProfileOp(r.operatore)}
+                                        title="Apri il report completo dell'operatore (come lo vede lui)"
                                     >
                                         <td className="py-2 font-medium text-theme-text-primary">
                                             <div className="flex items-center gap-2">
-                                                <span className={`inline-block transition-transform ${isExpanded ? 'rotate-90' : ''} text-theme-text-muted text-xs`}>▶</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); setExpandedOpId(isExpanded ? null : r.operatore.id) }}
+                                                    className={`inline-block transition-transform ${isExpanded ? 'rotate-90' : ''} text-theme-text-muted hover:text-theme-text-primary text-xs`}
+                                                    title={isExpanded ? 'Chiudi dettaglio inline' : 'Apri dettaglio inline'}
+                                                >▶</button>
                                                 <OperatoreAvatar op={r.operatore} size={32} />
                                                 <span>
                                                     {r.operatore.nome} {r.operatore.cognome || ''}
@@ -605,24 +611,24 @@ export default function OperatoriReportDashboard() {
                                         </td>
                                         <td className="py-2 text-center">{isSingleDay ? <StatoLabel s={r.stato} /> : <span className="text-[10px] text-theme-text-muted">Range</span>}</td>
                                         <td className="py-2 text-right">
-                                            {isMine && isSingleDay && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setEditingDay(dataDay) }}
-                                                    className="text-[11px] px-2 py-1 rounded bg-dr7-gold text-black hover:opacity-90 font-medium"
-                                                    title="Modifica i miei orari per questa giornata"
-                                                >
-                                                    Modifica
-                                                </button>
-                                            )}
-                                            {!isSingleDay && (
+                                            <div className="flex items-center justify-end gap-1.5">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setProfileOp(r.operatore) }}
-                                                    className="text-[11px] px-2 py-1 rounded bg-dr7-gold/80 text-black hover:opacity-90 font-medium"
-                                                    title="Apri il profilo completo dell'operatore"
+                                                    className="text-[11px] px-2 py-1 rounded bg-dr7-gold text-black hover:opacity-90 font-semibold whitespace-nowrap"
+                                                    title={`Apri il report di ${r.operatore.nome} con grafico e KPI`}
                                                 >
-                                                    Profilo
+                                                    Vedi report
                                                 </button>
-                                            )}
+                                                {isMine && isSingleDay && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setEditingDay(dataDay) }}
+                                                        className="text-[11px] px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-tertiary/70 font-medium"
+                                                        title="Modifica i miei orari per questa giornata"
+                                                    >
+                                                        Modifica
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                     {isExpanded && (
