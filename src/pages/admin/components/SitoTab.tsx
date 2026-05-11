@@ -60,35 +60,50 @@ type SectionId =
     | 'registrazione-cliente'
     | 'booking-search-box'
 
-const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
-    { id: 'faq', title: 'FAQ', ready: true },
-    { id: 'cancellazione', title: 'Cancellazione', ready: true },
-    { id: 'membership', title: 'Membership / DR7 Club', ready: true },
-    { id: 'hero', title: 'Home / Hero', ready: true },
-    { id: 'chi-siamo', title: 'Chi Siamo', ready: true },
-    { id: 'footer', title: 'Footer', ready: true },
-    { id: 'legali', title: 'Privacy & Termini', ready: true },
-    { id: 'careers', title: 'Careers', ready: true },
-    { id: 'press', title: 'Press', ready: true },
-    { id: 'contatti', title: 'Contatti', ready: true },
-    { id: 'meccanica', title: 'Servizi Meccanica', ready: true },
-    { id: 'lavaggio', title: 'Servizi Lavaggio', ready: true },
-    { id: 'investitori', title: 'Investitori', ready: true },
-    { id: 'franchising', title: 'Franchising', ready: true },
-    { id: 'aviation', title: 'Aviation Quote', ready: true },
-    { id: 'check-email', title: 'Check Email', ready: true },
-    { id: 'jet-search', title: 'Jet Search Results', ready: true },
-    { id: 'confirmation', title: 'Conferma Prenotazione', ready: true },
-    { id: 'header', title: 'Header / Navigazione', ready: true },
-    { id: 'signup', title: 'Registrazione Cliente', ready: true },
-    { id: 'payment', title: 'Pagina Pagamento (Nexi)', ready: true },
-    { id: 'payment-success', title: 'Pagamento Riuscito', ready: true },
-    { id: 'booking', title: 'Prenotazione (Yacht/Jet/Heli)', ready: true },
-    { id: 'credit-wallet', title: 'Credit Wallet', ready: true },
-    { id: 'token', title: 'DR7 Token (Coin/Up/APP)', ready: true },
-    { id: 'firma', title: 'Firma Contratto (OTP)', ready: true },
-    { id: 'registrazione-cliente', title: 'Registrazione Cliente (Invito)', ready: true },
-    { id: 'booking-search-box', title: 'Booking Search Box', ready: true },
+type SectionCategoryId = 'chrome' | 'public' | 'auth' | 'booking' | 'legal'
+
+const SECTION_CATEGORIES: { id: SectionCategoryId; label: string; description: string }[] = [
+    { id: 'chrome', label: 'Chrome sito', description: 'Header, footer, popup di ricerca — appaiono su tutte le pagine.' },
+    { id: 'public', label: 'Pagine pubbliche', description: 'Home + pagine vetrina + servizi (no login richiesto).' },
+    { id: 'auth', label: 'Auth & Cliente', description: 'Registrazione account, link invito cliente, firma contratto.' },
+    { id: 'booking', label: 'Prenotazione & Pagamento', description: 'Form prenotazione, checkout, conferma, wallet.' },
+    { id: 'legal', label: 'Legale', description: 'Privacy, termini, cancellazione.' },
+]
+
+const SECTIONS: { id: SectionId; title: string; category: SectionCategoryId; ready: boolean }[] = [
+    // Chrome
+    { id: 'header', title: 'Header / Navigazione', category: 'chrome', ready: true },
+    { id: 'footer', title: 'Footer', category: 'chrome', ready: true },
+    { id: 'booking-search-box', title: 'Booking Search Box', category: 'chrome', ready: true },
+    // Pagine pubbliche
+    { id: 'hero', title: 'Home / Hero', category: 'public', ready: true },
+    { id: 'chi-siamo', title: 'Chi Siamo', category: 'public', ready: true },
+    { id: 'faq', title: 'FAQ', category: 'public', ready: true },
+    { id: 'membership', title: 'Membership / DR7 Club', category: 'public', ready: true },
+    { id: 'meccanica', title: 'Servizi Meccanica', category: 'public', ready: true },
+    { id: 'lavaggio', title: 'Servizi Lavaggio', category: 'public', ready: true },
+    { id: 'investitori', title: 'Investitori', category: 'public', ready: true },
+    { id: 'franchising', title: 'Franchising', category: 'public', ready: true },
+    { id: 'careers', title: 'Careers', category: 'public', ready: true },
+    { id: 'press', title: 'Press', category: 'public', ready: true },
+    { id: 'contatti', title: 'Contatti', category: 'public', ready: true },
+    { id: 'token', title: 'DR7 Token (Coin/Up/APP)', category: 'public', ready: true },
+    // Auth & Cliente
+    { id: 'signup', title: 'Registrazione Cliente (Account)', category: 'auth', ready: true },
+    { id: 'registrazione-cliente', title: 'Registrazione Cliente (Invito)', category: 'auth', ready: true },
+    { id: 'check-email', title: 'Check Email', category: 'auth', ready: true },
+    { id: 'firma', title: 'Firma Contratto (OTP)', category: 'auth', ready: true },
+    // Prenotazione & Pagamento
+    { id: 'booking', title: 'Prenotazione (Yacht/Jet/Heli)', category: 'booking', ready: true },
+    { id: 'aviation', title: 'Aviation Quote', category: 'booking', ready: true },
+    { id: 'jet-search', title: 'Jet Search Results', category: 'booking', ready: true },
+    { id: 'payment', title: 'Pagina Pagamento (Nexi)', category: 'booking', ready: true },
+    { id: 'payment-success', title: 'Pagamento Riuscito', category: 'booking', ready: true },
+    { id: 'confirmation', title: 'Conferma Prenotazione', category: 'booking', ready: true },
+    { id: 'credit-wallet', title: 'Credit Wallet', category: 'booking', ready: true },
+    // Legale
+    { id: 'legali', title: 'Privacy & Termini', category: 'legal', ready: true },
+    { id: 'cancellazione', title: 'Cancellazione', category: 'legal', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -1788,6 +1803,93 @@ async function savePersisted(snap: SiteCopySnapshot): Promise<void> {
     if (error) throw error
 }
 
+// ─── Sidebar (grouped + searchable) ──────────────────────────────────────
+// Categories with collapsible groups. Auto-expands the group containing
+// the active section. Search input filters across all categories — when
+// search is active, groups expand to show matches and irrelevant ones hide.
+function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id: SectionId) => void }) {
+    const [query, setQuery] = useState('')
+    const [collapsed, setCollapsed] = useState<Record<SectionCategoryId, boolean>>({
+        chrome: false, public: false, auth: false, booking: false, legal: false,
+    })
+    const activeCategory = SECTIONS.find(s => s.id === section)?.category
+    const q = query.trim().toLowerCase()
+    const filteredByCategory = SECTION_CATEGORIES.map(cat => {
+        const items = SECTIONS.filter(s => s.category === cat.id && (q === '' || s.title.toLowerCase().includes(q)))
+        return { cat, items }
+    }).filter(g => g.items.length > 0)
+
+    return (
+        <div className="bg-white rounded-2xl p-3 border border-black/5 shadow-sm space-y-3">
+            <div className="relative">
+                <input
+                    type="search"
+                    placeholder="Cerca sezione…"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl text-[13px] bg-black/[0.03] border border-transparent focus:bg-white focus:border-black/10 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                />
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6e6e73] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <circle cx="11" cy="11" r="7" />
+                    <path strokeLinecap="round" d="m20 20-3-3" />
+                </svg>
+            </div>
+
+            {filteredByCategory.length === 0 && (
+                <p className="px-3 py-6 text-center text-[12px] text-[#6e6e73]">Nessuna sezione corrisponde.</p>
+            )}
+
+            {filteredByCategory.map(({ cat, items }) => {
+                const isOpen = q !== '' || !collapsed[cat.id] || cat.id === activeCategory
+                return (
+                    <div key={cat.id}>
+                        <button
+                            type="button"
+                            onClick={() => q === '' && setCollapsed(s => ({ ...s, [cat.id]: !s[cat.id] }))}
+                            className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#6e6e73] hover:text-[#1d1d1f]"
+                            title={cat.description}
+                        >
+                            <span>{cat.label}</span>
+                            <span className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-semibold bg-black/5 rounded-full px-1.5 py-0.5">{items.length}</span>
+                                {q === '' && (
+                                    <svg className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="currentColor"><path d="M6 8 1 3h10z" /></svg>
+                                )}
+                            </span>
+                        </button>
+                        {isOpen && (
+                            <ul className="space-y-0.5 mt-1">
+                                {items.map(s => {
+                                    const active = section === s.id
+                                    return (
+                                        <li key={s.id}>
+                                            <button
+                                                onClick={() => onSelect(s.id)}
+                                                className={`w-full text-left px-3 py-2 rounded-xl text-[13px] font-medium transition-colors flex items-center gap-2 ${
+                                                    active
+                                                        ? 'bg-blue-500 text-white shadow-sm'
+                                                        : 'text-[#1d1d1f] hover:bg-black/5'
+                                                }`}
+                                            >
+                                                <span className="flex-1">{s.title}</span>
+                                                {!s.ready && (
+                                                    <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                                                        active ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-700'
+                                                    }`}>Soon</span>
+                                                )}
+                                            </button>
+                                        </li>
+                                    )
+                                })}
+                            </ul>
+                        )}
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function SitoTab() {
     const { adminEmail, loading: roleLoading } = useAdminRole()
@@ -2197,36 +2299,13 @@ export default function SitoTab() {
 
             {/* Body: side nav + content */}
             <div className="px-6 pt-6">
-                <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-6">
-                    {/* Side nav */}
+                <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
+                    {/* Side nav — grouped by category + searchable */}
                     <aside>
-                        <ul className="space-y-1 bg-white rounded-2xl p-2 border border-black/5 shadow-sm">
-                            {SECTIONS.map((s, idx) => {
-                                const active = section === s.id
-                                return (
-                                    <li key={s.id}>
-                                        <button
-                                            onClick={() => setSection(s.id)}
-                                            className={`w-full text-left px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors flex items-center gap-2 ${
-                                                active
-                                                    ? 'bg-blue-500 text-white shadow-sm'
-                                                    : 'text-[#1d1d1f] hover:bg-black/5'
-                                            }`}
-                                        >
-                                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-[11px] font-semibold ${
-                                                active ? 'bg-white/20 text-white' : 'bg-black/5 text-[#6e6e73]'
-                                            }`}>{idx + 1}</span>
-                                            <span className="flex-1">{s.title}</span>
-                                            {!s.ready && (
-                                                <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                                                    active ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-700'
-                                                }`}>Soon</span>
-                                            )}
-                                        </button>
-                                    </li>
-                                )
-                            })}
-                        </ul>
+                        <SitoSidebar
+                            section={section}
+                            onSelect={setSection}
+                        />
                     </aside>
 
                     {/* Main content */}
