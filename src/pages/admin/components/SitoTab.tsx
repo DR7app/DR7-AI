@@ -1802,6 +1802,38 @@ async function savePersisted(snap: SiteCopySnapshot): Promise<void> {
     if (error) throw error
 }
 
+// ─── WhatsApp template cross-link banner ────────────────────────────────
+// Shown at the top of any Sito sub-tab whose page also sends a WhatsApp
+// message. The message bodies live in `system_messages` (Messaggi di
+// Sistema Pro tab), NOT in `site_copy` — this banner makes the split
+// navigable instead of confusing.
+function WhatsAppTemplateNotice({ keys }: { keys: { key: string; label: string }[] }) {
+    return (
+        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500/15 text-green-600 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                    <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.592 2.654-.698c1.09.587 2.107.89 3.037.89h.007c3.181 0 5.768-2.587 5.768-5.776 0-3.183-2.585-5.769-5.769-5.769z" />
+                </svg>
+            </div>
+            <div className="flex-1 text-[13px] text-theme-text-secondary">
+                <p>
+                    Questa pagina invia anche messaggi WhatsApp ai clienti. I <strong className="text-theme-text-primary">testi dei messaggi</strong> vivono in{' '}
+                    <strong className="text-theme-text-primary">Messaggi di Sistema Pro</strong> (un tab dedicato), non qui — qui modifichi solo la pagina del sito.
+                </p>
+                <ul className="mt-2 space-y-1">
+                    {keys.map(k => (
+                        <li key={k.key} className="flex items-center gap-2">
+                            <code className="text-[11px] bg-theme-bg-tertiary px-1.5 py-0.5 rounded font-mono">{k.key}</code>
+                            <span className="text-theme-text-muted">→</span>
+                            <span>{k.label}</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    )
+}
+
 // ─── Sidebar (grouped + searchable) ──────────────────────────────────────
 // Categories with collapsible groups. Auto-expands the group containing
 // the active section. Search input filters across all categories — when
@@ -5023,9 +5055,13 @@ function AviationQuoteEditor({ copy, setCopy }: { copy: AviationQuoteCopy; setCo
             <div>
                 <h2 className="text-[20px] font-semibold tracking-tight text-theme-text-primary">Aviation Quote</h2>
                 <p className="text-[13px] text-theme-text-secondary mt-1">
-                    Pagine <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/aviation-quote-request</code> + <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/helicopter-quote-request</code>. Token <code>{'{service}'}</code> nel titolo si risolve a "Jet Privato" o "Elicottero" in base alla pagina. Il template WhatsApp supporta i placeholder: <code>{'{service}'}</code>, <code>{'{nome}'}</code>, <code>{'{email}'}</code>, <code>{'{telefono}'}</code>, <code>{'{partenza}'}</code>, <code>{'{arrivo}'}</code>, <code>{'{data_partenza}'}</code>, <code>{'{data_ritorno}'}</code>, <code>{'{passeggeri}'}</code>, <code>{'{note}'}</code>.
+                    Pagine <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/aviation-quote-request</code> + <code className="text-[12px] bg-theme-bg-secondary px-1.5 py-0.5 rounded">/helicopter-quote-request</code>. Token <code>{'{service}'}</code> nel titolo si risolve a "Jet Privato" o "Elicottero" in base alla pagina.
                 </p>
             </div>
+
+            <WhatsAppTemplateNotice keys={[
+                { key: 'pro_aviation_quote_request', label: 'Richiesta Preventivo Aviation (Jet + Elicottero)' },
+            ]} />
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Etichette servizio (per token {'{service}'})</h3>
@@ -5733,6 +5769,11 @@ function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; set
                 segnaposto fra parentesi graffe — vengono sostituiti dal sito.
             </p>
 
+            <WhatsAppTemplateNotice keys={[
+                { key: 'pro_payment_success_rental', label: 'Conferma noleggio (auto / yacht / jet / heli)' },
+                { key: 'pro_payment_success_appointment', label: 'Conferma appuntamento (lavaggio + meccanica)' },
+            ]} />
+
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Stato caricamento</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -5833,6 +5874,12 @@ function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: B
                 dizionario i18n; qui modifichi solo gate di login, schermate di conferma, blocco riepilogo
                 preventivo, messaggi di errore Stripe/salvataggio e label default del select.
             </p>
+
+            <WhatsAppTemplateNotice keys={[
+                { key: 'pro_booking_helicopter_inquiry', label: 'Richiesta preventivo elicottero' },
+                { key: 'pro_booking_jet_inquiry', label: 'Richiesta preventivo jet privato' },
+                { key: 'pro_booking_yacht_confirm', label: 'Conferma prenotazione yacht' },
+            ]} />
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Stati comuni</h3>
