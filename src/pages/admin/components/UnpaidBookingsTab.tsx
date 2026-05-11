@@ -526,10 +526,10 @@ export default function UnpaidBookingsTab() {
       }
 
       if (newStatus === 'paid') {
-        // Get service_type to check if it's a car rental
+        // Get service_type + payment_method per decidere se generare fattura.
         const { data: bookingData } = await supabase
           .from('bookings')
-          .select('service_type')
+          .select('service_type, payment_method')
           .eq('id', bookingId)
           .maybeSingle()
         // Car rental = NOT car_wash and NOT mechanical
@@ -537,7 +537,12 @@ export default function UnpaidBookingsTab() {
         const isCarRental = !st || st === 'rental' || st === 'car_rental' ||
           (st !== 'car_wash' && st !== 'mechanical' && st !== 'mechanical_service')
         const isCarWash = st === 'car_wash'
-        logger.log('[updatePaymentStatus] service_type:', st, 'isCarRental:', isCarRental, 'isCarWash:', isCarWash)
+        // Credit Wallet: la fattura e' gia' stata generata al momento della
+        // ricarica del wallet. Generarne un'altra qui sarebbe doppia
+        // fatturazione. Salta tutto il blocco fattura per questo metodo.
+        const pm = (bookingData?.payment_method || '').toLowerCase()
+        const isCreditWallet = pm === 'credit wallet' || pm === 'credit_wallet' || pm === 'credit'
+        logger.log('[updatePaymentStatus] service_type:', st, 'isCarRental:', isCarRental, 'isCarWash:', isCarWash, 'isCreditWallet:', isCreditWallet)
 
         // DR7 Privilege — fire-and-forget sul pagamento per QUALSIASI servizio
         // (car wash + noleggio). Backend e' idempotente via dr7_privilege_sent_at.
@@ -549,7 +554,9 @@ export default function UnpaidBookingsTab() {
           }).catch(() => { /* non-blocking */ })
         }
 
-        // 1. Generate fattura.
+        // 1. Generate fattura — SOLO se NON e' Credit Wallet (in quel caso
+        //    la fattura e' gia' stata generata alla ricarica del wallet, non
+        //    qui).
         // Logic:
         //   • If NO fattura exists yet → full fattura on the booking total.
         //   • If a fattura ALREADY exists and the booking was previously
@@ -558,7 +565,10 @@ export default function UnpaidBookingsTab() {
         //     that's being paid now. Prevents the "Fattura già esistente"
         //     blocker when an admin raises the price by e.g. 5 € and marks
         //     the extra paid.
-        try {
+        if (isCreditWallet) {
+          logger.log('[updatePaymentStatus] Credit Wallet: skip fattura generation (gia\' generata alla ricarica wallet)')
+          toast.success('Segnato come pagato (fattura gia\' presente per ricarica wallet)')
+        } else try {
           const { data: fatture } = await supabase
             .from('fatture')
             .select('id, numero_fattura, items')
