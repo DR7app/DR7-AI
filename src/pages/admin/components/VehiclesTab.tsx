@@ -1355,13 +1355,16 @@ export default function VehiclesTab() {
                 })}
               </div>
 
-              {/* Desktop table (xl+) */}
-              <div className="hidden xl:block overflow-x-auto">
-                <table className="w-full">
+              {/* Desktop table (xl+): 7 colonne strette, niente overflow-x.
+                  Stato/G.Fermo/Targa/ROI rimossi perche\' ridondanti — Stato
+                  e\' nello chip Dispon., G.Fermo si legge nella barra Utilizzo,
+                  Targa va nel sottotitolo del Veicolo, ROI deriva da Fatturato. */}
+              <div className="hidden xl:block">
+                <table className="w-full table-auto">
                   <thead>
                     <tr className="text-[10px] uppercase tracking-wider text-theme-text-muted border-b border-theme-border">
                       {multiSelectMode && (
-                        <th className="px-3 py-3 text-left w-8">
+                        <th className="px-1.5 py-2 text-left w-8">
                           <input
                             type="checkbox"
                             checked={flatRows.length > 0 && flatRows.every(r => selectedVehicles.has(r.vehicle.id))}
@@ -1372,13 +1375,9 @@ export default function VehiclesTab() {
                       )}
                       <th className="px-1.5 py-2 text-left font-semibold">Veicolo</th>
                       <th className="px-1.5 py-2 text-left font-semibold">Gruppo</th>
-                      <th className="px-1.5 py-2 text-left font-semibold">Targa</th>
                       <th className="px-1.5 py-2 text-right font-semibold">Km</th>
-                      <th className="px-1.5 py-2 text-left font-semibold">Stato</th>
                       <th className="px-1.5 py-2 text-left font-semibold">Utilizzo</th>
                       <th className="px-1.5 py-2 text-right font-semibold">Fatturato</th>
-                      <th className="px-1.5 py-2 text-right font-semibold">G. Fermo</th>
-                      <th className="px-1.5 py-2 text-right font-semibold">ROI</th>
                       <th className="px-1.5 py-2 text-left font-semibold">Dispon.</th>
                       <th className="px-1.5 py-2 text-center font-semibold">Az.</th>
                     </tr>
@@ -1386,7 +1385,7 @@ export default function VehiclesTab() {
                   <tbody>
                     {flatRows.length === 0 && (
                       <tr>
-                        <td colSpan={multiSelectMode ? 12 : 11} className="px-3 py-12 text-center text-theme-text-muted text-sm">
+                        <td colSpan={multiSelectMode ? 8 : 7} className="px-3 py-12 text-center text-theme-text-muted text-sm">
                           Nessun veicolo trovato con i filtri selezionati
                         </td>
                       </tr>
@@ -1423,9 +1422,9 @@ export default function VehiclesTab() {
                               </div>
                               <div className="min-w-0">
                                 <div className="text-xs font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
-                                <div className="text-[10px] text-theme-text-muted truncate">
-                                  {(vehicle.metadata as { cv?: number } | null)?.cv && <span>{(vehicle.metadata as { cv?: number }).cv} CV</span>}
-                                  {(vehicle.metadata as { model_year?: number } | null)?.model_year && <span>{(vehicle.metadata as { cv?: number } | null)?.cv ? ' · ' : ''}{(vehicle.metadata as { model_year?: number }).model_year}</span>}
+                                <div className="text-[10px] text-theme-text-muted truncate font-mono">
+                                  {vehicle.plate || '—'}
+                                  {(vehicle.metadata as { cv?: number } | null)?.cv && <span> · {(vehicle.metadata as { cv?: number }).cv}CV</span>}
                                 </div>
                               </div>
                             </div>
@@ -1433,13 +1432,7 @@ export default function VehiclesTab() {
                           <td className="px-1.5 py-2">
                             <span className={`px-1.5 py-0.5 ${palette.pillBg} ${palette.pillText} rounded text-[9px] font-medium uppercase tracking-wider whitespace-nowrap`}>{sectionLabel}</span>
                           </td>
-                          <td className="px-1.5 py-2 text-[11px] font-mono text-theme-text-primary tabular-nums">{vehicle.plate || '—'}</td>
                           <td className="px-1.5 py-2 text-[11px] text-theme-text-primary tabular-nums text-right whitespace-nowrap">{km.toLocaleString('it-IT')}</td>
-                          <td className="px-1.5 py-2">
-                            <span className={`inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap ${st.text}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}/>{st.label}
-                            </span>
-                          </td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-2 min-w-[110px]">
                               <div className="w-10 h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
@@ -1449,10 +1442,6 @@ export default function VehiclesTab() {
                             </div>
                           </td>
                           <td className="px-1.5 py-2 text-xs text-theme-text-primary tabular-nums text-right whitespace-nowrap">€{fatt.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</td>
-                          <td className="px-1.5 py-2 text-xs text-theme-text-primary tabular-nums text-right">{fermi}</td>
-                          <td className="px-1.5 py-2 text-xs tabular-nums text-right whitespace-nowrap">
-                            <span className={roi >= 0 ? 'text-emerald-400' : 'text-red-400'}>{roi >= 0 ? '▲' : '▼'} {String(Math.abs(roi)).replace('.', ',')}%</span>
-                          </td>
                           <td className="px-1.5 py-2 whitespace-nowrap">
                             <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-medium border whitespace-nowrap ${dispClass}`}>{dispLabel}</span>
                           </td>
