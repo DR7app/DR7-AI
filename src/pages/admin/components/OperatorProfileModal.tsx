@@ -688,8 +688,8 @@ function Flag({ label, on }: { label: string; on: boolean }) {
     )
 }
 
-function LabeledInput({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement> & { onChange: (v: string) => void }) {
-    const { onChange, ...rest } = props as React.InputHTMLAttributes<HTMLInputElement> & { onChange: (v: string) => void }
+function LabeledInput({ label, ...props }: { label: string } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> & { onChange: (v: string) => void }) {
+    const { onChange, ...rest } = props
     return (
         <label className="block">
             <span className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">{label}</span>
