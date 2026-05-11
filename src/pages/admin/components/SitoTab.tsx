@@ -52,6 +52,7 @@ type SectionId =
     | 'header'
     | 'signup'
     | 'payment'
+    | 'payment-success'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -75,6 +76,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'header', title: 'Header / Navigazione', ready: true },
     { id: 'signup', title: 'Registrazione Cliente', ready: true },
     { id: 'payment', title: 'Pagina Pagamento (Nexi)', ready: true },
+    { id: 'payment-success', title: 'Pagamento Riuscito', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -373,6 +375,60 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Payment Success page (post-payment landing) ─────────────────────────
+interface PaymentSuccessCopy {
+    loading_title_it: string; loading_title_en: string
+    loading_subtitle_it: string; loading_subtitle_en: string
+    success_title_it: string; success_title_en: string
+    body_generic_it: string; body_generic_en: string
+    body_dr7_club_it: string; body_dr7_club_en: string
+    body_membership_template_it: string; body_membership_template_en: string
+    body_wallet_template_it: string; body_wallet_template_en: string
+    billing_cycle_monthly_it: string; billing_cycle_monthly_en: string
+    billing_cycle_annual_it: string; billing_cycle_annual_en: string
+    transaction_heading_it: string; transaction_heading_en: string
+    transaction_order_id_label_it: string; transaction_order_id_label_en: string
+    transaction_amount_label_it: string; transaction_amount_label_en: string
+    transaction_auth_code_label_it: string; transaction_auth_code_label_en: string
+    cta_home_it: string; cta_home_en: string
+    cta_whatsapp_it: string; cta_whatsapp_en: string
+    cta_membership_it: string; cta_membership_en: string
+    cta_wallet_it: string; cta_wallet_en: string
+    cta_bookings_it: string; cta_bookings_en: string
+    err_booking_create_it: string; err_booking_create_en: string
+    err_auth_it: string; err_auth_en: string
+    err_purchase_update_it: string; err_purchase_update_en: string
+    err_credit_add_it: string; err_credit_add_en: string
+    err_order_not_found_it: string; err_order_not_found_en: string
+    err_generic_it: string; err_generic_en: string
+}
+const INITIAL_PAYMENT_SUCCESS: PaymentSuccessCopy = {
+    loading_title_it: '', loading_title_en: '',
+    loading_subtitle_it: '', loading_subtitle_en: '',
+    success_title_it: '', success_title_en: '',
+    body_generic_it: '', body_generic_en: '',
+    body_dr7_club_it: '', body_dr7_club_en: '',
+    body_membership_template_it: '', body_membership_template_en: '',
+    body_wallet_template_it: '', body_wallet_template_en: '',
+    billing_cycle_monthly_it: '', billing_cycle_monthly_en: '',
+    billing_cycle_annual_it: '', billing_cycle_annual_en: '',
+    transaction_heading_it: '', transaction_heading_en: '',
+    transaction_order_id_label_it: '', transaction_order_id_label_en: '',
+    transaction_amount_label_it: '', transaction_amount_label_en: '',
+    transaction_auth_code_label_it: '', transaction_auth_code_label_en: '',
+    cta_home_it: '', cta_home_en: '',
+    cta_whatsapp_it: '', cta_whatsapp_en: '',
+    cta_membership_it: '', cta_membership_en: '',
+    cta_wallet_it: '', cta_wallet_en: '',
+    cta_bookings_it: '', cta_bookings_en: '',
+    err_booking_create_it: '', err_booking_create_en: '',
+    err_auth_it: '', err_auth_en: '',
+    err_purchase_update_it: '', err_purchase_update_en: '',
+    err_credit_add_it: '', err_credit_add_en: '',
+    err_order_not_found_it: '', err_order_not_found_en: '',
+    err_generic_it: '', err_generic_en: '',
 }
 
 // ─── Payment page (Nexi XPay wrapper) ────────────────────────────────────
@@ -1141,6 +1197,7 @@ interface SiteCopySnapshot {
     header?: HeaderCopy
     signUp?: SignUpCopy
     payment?: PaymentCopy
+    paymentSuccess?: PaymentSuccessCopy
 }
 
 interface CurrentState {
@@ -1165,6 +1222,7 @@ interface CurrentState {
     header: HeaderCopy
     signUp: SignUpCopy
     payment: PaymentCopy
+    paymentSuccess: PaymentSuccessCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -1265,6 +1323,8 @@ export default function SitoTab() {
     const [savedSignUp, setSavedSignUp] = useState<SignUpCopy>(INITIAL_SIGNUP)
     const [payment, setPayment] = useState<PaymentCopy>(INITIAL_PAYMENT)
     const [savedPayment, setSavedPayment] = useState<PaymentCopy>(INITIAL_PAYMENT)
+    const [paymentSuccess, setPaymentSuccess] = useState<PaymentSuccessCopy>(INITIAL_PAYMENT_SUCCESS)
+    const [savedPaymentSuccess, setSavedPaymentSuccess] = useState<PaymentSuccessCopy>(INITIAL_PAYMENT_SUCCESS)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -1376,6 +1436,10 @@ export default function SitoTab() {
                     setPayment(remote.payment)
                     setSavedPayment(remote.payment)
                 }
+                if (remote?.paymentSuccess && remote.paymentSuccess.success_title_it) {
+                    setPaymentSuccess(remote.paymentSuccess)
+                    setSavedPaymentSuccess(remote.paymentSuccess)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -1388,10 +1452,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess]
     )
     const dirty = changes.length > 0
 
@@ -1402,7 +1466,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1424,6 +1488,7 @@ export default function SitoTab() {
             setSavedHeader(header)
             setSavedSignUp(signUp)
             setSavedPayment(payment)
+            setSavedPaymentSuccess(paymentSuccess)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1479,6 +1544,7 @@ export default function SitoTab() {
         setHeader(savedHeader)
         setSignUp(savedSignUp)
         setPayment(savedPayment)
+        setPaymentSuccess(savedPaymentSuccess)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1647,6 +1713,9 @@ export default function SitoTab() {
                         {hydrated && section === 'payment' && (
                             <PaymentEditor copy={payment} setCopy={setPayment} />
                         )}
+                        {hydrated && section === 'payment-success' && (
+                            <PaymentSuccessEditor copy={paymentSuccess} setCopy={setPaymentSuccess} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1777,6 +1846,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.payment) !== JSON.stringify(saved.payment)) {
         out.push('Pagina Pagamento: contenuti modificati')
+    }
+    if (JSON.stringify(current.paymentSuccess) !== JSON.stringify(saved.paymentSuccess)) {
+        out.push('Pagamento Riuscito: contenuti modificati')
     }
     return out
 }
@@ -4946,6 +5018,107 @@ function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: P
                     <FieldText label="Check card error (EN)" value={copy.error_check_card_en} onChange={v => update('error_check_card_en', v)} />
                     <FieldText label="Pagamento fallito (IT)" value={copy.error_payment_failed_it} onChange={v => update('error_payment_failed_it', v)} />
                     <FieldText label="Payment failed (EN)" value={copy.error_payment_failed_en} onChange={v => update('error_payment_failed_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Payment Success editor (post-payment landing) ─────────────────────────
+// Body templates accept tokens: {tierName} {cycle} (membership), {packageName}
+// {amount} (wallet). Keep the placeholders verbatim — they're replaced at
+// render time on the website.
+function PaymentSuccessEditor({ copy, setCopy }: { copy: PaymentSuccessCopy; setCopy: (next: PaymentSuccessCopy) => void }) {
+    const update = <K extends keyof PaymentSuccessCopy>(key: K, value: PaymentSuccessCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-[#6e6e73]">
+                Pagina di conferma post-pagamento. Quattro varianti del messaggio (booking generica, DR7 Club,
+                Membership con {`{tierName}`} {`{cycle}`}, Wallet con {`{packageName}`} {`{amount}`}). Lascia i
+                segnaposto fra parentesi graffe — vengono sostituiti dal sito.
+            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato caricamento</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.loading_title_it} onChange={v => update('loading_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.loading_title_en} onChange={v => update('loading_title_en', v)} />
+                    <FieldText label="Sottotitolo (IT)" value={copy.loading_subtitle_it} onChange={v => update('loading_subtitle_it', v)} />
+                    <FieldText label="Subtitle (EN)" value={copy.loading_subtitle_en} onChange={v => update('loading_subtitle_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Stato successo + corpo messaggio</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo successo (IT)" value={copy.success_title_it} onChange={v => update('success_title_it', v)} />
+                    <FieldText label="Success title (EN)" value={copy.success_title_en} onChange={v => update('success_title_en', v)} />
+                    <FieldTextArea label="Corpo generico (IT)" value={copy.body_generic_it} onChange={v => update('body_generic_it', v)} />
+                    <FieldTextArea label="Generic body (EN)" value={copy.body_generic_en} onChange={v => update('body_generic_en', v)} />
+                    <FieldTextArea label="Corpo DR7 Club (IT)" value={copy.body_dr7_club_it} onChange={v => update('body_dr7_club_it', v)} />
+                    <FieldTextArea label="DR7 Club body (EN)" value={copy.body_dr7_club_en} onChange={v => update('body_dr7_club_en', v)} />
+                    <FieldTextArea label="Corpo Membership (IT) — usa {tierName} {cycle}" value={copy.body_membership_template_it} onChange={v => update('body_membership_template_it', v)} />
+                    <FieldTextArea label="Membership body (EN) — uses {tierName} {cycle}" value={copy.body_membership_template_en} onChange={v => update('body_membership_template_en', v)} />
+                    <FieldTextArea label="Corpo Wallet (IT) — usa {packageName} {amount}" value={copy.body_wallet_template_it} onChange={v => update('body_wallet_template_it', v)} />
+                    <FieldTextArea label="Wallet body (EN) — uses {packageName} {amount}" value={copy.body_wallet_template_en} onChange={v => update('body_wallet_template_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Ciclo fatturazione (Membership)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Mensile (IT)' value={copy.billing_cycle_monthly_it} onChange={v => update('billing_cycle_monthly_it', v)} />
+                    <FieldText label='Monthly (EN)' value={copy.billing_cycle_monthly_en} onChange={v => update('billing_cycle_monthly_en', v)} />
+                    <FieldText label='Annuale (IT)' value={copy.billing_cycle_annual_it} onChange={v => update('billing_cycle_annual_it', v)} />
+                    <FieldText label='Annual (EN)' value={copy.billing_cycle_annual_en} onChange={v => update('billing_cycle_annual_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Dettagli transazione</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo sezione (IT)" value={copy.transaction_heading_it} onChange={v => update('transaction_heading_it', v)} />
+                    <FieldText label="Section heading (EN)" value={copy.transaction_heading_en} onChange={v => update('transaction_heading_en', v)} />
+                    <FieldText label="ID Ordine (IT)" value={copy.transaction_order_id_label_it} onChange={v => update('transaction_order_id_label_it', v)} />
+                    <FieldText label="Order ID label (EN)" value={copy.transaction_order_id_label_en} onChange={v => update('transaction_order_id_label_en', v)} />
+                    <FieldText label="Importo (IT)" value={copy.transaction_amount_label_it} onChange={v => update('transaction_amount_label_it', v)} />
+                    <FieldText label="Amount label (EN)" value={copy.transaction_amount_label_en} onChange={v => update('transaction_amount_label_en', v)} />
+                    <FieldText label="Codice Autorizzazione (IT)" value={copy.transaction_auth_code_label_it} onChange={v => update('transaction_auth_code_label_it', v)} />
+                    <FieldText label="Auth Code label (EN)" value={copy.transaction_auth_code_label_en} onChange={v => update('transaction_auth_code_label_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Pulsanti azione</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Home CTA (IT)" value={copy.cta_home_it} onChange={v => update('cta_home_it', v)} />
+                    <FieldText label="Home CTA (EN)" value={copy.cta_home_en} onChange={v => update('cta_home_en', v)} />
+                    <FieldText label="WhatsApp CTA (IT)" value={copy.cta_whatsapp_it} onChange={v => update('cta_whatsapp_it', v)} />
+                    <FieldText label="WhatsApp CTA (EN)" value={copy.cta_whatsapp_en} onChange={v => update('cta_whatsapp_en', v)} />
+                    <FieldText label="Membership CTA (IT)" value={copy.cta_membership_it} onChange={v => update('cta_membership_it', v)} />
+                    <FieldText label="Membership CTA (EN)" value={copy.cta_membership_en} onChange={v => update('cta_membership_en', v)} />
+                    <FieldText label="Wallet CTA (IT)" value={copy.cta_wallet_it} onChange={v => update('cta_wallet_it', v)} />
+                    <FieldText label="Wallet CTA (EN)" value={copy.cta_wallet_en} onChange={v => update('cta_wallet_en', v)} />
+                    <FieldText label="Prenotazioni CTA (IT)" value={copy.cta_bookings_it} onChange={v => update('cta_bookings_it', v)} />
+                    <FieldText label="Bookings CTA (EN)" value={copy.cta_bookings_en} onChange={v => update('cta_bookings_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Messaggi di errore</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Creazione prenotazione (IT)" value={copy.err_booking_create_it} onChange={v => update('err_booking_create_it', v)} />
+                    <FieldText label="Booking create error (EN)" value={copy.err_booking_create_en} onChange={v => update('err_booking_create_en', v)} />
+                    <FieldText label="Autenticazione (IT)" value={copy.err_auth_it} onChange={v => update('err_auth_it', v)} />
+                    <FieldText label="Auth error (EN)" value={copy.err_auth_en} onChange={v => update('err_auth_en', v)} />
+                    <FieldText label="Aggiornamento acquisto (IT)" value={copy.err_purchase_update_it} onChange={v => update('err_purchase_update_it', v)} />
+                    <FieldText label="Purchase update error (EN)" value={copy.err_purchase_update_en} onChange={v => update('err_purchase_update_en', v)} />
+                    <FieldText label="Aggiunta crediti wallet (IT)" value={copy.err_credit_add_it} onChange={v => update('err_credit_add_it', v)} />
+                    <FieldText label="Wallet credit add error (EN)" value={copy.err_credit_add_en} onChange={v => update('err_credit_add_en', v)} />
+                    <FieldText label="Ordine non trovato (IT)" value={copy.err_order_not_found_it} onChange={v => update('err_order_not_found_it', v)} />
+                    <FieldText label="Order not found (EN)" value={copy.err_order_not_found_en} onChange={v => update('err_order_not_found_en', v)} />
+                    <FieldText label="Errore generico (IT)" value={copy.err_generic_it} onChange={v => update('err_generic_it', v)} />
+                    <FieldText label="Generic error (EN)" value={copy.err_generic_en} onChange={v => update('err_generic_en', v)} />
                 </div>
             </section>
         </div>
