@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
@@ -113,6 +113,8 @@ export default function CampagnaMarketingTab() {
     const [videoFile, setVideoFile] = useState<File | null>(null)
     const [videoPreview, setVideoPreview] = useState<string>('')
     const [, setSending] = useState(false)
+    const sendLockRef = useRef(false)
+    const saveEditLockRef = useRef(false)
 
     const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
@@ -296,8 +298,18 @@ export default function CampagnaMarketingTab() {
     }
 
     async function handleSend() {
+        if (sendLockRef.current) return
         if (!title.trim()) return toast.error('Inserisci un titolo')
         if (!message.trim()) return toast.error('Inserisci il messaggio')
+        sendLockRef.current = true
+        try {
+        await handleSendInner()
+        } finally {
+            sendLockRef.current = false
+        }
+    }
+
+    async function handleSendInner() {
 
         // Scheduled-send branch: ignores manual selection (audience is
         // recomputed at fire time from saved filters).
@@ -479,6 +491,7 @@ export default function CampagnaMarketingTab() {
     }
 
     async function handleSaveEdit() {
+        if (saveEditLockRef.current) return
         if (!editing) return
         if (!editDate || !editTime) return toast.error('Data/ora obbligatorie')
         const newScheduledIso = romeLocalToISO(editDate, editTime)
@@ -494,6 +507,7 @@ export default function CampagnaMarketingTab() {
             if (editInterval < 1) return toast.error('Intervallo ricorrenza non valido')
         }
 
+        saveEditLockRef.current = true
         setSavingEdit(true)
         try {
             const { error } = await supabase
@@ -514,6 +528,7 @@ export default function CampagnaMarketingTab() {
             toast.error(`Errore: ${msg}`)
         } finally {
             setSavingEdit(false)
+            saveEditLockRef.current = false
         }
     }
 

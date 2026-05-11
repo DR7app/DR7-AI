@@ -58,6 +58,8 @@ export default function CarWashCatalogTab() {
 
   const newImageRef = useRef<HTMLInputElement>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
+  const primeFlexLockRef = useRef(false)
+  const saveEditingLockRef = useRef(false)
 
   // Prime Flex (protezione cancellazione lavaggio): prezzo unico modificabile
   // dall'admin, letto dal sito (CarWashBookingPage) tramite centralina_pro_config.
@@ -123,11 +125,13 @@ export default function CarWashCatalogTab() {
   // (preserva il resto della config esistente). Niente upsert nuovo: facciamo
   // SELECT, merge, UPDATE per non sovrascrivere campi che non gestiamo qui.
   async function savePrimeFlex() {
+    if (primeFlexLockRef.current) return
     const parsed = parseFloat(primeFlexPrice)
     if (!Number.isFinite(parsed) || parsed < 0) {
       toast.error('Prezzo non valido')
       return
     }
+    primeFlexLockRef.current = true
     setPrimeFlexSaving(true)
     try {
       const { data } = await supabase
@@ -151,6 +155,7 @@ export default function CarWashCatalogTab() {
       toast.error('Errore salvataggio Prime Flex: ' + (err as Error).message)
     } finally {
       setPrimeFlexSaving(false)
+      primeFlexLockRef.current = false
     }
   }
 
@@ -190,6 +195,8 @@ export default function CarWashCatalogTab() {
   }
 
   async function saveEditing(service: CarWashService) {
+    if (saveEditingLockRef.current) return
+    saveEditingLockRef.current = true
     setSaving(true)
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -219,6 +226,7 @@ export default function CarWashCatalogTab() {
       alert('Errore nel salvataggio: ' + (err as Error).message)
     } finally {
       setSaving(false)
+      saveEditingLockRef.current = false
     }
   }
 

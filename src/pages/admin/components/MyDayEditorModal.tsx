@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
@@ -87,6 +87,7 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
     const [note, setNote] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const submitLockRef = useRef(false)
 
     // Calcolo live di pausa totale + lavoro netto/lordo (in minuti)
     const livePausaMin = pause.reduce((sum, p) => {
@@ -243,6 +244,8 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
 
     async function handleSave() {
         if (!me) return
+        if (submitLockRef.current) return
+        submitLockRef.current = true
         setSaving(true)
         try {
             const { error: delErr } = await supabase
@@ -294,6 +297,7 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
         } catch (err) {
             toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
         } finally {
+            submitLockRef.current = false
             setSaving(false)
         }
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -130,6 +130,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBooking, setSelectedBooking] = useState<CarWashBooking | null>(null)
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
+  const saveEditLockRef = useRef(false)
 
   // Edit modal: services catalog + selections
   const [carWashServices, setCarWashServices] = useState<CarWashService[]>([])
@@ -1443,6 +1444,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             <div className="p-6 border-t border-theme-border flex gap-3">
               <button
                 onClick={async () => {
+                  if (saveEditLockRef.current) return
+                  saveEditLockRef.current = true
                   try {
                     // Rebuild cart items from edit selections
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1487,6 +1490,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   } catch (error) {
                     console.error('Failed to update booking:', error)
                     toast.error('Errore durante l\'aggiornamento')
+                  } finally {
+                    saveEditLockRef.current = false
                   }
                 }}
                 className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-white px-6 py-3 rounded-full font-medium transition-colors"

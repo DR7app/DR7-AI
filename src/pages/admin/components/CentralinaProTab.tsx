@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -1427,7 +1427,11 @@ export default function CentralinaProTab() {
     ]
   )
 
+  const submitLockRef = useRef(false)
   function handleSave() {
+    if (submitLockRef.current) return
+    submitLockRef.current = true
+    try {
     const changesSnapshot = changes.slice()
     setSavedCategories(categories)
     setSavedFasce(fasce)
@@ -1453,6 +1457,9 @@ export default function CentralinaProTab() {
       changes_count: changesSnapshot.length,
       changes: changesSnapshot.length > 0 ? changesSnapshot : ['(nessuna modifica rilevata)'],
     })
+    } finally {
+      submitLockRef.current = false
+    }
   }
 
   function handleDiscard() {

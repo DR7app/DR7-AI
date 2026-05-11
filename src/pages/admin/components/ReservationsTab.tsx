@@ -3669,6 +3669,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         pendingSubmitRef.current = { skipValidation, overrideCustomerId }
         requestOverride(primary.code, limitationMessage, primary.code === 'paid_rental_modify' ? `booking_edit_${editingId}` : undefined)
+        submitLockRef.current = false
         return
       }
     }
@@ -3699,14 +3700,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // so license_too_recent check runs after customer is saved to DB (existing customer path on retry)
           if (newCustomerData.data_nascita && customerTier?.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
             requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${customerTier.reason}`)
+            submitLockRef.current = false
             return
           }
           if (customerTier?.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
             requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
+            submitLockRef.current = false
             return
           }
           if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
             requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
+            submitLockRef.current = false
             return
           }
         } else if (newCustomerData.tipo_cliente === 'azienda') {
@@ -3736,6 +3740,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         if (!targetId) {
           alert('Seleziona un cliente')
+          submitLockRef.current = false
           return
         }
 
@@ -3807,6 +3812,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             `ID Cliente: ${targetCustomerId}\n\n` +
             'Riprova o contatta il supporto tecnico.'
           )
+          submitLockRef.current = false
           return
         }
 
@@ -3859,6 +3865,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const licYears = calculateLicenseYears(patenteDate)
               if (licYears < 3 && !hasOverride('license_too_recent')) {
                 requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
+                submitLockRef.current = false
                 return
               }
             }
@@ -3868,15 +3875,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const tier = classifyDriverTier(age, licYears)
               if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
                 requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
+                submitLockRef.current = false
                 return
               }
               if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
                 requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
+                submitLockRef.current = false
                 return
               }
             }
             if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
               requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
+              submitLockRef.current = false
               return
             }
           }
@@ -3933,6 +3943,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               'Il cliente selezionato non esiste nel sistema.\n\n' +
               'Per favore, crea prima il profilo del cliente nella tab "Clienti".'
             )
+            submitLockRef.current = false
             return
           }
         }

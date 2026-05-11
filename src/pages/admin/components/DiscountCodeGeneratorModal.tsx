@@ -40,6 +40,7 @@ function generateCode(): string {
 export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSave }: DiscountCodeGeneratorModalProps) {
     const isEditing = !!editingCode
 
+    const submitLockRef = useRef(false)
     const [loading, setLoading] = useState(false)
     const [formData, setFormData] = useState({
         code_type: editingCode?.code_type || 'codice_sconto' as 'codice_sconto' | 'gift_card',
@@ -163,6 +164,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (submitLockRef.current) return
 
         // Validation
         if (!formData.value_amount || Number(formData.value_amount) <= 0) {
@@ -192,6 +194,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
             return
         }
 
+        submitLockRef.current = true
         setLoading(true)
         try {
             // Check uniqueness (skip if editing and code unchanged)
@@ -249,6 +252,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
             console.error('Error saving discount code:', error)
             toast.error(`Errore nel salvataggio: ${_errMsg}`)
         } finally {
+            submitLockRef.current = false
             setLoading(false)
         }
     }

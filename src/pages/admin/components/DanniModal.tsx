@@ -37,6 +37,7 @@ interface CartItem {
 }
 
 export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEditCustomer }: DanniModalProps) {
+    const submitLockRef = useRef(false)
     const [cart, setCart] = useState<CartItem[]>([])
     const [customAmount, setCustomAmount] = useState('')
     const [customLabel, setCustomLabel] = useState('')
@@ -185,10 +186,12 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
     const cartItemCount = cart.reduce((sum, c) => sum + c.quantity, 0)
 
     const handleSubmit = async () => {
+        if (submitLockRef.current) return
         setError('')
         if (cart.length === 0) { setError('Aggiungi almeno un danno.'); return }
         if (cartTotal <= 0) { setError('Il totale deve essere maggiore di zero.'); return }
 
+        submitLockRef.current = true
         setIsGenerating(true)
         try {
             // Upload photos if any
@@ -396,6 +399,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
             console.error('Error generating danni:', err)
             setError(_errMsg || 'Errore nella generazione.')
         } finally {
+            submitLockRef.current = false
             setIsGenerating(false)
         }
     }

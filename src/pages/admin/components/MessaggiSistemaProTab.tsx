@@ -256,6 +256,15 @@ function buildScheduleSummary(
     lines.push(`Evento · ${ev}`)
   }
 
+  // Avviso di duplicato: se è attivo SIA il cron SIA almeno un evento di
+  // codice, il template viene inviato DUE volte (una alla creazione
+  // prenotazione tramite evento, una via cron nell'orario configurato).
+  // Quasi sempre è un errore: il cron è rimasto a default sull'evento
+  // sbagliato (es. "Conferma Noleggio" con cron "24h prima riconsegna").
+  if (t.is_automatic && eventTriggers.length > 0) {
+    lines.push('⚠ Doppio invio: il cron qui sopra causerà un SECONDO invio oltre all\'evento. Se non lo vuoi, clicca il badge "Automatico" per metterlo a "Manuale".')
+  }
+
   if (lines.length === 0) {
     lines.push('Manuale — non parte automaticamente, solo invio a mano dall\'admin')
   }

@@ -12,10 +12,26 @@
  * esistenti (EMTNAuthorizationModal, EMTNEventReportModal) per
  * preservare il flusso server.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import EMTNAuthorizationModal from './emtn/EMTNAuthorizationModal'
 import EMTNEventReportModal from './emtn/EMTNEventReportModal'
 import { authFetch } from '../../../utils/authFetch'
+
+interface ClientWithDamages {
+    codice_fiscale: string
+    customer_name: string | null
+    customer_email: string | null
+    customer_phone: string | null
+    damages_count: number
+    penalties_count: number
+    paid_damage_total: number
+    unpaid_damage_total: number
+    paid_penalty_total: number
+    unpaid_penalty_total: number
+    last_event_date: string | null
+    last_vehicle: string | null
+    bookings_with_events: number
+}
 
 const CF_REGEX = /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/
 

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, useEffect, useCallback } from 'react'
+import { Fragment, useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
@@ -398,17 +398,24 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
     ['valerio@dr7.app', 'ilenia@dr7.app'].includes(currentEmail.toLowerCase())
 
   // Save a single field on the selected admin row + update local state.
+  const updateFieldLockRef = useRef(false)
   async function updateOperatorField(adminId: string, field: keyof Admin, value: string) {
-    const { error } = await supabase
-      .from('admins')
-      .update({ [field]: value || null })
-      .eq('id', adminId)
-    if (error) {
-      toast.error(`Salvataggio fallito: ${error.message}`)
-      return
+    if (updateFieldLockRef.current) return
+    updateFieldLockRef.current = true
+    try {
+      const { error } = await supabase
+        .from('admins')
+        .update({ [field]: value || null })
+        .eq('id', adminId)
+      if (error) {
+        toast.error(`Salvataggio fallito: ${error.message}`)
+        return
+      }
+      setAdmins(prev => prev.map(a => a.id === adminId ? { ...a, [field]: value || null } : a))
+      toast.success('Salvato')
+    } finally {
+      updateFieldLockRef.current = false
     }
-    setAdmins(prev => prev.map(a => a.id === adminId ? { ...a, [field]: value || null } : a))
-    toast.success('Salvato')
   }
 
   // ─── Aggregations ────────────────────────────────────────────────────
@@ -1059,17 +1066,21 @@ function ProfileFieldEditable({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value || '')
   const [saving, setSaving] = useState(false)
+  const commitLockRef = useRef(false)
   useEffect(() => { setDraft(value || '') }, [value])
 
   async function commit() {
+    if (commitLockRef.current) return
     if (!canEdit) { setEditing(false); return }
     if ((draft || '').trim() === (value || '').trim()) { setEditing(false); return }
+    commitLockRef.current = true
     setSaving(true)
     try {
       await onSave(draft.trim())
       setEditing(false)
     } finally {
       setSaving(false)
+      commitLockRef.current = false
     }
   }
 

@@ -48,6 +48,7 @@ interface PenaltyPreset {
 // Centralina Pro.
 
 export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, onEditCustomer, initialTab = 'danni' }: DanniPenaliModalProps) {
+    const submitLockRef = useRef(false)
     const [activeTab, setActiveTab] = useState<'danni' | 'penali'>(initialTab)
     const [cart, setCart] = useState<CartItem[]>([])
     const [note, setNote] = useState('')
@@ -373,10 +374,12 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
 
     // ── Submit ──
     const handleSubmit = async () => {
+        if (submitLockRef.current) return
         setError('')
         if (cart.length === 0) { setError('Aggiungi almeno un danno o una penale.'); return }
         if (cartTotal <= 0) { setError('Il totale deve essere maggiore di zero.'); return }
 
+        submitLockRef.current = true
         setIsGenerating(true)
         try {
             // Upload photos
@@ -614,6 +617,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             console.error('Error generating danni/penali:', err)
             setError(_errMsg || 'Errore nella generazione.')
         } finally {
+            submitLockRef.current = false
             setIsGenerating(false)
         }
     }

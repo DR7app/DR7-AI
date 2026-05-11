@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import NewClientModal from './NewClientModal'
 import CustomerAutocomplete from './CustomerAutocomplete'
@@ -90,6 +90,8 @@ const generateTimeSlots = () => {
 const TIME_SLOTS = generateTimeSlots()
 
 export default function MechanicalBookingForm({ initialData, customers, onSave, onCancel, editingId }: MechanicalBookingFormProps) {
+    const submitLockRef = useRef(false)
+    const [submitting, setSubmitting] = useState(false)
     const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false)
 
     // New state for conflict detection
@@ -165,6 +167,9 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
+        if (submitLockRef.current) return
+        submitLockRef.current = true
+        setSubmitting(true)
         try {
             const customerId = formData.customer_id
 
@@ -318,6 +323,9 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
         } catch (error) {
             console.error('Failed to save booking:', error)
             toast.error('Errore durante il salvataggio: ' + (error as Error).message)
+        } finally {
+            submitLockRef.current = false
+            setSubmitting(false)
         }
     }
 
@@ -553,9 +561,10 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 <div className="flex gap-3">
                     <button
                         type="submit"
-                        className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-[#0A8FA3] text-white font-semibold rounded-full transition-colors"
+                        disabled={submitting}
+                        className="flex-1 px-4 py-2 bg-dr7-gold hover:bg-[#0A8FA3] text-white font-semibold rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Salva
+                        {submitting ? 'Salvataggio...' : 'Salva'}
                     </button>
                     <button
                         type="button"
