@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
+import { getProKeyEventTriggers } from '../../../utils/proTemplateRouting'
 import toast from 'react-hot-toast'
 
 interface SystemMessage {
@@ -145,36 +146,58 @@ function statusCsvLabel(csv: string | null | undefined): string {
 }
 
 /**
- * Construct a plain-Italian preview describing when a template will fire.
- * Examples:
- *   "Manuale — non parte automaticamente"
- *   "Invia 24h prima del Ritiro · alle 09:00 Rome · stato: Confermata, Attiva (in corso) · solo Exotic"
- *   "Invia 2h dopo il Pagamento ricevuto · subito · tutti gli stati · tutti i veicoli"
+ * Costruisce un riassunto in italiano semplice di QUANDO partirà
+ * davvero un template. Considera DUE fonti distinte di invio:
+ *   1. Il cron `process-scheduled-system-messages-cron` (controllato da
+ *      is_automatic + trigger_event/offset/send_hour/target_*).
+ *   2. Eventi di codice che chiamano `renderTemplate('<legacy_key>')`
+ *      e vengono instradati a questo template via OLD_TO_PRO. Questi
+ *      partono indipendentemente da is_automatic — la chiave Pro è
+ *      derivata da `message_key`.
+ *
+ * Restituisce una lista di righe (una per ogni canale che fa partire
+ * il template). Se nessun canale è attivo, l'unica riga è "Manuale —
+ * invio solo a mano dall'admin".
  */
 function buildScheduleSummary(
-  t: { is_automatic?: boolean; trigger_event?: string; trigger_offset_hours?: number; send_hour?: number | null; target_status?: string | null; target_category?: string | null },
+  t: { message_key?: string; is_automatic?: boolean; trigger_event?: string; trigger_offset_hours?: number; send_hour?: number | null; target_status?: string | null; target_category?: string | null },
   categoryLabels: Record<string, string>,
-): string {
-  if (!t.is_automatic) return 'Manuale — non parte automaticamente'
-  const triggerLabel = TRIGGER_LABELS[t.trigger_event || ''] || (t.trigger_event || 'evento sconosciuto')
-  const offset = Math.abs(Number(t.trigger_offset_hours) || 0)
-  const event = String(t.trigger_event || '')
-  const offsetText = offset === 0
-    ? 'subito'
-    : event.startsWith('before_')
-      ? `${offset}h prima`
-      : event.startsWith('after_') || event.startsWith('on_')
-        ? `${offset}h dopo`
-        : `±${offset}h`
-  const sendHourText = t.send_hour == null
-    ? 'subito'
-    : `alle ${String(t.send_hour).padStart(2, '0')}:00 Rome`
-  const statusLabel = `stato: ${statusCsvLabel(t.target_status)}`
-  const cat = (t.target_category || 'all').toLowerCase()
-  const catLabel = cat === 'all' || !cat
-    ? 'tutti i veicoli'
-    : `solo ${categoryLabels[cat] || cat}`
-  return `Invia ${offsetText} ${triggerLabel.toLowerCase()} · ${sendHourText} · ${statusLabel} · ${catLabel}`
+): string[] {
+  const lines: string[] = []
+
+  if (t.is_automatic) {
+    const triggerLabel = TRIGGER_LABELS[t.trigger_event || ''] || (t.trigger_event || 'evento sconosciuto')
+    const offset = Math.abs(Number(t.trigger_offset_hours) || 0)
+    const event = String(t.trigger_event || '')
+    const offsetText = offset === 0
+      ? 'subito'
+      : event.startsWith('before_')
+        ? `${offset}h prima`
+        : event.startsWith('after_') || event.startsWith('on_')
+          ? `${offset}h dopo`
+          : `±${offset}h`
+    const sendHourText = t.send_hour == null
+      ? 'subito'
+      : `alle ${String(t.send_hour).padStart(2, '0')}:00 Rome`
+    const statusLabel = `stato: ${statusCsvLabel(t.target_status)}`
+    const cat = (t.target_category || 'all').toLowerCase()
+    const catLabel = cat === 'all' || !cat
+      ? 'tutti i veicoli'
+      : `solo ${categoryLabels[cat] || cat}`
+    lines.push(`Cron · invia ${offsetText} ${triggerLabel.toLowerCase()} · ${sendHourText} · ${statusLabel} · ${catLabel}`)
+  }
+
+  // Eventi di codice che instradano qui (callback Nexi, conferma
+  // prenotazione, firma, ecc.). Lista derivata da proTemplateRouting.
+  const eventTriggers = getProKeyEventTriggers(t.message_key)
+  for (const ev of eventTriggers) {
+    lines.push(`Evento · ${ev}`)
+  }
+
+  if (lines.length === 0) {
+    lines.push('Manuale — non parte automaticamente, solo invio a mano dall\'admin')
+  }
+  return lines
 }
 
 // Descrizioni in linguaggio naturale per ogni evento — mostrate sotto la select.
@@ -2574,17 +2597,34 @@ export default function MessaggiSistemaProTab() {
                                                         </p>
                                                     </div>
                                                 )}
-                                                {/* Programmazione — preview sempre visibile (anche per i manuali).
-                                                    Permette all'admin di capire al volo se/quando un
-                                                    template parte senza dover aprire i controlli. */}
-                                                <div className={`px-3 py-2 rounded-lg border text-xs ${
-                                                    template.is_automatic
-                                                        ? 'bg-emerald-500/5 border-emerald-500/30 text-emerald-300/95'
-                                                        : 'bg-theme-bg-primary border-theme-border/50 text-theme-text-muted'
-                                                }`}>
-                                                    <span className="font-semibold">Programmazione:</span>{' '}
-                                                    {buildScheduleSummary(template, Object.fromEntries(proCategories.map(c => [c.id, c.label])))}
-                                                </div>
+                                                {/* Programmazione — preview sempre visibile.
+                                                    Una riga per OGNI canale che farà partire il
+                                                    template: cron (se is_automatic) + eventi di
+                                                    codice instradati via OLD_TO_PRO (es. conferma
+                                                    prenotazione, callback Nexi, firma contratto).
+                                                    Se nessun canale è attivo → "Manuale". */}
+                                                {(() => {
+                                                    const lines = buildScheduleSummary(template, Object.fromEntries(proCategories.map(c => [c.id, c.label])))
+                                                    const hasEvent = lines.some(l => l.startsWith('Evento ·'))
+                                                    const hasCron = lines.some(l => l.startsWith('Cron ·'))
+                                                    const isManual = !hasEvent && !hasCron
+                                                    const containerClass = isManual
+                                                        ? 'bg-theme-bg-primary border-theme-border/50 text-theme-text-muted'
+                                                        : 'bg-emerald-500/5 border-emerald-500/30 text-emerald-300/95'
+                                                    return (
+                                                        <div className={`px-3 py-2 rounded-lg border text-xs ${containerClass}`}>
+                                                            <div className="font-semibold mb-1">Programmazione</div>
+                                                            <ul className="space-y-0.5">
+                                                                {lines.map((l, i) => (
+                                                                    <li key={i} className="flex gap-1.5">
+                                                                        <span className="text-theme-text-muted/80 shrink-0">›</span>
+                                                                        <span>{l}</span>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    )
+                                                })()}
 
                                                 {template.is_automatic && (
                                                     <div className="rounded-lg bg-theme-bg-primary border border-theme-border/50 p-3 space-y-2">

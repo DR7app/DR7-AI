@@ -9,6 +9,7 @@
  * Variables in templates use {variable_name} syntax.
  */
 import { createClient } from '@supabase/supabase-js'
+import { OLD_TO_PRO as SHARED_OLD_TO_PRO } from '../../../src/utils/proTemplateRouting'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -132,95 +133,24 @@ const LABEL_FALLBACKS: Record<string, string[][]> = {
 /**
  * Old-key → Pro-key router.
  *
- * Messaggi di Sistema Pro is now the single source of truth. Every legacy call
- * to renderTemplate('rental_new_customer', ...) gets silently swapped to the
- * mapped pro_* template at render time. Unmapped legacy keys return null →
- * the send is skipped entirely (no hardcoded fallback).
+ * SINGLE SOURCE OF TRUTH: la mappa vive in
+ * `src/utils/proTemplateRouting.ts` così sia il server (questo file,
+ * per il render dei template) sia il client (MessaggiSistemaProTab,
+ * per mostrare all'admin "quando parte davvero ogni template") usano
+ * gli stessi dati. NON duplicare la mappa qui — modifica solo il file
+ * condiviso.
  *
- * Admin variants (rental_new, rental_new_admin, carwash_new, carwash_new_admin)
- * intentionally point at the SAME pro_* slot as the customer variant — per the
- * product decision that admin should receive the same message as the client.
+ * Comportamento: ogni chiamata legacy `renderTemplate('rental_new_customer', ...)`
+ * viene silenziosamente reindirizzata al template pro_* mappato al
+ * momento del render. Chiavi non mappate → null → l'invio viene saltato
+ * (niente fallback hardcoded).
  *
- * Mapping derived from the BODY CONTENT of each pro_* template (labels have
- * been renamed, so the slot's purpose = its body, not its pro_* name).
+ * Le varianti admin (rental_new, rental_new_admin, carwash_new,
+ * carwash_new_admin) puntano allo STESSO slot pro_* della variante
+ * customer — scelta di prodotto: admin riceve lo stesso messaggio del
+ * cliente.
  */
-// IMPORTANT: This mapping points each legacy key to the Pro row that ACTUALLY
-// holds the right body in this tenant's system_messages table. The rows are
-// the ones already present in Messaggi di Sistema Pro — we do NOT require new
-// rows to be created; we just route to where the body already lives.
-const OLD_TO_PRO: Record<string, string> = {
-  // Noleggio — customer + admin get the same template
-  rental_new_customer: 'pro_conferma_noleggio',
-  rental_new: 'pro_conferma_noleggio',
-  rental_new_admin: 'pro_conferma_noleggio',
-  // Modifica noleggio body lives in pro_promemoria_appuntamento
-  rental_modified: 'pro_promemoria_appuntamento',
-  deposit_return_iban: 'pro_richiesta_iban',
-
-  // Lavaggio — customer + admin get the same template
-  carwash_new_customer: 'pro_conferma_lavaggio',
-  carwash_new: 'pro_conferma_lavaggio',
-  carwash_new_admin: 'pro_conferma_lavaggio',
-  // Modifica lavaggio body lives in pro_promemoria_pagamento
-  carwash_modified: 'pro_promemoria_pagamento',
-
-  // Meccanica (Prime Wash umbrella) — reuse lavaggio modifica
-  mechanical_new_customer: 'pro_conferma_meccanica',
-  mechanical_new: 'pro_conferma_meccanica',
-  mechanical_new_admin: 'pro_conferma_meccanica',
-  mechanical_modified: 'pro_promemoria_pagamento',
-
-  // Firma & Contratto — each call routes to its dedicated Pro slot:
-  //   signing-link  → "Richiesta Firma"
-  //   reminder      → "Promemoria Firma"
-  //   OTP           → "Richiesta OTP"   (admin-editable body for OTP send)
-  signature_request_link: 'pro_richiesta_firma',
-  signature_reminder_whatsapp: 'pro_promemoria_firma',
-  signature_otp_whatsapp: 'pro_richiesta_otp',
-  document_signature_link: 'pro_richiesta_firma',
-
-  // Pagamenti & annullamenti — payment-link body now lives in pro_richiesta_pagamento,
-  // cancellation body in pro_custom_prenotazione_annullata_da_sito_1776503923221
-  payment_link_customer: 'pro_richiesta_pagamento',
-  rental_da_saldare_customer: 'pro_richiesta_pagamento',
-  booking_cancelled_whatsapp: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
-
-  // Pagamento ricevuto (estensione, top-up, danni/penali) — il body vive in
-  // pro_conferma_pagamento ("Conferma Pagamento"). Admin variants point al
-  // medesimo slot (stessa scelta dell'altra famiglia rental_*_admin).
-  // Senza queste righe ogni renderTemplate('payment_received_*') tornava
-  // null e l'invio WhatsApp veniva silenziosamente saltato — confermati
-  // estensione e danni/penali arrivavano nulla a cliente e admin.
-  payment_received_extension: 'pro_conferma_pagamento',
-  payment_received_extension_admin: 'pro_conferma_pagamento',
-  payment_received_damages: 'pro_conferma_pagamento',
-  payment_received_damages_admin: 'pro_conferma_pagamento',
-
-  // Preventivi admin alert body lives in pro_richiesta_otp
-  admin_new_website_quote: 'pro_richiesta_otp',
-  admin_no_cauzione_request: 'pro_richiesta_otp',
-
-  // Marketing & Wallet — review body lives in `pro_marketing_recensione`
-  // (slot dedicato "Richiesta Recensione" in Messaggi di Sistema Pro). Era
-  // mappato per errore su pro_promemoria_firma (la mappa era stata fatta
-  // pensando che il body vivesse lì), ma il body firma e quello recensione
-  // sono messaggi diversi: dirottare il review request sul template della
-  // firma significava (a) inviare il testo della firma invece del review,
-  // o (b) sovraccaricare il template firma con il body del review. La
-  // mappa qui sotto ora punta allo slot corretto. Wallet cashback resta
-  // su pro_wallet_bonus_cliente.
-  review_request_whatsapp: 'pro_marketing_recensione',
-  birthday_message: 'pro_marketing_compleanno',
-  wallet_bonus_credit: 'pro_wallet_bonus_cliente',
-
-  // Fidelity Card — voucher message fired at 250 punti.
-  // Body lives in `pro_fidelity_voucher` so admin can edit it from
-  // Messaggi di Sistema Pro without redeploying.
-  fidelity_voucher_whatsapp: 'pro_fidelity_voucher',
-
-  // Website customer actions
-  website_booking_cancelled_customer: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
-}
+const OLD_TO_PRO: Record<string, string> = SHARED_OLD_TO_PRO
 
 export interface RenderContext {
   vehiclePlate?: string | null
