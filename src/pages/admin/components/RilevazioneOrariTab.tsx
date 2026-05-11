@@ -13,6 +13,7 @@ interface Operatore {
     ruolo: string | null
     ore_target_giornaliere: number
     attivo: boolean
+    avatar_url: string | null
 }
 
 interface DayRow {
@@ -45,6 +46,72 @@ function fmtMin(min: number): string {
 function fmtMinShort(min: number): string {
     if (min === 0) return '—'
     return `${min} min`
+}
+
+/**
+ * OperatoreAvatar — round avatar shown next to every operatore in
+ * tables and detail panels. Renders the uploaded picture when
+ * present, otherwise a colored circle with the operatore's initials
+ * (deterministic color per name so the same person always gets the
+ * same tile color).
+ */
+const AVATAR_TONES = ['bg-emerald-600', 'bg-blue-600', 'bg-amber-600', 'bg-rose-600', 'bg-violet-600', 'bg-cyan-600', 'bg-fuchsia-600', 'bg-orange-600']
+function avatarTone(seed: string): string {
+    let h = 0
+    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+    return AVATAR_TONES[h % AVATAR_TONES.length]
+}
+/**
+ * AvatarUploader — replaces the avatar tile with a clickable label
+ * that opens the file picker. On select, uploads to operator-avatars
+ * bucket (path: {operatorId}/{timestamp}.{ext}), writes the public
+ * URL back on operatori_persone.avatar_url, and calls onUploaded so
+ * the parent can refresh.
+ */
+async function uploadOperatoreAvatar(operatorId: string, file: File): Promise<string | null> {
+    if (!file.type.startsWith('image/')) {
+        toast.error('Carica un\'immagine (jpg, png, webp).')
+        return null
+    }
+    if (file.size > 2 * 1024 * 1024) {
+        toast.error('File troppo grande (max 2 MB).')
+        return null
+    }
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `${operatorId}/${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage
+        .from('operator-avatars')
+        .upload(path, file, { upsert: true, contentType: file.type })
+    if (upErr) {
+        toast.error('Upload fallito: ' + upErr.message)
+        return null
+    }
+    const { data: pub } = supabase.storage.from('operator-avatars').getPublicUrl(path)
+    const url = pub.publicUrl
+    const { error: dbErr } = await supabase.from('operatori_persone').update({ avatar_url: url }).eq('id', operatorId)
+    if (dbErr) {
+        toast.error('Salvataggio URL avatar fallito: ' + dbErr.message)
+        return null
+    }
+    toast.success('Foto profilo aggiornata')
+    return url
+}
+
+function OperatoreAvatar({ op, size = 32 }: { op: { nome?: string | null; cognome?: string | null; email?: string | null; avatar_url?: string | null }; size?: number }) {
+    const initials = `${(op.nome || '').charAt(0)}${(op.cognome || '').charAt(0)}`.toUpperCase() || (op.email || '?').charAt(0).toUpperCase()
+    const tone = avatarTone(op.email || op.nome || op.cognome || '?')
+    const cls = `inline-flex items-center justify-center rounded-full text-white font-semibold flex-shrink-0 overflow-hidden`
+    const style = { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.4)}px` }
+    if (op.avatar_url) {
+        return (
+            <span className={`${cls} bg-theme-bg-tertiary border border-theme-border`} style={style}>
+                <img src={op.avatar_url} alt="" className="w-full h-full object-cover" />
+            </span>
+        )
+    }
+    return (
+        <span className={`${cls} ${tone}`} style={style}>{initials}</span>
+    )
 }
 
 type ViewMode = 'giornaliera' | 'settimanale' | 'mensile'
@@ -134,21 +201,21 @@ export default function RilevazioneOrariTab() {
                 // Direzione: vede TUTTI gli operatori
                 const { data: ops } = await supabase
                     .from('operatori_persone')
-                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
+                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo, avatar_url')
                     .eq('attivo', true)
                     .order('cognome', { ascending: true })
                 opList = (ops || []) as Operatore[]
             } else if (user) {
                 const { data: byId } = await supabase
                     .from('operatori_persone')
-                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
+                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo, avatar_url')
                     .eq('attivo', true)
                     .eq('user_id', user.id)
                 opList = (byId || []) as Operatore[]
                 if (opList.length === 0 && user.email) {
                     const { data: byEmail } = await supabase
                         .from('operatori_persone')
-                        .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
+                        .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo, avatar_url')
                         .eq('attivo', true)
                         .ilike('email', user.email)
                     opList = (byEmail || []) as Operatore[]
@@ -184,7 +251,7 @@ export default function RilevazioneOrariTab() {
                             ore_target_giornaliere: 8,
                             attivo: true,
                         })
-                        .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo')
+                        .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, attivo, avatar_url')
                         .single()
                     if (created) opList = [created as Operatore]
                 }
@@ -440,6 +507,7 @@ export default function RilevazioneOrariTab() {
                                         <td className="px-3 py-2 text-theme-text-primary font-semibold">
                                             <div className="flex items-center gap-2">
                                                 <span className={`inline-block transition-transform ${isExpanded ? 'rotate-90' : ''} text-theme-text-muted text-xs`}>▶</span>
+                                                <OperatoreAvatar op={r.operatore} size={32} />
                                                 <div>
                                                     {r.operatore.nome} {r.operatore.cognome || ''}
                                                     {isMine && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
@@ -658,23 +726,46 @@ function DailyOperatorDetail({
 
     return (
         <div className="space-y-4">
-            {/* Profile */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div>
-                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Operatore</div>
-                    <div className="text-sm font-semibold text-theme-text-primary">{op.nome} {op.cognome || ''}</div>
+            {/* Profile header with avatar + change-photo button */}
+            <div className="flex items-start gap-4">
+                <div className="relative flex-shrink-0">
+                    <OperatoreAvatar op={op} size={72} />
+                    <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-dr7-gold text-black flex items-center justify-center cursor-pointer hover:opacity-90 shadow-md" title="Cambia foto">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M3 9a2 2 0 012-2h2.5L9 5h6l1.5 2H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3" strokeWidth={2}/></svg>
+                        <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            className="hidden"
+                            onChange={async (e) => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+                                const url = await uploadOperatoreAvatar(op.id, file)
+                                if (url) {
+                                    // Trigger a hard refresh of the table.
+                                    window.location.reload()
+                                }
+                                e.target.value = ''
+                            }}
+                        />
+                    </label>
                 </div>
-                <div>
-                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Ruolo</div>
-                    <div className="text-sm text-theme-text-primary">{op.ruolo || '—'}</div>
-                </div>
-                <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Email</div>
-                    <div className="text-sm text-theme-text-primary truncate" title={op.email}>{op.email || '—'}</div>
-                </div>
-                <div>
-                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Target ore</div>
-                    <div className="text-sm text-theme-text-primary">{op.ore_target_giornaliere}h / giorno</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs flex-1">
+                    <div>
+                        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Operatore</div>
+                        <div className="text-sm font-semibold text-theme-text-primary">{op.nome} {op.cognome || ''}</div>
+                    </div>
+                    <div>
+                        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Ruolo</div>
+                        <div className="text-sm text-theme-text-primary">{op.ruolo || '—'}</div>
+                    </div>
+                    <div className="min-w-0">
+                        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Email</div>
+                        <div className="text-sm text-theme-text-primary truncate" title={op.email}>{op.email || '—'}</div>
+                    </div>
+                    <div>
+                        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Target ore</div>
+                        <div className="text-sm text-theme-text-primary">{op.ore_target_giornaliere}h / giorno</div>
+                    </div>
                 </div>
             </div>
 
@@ -952,26 +1043,72 @@ function AddOperatoreModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     const [oreTarget, setOreTarget] = useState('8')
     const [linkSelf, setLinkSelf] = useState(true)
     const [saving, setSaving] = useState(false)
+    // Local preview before upload: data: URL of the file the operator
+    // picked. Uploaded to storage AFTER the row is inserted so the path
+    // can include the operator id.
+    const [avatarFile, setAvatarFile] = useState<File | null>(null)
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+    const [uploading, setUploading] = useState(false)
+
+    function handleAvatarPick(file: File | null) {
+        if (!file) {
+            setAvatarFile(null)
+            setAvatarPreview(null)
+            return
+        }
+        if (!file.type.startsWith('image/')) {
+            alert('Carica un\'immagine (jpg, png, webp).')
+            return
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            alert('File troppo grande (max 2 MB).')
+            return
+        }
+        setAvatarFile(file)
+        const reader = new FileReader()
+        reader.onload = () => setAvatarPreview(String(reader.result))
+        reader.readAsDataURL(file)
+    }
 
     async function handleSave() {
         if (!nome.trim() || !email.trim()) { alert('Nome e email obbligatori'); return }
         setSaving(true)
         try {
             const { data: { user } } = await supabase.auth.getUser()
-            const { error } = await supabase.from('operatori_persone').insert({
+            const { data: inserted, error } = await supabase.from('operatori_persone').insert({
                 nome: nome.trim(),
                 cognome: cognome.trim() || null,
                 email: email.trim().toLowerCase(),
                 ruolo: ruolo.trim() || null,
                 ore_target_giornaliere: parseFloat(oreTarget) || 8,
                 user_id: linkSelf ? user?.id || null : null,
-            })
+            }).select('id').single()
             if (error) throw error
+
+            // Upload avatar (if any) AFTER row creation so we have the id
+            // for a stable storage path: operatore-{id}-{timestamp}.{ext}.
+            if (avatarFile && inserted?.id) {
+                setUploading(true)
+                const ext = avatarFile.name.split('.').pop()?.toLowerCase() || 'jpg'
+                const path = `${inserted.id}/${Date.now()}.${ext}`
+                const { error: upErr } = await supabase.storage
+                    .from('operator-avatars')
+                    .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type })
+                if (upErr) {
+                    console.error('[AddOperatoreModal] avatar upload failed:', upErr)
+                    toast.error('Operatore creato, ma upload foto fallito: ' + upErr.message)
+                } else {
+                    const { data: pub } = supabase.storage.from('operator-avatars').getPublicUrl(path)
+                    await supabase.from('operatori_persone').update({ avatar_url: pub.publicUrl }).eq('id', inserted.id)
+                }
+            }
+
             onSaved()
         } catch (err) {
             alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
         } finally {
             setSaving(false)
+            setUploading(false)
         }
     }
 
@@ -979,6 +1116,39 @@ function AddOperatoreModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
             <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
                 <h3 className="text-xl font-semibold text-theme-text-primary mb-4">Nuovo Operatore</h3>
+
+                {/* Avatar upload */}
+                <div className="flex items-center gap-4 mb-4">
+                    <div className="w-20 h-20 rounded-full bg-theme-bg-tertiary border-2 border-dashed border-theme-border flex items-center justify-center overflow-hidden">
+                        {avatarPreview ? (
+                            <img src={avatarPreview} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                            <span className="text-3xl text-theme-text-muted">+</span>
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        <label className="px-3 py-1.5 rounded-full bg-dr7-gold text-black text-xs font-semibold cursor-pointer hover:opacity-90 inline-block w-fit">
+                            {avatarFile ? 'Cambia foto' : 'Carica foto'}
+                            <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp,image/gif"
+                                className="hidden"
+                                onChange={e => handleAvatarPick(e.target.files?.[0] || null)}
+                            />
+                        </label>
+                        {avatarFile && (
+                            <button
+                                type="button"
+                                onClick={() => handleAvatarPick(null)}
+                                className="text-[11px] text-theme-text-muted hover:text-rose-400"
+                            >
+                                Rimuovi
+                            </button>
+                        )}
+                        <span className="text-[10px] text-theme-text-muted">jpg/png/webp · max 2 MB</span>
+                    </div>
+                </div>
+
                 <div className="space-y-3">
                     <Field label="Nome *" value={nome} onChange={setNome} />
                     <Field label="Cognome" value={cognome} onChange={setCognome} />
@@ -995,7 +1165,7 @@ function AddOperatoreModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                 </p>
                 <div className="flex justify-end gap-2 mt-4">
                     <Button variant="secondary" onClick={onClose}>Annulla</Button>
-                    <Button onClick={handleSave} disabled={saving}>{saving ? 'Salvataggio…' : 'Crea'}</Button>
+                    <Button onClick={handleSave} disabled={saving || uploading}>{uploading ? 'Upload…' : saving ? 'Salvataggio…' : 'Crea'}</Button>
                 </div>
             </div>
         </div>

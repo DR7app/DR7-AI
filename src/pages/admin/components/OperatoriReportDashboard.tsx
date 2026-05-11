@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { MyDayEditorModal } from './RilevazioneOrariTab'
@@ -22,6 +23,58 @@ function fmtTime(iso: string | null): string {
     return new Date(iso).toLocaleTimeString('it-IT', { timeZone: ROME_TZ, hour: '2-digit', minute: '2-digit' })
 }
 
+// Avatar tile — uploaded image if present, else initials on a
+// deterministic color tile (same person → same color).
+const AVATAR_TONES = ['bg-emerald-600', 'bg-blue-600', 'bg-amber-600', 'bg-rose-600', 'bg-violet-600', 'bg-cyan-600', 'bg-fuchsia-600', 'bg-orange-600']
+function avatarTone(seed: string): string {
+    let h = 0
+    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+    return AVATAR_TONES[h % AVATAR_TONES.length]
+}
+async function uploadOperatoreAvatar(operatorId: string, file: File): Promise<string | null> {
+    if (!file.type.startsWith('image/')) {
+        toast.error('Carica un\'immagine (jpg, png, webp).')
+        return null
+    }
+    if (file.size > 2 * 1024 * 1024) {
+        toast.error('File troppo grande (max 2 MB).')
+        return null
+    }
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `${operatorId}/${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage
+        .from('operator-avatars')
+        .upload(path, file, { upsert: true, contentType: file.type })
+    if (upErr) {
+        toast.error('Upload fallito: ' + upErr.message)
+        return null
+    }
+    const { data: pub } = supabase.storage.from('operator-avatars').getPublicUrl(path)
+    const url = pub.publicUrl
+    const { error: dbErr } = await supabase.from('operatori_persone').update({ avatar_url: url }).eq('id', operatorId)
+    if (dbErr) {
+        toast.error('Salvataggio URL avatar fallito: ' + dbErr.message)
+        return null
+    }
+    toast.success('Foto profilo aggiornata')
+    return url
+}
+
+function OperatoreAvatar({ op, size = 32 }: { op: { nome?: string | null; cognome?: string | null; email?: string | null; avatar_url?: string | null }; size?: number }) {
+    const initials = `${(op.nome || '').charAt(0)}${(op.cognome || '').charAt(0)}`.toUpperCase() || (op.email || '?').charAt(0).toUpperCase()
+    const tone = avatarTone(op.email || op.nome || op.cognome || '?')
+    const cls = `inline-flex items-center justify-center rounded-full text-white font-semibold flex-shrink-0 overflow-hidden`
+    const style = { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.4)}px` }
+    if (op.avatar_url) {
+        return (
+            <span className={`${cls} bg-theme-bg-tertiary border border-theme-border`} style={style}>
+                <img src={op.avatar_url} alt="" className="w-full h-full object-cover" />
+            </span>
+        )
+    }
+    return <span className={`${cls} ${tone}`} style={style}>{initials}</span>
+}
+
 interface Operatore {
     id: string
     user_id: string | null
@@ -30,6 +83,7 @@ interface Operatore {
     email: string
     ruolo: string | null
     ore_target_giornaliere: number
+    avatar_url: string | null
 }
 
 interface DayRow {
@@ -125,7 +179,7 @@ export default function OperatoriReportDashboard() {
             // 1) operatori — direzione vede tutti, gli altri solo se stessi
             let opQuery = supabase
                 .from('operatori_persone')
-                .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere')
+                .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url')
                 .eq('attivo', true)
             if (!isDirezione && user?.id) {
                 opQuery = opQuery.or(`user_id.eq.${user.id},email.ilike.${myEmail}`)
@@ -406,6 +460,7 @@ export default function OperatoriReportDashboard() {
                                         <td className="py-2 font-medium text-theme-text-primary">
                                             <div className="flex items-center gap-2">
                                                 <span className={`inline-block transition-transform ${isExpanded ? 'rotate-90' : ''} text-theme-text-muted text-xs`}>▶</span>
+                                                <OperatoreAvatar op={r.operatore} size={32} />
                                                 <span>
                                                     {r.operatore.nome} {r.operatore.cognome || ''}
                                                     {isMine && <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
@@ -996,23 +1051,43 @@ function OperatorDailyDetail({
 
     return (
         <div className="space-y-4">
-            {/* Profile */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div>
-                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Operatore</div>
-                    <div className="text-sm font-semibold text-theme-text-primary">{op.nome} {op.cognome || ''}</div>
+            {/* Profile header with avatar + change-photo button */}
+            <div className="flex items-start gap-4">
+                <div className="relative flex-shrink-0">
+                    <OperatoreAvatar op={op} size={72} />
+                    <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-dr7-gold text-black flex items-center justify-center cursor-pointer hover:opacity-90 shadow-md" title="Cambia foto">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M3 9a2 2 0 012-2h2.5L9 5h6l1.5 2H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3" strokeWidth={2}/></svg>
+                        <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            className="hidden"
+                            onChange={async (e) => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+                                const url = await uploadOperatoreAvatar(op.id, file)
+                                if (url) window.location.reload()
+                                e.target.value = ''
+                            }}
+                        />
+                    </label>
                 </div>
-                <div>
-                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Ruolo</div>
-                    <div className="text-sm text-theme-text-primary">{op.ruolo || '—'}</div>
-                </div>
-                <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Email</div>
-                    <div className="text-sm text-theme-text-primary truncate" title={op.email}>{op.email || '—'}</div>
-                </div>
-                <div>
-                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Target ore</div>
-                    <div className="text-sm text-theme-text-primary">{op.ore_target_giornaliere}h / giorno</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs flex-1">
+                    <div>
+                        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Operatore</div>
+                        <div className="text-sm font-semibold text-theme-text-primary">{op.nome} {op.cognome || ''}</div>
+                    </div>
+                    <div>
+                        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Ruolo</div>
+                        <div className="text-sm text-theme-text-primary">{op.ruolo || '—'}</div>
+                    </div>
+                    <div className="min-w-0">
+                        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Email</div>
+                        <div className="text-sm text-theme-text-primary truncate" title={op.email}>{op.email || '—'}</div>
+                    </div>
+                    <div>
+                        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Target ore</div>
+                        <div className="text-sm text-theme-text-primary">{op.ore_target_giornaliere}h / giorno</div>
+                    </div>
                 </div>
             </div>
 
