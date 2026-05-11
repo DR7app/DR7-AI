@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
@@ -1700,7 +1701,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // Sync ref guard prima del setSubmitting (state e' async).
     if (submitLockRef.current || submitting) return
     submitLockRef.current = true
-    setSubmitting(true)
+    // flushSync forza React a renderizzare il pulsante come disabled
+    // IMMEDIATAMENTE (sync). Senza, React 18 batcha lo state update e
+    // lascia il pulsante cliccabile per qualche ms — abbastanza per
+    // intercettare un secondo click rapido.
+    flushSync(() => setSubmitting(true))
 
     try {
       if (!selectedService) {
@@ -3107,8 +3112,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
                 <button
                   type="button"
-                  disabled={submitting || !formData.customer_id || !formData.appointment_time}
-                  onClick={() => handleSubmit()}
+                  disabled={submitting || submitLockRef.current || !formData.customer_id || !formData.appointment_time}
+                  onClick={(e) => {
+                    // Click guard SINCRONO al livello del DOM: anche se
+                    // React non ha ancora propagato disabled=true, il
+                    // ref bocca il click prima di chiamare handleSubmit.
+                    if (submitLockRef.current || submitting) {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      return
+                    }
+                    handleSubmit()
+                  }}
                   className={`px-8 py-3 rounded-full font-bold text-base transition-colors ${
                     submitting || !formData.customer_id || !formData.appointment_time
                       ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
