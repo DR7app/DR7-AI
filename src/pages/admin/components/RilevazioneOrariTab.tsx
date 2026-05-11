@@ -294,8 +294,13 @@ export default function RilevazioneOrariTab() {
                     if (data) {
                         const { data: m } = await supabase.rpc('operatore_minuti_lavorati', { p_operatore_id: op.id, p_data: d })
                         minuti = Number(m) || 0
+                        // Pairing: pausa_inizi[i] con pausa_fini[i] (entrambi ordinati
+                        // ASC per timestamp). Math.round per evitare di perdere un
+                        // minuto se i secondi salvati attraversano un boundary
+                        // (es. 10:57:30 -> 11:00:29 = 2.98 min -> floor 2 con bug).
                         for (let i = 0; i < Math.min(data.pi.length, data.pf.length); i++) {
-                            pausaMin += Math.floor((new Date(data.pf[i]).getTime() - new Date(data.pi[i]).getTime()) / 60000)
+                            const diff = new Date(data.pf[i]).getTime() - new Date(data.pi[i]).getTime()
+                            if (diff > 0) pausaMin += Math.round(diff / 60000)
                         }
                     }
                     let stato: DayRow['stato'] = 'fuori'
@@ -395,15 +400,17 @@ export default function RilevazioneOrariTab() {
                 </div>
             </div>
 
-            {/* Self profile card — click avatar / button to open the time-entry modal */}
+            {/* Self profile card — theme-aware (bg-theme-bg-secondary) per
+                seguire il tema globale; accento DR7-gold sul bordo per
+                mantenere la "tua riga" riconoscibile in dark e light. */}
             {me ? (
                 <div
                     onClick={() => setEditMyDay(true)}
-                    className="bg-gradient-to-br from-amber-50 to-stone-100 dark:from-amber-950/30 dark:to-stone-900/30 rounded-xl border border-amber-300 dark:border-amber-800 p-5 cursor-pointer hover:shadow-md transition"
+                    className="bg-theme-bg-secondary rounded-xl border border-dr7-gold/40 p-5 cursor-pointer hover:shadow-md transition"
                     title="Clicca per inserire i tuoi orari"
                 >
                     <div className="flex items-center gap-4">
-                        <div className="flex-shrink-0 w-14 h-14 rounded-full bg-amber-600 text-white flex items-center justify-center text-xl font-bold">
+                        <div className="flex-shrink-0 w-14 h-14 rounded-full bg-dr7-gold text-black flex items-center justify-center text-xl font-bold">
                             {(me.nome[0] || '?').toUpperCase()}{(me.cognome?.[0] || '').toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -418,7 +425,7 @@ export default function RilevazioneOrariTab() {
                         </div>
                         <div className="text-right flex flex-col items-end gap-2">
                             <StatoLabel s={myStato} large />
-                            <span className="text-xs text-amber-700 dark:text-amber-300 underline">Inserisci orari →</span>
+                            <span className="text-xs text-dr7-gold underline">Inserisci orari →</span>
                         </div>
                     </div>
                 </div>
@@ -565,13 +572,13 @@ export default function RilevazioneOrariTab() {
                                 const pauseWindows = r.pausa_inizi.map((start, i) => {
                                     const end = r.pausa_fini[i] || null
                                     let durMin = 0
-                                    if (end) durMin = Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 60000))
-                                    else if (r.stato === 'pausa') durMin = Math.max(0, Math.floor((Date.now() - new Date(start).getTime()) / 60000))
+                                    if (end) durMin = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000))
+                                    else if (r.stato === 'pausa') durMin = Math.max(0, Math.round((Date.now() - new Date(start).getTime()) / 60000))
                                     return { start, end, durMin, idx: i + 1 }
                                 })
                                 return (
                                     <React.Fragment key={r.operatore.id}>
-                                    <tr className={`${isMine ? 'bg-amber-50/40 dark:bg-amber-950/20' : ''} ${isExpanded ? 'bg-theme-bg-tertiary/40' : ''} cursor-pointer hover:bg-theme-bg-tertiary/30`}
+                                    <tr className={`${isMine ? 'bg-dr7-gold/10' : ''} ${isExpanded ? 'bg-theme-bg-tertiary/40' : ''} cursor-pointer hover:bg-theme-bg-tertiary/30`}
                                         onClick={() => setProfileOp(r.operatore)}
                                         title="Apri il report completo dell'operatore (come lo vede lui)">
                                         <td className="px-3 py-2 text-theme-text-primary font-semibold">
@@ -714,7 +721,7 @@ export default function RilevazioneOrariTab() {
                                 const saldo = total - targetTotal
                                 const isMine = r.operatore.id === me?.id
                                 return (
-                                    <tr key={r.operatore.id} className={isMine ? 'bg-amber-50/40 dark:bg-amber-950/20' : ''}>
+                                    <tr key={r.operatore.id} className={isMine ? 'bg-dr7-gold/10' : ''}>
                                         <td className="px-3 py-2 text-theme-text-primary font-semibold sticky left-0 bg-theme-bg-secondary">
                                             {r.operatore.nome} {r.operatore.cognome || ''}
                                             {isMine && <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
