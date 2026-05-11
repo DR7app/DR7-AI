@@ -12,26 +12,29 @@ export interface CategoryPalette {
     pillBg: string
     /** Pill text color paired with `pillBg`. */
     pillText: string
+    /** Hex used for SVG (donut chart, dots) — matches the pill family. */
+    dotHex: string
 }
 
 export const CATEGORY_PALETTES: CategoryPalette[] = [
-    { wrapBg: 'bg-cyan-900/30', pillBg: 'bg-cyan-900', pillText: 'text-cyan-200' },
-    { wrapBg: 'bg-purple-900/30', pillBg: 'bg-purple-900', pillText: 'text-purple-200' },
-    { wrapBg: 'bg-orange-900/30', pillBg: 'bg-orange-900', pillText: 'text-orange-200' },
-    { wrapBg: 'bg-emerald-900/30', pillBg: 'bg-emerald-900', pillText: 'text-emerald-200' },
-    { wrapBg: 'bg-sky-900/30', pillBg: 'bg-sky-900', pillText: 'text-sky-200' },
-    { wrapBg: 'bg-rose-900/30', pillBg: 'bg-rose-900', pillText: 'text-rose-200' },
-    { wrapBg: 'bg-fuchsia-900/30', pillBg: 'bg-fuchsia-900', pillText: 'text-fuchsia-200' },
-    { wrapBg: 'bg-amber-900/30', pillBg: 'bg-amber-900', pillText: 'text-amber-200' },
-    { wrapBg: 'bg-lime-900/30', pillBg: 'bg-lime-900', pillText: 'text-lime-200' },
-    { wrapBg: 'bg-teal-900/30', pillBg: 'bg-teal-900', pillText: 'text-teal-200' },
-    { wrapBg: 'bg-indigo-900/30', pillBg: 'bg-indigo-900', pillText: 'text-indigo-200' },
+    { wrapBg: 'bg-cyan-900/30', pillBg: 'bg-cyan-900', pillText: 'text-cyan-200', dotHex: '#06b6d4' },
+    { wrapBg: 'bg-purple-900/30', pillBg: 'bg-purple-900', pillText: 'text-purple-200', dotHex: '#a855f7' },
+    { wrapBg: 'bg-orange-900/30', pillBg: 'bg-orange-900', pillText: 'text-orange-200', dotHex: '#f97316' },
+    { wrapBg: 'bg-emerald-900/30', pillBg: 'bg-emerald-900', pillText: 'text-emerald-200', dotHex: '#10b981' },
+    { wrapBg: 'bg-sky-900/30', pillBg: 'bg-sky-900', pillText: 'text-sky-200', dotHex: '#0ea5e9' },
+    { wrapBg: 'bg-rose-900/30', pillBg: 'bg-rose-900', pillText: 'text-rose-200', dotHex: '#f43f5e' },
+    { wrapBg: 'bg-fuchsia-900/30', pillBg: 'bg-fuchsia-900', pillText: 'text-fuchsia-200', dotHex: '#d946ef' },
+    { wrapBg: 'bg-amber-900/30', pillBg: 'bg-amber-900', pillText: 'text-amber-200', dotHex: '#f59e0b' },
+    { wrapBg: 'bg-lime-900/30', pillBg: 'bg-lime-900', pillText: 'text-lime-200', dotHex: '#84cc16' },
+    { wrapBg: 'bg-teal-900/30', pillBg: 'bg-teal-900', pillText: 'text-teal-200', dotHex: '#14b8a6' },
+    { wrapBg: 'bg-indigo-900/30', pillBg: 'bg-indigo-900', pillText: 'text-indigo-200', dotHex: '#6366f1' },
 ]
 
 export const ORPHAN_PALETTE: CategoryPalette = {
     wrapBg: 'bg-theme-bg-tertiary',
     pillBg: 'bg-theme-bg-tertiary',
     pillText: 'text-theme-text-secondary',
+    dotHex: '#6b7280',
 }
 
 /**

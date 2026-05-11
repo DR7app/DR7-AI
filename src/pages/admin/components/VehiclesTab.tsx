@@ -63,9 +63,33 @@ export default function VehiclesTab() {
 
   const [plateSearch, setPlateSearch] = useState('')
 
+  // Filtri tabella unificata (sostituisce il layout per categoria del mockup):
+  // gruppo (categoria) / stato veicolo / disponibilita\' (criticita\' utilizzo).
+  const [groupFilter, setGroupFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [availabilityFilter, setAvailabilityFilter] = useState<string>('all')
+
   // Multi-select state
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [selectedVehicles, setSelectedVehicles] = useState<Set<string>>(new Set())
+
+  // Numero di scadenze in scadenza nei prossimi 30g (per alert intelligenti).
+  // Dato reale dalla tabella `scadenze`. Aggiornato a ogni mount.
+  const [scadenzeInScadenza, setScadenzeInScadenza] = useState<number>(0)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const now = new Date()
+      const in30 = new Date(now.getTime() + 30 * 86400000)
+      const { count } = await supabase
+        .from('scadenze')
+        .select('id', { count: 'exact', head: true })
+        .lte('expiry_date', in30.toISOString().slice(0, 10))
+        .gte('expiry_date', now.toISOString().slice(0, 10))
+      if (!cancelled && typeof count === 'number') setScadenzeInScadenza(count)
+    })().catch(() => { /* tabella opzionale, ignora errori */ })
+    return () => { cancelled = true }
+  }, [])
 
   const [formData, setFormData] = useState({
     display_name: '',
@@ -561,45 +585,6 @@ export default function VehiclesTab() {
     setSelectedVehicles(newSelected)
   }
 
-  async function syncToGoogleCalendar(vehicle: Vehicle) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const metadata = vehicle.metadata as any
-    const unavailableFrom = metadata?.unavailable_from
-    const unavailableUntil = metadata?.unavailable_until
-    const unavailableFromTime = metadata?.unavailable_from_time || '09:00'
-    const unavailableUntilTime = metadata?.unavailable_until_time || '18:00'
-    const unavailableReason = metadata?.unavailable_reason
-
-    if (!unavailableFrom || !unavailableUntil) {
-      alert('⚠️ Impossibile sincronizzare: Date di non disponibilità mancanti.\n\nModifica il veicolo e inserisci entrambe le date.')
-      return
-    }
-
-    try {
-      const response = await fetch('/.netlify/functions/create-vehicle-unavailability-event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vehicleName: vehicle.display_name,
-          vehiclePlate: vehicle.plate || undefined,
-          unavailableFrom: unavailableFrom,
-          unavailableUntil: unavailableUntil,
-          unavailableFromTime: unavailableFromTime,
-          unavailableUntilTime: unavailableUntilTime,
-          reason: unavailableReason || 'Non disponibile'
-        })
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Failed to create calendar event:', errorText)
-        alert('❌ Errore nella sincronizzazione con Google Calendar.\n\nVerifica le credenziali.')
-      }
-    } catch (error) {
-      console.error('Error syncing with calendar:', error)
-    }
-  }
-
   function resetForm() {
     setFormData({
       display_name: '',
@@ -734,46 +719,74 @@ export default function VehiclesTab() {
 
   return (
     <div>
-      {/* KPI strip — 6 metriche flotta, dati reali da vehicles + bookings 30g */}
+      {/* KPI strip — 6 metriche flotta, dati reali da vehicles + bookings 30g.
+          Stile mockup: icona a sinistra, valore grande, sub-label muted.       */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
-        {[
-          { label: 'Totale Veicoli', value: String(fleetKpi.total), sub: '100% della flotta', ring: '#3B82F6' },
-          { label: 'Veicoli Attivi', value: String(fleetKpi.attivi), sub: fleetKpi.total > 0 ? `${Math.round((fleetKpi.attivi / fleetKpi.total) * 100)}% della flotta` : '—', ring: '#10B981' },
-          { label: 'Veicoli Fermi', value: String(fleetKpi.fermi), sub: fleetKpi.total > 0 ? `${Math.round((fleetKpi.fermi / fleetKpi.total) * 100)}% della flotta` : '—', ring: '#EF4444' },
-          { label: 'Fatturato Flotta', value: `€${fleetKpi.totalFatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`, sub: 'ultimi 30 giorni', ring: '#F59E0B' },
-          { label: 'Utilizzo Medio', value: `${fleetKpi.utilizzoMedio}%`, sub: 'media veicolare', ring: '#06B6D4' },
-          { label: 'ROI Medio Flotta', value: `${String(fleetKpi.roiMedio).replace('.', ',')}%`, sub: 'fatturato/potenziale', ring: '#A855F7' },
-        ].map((k) => (
-          <div key={k.label} className="relative overflow-hidden rounded-2xl border bg-theme-bg-secondary p-3" style={{ borderColor: `${k.ring}33` }}>
-            <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full blur-2xl pointer-events-none" style={{ background: `${k.ring}22` }}/>
-            <div className="relative">
-              <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${k.ring}cc` }}>{k.label}</div>
-              <div className="text-xl lg:text-2xl font-bold text-theme-text-primary mt-1 tabular-nums">{k.value}</div>
-              <div className="text-[10px] text-theme-text-muted mt-0.5">{k.sub}</div>
+        {(() => {
+          const total = fleetKpi.total
+          const pct = (n: number) => total > 0 ? `${Math.round((n / total) * 100)}% della flotta` : '—'
+          const cards = [
+            { label: 'TOTALE VEICOLI', value: String(total), sub: '100% della flotta', tone: '#3B82F6', icon: 'car' },
+            { label: 'VEICOLI ATTIVI', value: String(fleetKpi.attivi), sub: pct(fleetKpi.attivi), tone: '#10B981', icon: 'check' },
+            { label: 'VEICOLI FERMI', value: String(fleetKpi.fermi), sub: pct(fleetKpi.fermi), tone: '#EF4444', icon: 'wrench' },
+            { label: 'FATTURATO FLOTTA', value: `€${fleetKpi.totalFatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`, sub: 'ultimi 30 giorni', tone: '#F59E0B', icon: 'euro' },
+            { label: 'UTILIZZO MEDIO', value: `${fleetKpi.utilizzoMedio}%`, sub: 'media veicolare', tone: '#06B6D4', icon: 'chart' },
+            { label: 'ROI MEDIO FLOTTA', value: `${String(fleetKpi.roiMedio).replace('.', ',')}%`, sub: 'fatturato/potenziale', tone: '#A855F7', icon: 'trend' },
+          ]
+          const renderIcon = (name: string, tone: string) => {
+            const common = { className: 'w-5 h-5', fill: 'none', stroke: tone, viewBox: '0 0 24 24', strokeWidth: 2 } as const
+            switch (name) {
+              case 'car': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1-4a2 2 0 012-1.5h12a2 2 0 012 1.5l1 4M5 17a2 2 0 100-4 2 2 0 000 4zm14 0a2 2 0 100-4 2 2 0 000 4zM3 13h18v3a1 1 0 01-1 1h-1m-14 0H4a1 1 0 01-1-1v-3z"/></svg>
+              case 'check': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              case 'wrench': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M14.7 6.3a4.5 4.5 0 005.7 5.7l-9.7 9.7a2.4 2.4 0 11-3.4-3.4l9.7-9.7-2.3-2.3 3-3 2.3 2.3-5.3 5.3-1.4-1.4z"/></svg>
+              case 'euro': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M15 9a4 4 0 100 6m-7-3h7m-7-3h7"/></svg>
+              case 'chart': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V9m4 10V5m4 14v-7M5 19h14"/></svg>
+              case 'trend': return <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 8-8m0 0v6m0-6h-6"/></svg>
+              default: return null
+            }
+          }
+          return cards.map(k => (
+            <div key={k.label} className="relative overflow-hidden rounded-2xl border bg-theme-bg-secondary px-3 py-3" style={{ borderColor: `${k.tone}30` }}>
+              <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full blur-2xl pointer-events-none" style={{ background: `${k.tone}1f` }}/>
+              <div className="relative flex items-start gap-2.5">
+                <div className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${k.tone}22` }}>
+                  {renderIcon(k.icon, k.tone)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold leading-tight" style={{ color: `${k.tone}cc` }}>{k.label}</div>
+                  <div className="text-xl lg:text-2xl font-bold text-theme-text-primary mt-0.5 tabular-nums leading-none">{k.value}</div>
+                  <div className="text-[10px] text-theme-text-muted mt-1">{k.sub}</div>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        })()}
       </div>
 
-      {/* Alert intelligenti — appare solo se ci sono avvisi */}
+      {/* Alert intelligenti — solo segnali reali (no mock). Tono colore e
+          dot match mockup: rosso=fermi>3gg, ambra=sotto target utilizzo,
+          arancio=scadenze nei prossimi 30g. Nessun avviso => non renderizza. */}
       {(() => {
-        const alerts: { tone: 'red' | 'amber'; text: string }[] = []
+        const alerts: { tone: 'red' | 'amber' | 'orange'; text: string }[] = []
         if (fleetKpi.fermiOltre3 > 0) alerts.push({ tone: 'red', text: `${fleetKpi.fermiOltre3} ${fleetKpi.fermiOltre3 === 1 ? 'veicolo fermo' : 'veicoli fermi'} da oltre 3 giorni` })
         if (fleetKpi.sottoTarget > 0) alerts.push({ tone: 'amber', text: `${fleetKpi.sottoTarget} ${fleetKpi.sottoTarget === 1 ? 'veicolo sotto' : 'veicoli sotto'} il target di utilizzo` })
+        if (scadenzeInScadenza > 0) alerts.push({ tone: 'orange', text: `${scadenzeInScadenza} ${scadenzeInScadenza === 1 ? 'scadenza' : 'scadenze'} nei prossimi 30 giorni` })
         if (alerts.length === 0) return null
-        const dot = { red: 'bg-red-500', amber: 'bg-amber-500' }
+        const dot = { red: 'bg-red-500', amber: 'bg-amber-500', orange: 'bg-orange-500' }
         return (
-          <div className="bg-gradient-to-br from-red-500/8 via-amber-500/5 to-transparent border border-amber-500/20 rounded-2xl px-4 py-3 mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Alert Intelligenti</span>
-              <span className="text-[11px] text-theme-text-muted">{alerts.length} {alerts.length === 1 ? 'avviso' : 'avvisi'}</span>
+          <div className="bg-gradient-to-r from-red-500/10 via-amber-500/8 to-transparent border border-red-500/30 rounded-2xl px-4 py-3 mb-4">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-red-500/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+              <span className="text-sm font-bold text-red-400">ALERT INTELLIGENTI!</span>
+              <span className="text-[11px] text-theme-text-muted">{alerts.length} {alerts.length === 1 ? 'avviso attivo' : 'avvisi attivi'}</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {alerts.map((a, i) => (
-                <div key={i} className="flex items-center gap-2 bg-theme-bg-primary/40 border border-theme-border/50 rounded-full px-3 py-1.5">
+                <div key={i} className="flex items-center gap-2 bg-theme-bg-primary/50 border border-theme-border/60 rounded-full px-3 py-1.5">
                   <span className={`w-2 h-2 rounded-full ${dot[a.tone]}`}/>
                   <span className="text-[11px] text-theme-text-primary">{a.text}</span>
                 </div>
@@ -783,40 +796,87 @@ export default function VehiclesTab() {
         )
       })()}
 
-      <div className="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
+      {/* Header (mockup style) — titolo Gestione Flotta + sottotitolo.
+          Selezione Multipla resta accessibile, "+ Nuovo Veicolo" si sposta
+          nella filter row qui sotto come da mockup.                        */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 mb-4">
         <div>
-          <h2 className="text-2xl font-bold text-theme-text-primary">Veicoli</h2>
-          <p className="text-sm text-theme-text-muted mt-1">
-            {sections.map(s => `${s.category.label}: ${s.vehicles.length}`).join(' | ')}
-            {sections.length > 0 ? ' | ' : ''}Totale: {vehicles.length}
-            {orphanSection ? ` | Senza categoria: ${orphanSection.vehicles.length}` : ''}
-          </p>
+          <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Flotta</h2>
+          <p className="text-sm text-theme-text-muted mt-0.5">Panoramica completa della tua flotta aziendale</p>
         </div>
-        <div className="flex gap-2">
+        {multiSelectMode && (
           <Button
-            onClick={() => {
-              setMultiSelectMode(!multiSelectMode)
-              setSelectedVehicles(new Set())
-            }}
-            variant={multiSelectMode ? 'secondary' : 'primary'}
-            className={multiSelectMode ? 'bg-blue-600 text-theme-text-primary' : ''}
+            onClick={() => { setMultiSelectMode(false); setSelectedVehicles(new Set()) }}
+            variant="secondary"
+            className="text-xs"
           >
-            {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
+            Annulla Selezione
           </Button>
-          <Button onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }}>
-            + Nuovo Veicolo
-          </Button>
-        </div>
+        )}
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-4">
-        <Input
-          label="Cerca per targa o nome veicolo"
-          placeholder="Cerca per targa o nome veicolo..."
-          value={plateSearch}
-          onChange={(e) => setPlateSearch(e.target.value)}
-        />
+      {/* Filter row — search + 3 dropdowns + Filtri + Nuovo Veicolo (mockup) */}
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-0">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input
+            type="text"
+            placeholder="Cerca per targa, nome o modello..."
+            value={plateSearch}
+            onChange={(e) => setPlateSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-sm text-theme-text-primary placeholder-theme-text-muted"
+          />
+        </div>
+        <select
+          value={groupFilter}
+          onChange={(e) => setGroupFilter(e.target.value)}
+          className="bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"
+        >
+          <option value="all">Tutti i gruppi</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          <option value="__orphan__">Senza categoria</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"
+        >
+          <option value="all">Tutti gli stati</option>
+          <option value="available">Disponibile</option>
+          <option value="rented">Noleggiato</option>
+          <option value="maintenance">Manutenzione</option>
+          <option value="unavailable">Non disponibile</option>
+        </select>
+        <select
+          value={availabilityFilter}
+          onChange={(e) => setAvailabilityFilter(e.target.value)}
+          className="bg-theme-bg-tertiary border border-theme-border rounded-full px-3 py-2 text-sm text-theme-text-primary"
+        >
+          <option value="all">Disponibilità</option>
+          <option value="ok">Utilizzo OK</option>
+          <option value="warning">Sotto target</option>
+          <option value="critical">Critico</option>
+        </select>
+        <button
+          onClick={() => {
+            setMultiSelectMode(!multiSelectMode)
+            setSelectedVehicles(new Set())
+          }}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm border ${multiSelectMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-theme-bg-tertiary text-theme-text-primary border-theme-border'}`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.5L14 13v6l-4 2v-8L3 6.5V4z"/>
+          </svg>
+          Filtri
+        </button>
+        <button
+          onClick={() => { resetForm(); setEditingId(null); setShowForm(true) }}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm bg-cyan-500 hover:bg-cyan-600 text-white font-medium"
+        >
+          + Nuovo Veicolo
+        </button>
       </div>
 
       {multiSelectMode && selectedVehicles.size > 0 && (
@@ -1157,12 +1217,10 @@ export default function VehiclesTab() {
         </form>
       )}
 
-      {/* Categorie veicoli — Centralina Pro e\' la sola fonte di verita\'.
-          Ogni categoria e\' una card con pill colorato (palette ciclata),
-          7 colonne (Nome, Targa, Stato, CV, Anno, Tariffa, Azioni), vista
-          mobile a card, bulk select, pulsanti Modifica / Sync / Elimina.
-          I veicoli orfani (category id non piu\' in Centralina Pro) finiscono
-          nella sezione "Altre / Senza categoria" per restare modificabili. */}
+      {/* Layout unificato (mockup): tabella veicoli a sinistra + sidebar
+          analitica a destra. Sostituisce il vecchio grid-3 per categoria.
+          Pulsanti azione: solo Modifica e Elimina (Sync Google Calendar
+          rimosso — uso del calendario interno).                            */}
       {categories.length === 0 && (
         <div className="rounded-lg border border-dashed border-theme-border bg-theme-bg-secondary p-8 text-center">
           <p className="text-sm font-semibold text-theme-text-primary">Nessuna categoria configurata</p>
@@ -1172,147 +1230,327 @@ export default function VehiclesTab() {
           </p>
         </div>
       )}
-      {allSections.length > 0 && (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {allSections.map(section => (
-            <div key={section.category.id} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
-              <div className={`${section.palette.wrapBg} px-4 py-3 border-b border-theme-border`}>
-                <h3 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-                  <span className={`px-3 py-1 ${section.palette.pillBg} ${section.palette.pillText} rounded text-sm`}>
-                    {section.category.label}
-                  </span>
-                  <span className="text-sm text-theme-text-muted">({section.vehicles.length} veicoli)</span>
-                </h3>
-              </div>
-              {/* Mobile Card View */}
-              <div className="lg:hidden divide-y divide-theme-border">
-                {section.vehicles.map((vehicle) => (
-                  <div key={vehicle.id} className={`p-3 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20' : ''}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
+      {allSections.length > 0 && (() => {
+        // Flatten + filtra sezioni in un'unica lista per la tabella.
+        type FlatRow = { vehicle: Vehicle; sectionId: string; sectionLabel: string; palette: typeof allSections[number]['palette'] }
+        const allFlat: FlatRow[] = allSections.flatMap(s =>
+          s.vehicles.map(v => ({ vehicle: v, sectionId: s.category.id, sectionLabel: s.category.label, palette: s.palette }))
+        )
+        const flatRows = allFlat.filter(r => {
+          if (groupFilter !== 'all' && r.sectionId !== groupFilter) return false
+          if (statusFilter !== 'all' && r.vehicle.status !== statusFilter) return false
+          if (availabilityFilter !== 'all') {
+            const s = vehicleStats.get(r.vehicle.id)
+            const u = s?.utilizzoPct ?? 0
+            if (availabilityFilter === 'ok' && u < 60) return false
+            if (availabilityFilter === 'warning' && (u >= 60 || u < 30)) return false
+            if (availabilityFilter === 'critical' && u >= 30) return false
+          }
+          return true
+        })
+
+        // Distribuzione per gruppo — donut data.
+        const groupCounts = allSections.map(s => ({ label: s.category.label, count: s.vehicles.length, palette: s.palette }))
+        const groupTotal = groupCounts.reduce((acc, g) => acc + g.count, 0)
+
+        // Top 5 per fatturato (30g, dati reali).
+        const topByFatturato = [...allFlat]
+          .map(r => ({ ...r, fatturato: vehicleStats.get(r.vehicle.id)?.fatturato || 0 }))
+          .sort((a, b) => b.fatturato - a.fatturato)
+          .slice(0, 5)
+
+        // Performance flotta.
+        const kmTotali = vehicles.reduce((acc, v) => acc + (Number((v as Vehicle & { current_km?: number }).current_km) || 0), 0)
+        const mediaKm = vehicles.length > 0 ? Math.round(kmTotali / vehicles.length) : 0
+        const giorniFermiTotali = Array.from(vehicleStats.values()).reduce((acc, s) => acc + s.giorniFermo, 0)
+
+        // Donut SVG geometry.
+        const R = 36; const C = 2 * Math.PI * R
+        let offset = 0
+
+        // ROI per riga — usa lo stesso calcolo del fleetKpi.
+        const roiOf = (v: Vehicle) => {
+          const s = vehicleStats.get(v.id)
+          const potential = ((v as Vehicle & { daily_rate?: number }).daily_rate || 0) * 30
+          if (!s || potential <= 0) return 0
+          return Math.round((s.fatturato / potential) * 1000) / 10
+        }
+        const stateOf = (v: Vehicle) => {
+          const s = vehicleStats.get(v.id)
+          if (v.status === 'maintenance' || v.status === 'unavailable') return { label: 'Fermo', dot: 'bg-red-500', text: 'text-red-400' }
+          if (s && s.giorniFermo >= 3 && s.utilizzoPct < 40) return { label: 'Attenzione', dot: 'bg-amber-500', text: 'text-amber-400' }
+          return { label: 'Attivo', dot: 'bg-emerald-500', text: 'text-emerald-400' }
+        }
+
+        return (
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+            {/* TABELLA — col-span-9 */}
+            <div className="xl:col-span-9 bg-theme-bg-secondary rounded-2xl border border-theme-border overflow-hidden">
+              {/* Mobile cards (sotto xl) */}
+              <div className="xl:hidden divide-y divide-theme-border">
+                {flatRows.length === 0 && (
+                  <div className="p-8 text-center text-theme-text-muted text-sm">Nessun veicolo trovato</div>
+                )}
+                {flatRows.map(({ vehicle, sectionLabel, palette }) => {
+                  const stats = vehicleStats.get(vehicle.id)
+                  const img = (vehicle.metadata as { image?: string } | null)?.image
+                  const st = stateOf(vehicle)
+                  const km = Number((vehicle as Vehicle & { current_km?: number }).current_km) || 0
+                  const roi = roiOf(vehicle)
+                  return (
+                    <div key={vehicle.id} className={`p-3 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20' : ''}`}>
+                      <div className="flex items-start gap-3">
                         {multiSelectMode && (
-                          <input
-                            type="checkbox"
-                            checked={selectedVehicles.has(vehicle.id)}
-                            onChange={() => toggleVehicleSelection(vehicle.id)}
-                            className="w-5 h-5 flex-shrink-0"
-                          />
+                          <input type="checkbox" checked={selectedVehicles.has(vehicle.id)} onChange={() => toggleVehicleSelection(vehicle.id)} className="w-5 h-5 mt-1 flex-shrink-0"/>
                         )}
-                        <div className="min-w-0">
+                        <div className="w-14 h-10 rounded-md bg-theme-bg-tertiary overflow-hidden flex-shrink-0 flex items-center justify-center">
+                          {img ? <img src={img} alt={vehicle.display_name} className="w-full h-full object-cover"/> : <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1-4a2 2 0 012-1.5h12a2 2 0 012 1.5l1 4M5 17a2 2 0 100-4 2 2 0 000 4zm14 0a2 2 0 100-4 2 2 0 000 4z"/></svg>}
+                        </div>
+                        <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
-                          <div className="text-xs text-theme-text-muted">
-                            {vehicle.plate || '-'}
-                            {(vehicle.metadata as { cv?: number } | null)?.cv && <span className="ml-2">{(vehicle.metadata as { cv?: number }).cv} CV</span>}
-                            {(vehicle.metadata as { model_year?: number } | null)?.model_year && <span className="ml-2">{(vehicle.metadata as { model_year?: number }).model_year}</span>}
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className={`px-2 py-0.5 ${palette.pillBg} ${palette.pillText} rounded text-[10px] font-medium`}>{sectionLabel}</span>
+                            <span className="text-[11px] text-theme-text-muted font-mono">{vehicle.plate || '—'}</span>
+                            <span className="text-[11px] text-theme-text-muted">{km.toLocaleString('it-IT')} km</span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-2 text-xs">
+                            <span className={`inline-flex items-center gap-1 ${st.text}`}><span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}/>{st.label}</span>
+                            <span className="text-theme-text-muted">Utilizzo <span className="text-theme-text-primary font-semibold">{stats?.utilizzoPct ?? 0}%</span></span>
+                            <span className="text-theme-text-muted">ROI <span className="text-theme-text-primary font-semibold">{String(roi).replace('.', ',')}%</span></span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <button onClick={() => handleEdit(vehicle)} className="text-xs px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white">Modifica</button>
+                            <button onClick={() => handleDelete(vehicle.id)} className="text-xs px-3 py-1.5 rounded-full bg-red-700 hover:bg-red-600 text-white">Elimina</button>
                           </div>
                         </div>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className="text-sm font-medium text-theme-text-primary">€{vehicle.daily_rate}</div>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-block mt-1 ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
-                          vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                            vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                              vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                                'bg-theme-bg-tertiary text-theme-text-secondary'
-                        }`}>
-                          {vehicle.status === 'available' ? 'Disponibile' :
-                            vehicle.status === 'unavailable' ? 'Non Disp.' :
-                              vehicle.status === 'rented' ? 'Noleggiato' :
-                                vehicle.status === 'maintenance' ? 'Manut.' : 'Ritirato'}
-                        </span>
+                        <div className="text-right flex-shrink-0">
+                          <div className="text-sm font-bold text-theme-text-primary tabular-nums">€{(stats?.fatturato || 0).toLocaleString('it-IT', { maximumFractionDigits: 0 })}</div>
+                          <div className="text-[10px] text-theme-text-muted">30g</div>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-2">
-                      <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-2 px-3 flex-1">Modifica</Button>
-                      <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800">Sync</Button>
-                      <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">×</Button>
-                    </div>
-                  </div>
-                ))}
-                {section.vehicles.length === 0 && (
-                  <div className="p-8 text-center text-theme-text-muted">
-                    Nessun veicolo in {section.category.label}
-                  </div>
-                )}
+                  )
+                })}
               </div>
-              {/* Desktop Table */}
-              <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full min-w-[600px]">
+
+              {/* Desktop table (xl+) */}
+              <div className="hidden xl:block overflow-x-auto">
+                <table className="w-full">
                   <thead>
-                    <tr>
+                    <tr className="text-[10px] uppercase tracking-wider text-theme-text-muted border-b border-theme-border">
                       {multiSelectMode && (
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary w-10">
+                        <th className="px-3 py-3 text-left w-8">
                           <input
                             type="checkbox"
-                            checked={section.vehicles.length > 0 && section.vehicles.every(v => selectedVehicles.has(v.id))}
-                            onChange={() => toggleSelectCategory(section.vehicles)}
-                            className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
+                            checked={flatRows.length > 0 && flatRows.every(r => selectedVehicles.has(r.vehicle.id))}
+                            onChange={() => toggleSelectCategory(flatRows.map(r => r.vehicle))}
+                            className="w-4 h-4 rounded border-theme-border-light"
                           />
                         </th>
                       )}
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Nome</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Targa</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">CV</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Anno</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Tariffa</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
+                      <th className="px-3 py-3 text-left font-semibold">Veicolo</th>
+                      <th className="px-3 py-3 text-left font-semibold">Gruppo</th>
+                      <th className="px-3 py-3 text-left font-semibold">Targa</th>
+                      <th className="px-3 py-3 text-right font-semibold">Km Attuali</th>
+                      <th className="px-3 py-3 text-left font-semibold">Stato</th>
+                      <th className="px-3 py-3 text-left font-semibold">Utilizzo</th>
+                      <th className="px-3 py-3 text-right font-semibold">Fatturato</th>
+                      <th className="px-3 py-3 text-right font-semibold">Giorni Fermo</th>
+                      <th className="px-3 py-3 text-right font-semibold">ROI</th>
+                      <th className="px-3 py-3 text-left font-semibold">Disponibilita\'</th>
+                      <th className="px-3 py-3 text-center font-semibold">Azioni</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {section.vehicles.map((vehicle) => (
-                      <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/20 hover:bg-blue-900/30' : ''}`}>
-                        {multiSelectMode && (
-                          <td className="px-4 py-3 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={selectedVehicles.has(vehicle.id)}
-                              onChange={() => toggleVehicleSelection(vehicle.id)}
-                              className="w-4 h-4 rounded-full border-theme-border-light bg-theme-bg-tertiary text-blue-600 focus:ring-blue-500"
-                            />
-                          </td>
-                        )}
-                        <td className="px-4 py-3 text-sm text-theme-text-primary font-semibold">{vehicle.display_name}</td>
-                        <td className="px-4 py-3 text-sm text-theme-text-primary">{vehicle.plate || '-'}</td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${vehicle.status === 'available' ? 'bg-green-900 text-green-200' :
-                            vehicle.status === 'unavailable' ? 'bg-red-900 text-red-200' :
-                              vehicle.status === 'rented' ? 'bg-blue-900 text-blue-200' :
-                                vehicle.status === 'maintenance' ? 'bg-yellow-900 text-yellow-200' :
-                                  'bg-theme-bg-tertiary text-theme-text-secondary'
-                            }`}>
-                            {vehicle.status === 'available' ? 'Disponibile' :
-                              vehicle.status === 'unavailable' ? 'Non Disponibile' :
-                                vehicle.status === 'rented' ? 'Noleggiato' :
-                                  vehicle.status === 'maintenance' ? 'Manutenzione' : 'Ritirato'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as { cv?: number } | null)?.cv || '-'}</td>
-                        <td className="px-4 py-3 text-sm text-theme-text-primary">{(vehicle.metadata as { model_year?: number } | null)?.model_year || '-'}</td>
-                        <td className="px-4 py-3 text-sm text-theme-text-primary">€{vehicle.daily_rate}</td>
-                        <td className="px-4 py-3 text-sm">
-                          <div className="flex gap-2">
-                            <Button onClick={() => handleEdit(vehicle)} variant="secondary" className="text-xs py-1 px-3">Modifica</Button>
-                            <Button onClick={() => syncToGoogleCalendar(vehicle)} variant="secondary" className="text-xs py-2 px-3 bg-blue-900 hover:bg-blue-800" title="Sincronizza con Google Calendar">📅 Sync</Button>
-                            <Button onClick={() => handleDelete(vehicle.id)} variant="secondary" className="text-xs py-2 px-3 bg-red-900 hover:bg-red-800">×</Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {section.vehicles.length === 0 && (
+                    {flatRows.length === 0 && (
                       <tr>
-                        <td colSpan={multiSelectMode ? 8 : 7} className="px-4 py-8 text-center text-theme-text-muted">
-                          Nessun veicolo in {section.category.label}
+                        <td colSpan={multiSelectMode ? 12 : 11} className="px-3 py-12 text-center text-theme-text-muted text-sm">
+                          Nessun veicolo trovato con i filtri selezionati
                         </td>
                       </tr>
                     )}
+                    {flatRows.map(({ vehicle, sectionLabel, palette }) => {
+                      const stats = vehicleStats.get(vehicle.id)
+                      const utilizzo = stats?.utilizzoPct ?? 0
+                      const fatt = stats?.fatturato || 0
+                      const fermi = stats?.giorniFermo ?? 0
+                      const roi = roiOf(vehicle)
+                      const km = Number((vehicle as Vehicle & { current_km?: number }).current_km) || 0
+                      const img = (vehicle.metadata as { image?: string } | null)?.image
+                      const st = stateOf(vehicle)
+                      const dispLabel = vehicle.status === 'available' ? 'Disponibile' : vehicle.status === 'unavailable' ? 'Non disponibile' : vehicle.status === 'rented' ? 'Noleggiato' : vehicle.status === 'maintenance' ? 'Manutenzione' : '—'
+                      const dispClass = vehicle.status === 'available' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : vehicle.status === 'rented' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'
+                      const utilBar = utilizzo >= 70 ? 'bg-emerald-500' : utilizzo >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                      return (
+                        <tr key={vehicle.id} className={`border-t border-theme-border hover:bg-theme-bg-tertiary/40 ${selectedVehicles.has(vehicle.id) ? 'bg-blue-900/15' : ''}`}>
+                          {multiSelectMode && (
+                            <td className="px-3 py-2.5">
+                              <input type="checkbox" checked={selectedVehicles.has(vehicle.id)} onChange={() => toggleVehicleSelection(vehicle.id)} className="w-4 h-4 rounded border-theme-border-light"/>
+                            </td>
+                          )}
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-12 h-9 rounded-md bg-theme-bg-tertiary overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                {img ? (
+                                  <img src={img} alt={vehicle.display_name} className="w-full h-full object-cover"/>
+                                ) : (
+                                  <svg className="w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1-4a2 2 0 012-1.5h12a2 2 0 012 1.5l1 4M5 17a2 2 0 100-4 2 2 0 000 4zm14 0a2 2 0 100-4 2 2 0 000 4z"/>
+                                  </svg>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
+                                <div className="text-[10px] text-theme-text-muted">
+                                  {(vehicle.metadata as { cv?: number } | null)?.cv && <span>{(vehicle.metadata as { cv?: number }).cv} CV</span>}
+                                  {(vehicle.metadata as { model_year?: number } | null)?.model_year && <span>{(vehicle.metadata as { cv?: number } | null)?.cv ? ' · ' : ''}{(vehicle.metadata as { model_year?: number }).model_year}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className={`px-2 py-0.5 ${palette.pillBg} ${palette.pillText} rounded text-[10px] font-medium uppercase tracking-wider`}>{sectionLabel}</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-xs font-mono text-theme-text-primary tabular-nums">{vehicle.plate || '—'}</td>
+                          <td className="px-3 py-2.5 text-xs text-theme-text-primary tabular-nums text-right">{km.toLocaleString('it-IT')} km</td>
+                          <td className="px-3 py-2.5">
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${st.text}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}/>{st.label}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2 min-w-[110px]">
+                              <div className="w-16 h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
+                                <div className={`h-full ${utilBar}`} style={{ width: `${Math.min(100, utilizzo)}%` }}/>
+                              </div>
+                              <span className="text-xs text-theme-text-primary font-semibold tabular-nums">{utilizzo}%</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-sm text-theme-text-primary tabular-nums text-right">€{fatt.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</td>
+                          <td className="px-3 py-2.5 text-sm text-theme-text-primary tabular-nums text-right">{fermi}</td>
+                          <td className="px-3 py-2.5 text-sm tabular-nums text-right">
+                            <span className={roi >= 0 ? 'text-emerald-400' : 'text-red-400'}>{roi >= 0 ? '▲' : '▼'} {String(Math.abs(roi)).replace('.', ',')}%</span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${dispClass}`}>{dispLabel}</span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex justify-center gap-1.5">
+                              <button onClick={() => handleEdit(vehicle)} className="px-2.5 py-1 text-[11px] rounded-md bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border border-blue-500/30">Modifica</button>
+                              <button onClick={() => handleDelete(vehicle.id)} className="px-2.5 py-1 text-[11px] rounded-md bg-red-600/15 hover:bg-red-600/25 text-red-400 border border-red-500/30">×</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
+              <div className="px-4 py-2.5 border-t border-theme-border text-[11px] text-theme-text-muted flex items-center justify-between">
+                <span>Mostra <span className="text-theme-text-primary">{flatRows.length}</span> di <span className="text-theme-text-primary">{allFlat.length}</span> veicoli</span>
+                {orphanSection && orphanSection.vehicles.length > 0 && (
+                  <span>{orphanSection.vehicles.length} senza categoria</span>
+                )}
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+
+            {/* SIDEBAR — col-span-3 */}
+            <div className="xl:col-span-3 space-y-4">
+              {/* Distribuzione per gruppo */}
+              <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-4">
+                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-3">Distribuzione per Gruppo</div>
+                {groupTotal > 0 ? (
+                  <div className="flex items-center gap-4">
+                    <svg width="96" height="96" viewBox="0 0 96 96" className="flex-shrink-0">
+                      <circle cx="48" cy="48" r={R} fill="none" stroke="var(--color-bg-tertiary, #1f2937)" strokeWidth="14"/>
+                      {groupCounts.map((g, idx) => {
+                        const len = (g.count / groupTotal) * C
+                        const dashArray = `${len} ${C - len}`
+                        const dashOffset = -offset
+                        offset += len
+                        const stroke = g.palette.dotHex || '#60a5fa'
+                        return <circle key={idx} cx="48" cy="48" r={R} fill="none" stroke={stroke} strokeWidth="14" strokeDasharray={dashArray} strokeDashoffset={dashOffset} transform="rotate(-90 48 48)"/>
+                      })}
+                      <text x="48" y="45" textAnchor="middle" className="fill-current text-theme-text-primary" style={{ fontSize: 14, fontWeight: 700 }}>{groupTotal}</text>
+                      <text x="48" y="60" textAnchor="middle" className="fill-current text-theme-text-muted" style={{ fontSize: 9 }}>veicoli</text>
+                    </svg>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      {groupCounts.map(g => (
+                        <div key={g.label} className="flex items-center gap-1.5 text-[11px]">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: g.palette.dotHex || '#60a5fa' }}/>
+                          <span className="text-theme-text-primary truncate flex-1">{g.label}</span>
+                          <span className="text-theme-text-muted tabular-nums">{g.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-theme-text-muted text-center py-3">Nessun veicolo</div>
+                )}
+              </div>
+
+              {/* Top per fatturato */}
+              <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-4">
+                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-3">Top per Fatturato (30g)</div>
+                <div className="space-y-2">
+                  {topByFatturato.filter(r => r.fatturato > 0).length === 0 ? (
+                    <div className="text-xs text-theme-text-muted text-center py-2">Nessun fatturato negli ultimi 30g</div>
+                  ) : topByFatturato.filter(r => r.fatturato > 0).map((r, i) => (
+                    <div key={r.vehicle.id} className="flex items-center gap-2">
+                      <span className="text-[10px] text-theme-text-muted font-mono w-3 flex-shrink-0">{i + 1}</span>
+                      <span className={`w-1.5 h-6 rounded-full flex-shrink-0`} style={{ background: r.palette.dotHex || '#60a5fa' }}/>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium text-theme-text-primary truncate">{r.vehicle.display_name}</div>
+                        <div className="text-[10px] text-theme-text-muted truncate">{r.sectionLabel}</div>
+                      </div>
+                      <span className="text-xs font-bold text-theme-text-primary tabular-nums">€{r.fatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Performance flotta */}
+              <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-4">
+                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-3">Performance Flotta</div>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-theme-text-muted">Km totali percorsi</span>
+                    <span className="text-xs font-bold text-theme-text-primary tabular-nums">{kmTotali.toLocaleString('it-IT')} km</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-theme-text-muted">Media km per veicolo</span>
+                    <span className="text-xs font-bold text-theme-text-primary tabular-nums">{mediaKm.toLocaleString('it-IT')} km</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-theme-text-muted">Giorni totali fermi (30g)</span>
+                    <span className="text-xs font-bold text-theme-text-primary tabular-nums">{giorniFermiTotali} giorni</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-theme-text-muted">Utilizzo medio flotta</span>
+                    <span className="text-xs font-bold text-theme-text-primary tabular-nums">{fleetKpi.utilizzoMedio}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Suggerimenti smart — solo se ha senso renderizzare */}
+              {fleetKpi.sottoTarget > 0 && (
+                <div className="bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border border-cyan-500/30 rounded-2xl p-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span className="text-[10px] uppercase tracking-wider text-cyan-400 font-bold">Suggerimenti Smart</span>
+                  </div>
+                  <p className="text-[11px] text-theme-text-primary leading-relaxed mb-3">
+                    {fleetKpi.sottoTarget} {fleetKpi.sottoTarget === 1 ? 'veicolo ha' : 'veicoli hanno'} un utilizzo basso.
+                    Considera promozioni mirate o riallocazione.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
