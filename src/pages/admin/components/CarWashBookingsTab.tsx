@@ -1162,10 +1162,36 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
     createBookingLockRef.current = true
 
-    // Get customer details from selected customer
-    const customer = customers.find(c => c.id === formData.customer_id)
+    // Get customer details from selected customer. Fallback to a direct
+    // Supabase lookup if the local customers[] array is stale (e.g., the
+    // customer was just created via NewClientModal and the refresh
+    // hasn't propagated yet).
+    let customer = customers.find(c => c.id === formData.customer_id)
+    if (!customer && formData.customer_id) {
+      try {
+        const { data: directCust } = await supabase
+          .from('customers_extended')
+          .select('id, nome, cognome, ragione_sociale, denominazione, tipo_cliente, email, telefono, telefono_secondario')
+          .eq('id', formData.customer_id)
+          .maybeSingle()
+        if (directCust) {
+          const fullName = directCust.tipo_cliente === 'azienda'
+            ? (directCust.ragione_sociale || directCust.denominazione || 'Cliente')
+            : `${directCust.nome || ''} ${directCust.cognome || ''}`.trim() || 'Cliente'
+          customer = {
+            id: directCust.id,
+            full_name: fullName,
+            email: directCust.email,
+            phone: directCust.telefono || directCust.telefono_secondario,
+          } as Customer
+        }
+      } catch (e) {
+        logger.warn('[createBooking] direct customer fetch failed:', e)
+      }
+    }
     if (!customer) {
       createBookingLockRef.current = false
+      toast.error('Cliente non trovato. Ricarica la pagina e riprova.')
       throw new Error('Cliente non trovato')
     }
 
@@ -2096,10 +2122,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       <NewClientModal
         isOpen={showNewClientModal}
         onClose={() => setShowNewClientModal(false)}
-        onClientCreated={(clientId) => {
+        onClientCreated={async (clientId) => {
           setFormData(prev => ({ ...prev, customer_id: clientId }))
           setShowNewClientModal(false)
-          refreshCustomers()
+          // Await the refresh — without await, clicking "Conferma" right
+          // after creating the customer made createBooking throw
+          // "Cliente non trovato" because the local customers[] hadn't
+          // re-populated yet.
+          await refreshCustomers()
         }}
       />
 
