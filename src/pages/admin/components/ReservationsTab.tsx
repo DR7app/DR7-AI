@@ -3213,7 +3213,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
         logger.log('[handleConfirmExtend] ✅ WhatsApp admin notification sent')
 
-        // Send to customer phone — resolve from multiple sources
+        // Send to customer phone — resolve from multiple sources.
+        // CRITICAL: NON inviare la conferma cliente se l'estensione richiede
+        // ancora un pagamento. Altrimenti il cliente riceve "estensione
+        // confermata" PRIMA di aver pagato. La conferma post-pagamento parte
+        // dal callback Nexi (payment_received_extension) o quando l'admin
+        // marca pagato manualmente.
+        const extensionFullySettled = additionalAmount <= 0
+          || extendData.extension_payment_status === 'paid'
         let customerPhone = extendingBooking.customer_phone || extendingBooking.booking_details?.customer?.phone
 
         // Fallback: look up phone from customers_extended if not on the booking
@@ -3230,7 +3237,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
         }
 
-        if (customerPhone) {
+        if (customerPhone && extensionFullySettled) {
           const customerFirstName = extendingBooking.booking_details?.customer?.firstName
             || extendingBooking.customer_name?.split(' ')[0]
             || 'Cliente'
@@ -3275,8 +3282,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           } else {
             logger.log('[handleConfirmExtend] ✅ WhatsApp customer notification sent to', customerPhone)
           }
-        } else {
+        } else if (!customerPhone) {
           logger.warn('[handleConfirmExtend] ⚠️ No customer phone — skipped customer notification')
+        } else {
+          logger.log('[handleConfirmExtend] ⏸️ Conferma cliente NON inviata: estensione con pagamento ancora pendente (' + extendData.extension_payment_status + '). Verrà inviata dopo il pagamento.')
         }
       } catch (whatsappError) {
         console.error('[handleConfirmExtend] ⚠️ WhatsApp notification failed:', whatsappError)
