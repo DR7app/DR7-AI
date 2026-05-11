@@ -118,11 +118,35 @@ export default function EMTNTab() {
     const [authOpen, setAuthOpen] = useState(false)
     const [reportOpen, setReportOpen] = useState(false)
 
+    const [damagedClients, setDamagedClients] = useState<ClientWithDamages[]>([])
+    const [damagedLoading, setDamagedLoading] = useState(false)
+    const [damagedError, setDamagedError] = useState<string | null>(null)
+
+    async function loadDamagedClients() {
+        setDamagedLoading(true)
+        setDamagedError(null)
+        try {
+            const res = await authFetch('/.netlify/functions/emtn-clients-with-damages', { method: 'GET' })
+            const body = await res.json()
+            if (!res.ok) throw new Error(body.error || 'Caricamento clienti con danni fallito')
+            setDamagedClients((body.clients as ClientWithDamages[]) || [])
+        } catch (err) {
+            setDamagedError((err as Error).message)
+        } finally {
+            setDamagedLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        loadDamagedClients()
+    }, [])
+
     const cfValid = CF_REGEX.test(cfInput.trim().toUpperCase())
 
     async function refresh() {
         if (!data) return
         await runSearch(data.client.codice_fiscale)
+        await loadDamagedClients()
     }
 
     async function runSearch(cf: string) {
@@ -173,6 +197,14 @@ export default function EMTNTab() {
                             verified={!!data}
                             error={error}
                         />
+                        {!data && (
+                            <ClientiConDanniCard
+                                clients={damagedClients}
+                                loading={damagedLoading}
+                                error={damagedError}
+                                onSelect={(cf) => runSearch(cf)}
+                            />
+                        )}
                         {data && (
                             <>
                                 <ClienteHeaderCard client={data.client} riskBand={data.riskBand} />
@@ -1152,6 +1184,109 @@ function ConformitaFooter() {
             </div>
             <a href="#" className="text-[10px] text-theme-text-muted hover:text-theme-text-primary">Regolamento EMTN →</a>
         </footer>
+    )
+}
+
+/* ---------- Clienti con danni (lista DR7 sotto la barra di ricerca) ---------- */
+
+function ClientiConDanniCard({ clients, loading, error, onSelect }: {
+    clients: ClientWithDamages[]
+    loading: boolean
+    error: string | null
+    onSelect: (cf: string) => void
+}) {
+    const totalUnpaid = clients.reduce((s, c) => s + c.unpaid_damage_total + c.unpaid_penalty_total, 0)
+    return (
+        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary overflow-hidden">
+            <div className="border-l-4 border-red-500 px-4 py-3">
+                <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                    <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 grid place-items-center text-red-500">
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                            </svg>
+                        </span>
+                        <h3 className="text-sm font-semibold">Clienti DR7 con danni o penali registrati</h3>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px]">
+                        <span className="text-theme-text-muted">{clients.length} clienti</span>
+                        {totalUnpaid > 0 && (
+                            <span className="text-red-400 font-semibold">
+                                Non pagato: €{totalUnpaid.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <p className="text-[11px] text-theme-text-muted mb-3">
+                    Lista dei clienti che hanno almeno un danno o una penale nei record DR7. Clicca un cliente per aprirlo nella rete EMTN.
+                </p>
+                {loading && (
+                    <p className="text-[11px] text-theme-text-muted italic py-2">Caricamento clienti…</p>
+                )}
+                {error && (
+                    <div className="px-3 py-2 rounded-lg border border-red-500/30 bg-red-500/5 text-[11px] text-red-400">{error}</div>
+                )}
+                {!loading && !error && clients.length === 0 && (
+                    <p className="text-[11px] text-theme-text-muted italic py-2">
+                        Nessun cliente con danni o penali nei record DR7.
+                    </p>
+                )}
+                {!loading && !error && clients.length > 0 && (
+                    <div className="overflow-x-auto -mx-4 px-4">
+                        <table className="w-full text-left text-[11px]">
+                            <thead>
+                                <tr className="text-theme-text-muted uppercase tracking-wider text-[10px]">
+                                    <th className="px-2 py-2 font-semibold">Cliente</th>
+                                    <th className="px-2 py-2 font-semibold">Codice Fiscale</th>
+                                    <th className="px-2 py-2 font-semibold text-right">Danni</th>
+                                    <th className="px-2 py-2 font-semibold text-right">Penali</th>
+                                    <th className="px-2 py-2 font-semibold text-right">Non pagato</th>
+                                    <th className="px-2 py-2 font-semibold">Ultimo evento</th>
+                                    <th className="px-2 py-2 font-semibold">Veicolo</th>
+                                    <th className="px-2 py-2 font-semibold"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {clients.map(c => {
+                                    const unpaid = c.unpaid_damage_total + c.unpaid_penalty_total
+                                    return (
+                                        <tr
+                                            key={c.codice_fiscale}
+                                            className="border-t border-theme-border hover:bg-theme-bg-tertiary cursor-pointer transition-colors"
+                                            onClick={() => onSelect(c.codice_fiscale)}
+                                        >
+                                            <td className="px-2 py-2 text-theme-text-primary font-medium">{c.customer_name || '—'}</td>
+                                            <td className="px-2 py-2 font-mono text-theme-text-muted">{c.codice_fiscale}</td>
+                                            <td className="px-2 py-2 text-right text-theme-text-primary tabular-nums">{c.damages_count}</td>
+                                            <td className="px-2 py-2 text-right text-theme-text-primary tabular-nums">{c.penalties_count}</td>
+                                            <td className={'px-2 py-2 text-right font-semibold tabular-nums ' + (unpaid > 0 ? 'text-red-400' : 'text-emerald-500')}>
+                                                {unpaid > 0
+                                                    ? `€${unpaid.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                    : 'Saldato'}
+                                            </td>
+                                            <td className="px-2 py-2 text-theme-text-muted">{formatDate(c.last_event_date) || '—'}</td>
+                                            <td className="px-2 py-2 text-theme-text-muted truncate max-w-[160px]">{c.last_vehicle || '—'}</td>
+                                            <td className="px-2 py-2 text-right">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); onSelect(c.codice_fiscale) }}
+                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-theme-border text-[10px] font-semibold text-theme-text-primary hover:bg-theme-bg-hover"
+                                                >
+                                                    Apri
+                                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                                                    </svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        </section>
     )
 }
 
