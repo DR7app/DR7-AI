@@ -309,7 +309,67 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
             {/* Layout: tabella + sidebar */}
             <div className="lg:flex lg:gap-4 lg:items-start">
                 <div className="lg:flex-1 lg:min-w-0 bg-theme-bg-secondary rounded-2xl border border-theme-border overflow-hidden">
-                    <div className="overflow-x-auto">
+                    {/* Mobile card view (<sm) — la tabella a 8 colonne sotto e\'
+                        comprimibile solo orizzontalmente, illeggibile su 360px. */}
+                    <div className="sm:hidden divide-y divide-theme-border">
+                        {filtered.map(vehicle => {
+                            const { nearestDeadline } = getVehicleStatus(vehicle, null)
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const img = (vehicle as any).metadata?.image as string | undefined
+                            const catColor = vehicle.category ? colorFor(vehicle.category) : '#6B7280'
+                            const s = vehicleStats.get(vehicle.id)
+                            const pct = s?.utilizzoPct ?? 0
+                            const pctColor = pct >= 70 ? '#10B981' : pct >= 40 ? '#F59E0B' : '#EF4444'
+                            return (
+                                <button
+                                    key={`mcard-${vehicle.id}`}
+                                    onClick={() => onOpenDetail(vehicle.id)}
+                                    className="w-full text-left p-3 hover:bg-theme-bg-hover/30 transition-colors min-h-[44px]"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        {img ? (
+                                            <img src={img} alt={vehicle.display_name} className="w-14 h-10 rounded object-cover border border-theme-border shrink-0"/>
+                                        ) : (
+                                            <div className="w-14 h-10 rounded bg-theme-bg-tertiary border border-theme-border grid place-items-center shrink-0">
+                                                <svg className="w-5 h-5 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 17v-2.5C3 13.12 4.12 12 5.5 12h13c1.38 0 2.5 1.12 2.5 2.5V17h-2v2a1 1 0 01-1 1h-1a1 1 0 01-1-1v-2H8v2a1 1 0 01-1 1H6a1 1 0 01-1-1v-2H3z"/>
+                                                </svg>
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</span>
+                                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border" style={{ backgroundColor: `${catColor}20`, color: catColor, borderColor: `${catColor}66` }}>
+                                                    {labelFor(vehicle.category)}
+                                                </span>
+                                            </div>
+                                            <div className="text-[11px] text-theme-text-muted font-mono mt-0.5">{vehicle.plate || '—'} · {(vehicle.current_km || 0).toLocaleString('it-IT')} km</div>
+                                            {nearestDeadline && (
+                                                <div className={`text-[10px] mt-0.5 ${nearestDeadline.isUrgent ? 'text-red-400 font-bold' : nearestDeadline.isWarning ? 'text-amber-400' : 'text-theme-text-muted'}`}>
+                                                    {nearestDeadline.label}: {nearestDeadline.isDate ? `${nearestDeadline.value} gg` : `${nearestDeadline.value} km`}
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${STATO_STYLE[vehicle.status] || ''}`}>
+                                                    {STATO_LABEL[vehicle.status] || vehicle.status}
+                                                </span>
+                                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                                    <div className="flex-1 h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden min-w-[40px]">
+                                                        <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: pctColor }}/>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: pctColor }}>{pct}%</span>
+                                                </div>
+                                                {s?.fatturato && s.fatturato > 0 && (
+                                                    <span className="text-[11px] font-bold text-dr7-gold tabular-nums shrink-0">€{s.fatturato.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </button>
+                            )
+                        })}
+                    </div>
+                    <div className="hidden sm:block overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-theme-border bg-theme-bg-tertiary/40 text-left">
