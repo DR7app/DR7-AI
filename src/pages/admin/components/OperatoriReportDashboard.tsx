@@ -54,7 +54,10 @@ type Range = 'oggi' | '7gg' | '30gg' | 'mese' | 'custom'
  */
 export default function OperatoriReportDashboard() {
     const { adminName, adminEmail } = useAdminRole()
-    const isDirezione = ((adminName || '') + ' ' + (adminEmail || '')).toLowerCase().match(/valerio|ilenia/) != null
+    // Direzione (Valerio, Ilenia) + ophe (developer/manutentrice) hanno
+    // accesso completo al report di TUTTI gli operatori, ai KPI di
+    // fatturato, e ai dettagli per operatore.
+    const isDirezione = ((adminName || '') + ' ' + (adminEmail || '')).toLowerCase().match(/valerio|ilenia|ophe@dr7\.app|ophelie/) != null
 
     const [range, setRange] = useState<Range>('mese')
     const [today] = useState(toRomeDate(new Date()))

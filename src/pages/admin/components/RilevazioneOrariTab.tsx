@@ -63,10 +63,16 @@ type ViewMode = 'giornaliera' | 'settimanale' | 'mensile'
  */
 export default function RilevazioneOrariTab() {
     const { adminName, adminEmail } = useAdminRole()
-    // Solo Valerio e Ilenia vedono tutti i report. Tutti gli altri admin
-    // (incluso Ophe) vedono solo i propri orari.
+    // Direzione (Valerio, Ilenia) + ophe (developer/manutentrice del
+    // sistema) vedono i report di TUTTI gli operatori. Tutti gli altri
+    // admin vedono solo i propri orari. La detail-row del singolo
+    // operatore (timeline + tutte le pause + KPI) è abilitata per
+    // chiunque rientri in questa allowlist.
     const adminTokens = ((adminName || '') + ' ' + (adminEmail || '')).toLowerCase()
-    const isValerioOrIlenia = adminTokens.includes('valerio') || adminTokens.includes('ilenia')
+    const isValerioOrIlenia = adminTokens.includes('valerio')
+        || adminTokens.includes('ilenia')
+        || adminTokens.includes('ophe@dr7.app')
+        || adminTokens.includes('ophelie')
 
     const [me, setMe] = useState<Operatore | null>(null)
     const [view, setView] = useState<ViewMode>('giornaliera')
