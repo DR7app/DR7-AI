@@ -210,16 +210,16 @@ function mockVehicle(
 }
 
 const MOCK_VEHICLES: SfVehicle[] = [
-  mockVehicle(1, 'Audi RS3', 'PA85501', 'online', 84, 81, { lat: 40.8083, lng: 14.1969, address: 'Via Posillipo, 80123 Napoli NA' }),
-  mockVehicle(2, 'BMW M3 Comp.', 'PA62042', 'idle', 0, 76, { lat: 40.8533, lng: 14.2681, address: 'Piazza Garibaldi, 80142 Napoli NA' }),
-  mockVehicle(3, 'Mercedes Vito VIP', 'DM876V', 'moving', 62, 40, { lat: 40.8410, lng: 14.2553, address: 'Via Toledo, 80132 Napoli NA' }),
-  mockVehicle(4, 'Fiat Ducato Maxi', 'DH885LL', 'offline', 0, 65, { lat: 40.8260, lng: 14.2400, address: 'Mergellina, 80122 Napoli NA' }),
-  mockVehicle(5, 'Porsche Macan GTS', 'VAA567', 'moving', 96, 53, { lat: 40.8721, lng: 14.2840, address: 'Capodimonte, 80131 Napoli NA' }),
-  mockVehicle(6, 'BMW M4 Comp.', 'TT54551', 'online', 0, 38, { lat: 40.8359, lng: 14.2487, address: 'Vomero, 80129 Napoli NA' }),
-  mockVehicle(7, 'Mercedes C63 S E', 'KN1010X', 'alarm', 142, 18, { lat: 40.7918, lng: 14.1882, address: 'Pozzuoli, 80078 Napoli NA' }),
-  mockVehicle(8, 'Jeep Renegade', 'GH200OL', 'online', 0, 67, { lat: 40.8629, lng: 14.2912, address: 'Capodichino, 80144 Napoli NA' }),
-  mockVehicle(9, 'Porsche Carrera S', 'PR3007', 'online', 0, 45, { lat: 40.8395, lng: 14.2114, address: 'Chiaia, 80121 Napoli NA' }),
-  mockVehicle(10, 'Range Rover Sport', 'RR890Z', 'blocked', 0, 30, { lat: 40.8298, lng: 14.2588, address: 'Centro Direzionale, 80143 Napoli NA' }),
+  mockVehicle(1, 'Audi RS3', 'PA85501', 'online', 84, 81, { lat: 39.2130, lng: 9.1370, address: 'Viale Marconi 229, 09131 Cagliari CA' }),
+  mockVehicle(2, 'BMW M3 Comp.', 'PA62042', 'idle', 0, 76, { lat: 39.2156, lng: 9.1116, address: 'Via Roma, 09124 Cagliari CA' }),
+  mockVehicle(3, 'Mercedes Vito VIP', 'DM876V', 'moving', 62, 40, { lat: 39.2415, lng: 9.1837, address: 'Quartu Sant\'Elena CA' }),
+  mockVehicle(4, 'Fiat Ducato Maxi', 'DH885LL', 'offline', 0, 65, { lat: 39.2557, lng: 9.0540, address: 'Aeroporto Elmas, 09030 CA' }),
+  mockVehicle(5, 'Porsche Macan GTS', 'VAA567', 'moving', 96, 53, { lat: 39.1972, lng: 9.1760, address: 'Poetto, 09126 Cagliari CA' }),
+  mockVehicle(6, 'BMW M4 Comp.', 'TT54551', 'online', 0, 38, { lat: 39.2245, lng: 9.1248, address: 'Castello, 09124 Cagliari CA' }),
+  mockVehicle(7, 'Mercedes C63 S E', 'KN1010X', 'alarm', 142, 18, { lat: 39.0254, lng: 9.0014, address: 'Pula, 09010 CA' }),
+  mockVehicle(8, 'Jeep Renegade', 'GH200OL', 'online', 0, 67, { lat: 39.1390, lng: 9.5193, address: 'Villasimius, 09049 CA' }),
+  mockVehicle(9, 'Porsche Carrera S', 'PR3007', 'online', 0, 45, { lat: 39.2204, lng: 9.1212, address: 'Via Dante, 09128 Cagliari CA' }),
+  mockVehicle(10, 'Range Rover Sport', 'RR890Z', 'blocked', 0, 30, { lat: 39.2098, lng: 9.1192, address: 'Stampace, 09124 Cagliari CA' }),
 ]
 
 function mockEvents(): SfEvent[] {
