@@ -352,6 +352,17 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     return days
   }, [daysInMonth, viewMode, currentDate, currentRomeComponents])
 
+  // Stretch day cells to fill the row when only a few days are visible
+  // (Giorno = 1 column, Settimana = up to 7 columns). For Mese we keep the
+  // fixed 52px width so all ~30 days fit without crushing the layout.
+  const stretchCols = viewMode !== 'mese'
+  const dayCellStyle: React.CSSProperties = stretchCols
+    ? { flex: 1, height: CELL_HEIGHT }
+    : { width: CELL_WIDTH, height: CELL_HEIGHT }
+  const headerCellStyle: React.CSSProperties = stretchCols
+    ? { flex: 1, height: 50 }
+    : { width: CELL_WIDTH, height: 50 }
+
   const navigateMonth = (dir: 'prev' | 'next') => {
     // Step size depends on the active view: day in Giorno, 7 days in
     // Settimana, full month in Mese. Keeps the left/right arrows useful
@@ -725,14 +736,14 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       <div className="flex-1 overflow-auto relative flex flex-col w-full bg-theme-bg-primary">
 
         {/* A. Sticky Header Row - Days */}
-        <div className="flex sticky top-0 z-[40] bg-theme-bg-primary shadow-lg min-w-max border-b border-theme-border/50">
+        <div className={`flex sticky top-0 z-[40] bg-theme-bg-primary shadow-lg border-b border-theme-border/50 ${stretchCols ? 'w-full' : 'min-w-max'}`}>
           {/* Header Spacer for Time Column */}
-          <div className="sticky left-0 w-[70px] z-[41] bg-theme-bg-primary border-r border-theme-border/50 flex items-center justify-center font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]" style={{ height: '50px' }}>
+          <div className="sticky left-0 w-[70px] shrink-0 z-[41] bg-theme-bg-primary border-r border-theme-border/50 flex items-center justify-center font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]" style={{ height: '50px' }}>
             Orario
           </div>
 
           {/* Day Columns Header */}
-          <div className="flex">
+          <div className={`flex ${stretchCols ? 'flex-1' : ''}`}>
             {daysArray.map((day) => {
               const d = new Date(currentRomeComponents.year, currentRomeComponents.month, day)
               const isHol = getHolidayForDate(d)
@@ -747,7 +758,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                     ${(isHol || isSun) ? 'bg-red-950/20' : ''}
                     ${isToday ? 'bg-gradient-to-b from-[#c9a84a]/45 to-[#c9a84a]/15 border-l-2 border-r-2 border-[#c9a84a] shadow-[inset_0_-3px_0_0_#c9a84a]' : ''}
                   `}
-                  style={{ width: CELL_WIDTH, height: '50px' }}
+                  style={headerCellStyle}
                 >
                   {/* Red dot for Sundays and holidays */}
                   {(isHol || isSun) && (
@@ -774,7 +785,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         </div>
 
         {/* B. Time Slots Grid */}
-        <div className="min-w-max relative">
+        <div className={`${stretchCols ? 'w-full' : 'min-w-max'} relative`}>
           {/* Generate time slots from 09:00 to 18:00 in 5-minute intervals (109 slots) */}
           {Array.from({ length: 109 }, (_, i) => {
             const totalMinutes = 9 * 60 + i * 5 // Start at 09:00
@@ -839,7 +850,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           ${!isToday && !slotBooking && isRedDay ? 'bg-red-950/10 hover:bg-red-950/20' : ''}
                           ${slotBooking && !isBookingStart ? 'bg-transparent' : ''}
                         `}
-                        style={{ width: CELL_WIDTH, height: CELL_HEIGHT }}
+                        style={dayCellStyle}
                         onClick={() => {
                           // Only allow booking on available slots (green cells)
                           if (!slotBooking && !isRedDay && onNewBooking) {
