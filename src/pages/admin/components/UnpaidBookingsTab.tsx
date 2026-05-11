@@ -2876,10 +2876,11 @@ export default function UnpaidBookingsTab() {
         </div>
       </div>
 
-      {/* KPI Cards — 5-card strip matching the mockup. Same data the page
-          already uses (customerGroups + totalChargedViaMit + new heuristic
-          stats added to performanceStats). */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
+      {/* KPI Cards + AI Insights — su lg sta tutto in una riga: 5 KPI a
+          sinistra (col 1-5 di 7) + pannello AI Insights a destra (col 6-7).
+          Sotto lg le card si impilano (KPI in 2 col, Insights full width). */}
+      <div className="grid grid-cols-2 lg:grid-cols-7 gap-3 lg:gap-4">
+        <div className="col-span-2 lg:col-span-5 grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
         {/* 1. Totale da incassare */}
         <div className="relative overflow-hidden rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent p-4">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-red-500/10 rounded-full blur-2xl pointer-events-none"/>
@@ -2976,6 +2977,92 @@ export default function UnpaidBookingsTab() {
               €{(performanceStats.incassiMese / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-theme-text-muted mt-1">recuperati via addebito</div>
+          </div>
+        </div>
+        </div>{/* end 5-KPI inner grid */}
+
+        {/* AI Insights — pannello a destra (col 6-7 su lg). Regole euristiche
+            sui dati gia\' disponibili in performanceStats e customerGroups,
+            niente LLM. Click su un insight scrolla / filtra la lista (TBD). */}
+        <div className="col-span-2 relative overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-500/10 via-cyan-500/5 to-transparent p-4">
+          <div className="absolute -top-8 -right-8 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"/>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/40 grid place-items-center">
+                  <svg className="w-3.5 h-3.5 text-cyan-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <div className="text-sm font-bold text-theme-text-primary">AI Insights</div>
+              </div>
+              <button type="button" className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold">Vedi tutti</button>
+            </div>
+
+            {/* Computed insights — pure rules on existing data */}
+            {(() => {
+              const noCardCount = customerGroups.filter(g => g.chargedViaMit === 0 && g.totalRemaining > 0).length
+              // count groups with oldest item > 14 days (re-use the scaduto calc semantics)
+              let overdueCount = 0
+              for (const g of customerGroups) {
+                const dates = [
+                  ...g.noleggioBookings.map(b => b.created_at),
+                  ...g.primeWashBookings.map(b => b.created_at),
+                  ...g.penaliItems.map(p => p.booking.created_at),
+                  ...g.danniItems.map(p => p.booking.created_at),
+                ].filter(Boolean) as string[]
+                if (dates.length === 0) continue
+                const oldest = dates.reduce((a, b) => a < b ? a : b)
+                const d = daysSince(oldest)
+                if (d != null && d >= 14) overdueCount++
+              }
+              const insights: { n: string; title: string; sub: string; tone: 'red' | 'amber' | 'cyan' }[] = []
+              if (noCardCount > 0) insights.push({
+                n: String(noCardCount),
+                title: noCardCount === 1 ? 'cliente con probabilità bassa di incasso' : 'clienti con probabilità bassa di incasso',
+                sub: 'Nessuna carta tokenizzata — richiedi addebito MIT',
+                tone: 'red',
+              })
+              if (overdueCount > 0) insights.push({
+                n: String(overdueCount),
+                title: overdueCount === 1 ? 'cliente oltre 14 giorni' : 'clienti oltre 14 giorni',
+                sub: `€${(performanceStats.scadutoCents / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} scaduti`,
+                tone: 'amber',
+              })
+              if (performanceStats.probabilitaIncasso < 60) insights.push({
+                n: `${performanceStats.probabilitaIncasso}%`,
+                title: 'probabilità incasso sotto soglia',
+                sub: `Solo ${performanceStats.clientsWithMit}/${customerGroups.length} hanno carta on file`,
+                tone: 'cyan',
+              })
+              if (insights.length === 0) insights.push({
+                n: '✓',
+                title: 'Tutto sotto controllo',
+                sub: 'Nessun cliente in ritardo o senza copertura',
+                tone: 'cyan',
+              })
+              const tones = {
+                red: 'bg-red-500/15 text-red-400 border-red-500/30',
+                amber: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+                cyan: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+              }
+              return (
+                <div className="space-y-2">
+                  {insights.map((ins, i) => (
+                    <div key={i} className="flex items-start gap-2.5 bg-theme-bg-primary/40 border border-theme-border/50 rounded-xl px-3 py-2">
+                      <div className={`shrink-0 w-7 h-7 rounded-lg ${tones[ins.tone]} border grid place-items-center font-bold text-xs tabular-nums`}>{ins.n}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-theme-text-primary font-semibold truncate">{ins.title}</div>
+                        <div className="text-[11px] text-theme-text-muted truncate">{ins.sub}</div>
+                      </div>
+                      <svg className="w-4 h-4 text-theme-text-muted shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
           </div>
         </div>
       </div>
