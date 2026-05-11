@@ -2791,9 +2791,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     {vehicleMakeModel && <span className="text-theme-text-primary">{vehicleMakeModel}</span>}
                     {vehicleCategory && (
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'
+                        vehicleCategory === 'moto' ? 'bg-purple-500/20 text-purple-400'
+                          : vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-orange-500/20 text-orange-400'
                       }`}>
-                        {vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                        {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                       </span>
                     )}
                   </div>
@@ -3230,9 +3232,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 <span className="text-xs text-theme-text-primary">{booking.booking_details?.vehicleMakeModel || booking.vehicle_name}</span>
                                 {booking.booking_details?.vehicleCategory && (
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-500/15 text-blue-400' : 'bg-orange-500/15 text-orange-400'
+                                    booking.booking_details.vehicleCategory === 'moto' ? 'bg-purple-500/15 text-purple-400'
+                                      : booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-500/15 text-blue-400'
+                                      : 'bg-orange-500/15 text-orange-400'
                                   }`}>
-                                    {booking.booking_details.vehicleCategory === 'urban' ? 'U' : 'M'}
+                                    {booking.booking_details.vehicleCategory === 'moto' ? 'MO' : booking.booking_details.vehicleCategory === 'urban' ? 'U' : 'M'}
                                   </span>
                                 )}
                               </div>
@@ -3380,9 +3384,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             )}
                             {booking.booking_details?.vehicleCategory && (
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-500/15 text-blue-500' : 'bg-orange-500/15 text-orange-500'
+                                booking.booking_details.vehicleCategory === 'moto' ? 'bg-purple-500/15 text-purple-500'
+                                  : booking.booking_details.vehicleCategory === 'urban' ? 'bg-blue-500/15 text-blue-500'
+                                  : 'bg-orange-500/15 text-orange-500'
                               }`}>
-                                {booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                                {booking.booking_details.vehicleCategory === 'moto' ? 'MOTO' : booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                               </span>
                             )}
                           </div>
