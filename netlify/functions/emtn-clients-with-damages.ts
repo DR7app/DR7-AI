@@ -3,17 +3,20 @@
  *
  * Restituisce l'elenco aggregato di tutti i clienti DR7 che hanno
  * almeno un danno o una penale registrata in `bookings.booking_details`
- * (danni / penali arrays). Serve come lista d'ingresso nella EMTN tab:
+ * (arrays danni / penali). Serve come lista d'ingresso nella EMTN tab:
  * l'operatore vede subito i clienti a rischio senza dover cercare a
  * mano CF per CF.
  *
- * Fonte: solo record DR7 interni. Nessun dato della rete EMTN viene
- * mostrato qui: la lookup EMTN resta gated dalla regola "no CF, no
- * search" del flusso /emtn-search.
+ * Schema relazione: bookings non contiene il CF direttamente, lo
+ * cerchiamo in customers_extended via bookings.user_id (fallback su
+ * customers_extended.id quando user_id e\' nullo) come fa
+ * auto-verify-document.ts. Bookings senza nessun match e senza CF nel
+ * booking_details vengono saltate: senza CF non possiamo aprire la
+ * lookup EMTN.
  *
  * Per cliente aggreghiamo: nome, CF, totali pagati/non pagati danni e
- * penali, conteggio eventi, data dell'ultimo evento. Ordinamento per
- * data decrescente cosi\' i casi recenti emergono in cima.
+ * penali, conteggio eventi, data ultimo evento, veicolo. Ordinamento
+ * per data desc, tiebreak su totale non pagato desc.
  */
 import { Handler } from '@netlify/functions'
 import { requireAuth } from './require-auth'
@@ -33,13 +36,28 @@ interface BookingRow {
     id: string
     pickup_date: string | null
     appointment_date: string | null
+    user_id: string | null
+    customer_id: string | null
     customer_name: string | null
-    customer_codice_fiscale: string | null
     customer_email: string | null
     customer_phone: string | null
     vehicle_name: string | null
     vehicle_plate: string | null
-    booking_details: { danni?: DanniItem[]; penali?: DanniItem[] } | null
+    booking_details: {
+        danni?: DanniItem[]
+        penali?: DanniItem[]
+        codice_fiscale?: string
+        codiceFiscale?: string
+        customer?: { codice_fiscale?: string; codiceFiscale?: string }
+    } | null
+}
+
+interface CustomerProfile {
+    id: string
+    user_id: string | null
+    codice_fiscale: string | null
+    nome: string | null
+    cognome: string | null
 }
 
 interface Aggregated {
@@ -62,14 +80,17 @@ function num(v: unknown): number {
     const n = Number(v)
     return Number.isFinite(n) ? n : 0
 }
-
 function itemTotal(it: DanniItem): number {
     if (typeof it.total === 'number') return num(it.total)
     return num(it.amount) * (num(it.quantity) || 1)
 }
-
 function isPaid(it: DanniItem): boolean {
     return String(it.paymentStatus || '').toLowerCase() === 'paid'
+}
+function normCF(value: string | null | undefined): string | null {
+    if (!value) return null
+    const v = String(value).trim().toUpperCase()
+    return v.length === 16 ? v : null
 }
 
 export const handler: Handler = async (event) => {
@@ -84,38 +105,85 @@ export const handler: Handler = async (event) => {
 
     const sb = getServiceSupabase()
 
-    // Tira tutte le bookings con almeno un elemento in danni o penali.
-    // Filtro lato Postgres: booking_details non null, e l'array danni/penali
-    // ha lunghezza > 0 (verifichiamo lato JS perche\' il filtro JSONB per
-    // array-non-vuoto via supabase-js e\' meno espressivo che lato server).
+    // Step 1 — pull bookings con booking_details non null (lato JS poi
+    // filtriamo per danni/penali non vuoti). Senza CF column dobbiamo
+    // portarci dietro user_id + customer_id per risolverlo dopo.
     const { data, error } = await sb
         .from('bookings')
-        .select('id, pickup_date, appointment_date, customer_name, customer_codice_fiscale, customer_email, customer_phone, vehicle_name, vehicle_plate, booking_details')
+        .select('id, pickup_date, appointment_date, user_id, customer_id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, booking_details')
         .not('booking_details', 'is', null)
         .order('pickup_date', { ascending: false })
         .limit(2000)
 
-    if (error) {
-        return jsonResponse(500, { error: error.message }, origin)
-    }
+    if (error) return jsonResponse(500, { error: error.message }, origin)
 
     const rows = (data || []) as BookingRow[]
+    const interesting = rows.filter(b => {
+        const d = b.booking_details?.danni || []
+        const p = b.booking_details?.penali || []
+        return d.length > 0 || p.length > 0
+    })
+
+    // Step 2 — raccogli user_id e customer_id distinti per fare il
+    // lookup batch su customers_extended e ricavare il CF.
+    const userIds = Array.from(new Set(interesting.map(b => b.user_id).filter(Boolean) as string[]))
+    const customerIds = Array.from(new Set(interesting.map(b => b.customer_id).filter(Boolean) as string[]))
+
+    const cfByUserId = new Map<string, CustomerProfile>()
+    const cfByCustomerId = new Map<string, CustomerProfile>()
+
+    if (userIds.length > 0) {
+        const { data: profsByUid } = await sb
+            .from('customers_extended')
+            .select('id, user_id, codice_fiscale, nome, cognome')
+            .in('user_id', userIds)
+        for (const p of (profsByUid || []) as CustomerProfile[]) {
+            if (p.user_id) cfByUserId.set(p.user_id, p)
+        }
+    }
+    if (customerIds.length > 0) {
+        // Fallback: bookings.customer_id puo\' puntare a customers_extended.id
+        // (legacy admin-imported rows). Risolviamo anche quei casi.
+        const { data: profsByCid } = await sb
+            .from('customers_extended')
+            .select('id, user_id, codice_fiscale, nome, cognome')
+            .in('id', customerIds)
+        for (const p of (profsByCid || []) as CustomerProfile[]) {
+            cfByCustomerId.set(p.id, p)
+        }
+    }
+
     const byCf = new Map<string, Aggregated>()
 
-    for (const b of rows) {
-        const danni = b.booking_details?.danni || []
-        const penali = b.booking_details?.penali || []
-        if (danni.length === 0 && penali.length === 0) continue
-        // Hard rule EMTN: senza CF non possiamo aggregare in modo affidabile,
-        // quindi le bookings senza customer_codice_fiscale vengono saltate.
-        const cf = (b.customer_codice_fiscale || '').trim().toUpperCase()
+    for (const b of interesting) {
+        // Risoluzione CF, in ordine di affidabilita\':
+        //  1. customers_extended.codice_fiscale via user_id
+        //  2. customers_extended.codice_fiscale via customer_id (legacy)
+        //  3. booking_details.codice_fiscale / codiceFiscale (inserito a mano)
+        //  4. booking_details.customer.codice_fiscale
+        const profile =
+            (b.user_id && cfByUserId.get(b.user_id)) ||
+            (b.customer_id && cfByCustomerId.get(b.customer_id)) ||
+            null
+        const cf =
+            normCF(profile?.codice_fiscale) ||
+            normCF(b.booking_details?.codice_fiscale) ||
+            normCF(b.booking_details?.codiceFiscale) ||
+            normCF(b.booking_details?.customer?.codice_fiscale) ||
+            normCF(b.booking_details?.customer?.codiceFiscale)
         if (!cf) continue
 
+        const danni = b.booking_details?.danni || []
+        const penali = b.booking_details?.penali || []
         const ref = b.pickup_date || b.appointment_date || null
+
         const existing = byCf.get(cf)
+        const fullName = profile && (profile.nome || profile.cognome)
+            ? [profile.nome, profile.cognome].filter(Boolean).join(' ')
+            : b.customer_name
         const agg: Aggregated = existing || {
             codice_fiscale: cf,
-            customer_name: b.customer_name,
+            customer_name: fullName || null,
             customer_email: b.customer_email,
             customer_phone: b.customer_phone,
             damages_count: 0,
@@ -128,12 +196,10 @@ export const handler: Handler = async (event) => {
             last_vehicle: null,
             bookings_with_events: 0,
         }
-        // Mantieni i dati contatto piu\' recenti (a parita\' di CF il record piu\'
-        // recente ha customer_name aggiornato).
         if (!existing) {
             byCf.set(cf, agg)
         } else {
-            if (!agg.customer_name && b.customer_name) agg.customer_name = b.customer_name
+            if (!agg.customer_name && fullName) agg.customer_name = fullName
             if (!agg.customer_email && b.customer_email) agg.customer_email = b.customer_email
             if (!agg.customer_phone && b.customer_phone) agg.customer_phone = b.customer_phone
         }
@@ -164,7 +230,6 @@ export const handler: Handler = async (event) => {
     }
 
     const clients = Array.from(byCf.values()).sort((a, b) => {
-        // Ordina per data evento piu\' recente, poi per totale non pagato.
         if (a.last_event_date && b.last_event_date) {
             if (a.last_event_date < b.last_event_date) return 1
             if (a.last_event_date > b.last_event_date) return -1
