@@ -325,7 +325,12 @@ export default function OperatorProfileModal({
                                 <div key={d.data} className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3">
                                     <div className="mb-2 flex items-baseline justify-between gap-3">
                                         <div className="text-sm font-semibold text-theme-text-primary">{fmtDate(d.data)}</div>
-                                        <span className="text-sm font-semibold text-emerald-400">{fmtMin(d.minutiLavorati)}</span>
+                                        <div className="text-right">
+                                            <div className="text-sm font-semibold text-emerald-400 leading-tight">{fmtMin(d.minutiLavorati)}</div>
+                                            {d.minutiLavorati > 0 && (
+                                                <div className="text-[10px] text-theme-text-muted tabular-nums">{d.minutiLavorati} min</div>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="mb-2 grid grid-cols-2 gap-2 text-[11px] sm:flex sm:flex-wrap sm:items-center sm:gap-4 sm:text-xs">
                                         <span className="text-theme-text-muted">Entrata: <span className="font-mono text-theme-text-primary">{fmtTime(d.entrata)}</span></span>
