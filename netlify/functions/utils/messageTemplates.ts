@@ -250,7 +250,31 @@ export async function getMessageTemplate(
   // contain ({name}, {{name}}, { name }). Historically some callers passed
   // wrapped keys here — previously they'd produce a `\{\{name\}\}` regex that
   // only matched `{{name}}` in the body, silently leaving `{name}` untouched.
+  //
+  // Aliases: caller passes `custName` / `customer_name` but the Italian
+  // template typically uses `{nome}` or `{name}` — without these synonyms
+  // the substitution silently leaves the literal `{nome}` token in the
+  // outgoing WhatsApp. Same logic mirrors send-whatsapp-notification.ts.
+  const ALIASES: Record<string, string[]> = {
+    custName:      ['name', 'nome', 'customer_name', 'cliente', 'fullName', 'full_name', 'firstName'],
+    customer_name: ['name', 'nome', 'cliente', 'fullName', 'full_name', 'firstName', 'custName'],
+    nome:          ['name', 'custName', 'customer_name', 'cliente', 'fullName', 'full_name', 'firstName'],
+    name:          ['nome', 'custName', 'customer_name', 'cliente', 'fullName', 'full_name', 'firstName'],
+    firstName:     ['name', 'nome', 'custName', 'customer_name', 'cliente'],
+    full_name:     ['name', 'nome', 'custName', 'customer_name', 'cliente', 'fullName'],
+    email:         ['customer_email'],
+    customer_email:['email'],
+    phone:         ['telefono', 'customer_phone'],
+    customer_phone:['telefono', 'phone'],
+    amountEur:     ['amount', 'importo', 'totale', 'total'],
+    amount:        ['amountEur', 'importo', 'totale', 'total'],
+    importo:       ['amountEur', 'amount', 'totale', 'total'],
+  }
   const escRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const replaceFor = (key: string, value: string) => {
+    body = body.replace(new RegExp(`\\{\\s*${escRx(key)}\\s*\\}`, 'g'), value)
+    body = body.replace(new RegExp(`\\{\\{\\s*${escRx(key)}\\s*\\}\\}`, 'g'), value)
+  }
   for (const [rawKey, v] of Object.entries(variables)) {
     const cleanKey = String(rawKey).replace(/^\s*\{+\s*|\s*\}+\s*$/g, '').trim()
     if (!cleanKey) continue
@@ -260,8 +284,8 @@ export async function getMessageTemplate(
     // bolds correctly. Trimming here removes incidental whitespace from
     // database values without forcing a data cleanup.
     const cleanV = (v ?? '').trim()
-    body = body.replace(new RegExp(`\\{\\s*${escRx(cleanKey)}\\s*\\}`, 'g'), cleanV)
-    body = body.replace(new RegExp(`\\{\\{\\s*${escRx(cleanKey)}\\s*\\}\\}`, 'g'), cleanV)
+    replaceFor(cleanKey, cleanV)
+    for (const alias of ALIASES[cleanKey] || []) replaceFor(alias, cleanV)
   }
   // Defensive cleanup for templates authored with stray spaces inside markers
   // (`* word *` / `_ word _`): convert them to tight `*word*` / `_word_` so
