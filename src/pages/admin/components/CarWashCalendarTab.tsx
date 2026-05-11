@@ -100,9 +100,6 @@ const hasNotes = (booking: CarWashBooking): boolean => {
   return !!(booking.booking_details?.notes && booking.booking_details.notes.trim())
 }
 
-/** Lavaggio shop open minutes per weekday — Mon-Sat 8h, Sun closed. */
-const openMinutesForDate = (d: Date): number => (d.getDay() === 0 ? 0 : 480)
-
 const formatDuration = (minutes: number): string => {
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -415,57 +412,6 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     today.getFullYear() === currentDate.getFullYear()
   const todayDay = isCurrentMonth ? today.getDate() : null
 
-  // KPI strip metrics — today vs ieri. Pure aggregate on the existing
-  // `bookings` array, no new queries, no operator data.
-  const kpis = useMemo(() => {
-    const sameDay = (a: Date, b: Date) =>
-      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-    const todayDate = new Date()
-    const yesterdayDate = new Date(todayDate.getTime() - 24 * 60 * 60 * 1000)
-    const todayBookings = bookings.filter(b => !isRientroBooking(b) && sameDay(new Date(b.appointment_date), todayDate))
-    const yesterdayBookings = bookings.filter(b => !isRientroBooking(b) && sameDay(new Date(b.appointment_date), yesterdayDate))
-    const sumMin = (list: CarWashBooking[]) => list.reduce((s, b) => s + getServiceDuration(b.service_name || '', b.booking_details?.vehicle_category, b.booking_details), 0)
-    const sumRev = (list: CarWashBooking[]) => list.reduce((s, b) => s + (b.price_total || 0), 0)
-    const todayBooked = sumMin(todayBookings)
-    const yBooked = sumMin(yesterdayBookings)
-    const todayOpen = openMinutesForDate(todayDate)
-    const yOpen = openMinutesForDate(yesterdayDate)
-    const occ = todayOpen > 0 ? Math.round((todayBooked / todayOpen) * 100) : 0
-    const yOcc = yOpen > 0 ? Math.round((yBooked / yOpen) * 100) : 0
-    const freeSlots = Math.floor(Math.max(0, todayOpen - todayBooked) / 30)
-    const todayRev = sumRev(todayBookings) / 100
-    const yRev = sumRev(yesterdayBookings) / 100
-    const avg = todayBookings.length > 0 ? Math.round(todayBooked / todayBookings.length) : 0
-    const yAvg = yesterdayBookings.length > 0 ? Math.round(yBooked / yesterdayBookings.length) : 0
-    const pct = (cur: number, prev: number) => {
-      if (prev === 0) return cur > 0 ? '+∞%' : '—'
-      const d = ((cur - prev) / prev) * 100
-      return `${d >= 0 ? '+' : ''}${Math.round(d)}%`
-    }
-    return {
-      lavaggi: todayBookings.length,
-      lavaggiDelta: pct(todayBookings.length, yesterdayBookings.length),
-      occ, occDelta: pct(occ, yOcc),
-      freeSlots, freeMin: Math.max(0, todayOpen - todayBooked),
-      openMin: todayOpen,
-      bookedMin: todayBooked,
-      rev: todayRev, revDelta: pct(todayRev, yRev),
-      avg, avgDelta: pct(avg, yAvg),
-    }
-  }, [bookings])
-
-  const deltaColor = (s: string) => s.startsWith('+') && s !== '+0%' ? 'text-emerald-400' : s.startsWith('-') ? 'text-red-400' : 'text-theme-text-muted'
-  const KpiCard = ({ label, value, delta, sub }: { label: string; value: string; delta?: string; sub?: string }) => (
-    <div className="flex-1 min-w-[130px] bg-theme-bg-primary/30 backdrop-blur-sm border border-theme-border/40 rounded-xl px-4 py-3">
-      <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold">{label}</div>
-      <div className="text-2xl font-bold text-theme-text-primary mt-1 tabular-nums">{value}</div>
-      <div className="flex items-center gap-2 mt-0.5 text-[11px]">
-        {delta && <span className={deltaColor(delta)}>{delta} vs ieri</span>}
-        {sub && <span className="text-theme-text-muted">{sub}</span>}
-      </div>
-    </div>
-  )
-
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -477,16 +423,6 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
   return (
     <div className="flex flex-col h-[calc(100vh-240px)] sm:h-[calc(100vh-200px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
-
-      {/* 0. KPI Strip — snapshot di oggi vs ieri (solo design, niente operatori) */}
-      <div className="flex flex-wrap gap-2 sm:gap-3 p-3 sm:p-4 bg-theme-bg-primary/10 border-b border-theme-border/30">
-        <KpiCard label="Lavaggi Oggi" value={String(kpis.lavaggi)} delta={kpis.lavaggiDelta} />
-        <KpiCard label="Slot Occupati" value={`${kpis.occ}%`} delta={kpis.occDelta} sub={`${formatDuration(kpis.bookedMin)} / ${formatDuration(kpis.openMin)}`} />
-        <KpiCard label="Slot Liberi" value={String(kpis.freeSlots)} sub={`${formatDuration(kpis.freeMin)} disp.`} />
-        {canViewFinancials && !hideFinancials && <KpiCard label="Fatturato Oggi" value={`€${kpis.rev.toFixed(2).replace('.', ',')}`} delta={kpis.revDelta} />}
-        <KpiCard label="Tempo Medio" value={kpis.avg > 0 ? formatDuration(kpis.avg) : '—'} delta={kpis.avg > 0 ? kpis.avgDelta : undefined} />
-        <KpiCard label="Saturazione" value={`${kpis.occ}%`} sub={kpis.occ >= 85 ? 'Alta' : kpis.occ >= 50 ? 'Media' : 'Bassa'} />
-      </div>
 
       {/* 1. Control Bar */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 sm:p-4 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
@@ -548,18 +484,6 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         </div>
       </div>
 
-      {/* Compact legend — same colour codes used by the booking cards in the
-          grid below. Wraps on small screens, no fixed sidebar. */}
-      <div className="hidden md:flex items-center gap-3 px-3 sm:px-4 py-2 bg-theme-bg-primary/10 border-b border-theme-border/30 text-[11px] flex-wrap">
-        <span className="text-theme-text-muted uppercase tracking-wider font-semibold">Legenda</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /><span className="text-theme-text-primary">Pagato</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" /><span className="text-theme-text-primary">Link Nexi inviato</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-700" /><span className="text-theme-text-primary">Da pagare</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-700" /><span className="text-theme-text-primary">Rientro</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm border-2 border-amber-300" /><span className="text-theme-text-primary">Con note</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#c9a84a]" /><span className="text-theme-text-primary">Oggi</span></span>
-      </div>
-
       {/* 2. Scrollable Calendar Area */}
       <div className="flex-1 overflow-auto relative flex flex-col w-full bg-theme-bg-primary">
 
@@ -584,7 +508,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   className={`
                     flex flex-col items-center justify-center border-r border-theme-border/30 relative transition-colors
                     ${(isHol || isSun) ? 'bg-red-950/20' : ''}
-                    ${isToday ? 'bg-gradient-to-b from-[#c9a84a]/45 to-[#c9a84a]/15 border-l-2 border-r-2 border-[#c9a84a] shadow-[inset_0_-3px_0_0_#c9a84a]' : ''}
+                    ${isToday ? 'bg-[#c9a84a]/30 border-l-2 border-r-2 border-[#c9a84a]' : ''}
                   `}
                   style={{ width: CELL_WIDTH, height: '50px' }}
                 >
@@ -673,7 +597,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         key={`${day}-${timeString}`}
                         className={`
                           relative border-r border-theme-border/20 transition-all
-                          ${isToday ? 'bg-[#c9a84a]/12 border-l border-r border-[#c9a84a]/40' : ''}
+                          ${isToday ? 'bg-[#c9a84a]/20 border-l border-r border-[#c9a84a]/30' : ''}
                           ${!isToday && !slotBooking && !isRedDay ? 'bg-green-600/15 hover:bg-green-600/25 cursor-pointer' : ''}
                           ${!isToday && !slotBooking && isRedDay ? 'bg-red-950/10 hover:bg-red-950/20' : ''}
                           ${slotBooking && !isBookingStart ? 'bg-transparent' : ''}
@@ -696,21 +620,20 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           const hasClientOverlap = isRientro && startingBookings.some(b => !isRientroBooking(b.booking))
                           const topOffset = hasClientOverlap ? -(CELL_HEIGHT - 1) : 1
 
-                          // Color logic: rientro=blue, paid=green, pending pay-by-link=orange, unpaid=red.
-                          // Gradient + soft shadow + hover lift for a polished look (mockup style).
+                          // Color logic: rientro=blue, paid=green, pending pay-by-link=orange, unpaid=red
                           const isPendingLink = !isRientro && isPendingPaymentLink(startEvt.booking)
                           const bgColor = isRientro
-                            ? 'bg-gradient-to-br from-blue-700 to-blue-900 border-blue-500/40 shadow-blue-900/30'
+                            ? 'bg-blue-800 border-blue-600/30'
                             : isPaid
-                              ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 border-emerald-300/40 shadow-emerald-900/30'
+                              ? 'bg-emerald-600 border-emerald-400/30'
                               : isPendingLink
-                                ? 'bg-gradient-to-br from-amber-500 to-amber-700 border-amber-300/40 shadow-amber-900/30'
-                                : 'bg-gradient-to-br from-red-700 to-red-900 border-red-500/40 shadow-red-900/30'
+                                ? 'bg-amber-600 border-amber-400/30'
+                                : 'bg-red-800 border-red-700/30'
 
                           return (
                           <div
                             key={startEvt.booking.id}
-                            className={`absolute inset-x-0 ${bgColor} border rounded-md shadow-lg hover:shadow-2xl hover:-translate-y-0.5 hover:brightness-105 transition-all duration-150 cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking ring-0 hover:ring-2 hover:ring-white/30`}
+                            className={`absolute inset-x-0 ${bgColor} border rounded shadow-md hover:shadow-xl hover:brightness-110 transition-all cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking`}
                             style={{
                               height: `${(startEvt.duration / 5) * CELL_HEIGHT - 2}px`,
                               top: `${topOffset}px`,
