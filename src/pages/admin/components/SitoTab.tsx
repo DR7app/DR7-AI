@@ -58,6 +58,7 @@ type SectionId =
     | 'token'
     | 'firma'
     | 'registrazione-cliente'
+    | 'booking-search-box'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -87,6 +88,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'token', title: 'DR7 Token (Coin/Up/APP)', ready: true },
     { id: 'firma', title: 'Firma Contratto (OTP)', ready: true },
     { id: 'registrazione-cliente', title: 'Registrazione Cliente (Invito)', ready: true },
+    { id: 'booking-search-box', title: 'Booking Search Box', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -385,6 +387,58 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── BookingSearchBox component (Header drawer popup + Hero variant) ─────
+interface BookingSearchBoxCopy {
+    title_it: string; title_en: string
+    pickup_location_label_it: string; pickup_location_label_en: string
+    pickup_location_placeholder_it: string; pickup_location_placeholder_en: string
+    same_return_note_it: string; same_return_note_en: string
+    return_location_label_it: string; return_location_label_en: string
+    return_location_placeholder_it: string; return_location_placeholder_en: string
+    pickup_section_label_it: string; pickup_section_label_en: string
+    return_section_label_it: string; return_section_label_en: string
+    date_placeholder_it: string; date_placeholder_en: string
+    closed_message_it: string; closed_message_en: string
+    rate_warning_title_it: string; rate_warning_title_en: string
+    rate_warning_body_it: string; rate_warning_body_en: string
+    delivery_calc_loading_it: string; delivery_calc_loading_en: string
+    delivery_label_it: string; delivery_label_en: string
+    delivery_breakdown_consegna_it: string; delivery_breakdown_consegna_en: string
+    delivery_breakdown_riconsegna_it: string; delivery_breakdown_riconsegna_en: string
+    search_cta_it: string; search_cta_en: string
+    err_pickup_date_required_it: string; err_pickup_date_required_en: string
+    err_return_date_required_it: string; err_return_date_required_en: string
+    err_blocked_pickup_it: string; err_blocked_pickup_en: string
+    err_blocked_return_it: string; err_blocked_return_en: string
+    err_return_before_pickup_it: string; err_return_before_pickup_en: string
+    err_return_time_before_pickup_it: string; err_return_time_before_pickup_en: string
+}
+const INITIAL_BOOKING_SEARCH_BOX: BookingSearchBoxCopy = {
+    title_it: '', title_en: '',
+    pickup_location_label_it: '', pickup_location_label_en: '',
+    pickup_location_placeholder_it: '', pickup_location_placeholder_en: '',
+    same_return_note_it: '', same_return_note_en: '',
+    return_location_label_it: '', return_location_label_en: '',
+    return_location_placeholder_it: '', return_location_placeholder_en: '',
+    pickup_section_label_it: '', pickup_section_label_en: '',
+    return_section_label_it: '', return_section_label_en: '',
+    date_placeholder_it: '', date_placeholder_en: '',
+    closed_message_it: '', closed_message_en: '',
+    rate_warning_title_it: '', rate_warning_title_en: '',
+    rate_warning_body_it: '', rate_warning_body_en: '',
+    delivery_calc_loading_it: '', delivery_calc_loading_en: '',
+    delivery_label_it: '', delivery_label_en: '',
+    delivery_breakdown_consegna_it: '', delivery_breakdown_consegna_en: '',
+    delivery_breakdown_riconsegna_it: '', delivery_breakdown_riconsegna_en: '',
+    search_cta_it: '', search_cta_en: '',
+    err_pickup_date_required_it: '', err_pickup_date_required_en: '',
+    err_return_date_required_it: '', err_return_date_required_en: '',
+    err_blocked_pickup_it: '', err_blocked_pickup_en: '',
+    err_blocked_return_it: '', err_blocked_return_en: '',
+    err_return_before_pickup_it: '', err_return_before_pickup_en: '',
+    err_return_time_before_pickup_it: '', err_return_time_before_pickup_en: '',
 }
 
 // ─── Registrazione Cliente page (token-gated customer data form) ─────────
@@ -1589,6 +1643,7 @@ interface SiteCopySnapshot {
     token?: TokenCopy
     firma?: FirmaCopy
     registrazioneCliente?: RegistrazioneClienteCopy
+    bookingSearchBox?: BookingSearchBoxCopy
 }
 
 interface CurrentState {
@@ -1619,6 +1674,7 @@ interface CurrentState {
     token: TokenCopy
     firma: FirmaCopy
     registrazioneCliente: RegistrazioneClienteCopy
+    bookingSearchBox: BookingSearchBoxCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -1731,6 +1787,8 @@ export default function SitoTab() {
     const [savedFirma, setSavedFirma] = useState<FirmaCopy>(INITIAL_FIRMA)
     const [registrazioneCliente, setRegistrazioneCliente] = useState<RegistrazioneClienteCopy>(INITIAL_REGISTRAZIONE_CLIENTE)
     const [savedRegistrazioneCliente, setSavedRegistrazioneCliente] = useState<RegistrazioneClienteCopy>(INITIAL_REGISTRAZIONE_CLIENTE)
+    const [bookingSearchBox, setBookingSearchBox] = useState<BookingSearchBoxCopy>(INITIAL_BOOKING_SEARCH_BOX)
+    const [savedBookingSearchBox, setSavedBookingSearchBox] = useState<BookingSearchBoxCopy>(INITIAL_BOOKING_SEARCH_BOX)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -1862,6 +1920,10 @@ export default function SitoTab() {
                     setRegistrazioneCliente(remote.registrazioneCliente)
                     setSavedRegistrazioneCliente(remote.registrazioneCliente)
                 }
+                if (remote?.bookingSearchBox && remote.bookingSearchBox.title_it) {
+                    setBookingSearchBox(remote.bookingSearchBox)
+                    setSavedBookingSearchBox(remote.bookingSearchBox)
+                }
                 if (remote?.token && remote.token.coin_section_title_it) {
                     setToken(remote.token)
                     setSavedToken(remote.token)
@@ -1878,10 +1940,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet, token: savedToken, firma: savedFirma, registrazioneCliente: savedRegistrazioneCliente, bookingSearchBox: savedBookingSearchBox }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet, token, savedToken, firma, savedFirma, registrazioneCliente, savedRegistrazioneCliente, bookingSearchBox, savedBookingSearchBox]
     )
     const dirty = changes.length > 0
 
@@ -1892,7 +1954,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1920,6 +1982,7 @@ export default function SitoTab() {
             setSavedToken(token)
             setSavedFirma(firma)
             setSavedRegistrazioneCliente(registrazioneCliente)
+            setSavedBookingSearchBox(bookingSearchBox)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1981,6 +2044,7 @@ export default function SitoTab() {
         setToken(savedToken)
         setFirma(savedFirma)
         setRegistrazioneCliente(savedRegistrazioneCliente)
+        setBookingSearchBox(savedBookingSearchBox)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -2167,6 +2231,9 @@ export default function SitoTab() {
                         {hydrated && section === 'registrazione-cliente' && (
                             <RegistrazioneClienteEditor copy={registrazioneCliente} setCopy={setRegistrazioneCliente} />
                         )}
+                        {hydrated && section === 'booking-search-box' && (
+                            <BookingSearchBoxEditor copy={bookingSearchBox} setCopy={setBookingSearchBox} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -2315,6 +2382,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.registrazioneCliente) !== JSON.stringify(saved.registrazioneCliente)) {
         out.push('Registrazione Cliente: contenuti modificati')
+    }
+    if (JSON.stringify(current.bookingSearchBox) !== JSON.stringify(saved.bookingSearchBox)) {
+        out.push('Booking Search Box: contenuti modificati')
     }
     return out
 }
@@ -6229,6 +6299,89 @@ function RegistrazioneClienteEditor({ copy, setCopy }: { copy: RegistrazioneClie
                     <FieldText label="Tax code length (EN)" value={copy.err_cf_length_en} onChange={v => update('err_cf_length_en', v)} />
                     <FieldText label="P.IVA lunghezza (IT)" value={copy.err_piva_length_it} onChange={v => update('err_piva_length_it', v)} />
                     <FieldText label="VAT length (EN)" value={copy.err_piva_length_en} onChange={v => update('err_piva_length_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── BookingSearchBox editor (Header drawer popup + Hero variant) ──────────
+function BookingSearchBoxEditor({ copy, setCopy }: { copy: BookingSearchBoxCopy; setCopy: (next: BookingSearchBoxCopy) => void }) {
+    const update = <K extends keyof BookingSearchBoxCopy>(key: K, value: BookingSearchBoxCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-[#6e6e73]">
+                Form di ricerca veicolo che appare nel popup del menu Header e nella variante hero. Tutti i
+                testi sono bilingue e modificabili qui.
+            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Header + posizioni</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.title_it} onChange={v => update('title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.title_en} onChange={v => update('title_en', v)} />
+                    <FieldText label="Etichetta luogo ritiro (IT)" value={copy.pickup_location_label_it} onChange={v => update('pickup_location_label_it', v)} />
+                    <FieldText label="Pickup location label (EN)" value={copy.pickup_location_label_en} onChange={v => update('pickup_location_label_en', v)} />
+                    <FieldText label="Placeholder ritiro (IT)" value={copy.pickup_location_placeholder_it} onChange={v => update('pickup_location_placeholder_it', v)} />
+                    <FieldText label="Pickup placeholder (EN)" value={copy.pickup_location_placeholder_en} onChange={v => update('pickup_location_placeholder_en', v)} />
+                    <FieldTextArea label="Nota stesso indirizzo (IT)" value={copy.same_return_note_it} onChange={v => update('same_return_note_it', v)} />
+                    <FieldTextArea label="Same-address note (EN)" value={copy.same_return_note_en} onChange={v => update('same_return_note_en', v)} />
+                    <FieldText label="Etichetta luogo riconsegna (IT)" value={copy.return_location_label_it} onChange={v => update('return_location_label_it', v)} />
+                    <FieldText label="Return location label (EN)" value={copy.return_location_label_en} onChange={v => update('return_location_label_en', v)} />
+                    <FieldText label="Placeholder riconsegna (IT)" value={copy.return_location_placeholder_it} onChange={v => update('return_location_placeholder_it', v)} />
+                    <FieldText label="Return placeholder (EN)" value={copy.return_location_placeholder_en} onChange={v => update('return_location_placeholder_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Date e orari</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Eyebrow "Ritiro" (IT)' value={copy.pickup_section_label_it} onChange={v => update('pickup_section_label_it', v)} />
+                    <FieldText label='Eyebrow "Pickup" (EN)' value={copy.pickup_section_label_en} onChange={v => update('pickup_section_label_en', v)} />
+                    <FieldText label='Eyebrow "Restituzione" (IT)' value={copy.return_section_label_it} onChange={v => update('return_section_label_it', v)} />
+                    <FieldText label='Eyebrow "Return" (EN)' value={copy.return_section_label_en} onChange={v => update('return_section_label_en', v)} />
+                    <FieldText label='Placeholder "Seleziona data" (IT)' value={copy.date_placeholder_it} onChange={v => update('date_placeholder_it', v)} />
+                    <FieldText label='"Select date" placeholder (EN)' value={copy.date_placeholder_en} onChange={v => update('date_placeholder_en', v)} />
+                    <FieldText label='Messaggio "Chiusi" (IT)' value={copy.closed_message_it} onChange={v => update('closed_message_it', v)} />
+                    <FieldText label='"Closed" message (EN)' value={copy.closed_message_en} onChange={v => update('closed_message_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Avviso tariffa + consegna a domicilio</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo avviso tariffa (IT)" value={copy.rate_warning_title_it} onChange={v => update('rate_warning_title_it', v)} />
+                    <FieldText label="Rate warning title (EN)" value={copy.rate_warning_title_en} onChange={v => update('rate_warning_title_en', v)} />
+                    <FieldTextArea label="Body avviso tariffa (IT)" value={copy.rate_warning_body_it} onChange={v => update('rate_warning_body_it', v)} />
+                    <FieldTextArea label="Rate warning body (EN)" value={copy.rate_warning_body_en} onChange={v => update('rate_warning_body_en', v)} />
+                    <FieldText label="Caricamento calcolo (IT)" value={copy.delivery_calc_loading_it} onChange={v => update('delivery_calc_loading_it', v)} />
+                    <FieldText label="Calc loading (EN)" value={copy.delivery_calc_loading_en} onChange={v => update('delivery_calc_loading_en', v)} />
+                    <FieldText label='"Consegna a domicilio" (IT)' value={copy.delivery_label_it} onChange={v => update('delivery_label_it', v)} />
+                    <FieldText label='"Home delivery" (EN)' value={copy.delivery_label_en} onChange={v => update('delivery_label_en', v)} />
+                    <FieldText label='Breakdown "Consegna" (IT)' value={copy.delivery_breakdown_consegna_it} onChange={v => update('delivery_breakdown_consegna_it', v)} />
+                    <FieldText label='Breakdown "Delivery" (EN)' value={copy.delivery_breakdown_consegna_en} onChange={v => update('delivery_breakdown_consegna_en', v)} />
+                    <FieldText label='Breakdown "Riconsegna" (IT)' value={copy.delivery_breakdown_riconsegna_it} onChange={v => update('delivery_breakdown_riconsegna_it', v)} />
+                    <FieldText label='Breakdown "Return" (EN)' value={copy.delivery_breakdown_riconsegna_en} onChange={v => update('delivery_breakdown_riconsegna_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">CTA + errori</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="CTA ricerca (IT)" value={copy.search_cta_it} onChange={v => update('search_cta_it', v)} />
+                    <FieldText label="Search CTA (EN)" value={copy.search_cta_en} onChange={v => update('search_cta_en', v)} />
+                    <FieldText label="Errore data ritiro (IT)" value={copy.err_pickup_date_required_it} onChange={v => update('err_pickup_date_required_it', v)} />
+                    <FieldText label="Pickup date required (EN)" value={copy.err_pickup_date_required_en} onChange={v => update('err_pickup_date_required_en', v)} />
+                    <FieldText label="Errore data restituzione (IT)" value={copy.err_return_date_required_it} onChange={v => update('err_return_date_required_it', v)} />
+                    <FieldText label="Return date required (EN)" value={copy.err_return_date_required_en} onChange={v => update('err_return_date_required_en', v)} />
+                    <FieldText label="Ritiro bloccato (IT)" value={copy.err_blocked_pickup_it} onChange={v => update('err_blocked_pickup_it', v)} />
+                    <FieldText label="Blocked pickup (EN)" value={copy.err_blocked_pickup_en} onChange={v => update('err_blocked_pickup_en', v)} />
+                    <FieldText label="Riconsegna bloccata (IT)" value={copy.err_blocked_return_it} onChange={v => update('err_blocked_return_it', v)} />
+                    <FieldText label="Blocked return (EN)" value={copy.err_blocked_return_en} onChange={v => update('err_blocked_return_en', v)} />
+                    <FieldText label="Riconsegna prima di ritiro (IT)" value={copy.err_return_before_pickup_it} onChange={v => update('err_return_before_pickup_it', v)} />
+                    <FieldText label="Return before pickup (EN)" value={copy.err_return_before_pickup_en} onChange={v => update('err_return_before_pickup_en', v)} />
+                    <FieldText label="Orario riconsegna prima ritiro (IT)" value={copy.err_return_time_before_pickup_it} onChange={v => update('err_return_time_before_pickup_it', v)} />
+                    <FieldText label="Return time before pickup (EN)" value={copy.err_return_time_before_pickup_en} onChange={v => update('err_return_time_before_pickup_en', v)} />
                 </div>
             </section>
         </div>
