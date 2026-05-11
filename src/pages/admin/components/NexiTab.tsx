@@ -827,10 +827,15 @@ export default function NexiTab() {
                 </div>
             )}
 
-            {/* Nuovo Addebito Modal */}
+            {/* Nuovo Addebito Modal — bottom-sheet su mobile, centered card
+                su sm+. Body scrollabile, footer pinned con safe-area-inset-bottom. */}
             {showAddebitoModal && addebitoTx && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-6 w-full max-w-lg space-y-4">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setShowAddebitoModal(false)}>
+                    <div
+                        className="bg-theme-bg-secondary w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl border border-theme-border flex flex-col max-h-full sm:max-h-[90vh] overflow-hidden"
+                        onClick={e => e.stopPropagation()}
+                    >
+                    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-4">
                         <h3 className="text-lg font-bold text-theme-text-primary">Nuovo Addebito</h3>
                         <div className="text-sm text-theme-text-secondary">
                             <p><strong>Cliente:</strong> {addebitoTx.booking?.customer_name || 'N/A'}</p>
@@ -917,22 +922,27 @@ export default function NexiTab() {
                                 <><strong>Flusso:</strong> Email formale inviata subito → dopo 24h seconda email con foto danni + avviso → dopo 2 min addebito MIT (se rifiutato, ritenta con -10% ogni secondo).</>
                             )}
                         </div>
+                    </div>
 
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={() => setShowAddebitoModal(false)}
-                                className="px-4 py-2 rounded-lg text-sm bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors"
-                            >
-                                Annulla
-                            </button>
-                            <button
-                                onClick={handleNuovoAddebito}
-                                disabled={addebitoSending}
-                                className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
-                            >
-                                {addebitoSending ? 'Invio...' : 'Invia Email e Programma Addebito'}
-                            </button>
-                        </div>
+                    {/* Footer pinned al fondo del modal, safe-area aware */}
+                    <div
+                        className="flex gap-3 justify-end px-5 sm:px-6 pt-3 border-t border-theme-border bg-theme-bg-secondary flex-shrink-0"
+                        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+                    >
+                        <button
+                            onClick={() => setShowAddebitoModal(false)}
+                            className="px-4 py-2 min-h-[44px] rounded-lg text-sm bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover transition-colors"
+                        >
+                            Annulla
+                        </button>
+                        <button
+                            onClick={handleNuovoAddebito}
+                            disabled={addebitoSending}
+                            className="px-4 py-2 min-h-[44px] rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+                        >
+                            {addebitoSending ? 'Invio...' : 'Invia Email e Programma Addebito'}
+                        </button>
+                    </div>
                     </div>
                 </div>
             )}
