@@ -1394,11 +1394,8 @@ export default function VehiclesTab() {
                       const stats = vehicleStats.get(vehicle.id)
                       const utilizzo = stats?.utilizzoPct ?? 0
                       const fatt = stats?.fatturato || 0
-                      const fermi = stats?.giorniFermo ?? 0
-                      const roi = roiOf(vehicle)
                       const km = Number((vehicle as Vehicle & { current_km?: number }).current_km) || 0
                       const img = pickVehicleImage(vehicle)
-                      const st = stateOf(vehicle)
                       const dispLabel = vehicle.status === 'available' ? 'Disponibile' : vehicle.status === 'unavailable' ? 'Non disponibile' : vehicle.status === 'rented' ? 'Noleggiato' : vehicle.status === 'maintenance' ? 'Manutenzione' : '—'
                       const dispClass = vehicle.status === 'available' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : vehicle.status === 'rented' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'
                       const utilBar = utilizzo >= 70 ? 'bg-emerald-500' : utilizzo >= 40 ? 'bg-amber-500' : 'bg-red-500'
