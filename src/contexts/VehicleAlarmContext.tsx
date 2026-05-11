@@ -351,12 +351,29 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         // Silence the alarm locally first (so user sees it stop even if DB hiccups)
         await stopAlarm(bookingId)
         const tryStatus = async (status: 'completata' | 'completed') => {
+            // Carica la booking_details corrente per fare merge senza
+            // perdere i campi esistenti (JSONB sostituirebbe tutto).
+            const { data: row } = await supabase
+                .from('bookings')
+                .select('booking_details')
+                .eq('id', bookingId)
+                .maybeSingle()
+            const prevDetails = (row?.booking_details && typeof row.booking_details === 'object')
+                ? row.booking_details as Record<string, unknown>
+                : {}
+            // `actual_return_date` non è una colonna su `bookings` (lo era
+            // in un'altra tabella o in una migration mai applicata): lo
+            // riponiamo dentro booking_details.actual_return_date così
+            // l'informazione sopravvive senza rompere lo schema cache di
+            // PostgREST. Il timestamp top-level rilevante è
+            // `alarm_triggered_at`, che è la colonna esistente usata in
+            // tutto il resto del file.
             return supabase
                 .from('bookings')
                 .update({
                     status,
-                    actual_return_date: new Date().toISOString(),
                     alarm_triggered_at: new Date().toISOString(),
+                    booking_details: { ...prevDetails, actual_return_date: new Date().toISOString() },
                 })
                 .eq('id', bookingId)
         }
