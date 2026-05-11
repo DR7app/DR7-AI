@@ -210,6 +210,31 @@ function buildScheduleSummary(
 ): string[] {
   const lines: string[] = []
 
+  // Eventi di codice che instradano qui — usa SIA message_key SIA label.
+  // I template custom (message_key `pro_custom_*`) la cui label corrisponde
+  // a uno slot canonico (es. "Conferma Noleggio") vengono riconosciuti
+  // tramite LABEL_FALLBACKS, esattamente come fa il resolver server.
+  const eventTriggers = getProKeyEventTriggers(t.message_key, t.label)
+
+  // Quando il template è guidato da eventi di codice, il vero
+  // momento di invio è l'evento — il cron è solo configurazione
+  // residua e mostrare "Cron · invia 24h prima…" è fuorviante.
+  // Mostriamo SOLO gli eventi. Il toggle Automatico resta nel pannello
+  // di automazione per chi volesse aggiungere un cron secondario,
+  // ma il preview Programmazione non lo riflette.
+  if (eventTriggers.length > 0) {
+    for (const ev of eventTriggers) {
+      lines.push(`Evento · ${ev}`)
+    }
+    if (t.is_automatic) {
+      lines.push('⚠ Cron impostato ma ridondante — il template parte già sull\'evento. Disattiva "Automatico" per evitare un doppio invio.')
+    }
+    return lines
+  }
+
+  // Da qui in poi: nessun evento di codice instrada a questo template.
+  // Quindi il cron è l'UNICA via di invio automatico — mostralo se
+  // attivo, altrimenti il template è davvero manuale.
   if (t.is_automatic) {
     // Il triggerLabel contiene già "prima/dopo" (es. "Prima della
     // riconsegna"); strippare quel prefisso dal label prima di
@@ -235,34 +260,7 @@ function buildScheduleSummary(
       ? 'tutti i veicoli'
       : `solo ${categoryLabels[cat] || cat}`
     lines.push(`Cron · invia ${offsetText} ${cleanTriggerLabel} · ${sendHourText} · ${statusLabel} · ${catLabel}`)
-
-    // Calcolo "Prossimo tentativo" — quando il cron POTREBBE far
-    // partire questo template. Considera SOLO il send_hour: se
-    // valorizzato, è quell'ora Rome di oggi (se non passata) o di
-    // domani; se null, il cron tenta in qualsiasi momento appena
-    // c'è una prenotazione che soddisfa la finestra ±19 min intorno
-    // al target = booking_date ± offset. Non possiamo prevedere il
-    // momento esatto senza scansionare le prenotazioni, quindi
-    // mostriamo la prossima finestra cron utile.
     lines.push(`Prossimo tentativo: ${nextCronAttemptText(t.send_hour ?? null)}`)
-  }
-
-  // Eventi di codice che instradano qui — usa SIA message_key SIA label.
-  // I template custom (message_key `pro_custom_*`) la cui label corrisponde
-  // a uno slot canonico (es. "Conferma Noleggio") vengono riconosciuti
-  // tramite LABEL_FALLBACKS, esattamente come fa il resolver server.
-  const eventTriggers = getProKeyEventTriggers(t.message_key, t.label)
-  for (const ev of eventTriggers) {
-    lines.push(`Evento · ${ev}`)
-  }
-
-  // Avviso di duplicato: se è attivo SIA il cron SIA almeno un evento di
-  // codice, il template viene inviato DUE volte (una alla creazione
-  // prenotazione tramite evento, una via cron nell'orario configurato).
-  // Quasi sempre è un errore: il cron è rimasto a default sull'evento
-  // sbagliato (es. "Conferma Noleggio" con cron "24h prima riconsegna").
-  if (t.is_automatic && eventTriggers.length > 0) {
-    lines.push('⚠ Doppio invio: il cron qui sopra causerà un SECONDO invio oltre all\'evento. Se non lo vuoi, clicca il badge "Automatico" per metterlo a "Manuale".')
   }
 
   if (lines.length === 0) {
