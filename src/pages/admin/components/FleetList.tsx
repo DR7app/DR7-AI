@@ -275,13 +275,11 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
     return (
         <div className="space-y-4 lg:space-y-6">
             {/* Hero */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-theme-bg-secondary via-theme-bg-secondary to-theme-bg-tertiary rounded-2xl border border-theme-border p-5 lg:p-6">
-                <div className="absolute -top-12 -right-12 w-56 h-56 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"/>
-                <div className="absolute -bottom-12 -left-12 w-56 h-56 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"/>
-                <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 lg:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="flex items-start gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-purple-500/10 border border-purple-500/30 grid place-items-center flex-shrink-0">
-                            <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                        <div className="w-11 h-11 rounded-xl border border-theme-border bg-theme-bg-tertiary grid place-items-center flex-shrink-0">
+                            <svg className="w-5 h-5 text-theme-text-primary" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16l4-4m0 0l4 4m-4-4v9m11-9V8.5M6.5 8.5h11M3 8.5L4.07 6.36a2 2 0 011.79-1.11h12.28a2 2 0 011.79 1.11L21 8.5"/>
                             </svg>
                         </div>
@@ -296,12 +294,12 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
             {/* KPI cards — 6 metriche come da mockup. Tutti i numeri vengono
                 dai dati reali (vehicleStats + vehicles), niente mock. */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-                <KpiCard label="Totale Veicoli" value={stats.total} subtitle="100% della flotta" ring="#3B82F6"/>
-                <KpiCard label="Veicoli Attivi" value={stats.attivi} subtitle={stats.total > 0 ? `${Math.round((stats.attivi / stats.total) * 100)}% della flotta` : '—'} ring="#10B981"/>
-                <KpiCard label="Veicoli Fermi" value={stats.fermi} subtitle={stats.total > 0 ? `${Math.round((stats.fermi / stats.total) * 100)}% della flotta` : '—'} ring="#EF4444" urgent={stats.fermi > 0}/>
-                <KpiCard label="Fatturato Flotta" value={`€${stats.totalFatturato.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} subtitle="ultimi 30 giorni" ring="#F59E0B"/>
-                <KpiCard label="Utilizzo Medio" value={`${stats.utilizzoMedio}%`} subtitle="media veicolare" ring="#06B6D4"/>
-                <KpiCard label="ROI Medio Flotta" value={`${stats.roiMedio.toString().replace('.', ',')}%`} subtitle="fatturato/potenziale" ring="#A855F7"/>
+                <KpiCard label="Totale Veicoli" value={stats.total} subtitle="100% della flotta"/>
+                <KpiCard label="Veicoli Attivi" value={stats.attivi} subtitle={stats.total > 0 ? `${Math.round((stats.attivi / stats.total) * 100)}% della flotta` : '—'}/>
+                <KpiCard label="Veicoli Fermi" value={stats.fermi} subtitle={stats.total > 0 ? `${Math.round((stats.fermi / stats.total) * 100)}% della flotta` : '—'} urgent={stats.fermi > 0}/>
+                <KpiCard label="Fatturato Flotta" value={`€${stats.totalFatturato.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} subtitle="ultimi 30 giorni"/>
+                <KpiCard label="Utilizzo Medio" value={`${stats.utilizzoMedio}%`} subtitle="media veicolare"/>
+                <KpiCard label="ROI Medio Flotta" value={`${stats.roiMedio.toString().replace('.', ',')}%`} subtitle="fatturato/potenziale"/>
             </div>
 
             {/* Alert Intelligenti — sezione condizionale che mostra gli avvisi
@@ -315,12 +313,12 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                 if (alerts.length === 0) return null
                 const dotColor = { red: 'bg-red-500', amber: 'bg-amber-500', yellow: 'bg-yellow-500' }
                 return (
-                    <div className="bg-gradient-to-br from-red-500/8 via-amber-500/5 to-transparent border border-amber-500/20 rounded-2xl px-4 py-3">
+                    <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary px-4 py-3">
                         <div className="flex items-center gap-2 mb-2">
-                            <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <svg className="w-4 h-4 text-theme-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M4.93 4.93l14.14 14.14M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Alert Intelligenti</span>
+                            <span className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Alert Intelligenti</span>
                             <span className="text-[11px] text-theme-text-muted">{alerts.length} {alerts.length === 1 ? 'avviso disponibile' : 'avvisi disponibili'}</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -346,7 +344,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Cerca per targa, nome o modello..."
-                        className="w-full pl-9 pr-3 py-2 min-h-[40px] bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                        className="w-full pl-9 pr-3 py-2 min-h-[40px] bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-none focus:ring-2 focus:ring-theme-text-primary/30"
                     />
                 </div>
                 <div className="flex gap-2 flex-wrap">
@@ -381,7 +379,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                     </select>
                     <button
                         type="button"
-                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-sm bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-sm bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
                         title="Filtri avanzati (in arrivo)"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -392,7 +390,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                     <button
                         type="button"
                         onClick={() => { try { window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'vehicles' } })) } catch { /* ignore */ } }}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-sm font-semibold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30 hover:bg-cyan-600 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-sm font-semibold bg-black text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 transition-colors"
                         title="Apri la tab Veicoli per aggiungere un nuovo veicolo"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
@@ -457,7 +455,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                                     <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: pctColor }}>{pct}%</span>
                                                 </div>
                                                 {s?.fatturato && s.fatturato > 0 && (
-                                                    <span className="text-[11px] font-bold text-dr7-gold tabular-nums shrink-0">€{s.fatturato.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                                                    <span className="text-[11px] font-bold text-theme-text-primary tabular-nums shrink-0">€{s.fatturato.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                                                 )}
                                             </div>
                                         </div>
@@ -540,7 +538,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                                     )
                                                 })()}
                                             </td>
-                                            <td className="py-2 px-3 text-right text-xs text-dr7-gold font-bold tabular-nums">
+                                            <td className="py-2 px-3 text-right text-xs text-theme-text-primary font-bold tabular-nums">
                                                 {(() => {
                                                     const s = vehicleStats.get(vehicle.id)
                                                     const f = s?.fatturato || 0
@@ -609,7 +607,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                                     <div className="text-xs text-theme-text-primary font-semibold truncate">{v.display_name}</div>
                                                     <div className="text-[10px] text-theme-text-muted truncate">{labelFor(v.category)}{v.plate ? ` · ${v.plate}` : ''}</div>
                                                 </div>
-                                                <div className="text-xs font-bold text-dr7-gold tabular-nums whitespace-nowrap">€{fatturato.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                                                <div className="text-xs font-bold text-theme-text-primary tabular-nums whitespace-nowrap">€{fatturato.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
                                             </button>
                                         )
                                     })}
@@ -637,12 +635,12 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                         if (stats.dueSoon > 0) lines.push(`${stats.dueSoon} ${stats.dueSoon === 1 ? 'scadenza' : 'scadenze'} entro 30 giorni: pianifica i rinnovi.`)
                         if (lines.length === 0) lines.push('Tutto sotto controllo: nessuna anomalia rilevata sulla flotta.')
                         return (
-                            <div className="rounded-2xl border border-dr7-gold/25 bg-gradient-to-br from-dr7-gold/8 via-dr7-gold/4 to-transparent p-4">
+                            <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                    <svg className="w-4 h-4 text-theme-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                     </svg>
-                                    <h3 className="text-xs font-bold text-dr7-gold uppercase tracking-wider">Suggerimenti Smart</h3>
+                                    <h3 className="text-xs font-bold text-theme-text-primary uppercase tracking-wider">Suggerimenti Smart</h3>
                                 </div>
                                 <ul className="space-y-1.5 text-[11px] text-theme-text-secondary leading-relaxed">
                                     {lines.map((l, i) => <li key={i}>{l}</li>)}
@@ -650,7 +648,7 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
                                 {stats.sottoTargetUtilizzo > 0 && (
                                     <button
                                         onClick={() => { try { window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'campagna-marketing' } })) } catch { /* ignore */ } }}
-                                        className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold bg-dr7-gold text-white hover:bg-dr7-gold/90 transition-colors"
+                                        className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold bg-black text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 transition-colors"
                                     >
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/>
@@ -667,15 +665,12 @@ export default function FleetList({ onOpenDetail }: FleetListProps) {
     )
 }
 
-function KpiCard({ label, value, subtitle, ring, urgent }: { label: string; value: number | string; subtitle?: string; ring: string; urgent?: boolean }) {
+function KpiCard({ label, value, subtitle, urgent }: { label: string; value: number | string; subtitle?: string; urgent?: boolean }) {
     return (
-        <div className="relative overflow-hidden rounded-2xl border bg-theme-bg-secondary p-4" style={{ borderColor: `${ring}33` }}>
-            <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl pointer-events-none" style={{ background: `${ring}22` }}/>
-            <div className="relative">
-                <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${ring}cc` }}>{label}</div>
-                <div className={`text-2xl lg:text-3xl font-bold mt-2 tabular-nums ${urgent ? 'animate-pulse' : ''}`} style={{ color: ring }}>{value}</div>
-                {subtitle && <div className="text-[11px] text-theme-text-muted mt-1 truncate">{subtitle}</div>}
-            </div>
+        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+            <div className="text-[10px] uppercase tracking-wider font-semibold text-theme-text-muted">{label}</div>
+            <div className={`text-2xl lg:text-3xl font-bold mt-2 tabular-nums text-theme-text-primary ${urgent ? 'animate-pulse' : ''}`}>{value}</div>
+            {subtitle && <div className="text-[11px] text-theme-text-muted mt-1 truncate">{subtitle}</div>}
         </div>
     )
 }
