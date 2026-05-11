@@ -200,12 +200,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [override.overrideCodes])
 
-  // Resume create booking once OTP `prenotazione_lavaggio_conferma` is
-  // approved — replay createBooking with the stored `force` flag so the
-  // operator doesn't have to press Salva a second time.
+  // Resume create booking once OTP `prenotazione_lavaggio_conferma` OR
+  // `carta_punti_lavaggio` is approved — replay createBooking with the
+  // stored `force` flag so the operator doesn't have to press Salva
+  // a second time.
   useEffect(() => {
     const pending = pendingCreateBookingRef.current
-    if (pending && override.overrideCodes.has('prenotazione_lavaggio_conferma')) {
+    if (!pending) return
+    const confirmOk = override.overrideCodes.has('prenotazione_lavaggio_conferma')
+    const cartaPuntiNeeded = formData.payment_method === 'Carta Punti'
+    const cartaPuntiOk = !cartaPuntiNeeded || override.overrideCodes.has('carta_punti_lavaggio')
+    if (confirmOk && cartaPuntiOk) {
       pendingCreateBookingRef.current = null
       createBooking(pending.force)
     }
@@ -1186,6 +1191,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
+    // ===== OTP GATE: Pagamento Carta Punti — convalida SEMPRE =====
+    // Quando l'operatore segna 'Carta Punti' come metodo di pagamento, ogni
+    // singola prenotazione richiede una conferma direzionale tramite OTP.
+    // Differenza con `prenotazione_lavaggio_conferma`: qui consumiamo
+    // l'override DOPO il salvataggio (più in basso), così la prossima
+    // prenotazione Carta Punti chiede di nuovo l'OTP — niente caching
+    // di sessione.
+    if (
+      formData.payment_method === 'Carta Punti'
+      && !override.hasOverride('carta_punti_lavaggio')
+    ) {
+      pendingCreateBookingRef.current = { force: forceBooking }
+      createBookingLockRef.current = false
+      override.requestOverride(
+        'carta_punti_lavaggio',
+        'Pagamento Carta Punti richiede autorizzazione direzionale per ogni prenotazione'
+      )
+      return
+    }
+
     // Validate customer has all required fields for fattura
     try {
       const custResp = await authFetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
@@ -1683,6 +1708,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setShowForm(false)
     resetWizard()
     loadData()
+
+    // Carta Punti: consuma l'override così la PROSSIMA prenotazione con
+    // questo metodo di pagamento richiede un nuovo OTP. Per gli altri
+    // metodi non c'è nulla da consumare.
+    if (formData.payment_method === 'Carta Punti') {
+      try { await override.consumeOverride('carta_punti_lavaggio') } catch (e) {
+        logger.warn('[carta_punti] consumeOverride failed:', e)
+      }
+    }
+
     // Mantieni il lock attivo per 3 secondi DOPO il successo: copre la
     // finestra tra setShowForm(false) (state async) e il re-render del
     // DOM senza la form. Senza questo delay un click rapido sul pulsante
@@ -1931,6 +1966,25 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // data/ora + totale).
     const cust = customers.find(c => c.id === formData.customer_id)
     const serviceLabel = buildServiceNames()
+
+    // Carta Punti — riusa la stessa snapshot del wizard ma flagga il
+    // metodo di pagamento così la direzione capisce subito perché serve
+    // l'OTP.
+    if (code === 'carta_punti_lavaggio') {
+      return {
+        Operazione: 'Pagamento Carta Punti (lavaggio)',
+        'Metodo pagamento': 'Carta Punti',
+        Cliente: cust?.full_name || null,
+        Email: cust?.email || null,
+        Telefono: cust?.phone || null,
+        Servizio: serviceLabel || null,
+        Veicolo: vehicleMakeModel || null,
+        'Data appuntamento': fmtDateIt(formData.appointment_date),
+        Ora: formData.appointment_time || null,
+        'Importo totale': getFinalPrice() > 0 ? fmtEur(getFinalPrice()) : null,
+      }
+    }
+
     return {
       Operazione: editingBooking ? 'Modifica prenotazione lavaggio' : 'Nuova prenotazione lavaggio',
       Cliente: cust?.full_name || null,
@@ -3107,6 +3161,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
                         <option value="Bonifico">Bonifico</option>
                         <option value="Credit Wallet">Credit Wallet</option>
+                        <option value="Carta Punti">Carta Punti (richiede OTP)</option>
                         <option value="Paypal">Paypal</option>
                       </select>
                     </>
