@@ -185,6 +185,17 @@ const OLD_TO_PRO: Record<string, string> = {
   rental_da_saldare_customer: 'pro_richiesta_pagamento',
   booking_cancelled_whatsapp: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
 
+  // Pagamento ricevuto (estensione, top-up, danni/penali) — il body vive in
+  // pro_conferma_pagamento ("Conferma Pagamento"). Admin variants point al
+  // medesimo slot (stessa scelta dell'altra famiglia rental_*_admin).
+  // Senza queste righe ogni renderTemplate('payment_received_*') tornava
+  // null e l'invio WhatsApp veniva silenziosamente saltato — confermati
+  // estensione e danni/penali arrivavano nulla a cliente e admin.
+  payment_received_extension: 'pro_conferma_pagamento',
+  payment_received_extension_admin: 'pro_conferma_pagamento',
+  payment_received_damages: 'pro_conferma_pagamento',
+  payment_received_damages_admin: 'pro_conferma_pagamento',
+
   // Preventivi admin alert body lives in pro_richiesta_otp
   admin_new_website_quote: 'pro_richiesta_otp',
   admin_no_cauzione_request: 'pro_richiesta_otp',
