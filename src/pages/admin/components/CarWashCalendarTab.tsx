@@ -315,22 +315,55 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     return new Date(currentRomeComponents.year, currentRomeComponents.month + 1, 0).getDate()
   }, [currentRomeComponents])
 
-  // Generate all days in the month for full monthly view
+  // Generate days to render based on viewMode.
+  //  - mese: every day of the current month (default)
+  //  - settimana: Mon–Sun of the week containing currentDate (only days
+  //    that fall inside the current month — cross-month weeks clip to
+  //    the visible month to keep the grid in one calendar)
+  //  - giorno: just the day pointed at by currentDate
   const daysArray = useMemo(() => {
-    const days = []
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i)
+    if (viewMode === 'giorno') {
+      const d = currentDate.getDate()
+      const inMonth = currentDate.getMonth() === currentRomeComponents.month
+        && currentDate.getFullYear() === currentRomeComponents.year
+      return inMonth ? [d] : []
     }
+    if (viewMode === 'settimana') {
+      const anchor = currentDate.getMonth() === currentRomeComponents.month
+        && currentDate.getFullYear() === currentRomeComponents.year
+        ? new Date(currentDate)
+        : new Date(currentRomeComponents.year, currentRomeComponents.month, 1)
+      const dow = (anchor.getDay() + 6) % 7 // Mon=0
+      const start = new Date(anchor)
+      start.setDate(anchor.getDate() - dow)
+      const out: number[] = []
+      for (let i = 0; i < 7; i++) {
+        const cur = new Date(start)
+        cur.setDate(start.getDate() + i)
+        if (cur.getMonth() === currentRomeComponents.month && cur.getFullYear() === currentRomeComponents.year) {
+          out.push(cur.getDate())
+        }
+      }
+      return out
+    }
+    // mese — full month
+    const days = []
+    for (let i = 1; i <= daysInMonth; i++) days.push(i)
     return days
-  }, [daysInMonth])
+  }, [daysInMonth, viewMode, currentDate, currentRomeComponents])
 
   const navigateMonth = (dir: 'prev' | 'next') => {
+    // Step size depends on the active view: day in Giorno, 7 days in
+    // Settimana, full month in Mese. Keeps the left/right arrows useful
+    // regardless of which view is selected.
     setCurrentDate(p => {
       const n = new Date(p)
-      n.setMonth(p.getMonth() + (dir === 'prev' ? -1 : 1))
+      const sign = dir === 'prev' ? -1 : 1
+      if (viewMode === 'giorno') n.setDate(p.getDate() + sign)
+      else if (viewMode === 'settimana') n.setDate(p.getDate() + 7 * sign)
+      else n.setMonth(p.getMonth() + sign)
       return n
     })
-    // Month changed
   }
 
   // Process bookings into calendar events
