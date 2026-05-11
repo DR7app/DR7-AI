@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import Button from './Button'
+import OperatorProfileModal from './OperatorProfileModal'
 
 interface Operatore {
     id: string
@@ -158,6 +159,10 @@ export default function RilevazioneOrariTab() {
     // performance metrics. Direzione/admin can expand any row to see
     // EVERYTHING; everyone else can still expand their own row.
     const [expandedId, setExpandedId] = useState<string | null>(null)
+    // Full-profile modal — opened from the "Profilo completo" button
+    // inside the expanded row. Renders per-operator KPIs, trend chart,
+    // pause analytics and a per-day breakdown of all pauses.
+    const [profileOp, setProfileOp] = useState<Operatore | null>(null)
 
     useEffect(() => {
         const t = setInterval(() => setNow(new Date()), 30000)
@@ -543,6 +548,7 @@ export default function RilevazioneOrariTab() {
                                                     target={target}
                                                     straord={straord}
                                                     deficit={deficit}
+                                                    onOpenProfile={() => setProfileOp(r.operatore)}
                                                 />
                                             </td>
                                         </tr>
@@ -658,6 +664,9 @@ export default function RilevazioneOrariTab() {
             {showAddOp && (
                 <AddOperatoreModal onClose={() => setShowAddOp(false)} onSaved={() => { setShowAddOp(false); load(); toast.success('Operatore aggiunto') }} />
             )}
+            {profileOp && (
+                <OperatorProfileModal operatore={profileOp} onClose={() => setProfileOp(null)} />
+            )}
 
             {editMyDay && me && (
                 <MyDayEditorModal
@@ -692,12 +701,14 @@ function DailyOperatorDetail({
     target,
     straord,
     deficit,
+    onOpenProfile,
 }: {
     row: DayRow
     pauseWindows: { start: string; end: string | null; durMin: number; idx: number }[]
     target: number
     straord: number
     deficit: number
+    onOpenProfile?: () => void
 }) {
     const op = row.operatore
     const fmtFull = (iso: string | null) => {
@@ -767,6 +778,15 @@ function DailyOperatorDetail({
                         <div className="text-sm text-theme-text-primary">{op.ore_target_giornaliere}h / giorno</div>
                     </div>
                 </div>
+                {onOpenProfile && (
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onOpenProfile() }}
+                        className="text-xs px-3 py-1.5 rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90 whitespace-nowrap"
+                    >
+                        Profilo completo
+                    </button>
+                )}
             </div>
 
             {/* Timeline 00–24 */}
