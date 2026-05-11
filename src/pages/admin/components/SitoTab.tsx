@@ -2341,7 +2341,7 @@ export default function SitoTab() {
     }
 
     return (
-        <div className="bg-[#fafafa] min-h-screen pb-32">
+        <div className="bg-theme-bg-secondary min-h-screen pb-32">
             <LimitationOverrideModal
                 isOpen={override.limitationState.isOpen}
                 limitationCode={override.limitationState.limitationCode}
