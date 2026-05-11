@@ -1035,7 +1035,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Recalculate total when insurance, delivery fees, or payment method change.
   // Runs in any engine mode — the dynamic coefficient + clamp must always
   // apply to the full subtotal (rental + extras), matching Preventivi.
+  //
+  // In edit mode (editingId set) skip ENTIRELY: la prenotazione esiste gia'
+  // con un prezzo concordato; cambiare data/ora non deve sovrascrivere il
+  // totale. Se direzione vuole ricalcolare, modifica manualmente l'importo.
   useEffect(() => {
+    if (editingId) return
     if (revenueSuggestion && formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       const activeTier = customerTier?.tier || 'TIER_1'
@@ -3475,7 +3480,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   async function processBookingSubmission(skipValidation = false, overrideCustomerId?: string) {
     logger.log('[processBookingSubmission] 🚀 STARTING SUBMISSION PROCESS', { skipValidation, overrideCustomerId })
 
-    if (isSubmitting) return
+    // Re-entry guard PRIMA di qualsiasi side-effect (modali OTP, fetch DB,
+    // WhatsApp send). isSubmitting e' async => doppio click rapido entra
+    // due volte qui prima del re-render. Il ref e' sincrono => secondo
+    // ingresso bail-out immediato senza spawnare alcun modal/sending.
+    if (submitLockRef.current || isSubmitting) return
+    submitLockRef.current = true
 
     // ─── OTP gates (Salva-time) ─────────────────────────────────────────
     // Valutiamo TUTTI i gate insieme: se più condizioni richiedono
@@ -3944,6 +3954,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '3. Contatta il supporto tecnico se necessario'
           )
           setIsSubmitting(false)
+          submitLockRef.current = false
           return
         }
 
@@ -3958,6 +3969,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         setEditModalOpen(true) // Open NewClientModal
 
         setIsSubmitting(false) // CRITICAL: Reset submitting state to allow retry after modal
+        submitLockRef.current = false
         return // STOP HERE - do not create booking until missing data is provided
       }
     }
@@ -3967,6 +3979,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (showMissingDataModal) {
       logger.log('[processBookingSubmission] ⚠️ Modal is open, aborting booking creation')
       setIsSubmitting(false)
+      submitLockRef.current = false
       return
     }
 
@@ -3976,12 +3989,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     // Call the original submit logic (embedded here or separate)
 
-    // Synchronous re-entry guard: React state updates are async, so a rapid
-    // second click lands here before the first call has flipped isSubmitting.
-    // The ref flips synchronously on the same tick, so the second call bails.
-    if (submitLockRef.current || isSubmitting) return
-    submitLockRef.current = true
-
+    // (Il re-entry guard sincrono e' gia' stato applicato in cima alla
+    // funzione — qui ci limitiamo a marcare lo stato React "in submitting".)
     setIsSubmitting(true)
     try {
       // ===== VALIDATION: Check all required date/time fields are populated =====
@@ -4001,6 +4010,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           )
         }, 100)
         setIsSubmitting(false)
+        submitLockRef.current = false
         return
       }
 
@@ -4011,6 +4021,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (pickupCheck < nowRome && !hasOverride('pickup_in_past')) {
           requestOverride('pickup_in_past', 'La data e ora di ritiro è nel passato. Serve autorizzazione per procedere.')
           setIsSubmitting(false)
+          submitLockRef.current = false
           return
         }
       }
@@ -4031,6 +4042,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           )
         }, 100)
         setIsSubmitting(false)
+        submitLockRef.current = false
         return
       }
 
@@ -4046,6 +4058,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           )
         }, 100)
         setIsSubmitting(false)
+        submitLockRef.current = false
         return
       }
 
@@ -4066,6 +4079,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             )
           }, 100)
           setIsSubmitting(false)
+          submitLockRef.current = false
           return
         }
       }
@@ -4087,6 +4101,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             )
           }, 100)
           setIsSubmitting(false)
+          submitLockRef.current = false
           return
         }
       }
@@ -4112,6 +4127,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             )
           }, 100)
           setIsSubmitting(false)
+          submitLockRef.current = false
           return
         }
       }
@@ -4141,6 +4157,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!availabilityResult.available && !hasOverride('slot_unavailable')) {
             requestOverride('slot_unavailable', availabilityResult.reason || 'Slot non disponibile')
             setIsSubmitting(false)
+            submitLockRef.current = false
             return
           }
 
@@ -4554,6 +4571,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.error('❌ Vehicle not found for vehicle_id:', formData.vehicle_id)
         alert('Errore: Veicolo non trovato. Seleziona un veicolo valido.')
         setIsSubmitting(false)
+        submitLockRef.current = false
         return
       }
 
@@ -4565,6 +4583,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (confirmBooking && !hasOverride('prenotazione_noleggio_conferma')) {
         requestOverride('prenotazione_noleggio_conferma', 'Conferma prenotazione noleggio richiede autorizzazione direzionale')
         setIsSubmitting(false)
+        submitLockRef.current = false
         return
       }
 

@@ -94,6 +94,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [carWashServices, setCarWashServices] = useState<CarWashService[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  // Synchronous re-entry guard: React state updates are async, so a rapid
+  // double-click lands in handleSubmit before submitting flips. The ref is
+  // synchronous, so the second call bails immediately and we don't fire
+  // duplicate WhatsApp confirmations / duplicate inserts.
+  const submitLockRef = useRef(false)
   const [showForm, setShowForm] = useState(false)
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const [editService, setEditService] = useState<CarWashService | null>(null)
@@ -1668,7 +1673,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   }
 
   async function handleSubmit() {
-    if (submitting) return
+    // Sync ref guard prima del setSubmitting (state e' async).
+    if (submitLockRef.current || submitting) return
+    submitLockRef.current = true
     setSubmitting(true)
 
     try {
@@ -1829,6 +1836,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     } finally {
       setSubmitting(false)
+      submitLockRef.current = false
     }
   }
 

@@ -133,8 +133,14 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
     if (invoice.customer_address) customerLines.push({ text: invoice.customer_address, bold: false, size: 9 })
     if (invoice.customer_phone) customerLines.push({ text: `Tel: ${invoice.customer_phone}`, bold: false, size: 9 })
     if (invoice.customer_email) customerLines.push({ text: `Email: ${invoice.customer_email}`, bold: false, size: 9 })
-    if (invoice.customer_tax_code) customerLines.push({ text: `C.F. ${invoice.customer_tax_code}`, bold: false, size: 9 })
-    if (invoice.customer_vat) customerLines.push({ text: `P.IVA ${invoice.customer_vat}`, bold: false, size: 9 })
+    // Aziende e PA hanno P.IVA -> mostra solo P.IVA. Il C.F. eventualmente
+    // presente sul cliente azienda e' del rappresentante e non va in
+    // fattura. I privati invece mostrano solo il C.F.
+    if (invoice.customer_vat) {
+        customerLines.push({ text: `P.IVA ${invoice.customer_vat}`, bold: false, size: 9 })
+    } else if (invoice.customer_tax_code) {
+        customerLines.push({ text: `C.F. ${invoice.customer_tax_code}`, bold: false, size: 9 })
+    }
 
     let customerY = y
     for (const line of customerLines) {

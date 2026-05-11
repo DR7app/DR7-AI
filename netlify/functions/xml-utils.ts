@@ -232,7 +232,9 @@ export function generateFatturaXML(invoice: InvoiceData): string {
   }
 
   // Only include P.IVA for B2B customers (those with a real SDI code, not 0000000)
-  // to avoid SDI error 00324 (P.IVA/CF mismatch) for individuals
+  // to avoid SDI error 00324 (P.IVA/CF mismatch) for individuals.
+  // Aziende e PA: solo IdFiscaleIVA. Privati: solo CodiceFiscale. Il C.F.
+  // del rappresentante non va in fattura per le aziende.
   let customerIdSection = ''
   const isB2B = codiceDestinatario !== '0000000'
   if (customerVAT && (isB2B || !customerFiscalCode)) {
@@ -242,7 +244,8 @@ export function generateFatturaXML(invoice: InvoiceData): string {
             <IdCodice>${customerVAT}</IdCodice>
           </IdFiscaleIVA>`
   }
-  if (customerFiscalCode) {
+  // CodiceFiscale solo per privati (no P.IVA presente).
+  if (customerFiscalCode && !customerVAT) {
     customerIdSection += `
           <CodiceFiscale>${customerFiscalCode}</CodiceFiscale>`
   }
