@@ -112,8 +112,11 @@ export default function ContrattiOperatoreView() {
                 .order('data_inizio', { ascending: false })
             setLoading(false)
             if (error) {
-                console.error(error)
-                toast.error('Errore caricamento contratti')
+                console.error('[Contratti] load error', error)
+                // Surfaciamo il messaggio reale di Supabase cosi' direzione
+                // capisce subito se e' "relation does not exist" (migrazione
+                // non eseguita) o "permission denied" (RLS).
+                toast.error(`Errore caricamento contratti: ${error.message || error.code || 'sconosciuto'}`)
                 return
             }
             const rows = (data || []) as Contratto[]
