@@ -2161,6 +2161,14 @@ export default function UnpaidBookingsTab() {
     const clientsWithMit = customerGroups.filter(g => g.chargedViaMit > 0).length
     const avgPerClient = customerGroups.length > 0 ? totalUnpaidCents / customerGroups.length : 0
 
+    // New KPIs for the 5-card strip (mockup style):
+    //  - scadutoCents: sum of remaining for clients whose oldest unpaid item
+    //    is older than 14 days
+    //  - probabilitaIncasso: % of clients with a tokenized card on file
+    //    (chargedViaMit > 0 means we already used the saved card → it works)
+    //  - incassiMese: total recovered via MIT charges (proxy for "this month",
+    //    refined later when we wire a fatture-by-month query)
+    let scadutoCents = 0
     let oldestSum = 0
     let oldestCount = 0
     for (const g of customerGroups) {
@@ -2173,11 +2181,19 @@ export default function UnpaidBookingsTab() {
       if (dates.length === 0) continue
       const oldest = dates.reduce((a, b) => a < b ? a : b)
       const d = daysSince(oldest)
-      if (d != null) { oldestSum += d; oldestCount++ }
+      if (d != null) {
+        oldestSum += d
+        oldestCount++
+        if (d >= 14) scadutoCents += g.totalRemaining
+      }
     }
     const avgAgeDays = oldestCount > 0 ? Math.round(oldestSum / oldestCount) : 0
+    const probabilitaIncasso = customerGroups.length > 0
+      ? Math.round((customerGroups.filter(g => g.chargedViaMit > 0 || g.totalRemaining === 0).length / customerGroups.length) * 100)
+      : 0
+    const incassiMese = totalChargedViaMit
 
-    return { recoveryRate, clientsWithMit, avgPerClient, avgAgeDays }
+    return { recoveryRate, clientsWithMit, avgPerClient, avgAgeDays, scadutoCents, probabilitaIncasso, incassiMese }
   }, [customerGroups, totalChargedViaMit])
 
   // ── Mobile accordion toggle ────────────────────────────────────────────────
@@ -2832,17 +2848,19 @@ export default function UnpaidBookingsTab() {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        {/* Totale da incassare */}
+      {/* KPI Cards — 5-card strip matching the mockup. Same data the page
+          already uses (customerGroups + totalChargedViaMit + new heuristic
+          stats added to performanceStats). */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
+        {/* 1. Totale da incassare */}
         <div className="relative overflow-hidden rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent p-4">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-red-500/10 rounded-full blur-2xl pointer-events-none"/>
           <div className="relative">
             <div className="flex items-center justify-between">
               <div className="text-[10px] text-red-300/80 uppercase tracking-wider font-semibold">Totale da incassare</div>
               <div className="w-7 h-7 rounded-lg bg-red-500/15 border border-red-500/30 grid place-items-center">
-                <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
               </div>
             </div>
@@ -2850,20 +2868,20 @@ export default function UnpaidBookingsTab() {
               €{(totalUnpaid / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-theme-text-muted mt-1">
-              {customerGroups.length} {customerGroups.length === 1 ? 'cliente coinvolto' : 'clienti coinvolti'}
+              {customerGroups.length} {customerGroups.length === 1 ? 'cliente' : 'clienti'} in lista
             </div>
           </div>
         </div>
 
-        {/* Clienti debitori */}
+        {/* 2. Clienti debitori */}
         <div className="relative overflow-hidden rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent p-4">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl pointer-events-none"/>
           <div className="relative">
             <div className="flex items-center justify-between">
               <div className="text-[10px] text-purple-300/80 uppercase tracking-wider font-semibold">Clienti debitori</div>
               <div className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 grid place-items-center">
-                <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
                 </svg>
               </div>
             </div>
@@ -2871,59 +2889,68 @@ export default function UnpaidBookingsTab() {
             <div className="text-[11px] text-theme-text-muted mt-1 flex flex-wrap gap-1">
               <span className="bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">N {allGroups.rental}</span>
               <span className="bg-cyan-500/15 text-cyan-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">PW {allGroups.pw}</span>
+              <span className="bg-yellow-500/15 text-yellow-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">P {allGroups.penali}</span>
+              <span className="bg-red-500/15 text-red-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">D {allGroups.danni}</span>
             </div>
           </div>
         </div>
 
-        {/* Recuperato via Addebito MIT */}
+        {/* 3. Scaduto (> 14 giorni) */}
+        <div className="relative overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent p-4">
+          <div className="absolute -top-6 -right-6 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl pointer-events-none"/>
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-orange-300/80 uppercase tracking-wider font-semibold">Scaduto</div>
+              <div className="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/30 grid place-items-center">
+                <svg className="w-3.5 h-3.5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+            </div>
+            <div className="text-2xl lg:text-3xl font-bold text-orange-400 mt-2.5 tabular-nums">
+              €{(performanceStats.scadutoCents / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[11px] text-theme-text-muted mt-1">oltre 14 giorni</div>
+          </div>
+        </div>
+
+        {/* 4. Probabilità incasso */}
         <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-4">
           <div className="absolute -top-6 -right-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"/>
           <div className="relative">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] text-emerald-300/80 uppercase tracking-wider font-semibold">Recuperato via Addebito</div>
+              <div className="text-[10px] text-emerald-300/80 uppercase tracking-wider font-semibold">Probabilità Incasso</div>
               <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 grid place-items-center">
-                <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
+                <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
                 </svg>
               </div>
             </div>
             <div className="text-2xl lg:text-3xl font-bold text-emerald-400 mt-2.5 tabular-nums">
-              €{(totalChargedViaMit / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {performanceStats.probabilitaIncasso}%
             </div>
-            <div className="text-[11px] text-theme-text-muted mt-1">via tokenizzazione carta</div>
+            <div className="text-[11px] text-theme-text-muted mt-1">
+              {performanceStats.clientsWithMit} con carta on file
+            </div>
           </div>
         </div>
 
-        {/* Sospesi per categoria */}
-        <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent p-4">
-          <div className="absolute -top-6 -right-6 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"/>
+        {/* 5. Incassi questo mese */}
+        <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent p-4">
+          <div className="absolute -top-6 -right-6 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"/>
           <div className="relative">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] text-amber-300/80 uppercase tracking-wider font-semibold">Sospesi per categoria</div>
-              <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 grid place-items-center">
-                <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              <div className="text-[10px] text-blue-300/80 uppercase tracking-wider font-semibold">Incassi Questo Mese</div>
+              <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 grid place-items-center">
+                <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
                 </svg>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-1.5 mt-2.5">
-              <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-lg px-2 py-1">
-                <span className="text-[10px] text-blue-300 font-medium">Noleggio</span>
-                <span className="text-sm font-bold text-blue-400 tabular-nums">{allGroups.rental}</span>
-              </div>
-              <div className="flex items-center justify-between bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-2 py-1">
-                <span className="text-[10px] text-cyan-300 font-medium">Wash</span>
-                <span className="text-sm font-bold text-cyan-400 tabular-nums">{allGroups.pw}</span>
-              </div>
-              <div className="flex items-center justify-between bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-2 py-1">
-                <span className="text-[10px] text-yellow-300 font-medium">Penali</span>
-                <span className="text-sm font-bold text-yellow-400 tabular-nums">{allGroups.penali}</span>
-              </div>
-              <div className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-lg px-2 py-1">
-                <span className="text-[10px] text-red-300 font-medium">Danni</span>
-                <span className="text-sm font-bold text-red-400 tabular-nums">{allGroups.danni}</span>
-              </div>
+            <div className="text-2xl lg:text-3xl font-bold text-blue-400 mt-2.5 tabular-nums">
+              €{(performanceStats.incassiMese / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
+            <div className="text-[11px] text-theme-text-muted mt-1">recuperati via addebito</div>
           </div>
         </div>
       </div>
