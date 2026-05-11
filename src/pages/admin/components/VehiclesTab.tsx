@@ -203,10 +203,18 @@ export default function VehiclesTab() {
     if (vehicles.length === 0) return
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const thirtyAgo = new Date(today.getTime() - 30 * 86400000)
+    // Stesso schema della funzione /monthly-report (Report Noleggio):
+    //   - bookings.price_total e\' in CENT (divido per 100)
+    //   - bookings.vehicle_plate (NON `plate`)
+    //   - status filter coincide con i noleggi reali (escludiamo solo
+    //     cancellati e bozze). payment_status non gate il fatturato perche\'
+    //     il report mostra ricavo maturato, non incassato.
+    const STATI_NOLEGGIO_REPORT = ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active']
     const { data: bookings } = await supabase
       .from('bookings')
-      .select('id, vehicle_id, plate, vehicle_name, pickup_date, dropoff_date, total_amount, status, payment_status, service_type')
+      .select('id, vehicle_id, vehicle_plate, vehicle_name, pickup_date, dropoff_date, price_total, status, payment_status, service_type')
       .gte('pickup_date', thirtyAgo.toISOString())
+      .in('status', STATI_NOLEGGIO_REPORT)
       .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
       .limit(2000)
     const stats = new Map<string, VehStats>()
@@ -219,14 +227,12 @@ export default function VehiclesTab() {
       if (v.display_name) byName.set(v.display_name.toLowerCase().trim(), v)
     }
     const occupied = new Map<string, Set<string>>()
-    const PAID = new Set(['paid', 'succeeded', 'completed'])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const b of ((bookings || []) as any[])) {
-      if (b.status === 'cancelled' || b.status === 'annullata') continue
       let vid: string | null = null
       if (b.vehicle_id && byId.has(b.vehicle_id)) vid = b.vehicle_id
-      else if (b.plate) {
-        const v = byPlate.get(String(b.plate).toLowerCase().replace(/\s/g, ''))
+      else if (b.vehicle_plate) {
+        const v = byPlate.get(String(b.vehicle_plate).toLowerCase().replace(/\s/g, ''))
         if (v) vid = v.id
       }
       if (!vid && b.vehicle_name) {
@@ -235,9 +241,10 @@ export default function VehiclesTab() {
       }
       if (!vid) continue
       const cur = stats.get(vid) || { fatturato: 0, giorniNoleggio: 0, giorniFermo: 0, utilizzoPct: 0 }
-      if (PAID.has(String(b.payment_status || '').toLowerCase())) {
-        cur.fatturato += Number(b.total_amount || 0)
-      }
+      // price_total puo\' essere numerico o stringa (wallet RPC casta a numeric).
+      const raw = b.price_total
+      const eur = (typeof raw === 'string' ? parseFloat(raw) : (raw || 0)) / 100
+      if (Number.isFinite(eur) && eur > 0) cur.fatturato += eur
       if (b.pickup_date && b.dropoff_date) {
         const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
         const e = new Date(b.dropoff_date); e.setHours(0, 0, 0, 0)
