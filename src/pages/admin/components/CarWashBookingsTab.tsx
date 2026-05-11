@@ -1995,8 +1995,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     // Carta Punti — riusa la stessa snapshot del wizard ma flagga il
     // metodo di pagamento così la direzione capisce subito perché serve
-    // l'OTP.
+    // l'OTP, e include ogni dettaglio operativo utile per autorizzare.
     if (code === 'carta_punti_lavaggio') {
+      const categoryLabel = vehicleCategory === 'moto'
+        ? 'Moto'
+        : vehicleCategory === 'urban'
+          ? 'Auto urban'
+          : vehicleCategory === 'maxi'
+            ? 'Auto maxi / SUV'
+            : vehicleCategory === 'aziendali'
+              ? 'Aziendale'
+              : vehicleCategory || null
+      const operatorEmail = typeof window !== 'undefined'
+        ? (sessionStorage.getItem('admin-email') || null)
+        : null
+      const duration = getTotalDuration()
       return {
         Operazione: 'Pagamento Carta Punti (lavaggio)',
         'Metodo pagamento': 'Carta Punti',
@@ -2004,10 +2017,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         Email: cust?.email || null,
         Telefono: cust?.phone || null,
         Servizio: serviceLabel || null,
+        'Durata stimata': duration > 0 ? `${duration} min` : null,
         Veicolo: vehicleMakeModel || null,
+        Targa: vehiclePlate || null,
+        'Tipo veicolo': categoryLabel,
         'Data appuntamento': fmtDateIt(formData.appointment_date),
-        Ora: formData.appointment_time || null,
+        'Ora appuntamento': formData.appointment_time || null,
         'Importo totale': getFinalPrice() > 0 ? fmtEur(getFinalPrice()) : null,
+        'Stato pagamento': formData.payment_status || null,
+        Note: formData.notes || null,
+        Operatore: operatorEmail,
+        'Data richiesta': new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
       }
     }
 
@@ -3220,15 +3240,35 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
                 <button
                   type="button"
-                  disabled={submitting || submitLockRef.current || formSubmittedRef.current || !formData.customer_id || !formData.appointment_time}
+                  disabled={
+                    submitting
+                    || submitLockRef.current
+                    || formSubmittedRef.current
+                    || !formData.customer_id
+                    || !formData.appointment_time
+                    // OTP modal currently asking for a code → block Conferma.
+                    // Without this, the 3s submit-lock cooldown would
+                    // re-enable the button while the OTP modal is still
+                    // open, letting a 2nd click fire a parallel handleSubmit.
+                    || override.limitationState.isOpen
+                    // Carta Punti gate waiting for OTP approval → also block.
+                    || pendingCreateBookingRef.current !== null
+                  }
                   onClick={(e) => {
                     // Click guard SINCRONO al livello del DOM: anche se
-                    // React non ha ancora propagato disabled=true, il
-                    // ref bocca il click prima di chiamare handleSubmit.
-                    // Include formSubmittedRef: una volta partito un Salva
-                    // andato a buon fine, non parte piu' nulla finche'
-                    // la form non viene riaperta.
-                    if (submitLockRef.current || submitting || formSubmittedRef.current) {
+                    // React non ha ancora propagato disabled=true, i ref
+                    // bloccano il click prima di chiamare handleSubmit.
+                    // Include formSubmittedRef, l'OTP modal aperto, e
+                    // un'eventuale createBooking parcheggiata in attesa
+                    // di OTP — tutti e tre indicano "già partito un
+                    // salvataggio, non rilanciare un secondo flusso".
+                    if (
+                      submitLockRef.current
+                      || submitting
+                      || formSubmittedRef.current
+                      || override.limitationState.isOpen
+                      || pendingCreateBookingRef.current !== null
+                    ) {
                       e.preventDefault()
                       e.stopPropagation()
                       return
@@ -3236,12 +3276,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     handleSubmit()
                   }}
                   className={`px-8 py-3 rounded-full font-bold text-base transition-colors ${
-                    submitting || !formData.customer_id || !formData.appointment_time
+                    submitting
+                    || override.limitationState.isOpen
+                    || pendingCreateBookingRef.current !== null
+                    || !formData.customer_id
+                    || !formData.appointment_time
                       ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                       : 'bg-dr7-gold hover:bg-[#0A8FA3] text-white'
                   }`}
                 >
-                  {submitting ? 'Creazione...' : `Conferma - EUR ${getFinalPrice().toFixed(2)}`}
+                  {submitting
+                    ? 'Creazione...'
+                    : override.limitationState.isOpen
+                      ? 'In attesa OTP…'
+                      : pendingCreateBookingRef.current !== null
+                        ? 'In attesa OTP…'
+                        : `Conferma - EUR ${getFinalPrice().toFixed(2)}`}
                 </button>
               </div>
             </div>
