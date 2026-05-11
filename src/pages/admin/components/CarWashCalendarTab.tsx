@@ -638,32 +638,53 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         </div>
 
         <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-theme-text-muted">Mese:</span>
-            <span className="text-dr7-gold font-bold text-xs sm:text-sm">
-              {bookings.filter(b => {
-                const bookingDate = new Date(b.appointment_date)
-                return bookingDate.getMonth() === currentDate.getMonth() &&
-                  bookingDate.getFullYear() === currentDate.getFullYear()
-              }).length} lavaggi
-            </span>
-          </div>
-          {canViewFinancials && !hideFinancials && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-theme-text-muted">Fatturato:</span>
-              <span className="text-green-400 font-bold text-xs sm:text-sm">
-                <FinancialData type="total">
-                  €{(bookings
-                    .filter(b => {
-                      const bookingDate = new Date(b.appointment_date)
-                      return bookingDate.getMonth() === currentDate.getMonth() &&
-                        bookingDate.getFullYear() === currentDate.getFullYear()
-                    })
-                    .reduce((sum, b) => sum + (b.price_total || 0), 0) / 100).toFixed(2)}
-                </FinancialData>
-              </span>
-            </div>
-          )}
+          {(() => {
+            // Filter bookings to the active view's range so the count/total
+            // shown next to the navigation arrows reflects what the grid
+            // actually displays (mese / settimana / giorno).
+            const inRange = (b: CarWashBooking): boolean => {
+              const bd = new Date(b.appointment_date)
+              if (viewMode === 'giorno') {
+                return bd.getFullYear() === currentDate.getFullYear()
+                  && bd.getMonth() === currentDate.getMonth()
+                  && bd.getDate() === currentDate.getDate()
+              }
+              if (viewMode === 'settimana') {
+                const dow = (currentDate.getDay() + 6) % 7
+                const start = new Date(currentDate)
+                start.setHours(0, 0, 0, 0)
+                start.setDate(currentDate.getDate() - dow)
+                const end = new Date(start)
+                end.setDate(start.getDate() + 7)
+                return bd >= start && bd < end
+              }
+              return bd.getMonth() === currentDate.getMonth()
+                && bd.getFullYear() === currentDate.getFullYear()
+            }
+            const list = bookings.filter(inRange)
+            const rangeLabel = viewMode === 'giorno' ? 'Giorno' : viewMode === 'settimana' ? 'Settimana' : 'Mese'
+            const total = list.reduce((s, b) => s + (b.price_total || 0), 0)
+            return (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-theme-text-muted">{rangeLabel}:</span>
+                  <span className="text-dr7-gold font-bold text-xs sm:text-sm">
+                    {list.length} lavaggi
+                  </span>
+                </div>
+                {canViewFinancials && !hideFinancials && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-theme-text-muted">Fatturato:</span>
+                    <span className="text-green-400 font-bold text-xs sm:text-sm">
+                      <FinancialData type="total">
+                        €{(total / 100).toFixed(2)}
+                      </FinancialData>
+                    </span>
+                  </div>
+                )}
+              </>
+            )
+          })()}
           {canViewFinancials && (
             <button
               onClick={() => setHideFinancials(!hideFinancials)}
