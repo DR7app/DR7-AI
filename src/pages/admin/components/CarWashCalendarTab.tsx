@@ -468,13 +468,15 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     icon: 'cars' | 'clock' | 'slot' | 'euro' | 'timer' | 'fire';
     accent: 'emerald' | 'blue' | 'cyan' | 'amber' | 'fuchsia' | 'rose';
   }) => {
+    // Vibrant filled icon squares (mockup style) — stronger contrast than
+    // the previous soft tints.
     const accentBg: Record<typeof accent, string> = {
-      emerald: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-      blue: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-      cyan: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
-      amber: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-      fuchsia: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30',
-      rose: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+      emerald: 'bg-emerald-500/25 text-emerald-300 ring-1 ring-inset ring-emerald-400/40',
+      blue: 'bg-blue-500/25 text-blue-300 ring-1 ring-inset ring-blue-400/40',
+      cyan: 'bg-cyan-500/25 text-cyan-300 ring-1 ring-inset ring-cyan-400/40',
+      amber: 'bg-amber-500/25 text-amber-300 ring-1 ring-inset ring-amber-400/40',
+      fuchsia: 'bg-fuchsia-500/25 text-fuchsia-300 ring-1 ring-inset ring-fuchsia-400/40',
+      rose: 'bg-rose-500/25 text-rose-300 ring-1 ring-inset ring-rose-400/40',
     }
     const iconPath: Record<typeof icon, string> = {
       cars: 'M3 13l2-7h14l2 7M5 17h14M7 17v3M17 17v3M5 13h14M7 10h10',
@@ -525,24 +527,25 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         <KpiCard icon="fire" accent="rose" label="Saturazione" value={`${kpis.occ}%`} sub={kpis.occ >= 85 ? 'Alta' : kpis.occ >= 50 ? 'Media' : 'Bassa'} />
       </div>
 
-      {/* View tabs + date display + Oggi button */}
-      <div className="flex flex-wrap items-center gap-3 px-3 sm:px-4 py-2 bg-theme-bg-primary/10 border-b border-theme-border/30">
-        <div className="flex items-center gap-1 bg-theme-bg-primary/30 rounded-full p-1">
+      {/* View tabs + date display + Oggi button — mockup style: dark pill
+          row with bright cyan accent on the active tab. */}
+      <div className="flex flex-wrap items-center gap-3 px-3 sm:px-4 py-2.5 bg-theme-bg-primary/10 border-b border-theme-border/30">
+        <div className="flex items-center gap-1 bg-theme-bg-primary/40 rounded-full p-1 border border-theme-border/40">
           {(['giorno', 'settimana', 'mese'] as const).map(v => (
             <button
               key={v}
               onClick={() => setViewMode(v)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-colors ${
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold capitalize transition-all ${
                 viewMode === v
-                  ? 'bg-dr7-gold text-white shadow'
-                  : 'text-theme-text-muted hover:text-theme-text-primary'
+                  ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-text-primary/5'
               }`}
             >
               {v}
             </button>
           ))}
         </div>
-        <div className="flex-1 text-center text-sm text-theme-text-primary capitalize">
+        <div className="flex-1 text-center text-sm font-medium text-theme-text-primary capitalize">
           {viewMode === 'giorno' && currentDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           {viewMode === 'settimana' && (() => {
             const start = new Date(currentDate)
@@ -555,12 +558,38 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           })()}
           {viewMode === 'mese' && currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
         </div>
-        <button
-          onClick={() => setCurrentDate(new Date())}
-          className="px-3 py-1.5 rounded-full text-xs font-semibold bg-theme-text-primary/5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-text-primary/10 transition-colors"
-        >
-          Oggi
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCurrentDate(new Date())}
+            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-theme-bg-primary/40 text-theme-text-primary border border-theme-border/50 hover:bg-theme-bg-primary/60 transition-colors"
+          >
+            Oggi
+          </button>
+          <button
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-theme-bg-primary/40 text-theme-text-primary border border-theme-border/50 hover:bg-theme-bg-primary/60 transition-colors"
+            title="Filtri (in arrivo)"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M6 12h12M10 20h4" />
+            </svg>
+            Filtri
+          </button>
+          {onNewBooking && (
+            <button
+              onClick={() => {
+                const today = new Date()
+                const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+                onNewBooking(dateStr, '10:00')
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30 hover:bg-cyan-600 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Nuova Prenotazione
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 1. Control Bar */}
