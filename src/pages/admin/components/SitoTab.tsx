@@ -54,6 +54,7 @@ type SectionId =
     | 'payment'
     | 'payment-success'
     | 'booking'
+    | 'credit-wallet'
 
 const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'faq', title: 'FAQ', ready: true },
@@ -79,6 +80,7 @@ const SECTIONS: { id: SectionId; title: string; ready: boolean }[] = [
     { id: 'payment', title: 'Pagina Pagamento (Nexi)', ready: true },
     { id: 'payment-success', title: 'Pagamento Riuscito', ready: true },
     { id: 'booking', title: 'Prenotazione (Yacht/Jet/Heli)', ready: true },
+    { id: 'credit-wallet', title: 'Credit Wallet', ready: true },
 ]
 
 // ─── FAQ schema ──────────────────────────────────────────────────────────────
@@ -377,6 +379,118 @@ const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
     email_body_logged_out_it: '', email_body_logged_out_en: '',
     email_cta_logged_in_it: '', email_cta_logged_in_en: '',
     email_cta_logged_out_it: '', email_cta_logged_out_en: '',
+}
+
+// ─── Credit Wallet page (marketing + checkout modal + errors) ────────────
+interface CreditWalletCopy {
+    hero_title_eyebrow_it: string; hero_title_eyebrow_en: string
+    hero_subtitle_it: string; hero_subtitle_en: string
+    hero_intro_it: string; hero_intro_en: string
+    benefit_extra_title_it: string; benefit_extra_title_en: string
+    benefit_extra_body_it: string; benefit_extra_body_en: string
+    benefit_no_expiry_title_it: string; benefit_no_expiry_title_en: string
+    benefit_no_expiry_body_it: string; benefit_no_expiry_body_en: string
+    benefit_secure_title_it: string; benefit_secure_title_en: string
+    benefit_secure_body_it: string; benefit_secure_body_en: string
+    services_heading_it: string; services_heading_en: string
+    services_body_it: string; services_body_en: string
+    services_no_expiry_it: string; services_no_expiry_en: string
+    packages_section_label_it: string; packages_section_label_en: string
+    packages_filter_all_it: string; packages_filter_all_en: string
+    promo_line1_it: string; promo_line1_en: string
+    promo_line2_it: string; promo_line2_en: string
+    advantages_heading_it: string; advantages_heading_en: string
+    advantage_1_title_it: string; advantage_1_title_en: string
+    advantage_1_body_it: string; advantage_1_body_en: string
+    advantage_2_title_it: string; advantage_2_title_en: string
+    advantage_2_body_it: string; advantage_2_body_en: string
+    advantage_3_title_it: string; advantage_3_title_en: string
+    advantage_3_body_it: string; advantage_3_body_en: string
+    advantage_4_title_it: string; advantage_4_title_en: string
+    advantage_4_body_it: string; advantage_4_body_en: string
+    transparency_heading_it: string; transparency_heading_en: string
+    transparency_bullet_1_it: string; transparency_bullet_1_en: string
+    transparency_bullet_2_it: string; transparency_bullet_2_en: string
+    transparency_bullet_3_it: string; transparency_bullet_3_en: string
+    cta_title_it: string; cta_title_en: string
+    cta_subtitle_it: string; cta_subtitle_en: string
+    cta_button_it: string; cta_button_en: string
+    card_popular_badge_it: string; card_popular_badge_en: string
+    card_recharge_label_it: string; card_recharge_label_en: string
+    card_receive_label_it: string; card_receive_label_en: string
+    card_bonus_suffix_it: string; card_bonus_suffix_en: string
+    card_cta_it: string; card_cta_en: string
+    modal_title_it: string; modal_title_en: string
+    modal_recharge_label_it: string; modal_recharge_label_en: string
+    modal_bonus_label_it: string; modal_bonus_label_en: string
+    modal_receive_label_it: string; modal_receive_label_en: string
+    modal_payment_heading_it: string; modal_payment_heading_en: string
+    modal_payment_info_it: string; modal_payment_info_en: string
+    modal_payment_secure_it: string; modal_payment_secure_en: string
+    modal_cancel_it: string; modal_cancel_en: string
+    modal_pay_template_it: string; modal_pay_template_en: string
+    modal_processing_it: string; modal_processing_en: string
+    err_name_required_it: string; err_name_required_en: string
+    err_email_required_it: string; err_email_required_en: string
+    err_phone_invalid_it: string; err_phone_invalid_en: string
+    err_cf_invalid_it: string; err_cf_invalid_en: string
+    err_payment_not_ready_it: string; err_payment_not_ready_en: string
+    err_payment_failed_it: string; err_payment_failed_en: string
+}
+const INITIAL_CREDIT_WALLET: CreditWalletCopy = {
+    hero_title_eyebrow_it: '', hero_title_eyebrow_en: '',
+    hero_subtitle_it: '', hero_subtitle_en: '',
+    hero_intro_it: '', hero_intro_en: '',
+    benefit_extra_title_it: '', benefit_extra_title_en: '',
+    benefit_extra_body_it: '', benefit_extra_body_en: '',
+    benefit_no_expiry_title_it: '', benefit_no_expiry_title_en: '',
+    benefit_no_expiry_body_it: '', benefit_no_expiry_body_en: '',
+    benefit_secure_title_it: '', benefit_secure_title_en: '',
+    benefit_secure_body_it: '', benefit_secure_body_en: '',
+    services_heading_it: '', services_heading_en: '',
+    services_body_it: '', services_body_en: '',
+    services_no_expiry_it: '', services_no_expiry_en: '',
+    packages_section_label_it: '', packages_section_label_en: '',
+    packages_filter_all_it: '', packages_filter_all_en: '',
+    promo_line1_it: '', promo_line1_en: '',
+    promo_line2_it: '', promo_line2_en: '',
+    advantages_heading_it: '', advantages_heading_en: '',
+    advantage_1_title_it: '', advantage_1_title_en: '',
+    advantage_1_body_it: '', advantage_1_body_en: '',
+    advantage_2_title_it: '', advantage_2_title_en: '',
+    advantage_2_body_it: '', advantage_2_body_en: '',
+    advantage_3_title_it: '', advantage_3_title_en: '',
+    advantage_3_body_it: '', advantage_3_body_en: '',
+    advantage_4_title_it: '', advantage_4_title_en: '',
+    advantage_4_body_it: '', advantage_4_body_en: '',
+    transparency_heading_it: '', transparency_heading_en: '',
+    transparency_bullet_1_it: '', transparency_bullet_1_en: '',
+    transparency_bullet_2_it: '', transparency_bullet_2_en: '',
+    transparency_bullet_3_it: '', transparency_bullet_3_en: '',
+    cta_title_it: '', cta_title_en: '',
+    cta_subtitle_it: '', cta_subtitle_en: '',
+    cta_button_it: '', cta_button_en: '',
+    card_popular_badge_it: '', card_popular_badge_en: '',
+    card_recharge_label_it: '', card_recharge_label_en: '',
+    card_receive_label_it: '', card_receive_label_en: '',
+    card_bonus_suffix_it: '', card_bonus_suffix_en: '',
+    card_cta_it: '', card_cta_en: '',
+    modal_title_it: '', modal_title_en: '',
+    modal_recharge_label_it: '', modal_recharge_label_en: '',
+    modal_bonus_label_it: '', modal_bonus_label_en: '',
+    modal_receive_label_it: '', modal_receive_label_en: '',
+    modal_payment_heading_it: '', modal_payment_heading_en: '',
+    modal_payment_info_it: '', modal_payment_info_en: '',
+    modal_payment_secure_it: '', modal_payment_secure_en: '',
+    modal_cancel_it: '', modal_cancel_en: '',
+    modal_pay_template_it: '', modal_pay_template_en: '',
+    modal_processing_it: '', modal_processing_en: '',
+    err_name_required_it: '', err_name_required_en: '',
+    err_email_required_it: '', err_email_required_en: '',
+    err_phone_invalid_it: '', err_phone_invalid_en: '',
+    err_cf_invalid_it: '', err_cf_invalid_en: '',
+    err_payment_not_ready_it: '', err_payment_not_ready_en: '',
+    err_payment_failed_it: '', err_payment_failed_en: '',
 }
 
 // ─── Booking page (yacht/jet/heli auth gate + chrome + errors) ───────────
@@ -1247,6 +1361,7 @@ interface SiteCopySnapshot {
     payment?: PaymentCopy
     paymentSuccess?: PaymentSuccessCopy
     booking?: BookingCopy
+    creditWallet?: CreditWalletCopy
 }
 
 interface CurrentState {
@@ -1273,6 +1388,7 @@ interface CurrentState {
     payment: PaymentCopy
     paymentSuccess: PaymentSuccessCopy
     booking: BookingCopy
+    creditWallet: CreditWalletCopy
 }
 
 async function loadPersisted(): Promise<SiteCopySnapshot | null> {
@@ -1377,6 +1493,8 @@ export default function SitoTab() {
     const [savedPaymentSuccess, setSavedPaymentSuccess] = useState<PaymentSuccessCopy>(INITIAL_PAYMENT_SUCCESS)
     const [booking, setBooking] = useState<BookingCopy>(INITIAL_BOOKING)
     const [savedBooking, setSavedBooking] = useState<BookingCopy>(INITIAL_BOOKING)
+    const [creditWallet, setCreditWallet] = useState<CreditWalletCopy>(INITIAL_CREDIT_WALLET)
+    const [savedCreditWallet, setSavedCreditWallet] = useState<CreditWalletCopy>(INITIAL_CREDIT_WALLET)
     const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
@@ -1496,6 +1614,10 @@ export default function SitoTab() {
                     setBooking(remote.booking)
                     setSavedBooking(remote.booking)
                 }
+                if (remote?.creditWallet && remote.creditWallet.hero_intro_it) {
+                    setCreditWallet(remote.creditWallet)
+                    setSavedCreditWallet(remote.creditWallet)
+                }
             } catch (e) {
                 console.error('SitoTab hydration failed:', e)
             } finally {
@@ -1508,10 +1630,10 @@ export default function SitoTab() {
     // ─── Changes detection ───────────────────────────────────────────────────
     const changes = useMemo(
         () => computeChanges(
-            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking },
-            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking }
+            { faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet },
+            { faq: savedFaq, cancellazione: savedCancellazione, membership: savedMembership, home: savedHome, about: savedAbout, footer: savedFooter, legal: savedLegal, careers: savedCareers, press: savedPress, contact: savedContact, mechanical: savedMechanical, carwash: savedCarwash, investitori: savedInvestitori, franchising: savedFranchising, aviationQuote: savedAviationQuote, checkEmail: savedCheckEmail, jetSearchResults: savedJetSearchResults, confirmationSuccess: savedConfirmationSuccess, header: savedHeader, signUp: savedSignUp, payment: savedPayment, paymentSuccess: savedPaymentSuccess, booking: savedBooking, creditWallet: savedCreditWallet }
         ),
-        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking]
+        [faq, savedFaq, cancellazione, savedCancellazione, membership, savedMembership, home, savedHome, about, savedAbout, footer, savedFooter, legal, savedLegal, careers, savedCareers, press, savedPress, contact, savedContact, mechanical, savedMechanical, carwash, savedCarwash, investitori, savedInvestitori, franchising, savedFranchising, aviationQuote, savedAviationQuote, checkEmail, savedCheckEmail, jetSearchResults, savedJetSearchResults, confirmationSuccess, savedConfirmationSuccess, header, savedHeader, signUp, savedSignUp, payment, savedPayment, paymentSuccess, savedPaymentSuccess, booking, savedBooking, creditWallet, savedCreditWallet]
     )
     const dirty = changes.length > 0
 
@@ -1522,7 +1644,7 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking })
+            await savePersisted({ faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet })
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
             setSavedMembership(membership)
@@ -1546,6 +1668,7 @@ export default function SitoTab() {
             setSavedPayment(payment)
             setSavedPaymentSuccess(paymentSuccess)
             setSavedBooking(booking)
+            setSavedCreditWallet(creditWallet)
             toast.success('Modifiche salvate')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -1603,6 +1726,7 @@ export default function SitoTab() {
         setPayment(savedPayment)
         setPaymentSuccess(savedPaymentSuccess)
         setBooking(savedBooking)
+        setCreditWallet(savedCreditWallet)
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -1777,6 +1901,9 @@ export default function SitoTab() {
                         {hydrated && section === 'booking' && (
                             <BookingEditor copy={booking} setCopy={setBooking} />
                         )}
+                        {hydrated && section === 'credit-wallet' && (
+                            <CreditWalletEditor copy={creditWallet} setCopy={setCreditWallet} />
+                        )}
                     </main>
                 </div>
             </div>
@@ -1913,6 +2040,9 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     }
     if (JSON.stringify(current.booking) !== JSON.stringify(saved.booking)) {
         out.push('Prenotazione: contenuti modificati')
+    }
+    if (JSON.stringify(current.creditWallet) !== JSON.stringify(saved.creditWallet)) {
+        out.push('Credit Wallet: contenuti modificati')
     }
     return out
 }
@@ -5270,6 +5400,195 @@ function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: B
                     <FieldText label="Save failed (EN)" value={copy.err_save_failed_en} onChange={v => update('err_save_failed_en', v)} />
                     <FieldText label="Errore imprevisto (IT)" value={copy.err_unexpected_it} onChange={v => update('err_unexpected_it', v)} />
                     <FieldText label="Unexpected error (EN)" value={copy.err_unexpected_en} onChange={v => update('err_unexpected_en', v)} />
+                </div>
+            </section>
+        </div>
+    )
+}
+
+// ─── Credit Wallet editor (marketing + checkout modal + errors) ────────────
+// Pacchetti (importi/bonus) NON sono modificabili qui — sono dati prodotto
+// (CREDIT_PACKAGES nel codice). Qui modifichi solo i testi marketing + chrome
+// del modale di checkout. Il template `{amount}` resta come segnaposto.
+function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy: (next: CreditWalletCopy) => void }) {
+    const update = <K extends keyof CreditWalletCopy>(key: K, value: CreditWalletCopy[K]) => setCopy({ ...copy, [key]: value })
+    return (
+        <div className="space-y-6">
+            <p className="text-[13px] text-[#6e6e73]">
+                Testi marketing + chrome del modale di acquisto crediti. Gli importi dei pacchetti restano nel
+                codice (CREDIT_PACKAGES). Il segnaposto {`{amount}`} nel bottone "Paga" del modale viene
+                sostituito a runtime con l'importo selezionato.
+            </p>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Hero</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo hero (IT)" value={copy.hero_title_eyebrow_it} onChange={v => update('hero_title_eyebrow_it', v)} />
+                    <FieldText label="Hero title (EN)" value={copy.hero_title_eyebrow_en} onChange={v => update('hero_title_eyebrow_en', v)} />
+                    <FieldText label="Sottotitolo (IT)" value={copy.hero_subtitle_it} onChange={v => update('hero_subtitle_it', v)} />
+                    <FieldText label="Subtitle (EN)" value={copy.hero_subtitle_en} onChange={v => update('hero_subtitle_en', v)} />
+                    <FieldTextArea label="Intro (IT)" value={copy.hero_intro_it} onChange={v => update('hero_intro_it', v)} />
+                    <FieldTextArea label="Intro (EN)" value={copy.hero_intro_en} onChange={v => update('hero_intro_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Tre vantaggi sopra i pacchetti</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label={`"Fino all'80% Extra" titolo (IT)`} value={copy.benefit_extra_title_it} onChange={v => update('benefit_extra_title_it', v)} />
+                    <FieldText label='"Up to 80% Extra" title (EN)' value={copy.benefit_extra_title_en} onChange={v => update('benefit_extra_title_en', v)} />
+                    <FieldText label='Body (IT)' value={copy.benefit_extra_body_it} onChange={v => update('benefit_extra_body_it', v)} />
+                    <FieldText label='Body (EN)' value={copy.benefit_extra_body_en} onChange={v => update('benefit_extra_body_en', v)} />
+                    <FieldText label='"Nessuna Scadenza" titolo (IT)' value={copy.benefit_no_expiry_title_it} onChange={v => update('benefit_no_expiry_title_it', v)} />
+                    <FieldText label='"No Expiration" title (EN)' value={copy.benefit_no_expiry_title_en} onChange={v => update('benefit_no_expiry_title_en', v)} />
+                    <FieldText label='Body (IT)' value={copy.benefit_no_expiry_body_it} onChange={v => update('benefit_no_expiry_body_it', v)} />
+                    <FieldText label='Body (EN)' value={copy.benefit_no_expiry_body_en} onChange={v => update('benefit_no_expiry_body_en', v)} />
+                    <FieldText label='"100% Sicuro" titolo (IT)' value={copy.benefit_secure_title_it} onChange={v => update('benefit_secure_title_it', v)} />
+                    <FieldText label='"100% Secure" title (EN)' value={copy.benefit_secure_title_en} onChange={v => update('benefit_secure_title_en', v)} />
+                    <FieldText label='Body (IT)' value={copy.benefit_secure_body_it} onChange={v => update('benefit_secure_body_it', v)} />
+                    <FieldText label='Body (EN)' value={copy.benefit_secure_body_en} onChange={v => update('benefit_secure_body_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Blocco "Come si usa"</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.services_heading_it} onChange={v => update('services_heading_it', v)} />
+                    <FieldText label="Heading (EN)" value={copy.services_heading_en} onChange={v => update('services_heading_en', v)} />
+                    <FieldTextArea label="Descrizione (IT)" value={copy.services_body_it} onChange={v => update('services_body_it', v)} />
+                    <FieldTextArea label="Description (EN)" value={copy.services_body_en} onChange={v => update('services_body_en', v)} />
+                    <FieldText label='"Credito non scade" (IT)' value={copy.services_no_expiry_it} onChange={v => update('services_no_expiry_it', v)} />
+                    <FieldText label='"Credit never expires" (EN)' value={copy.services_no_expiry_en} onChange={v => update('services_no_expiry_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Selettore pacchetti</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='"SCEGLI IL TUO PACCHETTO:" (IT)' value={copy.packages_section_label_it} onChange={v => update('packages_section_label_it', v)} />
+                    <FieldText label='"CHOOSE YOUR PACKAGE:" (EN)' value={copy.packages_section_label_en} onChange={v => update('packages_section_label_en', v)} />
+                    <FieldText label='Filtro "Tutti i Pacchetti" (IT)' value={copy.packages_filter_all_it} onChange={v => update('packages_filter_all_it', v)} />
+                    <FieldText label='Filter "All Packages" (EN)' value={copy.packages_filter_all_en} onChange={v => update('packages_filter_all_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Card pacchetto (etichette ripetute su ogni card)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Badge "PIÙ SCELTO" (IT)' value={copy.card_popular_badge_it} onChange={v => update('card_popular_badge_it', v)} />
+                    <FieldText label='"MOST POPULAR" badge (EN)' value={copy.card_popular_badge_en} onChange={v => update('card_popular_badge_en', v)} />
+                    <FieldText label='Etichetta "Ricarichi" (IT)' value={copy.card_recharge_label_it} onChange={v => update('card_recharge_label_it', v)} />
+                    <FieldText label='"You recharge" label (EN)' value={copy.card_recharge_label_en} onChange={v => update('card_recharge_label_en', v)} />
+                    <FieldText label='Etichetta "Ricevi" (IT)' value={copy.card_receive_label_it} onChange={v => update('card_receive_label_it', v)} />
+                    <FieldText label='"You receive" label (EN)' value={copy.card_receive_label_en} onChange={v => update('card_receive_label_en', v)} />
+                    <FieldText label='Suffisso "Bonus" (IT)' value={copy.card_bonus_suffix_it} onChange={v => update('card_bonus_suffix_it', v)} />
+                    <FieldText label='"Bonus" suffix (EN)' value={copy.card_bonus_suffix_en} onChange={v => update('card_bonus_suffix_en', v)} />
+                    <FieldText label='CTA "Ricarica Ora" (IT)' value={copy.card_cta_it} onChange={v => update('card_cta_it', v)} />
+                    <FieldText label='CTA "Top up now" (EN)' value={copy.card_cta_en} onChange={v => update('card_cta_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Slogan promo sotto i pacchetti</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Riga 1 (IT)" value={copy.promo_line1_it} onChange={v => update('promo_line1_it', v)} />
+                    <FieldText label="Line 1 (EN)" value={copy.promo_line1_en} onChange={v => update('promo_line1_en', v)} />
+                    <FieldText label="Riga 2 (IT)" value={copy.promo_line2_it} onChange={v => update('promo_line2_it', v)} />
+                    <FieldText label="Line 2 (EN)" value={copy.promo_line2_en} onChange={v => update('promo_line2_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Vantaggi (4 card)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo sezione (IT)" value={copy.advantages_heading_it} onChange={v => update('advantages_heading_it', v)} />
+                    <FieldText label="Section heading (EN)" value={copy.advantages_heading_en} onChange={v => update('advantages_heading_en', v)} />
+                    <FieldText label="Card 1 titolo (IT)" value={copy.advantage_1_title_it} onChange={v => update('advantage_1_title_it', v)} />
+                    <FieldText label="Card 1 title (EN)" value={copy.advantage_1_title_en} onChange={v => update('advantage_1_title_en', v)} />
+                    <FieldText label="Card 1 body (IT)" value={copy.advantage_1_body_it} onChange={v => update('advantage_1_body_it', v)} />
+                    <FieldText label="Card 1 body (EN)" value={copy.advantage_1_body_en} onChange={v => update('advantage_1_body_en', v)} />
+                    <FieldText label="Card 2 titolo (IT)" value={copy.advantage_2_title_it} onChange={v => update('advantage_2_title_it', v)} />
+                    <FieldText label="Card 2 title (EN)" value={copy.advantage_2_title_en} onChange={v => update('advantage_2_title_en', v)} />
+                    <FieldText label="Card 2 body (IT)" value={copy.advantage_2_body_it} onChange={v => update('advantage_2_body_it', v)} />
+                    <FieldText label="Card 2 body (EN)" value={copy.advantage_2_body_en} onChange={v => update('advantage_2_body_en', v)} />
+                    <FieldText label="Card 3 titolo (IT)" value={copy.advantage_3_title_it} onChange={v => update('advantage_3_title_it', v)} />
+                    <FieldText label="Card 3 title (EN)" value={copy.advantage_3_title_en} onChange={v => update('advantage_3_title_en', v)} />
+                    <FieldText label="Card 3 body (IT)" value={copy.advantage_3_body_it} onChange={v => update('advantage_3_body_it', v)} />
+                    <FieldText label="Card 3 body (EN)" value={copy.advantage_3_body_en} onChange={v => update('advantage_3_body_en', v)} />
+                    <FieldText label="Card 4 titolo (IT)" value={copy.advantage_4_title_it} onChange={v => update('advantage_4_title_it', v)} />
+                    <FieldText label="Card 4 title (EN)" value={copy.advantage_4_title_en} onChange={v => update('advantage_4_title_en', v)} />
+                    <FieldText label="Card 4 body (IT)" value={copy.advantage_4_body_it} onChange={v => update('advantage_4_body_it', v)} />
+                    <FieldText label="Card 4 body (EN)" value={copy.advantage_4_body_en} onChange={v => update('advantage_4_body_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Trasparenza & sicurezza</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.transparency_heading_it} onChange={v => update('transparency_heading_it', v)} />
+                    <FieldText label="Heading (EN)" value={copy.transparency_heading_en} onChange={v => update('transparency_heading_en', v)} />
+                    <FieldText label="Bullet 1 (IT)" value={copy.transparency_bullet_1_it} onChange={v => update('transparency_bullet_1_it', v)} />
+                    <FieldText label="Bullet 1 (EN)" value={copy.transparency_bullet_1_en} onChange={v => update('transparency_bullet_1_en', v)} />
+                    <FieldText label="Bullet 2 (IT)" value={copy.transparency_bullet_2_it} onChange={v => update('transparency_bullet_2_it', v)} />
+                    <FieldText label="Bullet 2 (EN)" value={copy.transparency_bullet_2_en} onChange={v => update('transparency_bullet_2_en', v)} />
+                    <FieldText label="Bullet 3 (IT)" value={copy.transparency_bullet_3_it} onChange={v => update('transparency_bullet_3_it', v)} />
+                    <FieldText label="Bullet 3 (EN)" value={copy.transparency_bullet_3_en} onChange={v => update('transparency_bullet_3_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">CTA finale</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo (IT)" value={copy.cta_title_it} onChange={v => update('cta_title_it', v)} />
+                    <FieldText label="Title (EN)" value={copy.cta_title_en} onChange={v => update('cta_title_en', v)} />
+                    <FieldText label="Sottotitolo (IT)" value={copy.cta_subtitle_it} onChange={v => update('cta_subtitle_it', v)} />
+                    <FieldText label="Subtitle (EN)" value={copy.cta_subtitle_en} onChange={v => update('cta_subtitle_en', v)} />
+                    <FieldText label="Bottone (IT)" value={copy.cta_button_it} onChange={v => update('cta_button_it', v)} />
+                    <FieldText label="Button (EN)" value={copy.cta_button_en} onChange={v => update('cta_button_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Modale di checkout</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Titolo modale (IT)" value={copy.modal_title_it} onChange={v => update('modal_title_it', v)} />
+                    <FieldText label="Modal title (EN)" value={copy.modal_title_en} onChange={v => update('modal_title_en', v)} />
+                    <FieldText label='Etichetta "Ricarichi" (IT)' value={copy.modal_recharge_label_it} onChange={v => update('modal_recharge_label_it', v)} />
+                    <FieldText label='"You recharge" label (EN)' value={copy.modal_recharge_label_en} onChange={v => update('modal_recharge_label_en', v)} />
+                    <FieldText label='Etichetta "Bonus" (IT)' value={copy.modal_bonus_label_it} onChange={v => update('modal_bonus_label_it', v)} />
+                    <FieldText label='"Bonus" label (EN)' value={copy.modal_bonus_label_en} onChange={v => update('modal_bonus_label_en', v)} />
+                    <FieldText label='Etichetta "Ricevi" (IT)' value={copy.modal_receive_label_it} onChange={v => update('modal_receive_label_it', v)} />
+                    <FieldText label='"You receive" label (EN)' value={copy.modal_receive_label_en} onChange={v => update('modal_receive_label_en', v)} />
+                    <FieldText label='Heading "Informazioni di Pagamento" (IT)' value={copy.modal_payment_heading_it} onChange={v => update('modal_payment_heading_it', v)} />
+                    <FieldText label='"Payment Information" heading (EN)' value={copy.modal_payment_heading_en} onChange={v => update('modal_payment_heading_en', v)} />
+                    <FieldText label='Info reindirizzamento Nexi (IT)' value={copy.modal_payment_info_it} onChange={v => update('modal_payment_info_it', v)} />
+                    <FieldText label='Nexi redirect info (EN)' value={copy.modal_payment_info_en} onChange={v => update('modal_payment_info_en', v)} />
+                    <FieldText label='"Pagamento protetto..." (IT)' value={copy.modal_payment_secure_it} onChange={v => update('modal_payment_secure_it', v)} />
+                    <FieldText label='"Secure payment..." (EN)' value={copy.modal_payment_secure_en} onChange={v => update('modal_payment_secure_en', v)} />
+                    <FieldText label='Bottone "Annulla" (IT)' value={copy.modal_cancel_it} onChange={v => update('modal_cancel_it', v)} />
+                    <FieldText label='"Cancel" button (EN)' value={copy.modal_cancel_en} onChange={v => update('modal_cancel_en', v)} />
+                    <FieldText label='Bottone pagamento (IT) — usa {amount}' value={copy.modal_pay_template_it} onChange={v => update('modal_pay_template_it', v)} />
+                    <FieldText label='Pay button (EN) — uses {amount}' value={copy.modal_pay_template_en} onChange={v => update('modal_pay_template_en', v)} />
+                    <FieldText label='"Elaborazione..." (IT)' value={copy.modal_processing_it} onChange={v => update('modal_processing_it', v)} />
+                    <FieldText label='"Processing..." (EN)' value={copy.modal_processing_en} onChange={v => update('modal_processing_en', v)} />
+                </div>
+            </section>
+
+            <section className="border border-black/10 rounded-2xl p-5 bg-white shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-[#1d1d1f]">Errori modale</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label="Nome obbligatorio (IT)" value={copy.err_name_required_it} onChange={v => update('err_name_required_it', v)} />
+                    <FieldText label="Name required (EN)" value={copy.err_name_required_en} onChange={v => update('err_name_required_en', v)} />
+                    <FieldText label="Email obbligatoria (IT)" value={copy.err_email_required_it} onChange={v => update('err_email_required_it', v)} />
+                    <FieldText label="Email required (EN)" value={copy.err_email_required_en} onChange={v => update('err_email_required_en', v)} />
+                    <FieldText label="Telefono non valido (IT)" value={copy.err_phone_invalid_it} onChange={v => update('err_phone_invalid_it', v)} />
+                    <FieldText label="Phone invalid (EN)" value={copy.err_phone_invalid_en} onChange={v => update('err_phone_invalid_en', v)} />
+                    <FieldText label="Codice Fiscale non valido (IT)" value={copy.err_cf_invalid_it} onChange={v => update('err_cf_invalid_it', v)} />
+                    <FieldText label="Tax code invalid (EN)" value={copy.err_cf_invalid_en} onChange={v => update('err_cf_invalid_en', v)} />
+                    <FieldText label="Pagamento non pronto (IT)" value={copy.err_payment_not_ready_it} onChange={v => update('err_payment_not_ready_it', v)} />
+                    <FieldText label="Payment not ready (EN)" value={copy.err_payment_not_ready_en} onChange={v => update('err_payment_not_ready_en', v)} />
+                    <FieldText label="Pagamento fallito (IT)" value={copy.err_payment_failed_it} onChange={v => update('err_payment_failed_it', v)} />
+                    <FieldText label="Payment failed (EN)" value={copy.err_payment_failed_en} onChange={v => update('err_payment_failed_en', v)} />
                 </div>
             </section>
         </div>
