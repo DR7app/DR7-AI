@@ -175,48 +175,6 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
         if (max != null && amountEur > max) return false
     }
 
-    // Vehicle fuel (booking-side, sync)
-    const fuel = String(tpl.target_vehicle_fuel || 'all').toLowerCase().trim()
-    if (fuel && fuel !== 'all') {
-        const v = booking.booking_details?.vehicle ?? {}
-        const vehFuel = String(
-            booking.vehicle_fuel
-            ?? booking.fuel
-            ?? v.fuel
-            ?? v.carburante
-            ?? booking.booking_details?.vehicle_fuel
-            ?? ''
-        ).toLowerCase().trim()
-        if (!vehFuel) return false
-        // Aliases per essere robusto
-        const aliases: Record<string, string[]> = {
-            petrol: ['petrol', 'benzina', 'gasoline', 'gas'],
-            diesel: ['diesel', 'gasolio'],
-            electric: ['electric', 'elettrico', 'ev', 'bev'],
-            hybrid: ['hybrid', 'ibrido', 'hev', 'phev', 'plugin'],
-        }
-        const wanted = aliases[fuel] ?? [fuel]
-        if (!wanted.some((w: string) => vehFuel.includes(w))) return false
-    }
-
-    // Vehicle transmission (booking-side, sync)
-    const trans = String(tpl.target_vehicle_transmission || 'all').toLowerCase().trim()
-    if (trans && trans !== 'all') {
-        const v = booking.booking_details?.vehicle ?? {}
-        const vehTrans = String(
-            booking.vehicle_transmission
-            ?? booking.transmission
-            ?? v.transmission
-            ?? v.cambio
-            ?? ''
-        ).toLowerCase().trim()
-        if (!vehTrans) return false
-        const isManual = vehTrans.includes('manual') || vehTrans.includes('manuale') || vehTrans.includes('mt')
-        const isAuto = vehTrans.includes('auto') || vehTrans.includes('cvt') || vehTrans.includes('dsg') || vehTrans.includes('at') || vehTrans.includes('dct')
-        if (trans === 'manual' && !isManual) return false
-        if (trans === 'automatic' && !isAuto) return false
-    }
-
     // Fascia oraria pickup (Europe/Rome). Si basa su pickup_date.
     // Per car wash / mechanical: si basa su appointment_date.
     const phMin = tpl.target_pickup_hour_min == null ? null : Number(tpl.target_pickup_hour_min)
@@ -499,7 +457,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     //    saranno gestiti dal cron, non qui.
     const { data: templates } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_vehicle_fuel, target_vehicle_transmission, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
+        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
         .eq('is_automatic', true)
         .eq('is_enabled', true)
         .eq('trigger_event', event)

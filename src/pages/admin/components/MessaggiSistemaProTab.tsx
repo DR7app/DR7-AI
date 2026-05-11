@@ -37,8 +37,6 @@ interface SystemMessage {
     target_residency?: string | null
     target_age_min?: number | null
     target_age_max?: number | null
-    target_vehicle_fuel?: string | null
-    target_vehicle_transmission?: string | null
     target_pickup_hour_min?: number | null
     target_pickup_hour_max?: number | null
     target_source_channel?: string | null
@@ -846,8 +844,6 @@ export default function MessaggiSistemaProTab() {
     const [newTargetMaxPrevBookings, setNewTargetMaxPrevBookings] = useState('')
     const [newTargetAgeMin, setNewTargetAgeMin] = useState('')
     const [newTargetAgeMax, setNewTargetAgeMax] = useState('')
-    const [newTargetVehicleFuel, setNewTargetVehicleFuel] = useState('all')
-    const [newTargetVehicleTransmission, setNewTargetVehicleTransmission] = useState('all')
     const [newTargetPickupHourMin, setNewTargetPickupHourMin] = useState('')
     const [newTargetPickupHourMax, setNewTargetPickupHourMax] = useState('')
     const [newTargetSourceChannel, setNewTargetSourceChannel] = useState('all')
@@ -864,6 +860,30 @@ export default function MessaggiSistemaProTab() {
     // (centralina_pro_config.config.dr7_club.tiers). Niente lista hardcoded —
     // se il boss aggiunge "Diamond" in Centralina Pro, qui appare in tempo reale.
     const [proTiers, setProTiers] = useState<Array<{ id: string; label: string }>>([])
+    // Source channels caricati DINAMICAMENTE dai valori effettivamente
+    // presenti in customers_extended.source. Niente lista hardcoded —
+    // se il boss importa clienti da TikTok, "tiktok" appare nel dropdown.
+    const [sourceChannels, setSourceChannels] = useState<string[]>([])
+    useEffect(() => {
+        let cancelled = false
+        const loadChannels = async () => {
+            const { data } = await supabase
+                .from('customers_extended')
+                .select('source')
+                .not('source', 'is', null)
+                .limit(1000)
+            if (cancelled || !data) return
+            // Distinct + ordinati
+            const seen = new Set<string>()
+            for (const row of data) {
+                const v = (row as { source?: unknown }).source
+                if (typeof v === 'string' && v.trim()) seen.add(v.trim())
+            }
+            setSourceChannels(Array.from(seen).sort())
+        }
+        loadChannels()
+        return () => { cancelled = true }
+    }, [])
     useEffect(() => {
         let cancelled = false
         const load = async () => {
@@ -1137,8 +1157,6 @@ export default function MessaggiSistemaProTab() {
                     target_max_prev_bookings: newTargetMaxPrevBookings ? parseInt(newTargetMaxPrevBookings, 10) : null,
                     target_age_min: newTargetAgeMin ? parseInt(newTargetAgeMin, 10) : null,
                     target_age_max: newTargetAgeMax ? parseInt(newTargetAgeMax, 10) : null,
-                    target_vehicle_fuel: newTargetVehicleFuel === 'all' ? null : newTargetVehicleFuel,
-                    target_vehicle_transmission: newTargetVehicleTransmission === 'all' ? null : newTargetVehicleTransmission,
                     target_pickup_hour_min: newTargetPickupHourMin ? parseInt(newTargetPickupHourMin, 10) : null,
                     target_pickup_hour_max: newTargetPickupHourMax ? parseInt(newTargetPickupHourMax, 10) : null,
                     target_source_channel: newTargetSourceChannel === 'all' ? null : newTargetSourceChannel,
@@ -1829,13 +1847,15 @@ export default function MessaggiSistemaProTab() {
                                                     <select value={newTargetSourceChannel} onChange={e => setNewTargetSourceChannel(e.target.value)}
                                                         className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                                         <option value="all">Tutti</option>
-                                                        <option value="google">Google</option>
-                                                        <option value="instagram">Instagram</option>
-                                                        <option value="facebook">Facebook</option>
-                                                        <option value="walk-in">Walk-in</option>
-                                                        <option value="referral">Referral</option>
-                                                        <option value="direct">Diretto</option>
+                                                        {sourceChannels.map(s => (
+                                                            <option key={s} value={s}>{s}</option>
+                                                        ))}
                                                     </select>
+                                                    {sourceChannels.length === 0 && (
+                                                        <p className="text-[11px] text-theme-text-muted mt-1">
+                                                            Nessun source ancora registrato. Aggiungi i clienti con il loro canale di provenienza.
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -1888,30 +1908,10 @@ export default function MessaggiSistemaProTab() {
                                             </div>
                                         </div>
 
-                                        {/* Sub-section: veicolo & timing */}
+                                        {/* Sub-section: orario pickup */}
                                         <div className="mt-3 pt-3 border-t border-theme-border/30">
-                                            <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Veicolo & orario pickup</div>
+                                            <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Orario pickup</div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                <div>
-                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Carburante veicolo</label>
-                                                    <select value={newTargetVehicleFuel} onChange={e => setNewTargetVehicleFuel(e.target.value)}
-                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
-                                                        <option value="all">Tutti</option>
-                                                        <option value="petrol">Benzina</option>
-                                                        <option value="diesel">Diesel</option>
-                                                        <option value="electric">Elettrico</option>
-                                                        <option value="hybrid">Ibrido</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Cambio</label>
-                                                    <select value={newTargetVehicleTransmission} onChange={e => setNewTargetVehicleTransmission(e.target.value)}
-                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
-                                                        <option value="all">Tutti</option>
-                                                        <option value="manual">Manuale</option>
-                                                        <option value="automatic">Automatico</option>
-                                                    </select>
-                                                </div>
                                                 <div className="md:col-span-2">
                                                     <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Fascia oraria pickup (Roma)</label>
                                                     <div className="flex gap-2">
