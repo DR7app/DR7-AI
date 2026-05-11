@@ -1484,14 +1484,14 @@ export default function CentralinaProTab() {
   void changes.length // SaveBar always visible
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] pb-32">
+    <div className="min-h-screen bg-theme-bg-primary pb-32">
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-8">
         <div className="flex items-start justify-between flex-wrap gap-4 mb-8">
           <div>
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-[#1d1d1f]">
+            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-theme-text-primary">
               Centralina Pro
             </h1>
-            <p className="mt-2 text-[15px] text-[#6e6e73]">
+            <p className="mt-2 text-[15px] text-theme-text-secondary">
               Configurazione centralizzata noleggio
             </p>
           </div>
@@ -1502,7 +1502,7 @@ export default function CentralinaProTab() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6">
-          <aside className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden h-fit">
+          <aside className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden h-fit">
             <nav className="py-2">
               {SECTIONS.map((s, idx) => {
                 const active = section === s.id
@@ -1513,21 +1513,21 @@ export default function CentralinaProTab() {
                     className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
                       active
                         ? 'bg-[#007aff]/10'
-                        : 'hover:bg-black/[0.03]:bg-white/[0.04]'
+                        : 'hover:bg-theme-bg-hover:bg-theme-bg-secondary/[0.04]'
                     }`}
                   >
                     <span
                       className={`flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-semibold ${
                         active
                           ? 'bg-[#007aff] text-white'
-                          : 'bg-[#e5e5ea] text-[#1d1d1f]'
+                          : 'bg-[#e5e5ea] text-theme-text-primary'
                       }`}
                     >
                       {idx + 1}
                     </span>
                     <span
                       className={`flex-1 min-w-0 text-[14px] font-medium truncate ${
-                        active ? 'text-[#007aff]' : 'text-[#1d1d1f]'
+                        active ? 'text-[#007aff]' : 'text-theme-text-primary'
                       }`}
                     >
                       {s.title}
@@ -1654,7 +1654,7 @@ function SaveBar({
           className={`rounded-2xl shadow-2xl border backdrop-blur-xl px-5 py-4 flex items-center gap-4 flex-wrap transition-all ${
             justSaved
               ? 'bg-[#34c759]/95 border-[#34c759] text-white'
-              : 'bg-white/95 border-black/10'
+              : 'bg-theme-bg-secondary/95 border-theme-border'
           }`}
         >
           {justSaved ? (
@@ -1667,10 +1667,10 @@ function SaveBar({
           ) : (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-[#1d1d1f] mb-1">
+                <p className="text-[13px] font-semibold text-theme-text-primary mb-1">
                   {changes.length} modifica{changes.length > 1 ? 'e' : ''} da salvare
                 </p>
-                <ul className="text-[12px] text-[#6e6e73] space-y-0.5 max-h-24 overflow-y-auto">
+                <ul className="text-[12px] text-theme-text-secondary space-y-0.5 max-h-24 overflow-y-auto">
                   {changes.map((c, i) => (
                     <li key={i} className="flex items-start gap-1.5">
                       <span className="text-[#007aff] mt-0.5">·</span>
@@ -1682,7 +1682,7 @@ function SaveBar({
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={onDiscard}
-                  className="px-4 py-2 rounded-lg text-[14px] font-medium text-[#1d1d1f] hover:bg-black/5:bg-white/10 transition-colors"
+                  className="px-4 py-2 rounded-lg text-[14px] font-medium text-theme-text-primary hover:bg-theme-bg-hover:bg-theme-bg-secondary/10 transition-colors"
                 >
                   Annulla
                 </button>
@@ -2234,12 +2234,12 @@ function EditableList<T extends ListItem>({
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
       <header className="px-5 pt-5 pb-3">
-        <h2 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
+        <h2 className="text-[17px] font-semibold text-theme-text-primary tracking-tight">
           {title}
         </h2>
-        <p className="text-[13px] text-[#6e6e73] mt-0.5">{subtitle}</p>
+        <p className="text-[13px] text-theme-text-secondary mt-0.5">{subtitle}</p>
       </header>
 
       <ul className="divide-y divide-black/5">
@@ -2248,7 +2248,7 @@ function EditableList<T extends ListItem>({
             <input
               value={item.label}
               onChange={(e) => update(item.id, e.target.value)}
-              className="flex-1 bg-transparent outline-none text-[15px] text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+              className="flex-1 bg-transparent outline-none text-[15px] text-theme-text-primary placeholder:text-theme-text-muted focus:bg-theme-bg-primary:bg-theme-bg-secondary/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
             />
             <button
               onClick={() => remove(item.id)}
@@ -2262,13 +2262,13 @@ function EditableList<T extends ListItem>({
           </li>
         ))}
         {items.length === 0 && (
-          <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+          <li className="px-5 py-6 text-center text-[13px] text-theme-text-secondary">
             Nessun elemento — aggiungine uno qui sotto
           </li>
         )}
       </ul>
 
-      <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa] flex items-center gap-2">
+      <footer className="px-5 py-3 border-t border-theme-border bg-theme-bg-tertiary flex items-center gap-2">
         <input
           value={newLabel}
           onChange={(e) => setNewLabel(e.target.value)}
@@ -2276,7 +2276,7 @@ function EditableList<T extends ListItem>({
             if (e.key === 'Enter') add()
           }}
           placeholder={placeholderNew}
-          className="flex-1 bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+          className="flex-1 bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
         />
         <button
           onClick={add}
@@ -2315,12 +2315,12 @@ function FasciaList({ items, onChange }: { items: Fascia[]; onChange: (next: Fas
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
       <header className="px-5 pt-5 pb-3">
-        <h2 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
+        <h2 className="text-[17px] font-semibold text-theme-text-primary tracking-tight">
           Fascia
         </h2>
-        <p className="text-[13px] text-[#6e6e73] mt-0.5">
+        <p className="text-[13px] text-theme-text-secondary mt-0.5">
           Fasce conducente — eta e anni di patente
         </p>
       </header>
@@ -2332,7 +2332,7 @@ function FasciaList({ items, onChange }: { items: Fascia[]; onChange: (next: Fas
               <input
                 value={f.label}
                 onChange={(e) => patch(f.id, { label: e.target.value })}
-                className="flex-1 bg-transparent outline-none text-[17px] font-semibold text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                className="flex-1 bg-transparent outline-none text-[17px] font-semibold text-theme-text-primary placeholder:text-theme-text-muted focus:bg-theme-bg-primary:bg-theme-bg-secondary/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
                 placeholder="Nome fascia"
               />
               <button
@@ -2350,7 +2350,7 @@ function FasciaList({ items, onChange }: { items: Fascia[]; onChange: (next: Fas
               value={f.description}
               onChange={(e) => patch(f.id, { description: e.target.value })}
               placeholder="Descrizione (es. Conducente esperto)"
-              className="w-full bg-transparent outline-none text-[14px] text-[#6e6e73] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 mb-4 transition-colors"
+              className="w-full bg-transparent outline-none text-[14px] text-theme-text-secondary placeholder:text-theme-text-muted focus:bg-theme-bg-primary:bg-theme-bg-secondary/5 rounded-lg px-2 py-1.5 -mx-2 mb-4 transition-colors"
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2376,13 +2376,13 @@ function FasciaList({ items, onChange }: { items: Fascia[]; onChange: (next: Fas
           </li>
         ))}
         {items.length === 0 && (
-          <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+          <li className="px-5 py-6 text-center text-[13px] text-theme-text-secondary">
             Nessuna fascia configurata
           </li>
         )}
       </ul>
 
-      <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa]">
+      <footer className="px-5 py-3 border-t border-theme-border bg-theme-bg-tertiary">
         <button
           onClick={add}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[14px] font-medium bg-[#007aff] text-white hover:bg-[#0066d6] transition-colors"
@@ -2410,7 +2410,7 @@ function NumberField({
 }) {
   return (
     <label className="block">
-      <span className="block text-[12px] font-medium text-[#6e6e73] mb-1">
+      <span className="block text-[12px] font-medium text-theme-text-secondary mb-1">
         {label}
       </span>
       <div className="relative">
@@ -2422,10 +2422,10 @@ function NumberField({
             const v = e.target.value
             onChange(v === '' ? '' : Number(v))
           }}
-          className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 pr-14 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+          className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 pr-14 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
         />
         {suffix && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
             {suffix}
           </span>
         )}
@@ -2518,10 +2518,10 @@ function AssicurazioniSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
           Prezzi Assicurazioni
         </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
+        <p className="text-[14px] text-theme-text-secondary mt-1">
           Per categoria e fascia conducente
         </p>
       </div>
@@ -2548,17 +2548,17 @@ function InsuranceCategoryCard({
   onChange: (patch: Partial<InsuranceCategoryConfig>) => void
 }) {
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
       <header className="px-5 pt-5 pb-4 flex items-center justify-between gap-4 flex-wrap">
-        <h3 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
+        <h3 className="text-[17px] font-semibold text-theme-text-primary tracking-tight">
           {category.label}
         </h3>
-        <label className="flex items-center gap-2 text-[13px] text-[#6e6e73]">
+        <label className="flex items-center gap-2 text-[13px] text-theme-text-secondary">
           <span>Modalita</span>
           <select
             value={category.mode}
             onChange={(e) => onChange({ mode: e.target.value as Mode })}
-            className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
           >
             <option value="per_fascia">Per fascia (separata)</option>
             <option value="all_tiers">Uguale per tutte le fasce</option>
@@ -2567,7 +2567,7 @@ function InsuranceCategoryCard({
       </header>
 
       {category.mode === 'per_fascia' ? (
-        <div className="divide-y divide-black/5 border-t border-black/5">
+        <div className="divide-y divide-black/5 border-t border-theme-border">
           {fasce.map((f) => (
             <InsuranceList
               key={f.id}
@@ -2579,13 +2579,13 @@ function InsuranceCategoryCard({
             />
           ))}
           {fasce.length === 0 && (
-            <p className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+            <p className="px-5 py-6 text-center text-[13px] text-theme-text-secondary">
               Nessuna fascia configurata. Aggiungine una in "Categorie & Fascia".
             </p>
           )}
         </div>
       ) : (
-        <div className="border-t border-black/5">
+        <div className="border-t border-theme-border">
           <InsuranceList
             heading="Stesse opzioni per tutte le fasce"
             items={category.all}
@@ -2621,20 +2621,20 @@ function InsuranceList({
 
   return (
     <div className="p-5">
-      <p className="text-[13px] font-medium text-[#6e6e73] mb-4">{heading}</p>
+      <p className="text-[13px] font-medium text-theme-text-secondary mb-4">{heading}</p>
 
       <div className="space-y-3">
         {items.map((opt) => (
           <div
             key={opt.id}
-            className="rounded-xl border border-black/[0.06] bg-[#fafafa] p-4 group"
+            className="rounded-xl border border-black/[0.06] bg-theme-bg-tertiary p-4 group"
           >
             <div className="flex items-center gap-3 mb-3">
               <input
                 value={opt.name}
                 onChange={(e) => patch(opt.id, { name: e.target.value })}
                 placeholder="Nome opzione"
-                className="flex-1 bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-white:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                className="flex-1 bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary placeholder:text-theme-text-muted focus:bg-theme-bg-secondary:bg-theme-bg-secondary/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
               />
               <button
                 onClick={() => remove(opt.id)}
@@ -2656,7 +2656,7 @@ function InsuranceList({
           </div>
         ))}
         {items.length === 0 && (
-          <p className="text-center text-[13px] text-[#6e6e73] py-4">
+          <p className="text-center text-[13px] text-theme-text-secondary py-4">
             Nessuna opzione
           </p>
         )}
@@ -2686,7 +2686,7 @@ function FieldBox({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+      <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
         {label}
       </span>
       <input
@@ -2697,7 +2697,7 @@ function FieldBox({
           const v = e.target.value
           onChange(v === '' ? '' : Number(v))
         }}
-        className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
       />
     </label>
   )
@@ -2726,10 +2726,10 @@ function KmSforoSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
           Km & Sforo
         </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
+        <p className="text-[14px] text-theme-text-secondary mt-1">
           Km inclusi per giorno, sforo e prezzo km illimitati per categoria
         </p>
       </div>
@@ -2738,22 +2738,22 @@ function KmSforoSection({
         {km.map((cat) => (
           <section
             key={cat.id}
-            className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden flex flex-col"
+            className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden flex flex-col"
           >
             <header className="px-5 pt-5 pb-3">
-              <h3 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
+              <h3 className="text-[17px] font-semibold text-theme-text-primary tracking-tight">
                 {cat.label}
               </h3>
             </header>
 
             <div className="px-5 pb-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-2">
                 Km inclusi per giorno
               </p>
               <div className="space-y-2">
                 {dayKeys.map((d) => (
                   <div key={d} className="flex items-center gap-3">
-                    <span className="w-14 text-[13px] text-[#6e6e73]">
+                    <span className="w-14 text-[13px] text-theme-text-secondary">
                       {d} {d === '1' ? 'giorno' : 'giorni'}
                     </span>
                     <div className="flex-1 relative">
@@ -2765,16 +2765,16 @@ function KmSforoSection({
                           const v = e.target.value
                           patchDay(cat.id, d, v === '' ? '' : Number(v))
                         }}
-                        className="w-full bg-[#f5f5f7] border border-black/5 rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                        className="w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
                         km
                       </span>
                     </div>
                   </div>
                 ))}
                 <div className="flex items-center gap-3 pt-2 border-t border-black/[0.06] mt-2">
-                  <span className="w-14 text-[13px] text-[#6e6e73]">
+                  <span className="w-14 text-[13px] text-theme-text-secondary">
                     + giorno
                   </span>
                   <div className="flex-1 relative">
@@ -2786,9 +2786,9 @@ function KmSforoSection({
                         const v = e.target.value
                         patch(cat.id, { extraPerDay: v === '' ? '' : Number(v) })
                       }}
-                      className="w-full bg-[#f5f5f7] border border-black/5 rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      className="w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 pr-10 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
                       km
                     </span>
                   </div>
@@ -2796,13 +2796,13 @@ function KmSforoSection({
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] bg-[#fafafa]">
+            <div className="px-5 py-4 border-t border-black/[0.06] bg-theme-bg-tertiary">
               <label className="block">
-                <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-2">
+                <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-2">
                   Sforo (€ per km oltre il limite)
                 </span>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[#a1a1a6] pointer-events-none">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-theme-text-muted pointer-events-none">
                     €
                   </span>
                   <input
@@ -2814,9 +2814,9 @@ function KmSforoSection({
                       const v = e.target.value
                       patch(cat.id, { sforo: v === '' ? '' : Number(v) })
                     }}
-                    className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-14 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-14 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
                     /km
                   </span>
                 </div>
@@ -2825,7 +2825,7 @@ function KmSforoSection({
 
             <div className="px-5 py-4 border-t border-black/[0.06] mt-auto space-y-3">
               {/* Label su riga dedicata — niente più wrap a 3 righe */}
-              <p className="text-[12px] font-semibold text-[#1d1d1f]">
+              <p className="text-[12px] font-semibold text-theme-text-primary">
                 Km illimitati — prezzo al giorno
               </p>
 
@@ -2836,8 +2836,8 @@ function KmSforoSection({
                   onClick={() => patch(cat.id, { unlimitedMode: 'all_tiers' })}
                   className={`py-1.5 rounded-md transition-colors ${
                     (cat.unlimitedMode || 'all_tiers') === 'all_tiers'
-                      ? 'bg-white shadow-sm text-[#1d1d1f]'
-                      : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                      ? 'bg-theme-bg-secondary shadow-sm text-theme-text-primary'
+                      : 'text-theme-text-secondary hover:text-theme-text-primary'
                   }`}
                 >Tutte le fasce</button>
                 <button
@@ -2845,15 +2845,15 @@ function KmSforoSection({
                   onClick={() => patch(cat.id, { unlimitedMode: 'per_fascia' })}
                   className={`py-1.5 rounded-md transition-colors ${
                     cat.unlimitedMode === 'per_fascia'
-                      ? 'bg-white shadow-sm text-[#1d1d1f]'
-                      : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                      ? 'bg-theme-bg-secondary shadow-sm text-theme-text-primary'
+                      : 'text-theme-text-secondary hover:text-theme-text-primary'
                   }`}
                 >Per fascia</button>
               </div>
 
               {(cat.unlimitedMode || 'all_tiers') === 'all_tiers' ? (
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[16px] font-medium text-[#6e6e73] pointer-events-none">€</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[16px] font-medium text-theme-text-secondary pointer-events-none">€</span>
                   <input
                     type="number"
                     min={0}
@@ -2864,9 +2864,9 @@ function KmSforoSection({
                       const v = e.target.value
                       patch(cat.id, { unlimitedPerDay: v === '' ? '' : Number(v) })
                     }}
-                    className="w-full bg-white border border-black/10 rounded-lg pl-8 pr-20 py-3 text-[18px] font-semibold text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-8 pr-20 py-3 text-[18px] font-semibold text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">/giorno</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">/giorno</span>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -2874,11 +2874,11 @@ function KmSforoSection({
                     const val = cat.unlimitedByFascia?.[fid] ?? ''
                     return (
                       <div key={fid} className="space-y-1">
-                        <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73]">
+                        <label className="block text-[11px] font-semibold uppercase tracking-wide text-theme-text-secondary">
                           Fascia {fid}
                         </label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[16px] font-medium text-[#6e6e73] pointer-events-none">€</span>
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[16px] font-medium text-theme-text-secondary pointer-events-none">€</span>
                           <input
                             type="number"
                             min={0}
@@ -2894,9 +2894,9 @@ function KmSforoSection({
                                 },
                               })
                             }}
-                            className="w-full bg-white border border-black/10 rounded-lg pl-8 pr-20 py-3 text-[18px] font-semibold text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                            className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-8 pr-20 py-3 text-[18px] font-semibold text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                           />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">/giorno</span>
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">/giorno</span>
                         </div>
                       </div>
                     )
@@ -2990,17 +2990,17 @@ function CauzioniSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
           Opzioni Cauzione per Categoria
         </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
+        <p className="text-[14px] text-theme-text-secondary mt-1">
           Opzioni cauzione per categoria veicolo, fascia conducente e residenza.
           Il sito e l'admin scelgono il set giusto in base alla categoria del veicolo prenotato.
         </p>
       </div>
 
       {/* Category tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-black/5 -mb-px">
+      <div className="flex flex-wrap gap-2 border-b border-theme-border -mb-px">
         {categoryList.map((c) => {
           const isActive = c.id === activeCategory
           return (
@@ -3009,8 +3009,8 @@ function CauzioniSection({
               onClick={() => setActiveCategory(c.id)}
               className={`px-4 py-2 text-[14px] font-medium rounded-t-lg transition-colors ${
                 isActive
-                  ? 'bg-white border border-black/10 border-b-white text-[#1d1d1f]'
-                  : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                  ? 'bg-theme-bg-secondary border border-theme-border border-b-white text-theme-text-primary'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
               {c.label}
@@ -3020,7 +3020,7 @@ function CauzioniSection({
       </div>
 
       {fasce.length === 0 && (
-        <p className="text-center text-[13px] text-[#6e6e73] py-8">
+        <p className="text-center text-[13px] text-theme-text-secondary py-8">
           Nessuna fascia configurata. Aggiungine una in "Categorie & Fascia".
         </p>
       )}
@@ -3033,10 +3033,10 @@ function CauzioniSection({
             return (
               <section
                 key={`${f.id}_${scope}`}
-                className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden"
+                className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden"
               >
                 <header className="px-5 pt-5 pb-3">
-                  <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+                  <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">
                     {groupLabel}
                   </h3>
                 </header>
@@ -3049,7 +3049,7 @@ function CauzioniSection({
                           value={opt.label}
                           onChange={(e) => patchOption(f.id, scope, opt.id, { label: e.target.value })}
                           placeholder="Nome opzione"
-                          className="flex-1 bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7] rounded-lg px-2 py-1 -mx-2 transition-colors"
+                          className="flex-1 bg-transparent outline-none text-[14px] font-medium text-theme-text-primary placeholder:text-theme-text-muted focus:bg-theme-bg-primary rounded-lg px-2 py-1 -mx-2 transition-colors"
                         />
                         <button
                           onClick={() => removeOption(f.id, scope, opt.id)}
@@ -3064,11 +3064,11 @@ function CauzioniSection({
 
                       <div className="grid grid-cols-2 gap-3">
                         <label className="block">
-                          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+                          <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
                             Importo
                           </span>
                           <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">€</span>
                             <input
                               type="number"
                               min={0}
@@ -3077,16 +3077,16 @@ function CauzioniSection({
                                 const v = e.target.value
                                 patchOption(f.id, scope, opt.id, { amount: v === '' ? '' : Number(v) })
                               }}
-                              className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                             />
                           </div>
                         </label>
                         <label className="block">
-                          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+                          <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
                             Sovrapprezzo / giorno
                           </span>
                           <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">€</span>
                             <input
                               type="number"
                               min={0}
@@ -3095,22 +3095,22 @@ function CauzioniSection({
                                 const v = e.target.value
                                 patchOption(f.id, scope, opt.id, { surcharge_per_day: v === '' ? '' : Number(v) })
                               }}
-                              className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                             />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6] pointer-events-none">/g</span>
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-theme-text-muted pointer-events-none">/g</span>
                           </div>
                         </label>
                       </div>
                     </li>
                   ))}
                   {items.length === 0 && (
-                    <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+                    <li className="px-5 py-6 text-center text-[13px] text-theme-text-secondary">
                       Nessuna opzione
                     </li>
                   )}
                 </ul>
 
-                <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa]">
+                <footer className="px-5 py-3 border-t border-theme-border bg-theme-bg-tertiary">
                   <button
                     onClick={() => addOption(f.id, scope)}
                     className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
@@ -3178,19 +3178,19 @@ function ServiziSection({
   return (
     <div className="space-y-6">
       {/* Servizi Experience */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
           <div className="flex-1 min-w-0">
             <input
               value={servizi.experience_title ?? 'Servizi Experience'}
               onChange={(e) => setServizi({ ...servizi, experience_title: e.target.value })}
-              className="w-full bg-transparent outline-none text-[17px] font-semibold text-[#1d1d1f] tracking-tight focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+              className="w-full bg-transparent outline-none text-[17px] font-semibold text-theme-text-primary tracking-tight focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
               placeholder="Titolo sezione"
             />
             <input
               value={servizi.experience_subtitle ?? 'Servizi extra opzionali'}
               onChange={(e) => setServizi({ ...servizi, experience_subtitle: e.target.value })}
-              className="w-full bg-transparent outline-none text-[13px] text-[#6e6e73] mt-0.5 focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+              className="w-full bg-transparent outline-none text-[13px] text-theme-text-secondary mt-0.5 focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
               placeholder="Sottotitolo"
             />
           </div>
@@ -3221,10 +3221,10 @@ function ServiziSection({
                   value={s.name}
                   onChange={(e) => patchExp(s.id, { name: e.target.value })}
                   placeholder="Nome servizio"
-                  className="flex-1 min-w-[200px] bg-transparent outline-none text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:bg-[#f5f5f7]:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+                  className="flex-1 min-w-[200px] bg-transparent outline-none text-[14px] font-medium text-theme-text-primary placeholder:text-theme-text-muted focus:bg-theme-bg-primary:bg-theme-bg-secondary/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
                 />
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
                     €
                   </span>
                   <input
@@ -3236,13 +3236,13 @@ function ServiziSection({
                       const v = e.target.value
                       patchExp(s.id, { price: v === '' ? '' : Number(v) })
                     }}
-                    className="w-24 bg-white border border-black/10 rounded-lg pl-7 pr-2 py-1.5 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-24 bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-2 py-1.5 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
                 </div>
                 <select
                   value={s.unit}
                   onChange={(e) => patchExp(s.id, { unit: e.target.value as ServiceUnit })}
-                  className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 >
                   {(Object.keys(UNIT_LABELS) as ServiceUnit[]).map((u) => (
                     <option key={u} value={u}>
@@ -3253,7 +3253,7 @@ function ServiziSection({
                 <select
                   value={s.tier_only}
                   onChange={(e) => patchExp(s.id, { tier_only: e.target.value })}
-                  className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 >
                   <option value="">Tutte le fasce</option>
                   {fasce.map((f) => (
@@ -3273,7 +3273,7 @@ function ServiziSection({
             </li>
           ))}
           {servizi.experience.length === 0 && (
-            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+            <li className="px-5 py-6 text-center text-[13px] text-theme-text-secondary">
               Nessun servizio
             </li>
           )}
@@ -3284,10 +3284,10 @@ function ServiziSection({
            collapses to a one-line "Riattiva" placeholder and the website wizard
            hides the option entirely (read via configOverlay.dr7Flex.enabled). */}
       {servizi.dr7_flex.enabled === false ? (
-        <section className="bg-white rounded-2xl border border-dashed border-black/15 shadow-sm overflow-hidden">
+        <section className="bg-theme-bg-secondary rounded-2xl border border-dashed border-theme-border shadow-sm overflow-hidden">
           <div className="px-5 py-4 flex items-center justify-between gap-3">
-            <div className="text-[13px] text-[#6e6e73]">
-              <strong className="text-[#1d1d1f]">{servizi.dr7_flex_title ?? 'DR7 Flex — Cancellazione Premium'}</strong> — disattivato.
+            <div className="text-[13px] text-theme-text-secondary">
+              <strong className="text-theme-text-primary">{servizi.dr7_flex_title ?? 'DR7 Flex — Cancellazione Premium'}</strong> — disattivato.
             </div>
             <button
               onClick={() => setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, enabled: true } })}
@@ -3301,12 +3301,12 @@ function ServiziSection({
           </div>
         </section>
       ) : (
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
           <input
             value={servizi.dr7_flex_title ?? 'DR7 Flex — Cancellazione Premium'}
             onChange={(e) => setServizi({ ...servizi, dr7_flex_title: e.target.value })}
-            className="flex-1 bg-transparent outline-none text-[17px] font-semibold text-[#1d1d1f] tracking-tight focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+            className="flex-1 bg-transparent outline-none text-[17px] font-semibold text-theme-text-primary tracking-tight focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
             placeholder="Titolo sezione"
           />
           <button
@@ -3328,11 +3328,11 @@ function ServiziSection({
         <div className="px-5 pb-5 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block">
-              <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
                 Prezzo / giorno
               </span>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
                   €
                 </span>
                 <input
@@ -3344,12 +3344,12 @@ function ServiziSection({
                     const v = e.target.value
                     setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, daily_price: v === '' ? '' : Number(v) } })
                   }}
-                  className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 />
               </div>
             </label>
             <label className="block">
-              <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
                 Rimborso
               </span>
               <div className="relative">
@@ -3362,15 +3362,15 @@ function ServiziSection({
                     const v = e.target.value
                     setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, refund_percent: v === '' ? '' : Number(v) } })
                   }}
-                  className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
                   %
                 </span>
               </div>
             </label>
             <label className="block">
-              <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
                 Disponibile per
               </span>
               <select
@@ -3378,7 +3378,7 @@ function ServiziSection({
                 onChange={(e) =>
                   setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, tier_restriction: e.target.value } })
                 }
-                className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">Tutte le fasce</option>
                 {fasce.map((f) => (
@@ -3388,13 +3388,13 @@ function ServiziSection({
             </label>
           </div>
           <label className="block">
-            <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
               Descrizione
             </span>
             <input
               value={servizi.dr7_flex.description}
               onChange={(e) => setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, description: e.target.value } })}
-              className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
           </label>
         </div>
@@ -3404,19 +3404,19 @@ function ServiziSection({
       {/* Simple services: 3-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Pulizia Finale */}
-        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+        <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
           <input
             value={servizi.lavaggio_title ?? 'Pulizia Finale'}
             onChange={(e) => setServizi({ ...servizi, lavaggio_title: e.target.value })}
-            className="w-full bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] mb-3 focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+            className="w-full bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary mb-3 focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
             placeholder="Titolo"
           />
           <label className="block mb-3">
-            <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
               Tariffa
             </span>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
                 €
               </span>
               <input
@@ -3428,7 +3428,7 @@ function ServiziSection({
                   const v = e.target.value
                   setServizi({ ...servizi, lavaggio: { ...servizi.lavaggio, fee: v === '' ? '' : Number(v) } })
                 }}
-                className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
             </div>
           </label>
@@ -3439,24 +3439,24 @@ function ServiziSection({
               onChange={(e) => setServizi({ ...servizi, lavaggio: { ...servizi.lavaggio, mandatory: e.target.checked } })}
               className="w-4 h-4 accent-[#007aff]"
             />
-            <span className="text-[13px] text-[#1d1d1f]">Obbligatoria</span>
+            <span className="text-[13px] text-theme-text-primary">Obbligatoria</span>
           </label>
         </section>
 
         {/* Consegna a Domicilio */}
-        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+        <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
           <input
             value={servizi.delivery_title ?? 'Consegna a Domicilio'}
             onChange={(e) => setServizi({ ...servizi, delivery_title: e.target.value })}
-            className="w-full bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] mb-3 focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+            className="w-full bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary mb-3 focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
             placeholder="Titolo"
           />
           <label className="block">
-            <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
               Prezzo per km
             </span>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
                 €
               </span>
               <input
@@ -3468,9 +3468,9 @@ function ServiziSection({
                   const v = e.target.value
                   setServizi({ ...servizi, delivery: { price_per_km: v === '' ? '' : Number(v) } })
                 }}
-                className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-12 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-12 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
                 /km
               </span>
             </div>
@@ -3478,19 +3478,19 @@ function ServiziSection({
         </section>
 
         {/* Secondo Guidatore */}
-        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+        <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
           <input
             value={servizi.second_driver_title ?? 'Secondo Guidatore'}
             onChange={(e) => setServizi({ ...servizi, second_driver_title: e.target.value })}
-            className="w-full bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] mb-3 focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+            className="w-full bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary mb-3 focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
             placeholder="Titolo"
           />
           <div className="space-y-2">
             {fasce.map((f) => (
               <div key={f.id} className="flex items-center gap-3">
-                <span className="w-20 text-[13px] text-[#6e6e73] truncate">{f.label}</span>
+                <span className="w-20 text-[13px] text-theme-text-secondary truncate">{f.label}</span>
                 <div className="flex-1 relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">€</span>
                   <input
                     type="number"
                     min={0}
@@ -3502,14 +3502,14 @@ function ServiziSection({
                         second_driver: { ...servizi.second_driver, [f.id]: v === '' ? '' : Number(v) },
                       })
                     }}
-                    className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">/g</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">/g</span>
                 </div>
               </div>
             ))}
             {fasce.length === 0 && (
-              <p className="text-center text-[13px] text-[#6e6e73] py-2">
+              <p className="text-center text-[13px] text-theme-text-secondary py-2">
                 Nessuna fascia configurata
               </p>
             )}
@@ -3517,13 +3517,13 @@ function ServiziSection({
         </section>
 
         {/* Luoghi di Ritiro */}
-        <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden md:col-span-2">
+        <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden md:col-span-2">
           <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <input
                 value={servizi.pickup_locations_title ?? 'Luoghi di Ritiro'}
                 onChange={(e) => setServizi({ ...servizi, pickup_locations_title: e.target.value })}
-                className="w-full bg-transparent outline-none text-[15px] font-semibold text-[#1d1d1f] focus:bg-[#f5f5f7] rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+                className="w-full bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
                 placeholder="Titolo"
               />
             </div>
@@ -3570,7 +3570,7 @@ function ServiziSection({
                           }
                         }}
                         placeholder="Aeroporto, hotel, indirizzo..."
-                        className="w-full bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                       />
                     </div>
                     <div className="relative">
@@ -3583,12 +3583,12 @@ function ServiziSection({
                           const v = e.target.value
                           patchLoc(loc.id, { km: v === '' ? '' : Number(v) })
                         }}
-                        className="w-28 bg-white border border-black/10 rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                        className="w-28 bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                         title="Calcolato dall'indirizzo (modificabile)"
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">km</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">km</span>
                     </div>
-                    <span className="text-[13px] tabular-nums text-[#6e6e73] min-w-[80px] text-right mt-2.5">
+                    <span className="text-[13px] tabular-nums text-theme-text-secondary min-w-[80px] text-right mt-2.5">
                       = €{fee.toFixed(2)}
                     </span>
                     <button
@@ -3602,7 +3602,7 @@ function ServiziSection({
               )
             })}
             {pickupLocations.length === 0 && (
-              <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+              <li className="px-5 py-6 text-center text-[13px] text-theme-text-secondary">
                 Nessun luogo configurato. L&rsquo;ufficio DR7 e il domicilio restano sempre disponibili.
               </li>
             )}
@@ -3701,15 +3701,15 @@ function PrezzoDinamicoSection({
     <div className="space-y-8">
       {/* ─── REVENUE ENGINE ─── */}
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
           Revenue Engine — Pricing Dinamico
         </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1 mb-5">
+        <p className="text-[14px] text-theme-text-secondary mt-1 mb-5">
           Prezzi dinamici, coefficienti e limiti min/max
         </p>
 
         {/* Enabled + Mode */}
-        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5 mb-4">
+        <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5 mb-4">
           <div className="flex items-center gap-4 flex-wrap">
             <label className="inline-flex items-center gap-2 cursor-pointer">
               <input
@@ -3718,17 +3718,17 @@ function PrezzoDinamicoSection({
                 onChange={(e) => patchDyn({ enabled: e.target.checked })}
                 className="w-5 h-5 accent-[#007aff]"
               />
-              <span className="text-[15px] font-semibold text-[#1d1d1f]">
+              <span className="text-[15px] font-semibold text-theme-text-primary">
                 Revenue Management attivo
               </span>
             </label>
             <div className="flex-1" />
-            <label className="flex items-center gap-2 text-[13px] text-[#6e6e73]">
+            <label className="flex items-center gap-2 text-[13px] text-theme-text-secondary">
               <span>Modalita</span>
               <select
                 value={config.dynamic.mode}
                 onChange={(e) => patchDyn({ mode: e.target.value as DynamicMode })}
-                className="bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="disabled">Disabilitato</option>
                 <option value="suggestion">Suggerimento</option>
@@ -3739,29 +3739,29 @@ function PrezzoDinamicoSection({
         </section>
 
         {/* Prezzi Base + Limiti Min/Max — per veicolo */}
-        <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden mb-4">
+        <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden mb-4">
           <header className="px-5 pt-5 pb-3">
-            <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+            <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">
               Prezzi Base + Limiti per Veicolo
             </h3>
-            <p className="text-[13px] text-[#6e6e73] mt-0.5">
+            <p className="text-[13px] text-theme-text-secondary mt-0.5">
               Override del prezzo base e vincoli min/max applicati dopo i coefficienti — per ogni veicolo della flotta
             </p>
           </header>
           <div className="px-5 pb-5 space-y-3">
-            <div className="grid grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
+            <div className="grid grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-theme-text-muted px-1">
               <span>Veicolo</span>
               <span className="text-right">Prezzo Base €/g</span>
               <span className="text-right">Min €/g</span>
               <span className="text-right">Max €/g</span>
             </div>
             {vehiclesLoading && (
-              <p className="text-center text-[13px] text-[#6e6e73] py-4">
+              <p className="text-center text-[13px] text-theme-text-secondary py-4">
                 Caricamento flotta…
               </p>
             )}
             {!vehiclesLoading && vehicles.length === 0 && (
-              <p className="text-center text-[13px] text-[#6e6e73] py-4">
+              <p className="text-center text-[13px] text-theme-text-secondary py-4">
                 Nessun veicolo nella flotta
               </p>
             )}
@@ -3779,16 +3779,16 @@ function PrezzoDinamicoSection({
                 if (vs.length === 0) return null
                 return (
                   <div key={group.key}>
-                    <h4 className="text-[12px] font-semibold uppercase tracking-wider text-[#6e6e73] mb-2 px-1 sticky top-0 bg-white py-1 z-10">
-                      {group.label} <span className="text-[#a1a1a6] font-normal">· {vs.length}</span>
+                    <h4 className="text-[12px] font-semibold uppercase tracking-wider text-theme-text-secondary mb-2 px-1 sticky top-0 bg-theme-bg-secondary py-1 z-10">
+                      {group.label} <span className="text-theme-text-muted font-normal">· {vs.length}</span>
                     </h4>
                     <div className="space-y-2">
                       {vs.map((v) => (
                         <div key={v.id} className="grid grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-2 items-center">
                           <div className="min-w-0">
-                            <div className="text-[14px] text-[#1d1d1f] font-medium truncate">{v.display_name}</div>
+                            <div className="text-[14px] text-theme-text-primary font-medium truncate">{v.display_name}</div>
                             {v.daily_rate != null && (
-                              <div className="text-[11px] text-[#a1a1a6]">listino €{v.daily_rate}/g</div>
+                              <div className="text-[11px] text-theme-text-muted">listino €{v.daily_rate}/g</div>
                             )}
                           </div>
                           <PriceBox
@@ -3816,15 +3816,15 @@ function PrezzoDinamicoSection({
                 if (others.length === 0) return null
                 return (
                   <div>
-                    <h4 className="text-[12px] font-semibold uppercase tracking-wider text-[#6e6e73] mb-2 px-1 sticky top-0 bg-white py-1 z-10">
-                      Altre categorie <span className="text-[#a1a1a6] font-normal">· {others.length}</span>
+                    <h4 className="text-[12px] font-semibold uppercase tracking-wider text-theme-text-secondary mb-2 px-1 sticky top-0 bg-theme-bg-secondary py-1 z-10">
+                      Altre categorie <span className="text-theme-text-muted font-normal">· {others.length}</span>
                     </h4>
                     <div className="space-y-2">
                       {others.map((v) => (
                         <div key={v.id} className="grid grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-2 items-center">
                           <div className="min-w-0">
-                            <div className="text-[14px] text-[#1d1d1f] font-medium truncate">{v.display_name}</div>
-                            <div className="text-[11px] text-[#a1a1a6]">
+                            <div className="text-[14px] text-theme-text-primary font-medium truncate">{v.display_name}</div>
+                            <div className="text-[11px] text-theme-text-muted">
                               {v.category ?? '—'}
                               {v.daily_rate != null && <> · listino €{v.daily_rate}/g</>}
                             </div>
@@ -3963,10 +3963,10 @@ function NamedCoefficientTable({
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">{title}</h3>
-      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">{subtitle}</p>
-      <div className="grid grid-cols-[1fr_100px_40px] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1 mb-1">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">{title}</h3>
+      <p className="text-[13px] text-theme-text-secondary mt-0.5 mb-3">{subtitle}</p>
+      <div className="grid grid-cols-[1fr_100px_40px] gap-2 items-center text-[11px] font-medium uppercase tracking-wide text-theme-text-muted px-1 mb-1">
         <span>Etichetta</span>
         <span className="text-right">Coeff.</span>
         <span />
@@ -3978,14 +3978,14 @@ function NamedCoefficientTable({
               type="text"
               value={r.label}
               onChange={(e) => patchRow(idx, { label: e.target.value })}
-              className="bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
             <input
               type="number"
               step={0.01}
               value={r.coeff}
               onChange={(e) => patchRow(idx, { coeff: e.target.value === '' ? '' : Number(e.target.value) })}
-              className="bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
             <button
               type="button"
@@ -4058,21 +4058,21 @@ function PromoPushSection({
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">
         Coefficienti Spinta Direzionale (Promo)
       </h3>
-      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+      <p className="text-[13px] text-theme-text-secondary mt-0.5 mb-3">
         Moltiplicatore per campagne e promo — attivalo solo quando serve.
       </p>
       <label className="block mb-4">
-        <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+        <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
           Livello attivo adesso
         </span>
         <select
           value={activeLevel}
           onChange={(e) => onChangeActiveLevel(e.target.value)}
-          className="bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+          className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
         >
           <option value="">Nessuna promo (coeff. 1,00)</option>
           {coefficients.map((c) => (
@@ -4088,16 +4088,16 @@ function PromoPushSection({
       />
 
       {/* Per-vehicle monthly revenue target → coefficient */}
-      <div className="mt-6 pt-5 border-t border-black/5">
-        <h4 className="text-[14px] font-semibold text-[#1d1d1f] tracking-tight">
+      <div className="mt-6 pt-5 border-t border-theme-border">
+        <h4 className="text-[14px] font-semibold text-theme-text-primary tracking-tight">
           Obiettivo Mensile per Veicolo
         </h4>
-        <p className="text-[12px] text-[#6e6e73] mt-0.5 mb-3">
+        <p className="text-[12px] text-theme-text-secondary mt-0.5 mb-3">
           Quando un veicolo raggiunge la soglia di incasso mensile nel mese del noleggio (es. preventivo per agosto → controlla l'incasso di agosto), il coefficiente moltiplica la tariffa. La soglia piu' alta raggiunta vince. Si combina con la promo globale qui sopra.
         </p>
 
         {vehicles.length === 0 ? (
-          <p className="text-[13px] text-[#a1a1a6] py-3 text-center border border-dashed border-black/10 rounded-lg">
+          <p className="text-[13px] text-theme-text-muted py-3 text-center border border-dashed border-theme-border rounded-lg">
             Nessun veicolo nella flotta.
           </p>
         ) : (
@@ -4117,16 +4117,16 @@ function PromoPushSection({
                 : undefined
 
               return (
-                <div key={v.id} className="rounded-xl border border-black/5 p-3">
+                <div key={v.id} className="rounded-xl border border-theme-border p-3">
                   {/* Header row: vehicle + live monthly revenue */}
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="min-w-0">
-                      <div className="text-[14px] text-[#1d1d1f] font-semibold truncate">{v.display_name}</div>
-                      <div className="text-[11px] text-[#a1a1a6] font-mono">{v.plate || '— senza targa'}</div>
+                      <div className="text-[14px] text-theme-text-primary font-semibold truncate">{v.display_name}</div>
+                      <div className="text-[11px] text-theme-text-muted font-mono">{v.plate || '— senza targa'}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-[10px] uppercase tracking-wide text-[#a1a1a6]">Incasso mese corrente</div>
-                      <div className="text-[14px] text-[#1d1d1f] font-semibold tabular-nums">
+                      <div className="text-[10px] uppercase tracking-wide text-theme-text-muted">Incasso mese corrente</div>
+                      <div className="text-[14px] text-theme-text-primary font-semibold tabular-nums">
                         {hasRevenue ? `€${(currentRevenue as number).toFixed(0)}` : '—'}
                       </div>
                     </div>
@@ -4134,12 +4134,12 @@ function PromoPushSection({
 
                   {/* Tier list */}
                   {tiers.length === 0 ? (
-                    <p className="text-[12px] text-[#a1a1a6] py-2 text-center border border-dashed border-black/10 rounded-lg">
+                    <p className="text-[12px] text-theme-text-muted py-2 text-center border border-dashed border-theme-border rounded-lg">
                       Nessuna soglia configurata — clicca "+" per aggiungerne una.
                     </p>
                   ) : (
                     <div className="space-y-1.5">
-                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-center text-[10px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1">
+                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-center text-[10px] font-medium uppercase tracking-wide text-theme-text-muted px-1">
                         <span>Incasso minimo (€)</span>
                         <span className="text-right">Coeff.</span>
                         <span></span>
@@ -4205,9 +4205,9 @@ function OperatingModeSection({
     { value: 'protezione', label: 'Protezione', hint: 'Occupazione alta — aumento prezzi, nessuna promo' },
   ]
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">Modalità Operativa</h3>
-      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">Modalità Operativa</h3>
+      <p className="text-[13px] text-theme-text-secondary mt-0.5 mb-3">
         Strategia globale corrente del revenue engine.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -4215,7 +4215,7 @@ function OperatingModeSection({
           <label
             key={o.value}
             className={`cursor-pointer rounded-xl border p-3 transition-colors ${
-              mode === o.value ? 'border-[#007aff] bg-[#007aff]/5' : 'border-black/10 hover:border-black/20'
+              mode === o.value ? 'border-[#007aff] bg-[#007aff]/5' : 'border-theme-border hover:border-black/20'
             }`}
           >
             <input
@@ -4226,8 +4226,8 @@ function OperatingModeSection({
               onChange={() => onChange(o.value)}
               className="sr-only"
             />
-            <div className="font-semibold text-[14px] text-[#1d1d1f]">{o.label}</div>
-            <div className="text-[12px] text-[#6e6e73] mt-1">{o.hint}</div>
+            <div className="font-semibold text-[14px] text-theme-text-primary">{o.label}</div>
+            <div className="text-[12px] text-theme-text-secondary mt-1">{o.hint}</div>
           </label>
         ))}
       </div>
@@ -4249,11 +4249,11 @@ function SeasonByMonthSection({
     'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
   ]
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">
         Stagione per Mese
       </h3>
-      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+      <p className="text-[13px] text-theme-text-secondary mt-0.5 mb-3">
         Quale tier di stagione applicare a ogni mese. Il coefficiente arriva dalla tabella sopra.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-5 gap-y-2">
@@ -4267,7 +4267,7 @@ function SeasonByMonthSection({
             : 'bg-gray-100 text-gray-600'
             : 'bg-gray-100 text-gray-400'
           return (
-            <div key={m} className="py-2 border-b border-black/5 last:border-0">
+            <div key={m} className="py-2 border-b border-theme-border last:border-0">
               {/* Header row: month name + coefficient badge */}
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[13px] text-black font-semibold">{name}</span>
@@ -4279,7 +4279,7 @@ function SeasonByMonthSection({
               <select
                 value={currentTier}
                 onChange={(e) => onChange({ ...seasonByMonth, [m]: e.target.value })}
-                className="w-full bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">— (nessuna)</option>
                 {seasonTiers.map((t) => (
@@ -4325,22 +4325,22 @@ function SpecialPeriodsSection({
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">
         Classificazione Periodi Speciali
       </h3>
-      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+      <p className="text-[13px] text-theme-text-secondary mt-0.5 mb-3">
         Assegna un tipo a un periodo di date (es. ponte dell'Immacolata, vacanze natalizie, evento). I giorni della settimana restano calcolati automaticamente al di fuori dei periodi definiti.
       </p>
 
       {periods.length === 0 && (
-        <div className="text-[13px] text-[#a1a1a6] py-3 text-center border border-dashed border-black/10 rounded-lg mb-3">
+        <div className="text-[13px] text-theme-text-muted py-3 text-center border border-dashed border-theme-border rounded-lg mb-3">
           Nessun periodo definito. Ogni data verrà classificata come semplice giorno della settimana.
         </div>
       )}
 
       {periods.length > 0 && (
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto_auto] gap-2 items-center text-[10px] font-medium uppercase tracking-wide text-[#a1a1a6] px-1 mb-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto_auto] gap-2 items-center text-[10px] font-medium uppercase tracking-wide text-theme-text-muted px-1 mb-1">
           <span>Data inizio</span>
           <span>Data fine</span>
           <span>Tipo</span>
@@ -4364,19 +4364,19 @@ function SpecialPeriodsSection({
                 type="date"
                 value={p.start_date}
                 onChange={(e) => patch(idx, { start_date: e.target.value })}
-                className={`bg-white border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${invalidRange ? 'border-red-400' : 'border-black/10'}`}
+                className={`bg-theme-bg-secondary border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${invalidRange ? 'border-red-400' : 'border-theme-border'}`}
               />
               <input
                 type="date"
                 value={p.end_date}
                 min={p.start_date || undefined}
                 onChange={(e) => patch(idx, { end_date: e.target.value })}
-                className={`bg-white border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${invalidRange ? 'border-red-400' : 'border-black/10'}`}
+                className={`bg-theme-bg-secondary border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${invalidRange ? 'border-red-400' : 'border-theme-border'}`}
               />
               <select
                 value={p.day_type_key}
                 onChange={(e) => patch(idx, { day_type_key: e.target.value })}
-                className="w-full bg-white border border-black/10 rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               >
                 <option value="">— (nessuna)</option>
                 {specialTiers.map((t) => (
@@ -4401,7 +4401,7 @@ function SpecialPeriodsSection({
         type="button"
         onClick={addPeriod}
         disabled={specialTiers.length === 0}
-        className="mt-3 text-[13px] text-[#007aff] hover:text-[#0051d5] disabled:text-[#a1a1a6] disabled:cursor-not-allowed"
+        className="mt-3 text-[13px] text-[#007aff] hover:text-[#0051d5] disabled:text-theme-text-muted disabled:cursor-not-allowed"
       >
         + Aggiungi periodo speciale
       </button>
@@ -4440,23 +4440,23 @@ function OccupancyTargetsSection({
     })
   }
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-      <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
+      <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">
         Target Occupazione per Classe × Finestra Temporale
       </h3>
-      <p className="text-[13px] text-[#6e6e73] mt-0.5 mb-3">
+      <p className="text-[13px] text-theme-text-secondary mt-0.5 mb-3">
         % attesa di occupazione rispetto al ritiro. Sotto target → sistema più aggressivo; sopra → protezione margine.
       </p>
 
       {/* Mobile / narrow: stacked cards per class */}
       <div className="space-y-4 md:hidden">
         {classes.map((cls) => (
-          <div key={cls.key} className="rounded-xl border border-black/10 p-3">
+          <div key={cls.key} className="rounded-xl border border-theme-border p-3">
             <div className="text-[13px] font-semibold text-black mb-2">{cls.label}</div>
             <div className="grid grid-cols-2 gap-2">
               {windows.map((w) => (
                 <label key={w.key} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-2 py-1.5">
-                  <span className="text-[11px] uppercase tracking-wide text-[#6e6e73]">{w.label}</span>
+                  <span className="text-[11px] uppercase tracking-wide text-theme-text-secondary">{w.label}</span>
                   <div className="relative">
                     <input
                       type="text"
@@ -4464,9 +4464,9 @@ function OccupancyTargetsSection({
                       pattern="[0-9]*"
                       value={targets[cls.key][w.key] === '' ? '' : String(targets[cls.key][w.key])}
                       onChange={(e) => handleChange(cls.key, w.key, e.target.value)}
-                      className="w-16 text-right tabular-nums bg-white text-black border border-black/10 rounded-md pr-6 pl-2 py-1 text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      className="w-16 text-right tabular-nums bg-theme-bg-secondary text-black border border-theme-border rounded-md pr-6 pl-2 py-1 text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                     />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6]">%</span>
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-theme-text-muted">%</span>
                   </div>
                 </label>
               ))}
@@ -4479,7 +4479,7 @@ function OccupancyTargetsSection({
       <div className="hidden md:block overflow-x-auto">
       <table className="min-w-full text-[13px]">
         <thead>
-          <tr className="text-[11px] uppercase tracking-wide text-[#a1a1a6]">
+          <tr className="text-[11px] uppercase tracking-wide text-theme-text-muted">
             <th className="text-left py-2 pr-4">Classe</th>
             {windows.map((w) => (
               <th key={w.key} className="text-right px-2">{w.label}</th>
@@ -4488,8 +4488,8 @@ function OccupancyTargetsSection({
         </thead>
         <tbody>
           {classes.map((cls) => (
-            <tr key={cls.key} className="border-t border-black/5">
-              <td className="py-2 pr-4 font-medium text-[#1d1d1f]">{cls.label}</td>
+            <tr key={cls.key} className="border-t border-theme-border">
+              <td className="py-2 pr-4 font-medium text-theme-text-primary">{cls.label}</td>
               {windows.map((w) => (
                 <td key={w.key} className="py-2 px-2">
                   <div className="relative">
@@ -4499,9 +4499,9 @@ function OccupancyTargetsSection({
                       pattern="[0-9]*"
                       value={targets[cls.key][w.key] === '' ? '' : String(targets[cls.key][w.key])}
                       onChange={(e) => handleChange(cls.key, w.key, e.target.value)}
-                      className="w-20 text-right tabular-nums bg-white text-black border border-black/10 rounded-lg pr-6 pl-2 py-1 text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      className="w-20 text-right tabular-nums bg-theme-bg-secondary text-black border border-theme-border rounded-lg pr-6 pl-2 py-1 text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                     />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-[#a1a1a6]">%</span>
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-theme-text-muted">%</span>
                   </div>
                 </td>
               ))}
@@ -4525,7 +4525,7 @@ function PriceBox({
 }) {
   return (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">€</span>
       <input
         type="number"
         min={0}
@@ -4536,7 +4536,7 @@ function PriceBox({
           const v = e.target.value
           onChange(v === '' ? '' : Number(v))
         }}
-        className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
       />
     </div>
   )
@@ -4553,7 +4553,7 @@ function CoeffBox({
 }) {
   return (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">×</span>
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">×</span>
       <input
         type="number"
         min={0}
@@ -4564,7 +4564,7 @@ function CoeffBox({
           const v = e.target.value
           onChange(v === '' ? '' : Number(v))
         }}
-        className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
       />
     </div>
   )
@@ -4594,20 +4594,20 @@ function CoefficientTable({
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+    <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
       <header className="px-5 pt-5 pb-3">
-        <h3 className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">
+        <h3 className="text-[15px] font-semibold text-theme-text-primary tracking-tight">
           {title}
         </h3>
-        <p className="text-[13px] text-[#6e6e73] mt-0.5">{subtitle}</p>
+        <p className="text-[13px] text-theme-text-secondary mt-0.5">{subtitle}</p>
       </header>
 
       <div className="px-5 pb-4">
         <div className="grid grid-cols-[80px_80px_80px_1fr_32px] gap-2 items-center px-1 mb-2">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Min {unit}</span>
-          <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Max {unit}</span>
-          <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Coeff.</span>
-          <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Etichetta</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Min {unit}</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Max {unit}</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Coeff.</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Etichetta</span>
           <span />
         </div>
 
@@ -4621,7 +4621,7 @@ function CoefficientTable({
                   const v = e.target.value
                   patch(r.id, { min: v === '' ? '' : Number(v) })
                 }}
-                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
               <input
                 type="number"
@@ -4630,7 +4630,7 @@ function CoefficientTable({
                   const v = e.target.value
                   patch(r.id, { max: v === '' ? '' : Number(v) })
                 }}
-                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
               <input
                 type="number"
@@ -4640,14 +4640,14 @@ function CoefficientTable({
                   const v = e.target.value
                   patch(r.id, { coeff: v === '' ? '' : Number(v) })
                 }}
-                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
               <input
                 type="text"
                 value={r.label}
                 onChange={(e) => patch(r.id, { label: e.target.value })}
                 placeholder="Descrizione"
-                className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
               <button
                 onClick={() => remove(r.id)}
@@ -4661,7 +4661,7 @@ function CoefficientTable({
             </div>
           ))}
           {rows.length === 0 && (
-            <p className="text-center text-[13px] text-[#6e6e73] py-4">
+            <p className="text-center text-[13px] text-theme-text-secondary py-4">
               Nessuna riga
             </p>
           )}
@@ -4700,21 +4700,21 @@ function PreventiviSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
           Impostazioni Preventivi
         </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
+        <p className="text-[14px] text-theme-text-secondary mt-1">
           Maggiorazione, scadenza e messaggi di sistema
         </p>
       </div>
 
       {/* Maggiorazione + Scadenza */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1">
+        <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1">
             Maggiorazione
           </h3>
-          <p className="text-[12px] text-[#6e6e73] mb-3">
+          <p className="text-[12px] text-theme-text-secondary mb-3">
             Applicata sul totale del preventivo
           </p>
           <div className="relative w-28">
@@ -4727,17 +4727,17 @@ function PreventiviSection({
                 const v = e.target.value
                 setPreventivi({ ...preventivi, maggiorazione_pct: v === '' ? '' : Number(v) })
               }}
-              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">%</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">%</span>
           </div>
         </section>
 
-        <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1">
+        <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1">
             Scadenza Default
           </h3>
-          <p className="text-[12px] text-[#6e6e73] mb-3">
+          <p className="text-[12px] text-theme-text-secondary mb-3">
             Validita del preventivo dopo l'invio
           </p>
           <div className="relative w-28">
@@ -4749,20 +4749,20 @@ function PreventiviSection({
                 const v = e.target.value
                 setPreventivi({ ...preventivi, scadenza_default_ore: v === '' ? '' : Number(v) })
               }}
-              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-12 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-12 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">ore</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">ore</span>
           </div>
         </section>
       </div>
 
       {/* Messaggi di Sistema Preventivo */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3">
-          <h3 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">
+          <h3 className="text-[17px] font-semibold text-theme-text-primary tracking-tight">
             Messaggi di Sistema — Preventivi
           </h3>
-          <p className="text-[13px] text-[#6e6e73] mt-0.5">
+          <p className="text-[13px] text-theme-text-secondary mt-0.5">
             Template usati dal sistema per i preventivi
           </p>
         </header>
@@ -4783,13 +4783,13 @@ function PreventiviSection({
                     />
                   </label>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-[14px] font-semibold text-[#1d1d1f]">
+                    <h4 className="text-[14px] font-semibold text-theme-text-primary">
                       {m.label}
                     </h4>
-                    <p className="text-[12px] text-[#6e6e73] mt-0.5">
+                    <p className="text-[12px] text-theme-text-secondary mt-0.5">
                       {m.description}
                     </p>
-                    <p className="text-[11px] text-[#a1a1a6] mt-0.5 font-mono">{m.key}</p>
+                    <p className="text-[11px] text-theme-text-muted mt-0.5 font-mono">{m.key}</p>
                   </div>
                 </div>
                 {isDeprecated ? (
@@ -4807,7 +4807,7 @@ function PreventiviSection({
                     value={m.body}
                     onChange={(e) => patchMsg(m.key, { body: e.target.value })}
                     rows={5}
-                    className="w-full bg-[#f5f5f7] border border-black/5 rounded-lg px-3 py-2 text-[13px] text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 resize-y font-mono leading-relaxed"
+                    className="w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 resize-y font-mono leading-relaxed"
                   />
                 )}
               </li>
@@ -4842,10 +4842,10 @@ function DanniPenaliSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
           Danni &amp; Penali
         </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
+        <p className="text-[14px] text-theme-text-secondary mt-1">
           Listino di Danni e Penali per categoria veicolo. Quando l&apos;admin apre il modale
           di addebito su una prenotazione, le voci abilitate qui vengono proposte automaticamente
           con prezzi e descrizione.
@@ -4853,7 +4853,7 @@ function DanniPenaliSection({
       </div>
 
       {/* Kind toggle (Penali / Danni) */}
-      <div className="inline-flex rounded-full bg-[#f5f5f7] p-1 gap-1">
+      <div className="inline-flex rounded-full bg-theme-bg-primary p-1 gap-1">
         {(['penali', 'danni'] as const).map((k) => {
           const active = k === kind
           return (
@@ -4862,8 +4862,8 @@ function DanniPenaliSection({
               onClick={() => setKind(k)}
               className={`px-4 py-1.5 text-[13px] font-medium rounded-full transition-colors ${
                 active
-                  ? 'bg-white text-[#1d1d1f] shadow-sm'
-                  : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                  ? 'bg-theme-bg-secondary text-theme-text-primary shadow-sm'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
               {k === 'penali' ? 'Penali' : 'Danni'}
@@ -4930,13 +4930,13 @@ function FeeListEditor({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-[16px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h3 className="text-[16px] font-semibold tracking-tight text-theme-text-primary">
           {titleNoun} per Categoria
         </h3>
       </div>
 
       {/* Category tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-black/5 -mb-px">
+      <div className="flex flex-wrap gap-2 border-b border-theme-border -mb-px">
         {categoryList.map((c) => {
           const isActive = c.id === activeCategory
           return (
@@ -4945,8 +4945,8 @@ function FeeListEditor({
               onClick={() => setActiveCategory(c.id)}
               className={`px-4 py-2 text-[14px] font-medium rounded-t-lg transition-colors ${
                 isActive
-                  ? 'bg-white border border-black/10 border-b-white text-[#1d1d1f]'
-                  : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                  ? 'bg-theme-bg-secondary border border-theme-border border-b-white text-theme-text-primary'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
               {c.label}
@@ -4955,7 +4955,7 @@ function FeeListEditor({
         })}
       </div>
 
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <ul className="divide-y divide-black/5">
           {items.map((it, idx) => (
             // NB: chiave SOLO per indice. Includere it.id farebbe cambiare
@@ -4971,10 +4971,10 @@ function FeeListEditor({
                   value={it.label}
                   onChange={(e) => patchItem(idx, { label: e.target.value })}
                   placeholder={`Nome ${itemNoun}`}
-                  className="flex-1 min-w-0 bg-white border border-black/10 rounded-lg px-3 py-1.5 text-[14px] font-medium text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 transition-colors"
+                  className="flex-1 min-w-0 bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-1.5 text-[14px] font-medium text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 transition-colors"
                 />
                 <div className="relative w-32 flex-shrink-0">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">€</span>
                   <input
                     type="number"
                     min={0}
@@ -4985,7 +4985,7 @@ function FeeListEditor({
                       patchItem(idx, { amount: v === '' ? '' : Number(v) })
                     }}
                     placeholder="0"
-                    className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-1.5 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-1.5 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
                 </div>
                 <button
@@ -5001,13 +5001,13 @@ function FeeListEditor({
             </li>
           ))}
           {items.length === 0 && (
-            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+            <li className="px-5 py-6 text-center text-[13px] text-theme-text-secondary">
               Nessun {itemNoun} per questa categoria
             </li>
           )}
         </ul>
 
-        <footer className="px-5 py-3 border-t border-black/5 bg-[#fafafa]">
+        <footer className="px-5 py-3 border-t border-theme-border bg-theme-bg-tertiary">
           <button
             onClick={addItem}
             className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6] transition-colors"
@@ -5035,17 +5035,17 @@ function FiscaleSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
           Fiscale
         </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
+        <p className="text-[14px] text-theme-text-secondary mt-1">
           Aliquota IVA applicata alle fatture generate dal sistema.
         </p>
       </div>
 
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
         <label className="block max-w-xs">
-          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
             Aliquota IVA
           </span>
           <div className="relative">
@@ -5059,9 +5059,9 @@ function FiscaleSection({
                 const v = e.target.value
                 setFiscal({ ...fiscal, vat_rate: v === '' ? '' : Number(v) })
               }}
-              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">%</span>
           </div>
         </label>
       </section>
@@ -5112,23 +5112,23 @@ function DR7ClubSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
           DR7 Club
         </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
+        <p className="text-[14px] text-theme-text-secondary mt-1">
           Tier di cashback DR7 Club. Il tier piu' alto raggiunto in base alla spesa annuale del cliente determina la percentuale di cashback applicata.
         </p>
       </div>
 
       {/* Legend — explain what the rules mean for the operator */}
       <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
-        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">
+        <h3 className="text-[14px] font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
           <svg className="w-4 h-4 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           Come funziona il calcolo
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-[13px] text-[#1d1d1f]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-[13px] text-theme-text-primary">
           <div>
             <p className="font-semibold mb-2 text-[#34c759]">Cosa conta come "spesa annuale"</p>
             <ul className="space-y-1.5 text-[#3a3a3c]">
@@ -5164,16 +5164,16 @@ function DR7ClubSection({
             </ul>
           </div>
         </div>
-        <div className="mt-4 pt-3 border-t border-[#007aff]/10 text-[12px] text-[#6e6e73]">
-          <span className="font-semibold text-[#1d1d1f]">Requisito:</span> il cliente deve avere un'iscrizione DR7 Club <b>attiva</b> al momento del pagamento. Senza iscrizione, nessun cashback viene applicato anche se la spesa supera la soglia.
+        <div className="mt-4 pt-3 border-t border-[#007aff]/10 text-[12px] text-theme-text-secondary">
+          <span className="font-semibold text-theme-text-primary">Requisito:</span> il cliente deve avere un'iscrizione DR7 Club <b>attiva</b> al momento del pagamento. Senza iscrizione, nessun cashback viene applicato anche se la spesa supera la soglia.
         </div>
       </section>
 
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Tier di Cashback</h3>
-            <p className="text-[12px] text-[#6e6e73] mt-0.5">
+            <h3 className="text-[15px] font-semibold text-theme-text-primary">Tier di Cashback</h3>
+            <p className="text-[12px] text-theme-text-secondary mt-0.5">
               Disattiva un tier per non applicarlo, senza perderlo dalla configurazione. Elimina un tier per rimuoverlo definitivamente.
             </p>
           </div>
@@ -5190,10 +5190,10 @@ function DR7ClubSection({
 
         <div className="px-5 pb-2">
           <div className="grid grid-cols-[44px_1fr_140px_100px_32px] gap-2 items-center px-1 mb-2">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Attivo</span>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6]">Nome</span>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Spesa min.</span>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] text-right">Reward</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Attivo</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">Nome</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted text-right">Spesa min.</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted text-right">Reward</span>
             <span />
           </div>
         </div>
@@ -5209,7 +5209,7 @@ function DR7ClubSection({
                   className="sr-only peer"
                 />
                 <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
-                  <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                  <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-theme-bg-secondary shadow transition-transform peer-checked:translate-x-5" />
                 </span>
               </label>
               <input
@@ -5217,10 +5217,10 @@ function DR7ClubSection({
                 value={t.label}
                 onChange={(e) => patchTier(t.id, { label: e.target.value })}
                 placeholder="Nome tier"
-                className={`bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${!t.is_active ? 'opacity-50' : ''}`}
+                className={`bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${!t.is_active ? 'opacity-50' : ''}`}
               />
               <div className={`relative ${!t.is_active ? 'opacity-50' : ''}`}>
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#a1a1a6] pointer-events-none">€</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">€</span>
                 <input
                   type="number"
                   min={0}
@@ -5230,7 +5230,7 @@ function DR7ClubSection({
                     const v = e.target.value
                     patchTier(t.id, { min_annual_spend: v === '' ? '' : Number(v) })
                   }}
-                  className="w-full bg-white border border-black/10 rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 />
               </div>
               <div className={`relative ${!t.is_active ? 'opacity-50' : ''}`}>
@@ -5244,9 +5244,9 @@ function DR7ClubSection({
                     const v = e.target.value
                     patchTier(t.id, { rate_pct: v === '' ? '' : Number(v) })
                   }}
-                  className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">%</span>
               </div>
               <button
                 onClick={() => removeTier(t.id)}
@@ -5261,7 +5261,7 @@ function DR7ClubSection({
             </li>
           ))}
           {sortedTiers.length === 0 && (
-            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+            <li className="px-5 py-6 text-center text-[13px] text-theme-text-secondary">
               Nessun tier configurato. Tutti i clienti riceveranno 0% di cashback.
             </li>
           )}
@@ -5286,17 +5286,17 @@ function AutomazioniSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">
           Automazioni
         </h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
+        <p className="text-[14px] text-theme-text-secondary mt-1">
           Buffer e gap operativi che controllano le verifiche di disponibilita' del calendario, sito e admin.
         </p>
       </div>
 
       {/* Legend — 3 buffers, what they do, when they fire */}
       <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
-        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-3 flex items-center gap-2">
+        <h3 className="text-[14px] font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
           <svg className="w-4 h-4 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -5334,15 +5334,15 @@ function AutomazioniSection({
             </div>
           </li>
         </ul>
-        <div className="mt-4 pt-3 border-t border-[#007aff]/10 text-[12px] text-[#6e6e73]">
-          <span className="font-semibold text-[#1d1d1f]">Importante:</span> dopo aver salvato un nuovo valore, l'admin va aggiornato (refresh pagina). Il sito propaga entro ~60 secondi grazie alla cache server-side.
+        <div className="mt-4 pt-3 border-t border-[#007aff]/10 text-[12px] text-theme-text-secondary">
+          <span className="font-semibold text-theme-text-primary">Importante:</span> dopo aver salvato un nuovo valore, l'admin va aggiornato (refresh pagina). Il sito propaga entro ~60 secondi grazie alla cache server-side.
         </div>
       </section>
 
       {/* 1) Buffer post-noleggio */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 bg-[#f5f9ff] border-b border-[#007aff]/10">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
             <span className="inline-flex w-6 h-6 rounded-full bg-[#007aff] text-white items-center justify-center text-[12px] font-bold">1</span>
             Buffer post-noleggio (stesso veicolo)
           </h3>
@@ -5363,19 +5363,19 @@ function AutomazioniSection({
                   const v = e.target.value
                   update({ rental_buffer_minutes: v === '' ? '' : Number(v) })
                 }}
-                className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">minuti</span>
             </div>
-            <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 90 (include il lavaggio automatico).</p>
+            <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 90 (include il lavaggio automatico).</p>
           </label>
         </div>
       </section>
 
       {/* 2) Cross-vehicle handover gap */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 bg-[#fff7e6] border-b border-[#ff9500]/15">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
             <span className="inline-flex w-6 h-6 rounded-full bg-[#ff9500] text-white items-center justify-center text-[12px] font-bold">2</span>
             Buffer handover tra veicoli diversi
           </h3>
@@ -5396,20 +5396,20 @@ function AutomazioniSection({
                   const v = e.target.value
                   update({ cross_vehicle_gap_minutes: v === '' ? '' : Number(v) })
                 }}
-                className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff9500]/40"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff9500]/40"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">minuti</span>
             </div>
-            <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 15. Esempio: cliente A ritira alle 10:30 → cliente B non puo' ritirare prima delle 10:45.</p>
+            <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 15. Esempio: cliente A ritira alle 10:30 → cliente B non puo' ritirare prima delle 10:45.</p>
           </label>
         </div>
       </section>
 
       {/* 5) Cancellation rules */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 bg-[#fff5f5] border-b border-[#ff3b30]/15 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+            <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
               <span className="inline-flex w-6 h-6 rounded-full bg-[#ff3b30] text-white items-center justify-center text-[12px] font-bold">5</span>
               Regole di cancellazione
             </h3>
@@ -5457,7 +5457,7 @@ function AutomazioniSection({
                         className="sr-only peer"
                       />
                       <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
-                        <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                        <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-theme-bg-secondary shadow transition-transform peer-checked:translate-x-5" />
                       </span>
                     </label>
                     <input
@@ -5465,7 +5465,7 @@ function AutomazioniSection({
                       value={r.label}
                       onChange={(e) => patch({ label: e.target.value })}
                       placeholder="Nome regola"
-                      className={`flex-1 min-w-0 bg-white border border-black/10 rounded-lg px-3 py-2 text-[14px] font-medium text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40 ${!r.is_active ? 'opacity-50' : ''}`}
+                      className={`flex-1 min-w-0 bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] font-medium text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40 ${!r.is_active ? 'opacity-50' : ''}`}
                     />
                     <button
                       onClick={() => update({ cancellation_rules: (automations.cancellation_rules || []).filter(x => x.id !== r.id) })}
@@ -5481,11 +5481,11 @@ function AutomazioniSection({
                   {/* Body: 5 fields in a responsive grid */}
                   <div className={`pl-[52px] grid grid-cols-2 sm:grid-cols-5 gap-3 ${!r.is_active ? 'opacity-50' : ''}`}>
                     <label className="block">
-                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Si applica a</span>
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">Si applica a</span>
                       <select
                         value={r.applies_to || 'all'}
                         onChange={(e) => patch({ applies_to: e.target.value as CancellationAppliesTo })}
-                        className="w-full bg-white border border-black/10 rounded-lg px-2 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
                       >
                         <option value="all">Tutto</option>
                         <option value="rental">Solo noleggio</option>
@@ -5493,11 +5493,11 @@ function AutomazioniSection({
                       </select>
                     </label>
                     <label className="block">
-                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Condizione</span>
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">Condizione</span>
                       <select
                         value={r.requires_service || 'none'}
                         onChange={(e) => patch({ requires_service: e.target.value as CancellationRequiresService })}
-                        className="w-full bg-white border border-black/10 rounded-lg px-2 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
                       >
                         <option value="none">Nessuna</option>
                         <option value="dr7_flex">DR7 Flex acquistato</option>
@@ -5506,7 +5506,7 @@ function AutomazioniSection({
                       </select>
                     </label>
                     <label className="block">
-                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Preavviso</span>
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">Preavviso</span>
                       <div className="relative">
                         <input
                           type="number"
@@ -5518,13 +5518,13 @@ function AutomazioniSection({
                             const v = e.target.value
                             patch({ min_days_notice: v === '' ? '' : Number(v) })
                           }}
-                          className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-10 py-2 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                          className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-10 py-2 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
                         />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">gg</span>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">gg</span>
                       </div>
                     </label>
                     <label className="block">
-                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Rimborso</span>
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">Rimborso</span>
                       <div className="relative">
                         <input
                           type="number"
@@ -5536,17 +5536,17 @@ function AutomazioniSection({
                             const v = e.target.value
                             patch({ refund_pct: v === '' ? '' : Number(v) })
                           }}
-                          className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-8 py-2 text-[13px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                          className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-8 py-2 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
                         />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">%</span>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">%</span>
                       </div>
                     </label>
                     <label className="block">
-                      <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">Destinazione</span>
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">Destinazione</span>
                       <select
                         value={r.refund_method || 'wallet'}
                         onChange={(e) => patch({ refund_method: e.target.value as 'wallet' | 'card' })}
-                        className="w-full bg-white border border-black/10 rounded-lg px-2 py-2 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
                       >
                         <option value="wallet">DR7 Wallet</option>
                         <option value="card">Carta (manuale)</option>
@@ -5554,14 +5554,14 @@ function AutomazioniSection({
                     </label>
                   </div>
                   {/* Summary */}
-                  <p className="text-[11px] text-[#6e6e73] mt-2 pl-[52px]">
+                  <p className="text-[11px] text-theme-text-secondary mt-2 pl-[52px]">
                     {appliesLbl}{(r.requires_service || 'none') !== 'none' ? ` · richiede ${requiresLbl}` : ''} · ≥ {typeof r.min_days_notice === 'number' ? r.min_days_notice : 0} gg → rimborso {typeof r.refund_pct === 'number' ? r.refund_pct : 0}% su {(r.refund_method || 'wallet') === 'card' ? 'carta (manuale)' : 'DR7 Wallet'} (penale {penalty}%)
                   </p>
                 </li>
               )
             })}
           {(automations.cancellation_rules || []).length === 0 && (
-            <li className="px-5 py-6 text-center text-[13px] text-[#6e6e73]">
+            <li className="px-5 py-6 text-center text-[13px] text-theme-text-secondary">
               Nessuna regola configurata. Tutte le cancellazioni saranno bloccate.
             </li>
           )}
@@ -5569,9 +5569,9 @@ function AutomazioniSection({
       </section>
 
       {/* 4) Late return grace */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 bg-[#fdf3ff] border-b border-[#af52de]/15">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
             <span className="inline-flex w-6 h-6 rounded-full bg-[#af52de] text-white items-center justify-center text-[12px] font-bold">4</span>
             Grace ritardo riconsegna
           </h3>
@@ -5592,19 +5592,19 @@ function AutomazioniSection({
                   const v = e.target.value
                   update({ late_return_grace_minutes: v === '' ? '' : Number(v) })
                 }}
-                className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#af52de]/40"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#af52de]/40"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">minuti</span>
             </div>
-            <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 90 (1h30 prima del pickup time).</p>
+            <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 90 (1h30 prima del pickup time).</p>
           </label>
         </div>
       </section>
 
       {/* 3) Pre-pickup carwash conflict */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 bg-[#f0f9ff] border-b border-[#34c759]/15">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1 flex items-center gap-2">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
             <span className="inline-flex w-6 h-6 rounded-full bg-[#34c759] text-white items-center justify-center text-[12px] font-bold">3</span>
             Buffer pre-pickup (veicolo in lavaggio)
           </h3>
@@ -5625,11 +5625,11 @@ function AutomazioniSection({
                   const v = e.target.value
                   update({ pre_pickup_carwash_buffer_minutes: v === '' ? '' : Number(v) })
                 }}
-                className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#34c759]/40"
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#34c759]/40"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">minuti</span>
             </div>
-            <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 90 (1h30). Solo lato admin.</p>
+            <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 90 (1h30). Solo lato admin.</p>
           </label>
         </div>
       </section>
@@ -5673,7 +5673,7 @@ function OrariLavaggioSection({
     <div className="space-y-6">
       {/* Legend */}
       <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
-        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-2 flex items-center gap-2">
+        <h3 className="text-[14px] font-semibold text-theme-text-primary mb-2 flex items-center gap-2">
           <svg className="w-4 h-4 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -5688,9 +5688,9 @@ function OrariLavaggioSection({
       </section>
 
       {/* Slot interval */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
         <label className="block max-w-xs">
-          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
             Granularità slot
           </span>
           <div className="relative">
@@ -5704,18 +5704,18 @@ function OrariLavaggioSection({
                 const v = e.target.value
                 update({ slot_minutes: v === '' ? '' : Number(v) })
               }}
-              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">minuti</span>
           </div>
-          <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 5. Esempio con 15: gli slot disponibili sono 09:00, 09:15, 09:30, …</p>
+          <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 5. Esempio con 15: gli slot disponibili sono 09:00, 09:15, 09:30, …</p>
         </label>
       </section>
 
       {/* Days */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Calendario settimanale</h3>
+          <h3 className="text-[15px] font-semibold text-theme-text-primary">Calendario settimanale</h3>
         </header>
         <ul className="divide-y divide-black/5">
           {DAY_KEYS.map((d) => {
@@ -5731,10 +5731,10 @@ function OrariLavaggioSection({
                       className="sr-only peer"
                     />
                     <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
-                      <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                      <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-theme-bg-secondary shadow transition-transform peer-checked:translate-x-5" />
                     </span>
                   </label>
-                  <span className="text-[14px] font-semibold text-[#1d1d1f] w-24">{DAY_LABELS[d]}</span>
+                  <span className="text-[14px] font-semibold text-theme-text-primary w-24">{DAY_LABELS[d]}</span>
                   {!day.is_open && <span className="text-[12px] text-[#ff3b30]">Chiuso</span>}
                   {day.is_open && (
                     <button
@@ -5757,14 +5757,14 @@ function OrariLavaggioSection({
                           type="time"
                           value={w.start}
                           onChange={(e) => patchWindow(d, i, { start: e.target.value })}
-                          className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                          className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                         />
-                        <span className="text-[12px] text-[#a1a1a6]">→</span>
+                        <span className="text-[12px] text-theme-text-muted">→</span>
                         <input
                           type="time"
                           value={w.end}
                           onChange={(e) => patchWindow(d, i, { end: e.target.value })}
-                          className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                          className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                         />
                         <button
                           onClick={() => removeWindow(d, i)}
@@ -5779,7 +5779,7 @@ function OrariLavaggioSection({
                       </div>
                     ))}
                     {day.windows.length === 0 && (
-                      <p className="text-[12px] text-[#6e6e73] italic">Nessuna finestra. Clicca "Finestra" per aggiungerne una.</p>
+                      <p className="text-[12px] text-theme-text-secondary italic">Nessuna finestra. Clicca "Finestra" per aggiungerne una.</p>
                     )}
                   </div>
                 )}
@@ -5813,18 +5813,18 @@ function OrariSection({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">Orari</h2>
-        <p className="text-[14px] text-[#6e6e73] mt-1">
+        <h2 className="text-[22px] font-semibold tracking-tight text-theme-text-primary">Orari</h2>
+        <p className="text-[14px] text-theme-text-secondary mt-1">
           Calendari settimanali per Noleggio (pickup + riconsegna) e Lavaggio. Sito + admin generano gli slot prenotabili da queste finestre.
         </p>
       </div>
 
       {/* Sub-tab pills */}
-      <div className="inline-flex items-center gap-1 p-1 bg-[#f5f5f7] rounded-xl">
+      <div className="inline-flex items-center gap-1 p-1 bg-theme-bg-primary rounded-xl">
         <button
           onClick={() => setTab('noleggio')}
           className={`px-4 py-1.5 text-[13px] font-medium rounded-lg transition-colors ${
-            tab === 'noleggio' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+            tab === 'noleggio' ? 'bg-theme-bg-secondary text-theme-text-primary shadow-sm' : 'text-theme-text-secondary hover:text-theme-text-primary'
           }`}
         >
           Noleggio
@@ -5832,7 +5832,7 @@ function OrariSection({
         <button
           onClick={() => setTab('lavaggio')}
           className={`px-4 py-1.5 text-[13px] font-medium rounded-lg transition-colors ${
-            tab === 'lavaggio' ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+            tab === 'lavaggio' ? 'bg-theme-bg-secondary text-theme-text-primary shadow-sm' : 'text-theme-text-secondary hover:text-theme-text-primary'
           }`}
         >
           Lavaggio
@@ -5889,10 +5889,10 @@ function NoleggioWeekHoursEditor({
                   className="sr-only peer"
                 />
                 <span className="relative inline-block w-11 h-6 rounded-full bg-[#e5e5ea] peer-checked:bg-[#34c759] transition-colors">
-                  <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                  <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-theme-bg-secondary shadow transition-transform peer-checked:translate-x-5" />
                 </span>
               </label>
-              <span className="text-[14px] font-semibold text-[#1d1d1f] w-24">{DAY_LABELS[d]}</span>
+              <span className="text-[14px] font-semibold text-theme-text-primary w-24">{DAY_LABELS[d]}</span>
               {!day.is_open && <span className="text-[12px] text-[#ff3b30]">Chiuso</span>}
               {day.is_open && (
                 <button
@@ -5915,14 +5915,14 @@ function NoleggioWeekHoursEditor({
                       type="time"
                       value={w.start}
                       onChange={(e) => patchWindow(d, i, { start: e.target.value })}
-                      className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2"
+                      className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2"
                     />
-                    <span className="text-[12px] text-[#a1a1a6]">→</span>
+                    <span className="text-[12px] text-theme-text-muted">→</span>
                     <input
                       type="time"
                       value={w.end}
                       onChange={(e) => patchWindow(d, i, { end: e.target.value })}
-                      className="bg-white border border-black/10 rounded-md px-2 py-1.5 text-[13px] text-[#1d1d1f] focus:outline-none focus:ring-2"
+                      className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2"
                     />
                     <button
                       onClick={() => removeWindow(d, i)}
@@ -5937,7 +5937,7 @@ function NoleggioWeekHoursEditor({
                   </div>
                 ))}
                 {day.windows.length === 0 && (
-                  <p className="text-[12px] text-[#6e6e73] italic">Nessuna finestra. Clicca "Finestra" per aggiungerne una.</p>
+                  <p className="text-[12px] text-theme-text-secondary italic">Nessuna finestra. Clicca "Finestra" per aggiungerne una.</p>
                 )}
               </div>
             )}
@@ -5961,7 +5961,7 @@ function OrariNoleggioSection({
     <div className="space-y-6">
       {/* Legend */}
       <section className="bg-[#f5f9ff] rounded-2xl border border-[#007aff]/15 p-5">
-        <h3 className="text-[14px] font-semibold text-[#1d1d1f] mb-2 flex items-center gap-2">
+        <h3 className="text-[14px] font-semibold text-theme-text-primary mb-2 flex items-center gap-2">
           <svg className="w-4 h-4 text-[#007aff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -5976,9 +5976,9 @@ function OrariNoleggioSection({
       </section>
 
       {/* Slot interval */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm p-5">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
         <label className="block max-w-xs">
-          <span className="block text-[11px] font-medium uppercase tracking-wide text-[#a1a1a6] mb-1">
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
             Granularità slot
           </span>
           <div className="relative">
@@ -5992,18 +5992,18 @@ function OrariNoleggioSection({
                 const v = e.target.value
                 update({ slot_minutes: v === '' ? '' : Number(v) })
               }}
-              className="w-full bg-white border border-black/10 rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-16 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#a1a1a6] pointer-events-none">minuti</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">minuti</span>
           </div>
-          <p className="text-[11px] text-[#6e6e73] mt-1.5">Default: 15. Esempio con 15: gli slot disponibili sono 09:00, 09:15, 09:30, …</p>
+          <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 15. Esempio con 15: gli slot disponibili sono 09:00, 09:15, 09:30, …</p>
         </label>
       </section>
 
       {/* Pickup */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 bg-[#f5f9ff] border-b border-[#007aff]/10">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Pickup (ritiro)</h3>
+          <h3 className="text-[15px] font-semibold text-theme-text-primary">Pickup (ritiro)</h3>
           <p className="text-[12px] text-[#3a3a3c] mt-0.5">Orari in cui il cliente puo' ritirare il veicolo.</p>
         </header>
         <NoleggioWeekHoursEditor
@@ -6014,9 +6014,9 @@ function OrariNoleggioSection({
       </section>
 
       {/* Return */}
-      <section className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden">
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
         <header className="px-5 pt-5 pb-3 bg-[#fff7e6] border-b border-[#ff9500]/15">
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Riconsegna (return)</h3>
+          <h3 className="text-[15px] font-semibold text-theme-text-primary">Riconsegna (return)</h3>
           <p className="text-[12px] text-[#3a3a3c] mt-0.5">Orari in cui il cliente puo' riconsegnare il veicolo.</p>
         </header>
         <NoleggioWeekHoursEditor
