@@ -193,27 +193,26 @@ export default function VehiclesTab() {
     }
   }
 
-  // Aggregati flotta dagli ultimi 30 giorni di bookings (stesso pattern
-  // di FleetList). Pure dati reali — niente mock. Caricati una volta
-  // dopo che `vehicles` e\' pronto, refresh su realtime bookings.
+  // Aggregati flotta del MESE CORRENTE (1->oggi). Schema identico a
+  // /monthly-report (Report Noleggio): price_total in cent / vehicle_plate
+  // / status filter. Nessun gate payment_status: e\' ricavo maturato.
   type VehStats = { fatturato: number; giorniNoleggio: number; giorniFermo: number; utilizzoPct: number }
   const [vehicleStats, setVehicleStats] = useState<Map<string, VehStats>>(new Map())
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loadBookingStats = async () => {
     if (vehicles.length === 0) return
     const today = new Date(); today.setHours(0, 0, 0, 0)
-    const thirtyAgo = new Date(today.getTime() - 30 * 86400000)
-    // Stesso schema della funzione /monthly-report (Report Noleggio):
-    //   - bookings.price_total e\' in CENT (divido per 100)
-    //   - bookings.vehicle_plate (NON `plate`)
-    //   - status filter coincide con i noleggi reali (escludiamo solo
-    //     cancellati e bozze). payment_status non gate il fatturato perche\'
-    //     il report mostra ricavo maturato, non incassato.
+    // Mese corrente: 1 del mese 00:00 -> oggi. Reset automatico al cambio mese.
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    const daysElapsed = Math.max(1, Math.round((today.getTime() - monthStart.getTime()) / 86400000) + 1)
     const STATI_NOLEGGIO_REPORT = ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active']
     const { data: bookings } = await supabase
       .from('bookings')
       .select('id, vehicle_id, vehicle_plate, vehicle_name, pickup_date, dropoff_date, price_total, status, payment_status, service_type')
-      .gte('pickup_date', thirtyAgo.toISOString())
+      // pickup oltre fine mese e\' escluso (non e\' ancora questo mese);
+      // pickup prima del mese ma con dropoff nel mese viene catturato perche\'
+      // l'overlap calcolato sotto include i giorni clamp-ati al mese.
+      .gte('pickup_date', new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString())
       .in('status', STATI_NOLEGGIO_REPORT)
       .or('service_type.is.null,service_type.eq.car_rental,service_type.eq.rental')
       .limit(2000)
@@ -240,32 +239,52 @@ export default function VehiclesTab() {
         if (v) vid = v.id
       }
       if (!vid) continue
+      // Overlap del booking col mese corrente. Se nessuna sovrapposizione, skip.
+      if (b.pickup_date && b.dropoff_date) {
+        const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
+        const e = new Date(b.dropoff_date); e.setHours(0, 0, 0, 0)
+        if (e < monthStart || s > today) continue
+        const sC = s < monthStart ? monthStart : s
+        const eC = e > today ? today : e
+        const set = occupied.get(vid) || new Set<string>()
+        for (let t = sC.getTime(); t <= eC.getTime(); t += 86400000) set.add(new Date(t).toISOString().slice(0, 10))
+        occupied.set(vid, set)
+      } else {
+        // Senza date robuste, considera valido solo se pickup_date dentro il mese.
+        if (b.pickup_date) {
+          const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
+          if (s < monthStart || s > today) continue
+        } else continue
+      }
       const cur = stats.get(vid) || { fatturato: 0, giorniNoleggio: 0, giorniFermo: 0, utilizzoPct: 0 }
       // price_total puo\' essere numerico o stringa (wallet RPC casta a numeric).
       const raw = b.price_total
       const eur = (typeof raw === 'string' ? parseFloat(raw) : (raw || 0)) / 100
       if (Number.isFinite(eur) && eur > 0) cur.fatturato += eur
-      if (b.pickup_date && b.dropoff_date) {
-        const s = new Date(b.pickup_date); s.setHours(0, 0, 0, 0)
-        const e = new Date(b.dropoff_date); e.setHours(0, 0, 0, 0)
-        const sC = s < thirtyAgo ? thirtyAgo : s
-        const eC = e > today ? today : e
-        const set = occupied.get(vid) || new Set<string>()
-        for (let t = sC.getTime(); t <= eC.getTime(); t += 86400000) set.add(new Date(t).toISOString().slice(0, 10))
-        occupied.set(vid, set)
-      }
       stats.set(vid, cur)
     }
     for (const [vid, set] of occupied.entries()) {
-      const cur = stats.get(vid)
-      if (!cur) continue
+      const cur = stats.get(vid) || { fatturato: 0, giorniNoleggio: 0, giorniFermo: 0, utilizzoPct: 0 }
       cur.giorniNoleggio = set.size
-      cur.giorniFermo = Math.max(0, 30 - set.size)
-      cur.utilizzoPct = Math.min(100, Math.round((set.size / 30) * 100))
+      cur.giorniFermo = Math.max(0, daysElapsed - set.size)
+      cur.utilizzoPct = Math.min(100, Math.round((set.size / daysElapsed) * 100))
+      stats.set(vid, cur)
     }
     setVehicleStats(stats)
   }
   useEffect(() => { loadBookingStats() }, [vehicles.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Giorni trascorsi nel mese corrente (1..today). Usato per ROI/utilizzo.
+  const daysElapsedThisMonth = useMemo(() => {
+    const t = new Date(); t.setHours(0, 0, 0, 0)
+    return t.getDate()
+  }, [])
+
+  // Etichetta mese corrente per i sub-label delle KPI.
+  const currentMonthLabel = useMemo(() => {
+    const t = new Date()
+    return t.toLocaleDateString('it-IT', { month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
+  }, [])
 
   // Stats aggregate per la dashboard (KPI + alert + suggerimenti).
   const fleetKpi = useMemo(() => {
@@ -285,7 +304,7 @@ export default function VehiclesTab() {
       if (s.utilizzoPct < 40) sottoTarget++
       if (s.giorniFermo >= 3) fermiOltre3++
       const v = vehicles.find(x => x.id === vid)
-      const potential = (v?.daily_rate || 0) * 30
+      const potential = (v?.daily_rate || 0) * daysElapsedThisMonth
       if (potential > 0) { roiSum += (s.fatturato / potential) * 100; roiCount++ }
     })
     const utilizzoMedio = utilCount > 0 ? Math.round(utilSum / utilCount) : 0
@@ -764,7 +783,7 @@ export default function VehiclesTab() {
             { label: 'TOTALE VEICOLI', value: String(total), sub: '100% della flotta', tone: '#3B82F6', icon: 'car' },
             { label: 'VEICOLI ATTIVI', value: String(fleetKpi.attivi), sub: pct(fleetKpi.attivi), tone: '#10B981', icon: 'check' },
             { label: 'VEICOLI FERMI', value: String(fleetKpi.fermi), sub: pct(fleetKpi.fermi), tone: '#EF4444', icon: 'wrench' },
-            { label: 'FATTURATO FLOTTA', value: `€${fleetKpi.totalFatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`, sub: 'ultimi 30 giorni', tone: '#F59E0B', icon: 'euro' },
+            { label: 'FATTURATO FLOTTA', value: `€${fleetKpi.totalFatturato.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`, sub: currentMonthLabel, tone: '#F59E0B', icon: 'euro' },
             { label: 'UTILIZZO MEDIO', value: `${fleetKpi.utilizzoMedio}%`, sub: 'media veicolare', tone: '#06B6D4', icon: 'chart' },
             { label: 'ROI MEDIO FLOTTA', value: `${String(fleetKpi.roiMedio).replace('.', ',')}%`, sub: 'fatturato/potenziale', tone: '#A855F7', icon: 'trend' },
           ]
@@ -1347,7 +1366,7 @@ export default function VehiclesTab() {
                         </div>
                         <div className="text-right flex-shrink-0">
                           <div className="text-sm font-bold text-theme-text-primary tabular-nums">€{(stats?.fatturato || 0).toLocaleString('it-IT', { maximumFractionDigits: 0 })}</div>
-                          <div className="text-[10px] text-theme-text-muted">30g</div>
+                          <div className="text-[10px] text-theme-text-muted">mese</div>
                         </div>
                       </div>
                     </div>
@@ -1453,8 +1472,8 @@ export default function VehiclesTab() {
                           <td className="px-3 py-2.5 text-sm tabular-nums text-right">
                             <span className={roi >= 0 ? 'text-emerald-400' : 'text-red-400'}>{roi >= 0 ? '▲' : '▼'} {String(Math.abs(roi)).replace('.', ',')}%</span>
                           </td>
-                          <td className="px-3 py-2.5">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${dispClass}`}>{dispLabel}</span>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap ${dispClass}`}>{dispLabel}</span>
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex justify-center gap-1.5">
@@ -1513,10 +1532,10 @@ export default function VehiclesTab() {
 
               {/* Top per fatturato */}
               <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-4">
-                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-3">Top per Fatturato (30g)</div>
+                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-3">Top per Fatturato (mese)</div>
                 <div className="space-y-2">
                   {topByFatturato.filter(r => r.fatturato > 0).length === 0 ? (
-                    <div className="text-xs text-theme-text-muted text-center py-2">Nessun fatturato negli ultimi 30g</div>
+                    <div className="text-xs text-theme-text-muted text-center py-2">Nessun fatturato nel mese corrente</div>
                   ) : topByFatturato.filter(r => r.fatturato > 0).map((r, i) => (
                     <div key={r.vehicle.id} className="flex items-center gap-2">
                       <span className="text-[10px] text-theme-text-muted font-mono w-3 flex-shrink-0">{i + 1}</span>
@@ -1544,7 +1563,7 @@ export default function VehiclesTab() {
                     <span className="text-xs font-bold text-theme-text-primary tabular-nums">{mediaKm.toLocaleString('it-IT')} km</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-theme-text-muted">Giorni totali fermi (30g)</span>
+                    <span className="text-[11px] text-theme-text-muted">Giorni totali fermi (mese)</span>
                     <span className="text-xs font-bold text-theme-text-primary tabular-nums">{giorniFermiTotali} giorni</span>
                   </div>
                   <div className="flex items-center justify-between">
