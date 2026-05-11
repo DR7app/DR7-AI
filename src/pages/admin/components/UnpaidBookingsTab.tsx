@@ -2834,16 +2834,44 @@ export default function UnpaidBookingsTab() {
               </svg>
             </div>
             <div className="min-w-0">
-              <h2 className="text-xl lg:text-2xl font-bold text-theme-text-primary leading-tight">In attesa di pagamento</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl lg:text-2xl font-bold text-theme-text-primary leading-tight">In attesa di pagamento</h2>
+                {/* AI badge — heuristic-only for now (rules in performanceStats),
+                    but the visual cue tells the operator this section uses
+                    intelligenza assistita for sollecit + priorita\'. */}
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                  AI
+                </span>
+              </div>
               <p className="text-xs lg:text-sm text-theme-text-muted mt-0.5">
                 Gestisci incassi, solleciti e recupera clienti in modo intelligente
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-theme-text-muted">
-            <span className="px-2.5 py-1 rounded-full bg-theme-bg-tertiary border border-theme-border">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 rounded-full bg-theme-bg-tertiary border border-theme-border text-[11px] text-theme-text-muted">
               {customerGroups.length} {customerGroups.length === 1 ? 'cliente' : 'clienti'} in lista
             </span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30 hover:bg-cyan-600 transition-colors"
+              title="Registra un nuovo incasso manuale (placeholder, da wirare)"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Nuovo Incasso
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+              title="Esporta lista insolventi (placeholder, da wirare)"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+              </svg>
+              Esporta
+            </button>
           </div>
         </div>
       </div>
@@ -2886,11 +2914,8 @@ export default function UnpaidBookingsTab() {
               </div>
             </div>
             <div className="text-2xl lg:text-3xl font-bold text-purple-400 mt-2.5 tabular-nums">{allGroups.total}</div>
-            <div className="text-[11px] text-theme-text-muted mt-1 flex flex-wrap gap-1">
-              <span className="bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">N {allGroups.rental}</span>
-              <span className="bg-cyan-500/15 text-cyan-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">PW {allGroups.pw}</span>
-              <span className="bg-yellow-500/15 text-yellow-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">P {allGroups.penali}</span>
-              <span className="bg-red-500/15 text-red-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">D {allGroups.danni}</span>
+            <div className="text-[11px] text-theme-text-muted mt-1">
+              {allGroups.rental} noleggio &middot; {allGroups.pw} prime wash
             </div>
           </div>
         </div>
@@ -2955,33 +2980,13 @@ export default function UnpaidBookingsTab() {
         </div>
       </div>
 
-      {/* Filters + Search */}
+      {/* Filters + Search — search a sinistra, 5 filter pills a destra
+          come da mockup. I primi 4 sono select-like (drop-down), il 5o
+          apre filtri avanzati. Servizio selezionato influenza la lista. */}
       <div className="bg-theme-bg-secondary rounded-2xl p-3 lg:p-4 border border-theme-border">
-        <div className="flex flex-col lg:flex-row justify-between gap-3 lg:gap-4">
-          <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0 lg:flex-wrap">
-            {(['all', 'rental', 'prime_wash'] as const).map(f => {
-              const counts: Record<string, number> = { all: allGroups.total, rental: allGroups.rental, prime_wash: allGroups.pw }
-              const labels: Record<string, string> = { all: 'Tutti', rental: 'Noleggio', prime_wash: 'Prime Wash' }
-              const active = filterService === f
-              return (
-                <button
-                  key={f}
-                  onClick={() => setFilterService(f)}
-                  className={`px-4 py-2 rounded-full font-medium transition-all whitespace-nowrap text-sm flex items-center gap-2 ${
-                    active
-                      ? 'bg-dr7-gold text-theme-bg-primary shadow-lg shadow-dr7-gold/20'
-                      : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover hover:text-theme-text-primary'
-                  }`}
-                >
-                  <span>{labels[f]}</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] tabular-nums ${
-                    active ? 'bg-theme-bg-primary/20 text-theme-bg-primary' : 'bg-theme-bg-primary/40 text-theme-text-muted'
-                  }`}>{counts[f]}</span>
-                </button>
-              )
-            })}
-          </div>
-          <div className="relative flex-1 lg:flex-initial lg:max-w-sm">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 lg:gap-3">
+          {/* Search */}
+          <div className="relative flex-1 lg:max-w-md">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -2989,9 +2994,76 @@ export default function UnpaidBookingsTab() {
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Cerca cliente, email, telefono..."
-              className="pl-9 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-dr7-gold/50 focus:border-dr7-gold/50 w-full transition-all"
+              placeholder="Cerca cliente, email, telefono, targa..."
+              className="pl-9 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 w-full transition-all"
             />
+          </div>
+
+          {/* Filter pills */}
+          <div className="flex gap-2 overflow-x-auto lg:flex-wrap lg:overflow-visible">
+            {/* Categoria (servizio) — funzionale */}
+            <select
+              value={filterService}
+              onChange={e => setFilterService(e.target.value as typeof filterService)}
+              className="appearance-none px-3 pr-7 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover transition-colors cursor-pointer"
+              style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '0.75rem' }}
+            >
+              <option value="all">Tutte le categorie ({allGroups.total})</option>
+              <option value="rental">Noleggio ({allGroups.rental})</option>
+              <option value="prime_wash">Prime Wash ({allGroups.pw})</option>
+            </select>
+
+            {/* Stato — placeholder (TBD wiring) */}
+            <select
+              defaultValue=""
+              className="appearance-none px-3 pr-7 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover transition-colors cursor-pointer"
+              style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '0.75rem' }}
+              title="Filtro stato (in arrivo)"
+            >
+              <option value="">Tutti gli stati</option>
+              <option value="aperto">Aperto</option>
+              <option value="parziale">Parzialmente pagato</option>
+              <option value="sollecitato">Sollecitato</option>
+            </select>
+
+            {/* Priorità — placeholder */}
+            <select
+              defaultValue=""
+              className="appearance-none px-3 pr-7 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover transition-colors cursor-pointer"
+              style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '0.75rem' }}
+              title="Filtro priorità (in arrivo)"
+            >
+              <option value="">Tutte le priorità</option>
+              <option value="alta">Alta</option>
+              <option value="media">Media</option>
+              <option value="bassa">Bassa</option>
+            </select>
+
+            {/* Data — placeholder */}
+            <select
+              defaultValue=""
+              className="appearance-none px-3 pr-7 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover transition-colors cursor-pointer"
+              style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '0.75rem' }}
+              title="Filtro data (in arrivo)"
+            >
+              <option value="">Tutte le date</option>
+              <option value="7d">Ultimi 7 giorni</option>
+              <option value="30d">Ultimi 30 giorni</option>
+              <option value="90d">Ultimi 90 giorni</option>
+              <option value="overdue">Solo scaduti</option>
+            </select>
+
+            {/* Filtri avanzati — placeholder button */}
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+              title="Filtri avanzati (in arrivo)"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M6 12h12M10 20h4" />
+              </svg>
+              Filtri avanzati
+            </button>
           </div>
         </div>
       </div>
