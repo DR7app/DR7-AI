@@ -1882,6 +1882,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             const km = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
             return km === 'unlimited' ? 'Illimitati' : `${km} Km`
           })(),
+          // {km_illimitati} -> Sì / No (mirror della variabile in
+          // send-whatsapp-notification.ts e nella legenda Pro). Necessario
+          // qui perche' i preventivi fanno la substitution LOCALMENTE e non
+          // passano per il sender.
+          km_illimitati: (pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited') ? 'Sì' : 'No',
+          unlimited_km: (pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited') ? 'Sì' : 'No',
           // Luogo di ritiro/riconsegna — se "domicilio" usa l'indirizzo custom,
           // altrimenti usa la label dell'ufficio/aeroporto.
           // pickup_location  → dove il cliente ritira (consegna a casa = delivery_address)
@@ -1898,8 +1904,32 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           })(),
         }
 
+        // CUSTOM VARIABLES — pre-load enabled rows da system_message_variables
+        // e mergea PRIMA delle vars locali (locali vincono in caso di collisione).
+        // Cosi' {address_main} / {promo_ferragosto} / qualunque variabile custom
+        // definita dall'admin funziona anche nei preventivi (non solo nei
+        // template inviati via send-whatsapp-notification).
+        let allVars: Record<string, string> = {}
+        try {
+          const { data: customVars } = await supabase
+            .from('system_message_variables')
+            .select('key, value, is_enabled')
+            .eq('is_enabled', true)
+          if (Array.isArray(customVars)) {
+            for (const row of customVars) {
+              const k = String((row as { key?: unknown }).key || '').trim()
+              const v = String((row as { value?: unknown }).value ?? '')
+              if (k) allVars[k] = v
+            }
+          }
+        } catch (e) {
+          console.error('[PreventiviTab] custom vars load failed (non-fatal):', e)
+        }
+        // Vars locali del preventivo vincono
+        allVars = { ...allVars, ...vars }
+
         let msg = tpl.message_body
-        for (const [k, v] of Object.entries(vars)) {
+        for (const [k, v] of Object.entries(allVars)) {
           msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '')
         }
         // Clean up empty lines from unused variables
