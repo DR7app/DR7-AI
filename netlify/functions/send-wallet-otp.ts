@@ -4,15 +4,36 @@ import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { requireAuth } from './require-auth'
 
-// OTP recipient — direzione's working channel (kept as-is, do not change).
+// OTP recipient — direzione's working channel. Config chain matches
+// limitation-override-otp.ts:
+//   1) centralina_pro_config.config.notifications.otp_recipient
+//   2) process.env.OTP_RECIPIENT
+//   3) hardcoded fallback
 // Any superadmin who triggers an OTP-required action self-approves
 // without an email (handled below).
-const OTP_RECIPIENT = 'valesaja91@icloud.com'
+const OTP_RECIPIENT_FALLBACK = 'valesaja91@icloud.com'
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+async function getOtpRecipient(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('centralina_pro_config')
+      .select('config')
+      .eq('id', 'main')
+      .maybeSingle()
+    const cfg = (data?.config || {}) as Record<string, unknown>
+    const notif = (cfg.notifications || {}) as Record<string, unknown>
+    const v = notif.otp_recipient
+    if (typeof v === 'string' && v.includes('@')) return v
+  } catch (e) {
+    console.warn('[send-wallet-otp] OTP recipient lookup failed, using fallback', e)
+  }
+  return process.env.OTP_RECIPIENT || OTP_RECIPIENT_FALLBACK
+}
 
 export const handler: Handler = async (event) => {
   const headers = {
@@ -59,7 +80,7 @@ export const handler: Handler = async (event) => {
 
     const { error: emailError } = await resend.emails.send({
       from: 'DR7 Empire <info@dr7.app>',
-      to: OTP_RECIPIENT,
+      to: await getOtpRecipient(),
       subject: `Codice Verifica Wallet - ${actionLabel} €${parseFloat(amount).toFixed(2)}`,
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -90,7 +111,7 @@ export const handler: Handler = async (event) => {
       return { statusCode: 500, headers, body: JSON.stringify({ error: emailError.message }) }
     }
 
-    console.log(`[send-wallet-otp] OTP sent to ${OTP_RECIPIENT} for ${actionLabel} €${amount} - ${customerName}`)
+    console.log(`[send-wallet-otp] OTP sent for ${actionLabel} €${amount} - ${customerName}`)
     return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }
   } catch (err: any) {
     console.error('[send-wallet-otp] Error:', err)

@@ -9,10 +9,29 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// OTP recipient — direzione's working channel (kept as-is, do not change).
+// OTP recipient — direzione's working channel. Config chain:
+//   1) centralina_pro_config.config.notifications.otp_recipient (boss-editable)
+//   2) process.env.OTP_RECIPIENT                                 (netlify env)
+//   3) hardcoded fallback                                        (recovery)
 // When a superadmin himself triggers an OTP-required action the bypass
 // below auto-approves without sending any email.
-const OTP_RECIPIENT = 'valesaja91@icloud.com'
+const OTP_RECIPIENT_FALLBACK = 'valesaja91@icloud.com'
+async function getOtpRecipient(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('centralina_pro_config')
+      .select('config')
+      .eq('id', 'main')
+      .maybeSingle()
+    const cfg = (data?.config || {}) as Record<string, unknown>
+    const notif = (cfg.notifications || {}) as Record<string, unknown>
+    const v = notif.otp_recipient
+    if (typeof v === 'string' && v.includes('@')) return v
+  } catch (e) {
+    console.warn('[limitation-override-otp] OTP recipient lookup failed, using fallback', e)
+  }
+  return process.env.OTP_RECIPIENT || OTP_RECIPIENT_FALLBACK
+}
 const OTP_TTL_MINUTES = 10
 const OVERRIDE_TTL_HOURS = 2
 
@@ -170,7 +189,7 @@ export const handler: Handler = async (event) => {
       const resend = new Resend(apiKey)
       const { error: emailError } = await resend.emails.send({
         from: 'DR7 Empire <info@dr7.app>',
-        to: OTP_RECIPIENT,
+        to: await getOtpRecipient(),
         subject: `Autorizzazione Direzionale - ${limitationCode}`,
         html: `
           <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
