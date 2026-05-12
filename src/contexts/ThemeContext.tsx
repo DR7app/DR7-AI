@@ -21,14 +21,18 @@ import type { ReactNode } from 'react'
  * call sites that only know about dark/light don't break.
  */
 
-export type Palette = 'dr7' | 'slate' | 'midnight' | 'graphite'
+export type Palette = 'dr7' | 'slate' | 'midnight' | 'graphite' | 'forest' | 'crimson' | 'mono' | 'plum'
 export type Mode = 'dark' | 'light'
 
 export const PALETTES: { id: Palette; label: string; description: string }[] = [
     { id: 'dr7', label: 'DR7', description: 'Brand DR7 originale, accento ciano.' },
     { id: 'slate', label: 'Slate', description: 'Grigio-blu neutro, professionale.' },
-    { id: 'midnight', label: 'Midnight', description: 'Navy profondo + indaco.' },
+    { id: 'midnight', label: 'Midnight', description: 'Navy profondo, accento indaco.' },
     { id: 'graphite', label: 'Graphite', description: 'Grigio caldo, accento teal.' },
+    { id: 'forest', label: 'Forest', description: 'Verde foresta profondo, accento smeraldo.' },
+    { id: 'crimson', label: 'Crimson', description: 'Bordeaux scuro, accento rosso intenso.' },
+    { id: 'mono', label: 'Mono', description: 'Bianco e nero puro, minimal.' },
+    { id: 'plum', label: 'Plum', description: 'Viola profondo, accento magenta.' },
 ]
 
 interface ThemeContextType {

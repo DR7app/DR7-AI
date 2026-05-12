@@ -607,9 +607,9 @@ export default function AdminDashboard() {
               {paletteMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setPaletteMenuOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-theme-border bg-theme-bg-secondary shadow-lg z-50 overflow-hidden">
-                    <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-theme-text-muted border-b border-theme-border">
-                      Palette
+                  <div className="absolute right-0 mt-2 w-60 max-h-[80vh] overflow-y-auto rounded-xl border border-theme-border bg-theme-bg-secondary shadow-lg z-50">
+                    <div className="sticky top-0 z-10 bg-theme-bg-secondary px-3 py-2 text-[10px] uppercase tracking-wider text-theme-text-muted border-b border-theme-border">
+                      Palette ({PALETTES.length})
                     </div>
                     {PALETTES.map(p => (
                       <button
@@ -961,6 +961,10 @@ function PalettePreview({ palette }: { palette: Palette }) {
         slate:    { a: '#3B82F6', b: '#1E293B', c: '#0F172A' },
         midnight: { a: '#6366F1', b: '#112236', c: '#0A1628' },
         graphite: { a: '#06B6D4', b: '#262626', c: '#1A1A1A' },
+        forest:   { a: '#10B981', b: '#152B25', c: '#0D1F1A' },
+        crimson:  { a: '#DC2626', b: '#2A1212', c: '#1A0A0A' },
+        mono:     { a: '#FFFFFF', b: '#0A0A0A', c: '#000000' },
+        plum:     { a: '#A855F7', b: '#1F1230', c: '#14091F' },
     }
     const s = swatch[palette]
     return (
