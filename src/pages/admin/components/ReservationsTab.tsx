@@ -5812,9 +5812,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Auto-send contract for signature via WhatsApp.
-      // Send when the booking is (or was) actually paid — we must NOT push a
-      // fresh signing link to a customer who has never paid (covered by the
-      // pay-by-link message from EditDiffLink / the Nexi topup callback).
       // Cases that trigger:
       //   - formData.payment_status ∈ {paid, completed, succeeded}
       //       → new paid booking, or edit that stays paid, or transition to paid.
@@ -5822,16 +5819,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       //     Da Saldare to ask for more money): the original customer already
       //     signed the old terms, so they need the updated contract. The
       //     pay-by-link handles the additional payment separately.
+      //   - Admin manually checked "Conferma Prenotazione" (confirmBooking):
+      //     the booking is intentionally confirmed without payment (it won't
+      //     expire after 1h) — the customer needs the contract to sign now,
+      //     the payment is handled separately via pay-by-link.
       // Cases that DON'T trigger:
-      //   - New Da Saldare booking (customer has never paid — wait for payment).
-      //   - Edit of a Da Saldare booking that stays Da Saldare.
+      //   - New Da Saldare booking (customer has never paid, not confirmed).
+      //   - Edit with an outstanding balance (defer until customer pays delta).
       const PAID_STATUSES = ['paid', 'completed', 'succeeded']
       const currentlyPaid = PAID_STATUSES.includes(formData.payment_status || '')
       const wasOriginallyPaid = !!editingId
         && PAID_STATUSES.includes(editingOriginalPaymentStatus || '')
       const shouldSendSigningLink = !!insertedBooking?.id
         && !editHasBalanceOwed  // defer signing link until after payment on edits with balance
-        && (currentlyPaid || wasOriginallyPaid)
+        && (currentlyPaid || wasOriginallyPaid || confirmBooking)
       if (shouldSendSigningLink) {
         try {
           // Fetch the contract that was just generated for this booking
