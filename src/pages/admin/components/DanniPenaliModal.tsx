@@ -209,34 +209,27 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         booking.booking_details?.vehicle?.category ||
         booking.booking_details?.vehicleCategory ||
         booking.booking_details?.category || ''
-    // Normalise vehicle category to the keys Centralina Pro Danni & Penali uses.
-    // The Veicoli tab supports custom Pro categories (hypercar, supercar_elite,
-    // gt, etc.) — we collapse the whole supercar family to 'exotic' so the
-    // operator doesn't see "categoria sconosciuta" for a Porsche/Ferrari/etc
-    // just because the category label differs from the legacy three.
-    const vehicleCategory = (() => {
-        const c = String(rawCategory || '').toLowerCase().trim()
-        // Supercar/exotic family
-        if (
-            c === 'supercar' || c === 'supercars' || c === 'exotic' ||
-            c === 'hypercar' || c === 'hyper' || c === 'gt' ||
-            c.startsWith('supercar') || c.startsWith('hyper') || c.startsWith('exotic') ||
-            c.includes('luxury')
-        ) return 'exotic'
-        // Aziendali / corporate / furgoni / NCC family
-        if (
-            c === 'furgone' || c === 'aziendali' || c === 'furgoni' ||
-            c === 'ncc' || c === 'corporate' || c === 'business' ||
-            c.startsWith('aziendal') || c.startsWith('furgon') || c.includes('ncc')
-        ) return 'aziendali'
-        // Urban / utilitarie family
-        if (
-            c === 'urban' || c === 'utilitaria' || c === 'utilitarie' ||
-            c === 'city' || c === 'cityear' ||
-            c.startsWith('urban') || c.startsWith('utilitari') || c.startsWith('city')
-        ) return 'urban'
-        return c
-    })()
+    // Use the RAW category as-is so custom Pro categories (Hypercar, Scooter,
+    // Supercar Elité, Suv Luxury, Moto, …) hit their own Danni/Penali entries
+    // configured by the boss in Centralina Pro. Aliasing happens lazily inside
+    // the list selectors below — only when the raw lookup misses, we try the
+    // legacy aliases (supercar→exotic, furgone→aziendali) and finally the
+    // name-based heuristic. Cosi' niente piu' "categoria sconosciuta" su un
+    // veicolo Hypercar che ha la sua lista dedicata, e nessun matching errato
+    // verso 'exotic' quando esiste una lista specifica.
+    const vehicleCategory = String(rawCategory || '').toLowerCase().trim()
+
+    // Legacy alias helper — used by the list selectors when the raw lookup
+    // returns nothing. Maps old/Italian aliases to the canonical Pro keys.
+    const aliasCategory = (c: string): string | null => {
+        if (c === 'supercar' || c === 'supercars') return 'exotic'
+        if (c === 'exotic') return 'supercars'
+        if (c === 'furgone' || c === 'furgoni' || c === 'ncc' || c === 'corporate') return 'aziendali'
+        if (c === 'aziendali') return 'furgone'
+        if (c === 'utilitaria' || c === 'utilitarie' || c === 'city') return 'urban'
+        if (c === 'urban') return 'utilitaria'
+        return null
+    }
     // Single source of truth: Centralina Pro. No hardcoded fallback.
     // If the admin hasn't configured a list for this category, the modal
     // shows the empty-state below so the operator knows where to fix it.
@@ -266,7 +259,17 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     }
 
     const penaltyList: PenaltyPreset[] = useMemo(() => {
-        const base = penaliFromCfg ? (penaliFromCfg[vehicleCategory] || []) : []
+        // 1) raw category (Hypercar/Scooter/Supercar Elité/Suv Luxury/Moto/etc),
+        // 2) legacy alias (supercar↔exotic, furgone↔aziendali, utilitaria↔urban),
+        // 3) empty — empty-state banner below tells the operator where to fix it.
+        let base: PenaltyPreset[] = []
+        if (penaliFromCfg) {
+            base = penaliFromCfg[vehicleCategory] || []
+            if (base.length === 0) {
+                const alias = aliasCategory(vehicleCategory)
+                if (alias) base = penaliFromCfg[alias] || []
+            }
+        }
         // Apply Km Sforo override on any matching row in Centralina (uses
         // contract rate, not Pro current). Then inject the synthetic row at
         // the top if Centralina didn't include one, so the operator always
@@ -299,7 +302,15 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     }, [penaliFromCfg, vehicleCategory, bookingSforoRate])
     const danniPresetList: PenaltyPreset[] = useMemo(() => {
         if (!danniFromCfg) return []
-        return danniFromCfg[vehicleCategory] || []
+        // Raw category first, then legacy alias fallback (same logic as
+        // penaltyList above). Custom Pro categories hit their own list.
+        let base = danniFromCfg[vehicleCategory] || []
+        if (base.length === 0) {
+            const alias = aliasCategory(vehicleCategory)
+            if (alias) base = danniFromCfg[alias] || []
+        }
+        return base
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [danniFromCfg, vehicleCategory])
 
     if (!isOpen) return null
