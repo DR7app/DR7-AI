@@ -34,6 +34,7 @@ const DEFAULT_METHODS: PaymentMethod[] = [
     { key: 'bonifico',                label: 'Bonifico',                         auto_invoice: true  },
     { key: 'bonifico_bancario',       label: 'Bonifico bancario',                auto_invoice: true  },
     { key: 'credit_wallet',           label: 'Credit Wallet',                    auto_invoice: false },
+    { key: 'carta_punti',             label: 'Carta Punti',                      auto_invoice: false },
     { key: 'paypal',                  label: 'Paypal',                           auto_invoice: true  },
     { key: 'assegno',                 label: 'Assegno',                          auto_invoice: true  },
     { key: 'assegno_circolare',       label: 'Assegno circolare',                auto_invoice: true  },

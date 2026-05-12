@@ -20,6 +20,18 @@ import { generateLavaggioSlotsForDate, getAllowedTimeRangesForDate } from '../..
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 
+// Match the "Carta Punti" payment method robustly. The admin can rename
+// the label in Centralina Pro > Fiscale (e.g. "Carta Punti DR7", "carta
+// punti", "Carta Punti (richiede OTP)") and the OTP gate must still
+// trigger. We accept any payment_method whose normalized text contains
+// both "carta" and "punt", or whose canonical key is "carta_punti".
+function isCartaPunti(paymentMethod: string | null | undefined): boolean {
+  const s = (paymentMethod || '').toString().trim().toLowerCase()
+  if (!s) return false
+  if (s === 'carta_punti' || s === 'cartapunti') return true
+  return s.includes('carta') && (s.includes('punti') || s.includes('punt'))
+}
+
 interface Customer {
   id: string
   full_name: string
@@ -211,7 +223,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const pending = pendingCreateBookingRef.current
     if (!pending) return
     const confirmOk = override.overrideCodes.has('prenotazione_lavaggio_conferma')
-    const cartaPuntiNeeded = formData.payment_method === 'Carta Punti'
+    const cartaPuntiNeeded = isCartaPunti(formData.payment_method)
     const cartaPuntiOk = !cartaPuntiNeeded || override.overrideCodes.has('carta_punti_lavaggio')
     if (confirmOk && cartaPuntiOk) {
       pendingCreateBookingRef.current = null
@@ -1237,7 +1249,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // prenotazione Carta Punti chiede di nuovo l'OTP — niente caching
     // di sessione.
     if (
-      formData.payment_method === 'Carta Punti'
+      isCartaPunti(formData.payment_method)
       && !override.hasOverride('carta_punti_lavaggio')
     ) {
       pendingCreateBookingRef.current = { force: forceBooking }
@@ -1752,7 +1764,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // Carta Punti: consuma l'override così la PROSSIMA prenotazione con
     // questo metodo di pagamento richiede un nuovo OTP. Per gli altri
     // metodi non c'è nulla da consumare.
-    if (formData.payment_method === 'Carta Punti') {
+    if (isCartaPunti(formData.payment_method)) {
       try { await override.consumeOverride('carta_punti_lavaggio') } catch (e) {
         logger.warn('[carta_punti] consumeOverride failed:', e)
       }

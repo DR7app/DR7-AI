@@ -113,6 +113,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
+    id: 'carta_punti_lavaggio',
+    label: 'Pagamento Carta Punti (Lavaggio)',
+    used_in: 'Prime Wash > Nuova prenotazione > Metodo pagamento = Carta Punti',
+    reason: 'Pagamento con Carta Punti su una prenotazione Prime Wash richiede autorizzazione direzionale per ogni singola operazione. L\'OTP viene consumato dopo il salvataggio, quindi la prossima prenotazione Carta Punti richiederà un nuovo OTP.',
+    group: 'Lavaggio',
+    wired: true,
+  },
+  {
     id: 'tier1_no_cauzione',
     label: 'No cauzione per Fascia B',
     used_in: 'Prenotazione Fascia B (TIER_1) con flag No Cauzione',
