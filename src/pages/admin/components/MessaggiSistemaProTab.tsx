@@ -542,7 +542,7 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
         items: [
             { key: 'insurance', description: 'Nome assicurazione scelta dal cliente', example: 'Kasko Black' },
             { key: 'km_info', description: 'Km inclusi nel noleggio (numero o "Illimitati")', example: '300 Km / Illimitati' },
-            { key: 'km_illimitati', description: 'Sì o No: indica se il noleggio ha km illimitati', example: 'Sì', aliases: ['unlimited_km'] },
+            { key: 'km_illimitati', description: 'Mostra la riga "Km Illimitati" SOLO se la prenotazione ha km illimitati. Altrimenti la riga sparisce automaticamente.', example: 'Km Illimitati', aliases: ['unlimited_km'] },
             { key: 'km_package', description: 'Pacchetto km con eventuale costo', example: '300 Km (€20,00)' },
         ],
     },

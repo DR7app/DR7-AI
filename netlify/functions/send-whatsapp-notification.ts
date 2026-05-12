@@ -174,6 +174,14 @@ const handler: Handler = async (event) => {
           };
           const escRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const replaceFor = (key: string, value: string) => {
+            // Se la variabile e' VUOTA e occupa una riga da sola (eventualmente
+            // con whitespace), elimina la riga intera. Cosi' la riga
+            // "{km_illimitati}" del template scompare quando il booking non
+            // ha km illimitati, senza lasciare un buco.
+            if (value === '') {
+              rendered = rendered.replace(new RegExp(`^[ \\t]*\\{\\{?\\s*${escRx(key)}\\s*\\}?\\}[ \\t]*\\n?`, 'gm'), '');
+              rendered = rendered.replace(new RegExp(`^[ \\t]*\\(\\s*${escRx(key)}\\s*\\)[ \\t]*\\n?`, 'gm'), '');
+            }
             // {key}, {{key}}, ${key}, % key %  → all curly variants
             rendered = rendered.replace(new RegExp(`\\{\\{?\\s*${escRx(key)}\\s*\\}?\\}`, 'g'), value);
             // (key), ( key ) → parens variant (Italian admin templates)
@@ -186,6 +194,9 @@ const handler: Handler = async (event) => {
             replaceFor(cleanKey, value);
             for (const alias of ALIASES[cleanKey] || []) replaceFor(alias, value);
           }
+          // Cleanup finale: collapse 3+ newlines into 2 (preserva paragraph
+          // breaks legittimi, rimuove gli extra introdotti da vars vuote)
+          rendered = rendered.replace(/\n{3,}/g, '\n\n').trim();
         }
         // OPT-IN wrapper: only attach header/footer when this specific
         // template's include_header is explicitly TRUE (no implicit default).
@@ -504,10 +515,13 @@ const handler: Handler = async (event) => {
         } else {
           vars.km_info = booking.booking_details?.total_km ? `${booking.booking_details.total_km} Km` : 'Illimitati';
         }
-        // Variabile dedicata "km illimitati" — l'admin chiedeva un valore
-        // che dicesse esplicitamente Sì/No così può comporre frasi tipo
-        // "Km illimitati: {km_illimitati}". Separa il flag dal totale Km.
-        vars.km_illimitati = isUnlim ? 'Sì' : 'No';
+        // Variabile dedicata "km illimitati" — appare SOLO quando il
+        // noleggio ha effettivamente km illimitati (checkbox attiva).
+        // Se non illimitato, resolve a stringa vuota e la riga del template
+        // contenente solo {km_illimitati} viene rimossa automaticamente
+        // (vedi line-strip nel substitution loop in PreventiviTab; per il
+        // sender la pulizia avviene piu' giu' nel replaceFor logic).
+        vars.km_illimitati = isUnlim ? 'Km Illimitati' : '';
         vars.unlimited_km = vars.km_illimitati;
 
         // KM package details (type + cost) for template

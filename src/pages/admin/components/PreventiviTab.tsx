@@ -1882,12 +1882,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             const km = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
             return km === 'unlimited' ? 'Illimitati' : `${km} Km`
           })(),
-          // {km_illimitati} -> Sì / No (mirror della variabile in
-          // send-whatsapp-notification.ts e nella legenda Pro). Necessario
-          // qui perche' i preventivi fanno la substitution LOCALMENTE e non
-          // passano per il sender.
-          km_illimitati: (pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited') ? 'Sì' : 'No',
-          unlimited_km: (pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited') ? 'Sì' : 'No',
+          // {km_illimitati} -> "Km Illimitati" se il noleggio ha km
+          // illimitati, altrimenti stringa vuota. Cosi' l'admin scrive
+          // semplicemente {km_illimitati} nel template (su una riga sua) e
+          // la riga appare SOLO quando applicabile. La cleanup successiva
+          // (\n{3,}) rimuove la riga vuota residua se non illimitato.
+          km_illimitati: (pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited') ? 'Km Illimitati' : '',
+          unlimited_km: (pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited') ? 'Km Illimitati' : '',
           // Luogo di ritiro/riconsegna — se "domicilio" usa l'indirizzo custom,
           // altrimenti usa la label dell'ufficio/aeroporto.
           // pickup_location  → dove il cliente ritira (consegna a casa = delivery_address)
@@ -1930,9 +1931,21 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
         let msg = tpl.message_body
         for (const [k, v] of Object.entries(allVars)) {
-          msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '')
+          const value = v || ''
+          // Se la variabile e' VUOTA e occupa una riga da sola (eventualmente
+          // con whitespace circostante), rimuovi la riga intera. Questo
+          // permette template tipo:
+          //   Pickup: {pickup_date}
+          //   {km_illimitati}
+          //   Prezzo: {prezzo}
+          // Se km_illimitati e' vuoto, la riga sparisce senza lasciare buchi.
+          if (value === '') {
+            msg = msg.replace(new RegExp(`^[ \\t]*\\{${k}\\}[ \\t]*\\n?`, 'gm'), '')
+          }
+          // Substitution standard per gli altri pattern (inline o leftover).
+          msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), value)
         }
-        // Clean up empty lines from unused variables
+        // Clean up: collapse 3+ newlines into 2 (preserva paragraph breaks)
         msg = msg.replace(/\n{3,}/g, '\n\n').trim()
 
         const footer = rentalConfig?.preventivi?.whatsapp_footer
