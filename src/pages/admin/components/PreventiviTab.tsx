@@ -1729,12 +1729,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               ? `Km illimitati = ${formatEur(p.unlimited_km_total)}`
               : `Km illimitati = Incluso`
           }
-          // Niente checkbox = niente riga "Km Illimitati / Incluso", anche
-          // se la categoria del veicolo ha default 'unlimited'. L'utente
-          // vuole che la riga compaia SOLO se ha esplicitamente spuntato.
-          const kmInc = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
-          if (kmInc === 'unlimited') return ''
-          return `Km inclusi: ${kmInc} Km`
+          // Checkbox NON spuntato = nessuna riga km, ne' "Km Illimitati"
+          // ne' "Km inclusi". L'utente vuole che la riga compaia SOLO
+          // quando ha esplicitamente scelto km illimitati.
+          return ''
         })()
         const lineSecondDriver = p.second_driver_total > 0
           ? `Secondo guidatore = ${formatEur(p.second_driver_total)}` : ''
@@ -1882,13 +1880,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           dropoff_time: p.dropoff_date
             ? new Date(p.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
             : '',
-          km_info: pickedUnlimitedKm ? 'Illimitati' : (() => {
-            const km = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
-            // Box non spuntato: non bluffare "Illimitati" anche se la
-            // categoria di default lo prevede. Riportiamo il numero o ''.
-            if (km === 'unlimited') return ''
-            return `${km} Km`
-          })(),
+          // Checkbox non spuntato: nessuna info km, qualunque sia il
+          // default della categoria.
+          km_info: pickedUnlimitedKm ? 'Illimitati' : '',
           // {km_illimitati} -> "Km Illimitati = X,XX" (stesso formato delle
           // altre voci: "Lavaggio Finale = 9,90", "No cauzione = 49,00").
           // Mostrata SOLO se l'utente ha esplicitamente spuntato Km
