@@ -358,43 +358,9 @@ export default function GestioneOtpTab() {
                 </div>
             </div>
 
-            {/* ===== NEW_RULE_FORM_PLACEHOLDER ===== */}
-
-            {/* Email di ricezione OTP (centralina_pro_config.config.notifications.otp_recipient) */}
-            <OtpRecipientField />
-
-            {/* KPI strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <KpiCard
-                    label="OTP attivi"
-                    value={requiredCount}
-                    accent="green"
-                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
-                />
-                <KpiCard
-                    label="Disattivati"
-                    value={disabledCount}
-                    accent="amber"
-                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>}
-                />
-                <KpiCard
-                    label="Totale configurati"
-                    value={rows.length}
-                    accent="blue"
-                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>}
-                />
-                <KpiCard
-                    label="Ultima modifica"
-                    valueText={formatRelative(lastUpdated)}
-                    accent="rose"
-                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>}
-                />
-            </div>
-
-            {/* New rule form — pick from catalog di azioni note. Cosi' la
-                regola creata e' SEMPRE collegata a un'azione cablata nel
-                codice, niente metadata orfana. Le entry con `wired: false`
-                sono ancora visibili ma chiaramente marcate "da cablare". */}
+            {/* New rule form — rendered RIGHT under the header so clicking
+                "+ Nuova regola OTP" shows the form immediately, not buried
+                below the KPI strip + email recipient card. */}
             {showCreate && (
                 <div className="rounded-2xl border border-dr7-gold/40 bg-dr7-gold/5 p-5 space-y-3 shadow-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -513,6 +479,37 @@ export default function GestioneOtpTab() {
                     </div>
                 </div>
             )}
+
+            {/* Email di ricezione OTP (centralina_pro_config.config.notifications.otp_recipient) */}
+            <OtpRecipientField />
+
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <KpiCard
+                    label="OTP attivi"
+                    value={requiredCount}
+                    accent="green"
+                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                />
+                <KpiCard
+                    label="Disattivati"
+                    value={disabledCount}
+                    accent="amber"
+                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>}
+                />
+                <KpiCard
+                    label="Totale configurati"
+                    value={rows.length}
+                    accent="blue"
+                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>}
+                />
+                <KpiCard
+                    label="Ultima modifica"
+                    valueText={formatRelative(lastUpdated)}
+                    accent="rose"
+                    icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>}
+                />
+            </div>
 
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-300 flex items-start gap-2">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">

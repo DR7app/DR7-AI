@@ -158,13 +158,32 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         booking.booking_details?.vehicle?.category ||
         booking.booking_details?.vehicleCategory ||
         booking.booking_details?.category || ''
-    // Normalise legacy category strings to the keys Centralina Pro uses.
-    // exotic/supercar → 'exotic', furgone → 'aziendali', everything else stays.
+    // Normalise vehicle category to the keys Centralina Pro Danni & Penali uses.
+    // The Veicoli tab supports custom Pro categories (hypercar, supercar_elite,
+    // gt, etc.) — we collapse the whole supercar family to 'exotic' so the
+    // operator doesn't see "categoria sconosciuta" for a Porsche/Ferrari/etc
+    // just because the category label differs from the legacy three.
     const vehicleCategory = (() => {
         const c = String(rawCategory || '').toLowerCase().trim()
-        if (c === 'supercar' || c === 'supercars' || c === 'exotic') return 'exotic'
-        if (c === 'furgone' || c === 'aziendali' || c === 'furgoni' || c === 'ncc') return 'aziendali'
-        if (c === 'urban' || c === 'utilitaria' || c === 'utilitarie') return 'urban'
+        // Supercar/exotic family
+        if (
+            c === 'supercar' || c === 'supercars' || c === 'exotic' ||
+            c === 'hypercar' || c === 'hyper' || c === 'gt' ||
+            c.startsWith('supercar') || c.startsWith('hyper') || c.startsWith('exotic') ||
+            c.includes('luxury')
+        ) return 'exotic'
+        // Aziendali / corporate / furgoni / NCC family
+        if (
+            c === 'furgone' || c === 'aziendali' || c === 'furgoni' ||
+            c === 'ncc' || c === 'corporate' || c === 'business' ||
+            c.startsWith('aziendal') || c.startsWith('furgon') || c.includes('ncc')
+        ) return 'aziendali'
+        // Urban / utilitarie family
+        if (
+            c === 'urban' || c === 'utilitaria' || c === 'utilitarie' ||
+            c === 'city' || c === 'cityear' ||
+            c.startsWith('urban') || c.startsWith('utilitari') || c.startsWith('city')
+        ) return 'urban'
         return c
     })()
     // Single source of truth: Centralina Pro. No hardcoded fallback.
