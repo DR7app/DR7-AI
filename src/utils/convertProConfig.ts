@@ -65,8 +65,18 @@ const PRO_TO_TIER: Record<string, string> = {
   B: 'TIER_1',
 }
 
-function num(v: number | '' | undefined | null): number {
-  return typeof v === 'number' ? v : 0
+function num(v: number | string | '' | undefined | null): number {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+  if (typeof v === 'string') {
+    // Accept both English ("0.89") and Italian ("0,89") decimal separators.
+    // Without this, sforo / prices typed in Centralina Pro that get
+    // serialized as strings (instead of numbers) silently became 0 on the
+    // booking side — e.g. supercar sforo 0,89 → 0.
+    const cleaned = v.replace(/\s/g, '').replace(',', '.')
+    const n = parseFloat(cleaned)
+    return Number.isFinite(n) ? n : 0
+  }
+  return 0
 }
 
 function numRecord(rec: Record<string, number | ''> | undefined): Record<string, number> {
