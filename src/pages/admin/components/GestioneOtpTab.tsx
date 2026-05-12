@@ -388,31 +388,19 @@ export default function GestioneOtpTab() {
                 />
             </div>
 
-            {/* New rule form (slide down) */}
+            {/* New rule form (slide down) — simplified, only 3 fields. ID is
+                auto-derived from the title (slugified). Advanced controls hidden
+                behind a toggle. */}
             {showCreate && (
                 <div className="rounded-2xl border border-dr7-gold/40 bg-dr7-gold/5 p-5 space-y-3 shadow-sm">
                     <div className="flex items-center justify-between gap-3">
                         <h3 className="text-sm font-semibold text-theme-text-primary">Nuova regola OTP</h3>
                         <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">system_otp_overrides</span>
                     </div>
-                    <p className="text-xs text-theme-text-muted">
-                        Per attivarsi su un'azione admin il codice deve chiamare{' '}
-                        <code className="bg-theme-bg-tertiary px-1 rounded">requestOverride('{newRow.id || 'tuo_id'}', '...')</code>{' '}
-                        nel relativo punto del frontend.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <label className="text-xs text-theme-text-muted">
-                            ID univoco (snake_case)
-                            <input
-                                type="text"
-                                value={newRow.id}
-                                onChange={e => setNewRow(r => ({ ...r, id: e.target.value }))}
-                                placeholder="es. blocca_modifica_dopo_pagamento"
-                                className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
-                            />
-                        </label>
-                        <label className="text-xs text-theme-text-muted">
-                            Label (mostrata nel modal OTP)
+
+                    <div className="space-y-3">
+                        <label className="block text-xs text-theme-text-muted">
+                            Titolo della regola
                             <input
                                 type="text"
                                 value={newRow.label}
@@ -420,9 +408,13 @@ export default function GestioneOtpTab() {
                                 placeholder="es. Modifica dopo pagamento"
                                 className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
                             />
+                            <span className="block mt-1 text-[10px] text-theme-text-muted">
+                                Lo vedrai sul popup OTP che chiede l&apos;autorizzazione.
+                            </span>
                         </label>
-                        <label className="text-xs text-theme-text-muted sm:col-span-2">
-                            Dove suona
+
+                        <label className="block text-xs text-theme-text-muted">
+                            Dove si attiva
                             <input
                                 type="text"
                                 value={newRow.used_in}
@@ -430,9 +422,13 @@ export default function GestioneOtpTab() {
                                 placeholder="es. Tab Prenotazioni > tasto Modifica"
                                 className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
                             />
+                            <span className="block mt-1 text-[10px] text-theme-text-muted">
+                                Solo un promemoria — dove dovrebbe scattare questa regola.
+                            </span>
                         </label>
-                        <label className="text-xs text-theme-text-muted sm:col-span-2">
-                            Motivo (mostrato all'admin che chiede l'OTP)
+
+                        <label className="block text-xs text-theme-text-muted">
+                            Perché serve l&apos;OTP
                             <textarea
                                 rows={2}
                                 value={newRow.reason}
@@ -440,8 +436,33 @@ export default function GestioneOtpTab() {
                                 placeholder="es. Modificare un noleggio dopo l'incasso richiede approvazione direzionale."
                                 className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-secondary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
                             />
+                            <span className="block mt-1 text-[10px] text-theme-text-muted">
+                                Spiegazione mostrata all&apos;operatore quando deve chiedere l&apos;OTP.
+                            </span>
                         </label>
+
+                        {/* Advanced: custom ID (otherwise auto-slugified from Titolo). */}
+                        <details className="text-xs text-theme-text-muted">
+                            <summary className="cursor-pointer select-none hover:text-theme-text-primary">Avanzato — ID tecnico (di solito non serve)</summary>
+                            <input
+                                type="text"
+                                value={newRow.id}
+                                onChange={e => setNewRow(r => ({ ...r, id: e.target.value }))}
+                                placeholder={newRow.label ? `auto: ${slugifyId(newRow.label)}` : 'auto-generato dal titolo'}
+                                className="mt-2 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
+                            />
+                            <span className="block mt-1 text-[10px] text-theme-text-muted">
+                                Lasciare vuoto: il sistema lo crea dal titolo. Compilarlo solo se uno sviluppatore te lo chiede.
+                            </span>
+                        </details>
+
+                        <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-[11px] text-amber-300">
+                            <strong>Nota:</strong> creare la regola la registra nel sistema, ma serve uno sviluppatore per
+                            collegarla al pulsante o all&apos;azione corrispondente nell&apos;admin. Senza quel passaggio
+                            l&apos;OTP non scatterà.
+                        </div>
                     </div>
+
                     <div className="flex justify-end gap-2 pt-1">
                         <button
                             onClick={() => { setShowCreate(false); setNewRow({ id: '', label: '', used_in: '', reason: '' }) }}
@@ -452,8 +473,8 @@ export default function GestioneOtpTab() {
                         </button>
                         <button
                             onClick={createNew}
-                            disabled={creating}
-                            className="px-4 py-2 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50"
+                            disabled={creating || !newRow.label.trim()}
+                            className="px-4 py-2 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {creating ? 'Creazione…' : 'Crea regola'}
                         </button>
