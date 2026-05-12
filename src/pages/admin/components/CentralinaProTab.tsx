@@ -475,11 +475,10 @@ type FiscalConfig = {
   payment_methods: FiscalPaymentMethod[]
 }
 
-// Lista completa di TUTTI i metodi di pagamento che esistevano hardcoded
-// nei vari dropdown del sistema (operativi + codici SDI). Il primo load
-// di Fiscale → Metodi di pagamento mostra tutto questo, cosi' la direzione
-// vede esattamente quello che gli operatori vedevano prima. Si possono
-// rimuovere, modificare, aggiungere senza dev.
+// Lista completa di TUTTI i metodi di pagamento che esistevano nei vari
+// dropdown del sistema (operativi + codici SDI completi). La direzione li
+// vede tutti in Fiscale: puo' rimuovere quelli che non usa, modificare
+// label/key, aggiungere nuovi metodi (es. Carta Punti) senza dev.
 const DEFAULT_PAYMENT_METHODS: FiscalPaymentMethod[] = [
   // Quotidiani
   { key: 'contanti',                label: 'Contanti',                         auto_invoice: true  },
@@ -5127,16 +5126,15 @@ function FiscaleSection({
   function removeMethod(index: number) {
     setFiscal({ ...fiscal, payment_methods: methods.filter((_, i) => i !== index) })
   }
-  // Append any historical default method whose key is missing from the
-  // current saved list. Used when the system shipped a short default and
-  // the operator wants the full SDI list back without retyping.
+  // Append any default method whose key is missing from the saved list.
+  // Used when the direzione had a short saved list and wants the full
+  // historical set back without retyping each row.
   function addMissingDefaults() {
     const existingKeys = new Set(methods.map(m => m.key))
     const missing = DEFAULT_PAYMENT_METHODS.filter(d => !existingKeys.has(d.key))
     if (missing.length === 0) return
     setFiscal({ ...fiscal, payment_methods: [...methods, ...missing] })
   }
-  // Hide the button when no defaults are missing (clean state).
   const missingDefaultsCount = DEFAULT_PAYMENT_METHODS.filter(
     d => !methods.some(m => m.key === d.key)
   ).length
@@ -5245,8 +5243,8 @@ function FiscaleSection({
               type="button"
               onClick={addMissingDefaults}
               className="flex-1 py-2 rounded-xl border-2 border-dashed border-[#007aff]/40 text-[12px] font-medium text-[#007aff] hover:bg-[#007aff]/5 transition-colors"
-              title="Aggiunge tutti i metodi storici (SDI, Bancomat, Wallet, ecc.) che oggi mancano dalla lista"
-            >+ Aggiungi {missingDefaultsCount} metod{missingDefaultsCount === 1 ? 'o' : 'i'} predefinit{missingDefaultsCount === 1 ? 'o' : 'i'} mancant{missingDefaultsCount === 1 ? 'e' : 'i'}</button>
+              title="Aggiunge tutti i metodi storici (SDI, RID, SEPA, PagoPA, ecc.) che oggi mancano dalla lista"
+            >+ Aggiungi {missingDefaultsCount} metod{missingDefaultsCount === 1 ? 'o' : 'i'} mancant{missingDefaultsCount === 1 ? 'e' : 'i'} (SDI, RID, SEPA, …)</button>
           )}
         </div>
       </section>

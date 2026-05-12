@@ -26,7 +26,7 @@ export interface PaymentMethod {
 
 // Fallback mirror della lista DEFAULT_PAYMENT_METHODS di CentralinaProTab.
 // Quando la direzione non ha ancora salvato la lista in Fiscale, i dropdown
-// mostrano questo set completo cosi' niente metodo storico sparisce.
+// mostrano questo set completo (operativi + codici SDI).
 const DEFAULT_METHODS: PaymentMethod[] = [
     { key: 'contanti',                label: 'Contanti',                         auto_invoice: true  },
     { key: 'bancomat',                label: 'Carta di Credito / bancomat',      auto_invoice: true  },
