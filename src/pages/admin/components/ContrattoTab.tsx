@@ -35,6 +35,79 @@ export default function ContrattoTab() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Master contract template — Supabase Storage bucket 'templates' /
+  // file 'master_contract.pdf'. Generate-contract.ts lo scarica con
+  // cache-busting (?t=Date.now()) ad ogni generazione, quindi un nuovo
+  // upload e\' subito attivo senza redeploy.
+  const [tmplInfo, setTmplInfo] = useState<{ size: number; updated_at: string | null } | null>(null)
+  const [tmplLoading, setTmplLoading] = useState(true)
+  const [tmplUploading, setTmplUploading] = useState(false)
+
+  async function loadMasterTemplateInfo() {
+    setTmplLoading(true)
+    try {
+      const { data, error } = await supabase.storage.from('templates').list('', { limit: 100 })
+      if (error) throw error
+      const f = (data || []).find(x => x.name === 'master_contract.pdf')
+      setTmplInfo(f ? {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        size: (f.metadata as any)?.size || 0,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        updated_at: (f as any).updated_at || (f.metadata as any)?.lastModified || null,
+      } : null)
+    } catch (e) {
+      console.error('master template info load failed', e)
+      setTmplInfo(null)
+    } finally {
+      setTmplLoading(false)
+    }
+  }
+
+  useEffect(() => { loadMasterTemplateInfo() }, [])
+
+  async function handleUploadMasterTemplate(file: File) {
+    if (!file) return
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Carica un file PDF (.pdf)')
+      return
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('File troppo grande (max 20 MB)')
+      return
+    }
+    const ok = window.confirm(
+      `Sostituire il master contract attuale con "${file.name}" (${(file.size / 1024).toFixed(0)} KB)?\n\n` +
+      'Tutti i nuovi contratti generati useranno subito questa versione. ' +
+      'Il file precedente non sara\' recuperabile.'
+    )
+    if (!ok) return
+    setTmplUploading(true)
+    try {
+      const { error } = await supabase.storage
+        .from('templates')
+        .upload('master_contract.pdf', file, {
+          contentType: 'application/pdf',
+          upsert: true,
+          cacheControl: '0',
+        })
+      if (error) throw error
+      toast.success('Master contract aggiornato')
+      await loadMasterTemplateInfo()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      toast.error('Upload fallito: ' + msg)
+    } finally {
+      setTmplUploading(false)
+    }
+  }
+
+  function fmtSize(bytes: number): string {
+    if (!bytes) return '—'
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+  }
+
   const [formData, setFormData] = useState({
     contract_number: '',
     contract_date: new Date().toISOString().split('T')[0],
@@ -480,6 +553,64 @@ export default function ContrattoTab() {
         >
           + Nuovo Contratto
         </button>
+      </div>
+
+      {/* Master Contract Template — bucket templates/master_contract.pdf.
+          L'upload sostituisce il file (upsert) e tutti i contratti generati
+          dopo il caricamento usano subito la nuova versione (cache-bust). */}
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-theme-text-primary">Master Contract (modello PDF)</h3>
+            <p className="text-xs text-theme-text-muted mt-1">
+              Modello base usato da tutti i contratti generati. Carica un nuovo PDF per aggiornarlo: la nuova versione e\' attiva immediatamente, senza redeploy.
+            </p>
+            <div className="text-[11px] text-theme-text-muted mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              <span>Bucket: <span className="font-mono text-theme-text-secondary">templates/master_contract.pdf</span></span>
+              {tmplLoading ? (
+                <span>Caricamento info...</span>
+              ) : tmplInfo ? (
+                <>
+                  <span>Dimensione: <span className="text-theme-text-secondary">{fmtSize(tmplInfo.size)}</span></span>
+                  {tmplInfo.updated_at && (
+                    <span>Ultimo aggiornamento: <span className="text-theme-text-secondary">{new Date(tmplInfo.updated_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}</span></span>
+                  )}
+                </>
+              ) : (
+                <span className="text-red-400">File mancante nel bucket.</span>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col sm:items-end gap-2 flex-shrink-0">
+            <label className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-medium cursor-pointer whitespace-nowrap ${tmplUploading ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed' : 'bg-dr7-gold text-black hover:opacity-90'}`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5m0 0l5 5m-5-5v12"/>
+              </svg>
+              {tmplUploading ? 'Caricamento...' : 'Carica nuova versione'}
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                disabled={tmplUploading}
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleUploadMasterTemplate(f)
+                  e.target.value = '' // reset cosi\' selezionare lo stesso file rifa l'upload
+                }}
+              />
+            </label>
+            {tmplInfo && (
+              <a
+                href={`${supabase.storage.from('templates').getPublicUrl('master_contract.pdf').data.publicUrl}?t=${Date.now()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-theme-text-secondary hover:text-theme-text-primary underline"
+              >
+                Apri versione attuale
+              </a>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Search Bar */}
