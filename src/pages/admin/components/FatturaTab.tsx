@@ -892,6 +892,7 @@ export default function FatturaTab() {
       {view === 'ricevute' && <IncomingInvoicesView />}
       {view === 'emesse' && (
       <>
+      {hasRole('direzione') && <InvoiceFooterEditor />}
       {/* ─── KPI strip ──────────────────────────────────────────────── */}
       {/* 6 cards dei dati chiave del mese (Fatturato Emesso, Incassato,
           Da Incassare, % Incasso, In Scadenza, Pagamenti Programmati). */}
@@ -1468,4 +1469,144 @@ export function useFatturaScartataCount() {
   }, [])
 
   return count
+}
+
+// ─── InvoiceFooterEditor ─────────────────────────────────────────────────
+// Direzione edits the 3 footer lines printed on every invoice PDF.
+// Writes centralina_pro_config.config.invoice.footer_lines; read by
+// netlify/functions/invoice-pdf-utils.ts on each PDF render.
+function InvoiceFooterEditor() {
+  const DEFAULT_LINES = [
+    'Dubai rent 7.0 S.p.A. - Iscr. reg. imp.: 04104640927',
+    'Tel: 3457905205 | Email: Info@dr7.app | PEC: dubai.rent7.0srl@legalmail.it | Website: www.dr7empire.com',
+    'Socio unico - Cap. soc. 50.000,00 € | Regime Fiscale: Ordinario',
+  ]
+  const [lines, setLines] = useState<string[]>(DEFAULT_LINES)
+  const [saved, setSaved] = useState<string[]>(DEFAULT_LINES)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      if (cancelled) return
+      const cfg = (data?.config || {}) as Record<string, unknown>
+      const inv = (cfg.invoice || {}) as Record<string, unknown>
+      const arr = inv.footer_lines
+      if (Array.isArray(arr) && arr.length > 0) {
+        const next = arr.map(String)
+        setLines(next)
+        setSaved(next)
+      }
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const dirty = JSON.stringify(lines) !== JSON.stringify(saved)
+
+  const handleSave = async () => {
+    if (!dirty || saving) return
+    setSaving(true)
+    try {
+      const { data: existing } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      const cfg = (existing?.config || {}) as Record<string, unknown>
+      const inv = (cfg.invoice || {}) as Record<string, unknown>
+      const nextInv = { ...inv, footer_lines: lines.filter(s => s.trim().length > 0) }
+      const nextCfg = { ...cfg, invoice: nextInv }
+      const { error } = await supabase
+        .from('centralina_pro_config')
+        .upsert({ id: 'main', config: nextCfg }, { onConflict: 'id' })
+      if (error) throw error
+      setSaved(lines)
+      toast.success('Footer fattura salvato')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
+      toast.error(`Errore salvataggio: ${msg}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleReset = () => setLines(DEFAULT_LINES)
+
+  return (
+    <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-dr7-gold/15 text-dr7-gold flex items-center justify-center shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-theme-text-primary">Footer fattura</h3>
+            <p className="text-[12px] text-theme-text-muted">3 righe legali/contatti stampate in fondo a ogni PDF fattura.</p>
+          </div>
+        </div>
+        <span className="text-[11px] text-theme-text-muted">{expanded ? '−' : '+'}</span>
+      </button>
+
+      {expanded && (
+        <div className="mt-4 space-y-2">
+          {lines.map((line, i) => (
+            <div key={i} className="flex gap-2">
+              <input
+                type="text"
+                value={line}
+                onChange={e => setLines(prev => prev.map((l, idx) => idx === i ? e.target.value : l))}
+                placeholder={DEFAULT_LINES[i] || `Riga ${i + 1}`}
+                disabled={loading}
+                className="flex-1 bg-theme-bg-primary border border-theme-border rounded-md px-3 py-2 text-[12px] font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))}
+                className="px-2 text-red-500 hover:bg-red-500/10 rounded-md text-sm"
+                title="Rimuovi riga"
+              >×</button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setLines(prev => [...prev, ''])}
+            className="w-full py-2 rounded-md border-2 border-dashed border-theme-border text-[12px] text-theme-text-secondary hover:bg-theme-bg-primary"
+          >+ Aggiungi riga</button>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={saving || loading}
+              className="px-3 py-1.5 text-[12px] text-theme-text-secondary hover:underline disabled:opacity-40"
+            >Ripristina default</button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!dirty || saving || loading}
+              className="px-4 py-1.5 rounded-md bg-dr7-gold text-white text-[12px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            >{saving ? 'Salvataggio…' : 'Salva'}</button>
+          </div>
+          <p className="text-[11px] text-theme-text-muted">
+            Le modifiche valgono per le fatture generate da ora in avanti. I PDF già emessi restano invariati.
+          </p>
+        </div>
+      )}
+    </div>
+  )
 }
