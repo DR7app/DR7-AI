@@ -561,6 +561,17 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setShowMyOrari(true)}
+              title="I miei orari — inserisci/modifica i tuoi orari di oggi"
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-dr7-gold/40 bg-dr7-gold/5 text-dr7-gold text-[13px] font-semibold hover:bg-dr7-gold/10 active:scale-95 transition-all"
+            >
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
+              </svg>
+              <span className="hidden sm:inline">I miei orari</span>
+            </button>
+            <button
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Passa al tema chiaro' : 'Passa al tema scuro'}
               aria-label="Cambia tema"
