@@ -80,10 +80,22 @@ const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[
   { name: 'E.M.T.N.', tabs: [
     { key: 'emtn', label: 'E.M.T.N.' },
   ]},
+  // Ruoli speciali — gestiti da hasRole() in useAdminRole. Aggiungere qui
+  // un nuovo flag richiede di leggere il tag corrispondente in qualche tab.
+  // I ruoli sostituiscono le vecchie allowlist hardcoded (valerio/ilenia/ophe).
+  { name: 'Ruoli speciali', tabs: [
+    { key: 'role:direzione', label: 'Direzione (superuser, sblocca tutto)' },
+    { key: 'role:developer', label: 'Developer (bypass OTP Gestione OTP)' },
+    { key: 'role:payment-manager', label: 'Payment Manager (segna fatture pagate)' },
+    { key: 'role:stipendio-editor', label: 'Stipendio Editor (Lavaggio)' },
+    { key: 'role:sito-direzione', label: 'Sito CMS (no OTP per testi)' },
+    { key: 'role:preventivi-admin', label: 'Preventivi Admin (flussi speciali)' },
+  ]},
 ]
 
 const PRESETS: { name: string; permissions: string[] }[] = [
   { name: 'Solo Ore', permissions: ['rilevazione-orari'] },
+  { name: 'Direzione (full)', permissions: ['*', 'role:direzione', 'role:payment-manager', 'role:stipendio-editor', 'role:sito-direzione', 'role:preventivi-admin'] },
 ]
 
 interface Props {
