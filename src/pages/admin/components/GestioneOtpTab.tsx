@@ -748,8 +748,10 @@ function KpiCard(props: {
 function OtpRecipientField() {
     const [email, setEmail] = useState('')
     const [savedEmail, setSavedEmail] = useState('')
-    const [phone, setPhone] = useState('')
-    const [savedPhone, setSavedPhone] = useState('')
+    const [adminPhone, setAdminPhone] = useState('')
+    const [savedAdminPhone, setSavedAdminPhone] = useState('')
+    const [bossPhone, setBossPhone] = useState('')
+    const [savedBossPhone, setSavedBossPhone] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
@@ -764,22 +766,27 @@ function OtpRecipientField() {
             if (cancelled) return
             const cfg = (data?.config || {}) as Record<string, unknown>
             const notif = (cfg.notifications || {}) as Record<string, unknown>
-            const e = typeof notif.otp_recipient === 'string' ? notif.otp_recipient : ''
-            const p = typeof notif.boss_whatsapp_phone === 'string' ? notif.boss_whatsapp_phone : ''
+            const e  = typeof notif.otp_recipient === 'string' ? notif.otp_recipient : ''
+            const ap = typeof notif.admin_whatsapp_phone === 'string' ? notif.admin_whatsapp_phone : ''
+            const bp = typeof notif.boss_whatsapp_phone === 'string' ? notif.boss_whatsapp_phone : ''
             setEmail(e); setSavedEmail(e)
-            setPhone(p); setSavedPhone(p)
+            setAdminPhone(ap); setSavedAdminPhone(ap)
+            setBossPhone(bp); setSavedBossPhone(bp)
             setLoading(false)
         })()
         return () => { cancelled = true }
     }, [])
 
+    const cleanPhone = (s: string) => s.trim().replace(/[\s+-]/g, '')
     const dirtyEmail = email.trim() !== savedEmail
-    const dirtyPhone = phone.trim().replace(/[\s+-]/g, '') !== savedPhone
-    const dirty = dirtyEmail || dirtyPhone
+    const dirtyAdminPhone = cleanPhone(adminPhone) !== savedAdminPhone
+    const dirtyBossPhone = cleanPhone(bossPhone) !== savedBossPhone
+    const dirty = dirtyEmail || dirtyAdminPhone || dirtyBossPhone
     const isValidEmail = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
-    // Accept 9-15 digits after stripping common separators.
-    const isValidPhone = !phone || /^\d{9,15}$/.test(phone.trim().replace(/[\s+-]/g, ''))
-    const canSave = dirty && isValidEmail && isValidPhone
+    const isValidPhone = (p: string) => !p || /^\d{9,15}$/.test(cleanPhone(p))
+    const validAdminPhone = isValidPhone(adminPhone)
+    const validBossPhone = isValidPhone(bossPhone)
+    const canSave = dirty && isValidEmail && validAdminPhone && validBossPhone
 
     const handleSave = async () => {
         if (!canSave || saving) return
@@ -795,7 +802,8 @@ function OtpRecipientField() {
             const nextNotif = {
                 ...notif,
                 otp_recipient: email.trim(),
-                boss_whatsapp_phone: phone.trim().replace(/[\s+-]/g, ''),
+                admin_whatsapp_phone: cleanPhone(adminPhone),
+                boss_whatsapp_phone: cleanPhone(bossPhone),
             }
             const nextCfg = { ...cfg, notifications: nextNotif }
             const { error } = await supabase
@@ -803,7 +811,8 @@ function OtpRecipientField() {
                 .upsert({ id: 'main', config: nextCfg }, { onConflict: 'id' })
             if (error) throw error
             setSavedEmail(email.trim())
-            setSavedPhone(phone.trim().replace(/[\s+-]/g, ''))
+            setSavedAdminPhone(cleanPhone(adminPhone))
+            setSavedBossPhone(cleanPhone(bossPhone))
             toast.success('Canali di notifica salvati')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
@@ -847,20 +856,39 @@ function OtpRecipientField() {
             </div>
 
             <div>
+                <label className="block text-[12px] font-medium text-theme-text-secondary mb-1">WhatsApp admin (notifiche operative)</label>
+                <input
+                    type="tel"
+                    value={adminPhone}
+                    onChange={e => setAdminPhone(e.target.value)}
+                    placeholder={loading ? 'Caricamento…' : 'es. 393457905205'}
+                    disabled={loading}
+                    className={`w-full bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!validAdminPhone && adminPhone ? 'border-red-500' : 'border-theme-border'}`}
+                />
+                {!validAdminPhone && adminPhone && (
+                    <p className="text-[11px] text-red-500 mt-1">Solo cifre (9-15), formato internazionale senza +.</p>
+                )}
+                <p className="text-[11px] text-theme-text-muted mt-1">
+                    Riceve gli alert automatici (Nexi callback, prepaid card, fornitori in scadenza, scadenze cron).
+                    Vuoto → usa <code>NOTIFICATION_PHONE</code> env o il default storico.
+                </p>
+            </div>
+
+            <div>
                 <label className="block text-[12px] font-medium text-theme-text-secondary mb-1">WhatsApp direzione (alert preventivi)</label>
                 <input
                     type="tel"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    placeholder={loading ? 'Caricamento…' : 'es. 393472817258 (formato internazionale, no +)'}
+                    value={bossPhone}
+                    onChange={e => setBossPhone(e.target.value)}
+                    placeholder={loading ? 'Caricamento…' : 'es. 393472817258'}
                     disabled={loading}
-                    className={`w-full bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!isValidPhone && phone ? 'border-red-500' : 'border-theme-border'}`}
+                    className={`w-full bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!validBossPhone && bossPhone ? 'border-red-500' : 'border-theme-border'}`}
                 />
-                {!isValidPhone && phone && (
-                    <p className="text-[11px] text-red-500 mt-1">Solo cifre (9-15). Esempio: 393472817258.</p>
+                {!validBossPhone && bossPhone && (
+                    <p className="text-[11px] text-red-500 mt-1">Solo cifre (9-15), formato internazionale senza +.</p>
                 )}
                 <p className="text-[11px] text-theme-text-muted mt-1">
-                    Riceve la richiesta "preventivo senza cauzione in attesa". Cambio = immediato, nessun deploy.
+                    Riceve la richiesta "preventivo senza cauzione in attesa". Diverso dal numero admin.
                 </p>
             </div>
 

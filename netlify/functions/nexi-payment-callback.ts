@@ -6,6 +6,7 @@ import { detectCardType, logCardAttempt, voidNexiTransaction, cancelBooking, not
 import { renderTemplate } from './utils/messageTemplates';
 import { getClubCashbackPct } from './utils/dr7ClubCashback';
 import { fetchNexiCardInfo } from './utils/nexiCardInfo';
+import { getAdminNotificationPhone } from './utils/notificationPhone';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -463,7 +464,7 @@ const handler: Handler = async (event) => {
                 }
 
                 // Admin notification
-                const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
+                const NOTIFICATION_PHONE = await getAdminNotificationPhone();
                 if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
                     const adminMsg = await renderTemplate('payment_received_damages_admin', { customer_name: booking.customer_name, amountEur, paymentType: paymentPurpose });
                     if (adminMsg === null) {
@@ -643,7 +644,7 @@ const handler: Handler = async (event) => {
                 }
 
                 // Admin notification
-                const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
+                const NOTIFICATION_PHONE = await getAdminNotificationPhone();
                 if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
                     const adminMsg = await renderTemplate('payment_received_extension_admin', { customer_name: booking.customer_name, amountEur, vehicle_name: booking.vehicle_name || 'N/A' });
                     if (adminMsg === null) {
@@ -1350,7 +1351,7 @@ const handler: Handler = async (event) => {
                             }
 
                             // Notify admin
-                            const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
+                            const NOTIFICATION_PHONE = await getAdminNotificationPhone();
                             if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
                                 const adminBonusMsg = await renderTemplate('wallet_bonus_credit_admin', { customer_name: booking.customer_name || '-', cardLabel, bonusEur, percentLabel, newBalance: newBalance.toFixed(2), bookingRef: booking.id.substring(0, 8).toUpperCase() });
                                 if (adminBonusMsg === null) {

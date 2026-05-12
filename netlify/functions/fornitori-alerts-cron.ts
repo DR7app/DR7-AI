@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { getAdminNotificationPhone } from './utils/notificationPhone'
 
 /**
  * Daily cron — Phase 4 smart alerts for the Fornitori module.
@@ -20,7 +21,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
-const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205'
+// NOTIFICATION_PHONE source: centralina_pro_config → env → hardcoded.
+// Resolved per-cron-run.
 
 interface FattureRow {
     id: string
@@ -264,10 +266,11 @@ const handler: Handler = async () => {
 
         const body = lines.join('\n')
         try {
+            const adminPhone = await getAdminNotificationPhone()
             await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId: `${NOTIFICATION_PHONE}@c.us`, message: body }),
+                body: JSON.stringify({ chatId: `${adminPhone}@c.us`, message: body }),
             })
         } catch (e) {
             console.error('[fornitori-alerts-cron] whatsapp error', e)

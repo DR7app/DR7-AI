@@ -30,6 +30,7 @@ import { schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { matchesAdvancedFilters, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
 import { getProKeyEventTriggers } from '../../src/utils/proTemplateRouting';
+import { getAdminNotificationPhone } from './utils/notificationPhone';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -368,8 +369,9 @@ async function processScadenzeAdmin(tpl: SystemMessage, now: number) {
 
     if (!scadenze?.length) return { sent: 0, skipped: 0, errors: 0 };
 
-    // Per le scadenze admin non c'e' un cliente — invia all'admin notification phone.
-    const adminPhone = process.env.NOTIFICATION_PHONE || '393457905205';
+    // Per le scadenze admin non c'e' un cliente — invia al numero direzione
+    // configurato (centralina_pro_config → env → fallback storico).
+    const adminPhone = await getAdminNotificationPhone();
 
     for (const s of scadenze as any[]) {
         const r = await fireToCustomer(tpl, `scadenza-${s.id}-${days}d`, 'DR7 Admin', null, adminPhone, {

@@ -1,6 +1,7 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
+import { getAdminNotificationPhone } from './utils/notificationPhone';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -153,7 +154,7 @@ const cancelHandler: Handler = async () => {
             }
 
             // 4. Notify admin — template-only
-            const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205';
+            const NOTIFICATION_PHONE = await getAdminNotificationPhone();
             if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
                 const adminMessage = await renderTemplate('cancellation_admin_alert', {
                     customer_name: booking.customer_name,

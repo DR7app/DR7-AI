@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { renderTemplate } from './utils/messageTemplates'
+import { getAdminNotificationPhone } from './utils/notificationPhone'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -9,7 +10,8 @@ const NEXI_API_KEY = process.env.NEXI_API_KEY!
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1'
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
-const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || '393457905205'
+// NOTIFICATION_PHONE source: centralina_pro_config → env → hardcoded.
+// Resolved via getAdminNotificationPhone() at call time.
 
 export interface CardCheckResult {
     isPrepaid: boolean
@@ -259,11 +261,12 @@ export async function notifyPrepaidBlocked(params: {
             // No Pro template → skip admin notification
             return
         }
+        const adminPhone = await getAdminNotificationPhone()
         await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                chatId: `${NOTIFICATION_PHONE}@c.us`,
+                chatId: `${adminPhone}@c.us`,
                 message: adminMessage
             })
         })
@@ -272,7 +275,7 @@ export async function notifyPrepaidBlocked(params: {
         try {
             await supabase.from('sent_messages_log').insert({
                 customer_name: params.customerName || 'N/A',
-                customer_phone: NOTIFICATION_PHONE,
+                customer_phone: adminPhone,
                 message_text: adminMessage,
                 template_label: 'Prepaid Card Blocked (Admin)',
                 status: 'sent',

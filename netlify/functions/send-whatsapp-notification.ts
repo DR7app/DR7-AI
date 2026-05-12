@@ -1,10 +1,10 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { getMessageTemplate, resolveKeyForContext } from './utils/messageTemplates';
+import { getAdminNotificationPhone } from './utils/notificationPhone';
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
-const NOTIFICATION_PHONE = process.env.NOTIFICATION_PHONE || "393457905205";
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
@@ -74,7 +74,7 @@ const handler: Handler = async (event) => {
   }
 
   let message = '';
-  let targetPhone = customPhone || NOTIFICATION_PHONE;
+  let targetPhone = customPhone || (await getAdminNotificationPhone());
   // Track the resolved Pro key so we can look up the email toggle after WhatsApp send.
   let usedTemplateKey: string | null = null;
 
