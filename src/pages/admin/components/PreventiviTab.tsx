@@ -1882,24 +1882,25 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             const km = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
             return km === 'unlimited' ? 'Illimitati' : `${km} Km`
           })(),
-          // {km_illimitati} -> "Km Illimitati (€X)" se il noleggio ha km
-          // illimitati. Stringa vuota se no. L'importo viene dal preventivo
-          // stesso (unlimited_km_total). Se il pacchetto e' "base illimitato"
-          // (incluso nel veicolo, no surcharge) mostra solo "Km Illimitati".
+          // {km_illimitati} -> "Km Illimitati = X,XX" (stesso formato delle
+          // altre voci: "Lavaggio Finale = 9,90", "No cauzione = 49,00").
+          // Vuoto se km limitati (line-strip rimuove la riga, anche il bullet
+          // "•" davanti). "Km Illimitati = Incluso" se illimitato gia' nel
+          // pacchetto base senza sovrapprezzo.
           km_illimitati: (() => {
               const hasUnlim = pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited'
               if (!hasUnlim) return ''
               const cost = Number(p.unlimited_km_total || 0)
-              return cost > 0 ? `Km Illimitati (${formatEur(cost)})` : 'Km Illimitati'
+              return cost > 0 ? `Km Illimitati = ${formatEur(cost)}` : 'Km Illimitati = Incluso'
           })(),
           unlimited_km: (() => {
               const hasUnlim = pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited'
               if (!hasUnlim) return ''
               const cost = Number(p.unlimited_km_total || 0)
-              return cost > 0 ? `Km Illimitati (${formatEur(cost)})` : 'Km Illimitati'
+              return cost > 0 ? `Km Illimitati = ${formatEur(cost)}` : 'Km Illimitati = Incluso'
           })(),
           // Importo grezzo, senza label: per template che vogliono mostrare
-          // l'importo separatamente dalla label (es. su una riga "Costo: €X")
+          // l'importo separatamente dalla label.
           km_illimitati_importo: (pickedUnlimitedKm && Number(p.unlimited_km_total || 0) > 0)
               ? formatEur(Number(p.unlimited_km_total || 0))
               : '',
@@ -1947,14 +1948,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         for (const [k, v] of Object.entries(allVars)) {
           const value = v || ''
           // Se la variabile e' VUOTA e occupa una riga da sola (eventualmente
-          // con whitespace circostante), rimuovi la riga intera. Questo
-          // permette template tipo:
-          //   Pickup: {pickup_date}
-          //   {km_illimitati}
-          //   Prezzo: {prezzo}
-          // Se km_illimitati e' vuoto, la riga sparisce senza lasciare buchi.
+          // con bullet "•", "-", "*" o whitespace circostante), rimuovi la
+          // riga intera + il bullet residuo. Esempi che vengono strippati:
+          //   "{km_illimitati}"
+          //   "  {km_illimitati}  "
+          //   "• {km_illimitati}"
+          //   "- {km_illimitati}"
+          //   "*{km_illimitati}*"
           if (value === '') {
-            msg = msg.replace(new RegExp(`^[ \\t]*\\{${k}\\}[ \\t]*\\n?`, 'gm'), '')
+            msg = msg.replace(new RegExp(`^[ \\t]*[•\\-\\*]?[ \\t]*\\*?\\{${k}\\}\\*?[ \\t]*\\n?`, 'gm'), '')
           }
           // Substitution standard per gli altri pattern (inline o leftover).
           msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), value)
