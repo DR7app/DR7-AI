@@ -1882,13 +1882,27 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             const km = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
             return km === 'unlimited' ? 'Illimitati' : `${km} Km`
           })(),
-          // {km_illimitati} -> "Km Illimitati" se il noleggio ha km
-          // illimitati, altrimenti stringa vuota. Cosi' l'admin scrive
-          // semplicemente {km_illimitati} nel template (su una riga sua) e
-          // la riga appare SOLO quando applicabile. La cleanup successiva
-          // (\n{3,}) rimuove la riga vuota residua se non illimitato.
-          km_illimitati: (pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited') ? 'Km Illimitati' : '',
-          unlimited_km: (pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited') ? 'Km Illimitati' : '',
+          // {km_illimitati} -> "Km Illimitati (€X)" se il noleggio ha km
+          // illimitati. Stringa vuota se no. L'importo viene dal preventivo
+          // stesso (unlimited_km_total). Se il pacchetto e' "base illimitato"
+          // (incluso nel veicolo, no surcharge) mostra solo "Km Illimitati".
+          km_illimitati: (() => {
+              const hasUnlim = pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited'
+              if (!hasUnlim) return ''
+              const cost = Number(p.unlimited_km_total || 0)
+              return cost > 0 ? `Km Illimitati (${formatEur(cost)})` : 'Km Illimitati'
+          })(),
+          unlimited_km: (() => {
+              const hasUnlim = pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited'
+              if (!hasUnlim) return ''
+              const cost = Number(p.unlimited_km_total || 0)
+              return cost > 0 ? `Km Illimitati (${formatEur(cost)})` : 'Km Illimitati'
+          })(),
+          // Importo grezzo, senza label: per template che vogliono mostrare
+          // l'importo separatamente dalla label (es. su una riga "Costo: €X")
+          km_illimitati_importo: (pickedUnlimitedKm && Number(p.unlimited_km_total || 0) > 0)
+              ? formatEur(Number(p.unlimited_km_total || 0))
+              : '',
           // Luogo di ritiro/riconsegna — se "domicilio" usa l'indirizzo custom,
           // altrimenti usa la label dell'ufficio/aeroporto.
           // pickup_location  → dove il cliente ritira (consegna a casa = delivery_address)

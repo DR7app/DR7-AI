@@ -516,13 +516,29 @@ const handler: Handler = async (event) => {
           vars.km_info = booking.booking_details?.total_km ? `${booking.booking_details.total_km} Km` : 'Illimitati';
         }
         // Variabile dedicata "km illimitati" — appare SOLO quando il
-        // noleggio ha effettivamente km illimitati (checkbox attiva).
-        // Se non illimitato, resolve a stringa vuota e la riga del template
-        // contenente solo {km_illimitati} viene rimossa automaticamente
-        // (vedi line-strip nel substitution loop in PreventiviTab; per il
-        // sender la pulizia avviene piu' giu' nel replaceFor logic).
-        vars.km_illimitati = isUnlim ? 'Km Illimitati' : '';
+        // noleggio ha effettivamente km illimitati. Se a pagamento mostra
+        // "Km Illimitati (€X)". Importo da booking_details.unlimited_km_total
+        // o extras.unlimited_km_total o kmPackage.cost. Vuoto se km limitati
+        // (riga rimossa dal line-strip in replaceFor logic).
+        const unlimKmCost = Number(
+            booking.booking_details?.unlimited_km_total
+            ?? booking.booking_details?.extras?.unlimited_km_total
+            ?? booking.booking_details?.kmPackage?.cost
+            ?? 0
+        );
+        if (isUnlim) {
+            vars.km_illimitati = unlimKmCost > 0
+                ? `Km Illimitati (€${unlimKmCost.toFixed(2).replace('.', ',')})`
+                : 'Km Illimitati';
+        } else {
+            vars.km_illimitati = '';
+        }
         vars.unlimited_km = vars.km_illimitati;
+        // Solo l'importo grezzo (senza label), utile per template che
+        // vogliono mostrare il prezzo separatamente.
+        vars.km_illimitati_importo = (isUnlim && unlimKmCost > 0)
+            ? `€${unlimKmCost.toFixed(2).replace('.', ',')}`
+            : '';
 
         // KM package details (type + cost) for template
         if (tplKmPackage) {
