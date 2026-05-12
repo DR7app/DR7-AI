@@ -34,6 +34,44 @@ async function loadVatRate(): Promise<number> {
     }
 }
 
+/**
+ * Read Centralina Pro → Fiscale → Metodi di pagamento and decide if a fattura
+ * should be auto-generated for a booking paid with `paymentMethod`. The admin
+ * UI stores booking.payment_method as the LABEL (e.g. "Contanti", "Bonifico",
+ * "Carta di Credito / bancomat"), so we match by case-insensitive label.
+ * Defaults to `true` (current behaviour) when:
+ *   - the config row is missing
+ *   - the fiscal.payment_methods array hasn't been saved yet
+ *   - the booking's payment_method is empty / not found in the list
+ * so legacy bookings and unknown labels still get a fattura.
+ */
+async function shouldAutoInvoice(paymentMethodRaw: string | null | undefined): Promise<boolean> {
+    const label = (paymentMethodRaw || '').trim().toLowerCase()
+    if (!label) return true
+    try {
+        const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+        const cfg = (data?.config ?? null) as Record<string, unknown> | null
+        const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
+        const list = fiscal?.payment_methods
+        if (!Array.isArray(list) || list.length === 0) return true
+        const match = list.find((m: any) => {
+            if (!m || typeof m !== 'object') return false
+            const ml = String(m.label || '').trim().toLowerCase()
+            const mk = String(m.key || '').trim().toLowerCase()
+            return ml === label || mk === label
+        }) as { auto_invoice?: boolean } | undefined
+        if (!match) return true
+        return match.auto_invoice !== false
+    } catch (e) {
+        console.warn('[shouldAutoInvoice] config lookup failed, defaulting to true', e)
+        return true
+    }
+}
+
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
@@ -149,6 +187,21 @@ export const handler: Handler = async (event) => {
             return {
                 statusCode: 200,
                 body: JSON.stringify({ message: 'Fattura non prevista per pagamenti con Wallet o Gift Card', skipped: true })
+            }
+        }
+
+        // Centralina Pro → Fiscale → Metodi di pagamento: rispetta la spunta
+        // "Fattura". Se la direzione ha disattivato l'auto-fattura per questo
+        // metodo (es. Contanti, Bonifico privato), salta la generazione.
+        if (!(await shouldAutoInvoice(booking.payment_method))) {
+            console.log(`[Invoice] Skipping — Centralina Pro disattiva auto-fattura per metodo "${booking.payment_method}"`)
+            return {
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: `Fattura disattivata da Centralina Pro per metodo "${booking.payment_method}"`,
+                    skipped: true,
+                    reason: 'auto_invoice_disabled',
+                })
             }
         }
 
