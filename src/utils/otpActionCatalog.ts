@@ -176,7 +176,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     used_in: 'Fattura > tasto Elimina sulla riga',
     reason: 'Eliminare una fattura richiede autorizzazione direzionale.',
     group: 'Fattura',
-    wired: false,
+    wired: true,
   },
   {
     id: 'fattura.send_sdi',
@@ -184,7 +184,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     used_in: 'Fattura > tasto Invia SDI',
     reason: "L'invio al SDI e definitivo: richiede approvazione direzionale.",
     group: 'Fattura',
-    wired: false,
+    wired: true,
   },
   {
     id: 'customer.delete',

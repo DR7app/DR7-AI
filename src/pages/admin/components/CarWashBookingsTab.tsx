@@ -894,6 +894,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   }
 
   async function handleDeleteBooking(bookingId: string, customerName: string) {
+    // OTP gate (configurabile da Gestione OTP > 'wash.delete'). Se la
+    // regola e' disattivata, isOtpRequired ritorna false e
+    // requestOverride auto-approva senza popup.
+    if (!override.hasOverride('wash.delete')) {
+      override.requestOverride('wash.delete', `Eliminare il lavaggio di ${customerName}: azione irreversibile.`)
+      if (!override.hasOverride('wash.delete')) return
+    }
     try {
       // Try to delete from Google Calendar
       try {
