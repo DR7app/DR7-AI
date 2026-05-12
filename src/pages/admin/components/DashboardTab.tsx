@@ -199,11 +199,30 @@ function writeCache<T>(key: string, data: T) {
     } catch { /* quota / serialize errors — silent */ }
 }
 
+// Helpers for date range
+function todayIsoRome(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+}
+function firstDayOfMonthIso(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+function lastDayOfMonthIso(d = new Date()): string {
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+}
+function isoAddDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d) + n * 86400000)
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
+}
+
 export default function DashboardTab() {
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  })
+  // Selected date range — default to the current calendar month.
+  const [dateFrom, setDateFrom] = useState<string>(() => firstDayOfMonthIso())
+  const [dateTo, setDateTo] = useState<string>(() => lastDayOfMonthIso())
+  // Kept around so the existing payload `period.month` and back-compat
+  // logging still work — derived from dateFrom.
+  const selectedMonth = dateFrom.substring(0, 7)
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -295,10 +314,10 @@ export default function DashboardTab() {
     fetchDashboard({ useCache: true })
     fetchSupplierCosts(selectedMonth, { useCache: true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMonth])
+  }, [dateFrom, dateTo])
 
   const fetchDashboard = async (opts?: { useCache?: boolean; force?: boolean }) => {
-    const cacheKey = `${CACHE_PREFIX}:${selectedMonth}`
+    const cacheKey = `${CACHE_PREFIX}:${dateFrom}_${dateTo}`
     if (opts?.useCache !== false) {
       const cached = readCache<DashboardData>(cacheKey)
       if (cached) {
@@ -312,7 +331,7 @@ export default function DashboardTab() {
     setLoading(true)
     setError(null)
     try {
-      const res = await authFetch(`/.netlify/functions/dashboard-kpi?month=${selectedMonth}`)
+      const res = await authFetch(`/.netlify/functions/dashboard-kpi?from=${dateFrom}&to=${dateTo}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setData(json)
@@ -412,12 +431,60 @@ export default function DashboardTab() {
           <p className="text-xs text-theme-text-muted mt-0.5">La visione strategica della tua azienda</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-[#19C2D6]/40 focus:border-[#19C2D6] outline-none"
-          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-[#19C2D6]/40 focus:border-[#19C2D6] outline-none"
+            />
+            <span className="text-theme-text-muted text-sm">→</span>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-[#19C2D6]/40 focus:border-[#19C2D6] outline-none"
+            />
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => { setDateFrom(firstDayOfMonthIso()); setDateTo(lastDayOfMonthIso()) }}
+                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
+                title="Mese corrente"
+              >
+                Mese
+              </button>
+              <button
+                onClick={() => { const t = todayIsoRome(); setDateFrom(isoAddDays(t, -6)); setDateTo(t) }}
+                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
+                title="Ultimi 7 giorni"
+              >
+                7g
+              </button>
+              <button
+                onClick={() => { const t = todayIsoRome(); setDateFrom(isoAddDays(t, -29)); setDateTo(t) }}
+                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
+                title="Ultimi 30 giorni"
+              >
+                30g
+              </button>
+              <button
+                onClick={() => { const t = todayIsoRome(); setDateFrom(isoAddDays(t, -89)); setDateTo(t) }}
+                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
+                title="Ultimi 90 giorni"
+              >
+                90g
+              </button>
+              <button
+                onClick={() => { const t = todayIsoRome(); setDateFrom(`${t.substring(0, 4)}-01-01`); setDateTo(t) }}
+                className="text-[11px] px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-theme-text-primary hover:border-[#19C2D6]"
+                title="Anno corrente"
+              >
+                YTD
+              </button>
+            </div>
+          </div>
           <span className={`text-xs px-2 py-1 rounded-full ${loading ? 'bg-blue-500/20 text-blue-300' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}>
             {loading ? 'Aggiorno…' : (cachedAt ? fmtRelative(cachedAt) : 'snapshot non disponibile')}
           </span>
@@ -439,7 +506,7 @@ export default function DashboardTab() {
           </button>
           <div className="text-right hidden sm:block">
             <p className="text-[10px] text-theme-text-muted uppercase">Periodo</p>
-            <p className="text-sm font-semibold text-theme-text-primary">{formatMonth(selectedMonth)}</p>
+            <p className="text-sm font-semibold text-theme-text-primary">{dateFrom} → {dateTo}</p>
           </div>
         </div>
       </div>

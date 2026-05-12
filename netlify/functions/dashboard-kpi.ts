@@ -21,6 +21,22 @@ function computeBillableDays(startDateStr: string, endDateStr: string): number {
   return Math.max(1, diffDays)
 }
 
+// Range-aware date helpers (replace the month-only logic).
+function isoUTCMs(iso: string): number {
+  const [y, m, d] = iso.substring(0, 10).split('-').map(Number)
+  return Date.UTC(y, m - 1, d)
+}
+function isoAddDays(iso: string, n: number): string {
+  const d = new Date(isoUTCMs(iso) + n * 86400000)
+  const yy = d.getUTCFullYear()
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+function daysBetween(startISO: string, endISO: string): number {
+  return Math.round((isoUTCMs(endISO) - isoUTCMs(startISO)) / 86400000) + 1
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
@@ -31,40 +47,61 @@ export const handler: Handler = async (event) => {
   if (authErr) return authErr
 
   const params = event.queryStringParameters || {}
-  const month = params.month // YYYY-MM
+  // New: prefer ?from=YYYY-MM-DD&to=YYYY-MM-DD. Fall back to ?month=YYYY-MM
+  // (treats the whole calendar month as the range) for backwards-compat.
+  let monthStartISO: string
+  let monthEndISO: string
+  let month: string  // YYYY-MM derived from range start, kept for payload back-compat
 
-  if (!month) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Missing required param: month (YYYY-MM)' }) }
+  if (params.from && params.to) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(params.from) || !/^\d{4}-\d{2}-\d{2}$/.test(params.to)) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid from/to format. Use YYYY-MM-DD' }) }
+    }
+    if (params.to < params.from) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'to must be on or after from' }) }
+    }
+    monthStartISO = params.from
+    monthEndISO = params.to
+    month = monthStartISO.substring(0, 7)
+  } else if (params.month) {
+    if (!/^\d{4}-\d{2}$/.test(params.month)) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid month format. Use YYYY-MM' }) }
+    }
+    const [yStr, mStr] = params.month.split('-')
+    const yMonth = parseInt(yStr)
+    const mMonth = parseInt(mStr)
+    if (!yMonth || !mMonth || mMonth < 1 || mMonth > 12) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid month format. Use YYYY-MM' }) }
+    }
+    const lastDay = getDaysInMonth(yMonth, mMonth)
+    monthStartISO = `${yMonth}-${String(mMonth).padStart(2, '0')}-01`
+    monthEndISO = `${yMonth}-${String(mMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    month = params.month
+  } else {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Missing range. Provide from + to (YYYY-MM-DD) or month (YYYY-MM)' }) }
   }
 
-  const [yearStr, monthStr] = month.split('-')
-  const year = parseInt(yearStr)
-  const monthNum = parseInt(monthStr)
+  // Derived month-style helpers — kept under the original names so the rest
+  // of the file (~49 references) doesn't need to be touched. They now hold
+  // the range bounds rather than literal calendar-month bounds.
+  const year = parseInt(monthStartISO.substring(0, 4))
+  const monthNum = parseInt(monthStartISO.substring(5, 7))
+  const daysInMonth = daysBetween(monthStartISO, monthEndISO)
 
-  if (!year || !monthNum || monthNum < 1 || monthNum > 12) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid month format. Use YYYY-MM' }) }
-  }
+  // Previous equivalent range: same length immediately before the selected range.
+  const prevMonthEndISO = isoAddDays(monthStartISO, -1)
+  const prevMonthStartISO = isoAddDays(prevMonthEndISO, -(daysInMonth - 1))
+  const prevYear = parseInt(prevMonthStartISO.substring(0, 4))
+  const prevMonthNum = parseInt(prevMonthStartISO.substring(5, 7))
+  const prevDaysInMonth = daysInMonth
 
-  const daysInMonth = getDaysInMonth(year, monthNum)
-  const monthStartISO = `${year}-${String(monthNum).padStart(2, '0')}-01`
-  const monthEndISO = `${year}-${String(monthNum).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
-
-  // Previous month
-  const prevDate = new Date(year, monthNum - 2, 1) // monthNum-1 is 0-based, -1 more for prev
-  const prevYear = prevDate.getFullYear()
-  const prevMonthNum = prevDate.getMonth() + 1
-  const prevDaysInMonth = getDaysInMonth(prevYear, prevMonthNum)
-  const prevMonthStartISO = `${prevYear}-${String(prevMonthNum).padStart(2, '0')}-01`
-  const prevMonthEndISO = `${prevYear}-${String(prevMonthNum).padStart(2, '0')}-${String(prevDaysInMonth).padStart(2, '0')}`
-
-  // Days elapsed in current month (for projections)
+  // Days elapsed within the selected range (for projections).
   const now = new Date()
-  const nowYear = now.getFullYear()
-  const nowMonth = now.getMonth() + 1
-  let daysElapsed = daysInMonth
-  if (nowYear === year && nowMonth === monthNum) {
-    daysElapsed = now.getDate()
-  }
+  const todayISO = now.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+  let daysElapsed: number
+  if (todayISO < monthStartISO) daysElapsed = 0
+  else if (todayISO > monthEndISO) daysElapsed = daysInMonth
+  else daysElapsed = daysBetween(monthStartISO, todayISO)
 
   try {
     // Parallel data fetches
@@ -165,8 +202,13 @@ export const handler: Handler = async (event) => {
     // matching Report Noleggio (monthly-report.ts) exactly so the two stay in
     // lockstep. Bookings spanning multiple months contribute only the slice
     // attributable to the selected month.
-    const calcRevenueForMonth = (bookings: any[], yearN: number, monthN: number) => {
-      const dim = new Date(yearN, monthN, 0).getDate()
+    // Range-aware proration: compute the overlap between [pickup, dropoff-1]
+    // and [rangeStart, rangeEnd], then bill price * (overlap / totalDays).
+    // Works for both calendar-month ranges (back-compat) and custom from/to
+    // ranges (e.g. 10 Apr → 10 May).
+    const calcRevenueForRange = (bookings: any[], rangeStartISO: string, rangeEndISO: string) => {
+      const rangeStartMs = isoUTCMs(rangeStartISO)
+      const rangeEndMs = isoUTCMs(rangeEndISO)
       let rental = 0, wash = 0, penalties = 0, danni = 0
       bookings.forEach(b => {
         const rawPrice = b.price_total
@@ -176,30 +218,23 @@ export const handler: Handler = async (event) => {
         if (st === 'car_wash') {
           wash += price
         } else if (b.pickup_date && b.dropoff_date) {
-          // Compute overlap days within (yearN, monthN) — same algorithm as
-          // monthly-report.ts: count rented days in this month, exclude dropoff day.
-          const [pY, pM, pD] = b.pickup_date.substring(0, 10).split('-').map(Number)
-          const [dY, dM, dD] = b.dropoff_date.substring(0, 10).split('-').map(Number)
-          let startDay: number, endDay: number
-          if (pY < yearN || (pY === yearN && pM < monthN)) startDay = 1
-          else if (pY === yearN && pM === monthN) startDay = pD
-          else { return /* pickup after this month */ }
-          if (dY > yearN || (dY === yearN && dM > monthN)) endDay = dim
-          else if (dY === yearN && dM === monthN) {
-            endDay = dD - 1
-            if (endDay < startDay) {
-              if (pY === yearN && pM === monthN) endDay = startDay
-              else return
-            }
-          } else return /* dropoff before this month */
-          const overlapDays = endDay - startDay + 1
-          // Total booking days (exclude dropoff day, min 1)
-          const startUtc = Date.UTC(pY, pM - 1, pD)
-          const endUtc = Date.UTC(dY, dM - 1, dD)
-          const totalBookingDays = Math.max(1, Math.round((endUtc - startUtc) / (1000 * 60 * 60 * 24)))
-          rental += (price / totalBookingDays) * overlapDays
+          const pickupISO = b.pickup_date.substring(0, 10)
+          const dropoffISO = b.dropoff_date.substring(0, 10)
+          const pickupMs = isoUTCMs(pickupISO)
+          const dropoffMs = isoUTCMs(dropoffISO)
+          // Last billable day = dropoff − 1 (exclude dropoff day, matches monthly-report.ts).
+          const lastBillableMs = dropoffMs - 86400000
+          // Overlap with the selected range.
+          const overlapStartMs = Math.max(pickupMs, rangeStartMs)
+          const overlapEndMs = Math.min(lastBillableMs, rangeEndMs)
+          if (overlapEndMs >= overlapStartMs) {
+            const overlapDays = Math.round((overlapEndMs - overlapStartMs) / 86400000) + 1
+            const totalBookingDays = Math.max(1, Math.round((dropoffMs - pickupMs) / 86400000))
+            rental += (price / totalBookingDays) * overlapDays
+          }
+          // else: booking falls entirely outside the range — skip.
         } else {
-          // No dates → can't prorate; count full price
+          // No dates → can't prorate; count full price.
           rental += price
         }
 
@@ -219,15 +254,22 @@ export const handler: Handler = async (event) => {
       })
       return { rental, wash, penalties, danni, total: rental + wash + penalties + danni }
     }
-    // Backwards-compat alias used by older paths in this file
-    const calcRevenue = (bookings: any[]) => calcRevenueForMonth(bookings, year, monthNum)
+    // Back-compat alias: existing call sites use calcRevenueForMonth — keep it
+    // working by routing to calcRevenueForRange with the matching ISO range.
+    const calcRevenueForMonth = (bookings: any[], yearN: number, monthN: number) => {
+      const lastDay = new Date(yearN, monthN, 0).getDate()
+      const startISO = `${yearN}-${String(monthN).padStart(2, '0')}-01`
+      const endISO = `${yearN}-${String(monthN).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      return calcRevenueForRange(bookings, startISO, endISO)
+    }
+    const calcRevenue = (bookings: any[]) => calcRevenueForRange(bookings, monthStartISO, monthEndISO)
 
-    // Current month: all bookings starting this month (rentals + washes + everything)
+    // Current range: all bookings starting in the range (rentals + washes + everything)
     const currentAllValid = allCurrentBookings.filter(b => validStatuses.includes(b.status))
     const prevAllValid = allPrevBookings.filter(b => validStatuses.includes(b.status))
 
-    const currentRevenue = calcRevenueForMonth(currentAllValid, year, monthNum)
-    const prevRevenue = calcRevenueForMonth(prevAllValid, prevYear, prevMonthNum)
+    const currentRevenue = calcRevenueForRange(currentAllValid, monthStartISO, monthEndISO)
+    const prevRevenue = calcRevenueForRange(prevAllValid, prevMonthStartISO, prevMonthEndISO)
 
     // Cancelled bookings — money that WAS booked but won't be earned. The user
     // wants visibility on this so it doesn't look like the month is empty.
@@ -284,45 +326,36 @@ export const handler: Handler = async (event) => {
     const idleNowCount = totalVehicles - rentedNowCount
     const occupationRate = totalVehicles > 0 ? Math.round((rentedNowCount / totalVehicles) * 100) : 0
 
-    // Monthly occupation rate (avg across month)
-    const calcMonthlyOccupation = (rentals: any[], vehList: any[], mStart: string, mEnd: string, dim: number) => {
-      if (vehList.length === 0) return 0
+    // Occupation rate (avg across the selected range). ISO-based overlap so
+    // arbitrary from/to ranges (10 Apr → 10 May) are computed correctly —
+    // not just calendar months.
+    const calcMonthlyOccupation = (rentals: any[], vehList: any[], rStart: string, rEnd: string, daysInRange: number) => {
+      if (vehList.length === 0 || daysInRange <= 0) return 0
+      const rangeStartMs = isoUTCMs(rStart)
+      const rangeEndMs = isoUTCMs(rEnd)
       const vehicleRentedDays: Record<string, Set<number>> = {}
       vehList.forEach(v => { vehicleRentedDays[v.id] = new Set() })
 
       rentals.forEach(b => {
         const vid = b.vehicle_id
         if (!vid || !vehicleRentedDays[vid]) return
-        const pickup = b.pickup_date.substring(0, 10)
-        const dropoff = b.dropoff_date.substring(0, 10)
-        const [pY, pM, pD] = pickup.split('-').map(Number)
-        const [dY, dM, dD] = dropoff.split('-').map(Number)
-        const mY = parseInt(mStart.substring(0, 4))
-        const mM = parseInt(mStart.substring(5, 7))
-
-        let startDay: number
-        if (pY < mY || (pY === mY && pM < mM)) startDay = 1
-        else if (pY === mY && pM === mM) startDay = pD
-        else return
-
-        let endDay: number
-        if (dY > mY || (dY === mY && dM > mM)) endDay = dim
-        else if (dY === mY && dM === mM) {
-          endDay = dD - 1
-          if (endDay < startDay) {
-            if (pY === mY && pM === mM) endDay = startDay
-            else return
-          }
-        } else return
-
-        for (let d = startDay; d <= endDay; d++) {
-          vehicleRentedDays[vid].add(d)
+        const pickupMs3 = isoUTCMs(b.pickup_date.substring(0, 10))
+        const dropoffMs3 = isoUTCMs(b.dropoff_date.substring(0, 10))
+        const lastBillableMs3 = dropoffMs3 - 86400000
+        const overlapStartMs3 = Math.max(pickupMs3, rangeStartMs)
+        const overlapEndMs3 = Math.min(lastBillableMs3, rangeEndMs)
+        if (overlapEndMs3 < overlapStartMs3) return
+        // Mark each absolute day inside the overlap. We key by days-since-1970
+        // so two bookings on the same vehicle that overlap in the range still
+        // de-duplicate (a vehicle can't be rented twice on the same day).
+        for (let ms = overlapStartMs3; ms <= overlapEndMs3; ms += 86400000) {
+          vehicleRentedDays[vid].add(Math.round(ms / 86400000))
         }
       })
 
       let totalDays = 0
       Object.values(vehicleRentedDays).forEach(days => { totalDays += days.size })
-      return Math.round((totalDays / (vehList.length * dim)) * 100)
+      return Math.round((totalDays / (vehList.length * daysInRange)) * 100)
     }
 
     const monthlyOccupationRate = calcMonthlyOccupation(monthRentals, vehicles, monthStartISO, monthEndISO, daysInMonth)
@@ -389,27 +422,19 @@ export const handler: Handler = async (event) => {
         const bookingRevenue = (typeof rawPrice === 'string' ? parseFloat(rawPrice) : (rawPrice || 0)) / 100
         const totalDays = computeBillableDays(b.pickup_date, b.dropoff_date)
 
-        // Prorate to this month
-        const pickup = b.pickup_date.substring(0, 10)
-        const dropoff = b.dropoff_date.substring(0, 10)
-        const pD = parseInt(pickup.substring(8, 10))
-        const dD = parseInt(dropoff.substring(8, 10))
-        const pM = parseInt(pickup.substring(5, 7))
-        const dM = parseInt(dropoff.substring(5, 7))
-        const pY = parseInt(pickup.substring(0, 4))
-        const dY = parseInt(dropoff.substring(0, 4))
-
-        let startDay = (pY < year || (pY === year && pM < monthNum)) ? 1 : pD
-        let endDay: number
-        if (dY > year || (dY === year && dM > monthNum)) endDay = daysInMonth
-        else {
-          endDay = dD - 1
-          if (endDay < startDay) {
-            if (pY === year && pM === monthNum) endDay = startDay
-            else return
-          }
-        }
-        const overlapDays = endDay - startDay + 1
+        // Prorate to the selected range (ISO-based overlap, works for any
+        // custom from/to — not just calendar months).
+        const pickupISO = b.pickup_date.substring(0, 10)
+        const dropoffISO = b.dropoff_date.substring(0, 10)
+        const pickupMs2 = isoUTCMs(pickupISO)
+        const dropoffMs2 = isoUTCMs(dropoffISO)
+        const lastBillableMs2 = dropoffMs2 - 86400000  // exclude dropoff day
+        const rangeStartMs2 = isoUTCMs(monthStartISO)
+        const rangeEndMs2 = isoUTCMs(monthEndISO)
+        const overlapStartMs2 = Math.max(pickupMs2, rangeStartMs2)
+        const overlapEndMs2 = Math.min(lastBillableMs2, rangeEndMs2)
+        if (overlapEndMs2 < overlapStartMs2) return
+        const overlapDays = Math.round((overlapEndMs2 - overlapStartMs2) / 86400000) + 1
         vRevenue += (bookingRevenue / totalDays) * overlapDays
         vRentedDays += overlapDays
       })
@@ -578,7 +603,7 @@ export const handler: Handler = async (event) => {
 
     // Build response
     const response = {
-      period: { month, daysInMonth, daysElapsed },
+      period: { month, daysInMonth, daysElapsed, from: monthStartISO, to: monthEndISO, prevFrom: prevMonthStartISO, prevTo: prevMonthEndISO },
 
       revenue: {
         currentMonth: Math.round(currentRevenue.total * 100) / 100,
