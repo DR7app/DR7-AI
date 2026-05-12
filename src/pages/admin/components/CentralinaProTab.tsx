@@ -1759,6 +1759,20 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   if (current.fiscal.vat_rate !== saved.fiscal.vat_rate) {
     out.push(`Aliquota IVA: ${saved.fiscal.vat_rate || 0}% → ${current.fiscal.vat_rate || 0}%`)
   }
+  // Metodi di pagamento — confronto deep (cambio numero righe, key, label,
+  // o flag auto_invoice). Senza questo la save-bar mostrava "0 modifica" e
+  // confondeva l'operatore anche se i dati nuovi venivano in realta' salvati.
+  {
+    const curM = Array.isArray(current.fiscal.payment_methods) ? current.fiscal.payment_methods : []
+    const savM = Array.isArray(saved.fiscal.payment_methods) ? saved.fiscal.payment_methods : []
+    if (JSON.stringify(curM) !== JSON.stringify(savM)) {
+      if (curM.length !== savM.length) {
+        out.push(`Metodi di pagamento: ${savM.length} → ${curM.length}`)
+      } else {
+        out.push(`Metodi di pagamento aggiornati`)
+      }
+    }
+  }
 
   // Automazioni
   if (current.automations.rental_buffer_minutes !== saved.automations.rental_buffer_minutes) {
