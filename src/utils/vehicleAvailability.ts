@@ -81,6 +81,20 @@ function isTestBooking(booking: Booking): boolean {
     return TEST_PLATES.has(raw.replace(/\s+/g, '').toUpperCase())
 }
 
+/**
+ * Lavaggio Rientro bookings are internal post-rental cleaning slots auto-created
+ * by a DB trigger when a rental dropoff happens. They are NOT real customer
+ * reservations and must never block the booking form — the rental_buffer_minutes
+ * (post-noleggio buffer) is the only thing that should reserve handover time.
+ *
+ * Without this filter the booking form showed "Slot non disponibile (cliente:
+ * Lavaggio Rientro) dal 15:00 al 15:45 ... prima disponibilità utile: 17:15"
+ * for vehicles that were actually free.
+ */
+function isLavaggioRientro(booking: Booking): boolean {
+    return (booking.customer_name || '').trim() === 'Lavaggio Rientro'
+}
+
 // Types
 export interface Vehicle {
     id: string
@@ -258,6 +272,9 @@ export function getEarliestValidPickupTime(
         if (booking.status === 'pending_payment' && booking.payment_status === 'expired') return false
         // Test bookings (TEST000/TEST002) never block real availability
         if (isTestBooking(booking)) return false
+        // Lavaggio Rientro is the internal post-rental cleaning slot — handover
+        // is already covered by rental_buffer_minutes, don't double-block.
+        if (isLavaggioRientro(booking)) return false
         // Pending Nexi Pay by Link bookings BLOCK the slot for 1 hour while awaiting payment
         return matchVehicleByPlate(booking, vehicle)
     })
@@ -406,6 +423,9 @@ export function isVehicleAvailable(
         if (booking.status === 'pending_payment' && booking.payment_status === 'expired') return false
         // Test bookings (TEST000/TEST002) never block real availability
         if (isTestBooking(booking)) return false
+        // Lavaggio Rientro is the internal post-rental cleaning slot — handover
+        // is already covered by rental_buffer_minutes, don't double-block.
+        if (isLavaggioRientro(booking)) return false
 
         // CRITICAL: Skip linked car wash bookings when extending a rental
         // Car wash bookings are automatically created/updated, so they shouldn't block extensions
@@ -501,6 +521,8 @@ export function isVehicleAvailable(
         if (booking.status === 'pending_payment' && booking.payment_status === 'expired') continue
         // Test bookings (TEST000/TEST002) never block real availability
         if (isTestBooking(booking)) continue
+        // Lavaggio Rientro is internal — never consumes handover staff.
+        if (isLavaggioRientro(booking)) continue
         // Only rental bookings consume handover staff. Car wash / mechanical are appointments.
         if (booking.service_type && booking.service_type !== 'car_rental') continue
         // Same-vehicle conflicts are already covered above with the 75-min buffer.

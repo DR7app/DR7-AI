@@ -2294,7 +2294,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const age = calculateAge(customer.data_nascita)
         const licYears = calculateLicenseYears(patenteDate)
         const tier = classifyDriverTier(age, licYears)
-        if (tier.tier === 'BLOCKED' && !hasOverride('driver_blocked')) {
+        // Skip driver_blocked when the only reason is the < 3 years license:
+        // that case is already covered by the more specific `license_too_recent`
+        // OTP just above. Without this skip the admin had to approve TWO
+        // overlapping popups for the same license-age condition.
+        const blockedOnlyForLicense = licYears < 3 && age >= 21 && age < 70
+        if (tier.tier === 'BLOCKED' && !blockedOnlyForLicense && !hasOverride('driver_blocked')) {
           setOverrideDetails(buildOverrideDetailsBase([
             { label: 'Motivo richiesta', value: `Cliente non idoneo al noleggio: ${tier.reason}` },
             { label: 'Eta cliente', value: `${age} anni` },
