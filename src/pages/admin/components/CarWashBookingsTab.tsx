@@ -18,6 +18,7 @@ import { authFetch } from '../../../utils/authFetch'
 // Orari lavaggio dinamici da Centralina Pro > Orari Lavaggio
 import { generateLavaggioSlotsForDate, getAllowedTimeRangesForDate } from '../../../utils/lavaggioHours'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
+import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 
 interface Customer {
   id: string
@@ -1052,10 +1053,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
-    // Never generate fattura for Wallet, Gift Card, or Carta Punti payments
+    // Don't generate fattura if the chosen payment method has
+    // auto_invoice=false in Centralina Pro > Fiscale. Source of truth =
+    // centralina_pro_config.fiscale.payment_methods (admin-managed).
     const pm = booking.payment_method || ''
-    if (pm === 'Wallet' || pm === 'Gift Card' || pm === 'Carta Punti' || pm === 'wallet' || pm === 'gift_card' || pm === 'credit' || pm === 'carta_punti') {
-      toast.error('Fattura non prevista per pagamenti con Wallet, Gift Card o Carta Punti')
+    if (!(await paymentMethodAutoInvoice(pm))) {
+      toast.error(`Fattura non prevista per pagamenti con "${pm}" (impostazione Centralina > Fiscale).`)
       return
     }
 
@@ -1490,13 +1493,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     }
 
-    // Generate fattura ONLY if paid — never for unpaid bookings, Wallet,
-    // Gift Card, o Carta Punti (sono crediti/fedelta', non operazioni
-    // fiscali da fatturare).
+    // Generate fattura ONLY if paid AND if the payment method has
+    // auto_invoice=true in Centralina Pro > Fiscale (admin-managed —
+    // niente piu' liste hardcoded di metodi).
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
-    const skipFattura = formData.payment_method === 'Wallet'
-      || formData.payment_method === 'Gift Card'
-      || formData.payment_method === 'Carta Punti'
+    const skipFattura = !(await paymentMethodAutoInvoice(formData.payment_method))
 
     if (isPaid && !skipFattura) {
       try {
@@ -4091,13 +4092,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         console.error('[Supercar Experience] cascade-edit failed:', cascadeErr)
                       }
 
-                      // Auto-generate fattura if payment changed to paid
-                      // (skip Wallet / Gift Card / Carta Punti — non sono
-                      // operazioni fiscali da fatturare).
+                      // Auto-generate fattura if payment changed to paid.
+                      // Skip = method ha auto_invoice=false in Centralina
+                      // Pro > Fiscale (admin-managed, niente liste hardcoded).
                       const editPaymentMethod = editingBooking.payment_method || ''
-                      const editSkipFattura = editPaymentMethod === 'Wallet'
-                        || editPaymentMethod === 'Gift Card'
-                        || editPaymentMethod === 'Carta Punti'
+                      const editSkipFattura = !(await paymentMethodAutoInvoice(editPaymentMethod))
                       if (!editSkipFattura && (editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded')) {
                         try {
                           // Check if fattura already exists for this booking

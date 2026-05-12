@@ -88,6 +88,7 @@ import {
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
 import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById } from '../../../utils/configLookup'
+import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -5602,13 +5603,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         && editingOriginalPaymentStatus !== 'completed'
         && editingOriginalPaymentStatus !== 'succeeded'
 
-      // Auto-generate fattura and send to SDI when payment status is "paid".
-      // SKIP fattura for Credit Wallet payments — wallet credits are not invoiceable.
-      // SKIP on edit if payment was ALREADY paid before (fattura already exists).
-      // Only fire for a fresh booking, OR for an edit where payment JUST transitioned to paid.
+      // Auto-generate fattura when payment status is "paid". Skip if the
+      // payment method has auto_invoice=false in Centralina Pro > Fiscale
+      // (admin-managed). Skip on edit if payment was ALREADY paid before.
+      const autoInvoice = await paymentMethodAutoInvoice(formData.payment_method)
       const shouldGenerateFattura = formData.payment_status === 'paid'
         && insertedBooking?.id
-        && formData.payment_method !== 'Credit Wallet'
+        && autoInvoice
         && (!editingId || justMarkedPaid)
       if (shouldGenerateFattura) {
         // Always try to generate fattura — backend has fallbacks for missing data
