@@ -223,17 +223,18 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['modifica', 'primewash'],
     ['modifica', 'wash'],
   ],
+  // I fallback generici (['link pagamento'], ['pay by link']) sono stati
+  // RIMOSSI: matchavano qualunque template di pagamento e facevano arrivare
+  // al cliente il messaggio sbagliato (generico Pay-by-Link) invece del
+  // testo specifico danni/penali. Ora se il template specifico non esiste
+  // l'invio viene saltato e l'admin vede un toast di errore.
   pro_richiesta_penali: [
     ['link', 'pagamento', 'penal'],
     ['penal'],
-    ['link pagamento'],
-    ['pay by link'],
   ],
   pro_richiesta_danni: [
     ['link', 'pagamento', 'dann'],
     ['dann'],
-    ['link pagamento'],
-    ['pay by link'],
   ],
   pro_richiesta_danni_penali: [
     ['link', 'pagamento', 'dann', 'penal'],
@@ -241,7 +242,6 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['link', 'pagamento', 'dann'],
     ['dann'],
     ['penal'],
-    ['link pagamento'],
   ],
   pro_richiesta_addebito: [
     ['link', 'pagamento', 'addebit'],
