@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
 import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
 import { supabase } from '../../../supabaseClient'
+import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 
 /**
  * Convert EUR string to integer cents using string parsing (no floating point).
@@ -496,6 +497,7 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void }) {
   const { canViewFinancials } = useAdminRole()
+  const paymentMethods = usePaymentMethods()
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -7567,33 +7569,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     }
                     setFormData(prev => ({ ...prev, ...updates }))
                   }}
-                  options={[
-                    { value: 'Nexi Pay by Link', label: 'Nexi - Pay by Link' },
-                    { value: 'Bonifico', label: 'Bonifico' },
-                    { value: 'Contanti', label: 'Contanti' },
-                    { value: 'Credit Wallet', label: 'Credit Wallet' },
-                    { value: 'Carta di Credito / bancomat', label: 'Carta di Credito / bancomat' },
-                    { value: 'Paypal', label: 'Paypal' },
-                    { value: 'RIBA', label: 'RIBA' },
-                    { value: 'RID', label: 'RID' },
-                    { value: 'Bollettino postale', label: 'Bollettino postale' },
-                    { value: 'Assegno', label: 'Assegno' },
-                    { value: 'Assegno circolare', label: 'Assegno circolare' },
-                    { value: 'PagoPA', label: 'PagoPA' },
-                    { value: 'RID utenze', label: 'RID utenze' },
-                    { value: 'RIB veloce', label: 'RIB veloce' },
-                    { value: 'SEPA Direct Debit', label: 'SEPA Direct Debit' },
-                    { value: 'SEPA Direct Debit CORE', label: 'SEPA Direct Debit CORE' },
-                    { value: 'SEPA Direct Debit B2B', label: 'SEPA Direct Debit B2B' },
-                    { value: 'Domiciliazione bancaria', label: 'Domiciliazione bancaria' },
-                    { value: 'Domiciliazione postale', label: 'Domiciliazione postale' },
-                    { value: 'Trattenuta su somme già riscosse', label: 'Trattenuta su somme già riscosse' },
-                    { value: 'Bollettino bancario', label: 'Bollettino bancario' },
-                    { value: 'Contanti presso tesoreria', label: 'Contanti presso tesoreria' },
-                    { value: 'Vaglia cambiario', label: 'Vaglia cambiario' },
-                    { value: 'Quietanza erario', label: 'Quietanza erario' },
-                    { value: 'Giroconto su conti di contabilità', label: 'Giroconto su conti di contabilità' }
-                  ]}
+                  options={(() => {
+                    const opts = paymentMethods.map(pm => ({ value: pm.label, label: pm.label }))
+                    // Keep legacy value visible if it's not in the curated list
+                    if (formData.payment_method && !opts.some(o => o.value === formData.payment_method)) {
+                      opts.push({ value: formData.payment_method, label: formData.payment_method })
+                    }
+                    return opts
+                  })()}
                 />
               )}
               {/* Revenue Management — Prezzo Suggerito/Auto */}

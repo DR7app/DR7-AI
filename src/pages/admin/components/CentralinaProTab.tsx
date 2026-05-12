@@ -475,14 +475,41 @@ type FiscalConfig = {
   payment_methods: FiscalPaymentMethod[]
 }
 
+// Lista completa di TUTTI i metodi di pagamento che esistevano hardcoded
+// nei vari dropdown del sistema (operativi + codici SDI). Il primo load
+// di Fiscale → Metodi di pagamento mostra tutto questo, cosi' la direzione
+// vede esattamente quello che gli operatori vedevano prima. Si possono
+// rimuovere, modificare, aggiungere senza dev.
 const DEFAULT_PAYMENT_METHODS: FiscalPaymentMethod[] = [
-  { key: 'contanti',       label: 'Contanti',                 auto_invoice: true  },
-  { key: 'bancomat',       label: 'Bancomat / POS',           auto_invoice: true  },
-  { key: 'carta',          label: 'Carta di credito (Nexi)',  auto_invoice: true  },
-  { key: 'bonifico',       label: 'Bonifico bancario',        auto_invoice: true  },
-  { key: 'assegno',        label: 'Assegno',                  auto_invoice: true  },
-  { key: 'wallet',         label: 'DR7 Wallet (credito)',     auto_invoice: false },
-  { key: 'altro',          label: 'Altro',                    auto_invoice: true  },
+  // Quotidiani
+  { key: 'contanti',                label: 'Contanti',                         auto_invoice: true  },
+  { key: 'bancomat',                label: 'Carta di Credito / bancomat',      auto_invoice: true  },
+  { key: 'nexi_pay_by_link',        label: 'Nexi - Pay by Link',               auto_invoice: true  },
+  { key: 'bonifico',                label: 'Bonifico',                         auto_invoice: true  },
+  { key: 'bonifico_bancario',       label: 'Bonifico bancario',                auto_invoice: true  },
+  { key: 'credit_wallet',           label: 'Credit Wallet',                    auto_invoice: false },
+  { key: 'paypal',                  label: 'Paypal',                           auto_invoice: true  },
+  { key: 'assegno',                 label: 'Assegno',                          auto_invoice: true  },
+  { key: 'assegno_circolare',       label: 'Assegno circolare',                auto_invoice: true  },
+  // Domiciliazioni / addebiti
+  { key: 'riba',                    label: 'RIBA',                             auto_invoice: true  },
+  { key: 'rid',                     label: 'RID',                              auto_invoice: true  },
+  { key: 'rid_utenze',              label: 'RID utenze',                       auto_invoice: true  },
+  { key: 'rib_veloce',              label: 'RIB veloce',                       auto_invoice: true  },
+  { key: 'sepa_direct_debit',       label: 'SEPA Direct Debit',                auto_invoice: true  },
+  { key: 'sepa_direct_debit_core',  label: 'SEPA Direct Debit CORE',           auto_invoice: true  },
+  { key: 'sepa_direct_debit_b2b',   label: 'SEPA Direct Debit B2B',            auto_invoice: true  },
+  { key: 'domiciliazione_bancaria', label: 'Domiciliazione bancaria',          auto_invoice: true  },
+  { key: 'domiciliazione_postale',  label: 'Domiciliazione postale',           auto_invoice: true  },
+  // Pubblica amministrazione / fiscali
+  { key: 'pagopa',                  label: 'PagoPA',                           auto_invoice: true  },
+  { key: 'bollettino_postale',      label: 'Bollettino postale',               auto_invoice: true  },
+  { key: 'bollettino_bancario',     label: 'Bollettino bancario',              auto_invoice: true  },
+  { key: 'contanti_tesoreria',      label: 'Contanti presso tesoreria',        auto_invoice: true  },
+  { key: 'vaglia_cambiario',        label: 'Vaglia cambiario',                 auto_invoice: true  },
+  { key: 'quietanza_erario',        label: 'Quietanza erario',                 auto_invoice: true  },
+  { key: 'giroconto_contabilita',   label: 'Giroconto su conti di contabilità', auto_invoice: true },
+  { key: 'trattenuta_riscosse',     label: 'Trattenuta su somme già riscosse', auto_invoice: true  },
 ]
 
 const INITIAL_FISCAL: FiscalConfig = {
