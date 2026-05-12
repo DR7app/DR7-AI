@@ -358,6 +358,8 @@ export default function GestioneOtpTab() {
                 </div>
             </div>
 
+            {/* ===== NEW_RULE_FORM_PLACEHOLDER ===== */}
+
             {/* Email di ricezione OTP (centralina_pro_config.config.notifications.otp_recipient) */}
             <OtpRecipientField />
 
@@ -523,6 +525,9 @@ export default function GestioneOtpTab() {
                     L'azione resta tracciata nel log audit (flag <code className="bg-theme-bg-tertiary px-1 rounded">limitation_override_bypassed</code>).
                 </p>
             </div>
+
+            {/* Live active OTPs from limitation_overrides */}
+            <ActiveOtpsSection />
 
             {/* Main 2-col grid */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -932,6 +937,197 @@ function OtpRecipientField() {
                     {saving ? 'Salvataggio…' : 'Salva canali'}
                 </button>
             </div>
+        </div>
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Active OTPs panel — lista in tempo reale degli OTP attualmente esistenti
+// in `limitation_overrides`. Mostra codice, contesto (cosa stanno
+// approvando), stato, scadenza. L'admin puo' annullare o copiare l'OTP.
+// ─────────────────────────────────────────────────────────────────────────
+interface ActiveOtp {
+    id: string
+    limitation_code: string
+    action_context: string | null
+    otp_code: string | null
+    otp_verified: boolean | null
+    otp_expires_at: string | null
+    expires_at: string | null
+    status: string | null
+    created_at: string
+    metadata: Record<string, unknown> | null
+}
+
+function ActiveOtpsSection() {
+    const [otps, setOtps] = useState<ActiveOtp[]>([])
+    const [loading, setLoading] = useState(true)
+    const [showExpired, setShowExpired] = useState(false)
+
+    async function loadOtps() {
+        // Carica gli OTP recenti (ultime 24h) ordinati per data desc.
+        // Filtra lato client tra "attivi" e "scaduti" per UX migliore.
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        const { data, error } = await supabase
+            .from('limitation_overrides')
+            .select('id, limitation_code, action_context, otp_code, otp_verified, otp_expires_at, expires_at, status, created_at, metadata')
+            .gte('created_at', since)
+            .order('created_at', { ascending: false })
+            .limit(100)
+        if (error) {
+            console.error('[ActiveOtpsSection] load error:', error)
+        } else {
+            setOtps((data as ActiveOtp[]) || [])
+        }
+        setLoading(false)
+    }
+
+    useEffect(() => {
+        loadOtps()
+        const sub = supabase
+            .channel('gestione-otp-active')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'limitation_overrides' }, () => loadOtps())
+            .subscribe()
+        const interval = setInterval(loadOtps, 30 * 1000)
+        return () => { sub.unsubscribe(); clearInterval(interval) }
+    }, [])
+
+    const now = Date.now()
+    const isOtpActive = (o: ActiveOtp): boolean => {
+        if (o.status === 'expired' || o.status === 'cancelled') return false
+        if (o.otp_verified === true) return false
+        const exp = o.otp_expires_at ? new Date(o.otp_expires_at).getTime() : null
+        if (exp && now > exp) return false
+        return true
+    }
+
+    const activeOtps = otps.filter(isOtpActive)
+    const inactiveOtps = otps.filter(o => !isOtpActive(o))
+    const visible = showExpired ? otps : activeOtps
+
+    async function handleCancel(id: string, code: string) {
+        if (!confirm(`Annullare l'OTP ${code}? Il flow corrispondente perdera' l'approvazione.`)) return
+        const { error } = await supabase
+            .from('limitation_overrides')
+            .update({ status: 'cancelled', otp_code: null })
+            .eq('id', id)
+        if (error) toast.error(`Errore: ${error.message}`)
+        else { toast.success('OTP annullato'); loadOtps() }
+    }
+
+    function handleCopy(code: string) {
+        navigator.clipboard.writeText(code).then(
+            () => toast.success(`Codice ${code} copiato`),
+            () => toast.error('Copia fallita')
+        )
+    }
+
+    function formatRemaining(expiresAt: string | null): string {
+        if (!expiresAt) return '—'
+        const ms = new Date(expiresAt).getTime() - now
+        if (ms < 0) return 'scaduto'
+        const minutes = Math.floor(ms / 60000)
+        const seconds = Math.floor((ms % 60000) / 1000)
+        if (minutes > 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+        if (minutes > 0) return `${minutes}m ${seconds}s`
+        return `${seconds}s`
+    }
+
+    function actionLabel(o: ActiveOtp): string {
+        const lc = o.limitation_code
+        const fromCatalog = OTP_ACTION_CATALOG.find((a: OtpAction) => a.id === lc)
+        return fromCatalog?.label || lc
+    }
+
+    return (
+        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dr7-gold">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <h3 className="text-base sm:text-lg font-semibold text-theme-text-primary">OTP in corso</h3>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[11px] font-bold">{activeOtps.length} attivi</span>
+                    {inactiveOtps.length > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-theme-bg-tertiary text-theme-text-muted text-[11px]">{inactiveOtps.length} scaduti/usati</span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer">
+                        <input type="checkbox" checked={showExpired} onChange={e => setShowExpired(e.target.checked)} className="w-3.5 h-3.5 accent-dr7-gold" />
+                        Mostra anche scaduti/usati
+                    </label>
+                    <button onClick={loadOtps} className="px-3 py-1.5 rounded-lg bg-theme-bg-tertiary text-xs text-theme-text-muted hover:bg-theme-bg-hover">
+                        Aggiorna
+                    </button>
+                </div>
+            </div>
+
+            {loading ? (
+                <div className="text-center py-6 text-sm text-theme-text-muted">Caricamento OTP attivi…</div>
+            ) : visible.length === 0 ? (
+                <div className="text-center py-6 text-sm text-theme-text-muted">
+                    {showExpired ? 'Nessun OTP nelle ultime 24 ore.' : 'Nessun OTP attivo in questo momento.'}
+                </div>
+            ) : (
+                <ul className="space-y-2">
+                    {visible.map(o => {
+                        const active = isOtpActive(o)
+                        const code = o.otp_code || '—'
+                        const requestor = (o.metadata as { requested_by?: string } | null)?.requested_by || '—'
+                        return (
+                            <li key={o.id} className={`rounded-xl border p-3 ${active ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-theme-border bg-theme-bg-tertiary opacity-70'}`}>
+                                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+                                    <div className="md:col-span-3">
+                                        <button
+                                            onClick={() => active && code !== '—' && handleCopy(code)}
+                                            disabled={!active || code === '—'}
+                                            className={`font-mono text-lg font-bold tracking-widest px-3 py-1.5 rounded-lg ${active ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 cursor-pointer' : 'bg-theme-bg-secondary text-theme-text-muted line-through'}`}
+                                            title={active ? 'Clicca per copiare' : ''}
+                                        >
+                                            {code}
+                                        </button>
+                                    </div>
+                                    <div className="md:col-span-5 min-w-0">
+                                        <div className="text-sm font-medium text-theme-text-primary truncate">{actionLabel(o)}</div>
+                                        <div className="text-[11px] text-theme-text-muted truncate">
+                                            {o.action_context || '—'}
+                                        </div>
+                                        <div className="text-[10px] text-theme-text-muted mt-0.5">
+                                            Richiesto da: {requestor}
+                                        </div>
+                                    </div>
+                                    <div className="md:col-span-2 text-xs">
+                                        <div className={active ? 'text-emerald-300 font-semibold' : 'text-theme-text-muted'}>
+                                            {active ? 'Attivo' : (o.otp_verified ? 'Usato' : (o.status === 'cancelled' ? 'Annullato' : 'Scaduto'))}
+                                        </div>
+                                        <div className="text-[10px] text-theme-text-muted">
+                                            {active ? `tra ${formatRemaining(o.otp_expires_at)}` : new Date(o.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}
+                                        </div>
+                                    </div>
+                                    <div className="md:col-span-2 flex justify-end gap-1">
+                                        {active && code !== '—' && (
+                                            <>
+                                                <button onClick={() => handleCopy(code)} className="px-2 py-1.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30">
+                                                    Copia
+                                                </button>
+                                                <button onClick={() => handleCancel(o.id, code)} className="px-2 py-1.5 rounded text-[11px] font-semibold bg-red-500/10 text-red-300 hover:bg-red-500/20 border border-red-500/30">
+                                                    Annulla
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </li>
+                        )
+                    })}
+                </ul>
+            )}
+
+            <p className="text-[11px] text-theme-text-muted mt-3">
+                Mostra gli OTP generati nelle ultime 24 ore (tabella <code>limitation_overrides</code>). Aggiorna automaticamente in tempo reale e ogni 30 secondi. Clicca su un codice attivo per copiarlo.
+            </p>
         </div>
     )
 }
