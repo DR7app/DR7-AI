@@ -215,17 +215,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [override.overrideCodes])
 
-  // Resume create booking once OTP `prenotazione_lavaggio_conferma` OR
-  // `carta_punti_lavaggio` is approved — replay createBooking with the
-  // stored `force` flag so the operator doesn't have to press Salva
-  // a second time.
+  // Resume create booking once any OTP override is approved.
+  // We retry createBooking as soon as the booking-confirmation override
+  // (prenotazione_lavaggio_conferma) lands, even if Carta Punti is also
+  // required. createBooking re-evaluates the carta_punti_lavaggio gate
+  // itself and re-fires requestOverride — opening the SECOND modal so
+  // the operator can chain through both OTPs.
+  //
+  // Previously we required BOTH confirmOk AND cartaPuntiOk in this gate,
+  // which deadlocked the flow: after approving conferma, the effect did
+  // nothing (cartaPuntiOk=false), the carta_punti gate never ran, and
+  // the Salva button stayed stuck on "In attesa OTP…" forever.
   useEffect(() => {
     const pending = pendingCreateBookingRef.current
     if (!pending) return
     const confirmOk = override.overrideCodes.has('prenotazione_lavaggio_conferma')
-    const cartaPuntiNeeded = isCartaPunti(formData.payment_method)
-    const cartaPuntiOk = !cartaPuntiNeeded || override.overrideCodes.has('carta_punti_lavaggio')
-    if (confirmOk && cartaPuntiOk) {
+    if (confirmOk) {
       pendingCreateBookingRef.current = null
       createBooking(pending.force)
     }
