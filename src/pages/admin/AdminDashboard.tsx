@@ -2,7 +2,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
-import { useTheme } from '../../contexts/ThemeContext'
+import { useTheme, PALETTES, type Palette } from '../../contexts/ThemeContext'
 import RentalTabs from './components/RentalTabs'
 import { useBirthdayCount } from './components/BirthdaysTab'
 import { useFatturaScartataCount } from './components/FatturaTab'
@@ -139,7 +139,8 @@ export default function AdminDashboard() {
   const scartataCount = useFatturaScartataCount()
   const { role: adminRole, hasPermission, adminName, adminEmail } = useAdminRole()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const { theme, toggleTheme } = useTheme()
+  const { theme, toggleTheme, palette, setPalette } = useTheme()
+  const [paletteMenuOpen, setPaletteMenuOpen] = useState(false)
 
   // Permission gate: a tab is restricted iff the operator's permissions[]
   // doesn't include it (and isn't '*' / direzione / superadmin).
@@ -588,6 +589,57 @@ export default function AdminDashboard() {
                 </svg>
               )}
             </button>
+            {/* Palette picker — swap brand palette without changing dark/light mode */}
+            <div className="relative">
+              <button
+                onClick={() => setPaletteMenuOpen(v => !v)}
+                title="Cambia palette"
+                aria-label="Cambia palette"
+                className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-full border border-theme-border hover:border-dr7-gold text-theme-text-secondary hover:text-dr7-gold transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <circle cx="13.5" cy="6.5" r="2.5" />
+                  <circle cx="17.5" cy="10.5" r="2.5" />
+                  <circle cx="8.5" cy="7.5" r="2.5" />
+                  <circle cx="6.5" cy="12.5" r="2.5" />
+                  <path d="M12 22a10 10 0 1 1 .01-20 7.5 7.5 0 0 1 5.3 12.79l-1.55 1.55a2 2 0 0 0 0 2.83 2 2 0 0 1-1.41 3.41A10 10 0 0 1 12 22z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {paletteMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setPaletteMenuOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-theme-border bg-theme-bg-secondary shadow-lg z-50 overflow-hidden">
+                    <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-theme-text-muted border-b border-theme-border">
+                      Palette
+                    </div>
+                    {PALETTES.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setPalette(p.id); setPaletteMenuOpen(false) }}
+                        className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors ${
+                          palette === p.id
+                            ? 'bg-theme-bg-hover text-theme-text-primary'
+                            : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <PalettePreview palette={p.id} />
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{p.label}</div>
+                            <div className="text-[10px] text-theme-text-muted truncate">{p.description}</div>
+                          </div>
+                        </div>
+                        {palette === p.id && (
+                          <svg className="w-4 h-4 text-dr7-gold shrink-0" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
             <span className="text-sm text-theme-text-secondary hidden lg:block">
               {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
@@ -905,4 +957,26 @@ export default function AdminDashboard() {
       )}
     </div>
   )
+}
+
+/**
+ * Small 3-dot swatch showing the palette's primary tones.
+ * Used inside the palette picker dropdown so the user previews
+ * each option without applying it.
+ */
+function PalettePreview({ palette }: { palette: Palette }) {
+    const swatch: Record<Palette, { a: string; b: string; c: string }> = {
+        dr7:      { a: '#19C2D6', b: '#4DE3F0', c: '#050708' },
+        slate:    { a: '#3B82F6', b: '#1E293B', c: '#0F172A' },
+        midnight: { a: '#6366F1', b: '#112236', c: '#0A1628' },
+        graphite: { a: '#06B6D4', b: '#262626', c: '#1A1A1A' },
+    }
+    const s = swatch[palette]
+    return (
+        <div className="flex shrink-0 items-center -space-x-1.5">
+            <span className="w-4 h-4 rounded-full border-2 border-theme-bg-secondary" style={{ backgroundColor: s.a }} />
+            <span className="w-4 h-4 rounded-full border-2 border-theme-bg-secondary" style={{ backgroundColor: s.b }} />
+            <span className="w-4 h-4 rounded-full border-2 border-theme-bg-secondary" style={{ backgroundColor: s.c }} />
+        </div>
+    )
 }

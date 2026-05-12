@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo, type ReactElement } from 'react'
+import { useState, useEffect, useMemo, useRef, type ReactElement } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildFatturaContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import IncomingInvoicesView from './IncomingInvoicesView'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 
@@ -464,6 +466,26 @@ export default function FatturaTab() {
   const [creatingNdc, setCreatingNdc] = useState<string | null>(null)
   const { hasRole } = useAdminRole()
   const canManagePayments = hasRole('payment-manager')
+
+  // OTP override: gates fattura.delete + fattura.send_sdi if direzione has
+  // enabled the rule in Gestione OTP. Auto-bypasses silently when disabled.
+  const override = useLimitationOverride()
+  const pendingOtp = useRef<null | { code: string; run: () => Promise<void> | void }>(null)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function gatedAction(code: string, message: string, run: () => Promise<void> | void) {
+    pendingOtp.current = { code, run }
+    override.requestOverride(code, message)
+  }
+  void gatedAction
+  useEffect(() => {
+    const p = pendingOtp.current
+    if (p && override.hasOverride(p.code)) {
+      pendingOtp.current = null
+      ;(async () => {
+        try { await p.run() } finally { await override.consumeOverride(p.code) }
+      })()
+    }
+  }, [override])
   const [updatingStato, setUpdatingStato] = useState<string | null>(null)
   const [refreshingAll, setRefreshingAll] = useState(false)
   const [reconciling, setReconciling] = useState(false)
@@ -640,15 +662,22 @@ export default function FatturaTab() {
 
     if (!requireOtpConfirm(`Eliminare fattura ${invoice.numero_fattura} — ${invoice.customer_name}?`)) return
 
-    try {
-      const { error } = await supabase.from('fatture').delete().eq('id', id)
-      if (error) throw error
-      logAdminAction('delete_fattura', 'fattura', id, buildFatturaContext(invoice))
-      loadInvoices()
-    } catch (error) {
-      console.error('Error deleting invoice:', error)
-      alert('Errore durante l\'eliminazione')
-    }
+    // OTP gate (auto-bypass if rule disabled in Gestione OTP).
+    gatedAction(
+      'fattura.delete',
+      `Eliminare la fattura ${invoice.numero_fattura} — ${invoice.customer_name}: azione irreversibile.`,
+      async () => {
+        try {
+          const { error } = await supabase.from('fatture').delete().eq('id', id)
+          if (error) throw error
+          logAdminAction('delete_fattura', 'fattura', id, buildFatturaContext(invoice))
+          loadInvoices()
+        } catch (error) {
+          console.error('Error deleting invoice:', error)
+          alert('Errore durante l\'eliminazione')
+        }
+      }
+    )
   }
 
   async function handleBulkDelete() {
@@ -783,32 +812,39 @@ export default function FatturaTab() {
       return
     }
 
+    // OTP gate (auto-bypass if rule disabled). SDI send is definitive,
+    // so this is the right spot to optionally require direzione approval.
+    gatedAction(
+      'fattura.send_sdi',
+      `Inviare al SDI la fattura ${invoice.numero_fattura} — ${invoice.customer_name}: l'invio è definitivo.`,
+      async () => {
+        try {
+          const updatedInvoices = invoices.map(i =>
+            i.id === invoice.id ? { ...i, sdi_status: 'sending' as const } : i
+          )
+          setInvoices(updatedInvoices)
 
-    try {
-      const updatedInvoices = invoices.map(i =>
-        i.id === invoice.id ? { ...i, sdi_status: 'sending' as const } : i
-      )
-      setInvoices(updatedInvoices)
+          const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ invoiceId: invoice.id })
+          })
 
-      const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId: invoice.id })
-      })
+          const result = await response.json()
 
-      const result = await response.json()
+          if (!response.ok) {
+            console.error('SDI send failed:', result.error, result.details)
+          } else {
+            logAdminAction('send_sdi', 'fattura', invoice.id, buildFatturaContext(invoice))
+          }
 
-      if (!response.ok) {
-        console.error('SDI send failed:', result.error, result.details)
-      } else {
-        logAdminAction('send_sdi', 'fattura', invoice.id, buildFatturaContext(invoice))
+          loadInvoices()
+        } catch (error) {
+          console.error('Error sending to SDI:', error)
+          loadInvoices()
+        }
       }
-
-      loadInvoices()
-    } catch (error) {
-      console.error('Error sending to SDI:', error)
-      loadInvoices()
-    }
+    )
   }
 
   if (loading) {

@@ -340,3 +340,290 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
    ma poco contrastato su bg-dr7-gold/10. Lascia invariato sui badge ma
    scurisci leggermente quando è su sfondo chiaro. */
 .light .text-dr7-gold { color: #1B5F57; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PALETTE ALTERNATIVE
+   Ogni palette ridefinisce le variabili CSS per dark + light. La
+   baseline (DR7 cyan) resta sotto html.dark / html.light senza
+   data-palette o con data-palette="dr7". Le altre palette intercettano
+   via [data-palette="X"].dark / [data-palette="X"].light.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── SLATE — grigio-blu neutro, accento blu ─────────────────────── */
+html[data-palette="slate"].dark {
+  --color-primary: #3B82F6;
+  --color-primary-light: #60A5FA;
+  --color-primary-dark: #2563EB;
+  --color-dr7-gold: #3B82F6;
+  --color-dr7-gold-light: #60A5FA;
+  --color-dr7-gold-dark: #2563EB;
+
+  --color-theme-bg-primary: #0F172A;
+  --color-theme-bg-secondary: #1E293B;
+  --color-theme-bg-tertiary: #273548;
+  --color-theme-bg-hover: #334155;
+  --color-theme-bg-elevated: #334155;
+  --color-theme-surface: #1E293B;
+
+  --color-theme-border: #334155;
+  --color-theme-border-light: #475569;
+  --color-theme-border-active: #3B82F6;
+
+  --color-theme-text-primary: #F1F5F9;
+  --color-theme-text-secondary: #CBD5E1;
+  --color-theme-text-muted: #94A3B8;
+  --color-theme-text-disabled: #64748B;
+
+  --color-theme-input-bg: #1E293B;
+  --color-theme-input-border: #334155;
+  --color-theme-input-border-focus: #3B82F6;
+  --color-theme-input-placeholder: #64748B;
+
+  --color-theme-shadow: rgba(0, 0, 0, 0.45);
+  --color-theme-overlay: rgba(15, 23, 42, 0.75);
+
+  --button-primary-bg: #3B82F6;
+  --button-primary-hover: #60A5FA;
+  --button-primary-active: #2563EB;
+  --button-primary-text: #FFFFFF;
+  --button-secondary-bg: #1E293B;
+  --button-secondary-hover: #334155;
+  --button-secondary-border: #475569;
+  --button-secondary-text: #F1F5F9;
+  --sidebar-bg: #0F172A;
+  --sidebar-item-hover: #1E293B;
+  --sidebar-item-active: #1E3A5F;
+  --sidebar-item-active-border: #3B82F6;
+  --card-bg: #1E293B;
+  --card-border: #334155;
+  --gradient-primary: linear-gradient(135deg, #60A5FA 0%, #3B82F6 50%, #2563EB 100%);
+}
+html[data-palette="slate"].light {
+  --color-primary: #2563EB;
+  --color-primary-light: #3B82F6;
+  --color-primary-dark: #1D4ED8;
+  --color-dr7-gold: #2563EB;
+  --color-dr7-gold-light: #3B82F6;
+  --color-dr7-gold-dark: #1D4ED8;
+
+  --color-theme-bg-primary: #F8FAFC;
+  --color-theme-bg-secondary: #FFFFFF;
+  --color-theme-bg-tertiary: #F1F5F9;
+  --color-theme-bg-hover: #E2E8F0;
+  --color-theme-bg-elevated: #FFFFFF;
+  --color-theme-surface: #FFFFFF;
+
+  --color-theme-border: #E2E8F0;
+  --color-theme-border-light: #F1F5F9;
+  --color-theme-border-active: #2563EB;
+
+  --color-theme-text-primary: #0F172A;
+  --color-theme-text-secondary: #334155;
+  --color-theme-text-muted: #64748B;
+  --color-theme-text-disabled: #94A3B8;
+
+  --color-theme-input-bg: #FFFFFF;
+  --color-theme-input-border: #E2E8F0;
+  --color-theme-input-border-focus: #2563EB;
+  --color-theme-input-placeholder: #94A3B8;
+
+  --button-primary-bg: #2563EB;
+  --button-primary-hover: #3B82F6;
+  --button-secondary-bg: #FFFFFF;
+  --button-secondary-hover: #F1F5F9;
+  --button-secondary-border: #E2E8F0;
+  --button-secondary-text: #0F172A;
+  --sidebar-bg: #FFFFFF;
+  --sidebar-item-hover: #F1F5F9;
+  --sidebar-item-active: #DBEAFE;
+  --sidebar-item-active-border: #2563EB;
+  --card-bg: #FFFFFF;
+  --card-border: #E2E8F0;
+  --gradient-primary: linear-gradient(135deg, #3B82F6 0%, #2563EB 50%, #1D4ED8 100%);
+}
+
+/* ─── MIDNIGHT — navy profondo, accento indaco ───────────────────── */
+html[data-palette="midnight"].dark {
+  --color-primary: #6366F1;
+  --color-primary-light: #818CF8;
+  --color-primary-dark: #4F46E5;
+  --color-dr7-gold: #6366F1;
+  --color-dr7-gold-light: #818CF8;
+  --color-dr7-gold-dark: #4F46E5;
+
+  --color-theme-bg-primary: #0A1628;
+  --color-theme-bg-secondary: #112236;
+  --color-theme-bg-tertiary: #182F4A;
+  --color-theme-bg-hover: #1E3A5F;
+  --color-theme-bg-elevated: #1E3A5F;
+  --color-theme-surface: #112236;
+
+  --color-theme-border: #1E3A5F;
+  --color-theme-border-light: #2C4F78;
+  --color-theme-border-active: #6366F1;
+
+  --color-theme-text-primary: #E0E6ED;
+  --color-theme-text-secondary: #B0BCC9;
+  --color-theme-text-muted: #7A8898;
+  --color-theme-text-disabled: #4A5868;
+
+  --color-theme-input-bg: #112236;
+  --color-theme-input-border: #1E3A5F;
+  --color-theme-input-border-focus: #6366F1;
+  --color-theme-input-placeholder: #7A8898;
+
+  --color-theme-shadow: rgba(0, 0, 0, 0.5);
+  --color-theme-overlay: rgba(10, 22, 40, 0.8);
+
+  --button-primary-bg: #6366F1;
+  --button-primary-hover: #818CF8;
+  --button-primary-active: #4F46E5;
+  --button-primary-text: #FFFFFF;
+  --button-secondary-bg: #112236;
+  --button-secondary-hover: #1E3A5F;
+  --button-secondary-border: #2C4F78;
+  --button-secondary-text: #E0E6ED;
+  --sidebar-bg: #0A1628;
+  --sidebar-item-hover: #112236;
+  --sidebar-item-active: #1E2A4D;
+  --sidebar-item-active-border: #6366F1;
+  --card-bg: #112236;
+  --card-border: #1E3A5F;
+  --gradient-primary: linear-gradient(135deg, #818CF8 0%, #6366F1 50%, #4F46E5 100%);
+}
+html[data-palette="midnight"].light {
+  --color-primary: #4F46E5;
+  --color-primary-light: #6366F1;
+  --color-primary-dark: #4338CA;
+  --color-dr7-gold: #4F46E5;
+  --color-dr7-gold-light: #6366F1;
+  --color-dr7-gold-dark: #4338CA;
+
+  --color-theme-bg-primary: #F4F6FA;
+  --color-theme-bg-secondary: #FFFFFF;
+  --color-theme-bg-tertiary: #EBEEF5;
+  --color-theme-bg-hover: #DDE3EE;
+  --color-theme-bg-elevated: #FFFFFF;
+  --color-theme-surface: #FFFFFF;
+
+  --color-theme-border: #D9E2EC;
+  --color-theme-border-light: #EBEEF5;
+  --color-theme-border-active: #4F46E5;
+
+  --color-theme-text-primary: #102A43;
+  --color-theme-text-secondary: #334E68;
+  --color-theme-text-muted: #627D98;
+  --color-theme-text-disabled: #9FB3C8;
+
+  --color-theme-input-bg: #FFFFFF;
+  --color-theme-input-border: #D9E2EC;
+  --color-theme-input-border-focus: #4F46E5;
+  --color-theme-input-placeholder: #9FB3C8;
+
+  --button-primary-bg: #4F46E5;
+  --button-primary-hover: #6366F1;
+  --button-secondary-bg: #FFFFFF;
+  --button-secondary-hover: #EBEEF5;
+  --button-secondary-border: #D9E2EC;
+  --button-secondary-text: #102A43;
+  --sidebar-bg: #FFFFFF;
+  --sidebar-item-hover: #EBEEF5;
+  --sidebar-item-active: #E0E7FF;
+  --sidebar-item-active-border: #4F46E5;
+  --card-bg: #FFFFFF;
+  --card-border: #D9E2EC;
+  --gradient-primary: linear-gradient(135deg, #6366F1 0%, #4F46E5 50%, #4338CA 100%);
+}
+
+/* ─── GRAPHITE — grigio caldo neutro, accento teal ───────────────── */
+html[data-palette="graphite"].dark {
+  --color-primary: #06B6D4;
+  --color-primary-light: #22D3EE;
+  --color-primary-dark: #0891B2;
+  --color-dr7-gold: #06B6D4;
+  --color-dr7-gold-light: #22D3EE;
+  --color-dr7-gold-dark: #0891B2;
+
+  --color-theme-bg-primary: #1A1A1A;
+  --color-theme-bg-secondary: #262626;
+  --color-theme-bg-tertiary: #2E2E2E;
+  --color-theme-bg-hover: #383838;
+  --color-theme-bg-elevated: #383838;
+  --color-theme-surface: #262626;
+
+  --color-theme-border: #404040;
+  --color-theme-border-light: #525252;
+  --color-theme-border-active: #06B6D4;
+
+  --color-theme-text-primary: #F5F5F4;
+  --color-theme-text-secondary: #D4D4D4;
+  --color-theme-text-muted: #A3A3A3;
+  --color-theme-text-disabled: #737373;
+
+  --color-theme-input-bg: #262626;
+  --color-theme-input-border: #404040;
+  --color-theme-input-border-focus: #06B6D4;
+  --color-theme-input-placeholder: #737373;
+
+  --color-theme-shadow: rgba(0, 0, 0, 0.5);
+  --color-theme-overlay: rgba(0, 0, 0, 0.75);
+
+  --button-primary-bg: #06B6D4;
+  --button-primary-hover: #22D3EE;
+  --button-primary-active: #0891B2;
+  --button-primary-text: #FFFFFF;
+  --button-secondary-bg: #262626;
+  --button-secondary-hover: #383838;
+  --button-secondary-border: #525252;
+  --button-secondary-text: #F5F5F4;
+  --sidebar-bg: #1A1A1A;
+  --sidebar-item-hover: #262626;
+  --sidebar-item-active: #0E3641;
+  --sidebar-item-active-border: #06B6D4;
+  --card-bg: #262626;
+  --card-border: #404040;
+  --gradient-primary: linear-gradient(135deg, #22D3EE 0%, #06B6D4 50%, #0891B2 100%);
+}
+html[data-palette="graphite"].light {
+  --color-primary: #0891B2;
+  --color-primary-light: #06B6D4;
+  --color-primary-dark: #0E7490;
+  --color-dr7-gold: #0891B2;
+  --color-dr7-gold-light: #06B6D4;
+  --color-dr7-gold-dark: #0E7490;
+
+  --color-theme-bg-primary: #FAFAF9;
+  --color-theme-bg-secondary: #FFFFFF;
+  --color-theme-bg-tertiary: #F5F5F4;
+  --color-theme-bg-hover: #E7E5E4;
+  --color-theme-bg-elevated: #FFFFFF;
+  --color-theme-surface: #FFFFFF;
+
+  --color-theme-border: #E7E5E4;
+  --color-theme-border-light: #F5F5F4;
+  --color-theme-border-active: #0891B2;
+
+  --color-theme-text-primary: #1C1917;
+  --color-theme-text-secondary: #44403C;
+  --color-theme-text-muted: #78716C;
+  --color-theme-text-disabled: #A8A29E;
+
+  --color-theme-input-bg: #FFFFFF;
+  --color-theme-input-border: #E7E5E4;
+  --color-theme-input-border-focus: #0891B2;
+  --color-theme-input-placeholder: #A8A29E;
+
+  --button-primary-bg: #0891B2;
+  --button-primary-hover: #06B6D4;
+  --button-secondary-bg: #FFFFFF;
+  --button-secondary-hover: #F5F5F4;
+  --button-secondary-border: #E7E5E4;
+  --button-secondary-text: #1C1917;
+  --sidebar-bg: #FFFFFF;
+  --sidebar-item-hover: #F5F5F4;
+  --sidebar-item-active: #CFFAFE;
+  --sidebar-item-active-border: #0891B2;
+  --card-bg: #FFFFFF;
+  --card-border: #E7E5E4;
+  --gradient-primary: linear-gradient(135deg, #06B6D4 0%, #0891B2 50%, #0E7490 100%);
+}
