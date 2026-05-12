@@ -603,8 +603,38 @@ export default function RilevazioneOrariTab() {
                                         </td>
                                         <td className="px-3 py-2"><StatoLabel s={r.stato} /></td>
                                         <td className="px-3 py-2 font-mono text-xs">{fmtTime(r.entrata)}</td>
-                                        <td className="px-3 py-2 font-mono text-xs">{fmtTime(r.pausa_inizi[0] || null)}</td>
-                                        <td className="px-3 py-2 font-mono text-xs">{fmtTime(r.pausa_fini[0] || null)}</td>
+                                        <td className="px-3 py-2 font-mono text-xs">
+                                            {/* Mostra TUTTI gli inizi pausa, uno per riga, non solo il primo */}
+                                            {r.pausa_inizi.length === 0 ? (
+                                                <span className="text-theme-text-muted">—</span>
+                                            ) : (
+                                                <div className="flex flex-col gap-0.5">
+                                                    {r.pausa_inizi.map((ts, i) => (
+                                                        <span key={i} className="whitespace-nowrap">
+                                                            <span className="text-[9px] text-theme-text-muted mr-1">#{i + 1}</span>
+                                                            {fmtTime(ts)}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-3 py-2 font-mono text-xs">
+                                            {r.pausa_inizi.length === 0 ? (
+                                                <span className="text-theme-text-muted">—</span>
+                                            ) : (
+                                                <div className="flex flex-col gap-0.5">
+                                                    {r.pausa_inizi.map((_, i) => {
+                                                        const end = r.pausa_fini[i] || null
+                                                        return (
+                                                            <span key={i} className="whitespace-nowrap">
+                                                                <span className="text-[9px] text-theme-text-muted mr-1">#{i + 1}</span>
+                                                                {end ? fmtTime(end) : <span className="text-amber-400">in corso</span>}
+                                                            </span>
+                                                        )
+                                                    })}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="px-3 py-2 font-mono text-xs">{fmtTime(r.uscita)}</td>
                                         <td className="px-3 py-2 text-center text-xs">{r.pausa_inizi.length}</td>
                                         <td className="px-3 py-2 text-right tabular-nums">
