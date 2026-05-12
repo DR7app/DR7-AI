@@ -177,6 +177,19 @@ export default function ContrattiOperatoreView() {
                     .insert(payload)
                 if (error) throw error
             }
+
+            // Sync the daily-hours target back onto operatori_persone so the
+            // Gestisci Operatori table (which reads from that row) stays in
+            // sync with the active contract. Without this, the table showed
+            // the stale 8h default even after a contract set 7h.
+            if (contratto.ore_target_giornaliere != null) {
+                const { error: syncErr } = await supabase
+                    .from('operatori_persone')
+                    .update({ ore_target_giornaliere: contratto.ore_target_giornaliere })
+                    .eq('id', contratto.operatore_id)
+                if (syncErr) console.error('[ContrattiOperatore] sync operatori_persone failed:', syncErr.message)
+            }
+
             toast.success('Contratto salvato')
             // Reload to pick up the new id / generated fields
             setSelectedId(prev => prev)
