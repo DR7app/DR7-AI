@@ -13,6 +13,16 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 // the row's `role` column.
 const FAILSAFE_DIREZIONE_EMAILS = new Set(['valerio@dr7.app', 'ilenia@dr7.app'])
 
+// Roster badge: "Amministratore" if either the failsafe email matches OR
+// the row has `role:direzione` in permissions. Keeps the per-row label in
+// sync when direzione promotes another operator via the Permessi & Ruoli
+// editor below.
+function isAdminDirezione(a: { email?: string | null; permissions?: string[] | null }): boolean {
+  if (FAILSAFE_DIREZIONE_EMAILS.has((a.email || '').toLowerCase())) return true
+  const perms = Array.isArray(a.permissions) ? a.permissions : []
+  return perms.includes('role:direzione')
+}
+
 interface Admin {
   id: string
   email: string
@@ -561,7 +571,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
               <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${avatarColor(admin.id)}`}>{initials(admin.nome, admin.email)}</span>
               <span className="text-sm font-medium">{admin.nome || admin.email.split('@')[0]}</span>
               <span className="text-[10px] uppercase tracking-wider opacity-70">{
-                FAILSAFE_DIREZIONE_EMAILS.has((admin.email || '').toLowerCase())
+                isAdminDirezione(admin)
                   ? 'Amministratore'
                   : admin.role
               }</span>
@@ -597,7 +607,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                 <div className="flex-1">
                   <div className="text-2xl font-bold text-theme-text-primary">{selected.nome || selected.email.split('@')[0]}</div>
                   <div className="text-sm text-theme-text-secondary">{
-                    FAILSAFE_DIREZIONE_EMAILS.has((selected.email || '').toLowerCase())
+                    isAdminDirezione(selected)
                       ? 'Amministratore'
                       : selected.role === 'superadmin' ? 'Superadmin' : 'Operatore'
                   }</div>
