@@ -1,4 +1,37 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { createClient } from '@supabase/supabase-js'
+
+// Default invoice footer lines (legal/company info shown on every PDF).
+// Admin can override via centralina_pro_config.config.invoice.footer_lines
+// — array of strings, one per line. Changes apply to next generated invoice.
+const DEFAULT_INVOICE_FOOTER_LINES = [
+    'Dubai rent 7.0 S.p.A. - Iscr. reg. imp.: 04104640927',
+    'Tel: 3457905205 | Email: Info@dr7.app | PEC: dubai.rent7.0srl@legalmail.it | Website: www.dr7empire.com',
+    'Socio unico - Cap. soc. 50.000,00 € | Regime Fiscale: Ordinario',
+]
+
+async function loadFooterLines(): Promise<string[]> {
+    try {
+        const url = process.env.VITE_SUPABASE_URL
+        const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+        if (!url || !key) return DEFAULT_INVOICE_FOOTER_LINES
+        const supabase = createClient(url, key)
+        const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+        const cfg = (data?.config || {}) as Record<string, unknown>
+        const inv = (cfg.invoice || {}) as Record<string, unknown>
+        const lines = inv.footer_lines
+        if (Array.isArray(lines) && lines.length > 0) {
+            return lines.map(String).filter(s => s.trim().length > 0)
+        }
+    } catch (e) {
+        console.warn('[invoice-pdf-utils] footer lines lookup failed, using default', e)
+    }
+    return DEFAULT_INVOICE_FOOTER_LINES
+}
 
 interface InvoiceItem {
     description: string
@@ -334,11 +367,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
     const footerY = MARGIN + 30
     drawLine(page, footerY + 12, font)
 
-    const footerLines = [
-        'Dubai rent 7.0 S.p.A. - Iscr. reg. imp.: 04104640927',
-        'Tel: 3457905205 | Email: Info@dr7.app | PEC: dubai.rent7.0srl@legalmail.it | Website: www.dr7empire.com',
-        'Socio unico - Cap. soc. 50.000,00 € | Regime Fiscale: Ordinario',
-    ]
+    const footerLines = await loadFooterLines()
 
     footerLines.forEach((line, i) => {
         const lineWidth = font.widthOfTextAtSize(line, 7)
