@@ -1052,10 +1052,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
-    // Never generate fattura for Wallet or Gift Card payments
+    // Never generate fattura for Wallet, Gift Card, or Carta Punti payments
     const pm = booking.payment_method || ''
-    if (pm === 'Wallet' || pm === 'Gift Card' || pm === 'wallet' || pm === 'gift_card' || pm === 'credit') {
-      toast.error('Fattura non prevista per pagamenti con Wallet o Gift Card')
+    if (pm === 'Wallet' || pm === 'Gift Card' || pm === 'Carta Punti' || pm === 'wallet' || pm === 'gift_card' || pm === 'credit' || pm === 'carta_punti') {
+      toast.error('Fattura non prevista per pagamenti con Wallet, Gift Card o Carta Punti')
       return
     }
 
@@ -1490,9 +1490,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     }
 
-    // Generate fattura ONLY if paid — never for unpaid bookings, Wallet, or Gift Card
+    // Generate fattura ONLY if paid — never for unpaid bookings, Wallet,
+    // Gift Card, o Carta Punti (sono crediti/fedelta', non operazioni
+    // fiscali da fatturare).
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
-    const skipFattura = formData.payment_method === 'Wallet' || formData.payment_method === 'Gift Card'
+    const skipFattura = formData.payment_method === 'Wallet'
+      || formData.payment_method === 'Gift Card'
+      || formData.payment_method === 'Carta Punti'
 
     if (isPaid && !skipFattura) {
       try {
@@ -4087,9 +4091,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         console.error('[Supercar Experience] cascade-edit failed:', cascadeErr)
                       }
 
-                      // Auto-generate fattura if payment changed to paid (skip Wallet & Gift Card)
+                      // Auto-generate fattura if payment changed to paid
+                      // (skip Wallet / Gift Card / Carta Punti — non sono
+                      // operazioni fiscali da fatturare).
                       const editPaymentMethod = editingBooking.payment_method || ''
-                      const editSkipFattura = editPaymentMethod === 'Wallet' || editPaymentMethod === 'Gift Card'
+                      const editSkipFattura = editPaymentMethod === 'Wallet'
+                        || editPaymentMethod === 'Gift Card'
+                        || editPaymentMethod === 'Carta Punti'
                       if (!editSkipFattura && (editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded')) {
                         try {
                           // Check if fattura already exists for this booking

@@ -616,7 +616,6 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             } else if (paymentStatus === 'nexi_pay_by_link') {
                 // NEXI PAY BY LINK — one combined link
                 try {
-                    const custPhone = currentBooking?.customer_phone || booking.customer_phone || booking.booking_details?.customer?.phone
                     const custEmail = currentBooking?.customer_email || booking.customer_email || booking.booking_details?.customer?.email
                     const custName = currentBooking?.customer_name || booking.customer_name
 

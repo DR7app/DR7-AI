@@ -50,11 +50,24 @@ function eur(n: number | null | undefined): string {
 }
 function fmtDateIT(s: string): string {
     if (!s) return '—'
-    return new Date(s + 'T12:00:00').toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: '2-digit', month: 'long', year: 'numeric' })
+    // Il backend ritorna gap_date gia' formattato in italiano ("12/05/2026")
+    // per la sostituzione nei template WhatsApp. Se vediamo "/" passiamo
+    // attraverso; altrimenti trattiamo come ISO yyyy-mm-dd e formattiamo.
+    if (s.includes('/')) return s
+    const d = new Date(s + 'T12:00:00')
+    if (isNaN(d.getTime())) return s
+    return d.toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: '2-digit', month: 'long', year: 'numeric' })
 }
 function fmtDateShort(s: string): string {
     if (!s) return '—'
-    return new Date(s + 'T12:00:00').toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: '2-digit', month: '2-digit' })
+    if (s.includes('/')) {
+        // "12/05/2026" → "12/05"
+        const [day, month] = s.split('/')
+        return day && month ? `${day}/${month}` : s
+    }
+    const d = new Date(s + 'T12:00:00')
+    if (isNaN(d.getTime())) return s
+    return d.toLocaleDateString('it-IT', { timeZone: ROME_TZ, day: '2-digit', month: '2-digit' })
 }
 
 export default function MaxiPromoGapTab() {

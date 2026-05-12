@@ -339,7 +339,6 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
 
                 // Generate Pay by Link
                 try {
-                    const custPhone = currentBookingNexi?.customer_phone || booking.booking_details?.customer?.phone
                     const custEmail = currentBookingNexi?.customer_email || booking.booking_details?.customer?.email
                     const custName = currentBookingNexi?.customer_name || booking.customer_name
 
