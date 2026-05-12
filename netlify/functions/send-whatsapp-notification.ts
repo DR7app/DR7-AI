@@ -493,7 +493,8 @@ const handler: Handler = async (event) => {
           tplKmPackage?.type === 'unlimited'
           || tplKmPackage?.distance === 'unlimited'
           || Number(tplKmPackage?.includedKm) >= 9999;
-        if (tplUnlimitedKm === true || tplKmLimit === 'Illimitati' || Number(tplKmLimit) >= 9999 || pkgUnlimited) {
+        const isUnlim = tplUnlimitedKm === true || tplKmLimit === 'Illimitati' || Number(tplKmLimit) >= 9999 || pkgUnlimited;
+        if (isUnlim) {
           vars.km_info = 'Illimitati';
         } else if (tplKmLimit && tplKmLimit !== '0') {
           const isNum = !isNaN(Number(tplKmLimit)) && !String(tplKmLimit).toLowerCase().includes('km');
@@ -503,6 +504,11 @@ const handler: Handler = async (event) => {
         } else {
           vars.km_info = booking.booking_details?.total_km ? `${booking.booking_details.total_km} Km` : 'Illimitati';
         }
+        // Variabile dedicata "km illimitati" — l'admin chiedeva un valore
+        // che dicesse esplicitamente Sì/No così può comporre frasi tipo
+        // "Km illimitati: {km_illimitati}". Separa il flag dal totale Km.
+        vars.km_illimitati = isUnlim ? 'Sì' : 'No';
+        vars.unlimited_km = vars.km_illimitati;
 
         // KM package details (type + cost) for template
         if (tplKmPackage) {
