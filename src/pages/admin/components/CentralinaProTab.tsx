@@ -5066,10 +5066,14 @@ function FiscaleSection({
     ? fiscal.payment_methods
     : DEFAULT_PAYMENT_METHODS
 
-  function patchMethod(key: string, patch: Partial<FiscalPaymentMethod>) {
+  // NB: usiamo l'indice come identità della riga, non `m.key`. La key
+  // viene editata in tempo reale dall'operatore: se usassimo m.key per
+  // identificare la riga, ogni keystroke cambierebbe l'identità e React
+  // smonterebbe l'input perdendo il focus dopo una sola lettera.
+  function patchMethod(index: number, patch: Partial<FiscalPaymentMethod>) {
     setFiscal({
       ...fiscal,
-      payment_methods: methods.map(m => m.key === key ? { ...m, ...patch } : m),
+      payment_methods: methods.map((m, i) => i === index ? { ...m, ...patch } : m),
     })
   }
   function addMethod() {
@@ -5079,8 +5083,8 @@ function FiscaleSection({
       payment_methods: [...methods, { key: id, label: 'Nuovo metodo', auto_invoice: true }],
     })
   }
-  function removeMethod(key: string) {
-    setFiscal({ ...fiscal, payment_methods: methods.filter(m => m.key !== key) })
+  function removeMethod(index: number) {
+    setFiscal({ ...fiscal, payment_methods: methods.filter((_, i) => i !== index) })
   }
 
   return (
@@ -5144,32 +5148,32 @@ function FiscaleSection({
           </div>
           {methods.map((m, i) => (
             <div
-              key={m.key}
+              key={i}
               className={`grid grid-cols-12 gap-2 px-4 py-2 items-center ${i < methods.length - 1 ? 'border-b border-theme-border' : ''}`}
             >
               <input
                 type="text"
                 value={m.key}
-                onChange={(e) => patchMethod(m.key, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
+                onChange={(e) => patchMethod(i, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
                 className="col-span-3 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px] font-mono text-theme-text-primary"
               />
               <input
                 type="text"
                 value={m.label}
-                onChange={(e) => patchMethod(m.key, { label: e.target.value })}
+                onChange={(e) => patchMethod(i, { label: e.target.value })}
                 className="col-span-6 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary"
               />
               <label className="col-span-2 flex items-center justify-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={m.auto_invoice}
-                  onChange={(e) => patchMethod(m.key, { auto_invoice: e.target.checked })}
+                  onChange={(e) => patchMethod(i, { auto_invoice: e.target.checked })}
                   className="w-4 h-4 accent-[#007aff]"
                 />
               </label>
               <button
                 type="button"
-                onClick={() => removeMethod(m.key)}
+                onClick={() => removeMethod(i)}
                 className="col-span-1 text-red-500 hover:bg-red-500/10 rounded-md py-1.5 text-sm"
                 title="Rimuovi metodo"
               >×</button>
