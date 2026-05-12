@@ -581,6 +581,9 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
         </div>
       </div>
 
+      {/* Direzione-only: roster sort + KPI exclusion config */}
+      {canEditOperators && <RosterConfigEditor admins={admins} />}
+
       {/* ─── Operator switcher ──────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
         {admins.map(admin => {
@@ -1312,6 +1315,212 @@ function AlertItem({ severity, title, detail }: { severity: 'low' | 'med' | 'hig
           <div className="text-xs opacity-80 mt-0.5">{detail}</div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── RosterConfigEditor ──────────────────────────────────────────────────
+// Direzione-only. Two side-by-side controls:
+// 1) Ordine roster — `centralina_pro_config.config.operatori.roster_order`
+//    Array of first-names. Drag-style up/down to reorder. Loaded admins
+//    are listed first; names not in the source roster can still be in
+//    the order list (kept around for ex-members).
+// 2) Esclusi KPI — `centralina_pro_config.config.kpi.excluded_operator_emails`
+//    Array of emails whose preventivi are filtered out of the Dashboard
+//    KPI rollups (test/dev accounts).
+function RosterConfigEditor({ admins }: { admins: Admin[] }) {
+  const fallbackOrder = ['Valerio', 'Ilenia', 'Salvatore', 'Ophélie', 'Davide']
+  const fallbackKpiExcluded = ['ophe@dr7.app']
+
+  const [order, setOrder] = useState<string[]>(fallbackOrder)
+  const [savedOrder, setSavedOrder] = useState<string[]>(fallbackOrder)
+  const [kpiExcluded, setKpiExcluded] = useState<string[]>(fallbackKpiExcluded)
+  const [savedKpiExcluded, setSavedKpiExcluded] = useState<string[]>(fallbackKpiExcluded)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [newOrderName, setNewOrderName] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      if (cancelled) return
+      const cfg = (data?.config || {}) as Record<string, unknown>
+      const op = (cfg.operatori || {}) as Record<string, unknown>
+      if (Array.isArray(op.roster_order) && op.roster_order.length > 0) {
+        const v = op.roster_order.map(String)
+        setOrder(v); setSavedOrder(v)
+      }
+      const kpi = (cfg.kpi || {}) as Record<string, unknown>
+      if (Array.isArray(kpi.excluded_operator_emails)) {
+        const v = kpi.excluded_operator_emails.map(String)
+        setKpiExcluded(v); setSavedKpiExcluded(v)
+      }
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const orderDirty = JSON.stringify(order) !== JSON.stringify(savedOrder)
+  const kpiDirty = JSON.stringify(kpiExcluded) !== JSON.stringify(savedKpiExcluded)
+  const dirty = orderDirty || kpiDirty
+
+  const moveOrder = (i: number, dir: -1 | 1) => {
+    const next = [...order]; const j = i + dir
+    if (j < 0 || j >= next.length) return
+    ;[next[i], next[j]] = [next[j], next[i]]
+    setOrder(next)
+  }
+  const addToOrder = () => {
+    const v = newOrderName.trim()
+    if (!v || order.includes(v)) return
+    setOrder([...order, v])
+    setNewOrderName('')
+  }
+  const removeFromOrder = (i: number) => setOrder(order.filter((_, idx) => idx !== i))
+
+  const toggleKpiExcluded = (email: string) => {
+    const e = email.toLowerCase()
+    setKpiExcluded(prev => prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e])
+  }
+
+  const save = async () => {
+    if (!dirty || saving) return
+    setSaving(true)
+    try {
+      const { data: existing } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      const cfg = (existing?.config || {}) as Record<string, unknown>
+      const nextCfg = {
+        ...cfg,
+        operatori: { ...(cfg.operatori || {} as Record<string, unknown>), roster_order: order },
+        kpi:       { ...(cfg.kpi || {} as Record<string, unknown>),       excluded_operator_emails: kpiExcluded },
+      }
+      const { error } = await supabase
+        .from('centralina_pro_config')
+        .upsert({ id: 'main', config: nextCfg }, { onConflict: 'id' })
+      if (error) throw error
+      setSavedOrder(order)
+      setSavedKpiExcluded(kpiExcluded)
+      toast.success('Configurazione roster salvata')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
+      toast.error(`Errore salvataggio: ${msg}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Admins not yet listed in roster_order — surface as quick-add chips.
+  const missingFromOrder = admins
+    .map(a => a.nome || '')
+    .filter(n => n && !order.includes(n))
+
+  return (
+    <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-dr7-gold/15 text-dr7-gold flex items-center justify-center shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-theme-text-primary">Configurazione roster</h3>
+            <p className="text-[12px] text-theme-text-muted">Ordine di visualizzazione + esclusione operatori dai KPI Dashboard.</p>
+          </div>
+        </div>
+        <span className="text-[11px] text-theme-text-muted">{expanded ? '−' : '+'}</span>
+      </button>
+
+      {expanded && (
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Roster order */}
+          <div>
+            <h4 className="text-[13px] font-semibold text-theme-text-primary mb-2">Ordine roster (per nome)</h4>
+            <div className="space-y-1.5">
+              {order.map((name, i) => (
+                <div key={`${name}-${i}`} className="flex items-center gap-2 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5">
+                  <span className="text-[11px] text-theme-text-muted w-5 text-right">{i + 1}.</span>
+                  <span className="flex-1 text-[13px] text-theme-text-primary">{name}</span>
+                  <button onClick={() => moveOrder(i, -1)} disabled={i === 0} className="w-6 h-6 rounded text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30">↑</button>
+                  <button onClick={() => moveOrder(i, 1)} disabled={i === order.length - 1} className="w-6 h-6 rounded text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30">↓</button>
+                  <button onClick={() => removeFromOrder(i)} className="w-6 h-6 rounded text-red-500 hover:bg-red-500/10 text-sm">×</button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <input
+                type="text"
+                value={newOrderName}
+                onChange={e => setNewOrderName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addToOrder() } }}
+                placeholder="Aggiungi nome…"
+                disabled={loading}
+                className="flex-1 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px]"
+              />
+              <button onClick={addToOrder} disabled={!newOrderName.trim()} className="px-3 py-1.5 rounded-md border border-theme-border text-[12px] disabled:opacity-40">+</button>
+            </div>
+            {missingFromOrder.length > 0 && (
+              <div className="mt-2 text-[11px] text-theme-text-muted">
+                Non in ordine: {missingFromOrder.map(n => (
+                  <button key={n} onClick={() => { setOrder([...order, n]) }} className="ml-1 underline hover:text-theme-text-primary">{n}</button>
+                ))}
+              </div>
+            )}
+            <p className="text-[11px] text-theme-text-muted mt-2">
+              Nomi non in lista finiscono in coda, ordinati alfabeticamente.
+            </p>
+          </div>
+
+          {/* KPI exclusion */}
+          <div>
+            <h4 className="text-[13px] font-semibold text-theme-text-primary mb-2">Esclusi dai KPI (preventivi)</h4>
+            <p className="text-[11px] text-theme-text-muted mb-2">
+              Spunta gli operatori da escludere dal rollup mensile (account dev/test).
+            </p>
+            <div className="space-y-1">
+              {admins.map(a => {
+                const checked = kpiExcluded.includes((a.email || '').toLowerCase())
+                return (
+                  <label key={a.id} className="flex items-center gap-2 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 cursor-pointer hover:border-dr7-gold/40">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleKpiExcluded(a.email || '')}
+                    />
+                    <span className="text-[13px] text-theme-text-primary">{a.nome || a.email.split('@')[0]}</span>
+                    <span className="text-[11px] text-theme-text-muted ml-auto">{a.email}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Save bar — spans both columns */}
+          <div className="md:col-span-2 flex justify-end pt-2 border-t border-theme-border">
+            <button
+              onClick={save}
+              disabled={!dirty || saving || loading}
+              className="px-4 py-1.5 rounded-md bg-dr7-gold text-white text-[12px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            >{saving ? 'Salvataggio…' : 'Salva configurazione'}</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
