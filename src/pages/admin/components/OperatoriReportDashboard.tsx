@@ -1071,6 +1071,7 @@ function CostiPersonale({ orePeriodoMin, operatoriCount }: { orePeriodoMin: numb
 
 function ManageOperatoriPanel({ operatori, onChanged }: { operatori: Operatore[]; onChanged: () => void }) {
     const [showAdd, setShowAdd] = useState(false)
+    const [editing, setEditing] = useState<Operatore | null>(null)
     const [busyId, setBusyId] = useState<string | null>(null)
 
     async function deactivateOperatore(op: Operatore) {
@@ -1131,7 +1132,12 @@ function ManageOperatoriPanel({ operatori, onChanged }: { operatori: Operatore[]
                                         <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Non collegato</span>
                                     )}
                                 </td>
-                                <td className="py-2 text-right">
+                                <td className="py-2 text-right whitespace-nowrap">
+                                    <button onClick={() => setEditing(op)} disabled={busyId === op.id}
+                                        className="text-xs px-2 py-1 rounded text-theme-text-primary hover:bg-theme-bg-tertiary disabled:opacity-50 mr-1"
+                                        title="Modifica nome, ruolo e ore target">
+                                        Modifica
+                                    </button>
                                     <button onClick={() => deactivateOperatore(op)} disabled={busyId === op.id}
                                         className="text-xs px-2 py-1 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
                                         title="Disattiva — non elimina lo storico">
@@ -1150,6 +1156,89 @@ function ManageOperatoriPanel({ operatori, onChanged }: { operatori: Operatore[]
                     onSaved={() => { setShowAdd(false); onChanged() }}
                 />
             )}
+            {editing && (
+                <EditOperatoreInlineModal
+                    op={editing}
+                    onClose={() => setEditing(null)}
+                    onSaved={() => { setEditing(null); onChanged() }}
+                />
+            )}
+        </div>
+    )
+}
+
+function EditOperatoreInlineModal({ op, onClose, onSaved }: { op: Operatore; onClose: () => void; onSaved: () => void }) {
+    const [nome, setNome] = useState(op.nome)
+    const [cognome, setCognome] = useState(op.cognome || '')
+    const [ruolo, setRuolo] = useState(op.ruolo || '')
+    const [oreTarget, setOreTarget] = useState(String(op.ore_target_giornaliere ?? 8))
+    const [saving, setSaving] = useState(false)
+
+    async function save() {
+        if (!nome.trim()) {
+            alert('Nome obbligatorio')
+            return
+        }
+        const oreNum = parseFloat(oreTarget)
+        if (!Number.isFinite(oreNum) || oreNum <= 0 || oreNum > 24) {
+            alert('Ore target deve essere un numero tra 0 e 24')
+            return
+        }
+        setSaving(true)
+        try {
+            // 1. Update operatori_persone (what the table reads).
+            const { error: opErr } = await supabase
+                .from('operatori_persone')
+                .update({
+                    nome: nome.trim(),
+                    cognome: cognome.trim() || null,
+                    ruolo: ruolo.trim() || null,
+                    ore_target_giornaliere: oreNum,
+                })
+                .eq('id', op.id)
+            if (opErr) throw opErr
+
+            // 2. Sync the active contract's hours so the two records don't drift.
+            // No active contract → skip silently (operator may not have one yet).
+            const { error: cErr } = await supabase
+                .from('operatore_contratto')
+                .update({ ore_target_giornaliere: oreNum })
+                .eq('operatore_id', op.id)
+                .eq('attivo', true)
+            if (cErr) console.error('[EditOperatore] contract sync failed (non-blocking):', cErr.message)
+
+            onSaved()
+        } catch (err) {
+            alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-semibold text-theme-text-primary mb-1">Modifica Operatore</h3>
+                <p className="text-xs text-theme-text-muted mb-4">{op.email}</p>
+                <div className="space-y-3">
+                    <Field label="Nome *" value={nome} onChange={setNome} placeholder="Es. Salvatore" />
+                    <Field label="Cognome" value={cognome} onChange={setCognome} placeholder="Es. Saja" />
+                    <Field label="Ruolo" value={ruolo} onChange={setRuolo} placeholder="Es. Receptionist, Operativo" />
+                    <Field label="Ore target/giorno" value={oreTarget} onChange={setOreTarget} type="number" />
+                </div>
+                <p className="text-[10px] text-theme-text-muted mt-3">
+                    Le ore target vengono allineate anche sul contratto attivo dell'operatore.
+                    Email e collegamento account non sono modificabili da qui.
+                </p>
+                <div className="flex justify-end gap-2 mt-4">
+                    <button onClick={onClose} disabled={saving}
+                        className="px-4 py-2 text-sm rounded text-theme-text-secondary hover:bg-theme-bg-tertiary">Annulla</button>
+                    <button onClick={save} disabled={saving}
+                        className="px-4 py-2 text-sm rounded bg-dr7-gold text-black font-semibold hover:opacity-90 disabled:opacity-50">
+                        {saving ? 'Salvataggio…' : 'Salva'}
+                    </button>
+                </div>
+            </div>
         </div>
     )
 }
