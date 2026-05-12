@@ -2,12 +2,11 @@ import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { corsHeaders } from './cors-headers'
 import { requireAuth } from './require-auth'
+import { userHasRole } from './utils/adminRoles'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-const DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
 
 interface InviteBody {
   email?: string
@@ -26,7 +25,7 @@ const handler: Handler = async (event) => {
   if (authErr) return authErr
 
   const callerEmail = (user?.email || '').toLowerCase()
-  if (!DIREZIONE_EMAILS.includes(callerEmail)) {
+  if (!(await userHasRole(callerEmail, 'direzione'))) {
     return { statusCode: 403, headers, body: JSON.stringify({ error: 'Solo la direzione può invitare operatori.' }) }
   }
 

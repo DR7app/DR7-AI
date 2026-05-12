@@ -3,6 +3,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { requireAuth } from './require-auth'
+import { userHasRole } from './utils/adminRoles'
 
 // OTP recipient — direzione's working channel. Config chain matches
 // limitation-override-otp.ts:
@@ -62,11 +63,10 @@ export const handler: Handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) }
     }
 
-    // BYPASS — strict allowlist by email, NOT by role. Only direzione
-    // (Valerio + Ilenia) self-approve wallet OTPs.
-    const SELF_APPROVE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
-    if (authUser?.email && SELF_APPROVE_EMAILS.includes(authUser.email.toLowerCase())) {
-      console.log(`[send-wallet-otp] AUTO-APPROVED for ${authUser.email} (direzione)`)
+    // BYPASS — role-tag check via admins.permissions[] (failsafe in
+    // utils/adminRoles.ROLE_FAILSAFE keeps valerio/ilenia safe).
+    if (authUser?.email && await userHasRole(authUser.email, 'direzione')) {
+      console.log(`[send-wallet-otp] AUTO-APPROVED for ${authUser.email} (role:direzione)`)
       return { statusCode: 200, headers, body: JSON.stringify({ success: true, autoApproved: true }) }
     }
 

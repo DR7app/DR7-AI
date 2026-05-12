@@ -3,6 +3,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { requireAuth } from './require-auth'
+import { userHasRole } from './utils/adminRoles'
 import { randomInt } from 'crypto'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -82,25 +83,17 @@ export const handler: Handler = async (event) => {
       const otpExpiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString()
       const overrideExpiresAt = new Date(Date.now() + OVERRIDE_TTL_HOURS * 60 * 60 * 1000).toISOString()
 
-      // BYPASS — strict allowlist by email, NOT by role. Only direzione
-      // (Valerio + Ilenia) self-approve. Everyone else, including any
-      // historical 'superadmin' rows in the admins table, must enter the
-      // OTP that the direzione sends them.
-      const SELF_APPROVE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app']
-      // Sviluppatori/manutentori del tab Gestione OTP: bypassano l'OTP
-      // SOLO per i codici `gestione_otp_*` (add/toggle/edit/delete delle
-      // regole). Il ruolo è tecnico, NON di direzione — per qualunque
-      // altro flusso di business (booking, preventivi, lavaggio…) il
-      // developer entra nel gate normale e deve digitare l'OTP inviato
-      // alla direzione.
-      const OTP_TAB_DEVELOPERS = ['ophe@dr7.app']
+      // BYPASS — role-tag check via admins.permissions[] (failsafe in
+      // utils/adminRoles.ROLE_FAILSAFE keeps valerio/ilenia/ophe safe):
+      //   role:direzione         → self-approves every OTP code
+      //   role:developer         → self-approves ONLY gestione_otp_* codes
+      // Anyone without these tags receives the OTP via email and must type it.
       const requestorEmail = (authUser?.email || '').toLowerCase()
       const isOtpTabAction = typeof limitationCode === 'string'
         && limitationCode.startsWith('gestione_otp_')
-      const isSelfApproval = !!authUser?.email && (
-        SELF_APPROVE_EMAILS.includes(requestorEmail)
-        || (isOtpTabAction && OTP_TAB_DEVELOPERS.includes(requestorEmail))
-      )
+      const isDirezione = await userHasRole(requestorEmail, 'direzione')
+      const isDeveloperOnOtpTab = isOtpTabAction && await userHasRole(requestorEmail, 'developer')
+      const isSelfApproval = !!authUser?.email && (isDirezione || isDeveloperOnOtpTab)
 
       // Store OTP server-side
       const { data: override, error: insertErr } = await supabase
