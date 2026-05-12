@@ -61,7 +61,7 @@ function romeDayOfWeek(): number {
 }
 
 /**
- * Cache in-process degli alias dei metodi di pagamento da payment_method_options.
+ * Cache in-process degli alias dei metodi di pagamento da payment_method_config.
  * Ricaricata via loadPaymentMethodAliases(). matchPaymentMethodKey usa la
  * cache; se vuota, fallback al literal check di key.
  */
@@ -109,7 +109,7 @@ export async function loadPaymentMethodAliases(supabase: any): Promise<void> {
     if (now - __paymentMethodCacheLoadedAt < PAYMENT_METHOD_CACHE_TTL_MS && Object.keys(__paymentMethodCache).length > 0) return
     try {
         const { data } = await supabase
-            .from('payment_method_options')
+            .from('payment_method_config')
             .select('key, aliases, is_enabled')
             .eq('is_enabled', true)
         const map: PaymentMethodMap = {}
@@ -236,7 +236,7 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
     }
 
     // Payment method — gli alias canonici sono SEEDED nella tabella
-    // payment_method_options (vedi migration 20260512_payment_method_options.sql). Il
+    // payment_method_config (vedi migration 20260512_payment_method_config.sql). Il
     // controllo di match qui usa la cache caricata da loadPaymentMethodAliases
     // attraverso matchPaymentMethodKey(). Se la cache non e' ancora
     // popolata, fallback al confronto literal di key (utile per il primo

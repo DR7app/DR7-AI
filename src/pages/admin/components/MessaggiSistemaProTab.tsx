@@ -1297,13 +1297,13 @@ export default function MessaggiSistemaProTab() {
         loadChannels()
         return () => { cancelled = true }
     }, [])
-    // Payment methods caricati da payment_method_options table (admin-managed).
+    // Payment methods caricati da payment_method_config table (admin-managed).
     const [paymentMethods, setPaymentMethods] = useState<Array<{ key: string; label: string }>>([])
     useEffect(() => {
         let cancelled = false
         const load = async () => {
             const { data } = await supabase
-                .from('payment_method_options')
+                .from('payment_method_config')
                 .select('key, label, is_enabled, sort_order')
                 .eq('is_enabled', true)
                 .order('sort_order', { ascending: true })
