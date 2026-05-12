@@ -359,40 +359,10 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                     const linkData = await linkRes.json()
 
                     if (linkRes.ok && linkData.paymentUrl) {
-                        const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
-                        if (custPhone) {
-                            const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    customPhone: custPhone,
-                                    templateKey: 'pro_richiesta_penali',
-                                    templateVars: (() => {
-                                        const customerName = custName || 'Cliente'
-                                        const amountStr = cartTotal.toFixed(2)
-                                        return {
-                                            '{customer_name}': customerName,
-                                            '{nome}': customerName.split(' ')[0] || 'Cliente',
-                                            '{amount}': amountStr,
-                                            '{total}': amountStr,
-                                            '{importo}': amountStr,
-                                            '{link}': linkData.paymentUrl,
-                                            '{payment_link}': linkData.paymentUrl,
-                                            '{booking_ref}': bookingRef,
-                                            '{booking_id}': bookingRef,
-                                            '{contract_ref}': bookingRef,
-                                        }
-                                    })(),
-                                    skipHeader: false,
-                                })
-                            })
-                            const sendJson = await sendRes.json().catch(() => ({}))
-                            if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
-                                toast.error('Template mancante in Messaggi di Sistema Pro')
-                            }
-                        }
+                        // Nessun messaggio WhatsApp automatico al cliente: la
+                        // direzione invia il link manualmente quando vuole.
                         try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
-                        toast.success(`Pay by Link penali inviato! €${cartTotal.toFixed(2)}`)
+                        toast.success(`Pay by Link penali creato (€${cartTotal.toFixed(2)}) — copiato negli appunti`)
                     } else {
                         toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
                     }

@@ -332,45 +332,11 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                     const linkData = await linkRes.json()
 
                     if (linkRes.ok && linkData.paymentUrl) {
-                        // Send WhatsApp to customer
-                        const custPhone = booking.customer_phone
-                        const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
-                        if (custPhone) {
-                            const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    customPhone: custPhone,
-                                    templateKey: 'pro_richiesta_danni',
-                                    templateVars: (() => {
-                                        const customerName = booking.customer_name || 'Cliente'
-                                        const amountStr = cartTotal.toFixed(2)
-                                        return {
-                                            '{customer_name}': customerName,
-                                            '{nome}': customerName.split(' ')[0] || 'Cliente',
-                                            '{amount}': amountStr,
-                                            '{total}': amountStr,
-                                            '{importo}': amountStr,
-                                            '{link}': linkData.paymentUrl,
-                                            '{payment_link}': linkData.paymentUrl,
-                                            '{booking_ref}': bookingRef,
-                                            '{booking_id}': bookingRef,
-                                            '{contract_ref}': bookingRef,
-                                        }
-                                    })(),
-                                    skipHeader: false,
-                                })
-                            })
-                            const sendJson = await sendRes.json().catch(() => ({}))
-                            if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
-                                toast.error('Template mancante in Messaggi di Sistema Pro')
-                            }
-                        }
-
-                        // Copy link to clipboard
+                        // Nessun messaggio WhatsApp automatico al cliente: la
+                        // direzione invia il link manualmente quando vuole.
+                        // Copiamo il link negli appunti per condividerlo subito.
                         try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
-
-                        toast.success(`Pay by Link inviato al cliente! €${cartTotal.toFixed(2)}`)
+                        toast.success(`Pay by Link creato (€${cartTotal.toFixed(2)}) — copiato negli appunti`)
                     } else {
                         toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
                     }
