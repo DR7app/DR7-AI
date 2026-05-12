@@ -6,11 +6,12 @@ const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-// HARD KILL SWITCH: set to true to re-enable campaign sends.
-// Disabled 2026-04-30 after a bulk send tripped WhatsApp anti-spam and
-// disconnected the Green API instance. Flip back to true after the
-// instance is reauthorized AND we're ready to send at the slower rate.
-const CAMPAIGN_SENDS_ENABLED = false;
+// HARD KILL SWITCH: set to false to suspend campaign sends if Green API
+// trips WhatsApp anti-spam again. Re-enabled 2026-05-12 after the previous
+// suspension (2026-04-30). Throttle remains conservative (CHUNK_SIZE=1,
+// 7s delay between recipients ~= 1 msg / 7s) to stay under WhatsApp's
+// anti-spam threshold.
+const CAMPAIGN_SENDS_ENABLED = true;
 
 // Process at most this many recipients per invocation. Dropped to 1 with
 // a 7s delay between sends to stay safely under WhatsApp's spam threshold
