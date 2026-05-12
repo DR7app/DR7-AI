@@ -120,17 +120,29 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                 // ignore
             }
 
-            // 2. Resolve vehicle category. Try booking_details first, otherwise
-            //    look up the vehicle row via the booking's vehicle_id / plate.
+            // 2. Resolve vehicle category. Cascading fallback chain:
+            //    a. booking_details (saved by some insert paths)
+            //    b. booking.vehicle_category top-level column (preventivo path)
+            //    c. vehicles table lookup via vehicle_id (canonical)
+            //    d. vehicles table lookup via plate (in case id missing)
+            //    e. name-based heuristic (Porsche/Ferrari → exotic, Polo → urban,
+            //       Ducato → aziendali) so the modal never shows "sconosciuta"
+            //       for a known brand even if the DB linkage is broken.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const bd = (booking as { booking_details?: any }).booking_details
-            let cat = String(bd?.vehicle?.category || bd?.vehicleCategory || bd?.category || '').toLowerCase().trim()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const bookingAny = booking as any
+            let cat = String(
+                bd?.vehicle?.category ||
+                bd?.vehicleCategory ||
+                bd?.category ||
+                bookingAny.vehicle_category ||
+                ''
+            ).toLowerCase().trim()
             if (!cat) {
                 try {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const vid = (booking as any).vehicle_id || bd?.vehicle?.id || bd?.vehicle_id
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const plate = (booking as any).vehicle_plate || bd?.vehicle?.plate || bd?.vehicle_plate
+                    const vid = bookingAny.vehicle_id || bd?.vehicle?.id || bd?.vehicle_id
+                    const plate = bookingAny.vehicle_plate || bd?.vehicle?.plate || bd?.vehicle_plate
                     if (vid) {
                         const { data: v } = await supabase
                             .from('vehicles')
@@ -140,14 +152,46 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         if (v?.category) cat = String(v.category).toLowerCase().trim()
                     }
                     if (!cat && plate) {
+                        const normalizedPlate = String(plate).replace(/\s+/g, '').toUpperCase()
                         const { data: v } = await supabase
                             .from('vehicles')
                             .select('category')
-                            .eq('plate', plate)
+                            .eq('plate', normalizedPlate)
                             .maybeSingle()
                         if (v?.category) cat = String(v.category).toLowerCase().trim()
                     }
                 } catch { /* ignore */ }
+            }
+            // Last-resort heuristic: classify by vehicle_name when DB lookup
+            // failed. Keeps the modal usable even if the vehicles row was
+            // deleted or the booking shape lost the vehicle_id.
+            if (!cat) {
+                const name = String(
+                    bookingAny.vehicle_name ||
+                    bd?.vehicle?.name ||
+                    bd?.vehicleName ||
+                    ''
+                ).toLowerCase()
+                if (name) {
+                    // Aziendali / commercial vans first (most specific)
+                    if (/\b(ducato|sprinter|vito|v[\s-]?class|classe v|transporter|crafter|trafic|master|movano|jumper|boxer|daily|expert|partner|berlingo|kangoo|caddy|ncc)\b/.test(name)) {
+                        cat = 'aziendali'
+                    } else if (
+                        // Exotic / supercar brands
+                        /\b(porsche|ferrari|lamborghini|mclaren|aston[\s-]?martin|bentley|maserati|rolls[\s-]?royce|bugatti|koenigsegg|pagani|lotus|alpine)\b/.test(name) ||
+                        // Audi RS / e-tron GT
+                        /\b(rs\s?\d|r8|e-tron\s+gt|tt[\s-]?rs)\b/.test(name) ||
+                        // BMW M / Mercedes AMG / Audi RS performance
+                        /\b(amg|m\s?\d|m[\s-]?coupe|m[\s-]?roadster|m[\s-]?performance)\b/.test(name) ||
+                        // Other supercar keywords
+                        /\b(huracan|aventador|gallardo|huayra|chiron|veyron|458|488|812|296|gt3|gt4|carrera|cayman|boxster|panamera|taycan|gtr)\b/.test(name)
+                    ) {
+                        cat = 'exotic'
+                    } else {
+                        // Default for unrecognised cars → urban (safest)
+                        cat = 'urban'
+                    }
+                }
             }
             if (!cancelled) setResolvedCategory(cat)
         })()
