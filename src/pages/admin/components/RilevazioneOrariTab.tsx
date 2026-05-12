@@ -574,8 +574,8 @@ export default function RilevazioneOrariTab() {
                                 <th className="text-left px-3 py-2">Operatore</th>
                                 <th className="text-left px-3 py-2">Stato</th>
                                 <th className="text-left px-3 py-2">Entrata</th>
-                                <th className="text-left px-3 py-2">Pausa Out</th>
-                                <th className="text-left px-3 py-2">Pausa In</th>
+                                <th className="text-left px-3 py-2" title="Orario di inizio pausa (operatore va in pausa)">Inizio Pausa</th>
+                                <th className="text-left px-3 py-2" title="Orario di rientro dalla pausa (operatore torna al lavoro)">Fine Pausa</th>
                                 <th className="text-left px-3 py-2">Uscita</th>
                                 <th className="text-center px-3 py-2">Pause</th>
                                 <th className="text-right px-3 py-2">Ore Lav.</th>
